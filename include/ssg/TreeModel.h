@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -45,6 +46,16 @@ private:
 };
 
 enum class TreeProviderKind { Filesystem, Git, Symbols };
+
+// Which tree provider a caller wants active, as a typed pair rather than a
+// string. `activateOrCreate` uses `kind` to decide whether a missing provider
+// may be lazily created (Git/Symbols) or is a genuine failure (Filesystem).
+struct TreeProviderBinding {
+    TreeProviderId id;
+    TreeProviderKind kind = TreeProviderKind::Filesystem;
+    bool operator==(const TreeProviderBinding&) const = default;
+};
+
 enum class TreeNodeKind { Root, Directory, File, Symlink, GitEntry, Symbol };
 enum class GitTreeStatus { Added, Modified, Deleted, Renamed, Untracked };
 struct GitTreeRecord;
@@ -186,6 +197,24 @@ public:
     bool isExpanded(const TreeProviderId& providerId,
                      const TreeNodeId& nodeId) const;
     bool activateProvider(const TreeProviderId& providerId);
+
+    // Activate the provider named by `binding`. When it does not exist yet and
+    // its kind is Git or Symbols, create it empty and activate it -- a panel can
+    // be shown before its provider has any content. A Filesystem binding is NEVER
+    // created here (the filesystem provider is seeded at construction), so a
+    // missing one is a genuine failure. Returns false when activation fails and
+    // nothing was created.
+    //
+    // `revisionForCreate` is invoked ONLY on the create path, so a caller whose
+    // revision source has a side effect (e.g. a post-increment counter) does not
+    // consume a revision when merely re-activating an existing provider. It must
+    // be callable: an empty function throws std::invalid_argument (a clear error
+    // rather than an opaque std::bad_function_call on the create path). Takes a
+    // typed binding, not a shell panel label: the tree does not know the shell's
+    // presentation vocabulary (the label -> binding mapping lives in the runtime
+    // seam).
+    bool activateOrCreate(const TreeProviderBinding& binding,
+                          const std::function<TreeRevision()>& revisionForCreate);
     std::optional<TreeCommandInvocation> invokeNodeCommand(
         const TreeProviderId& providerId, const TreeNodeId& nodeId,
         std::string_view commandId) const;

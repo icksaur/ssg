@@ -11,28 +11,16 @@ namespace {
 template <typename T>
 T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload); }
 
+// Activate the tree provider matching the active panel, creating a git/symbols
+// provider on demand.  The label->provider mapping and the create-on-miss logic
+// now live in the runtime seam (panelProviderBinding) and on TreeModel
+// (activateOrCreate); this only wires the active panel to them.
 bool syncTreeProviderToPanel(EditorRuntime::Impl& runtime) {
-    const auto label = runtime.shell.activePanelProvider();
-    if (label == "files") {
-        return runtime.tree.activateProvider(TreeProviderId{"filesystem"});
-    } else if (label == "git") {
-        if (!runtime.tree.activateProvider(TreeProviderId{"git"})) {
-            runtime.tree.replaceProvider(TreeProviderSnapshot{
-                TreeProviderId{"git"}, TreeProviderKind::Git,
-                TreeRevision{runtime.nextTreeRevision++}, {}});
-            return runtime.tree.activateProvider(TreeProviderId{"git"});
-        }
-        return true;
-    } else if (label == "symbols") {
-        if (!runtime.tree.activateProvider(TreeProviderId{"symbols"})) {
-            runtime.tree.replaceProvider(TreeProviderSnapshot{
-                TreeProviderId{"symbols"}, TreeProviderKind::Symbols,
-                TreeRevision{runtime.nextTreeRevision++}, {}});
-            return runtime.tree.activateProvider(TreeProviderId{"symbols"});
-        }
-        return true;
-    }
-    return false;
+    auto const binding = panelProviderBinding(runtime.shell.activePanelProvider());
+    if (!binding) return false;
+    return runtime.tree.activateOrCreate(*binding, [&runtime] {
+        return TreeRevision{runtime.nextTreeRevision++};
+    });
 }
 
 bool userNavigationShellCommand(std::string_view id) {

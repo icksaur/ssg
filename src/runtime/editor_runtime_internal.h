@@ -61,6 +61,29 @@ inline std::uint32_t uint32Setting(SettingsModel const& settings, SettingKey key
     return fallback;
 }
 
+// The correspondence between a shell panel-provider label and its tree provider.
+// This is the ONE place the mapping lives: the shell speaks presentation labels
+// ("files"/"git"/"symbols") and the tree speaks TreeProviderId/Kind, and this
+// runtime seam is where those two vocabularies legitimately meet. TreeModel does
+// not learn the labels; both runtime handler files ask here instead of spelling
+// the table themselves. Returns nullopt for a label with no tree provider.
+[[nodiscard]] inline std::optional<TreeProviderBinding> panelProviderBinding(
+    std::string_view panelLabel) {
+    if (panelLabel == "files") {
+        return TreeProviderBinding{TreeProviderId{"filesystem"},
+                                   TreeProviderKind::Filesystem};
+    }
+    if (panelLabel == "git") {
+        return TreeProviderBinding{TreeProviderId{"git"},
+                                   TreeProviderKind::Git};
+    }
+    if (panelLabel == "symbols") {
+        return TreeProviderBinding{TreeProviderId{"symbols"},
+                                   TreeProviderKind::Symbols};
+    }
+    return std::nullopt;
+}
+
 struct GitDiffRefreshWorkerState;
 
 // The reopen outcome of a document's recovered draft (single-file draft

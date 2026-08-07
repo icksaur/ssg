@@ -284,6 +284,88 @@ TEST(overBudgetDeltaRequiresSnapshotWithoutPartialOperations) {
 
 } // namespace
 
+TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
+    TemporaryDirectory directory;
+    TreeModel model;
+    model.replaceProvider(TreeProviderSnapshot::fromFilesystem(
+        TreeProviderId{"filesystem"}, directory.path(), TreeRevision{1}));
+
+    // Counts how often the model asks for a create-revision, so the test can pin
+    // that the source is consumed ONLY on the create path.
+    int revisionRequests = 0;
+    auto revision = [&](std::uint64_t value) {
+        return [&revisionRequests, value] {
+            ++revisionRequests;
+            return TreeRevision{value};
+        };
+    };
+
+    // A git binding with no git provider yet: created at the supplied revision,
+    // activated, and reported as the active provider.
+    ASSERT_TRUE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
+        revision(7)));
+    ASSERT_EQ(revisionRequests, 1);
+    {
+        const auto view = model.viewState();
+        const auto& active = view.providers.front();
+        ASSERT_TRUE(active.providerId == TreeProviderId{"git"});
+        ASSERT_TRUE(active.kind == TreeProviderKind::Git);
+    }
+
+    // A symbols binding: the same lazy-create path for the second creatable kind.
+    ASSERT_TRUE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"symbols"},
+                            TreeProviderKind::Symbols},
+        revision(9)));
+    ASSERT_EQ(revisionRequests, 2);
+    {
+        const auto view = model.viewState();
+        const auto& active = view.providers.front();
+        ASSERT_TRUE(active.providerId == TreeProviderId{"symbols"});
+        ASSERT_TRUE(active.kind == TreeProviderKind::Symbols);
+    }
+
+    // Re-activating an existing provider is a plain activate: it becomes active
+    // again, the view revision does NOT advance a second time (no spurious
+    // replace), and the create-revision source is NOT consumed.
+    ASSERT_TRUE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
+        revision(99)));
+    const auto afterFirst = model.viewState().revision;
+    const auto requestsAfterFirst = revisionRequests;
+    ASSERT_TRUE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
+        revision(99)));
+    ASSERT_TRUE(model.viewState().revision == afterFirst);
+    ASSERT_EQ(revisionRequests, requestsAfterFirst);
+    ASSERT_TRUE(model.viewState().providers.front().providerId ==
+                TreeProviderId{"git"});
+
+    // A filesystem binding is NEVER created here (it is seeded at construction);
+    // a missing one is a genuine failure that creates nothing and asks for no
+    // revision.
+    TreeModel empty;
+    int emptyRequests = 0;
+    ASSERT_FALSE(empty.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"filesystem"},
+                            TreeProviderKind::Filesystem},
+        [&emptyRequests] {
+            ++emptyRequests;
+            return TreeRevision{3};
+        }));
+    ASSERT_TRUE(empty.viewState().providers.empty());
+    ASSERT_EQ(emptyRequests, 0);
+
+    // An empty revision source is a misuse that fails loudly with a descriptive
+    // error, not an opaque std::bad_function_call on the create path.
+    ASSERT_THROWS(
+        model.activateOrCreate(
+            TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
+            std::function<TreeRevision()>{}),
+        std::invalid_argument);
+}
+
 int main() {
     RUN(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks);
     RUN(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys);
@@ -293,5 +375,6 @@ int main() {
     RUN(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes);
     RUN(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase);
     RUN(overBudgetDeltaRequiresSnapshotWithoutPartialOperations);
+    RUN(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem);
     return failed == 0 ? 0 : 1;
 }

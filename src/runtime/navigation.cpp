@@ -13,13 +13,6 @@ namespace {
 template <typename T>
 T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload); }
 
-std::optional<TreeProviderId> panelProviderTreeId(std::string_view label) {
-    if (label == "files") return TreeProviderId{"filesystem"};
-    if (label == "git") return TreeProviderId{"git"};
-    if (label == "symbols") return TreeProviderId{"symbols"};
-    return std::nullopt;
-}
-
 // Validates that the palette is open and that `command_id` is a member of the
 // currently published palette candidate set (the command mode's candidates,
 // which `palette_view()` publishes from `descriptors()`) and that the invoking
@@ -181,8 +174,13 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
                                  CommandContext& context,
                                  std::string_view id,
                                  std::any const& payload) {
-    if (auto providerId = panelProviderTreeId(runtime.shell.activePanelProvider())) {
-        (void)runtime.tree.activateProvider(*providerId);
+    // Best-effort activate the provider bound to the active panel WITHOUT
+    // creating one: a tree command may fire while the panel is hidden, where the
+    // currently-active provider must be retained rather than replaced by a fresh
+    // empty git/symbols provider (that is syncTreeProviderToPanel's job when a
+    // panel is shown).
+    if (auto binding = panelProviderBinding(runtime.shell.activePanelProvider())) {
+        (void)runtime.tree.activateProvider(binding->id);
     }
     if (id == "tree.select_next") { (void)runtime.tree.selectNext(); runtime.revealTreeSelection(); return success(); }
     if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); runtime.revealTreeSelection(); return success(); }

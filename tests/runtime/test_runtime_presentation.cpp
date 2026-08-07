@@ -944,6 +944,62 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
     ASSERT_FALSE(snapshot->sections().shell.panel.has_value());
 }
 
+TEST(panelProviderCycleSelectsTheBoundTreeProvider) {
+    // Oracle for panelProviderBinding (the runtime-seam label->tree map): cycling
+    // the panel through every provider must select the correct TREE provider for
+    // each label, not merely change the shell label. Covers the symbols path,
+    // which no other test exercised.
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+
+    auto activeTreeKind = [&]() -> std::optional<ssg::TreeProviderKind> {
+        auto snapshot =
+            runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot || snapshot->sections().tree.providers.empty()) {
+            return std::nullopt;
+        }
+        return snapshot->sections().tree.providers.front().kind;
+    };
+
+    // Show the panel on its first provider (files) -> filesystem tree provider.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.show_files", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(activeTreeKind() == ssg::TreeProviderKind::Filesystem);
+
+    // Cycle forward: files -> git -> symbols -> back to files. Each step must
+    // select the matching tree provider, creating git/symbols on first sight.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.next_provider", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(activeTreeKind() == ssg::TreeProviderKind::Git);
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.next_provider", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(activeTreeKind() == ssg::TreeProviderKind::Symbols);
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.next_provider", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(activeTreeKind() == ssg::TreeProviderKind::Filesystem);
+
+    // Cycle backward re-selects symbols, proving the map is direction-agnostic.
+    ASSERT_TRUE(runtime.dispatch(
+                       ssg::ClientId{1},
+                       {"panel.previous_provider", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(activeTreeKind() == ssg::TreeProviderKind::Symbols);
+}
+
 TEST(chromeNodeCaptionLabelsAreLowercase) {
     // Invariant guard: every shell chrome caption (provider tab, header/footer
     // field, footer/notice action) renders lowercase, across all providers
@@ -1011,6 +1067,7 @@ int main() {
     RUN(liveDiffTabTitlePrefixesGlyphWithoutChangingDocumentTabs);
     RUN(liveDiffTabGlyphColorTracksThemePalette);
     RUN(panelShowCommandsToggleAndSwitchProviders);
+    RUN(panelProviderCycleSelectsTheBoundTreeProvider);
     RUN(chromeNodeCaptionLabelsAreLowercase);
     RUN(editorScrollUsesTheRealPaneHeightNotAHardcoded24);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
