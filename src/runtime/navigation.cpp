@@ -10,9 +10,6 @@
 namespace ssg {
 namespace {
 
-template <typename T>
-T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload); }
-
 // Validates that the palette is open and that `command_id` is a member of the
 // currently published palette candidate set (the command mode's candidates,
 // which `palette_view()` publishes from `descriptors()`) and that the invoking

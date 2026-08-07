@@ -10,22 +10,12 @@
 namespace ssg {
 namespace {
 
-template <typename T>
-T const* payloadAs(std::any const& payload) {
-    return std::any_cast<T>(&payload);
-}
-
 TextInputSettings textInputSettings(EditorRuntime::Impl const&) {
     return {IndentStyle::Spaces, 4, true, LineEnding::Lf};
 }
 
 EditCommandSettings editSettings(EditorRuntime::Impl const&) {
     return {IndentStyle::Spaces, 4, 4, LineEnding::Lf, "//"};
-}
-
-bool activeLiveDiffTab(const EditorRuntime::Impl& runtime) {
-    const auto* tab = runtime.activeTabState();
-    return tab != nullptr && tab->kind == TabKind::LiveDiff;
 }
 
 CommandHandlerResult applyTransaction(EditorRuntime::Impl& runtime,
@@ -50,7 +40,7 @@ CommandHandlerResult applyTransaction(EditorRuntime::Impl& runtime,
 CommandHandlerResult bindText(EditorRuntime::Impl& runtime,
                                TextInputCommand command,
                                TextInputArguments arguments) {
-    if (activeLiveDiffTab(runtime)) {
+    if (runtime.activeTabIsLiveDiff()) {
         return failure("text input is unavailable in diff mode");
     }
     auto const* document = runtime.activeDocument();
@@ -131,7 +121,7 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
 }
 
 CommandHandlerResult bindEdit(EditorRuntime::Impl& runtime, EditCommand command) {
-    if (activeLiveDiffTab(runtime)) {
+    if (runtime.activeTabIsLiveDiff()) {
         return failure("edit command cannot mutate a diff document");
     }
     auto const* document = runtime.activeDocument();
@@ -146,7 +136,7 @@ CommandHandlerResult bindEdit(EditorRuntime::Impl& runtime, EditCommand command)
 }
 
 CommandHandlerResult bindHistory(EditorRuntime::Impl& runtime, HistoryCommand command) {
-    if (activeLiveDiffTab(runtime)) {
+    if (runtime.activeTabIsLiveDiff()) {
         return failure("history command cannot mutate a diff document");
     }
     auto id = runtime.activeDocumentId();
@@ -164,7 +154,7 @@ CommandHandlerResult bindHistory(EditorRuntime::Impl& runtime, HistoryCommand co
 }
 
 CommandHandlerResult bindClipboard(EditorRuntime::Impl& runtime, ClipboardCommand command) {
-    if (activeLiveDiffTab(runtime) && command != ClipboardCommand::Copy) {
+    if (runtime.activeTabIsLiveDiff() && command != ClipboardCommand::Copy) {
         return failure("clipboard mutation is unavailable in diff mode");
     }
     auto id = runtime.activeDocumentId();
@@ -278,7 +268,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
                                      Revision revision,
                                      FindReplaceCommand command,
                                      std::any const& payload) {
-    if (activeLiveDiffTab(runtime) &&
+    if (runtime.activeTabIsLiveDiff() &&
         (command == FindReplaceCommand::ReplaceOpen ||
          command == FindReplaceCommand::ReplaceCurrent ||
          command == FindReplaceCommand::ReplaceAll ||
