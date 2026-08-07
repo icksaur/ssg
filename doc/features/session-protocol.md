@@ -6,7 +6,7 @@ Expose all interactions and views through one revisioned API that behaves identi
 
 ## Design
 
-`EditorSession`, command ordering, snapshots/deltas, replay, bounds, queues, and reconnect behavior follow `doc/spec.md`. Attach/authentication creates an immutable `InvocationPrincipal` containing client identity, origin, and host-granted capabilities; every command dispatch receives it and every per-client snapshot exposes its capability IDs. The protocol carries commands, capability state, clipboard, status actions, and binary payloads without an out-of-band behavior channel.
+`EditorSession`, command ordering, snapshots/deltas, replay, bounds, queues, and reconnect behavior follow `doc/spec.md`. Attach creates an immutable `InvocationPrincipal` containing client identity, origin, and host-granted capabilities; every command dispatch receives it and every per-client snapshot exposes its capability IDs. The protocol carries commands, capability state, clipboard, status actions, and binary payloads without an out-of-band behavior channel.
 
 The initial session-state component owns the serialized executor, strong client,
 workspace, and view identities, attached-client records, shared active
@@ -108,20 +108,18 @@ input buffer. Producing streaming-output or image payloads remains stretch work.
 Gate 10 replaces the temporary `CoreEditorSlice` server constructor with an
 assembled-session adapter. `HttpEditorServer` receives the one `EditorSession`,
 the immutable complete command-argument codec registry, and an
-`HttpEditorSessionHost`. The host is the explicit transport seam for resolving
-an opaque credential into a host-created session ID, immutable
-`InvocationPrincipal`, and view ID; producing the current aggregate
+`HttpEditorSessionHost`. The host is the explicit transport seam for resolving a connection into a
+host-created session ID, immutable `InvocationPrincipal`, and view ID; producing the current aggregate
 `SessionSnapshot` for that attached client; and accepting decoded
 status-action and binary ingress. Snapshot production continues to use the
 assembly-owned aggregate functions. The transport never reconstructs feature
 state and never reads capabilities from a client payload.
 
 The first message on a connection is a server-owned, versioned attach request
-on that same WebSocket. It contains only an opaque credential and an optional
-last-applied revision. The credential is passed unchanged to host policy.
-Successful authentication maps the connection to the returned session ID,
+on that same WebSocket. It contains only an optional
+last-applied revision. The host resolves the connection to a session ID,
 principal client ID, protocol version, view ID, bounded queue, and one writer.
-The server then calls `EditorSession::attach`. Authentication or attach failure
+The server then calls `EditorSession::attach`. A declined or failed attach
 closes the connection without exposing a success-shaped session. Attach
 framing is text so it cannot be confused with the binary complete-codec and
 binary-payload envelopes; every post-attach interaction uses those reviewed
@@ -141,7 +139,7 @@ Disconnect detaches the client but preserves its bounded replay state.
 Only the connection writer calls `../http::Server::send`. Command, status, and
 binary callbacks enqueue owned bytes and never write a socket.
 Queue overflow, an expired/failed write, malformed post-attach input, or an
-interaction before authentication closes that connection deterministically.
+interaction before attach closes that connection deterministically.
 Well-formed command rejection is failure-atomic and returns a typed
 `CommandResult` without disconnecting the client.
 The server does not coalesce revisions because replay must remain contiguous.
@@ -175,12 +173,12 @@ I1, I2, I3, I10, I11, I12, I16, I21 from `doc/spec.md`.
 - The thin-slice route owns a finite per-connection outbound queue and one
   writer thread. Command callbacks enqueue owned payloads and never call socket
   send directly. Queue overflow or a failed/deadline-expired write closes the
-  connection. Broader replay, reconnect, authentication, and service
+  connection. Broader replay, reconnect, attach, and service
   integration remain later work.
 - Gate 10 carries forward that queue/writer/deadline mechanism, removes the
   thin-slice constructor, and composes the assembled session and complete
   codec. The old core-slice test remains the codec/dispatch regression oracle;
-  `tests/test_http_server.cpp` owns complete-server authentication, replay,
+  `tests/test_http_server.cpp` owns complete-server attach, replay,
   interaction-routing, and backpressure coverage.
 - Malformed frames are a codec/WebSocket rejection oracle because the typed
   in-process API has no decode step. Stale requests are compared through both
@@ -207,7 +205,7 @@ I1, I2, I3, I10, I11, I12, I16, I21 from `doc/spec.md`.
   scripts for session state; codec round trips/malformed corpus,
   partial-write/deadline tests, and replay-vs-snapshot comparisons for later
   protocol components.
-- Server oracles: host-policy authentication and capability isolation,
+- Server oracles: host-policy attach and capability isolation,
   in-process/socket aggregate snapshot parity, contiguous reconnect replay and
   fresh-snapshot fallback after replay eviction, bounded outbound/replay queues,
   deadline/slow-client disconnect, and an audit that command,
@@ -223,7 +221,7 @@ I1, I2, I3, I10, I11, I12, I16, I21 from `doc/spec.md`.
 | 4 | Implement the finite-queue one-channel thin-slice server adapter for `text.insert` | `include/ssg/http_server.h`, `src/http_server.cpp`, `tests/test_core_websocket_slice.cpp`, `cmake/components/core-websocket-slice.cmake` | in-process/loopback-WebSocket parity, stale/malformed scripts, and side-channel audit | I1, I2, I11, I16 |
 | 5 | Assemble every P0 feature command catalog, extend the common dispatch services, and aggregate/replay every typed snapshot/delta section for one client | `include/ssg/editor_session_assembly.h`, `src/editor_session_assembly.cpp`, `include/ssg/session_snapshot.h`, `src/session_snapshot.cpp`, session/registry/document seams, assembly tests and manifest | required catalog equals registry exactly; full transition snapshot equals replay; two-client capabilities and viewports remain isolated | I2, I3, I16 |
 | 6 | Implement the complete socket-free protocol codec, typed command-argument registry, aggregate snapshot/delta reconstruction, clipboard/status messages, and bounded binary-frame envelope | `include/ssg/protocol.h`, `src/protocol.cpp`, `include/ssg/session_snapshot.h`, `protocol/schema/`, `tests/fixtures/protocol/`, `tests/test_protocol.cpp`, `cmake/components/protocol-codec.cmake` | canonical round trips; malformed, truncated, oversized, and unknown-version corpus; exact command-registry coverage; two-client isolation; replay-vs-decoded-snapshot equivalence; decoded byte-lifetime tests | I2, I3, I11, I16 |
-| 7 | Replace the thin-slice server with assembled-session authentication/mapping, bounded one-writer queues, finite per-client delta replay, fresh-snapshot reconnect fallback, typed command results, and complete-codec routing on one WebSocket | `include/ssg/http_server.h`, `src/http_server.cpp`, `include/ssg/protocol.h`, `src/protocol.cpp`, `protocol/schema/README.md`, `tests/fixtures/protocol/command_result.hex`, `tests/test_http_server.cpp`, `tests/test_protocol.cpp`, `cmake/components/websocket-server.cmake`, `cmake/components/core-websocket-slice.cmake` | host-issued capability isolation; in-process/socket snapshot parity; typed stale rejection without disconnect; contiguous replay and eviction/queue fallback; queue/write-timeout disconnect; command/clipboard/status/binary single-channel audit | I1, I2, I3, I10, I11, I16, I21 |
+| 7 | Replace the thin-slice server with assembled-session attach/mapping, bounded one-writer queues, finite per-client delta replay, fresh-snapshot reconnect fallback, typed command results, and complete-codec routing on one WebSocket | `include/ssg/http_server.h`, `src/http_server.cpp`, `include/ssg/protocol.h`, `src/protocol.cpp`, `protocol/schema/README.md`, `tests/fixtures/protocol/command_result.hex`, `tests/test_http_server.cpp`, `tests/test_protocol.cpp`, `cmake/components/websocket-server.cmake`, `cmake/components/core-websocket-slice.cmake` | host-issued capability isolation; in-process/socket snapshot parity; typed stale rejection without disconnect; contiguous replay and eviction/queue fallback; queue/write-timeout disconnect; command/clipboard/status/binary single-channel audit | I1, I2, I3, I10, I11, I16, I21 |
 
 ## Rationale (optional, skippable)
 

@@ -64,7 +64,7 @@ logs, or repeated status sections.
   state-losing major actions reversible through recovery, reopen, backup, or a
   compensating command.
 - Register user-visible actions in the command registry. Except for lifecycle,
-  transport authentication, raw platform I/O, and capability-grant decisions,
+  raw platform I/O, and capability-grant decisions,
   actions must be callable through the versioned Lua API.
 
 ## C++ and code quality

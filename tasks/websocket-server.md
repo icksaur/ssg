@@ -6,13 +6,13 @@
 
 ## Scope
 
-Implement `HttpEditorServer`, authentication/session mapping, bounded queues,
+Implement `HttpEditorServer`, session mapping, bounded queues,
 one writer, replay/reconnect, slow-client disconnect, and the single-channel
-interaction contract. Authentication resolves host policy into an immutable
+interaction contract. The host resolves each connection into an immutable
 `InvocationPrincipal`; client payloads cannot grant capabilities.
 Replace the temporary `CoreEditorSlice` constructor with the assembled
 `EditorSession`, complete command codec, and explicit `HttpEditorSessionHost`
-authentication/snapshot/interaction seam. Carry forward the already-proven
+attach/snapshot/interaction seam. Carry forward the already-proven
 queue, writer, and deadline mechanism rather than creating a second path.
 
 ## Files

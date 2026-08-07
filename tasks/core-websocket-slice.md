@@ -17,7 +17,7 @@ this temporary single-document adapter.
 Malformed input is rejected at the codec/WebSocket boundary; stale requests
 are compared through direct and WebSocket dispatch. The route uses a finite
 per-connection outbound queue and one writer thread; command callbacks do not
-send on the socket. Replay, reconnect, authentication, other text commands,
+send on the socket. Replay, reconnect, other text commands,
 and optional services are out of scope.
 
 ## Files
