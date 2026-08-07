@@ -290,11 +290,22 @@ TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
     model.replaceProvider(TreeProviderSnapshot::fromFilesystem(
         TreeProviderId{"filesystem"}, directory.path(), TreeRevision{1}));
 
+    // Counts how often the model asks for a create-revision, so the test can pin
+    // that the source is consumed ONLY on the create path.
+    int revisionRequests = 0;
+    auto revision = [&](std::uint64_t value) {
+        return [&revisionRequests, value] {
+            ++revisionRequests;
+            return TreeRevision{value};
+        };
+    };
+
     // A git binding with no git provider yet: created at the supplied revision,
     // activated, and reported as the active provider.
     ASSERT_TRUE(model.activateOrCreate(
         TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
-        TreeRevision{7}));
+        revision(7)));
+    ASSERT_EQ(revisionRequests, 1);
     {
         const auto view = model.viewState();
         const auto& active = view.providers.front();
@@ -306,7 +317,8 @@ TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
     ASSERT_TRUE(model.activateOrCreate(
         TreeProviderBinding{TreeProviderId{"symbols"},
                             TreeProviderKind::Symbols},
-        TreeRevision{9}));
+        revision(9)));
+    ASSERT_EQ(revisionRequests, 2);
     {
         const auto view = model.viewState();
         const auto& active = view.providers.front();
@@ -315,26 +327,35 @@ TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
     }
 
     // Re-activating an existing provider is a plain activate: it becomes active
-    // again and the revision does NOT advance a second time (no spurious replace).
+    // again, the view revision does NOT advance a second time (no spurious
+    // replace), and the create-revision source is NOT consumed.
     ASSERT_TRUE(model.activateOrCreate(
         TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
-        TreeRevision{99}));
+        revision(99)));
     const auto afterFirst = model.viewState().revision;
+    const auto requestsAfterFirst = revisionRequests;
     ASSERT_TRUE(model.activateOrCreate(
         TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
-        TreeRevision{99}));
+        revision(99)));
     ASSERT_TRUE(model.viewState().revision == afterFirst);
+    ASSERT_EQ(revisionRequests, requestsAfterFirst);
     ASSERT_TRUE(model.viewState().providers.front().providerId ==
                 TreeProviderId{"git"});
 
     // A filesystem binding is NEVER created here (it is seeded at construction);
-    // a missing one is a genuine failure that creates nothing.
+    // a missing one is a genuine failure that creates nothing and asks for no
+    // revision.
     TreeModel empty;
+    int emptyRequests = 0;
     ASSERT_FALSE(empty.activateOrCreate(
         TreeProviderBinding{TreeProviderId{"filesystem"},
                             TreeProviderKind::Filesystem},
-        TreeRevision{3}));
+        [&emptyRequests] {
+            ++emptyRequests;
+            return TreeRevision{3};
+        }));
     ASSERT_TRUE(empty.viewState().providers.empty());
+    ASSERT_EQ(emptyRequests, 0);
 }
 
 int main() {

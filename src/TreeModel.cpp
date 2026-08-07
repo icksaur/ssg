@@ -531,8 +531,9 @@ bool TreeModel::activateProvider(const TreeProviderId& providerId) {
     return true;
 }
 
-bool TreeModel::activateOrCreate(const TreeProviderBinding& binding,
-                                 TreeRevision revisionIfCreated) {
+bool TreeModel::activateOrCreate(
+    const TreeProviderBinding& binding,
+    const std::function<TreeRevision()>& revisionForCreate) {
     if (activateProvider(binding.id)) {
         return true;
     }
@@ -542,7 +543,7 @@ bool TreeModel::activateOrCreate(const TreeProviderBinding& binding,
         return false;
     }
     replaceProvider(
-        TreeProviderSnapshot{binding.id, binding.kind, revisionIfCreated, {}});
+        TreeProviderSnapshot{binding.id, binding.kind, revisionForCreate(), {}});
     return activateProvider(binding.id);
 }
 

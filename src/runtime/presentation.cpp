@@ -18,8 +18,9 @@ T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload);
 bool syncTreeProviderToPanel(EditorRuntime::Impl& runtime) {
     auto const binding = panelProviderBinding(runtime.shell.activePanelProvider());
     if (!binding) return false;
-    return runtime.tree.activateOrCreate(
-        *binding, TreeRevision{runtime.nextTreeRevision++});
+    return runtime.tree.activateOrCreate(*binding, [&runtime] {
+        return TreeRevision{runtime.nextTreeRevision++};
+    });
 }
 
 bool userNavigationShellCommand(std::string_view id) {
