@@ -534,6 +534,11 @@ bool TreeModel::activateProvider(const TreeProviderId& providerId) {
 bool TreeModel::activateOrCreate(
     const TreeProviderBinding& binding,
     const std::function<TreeRevision()>& revisionForCreate) {
+    if (!revisionForCreate) {
+        throw std::invalid_argument{
+            "TreeModel::activateOrCreate requires a revision source "
+            "(revisionForCreate must be callable)"};
+    }
     if (activateProvider(binding.id)) {
         return true;
     }

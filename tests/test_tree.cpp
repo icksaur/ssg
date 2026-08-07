@@ -356,6 +356,14 @@ TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
         }));
     ASSERT_TRUE(empty.viewState().providers.empty());
     ASSERT_EQ(emptyRequests, 0);
+
+    // An empty revision source is a misuse that fails loudly with a descriptive
+    // error, not an opaque std::bad_function_call on the create path.
+    ASSERT_THROWS(
+        model.activateOrCreate(
+            TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
+            std::function<TreeRevision()>{}),
+        std::invalid_argument);
 }
 
 int main() {

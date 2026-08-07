@@ -207,7 +207,9 @@ public:
     //
     // `revisionForCreate` is invoked ONLY on the create path, so a caller whose
     // revision source has a side effect (e.g. a post-increment counter) does not
-    // consume a revision when merely re-activating an existing provider. Takes a
+    // consume a revision when merely re-activating an existing provider. It must
+    // be callable: an empty function throws std::invalid_argument (a clear error
+    // rather than an opaque std::bad_function_call on the create path). Takes a
     // typed binding, not a shell panel label: the tree does not know the shell's
     // presentation vocabulary (the label -> binding mapping lives in the runtime
     // seam).
