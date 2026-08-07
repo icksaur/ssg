@@ -531,6 +531,21 @@ bool TreeModel::activateProvider(const TreeProviderId& providerId) {
     return true;
 }
 
+bool TreeModel::activateOrCreate(const TreeProviderBinding& binding,
+                                 TreeRevision revisionIfCreated) {
+    if (activateProvider(binding.id)) {
+        return true;
+    }
+    // Not present. Only Git/Symbols may be created on demand; a Filesystem
+    // provider is seeded at construction, so a missing one is a real failure.
+    if (binding.kind == TreeProviderKind::Filesystem) {
+        return false;
+    }
+    replaceProvider(
+        TreeProviderSnapshot{binding.id, binding.kind, revisionIfCreated, {}});
+    return activateProvider(binding.id);
+}
+
 std::optional<TreeCommandInvocation> TreeModel::invokeNodeCommand(
     const TreeProviderId& providerId, const TreeNodeId& nodeId,
     std::string_view commandId) const {

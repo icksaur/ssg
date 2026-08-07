@@ -284,6 +284,59 @@ TEST(overBudgetDeltaRequiresSnapshotWithoutPartialOperations) {
 
 } // namespace
 
+TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
+    TemporaryDirectory directory;
+    TreeModel model;
+    model.replaceProvider(TreeProviderSnapshot::fromFilesystem(
+        TreeProviderId{"filesystem"}, directory.path(), TreeRevision{1}));
+
+    // A git binding with no git provider yet: created at the supplied revision,
+    // activated, and reported as the active provider.
+    ASSERT_TRUE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
+        TreeRevision{7}));
+    {
+        const auto view = model.viewState();
+        const auto& active = view.providers.front();
+        ASSERT_TRUE(active.providerId == TreeProviderId{"git"});
+        ASSERT_TRUE(active.kind == TreeProviderKind::Git);
+    }
+
+    // A symbols binding: the same lazy-create path for the second creatable kind.
+    ASSERT_TRUE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"symbols"},
+                            TreeProviderKind::Symbols},
+        TreeRevision{9}));
+    {
+        const auto view = model.viewState();
+        const auto& active = view.providers.front();
+        ASSERT_TRUE(active.providerId == TreeProviderId{"symbols"});
+        ASSERT_TRUE(active.kind == TreeProviderKind::Symbols);
+    }
+
+    // Re-activating an existing provider is a plain activate: it becomes active
+    // again and the revision does NOT advance a second time (no spurious replace).
+    ASSERT_TRUE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
+        TreeRevision{99}));
+    const auto afterFirst = model.viewState().revision;
+    ASSERT_TRUE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
+        TreeRevision{99}));
+    ASSERT_TRUE(model.viewState().revision == afterFirst);
+    ASSERT_TRUE(model.viewState().providers.front().providerId ==
+                TreeProviderId{"git"});
+
+    // A filesystem binding is NEVER created here (it is seeded at construction);
+    // a missing one is a genuine failure that creates nothing.
+    TreeModel empty;
+    ASSERT_FALSE(empty.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"filesystem"},
+                            TreeProviderKind::Filesystem},
+        TreeRevision{3}));
+    ASSERT_TRUE(empty.viewState().providers.empty());
+}
+
 int main() {
     RUN(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks);
     RUN(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys);
@@ -293,5 +346,6 @@ int main() {
     RUN(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes);
     RUN(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase);
     RUN(overBudgetDeltaRequiresSnapshotWithoutPartialOperations);
+    RUN(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem);
     return failed == 0 ? 0 : 1;
 }
