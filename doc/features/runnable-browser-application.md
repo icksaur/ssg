@@ -1,13 +1,23 @@
-# spec-runnable-browser-application
+# spec-editor-runtime (historical: runnable-browser-application)
+
+> **Status: partially superseded.** The `EditorRuntime` production composition
+> seam and the `HttpEditorServer`/`HttpEditorRoute` WebSocket adapter described
+> here shipped and remain the library's real entry points. The bundled
+> `ssg-editor` loopback executable and the browser reference client this spec was
+> originally framed around were **removed as out of scope**: SSG ships the
+> library, the WebSocket server adapter, and a reference TUI adapter, and bundles
+> no client application. The protocol stays browser-deliverable (spec.md I18), so
+> a host may serve its own standards-based browser client. This document is
+> retained as the design record for `EditorRuntime`; sections describing the
+> removed executable and its browser assets no longer reflect shipped code.
 
 ## Goals
 
-A user can build SSG, run `ssg-editor [CWD]`, open the printed loopback URL, and
-edit real files through the bundled browser client. One process owns the real
-workspace-backed editor session, serves the browser assets and `/session`
-WebSocket on one port, and shuts down cleanly. The README leads with this
-workflow and clearly distinguishes the runnable application from embedding,
-fixtures, and development gates.
+`EditorRuntime` is the pit-of-success production composition of the `ssg`
+library: one object owns a real workspace-backed editor session, binds every
+command to a real handler, and produces live per-client snapshots for
+in-process, TUI, and WebSocket hosts. A host serves the `/session` WebSocket to a
+remote client through the server adapter; SSG bundles no client of its own.
 
 ## Design
 
@@ -26,51 +36,27 @@ remains available for custom composition, while the default runtime is the pit
 of success for a complete editor. Synthetic `FixtureModel` state remains only
 an independent protocol/client oracle and is never used by the application.
 
-`HttpEditorRoute` registers the existing editor WebSocket protocol on an
-externally owned `Http::Server` and owns all route connection state.
-`HttpEditorServer` is refactored to own one `Http::Server` plus one
-`HttpEditorRoute`, preserving its current convenience API. The
-`ssg_editor` application instead owns the shared `Http::Server`, registers the
-browser assets through `Http::FileServer`, constructs `HttpEditorRoute` for
-`/session`, then starts and stops the shared server once. The server outlives
-the route, and the route outlives the started server. This is chosen over two
-ports because the browser client intentionally defaults to location.host,
-and it avoids CORS and split-origin clipboard behavior.
+`HttpEditorRoute` registers the editor WebSocket protocol on an externally owned
+`Http::Server` and owns all route connection state. `HttpEditorServer` owns one
+`Http::Server` plus one `HttpEditorRoute` as a convenience API. A host that also
+serves its own browser assets can register them on the same shared
+`Http::Server`; defaulting the client to `location.host` avoids CORS and
+split-origin clipboard behavior.
 
 The sibling `http` library adds `enum class BindAddress { any, loopback }`,
 keeps `Server(int)` equivalent to `BindAddress::any` for compatibility, and
 adds `Server(int, BindAddress)` plus `boundPort()`. `boundPort()` reports no
 value before a successful start and the operating-system-selected port after
 start, including when constructed with port `0`. The library also serves `.mjs`
-as `text/javascript`. The application always selects `BindAddress::loopback`;
-non-loopback application exposure is not configurable. Port `0` is the default
-so concurrent local instances do not collide, and the exact selected port is
-printed only after successful startup.
+as `text/javascript`. These additions shipped and remain useful to any host.
 
-Browser assets remain ordinary files. `--assets PATH` overrides discovery;
-otherwise a build-tree post-build rule copies them beside the executable at
-`browser/`, and an installed executable resolves
-`../${CMAKE_INSTALL_DATADIR}/ssg/browser` relative to its binary. The required
-manifest is index.html, local.html, app.mjs, client.mjs, protocol.mjs, and
-style.css; all six files are read successfully before the
-socket starts. CMake builds `ssg-editor`, uses `GNUInstallDirs`, and installs
-the binary plus this manifest.
-
-The command-line contract is:
-
-```text
-ssg-editor [--port PORT] [--assets PATH] [CWD]
-```
-
-`CWD` defaults to the process current directory. `PORT` defaults to `0`.
-Startup canonicalizes and validates the CWD, initializes the real runtime,
-loads the complete asset manifest, binds loopback, then prints
-`SSG editor: http://127.0.0.1:PORT/` with the selected port.
-On POSIX, SIGINT and SIGTERM are blocked before worker threads start and the
-main thread waits with `sigwait`; on Windows, `SetConsoleCtrlHandler` signals a
-Windows event that the main thread waits on. Both paths converge on main-thread
-`server.stop()` and RAII destruction. Startup and shutdown never depend on
-stdin.
+> The remainder of this Design section — the `ssg-editor` executable, its
+> browser-asset manifest and discovery/install rules, its `ssg-editor
+> [--port PORT] [--assets PATH] [CWD]` command-line contract, and its
+> POSIX/Windows main-thread shutdown — described the removed loopback
+> application and no longer reflects shipped code. It is elided; a host that
+> wants a runnable binary composes `EditorRuntime` with `HttpEditorServer`
+> itself.
 
 ## Invariants
 
@@ -137,18 +123,17 @@ stdin.
 
 ## Acceptance (Definition of Done)
 
-- **Observable:** From a clean checkout with sibling `../http`, a user runs the
-  documented build commands followed by `./build/ssg-editor PATH`. The process
-  prints one clickable loopback URL. Opening it loads the browser client without
-  a second server; the user opens, edits, saves, closes, and reopens a real file,
-  and the saved bytes are present beneath `PATH`. SIGINT/SIGTERM exits cleanly.
-  This browser workflow requires visual signoff before commit.
+- **Observable:** A TUI fixture and a WebSocket client fixture open a directory
+  through `EditorRuntime` and perform typing, multi-cursor selection,
+  copy/cut/save, per-file undo/redo, close/reopen, read-only rejection, diff
+  viewing, and crash-recovery scripts through the same production runtime API,
+  with saved bytes present on disk. The removed `ssg-editor` executable's
+  clean-checkout "run and edit in a browser" walkthrough no longer applies.
 - **Budgets:** Existing command/delta, 10 MiB viewport, idle CPU, queue, and
-  durability budgets remain green. Static assets are bounded and loaded once at
-  startup.
-- **Gates:** Release build, all CTest tests, ASan/UBSan, required
-  Chromium/Firefox/WebKit matrices, consumer `add_subdirectory`, native
-  loopback-only server tests, and available Windows build/CI gates are green.
+  durability budgets remain green.
+- **Gates:** Release build, all CTest tests, ASan/UBSan, consumer
+  `add_subdirectory`, native loopback-only server tests, and available Windows
+  build/CI gates are green.
 - **Oracles:** Temporary-directory ground truth verifies real file operations;
   direct-runtime and browser-WebSocket scripts compare snapshots after every
   command; exact catalog comparison proves handler completeness; HTTP response
@@ -175,9 +160,9 @@ stdin.
 | 7 | Bind syntax, LSP feature/workspace-edit, and Lua-dispatch paths | `src/runtime/language_services.cpp`, `tests/runtime/test_runtime_language_services.cpp` | syntax goldens; scripted LSP peer messages/workspace bytes; Lua command invocation vs direct runtime dispatch | I2, I10, I16, I20 |
 | 8 | Prove full-catalog behavioral coverage and aggregate complete server-owned per-client UI snapshots | `src/runtime/snapshot.cpp`, `include/ssg/editor_runtime.h`, `tests/runtime/{command_cases.h,test_runtime_snapshot.cpp}` | case-table IDs exactly equal independent required-command catalog; snapshot goldens and delta replay; exact server UI-element inventory and grid geometry | I2, I3, I7, I14, I15, I16, I17 |
 | 9 | Add externally owned `HttpEditorRoute` while preserving `HttpEditorServer` | `include/ssg/http_server.h`, `src/http_server.cpp`, `tests/test_http_server.cpp` | one-port HTTP/WebSocket lifecycle and existing convenience-server compatibility | I2, I11, I12 |
-| 11 | Add the loopback `ssg-editor` executable, six-asset discovery/install, and cross-platform main-thread shutdown | `apps/{ssg_editor_main.cpp,platform/shutdown_posix.cpp,platform/shutdown_windows.cpp}`, `cmake/components/ssg-editor.cmake`, `CMakeLists.txt`, `tests/test_ssg_editor.cpp` | subprocess startup/URL/asset/shutdown and invalid-CWD/assets/port cases; installed-prefix smoke test | I4, I9, I21 |
-| 12 | Replace synthetic product-path parity with real workspace-backed parity and thin-client UI enforcement | `tests/test_end_to_end.cpp`, `tests/browser/client/*`, `tests/browser/end_to_end/*` | direct/TUI/browser states plus exact saved disk bytes after every workflow; real-browser `Escape` leader/configuration access from every state; rendered element inventory equals the server snapshot and uses only its 16 theme colors | I1, I2, I6, I7, I16, I17, I18, I22, I24 |
-| 13 | Rewrite the README around the human launch path and retain embedding as advanced usage | `README.md` | clean-checkout command transcript and link/content smoke test | - |
+| ~~11~~ | ~~Loopback `ssg-editor` executable, six-asset discovery/install, cross-platform shutdown~~ — REMOVED (out of scope; SSG bundles no client application) | — | — | — |
+| ~~12~~ | ~~Real workspace-backed browser parity and thin-client UI enforcement~~ — SUPERSEDED: `tests/test_end_to_end.cpp` retains the in-process/TUI/WebSocket parity oracle; the browser-client suites were removed | `tests/test_end_to_end.cpp` | direct/TUI/WebSocket state parity plus saved disk bytes | I1, I2, I16, I17 |
+| ~~13~~ | ~~Rewrite the README around the human launch path~~ — done separately (visitor-facing README + `development.md`) | `README.md`, `development.md` | link/content smoke test | - |
 
 ## Rationale (optional, skippable)
 
