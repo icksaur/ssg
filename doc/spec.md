@@ -191,7 +191,7 @@ The build system uses `cmake/components/*.cmake` manifests for component-local s
 - **Protocol limits:** Hosts configure maximum message, snapshot, binary frame, queue, session, client, tab, and document sizes. Defaults are finite and covered by rejection tests.
 - **Unicode:** Byte offsets are canonical for document mutation; grapheme/cell and LSP UTF-16 conversions are boundary concerns. Fixtures cover combining marks, emoji sequences, CRLF, invalid UTF-8, and double-width glyphs.
 - **Filesystem safety:** Canonicalization, symlink traversal, rename races, case sensitivity, atomic save, permissions, external modification, and newline preservation require explicit errors and tests.
-- **Browser input:** The conformance manifest records required actions and default bindings, and automated browser tests prove events reach the client and suppress browser behavior where applicable.
+- **Browser input:** The conformance manifest records required actions and default bindings, and the reserved-chord fixture proves each required action avoids a browser-reserved or browser-specific chord so a standards-based browser client can deliver it.
 - **Client locality:** Local-only capabilities are granted by host policy, never by a client assertion or IP-address guess. Remote and locality-unknown connections cannot invoke `file.open_dropped_content`.
 - **Multiple clients:** P0 guarantees ordered observation and rejects stale mutation commands; simultaneous collaborative conflict resolution and shared cursors are not promised.
 - **Persistence:** Session state stores relative paths, tab/split topology, active views, panel state, keymap/theme names, and unsaved-buffer recovery separately. Corrupt or newer state fails safely without preventing a clean session.
@@ -211,7 +211,7 @@ The build system uses `cmake/components/*.cmake` manifests for component-local s
 
 - **Text storage choices could prevent large-file work:** Keep `Document` behind command/snapshot interfaces, benchmark representative edit patterns, and avoid exposing storage iterators or contiguous-buffer assumptions.
 - **Cell layout may disagree across clients:** Pin Unicode data, publish golden cell-run fixtures, and require every client to pass them.
-- **Browser shortcut interception may make commands unreachable:** Maintain a cross-browser reserved-binding denylist and run real-browser key conformance tests for every required action.
+- **Browser shortcut interception may make commands unreachable:** Maintain a cross-browser reserved-binding denylist and verify every required action against the shipped reserved-chord fixture.
 - **Lua plugins may compromise stability or security:** Use per-session states, capability grants, checked handles, execution budgets, bounded errors, and no native modules by default.
 - **LSP edits may corrupt newer documents:** Map protocol versions to document revisions and reject or rebase only through an explicitly tested transaction path.
 - **Incremental services may produce stale output:** Revision-tag all asynchronous work and discard obsolete results at the session boundary.
