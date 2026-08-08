@@ -99,27 +99,25 @@ as `text/javascript`. These additions shipped and remain useful to any host.
   coherent revision.
 - Optional services remain lazy or injected. Constructing basic workspace
   editing does not launch LSP, parse Tree-sitter grammars, or create Lua states.
-- Asset paths and error messages must work from both the build tree and an
-  installed prefix.
-- Windows console control handling and POSIX signals both request shutdown;
-  cleanup remains owned by RAII and the main thread.
+
+> The removed `ssg-editor` executable's asset-path resolution and its
+> POSIX/Windows main-thread signal shutdown are historical and no longer apply.
 
 ## Risks and Mitigations
 
 - **Synthetic behavior leaks into production:** source and integration tests
-  reject fixture headers/symbols in application/runtime targets and verify real
-  disk bytes after browser commands.
+  reject fixture headers/symbols in runtime targets and verify real disk bytes
+  after commands.
 - **A broad runtime becomes a second implementation:** handlers call existing
   feature operations; seam tests compare direct runtime, TUI, and WebSocket
   snapshots after each command.
 - **Incomplete command coverage:** construction compares real bindings against
   `p0_command_descriptors()` and the independent required-command catalog.
-- **Network or same-host access leaks workspace data:** the only bind mode is
-  loopback. Native socket oracles cover the boundary.
-- **Static modules fail in browsers:** HTTP tests assert JavaScript MIME types,
-  and a real-browser smoke test loads the application from the C++ server.
-- **Shutdown loses recovery data:** lifecycle tests mutate a document, signal
-  shutdown, restart, and verify the existing scratch durability contract.
+- **Shutdown loses recovery data:** lifecycle tests mutate a document, restart,
+  and verify the existing scratch durability contract.
+
+> Historical (removed with the `ssg-editor` app): the loopback-only bind boundary,
+> browser static-module MIME serving, and the real-browser smoke test.
 
 ## Acceptance (Definition of Done)
 
@@ -135,17 +133,18 @@ as `text/javascript`. These additions shipped and remain useful to any host.
   `add_subdirectory`, native loopback-only server tests, and available Windows
   build/CI gates are green.
 - **Oracles:** Temporary-directory ground truth verifies real file operations;
-  direct-runtime and browser-WebSocket scripts compare snapshots after every
-  command; exact catalog comparison proves handler completeness; HTTP response
-  fixtures prove `/`, the six-asset manifest, `.mjs` MIME, and `/session` share
-  one port; OS socket inspection and non-loopback connection tests prove
-  loopback binding; restart fixtures prove recovery; source scans prove application targets do
-  not use test fixtures. Every command-family test initializes two equivalent
-  states, dispatches each descriptor through the runtime in one, invokes the
-  existing feature-owned operation directly in the other, and compares exact
-  model state, snapshots, emitted adapter calls, and disk bytes as applicable.
-  The table of cases is independently checked one-to-one against the command
-  catalog, so a bound no-op cannot satisfy command coverage.
+  direct-runtime and WebSocket scripts compare snapshots after every command;
+  exact catalog comparison proves handler completeness. Every command-family
+  test initializes two equivalent states, dispatches each descriptor through the
+  runtime in one, invokes the existing feature-owned operation directly in the
+  other, and compares exact model state, snapshots, emitted adapter calls, and
+  disk bytes as applicable. The table of cases is independently checked
+  one-to-one against the command catalog, so a bound no-op cannot satisfy command
+  coverage.
+
+> Historical oracles (removed with the `ssg-editor` app): the `/`, six-asset
+> manifest, and `.mjs` MIME HTTP-response fixtures, and OS-socket/non-loopback
+> binding inspection.
 
 ## Plan
 
