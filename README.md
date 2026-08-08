@@ -5,7 +5,21 @@ fuzzy file finder, find-and-replace, syntax highlighting, mouse support, and
 themes — with the editing conveniences you expect from Sublime Text or VS Code,
 in your terminal.
 
-## Run it
+## Install it
+
+On Arch Linux (or a derivative), one script builds an optimized binary and
+installs it to `/usr/local/bin/ssg`:
+
+```sh
+scripts/install.sh                 # installs deps, builds Release, installs ssg
+scripts/install.sh --prefix ~/.local  # install somewhere on your PATH instead
+scripts/install.sh --build-only    # just build; run ./build-release/ssg .
+```
+
+It installs the build tools via `pacman`, fetches the sibling `http` library if
+needed, and builds. Pass `--no-deps` if you manage the toolchain yourself.
+
+## Run from source
 
 ```sh
 cmake --preset dev && cmake --build build   # build the `ssg` binary
