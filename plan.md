@@ -13,9 +13,9 @@
       `doc/spec.md` and marked `doc/features/runnable-browser-application.md`
       historical (retained as the `EditorRuntime` design record). Kept the I18
       browser-feasibility invariant and the browser-deliverable protocol framing.
-- [x] Add a LICENSE file (MIT, Carl Zernicke 2026) and reference it from the
-      README. Vendored deps under `vendor/` keep their own licenses (tree-sitter
-      grammars MIT; libgit2 GPLv2-with-linking-exception).
+- [x] Add a LICENSE file (MIT) and reference it from the README. Vendored deps
+      under `vendor/` keep their own licenses (tree-sitter grammars MIT; libgit2
+      GPLv2-with-linking-exception).
 
 ## Done: "boring OOP" architecture refactor (R1–R4)
 
