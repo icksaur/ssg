@@ -8,13 +8,11 @@
 - [x] Remove authentication: delete `ApplicationAuthentication` + credential
       wire; credential-less `HttpEditorSessionHost::attach()`; scrub auth from
       all specs/tasks. The capability/principal authorization model is retained.
-- [ ] Resolve browser scope: the browser reference client and the `ssg-editor`
-      bundled-client app were removed (commit 96bfe4c5). `doc/spec.md` and
-      `doc/features/runnable-browser-application.md` still describe them and weave
-      "browser client" in as a design invariant (I18 feasibility, browser-safe
-      keymaps). Decide: protocol stays browser-capable with no shipped client, or
-      browser is fully out as a target client. Then reconcile spec.md + the
-      runnable-browser feature doc.
+- [x] Resolve browser scope (decision: protocol stays browser-capable, no
+      shipped client). Scrubbed `ssg-editor`/bundled-client claims from
+      `doc/spec.md` and marked `doc/features/runnable-browser-application.md`
+      historical (retained as the `EditorRuntime` design record). Kept the I18
+      browser-feasibility invariant and the browser-deliverable protocol framing.
 - [ ] Add a LICENSE file before publishing.
 
 ## Done: "boring OOP" architecture refactor (R1–R4)
