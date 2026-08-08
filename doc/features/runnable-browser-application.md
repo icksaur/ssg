@@ -130,7 +130,7 @@ as `text/javascript`. These additions shipped and remain useful to any host.
 - **Budgets:** Existing command/delta, 10 MiB viewport, idle CPU, queue, and
   durability budgets remain green.
 - **Gates:** Release build, all CTest tests, ASan/UBSan, consumer
-  `add_subdirectory`, native loopback-only server tests, and available Windows
+  `add_subdirectory`, native server/transport tests, and available Windows
   build/CI gates are green.
 - **Oracles:** Temporary-directory ground truth verifies real file operations;
   direct-runtime and WebSocket scripts compare snapshots after every command;
