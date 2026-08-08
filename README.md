@@ -147,3 +147,7 @@ goals, and there is intentionally no package marketplace or plugin registry.
 - [`doc/config.md`](doc/config.md) — writing `init.lua`
 - [`development.md`](development.md) — building, testing, benchmarks, and
   contributor workflow
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
