@@ -114,12 +114,15 @@ public:
                                          ClientCommand const& command);
 
     [[nodiscard]] Revision revision() const;
-    // Advance the session revision for a library-internal, out-of-band
-    // authoritative state change that does not flow through dispatch (M10
+    // CONTRACT
+    // EditorSession::advanceRevision advances the revision only for the runtime's
+    //   own out-of-band authoritative mutations that do not flow through
+    //   dispatch; a client-visible command must reach the revision through
+    //   dispatch, so this is never a substitute dispatch path.
+    // Used for library-internal, out-of-band authoritative state changes (M10
     // deferred enrichment: the tree scan and syntax highlighting run by
-    // prime_deferred after the first frame).  Client commands still advance the
-    // revision only through dispatch; this is the runtime's seam for its own
-    // authoritative mutations so delta clients observe them.  Throws on overflow.
+    // prime_deferred after the first frame) so delta clients observe them.
+    // Throws on overflow.
     Revision advanceRevision();
     [[nodiscard]] SessionTopology topology() const;
     [[nodiscard]] std::optional<AttachedClient> attachedClient(

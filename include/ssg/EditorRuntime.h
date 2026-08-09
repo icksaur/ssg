@@ -88,6 +88,12 @@ struct GitDiffScanResult {
     }
 };
 
+// CONTRACT
+// EditorRuntime: resetKeymapToDefault, focusEditor, setComposedChrome,
+//   primeDeferred, and the autosave-flush methods are host-only orchestration
+//   seams, called on the session thread. They deliberately bypass the command
+//   registry and are not user-visible actions, so they are never registered or
+//   exposed through the Lua API; that omission is intentional, not a gap.
 class EditorRuntime {
 public:
     [[nodiscard]] static EditorRuntimeCreateResult create(

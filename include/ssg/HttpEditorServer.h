@@ -52,24 +52,29 @@ struct AttachedSession {
     ViewId viewId;
 };
 
+// CONTRACT
+// HttpEditorSessionHost: the host is the sole authority for a connection's
+//   session id, principal, and capabilities, deriving them from its own policy
+//   and never from client-supplied input. SSG is not an authentication
+//   boundary; a credential-less attach is a deliberate refusal, not an
+//   unimplemented feature, and a host that needs authentication enforces it in
+//   its transport before a connection reaches attach.
+// CONTRACT
+// HttpEditorSessionHost: snapshot() returns the library's aggregate view for
+//   the attached client unchanged; the transport reconstructs no feature state
+//   and reads no capability from a client payload. Capabilities come only from
+//   the principal fixed at attach, so the direct and WebSocket paths cannot
+//   diverge into two editors.
 class HttpEditorSessionHost {
 public:
     virtual ~HttpEditorSessionHost() = default;
 
-    // Bind a new connection to a session. The host is the per-connection
-    // principal factory: it assigns the session id, principal (client identity,
-    // origin, and any host-granted capabilities), and view by its OWN policy,
-    // never from client-supplied input. It may decline (return nullopt) to cap
-    // sessions or reject a connection.
-    //
-    // There is no credential and no authentication: SSG is not an authentication
-    // boundary; a host that needs one enforces it in its own transport layer
-    // before the connection reaches here. Locality-based grants (e.g.
+    // Bind a new connection to a session. The host assigns the session id,
+    // principal, and view by its own policy, or may decline (return nullopt) to
+    // cap sessions or reject a connection. Locality-based grants (e.g.
     // `local_file_drop` for a trusted local UI) follow the host's deployment and
-    // bind choice, not a client assertion (doc/spec.md: local-only capabilities
-    // are granted by host policy, never by a client assertion). The host
-    // correlates later snapshot()/binary() callbacks by the SessionId/ClientId it
-    // returned here.
+    // bind choice. The host correlates later snapshot()/binary() callbacks by the
+    // SessionId/ClientId it returned here.
     [[nodiscard]] virtual std::optional<AttachedSession> attach() = 0;
     [[nodiscard]] virtual SessionSnapshot snapshot(SessionId const& sessionId,
                                                    ClientId clientId) = 0;
@@ -96,10 +101,15 @@ struct HttpEditorServerConfig {
     ProtocolLimits protocolLimits{};
 };
 
+// CONTRACT
+// HttpEditorRoute: the referenced EditorSession and Http::Server must outlive
+//   the route, and the server must be stopped before the route is destroyed, so
+//   no registered connection callback can run against freed route state. A route
+//   destroyed while its server is still bound aborts deliberately rather than
+//   softening into a best-effort teardown, which would leave a live callback
+//   over freed state.
 class HttpEditorRoute {
 public:
-    // The referenced server must outlive this route and must be stopped before
-    // route destruction so no registered callback can outlive its state.
     HttpEditorRoute(Http::Server& server, EditorSession& session,
                     HttpEditorSessionHost& host,
                     HttpEditorRouteConfig config = {});

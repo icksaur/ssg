@@ -109,6 +109,11 @@ public:
                                         const ClipboardViewState& after);
 };
 
+// CONTRACT
+// ClipboardRegister: the register is authoritative for every editor operation;
+//   the system clipboard is best-effort export only. There is no system
+//   clipboard read and no acknowledgement of a write — both were tried and
+//   retired — so no behavior may depend on either.
 class ClipboardRegister {
 public:
     explicit ClipboardRegister(int tabWidth = 4);
@@ -124,9 +129,8 @@ public:
     [[nodiscard]] ClipboardResult cut(
         Document& document, DocumentHistory& history,
         const SelectionSet& selections, std::uint64_t timestampMs);
-    // Pastes the register.  There is no system-clipboard READ: it is refused
-    // outright by some terminals on security grounds, so nothing may be designed
-    // around it, and a read is meaningless without a response path.
+    // Pastes the register.  A read is meaningless without a response path (see
+    // the ClipboardRegister contract).
     [[nodiscard]] ClipboardResult paste(
         Document& document, DocumentHistory& history,
         const SelectionSet& selections, std::uint64_t timestampMs);

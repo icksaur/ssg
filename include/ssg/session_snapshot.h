@@ -70,6 +70,13 @@ struct ClientSnapshotState {
     bool operator==(ClientSnapshotState const&) const = default;
 };
 
+// CONTRACT
+// SessionSnapshot: while one instance is alive, any number of threads may read
+//   it concurrently through const access, but moving or destroying it requires
+//   external exclusion, and handing it to a thread that may outlive the owner
+//   requires an explicit copy or serialization. It carries no internal
+//   synchronization for its own move or destruction. The same governs
+//   SessionDelta.
 class SessionSnapshot {
 public:
     SessionSnapshot(Revision revision, SessionTopology topology,

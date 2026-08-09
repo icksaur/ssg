@@ -153,8 +153,13 @@ struct FileReadResult {
 // Creates a new file, failing with AlreadyExists when the path is taken. The
 // exclusion is performed by the filesystem itself (O_CREAT|O_EXCL, CREATE_NEW)
 // rather than by a preceding existence check, so a concurrent creator cannot
-// be silently clobbered. This is why the seam offers no exists() helper: such a
-// helper would only ever be used to build the racy version of this call.
+// be silently clobbered.
+// CONTRACT
+// createFileExclusively: the clash check is the filesystem's own atomic
+//   creation, never a preceding existence probe, so the seam offers no exists()
+//   helper — one would only ever build the racy pre-check this replaces. For the
+//   same reason readFile exposes no path-to-string/bytes overload: a missing
+//   file must never be expressible as empty content.
 [[nodiscard]] FileIoResult createFileExclusively(
     const std::filesystem::path& target,
     std::span<const std::byte> contents);

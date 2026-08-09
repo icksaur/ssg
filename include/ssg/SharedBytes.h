@@ -19,8 +19,12 @@ namespace ssg {
 
 class SharedBytes {
 public:
-    // Anything that owns a contiguous immutable byte range. `data()` must stay
-    // valid and stable for the backing's lifetime.
+    // CONTRACT
+    // SharedBytes::Backing: an implementation must return a pointer from data()
+    //   that stays valid and unmoved for the whole lifetime of the backing,
+    //   because holders index into it directly; a future relocating or lazily-
+    //   faulting backing must preserve this or it is not a valid backing.
+    // Anything that owns a contiguous immutable byte range.
     struct Backing {
         Backing() = default;
         virtual ~Backing() = default;
