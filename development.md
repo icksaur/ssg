@@ -112,5 +112,5 @@ Exit code 0 is clean; 1 means findings to review.
 - `doc/config.md` — user guide: writing `init.lua`
 - `doc/learnings.md` — durable implementation and integration constraints
 - `cpp-values.md` — public C++ API design values
-- `copilot-instructions.md` — invariants, risk-tiered workflow, and test rules
+- `AGENTS.md` — ambient contract: where a promise lives, when to spec, gates
 - `backlog.md` (repository root) — deferred work, and the process for it

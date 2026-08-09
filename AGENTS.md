@@ -163,6 +163,24 @@ first. A change here alters what every future session is told.
   path to be impossible to write, not merely absent.
 - Linux and Windows are required; platform services use adapters with parity
   tests on both. → wants the adapter seam to be the only platform-specific site.
+- SSG is keyboard-first: every user-visible action is operable through
+  browser-deliverable keyboard input via the authoritative keymap, and every
+  client exposes the server-owned configuration input through a global binding
+  that works in every client state. Pointer input may supplement, never replace.
+  → wants a test that every action has a keyboard route.
+- Every UI element occupies server-described cells on the shared monospace grid;
+  a client may restyle for readability but never change geometry, semantics, or
+  behavior. → wants the grid to be the only geometry authority.
+- No blocking dialog or confirmation modal. A command takes effect immediately,
+  reports through the view model, and makes a destructive action reversible
+  through recovery, reopen, backup, or a compensating command. → wants the
+  absence of a modal primitive to make one impossible to add.
+- Every user-visible action is registered in the command registry and callable
+  through the versioned Lua API, except lifecycle, raw platform I/O, and
+  capability-grant decisions. → wants registration to be the only path to a
+  user-visible action.
+- No feature exists that a current standards-based browser cannot expose through
+  the client API. → wants the feasibility check at the API seam.
 - Values and budgets live in code; prose names symbols, never numbers. → wants a
   lint over CONTRACT lines and Markdown.
 

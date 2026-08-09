@@ -15,7 +15,7 @@ git worktree add -b <slug>-task ../ssg-<slug> <dependency-complete-sha>
 
 Every task follows this mandatory workflow:
 
-1. Read `copilot-instructions.md`, `doc/spec.md`, `doc/learnings.md`, the
+1. Read `AGENTS.md`, `doc/spec.md`, `doc/learnings.md`, the
    referenced feature spec, and the task file.
 2. Use the `task` tool with Claude Opus 4.8 for a task/spec sanity review.
 3. Fold warranted findings into the task's feature spec before implementation.

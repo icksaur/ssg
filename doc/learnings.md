@@ -13,8 +13,8 @@ Record only durable, cross-task knowledge such as:
 
 Do not record task summaries, progress, speculation, obvious documentation, or
 temporary workarounds. Each entry names the discovering task, states the
-learning, and explains its consequence. Promote a learning into
-`copilot-instructions.md` or `doc/spec.md` when it becomes a required invariant,
+learning, and explains its consequence. Promote a learning into a `// CONTRACT`
+line, a test, or `AGENTS.md` when it becomes a required invariant,
 then remove or shorten the redundant entry here.
 
 ## foundation-harness
