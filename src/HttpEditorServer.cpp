@@ -52,8 +52,11 @@ DecodeSessionAttachRequestResult decodeSessionAttachRequest(
                 "attach request exceeds message limit"};
     }
     auto const fields = split(message);
-    if (fields.size() != 3 || fields[0] != "SSG1" ||
-        fields[1] != "ATTACH") {
+    if (fields.empty() || fields[0] != "SSG1") {
+        return {ProtocolError::UnsupportedVersion, std::nullopt,
+                "unsupported protocol version"};
+    }
+    if (fields.size() != 3 || fields[1] != "ATTACH") {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "expected SSG1 ATTACH request"};
     }

@@ -521,12 +521,20 @@ TEST(attachRequestNeverCarriesAClientGrantedCapability) {
 
 TEST(attachRejectsAForeignPreambleWithoutAPartialRequest) {
     // A bad preamble yields no request object at all, so attach() can never act
-    // on a half-parsed frame: a foreign prefix, a wrong keyword, and a
-    // truncated frame each fail whole.
-    for (auto const* preamble :
-         {"XXXX ATTACH 9", "SSG1 HELLO 9", "SSG1 ATTACH"}) {
-        auto const decoded = ssg::decodeSessionAttachRequest(preamble);
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
+    // on a half-parsed frame. A foreign SSG1 prefix is an unsupported version
+    // (matching the command codec); a wrong keyword or a truncated frame is
+    // malformed. Either way there is no partial request.
+    struct Case {
+        char const* preamble;
+        ssg::ProtocolError error;
+    };
+    for (auto const& c : {
+             Case{"XXXX ATTACH 9", ssg::ProtocolError::UnsupportedVersion},
+             Case{"SSG1 HELLO 9", ssg::ProtocolError::MalformedMessage},
+             Case{"SSG1 ATTACH", ssg::ProtocolError::MalformedMessage},
+         }) {
+        auto const decoded = ssg::decodeSessionAttachRequest(c.preamble);
+        ASSERT_EQ(decoded.error, c.error);
         ASSERT_FALSE(decoded.request.has_value());
     }
 }

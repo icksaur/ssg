@@ -28,13 +28,13 @@ enum class PromptControlKind : std::uint8_t { Input, Toggle, Count };
 // the FOOTER. This is the SINGLE place that "where does the focused prompt live"
 // is expressed, so the two scattered `kind == Palette` checks cannot drift
 // (doc/spec-chrome-stacks.md §Prompt as a focusable region mode).
+enum class PromptRegion : std::uint8_t { Header, Footer };
+
 // CONTRACT
 // promptFocusRegion: because there is exactly one PromptSurface (one optional
 //   request), at most one prompt is ever active, and FocusTarget::Prompt
 //   resolves to this region for that one prompt — the focus model is unambiguous
 //   by construction, not by convention.
-enum class PromptRegion : std::uint8_t { Header, Footer };
-
 [[nodiscard]] constexpr PromptRegion promptFocusRegion(PromptKind kind) noexcept {
     return kind == PromptKind::Palette ? PromptRegion::Header
                                        : PromptRegion::Footer;

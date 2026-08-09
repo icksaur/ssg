@@ -150,8 +150,8 @@ first. A change here alters what every future session is told.
   default. → wants the seam narrow enough that a host physically cannot.
 - Every interaction enters through the typed client API and every observable view
   leaves through a snapshot or delta on it; there is no out-of-band UI,
-  filesystem, clipboard, or control channel. The whole product works over one
-  ordered WebSocket connection. → wants a chokepoint on the API surface.
+  filesystem, clipboard, or control channel. A WebSocket host carries the whole
+  product over one ordered connection. → wants a chokepoint on the API surface.
 - `Theme` is the single source of all color: exactly 16 indexed colors and
   semantic role mappings flow through the API. No client, plugin, syntax
   definition, or adapter introduces a literal or computed color. → wants a lint
