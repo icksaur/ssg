@@ -238,7 +238,7 @@ public:
             ssg::SessionId{"test-session"},
             ssg::InvocationPrincipal{
                 ssg::ClientId{remote ? 12u : 11u},
-                ssg::InvocationOrigin::Websocket,
+                attachOrigin,
                 remote ? std::vector<ssg::CapabilityId>{}
                        : std::vector<ssg::CapabilityId>{
                              ssg::CapabilityId{"local_file_drop"}}},
@@ -267,6 +267,10 @@ public:
     ssg::EditorSession& session;
     std::string document;
     bool remote{false};
+    // A host binds a Websocket-origin principal onto a socket; the origin is a
+    // property of the deployment, exposed here so a seam test can drive a
+    // non-Websocket origin through the same attach path.
+    ssg::InvocationOrigin attachOrigin{ssg::InvocationOrigin::Websocket};
     std::atomic<int> statusActions{0};
     std::atomic<int> binaryFrames{0};
 };
@@ -297,6 +301,16 @@ void attach(TestSocket socket,
             std::optional<ssg::Revision> revision = std::nullopt) {
     sendAll(socket,
              maskedFrame(0x1, ssg::encodeSessionAttachRequest({revision})));
+}
+
+// True when the server has closed the connection: the next frame is a WebSocket
+// close (opcode 0x8) or the socket has already gone away.
+bool connectionClosed(FrameReader& reader) {
+    try {
+        return reader.next().opcode == 0x8;
+    } catch (std::exception const&) {
+        return true;
+    }
 }
 
 TEST(externallyOwnedRouteSharesOneServerLifecycle) {
@@ -491,16 +505,33 @@ TEST(replayLargerThanTheOutboundQueueFallsBackToSnapshot) {
     server.stop();
 }
 
-TEST(configAndAttachCodecRejectUnboundedOrClientAuthorityInputs) {
+TEST(attachRequestNeverCarriesAClientGrantedCapability) {
+    // The only field a client can put on the attach wire is the last-applied
+    // revision; a capability grant is structurally inexpressible, and the codec
+    // rejects any attempt to smuggle one in as extra tokens. Capabilities are
+    // host policy, never a client assertion.
     auto encoded = ssg::encodeSessionAttachRequest({ssg::Revision{9}});
     auto decoded = ssg::decodeSessionAttachRequest(encoded);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.request->lastAppliedRevision, ssg::Revision{9});
-    // A client cannot smuggle extra authority fields into the attach request.
     ASSERT_FALSE(ssg::decodeSessionAttachRequest(
                      "SSG1 ATTACH 9 capabilities=all")
                      .accepted());
+}
 
+TEST(attachRejectsAForeignPreambleWithoutAPartialRequest) {
+    // A bad preamble yields no request object at all, so attach() can never act
+    // on a half-parsed frame: a foreign prefix, a wrong keyword, and a
+    // truncated frame each fail whole.
+    for (auto const* preamble :
+         {"XXXX ATTACH 9", "SSG1 HELLO 9", "SSG1 ATTACH"}) {
+        auto const decoded = ssg::decodeSessionAttachRequest(preamble);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
+        ASSERT_FALSE(decoded.request.has_value());
+    }
+}
+
+TEST(serverConstructionRejectsAZeroQueueOrReplay) {
     Fixture fixture;
     ASSERT_THROWS(
         ssg::HttpEditorServer(
@@ -512,6 +543,86 @@ TEST(configAndAttachCodecRejectUnboundedOrClientAuthorityInputs) {
             *fixture.session,
             *fixture.host, {18778, "/session", 1, 0, 250ms}),
         std::invalid_argument);
+}
+
+TEST(attachOnlyBindsAWebsocketOriginPrincipal) {
+    // Binding another origin's principal onto a socket would route its authority
+    // over the wire. A Websocket-origin attach succeeds; an in-process one is
+    // refused and the connection closed with no snapshot.
+    {
+        Fixture fixture;
+        constexpr std::uint16_t port = 18780;
+        ssg::HttpEditorServer server{
+            *fixture.session,
+            *fixture.host, {port, "/session", 8, 8, 250ms}};
+        server.start();
+        std::this_thread::sleep_for(20ms);
+        auto socket = connectWebsocket(port);
+        FrameReader reader{socket.socket};
+        attach(socket.socket);
+        ASSERT_TRUE(
+            ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload)
+                .accepted());
+        server.stop();
+    }
+    {
+        Fixture fixture;
+        fixture.host->attachOrigin = ssg::InvocationOrigin::InProcess;
+        constexpr std::uint16_t port = 18781;
+        ssg::HttpEditorServer server{
+            *fixture.session,
+            *fixture.host, {port, "/session", 8, 8, 250ms}};
+        server.start();
+        std::this_thread::sleep_for(20ms);
+        auto socket = connectWebsocket(port);
+        FrameReader reader{socket.socket};
+        attach(socket.socket);
+        ASSERT_TRUE(connectionClosed(reader));
+        server.stop();
+    }
+}
+
+TEST(aBoundConnectionRejectsAnyFrameThatIsNotATypedCommand) {
+    // The whole product travels one ordered channel; a bound connection accepts
+    // only typed binary command frames. A text frame, or a binary frame that
+    // decodes as no typed message, opens no second channel: it closes.
+    {
+        Fixture fixture{/*remote=*/true};
+        constexpr std::uint16_t port = 18782;
+        ssg::HttpEditorServer server{
+            *fixture.session,
+            *fixture.host, {port, "/session", 8, 8, 250ms}};
+        server.start();
+        std::this_thread::sleep_for(20ms);
+        auto socket = connectWebsocket(port);
+        FrameReader reader{socket.socket};
+        attach(socket.socket);
+        ASSERT_TRUE(
+            ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload)
+                .accepted());
+        sendAll(socket.socket, maskedFrame(0x1, "a control text frame"));
+        ASSERT_TRUE(connectionClosed(reader));
+        server.stop();
+    }
+    {
+        Fixture fixture{/*remote=*/true};
+        constexpr std::uint16_t port = 18783;
+        ssg::HttpEditorServer server{
+            *fixture.session,
+            *fixture.host, {port, "/session", 8, 8, 250ms}};
+        server.start();
+        std::this_thread::sleep_for(20ms);
+        auto socket = connectWebsocket(port);
+        FrameReader reader{socket.socket};
+        attach(socket.socket);
+        ASSERT_TRUE(
+            ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload)
+                .accepted());
+        sendAll(socket.socket,
+                maskedFrame(0x2, "not a command, status, or binary frame"));
+        ASSERT_TRUE(connectionClosed(reader));
+        server.stop();
+    }
 }
 
 TEST(slowClientCannotGrowTheOutboundQueue) {
@@ -553,7 +664,11 @@ int main() {
     RUN(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot);
     RUN(statusAndBinaryIngressShareTheAttachedConnection);
     RUN(replayLargerThanTheOutboundQueueFallsBackToSnapshot);
-    RUN(configAndAttachCodecRejectUnboundedOrClientAuthorityInputs);
+    RUN(attachRequestNeverCarriesAClientGrantedCapability);
+    RUN(attachRejectsAForeignPreambleWithoutAPartialRequest);
+    RUN(serverConstructionRejectsAZeroQueueOrReplay);
+    RUN(attachOnlyBindsAWebsocketOriginPrincipal);
+    RUN(aBoundConnectionRejectsAnyFrameThatIsNotATypedCommand);
     RUN(slowClientCannotGrowTheOutboundQueue);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

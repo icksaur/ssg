@@ -9,6 +9,7 @@
 #include <fstream>
 #include <memory>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -407,6 +408,21 @@ TEST(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor) {
     fs::remove_all(root);
 }
 
+TEST(OnlyOneScriptHostMayAttachPerRuntime) {
+    // The script client id is reserved for the process's one ScriptHost. A
+    // second host over the same runtime is refused whole at construction, not
+    // left half-connected, and the first host keeps working.
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    ssg::ScriptHost scripts{*runtime};
+
+    ASSERT_THROWS(ssg::ScriptHost{*runtime}, std::runtime_error);
+
+    ASSERT_TRUE(scripts.evaluate("survived = 1").accepted());
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
@@ -426,6 +442,7 @@ int main() {
     RUN(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor);
     RUN(aScriptThatQueuesWithoutBoundIsRefusedRatherThanSpinning);
     RUN(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised);
+    RUN(OnlyOneScriptHostMayAttachPerRuntime);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

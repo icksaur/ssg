@@ -945,6 +945,28 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
 // ordinal is what goes on the wire, so their slots must stay dead rather than be
 // reclaimed: a peer built against the old numbering must be told the kind is
 // unsupported, never handed a message that now means something else.
+TEST(protocolMessageKindOrdinalsAreNeverRenumbered) {
+    // The ordinal is the wire identity two peers exchange, so a renumber makes
+    // them disagree about a message's meaning while both still parse it. Each
+    // enumerator is pinned to its literal value, and the retired clipboard
+    // ordinals (3 = request, 4 = response) stay reserved, never reused. Casting
+    // to a byte the way the round-trip tests do would survive a renumber; this
+    // asserts the literals so it does not.
+    using Kind = ssg::ProtocolMessageKind;
+    ASSERT_EQ(static_cast<int>(Kind::CommandRequest), 0);
+    ASSERT_EQ(static_cast<int>(Kind::SessionSnapshot), 1);
+    ASSERT_EQ(static_cast<int>(Kind::SessionDelta), 2);
+    ASSERT_EQ(static_cast<int>(Kind::StatusActionInvocation), 5);
+    ASSERT_EQ(static_cast<int>(Kind::CommandResult), 6);
+
+    for (auto const kind : {Kind::CommandRequest, Kind::SessionSnapshot,
+                            Kind::SessionDelta, Kind::StatusActionInvocation,
+                            Kind::CommandResult}) {
+        ASSERT_NE(static_cast<int>(kind), 3);
+        ASSERT_NE(static_cast<int>(kind), 4);
+    }
+}
+
 TEST(retiredWireKindsAreNeverReclaimed) {
     ssg::StatusActionInvocation const invocation{ssg::StatusId{1}, "a", 1};
     auto const canonical =
@@ -1302,6 +1324,7 @@ int main() {
     RUN(binaryFrameRejectsTruncatedInput);
     RUN(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus);
     RUN(retiredWireKindsAreNeverReclaimed);
+    RUN(protocolMessageKindOrdinalsAreNeverRenumbered);
     RUN(valueBoundsAreEnforcedOnDecode);
     RUN(regenerateCanonicalFixtures);
     RUN(canonicalFixturesDecodeToTheExpectedValues);
