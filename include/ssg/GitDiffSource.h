@@ -90,10 +90,11 @@ public:
     // not be a git repository.
     [[nodiscard]] virtual bool usable() const = 0;
 
-    // `workspaceRelative` is relative to the workspace root this matcher was
-    // built for, which is NOT necessarily the repository root.  Rebasing it onto
-    // the repository work directory is the matcher's job; callers must never
-    // pre-rebase, and must not pass absolute paths.
+    // CONTRACT
+    // GitDiffSource::ignores: rebasing the workspace-relative path onto the
+    //   repository work directory is the matcher's job; callers must never
+    //   pre-rebase and must not pass an absolute path. The workspace root this
+    //   matcher was built for is not necessarily the repository root.
     [[nodiscard]] virtual bool ignores(
         const std::filesystem::path& workspaceRelative) const = 0;
 };

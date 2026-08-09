@@ -61,7 +61,6 @@ struct GcbRange {
     GcbProp prop;
 };
 
-// Binary search: true when cp falls in any URange range in ranges[0..n).
 // Requires ranges to be sorted by lo and non-overlapping.
 static bool inRanges(const URange* ranges, int n, uint32_t cp) noexcept {
     int lo = 0, hi = n - 1;
@@ -74,7 +73,7 @@ static bool inRanges(const URange* ranges, int n, uint32_t cp) noexcept {
     return false;
 }
 
-// Binary search in a sorted GcbRange array; returns Other if not found.
+// Requires ranges sorted by lo and non-overlapping; returns Other when cp is in none.
 static GcbProp gcbLookup(const GcbRange* ranges, int n, uint32_t cp) noexcept {
     int lo = 0, hi = n - 1;
     while (lo <= hi) {

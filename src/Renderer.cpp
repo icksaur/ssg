@@ -130,8 +130,6 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
     return lines;
 }
 
-// Underline the document cells covered by LSP diagnostics.
-//
 // A separate pass over already-painted cells rather than a parameter threaded
 // through painting: a diagnostic is a DECORATION over whatever the cell already
 // shows, so it must not disturb syntax colour, selection, find highlighting or

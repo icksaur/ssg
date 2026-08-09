@@ -28,21 +28,24 @@ struct FileArchivePruneReport {
     // backup. Retained for the same reason as unparseable entries, and counted
     // so the condition is visible rather than a silently immortal entry.
     std::size_t retainedFutureDated = 0;
-    // Housekeeping failures. Non-empty does NOT mean the caller should fail:
-    // a corrupt archive entry must never stop a user opening their workspace.
+    // Housekeeping failures. Non-empty does NOT mean the caller should fail
+    // (see the FileArchive contract).
     std::string message;
 
     [[nodiscard]] bool ok() const noexcept { return message.empty(); }
 };
 
+// CONTRACT
+// FileArchive: an archive housekeeping failure is never fatal to the caller —
+//   a corrupt or unreadable archive entry must never stop a user opening their
+//   workspace. Delete is deliberately unconfirmed, so the archive is what makes
+//   the absence of a confirmation safe.
 // The durable home for deleted files.
 //
 // Distinct from the recovery store on purpose. Recovery is a bounded undo ring
 // (32 records / 64 MiB, evicting oldest-first), which is right for undo and
 // wrong as the only surviving copy of something the user deleted: its lifetime
-// would depend on how many unrelated edits happened afterwards. Delete is
-// deliberately unconfirmed, so the archive is what makes the absence of a
-// confirmation safe.
+// would depend on how many unrelated edits happened afterwards.
 class FileArchive {
 public:
     explicit FileArchive(std::filesystem::path root);
