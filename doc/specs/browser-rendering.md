@@ -29,11 +29,17 @@ The one open fork is **where the visible lines' cell geometry comes from**:
   library already computes (grapheme → cell-column spans) plus each span's syntax
   scope. All layout stays in C++; the wire stays semantic; no client-side layout
   code ships.
-- **B — WASM the layout core.** Compile the isolated, already-tested
-  `GraphemeLayout` (`computeRun`/`CellRun`) to WebAssembly. The browser holds the
-  whole `document.text`, so it can lay out any line locally against the server's
-  wrap policy. No protocol change; ships and loads a WASM module; the geometry
-  code is literally the same code, so the two clients cannot diverge.
+- **B — WASM the layout core.** Compile the layout code to WebAssembly so the
+  browser, which holds the whole `document.text`, lays out any line locally
+  against the server's policy. The geometry code is literally the same code, so
+  the two clients cannot diverge, and no protocol change is needed. Scope caveat
+  (load-bearing): `GraphemeLayout` alone is not enough — it deliberately excludes
+  wrapping, visual-row projection, scrollbars, and viewports. To derive arbitrary
+  visual rows, `totalVisualRows`, wrap boundaries, and diff phantom rows from
+  `document.text`, B must also compile the shared projection boundary that owns
+  them (`Viewport` visual-row projection over `CellRun`s, and the diff phantom-row
+  source). B's real cost is that boundary, not one module; the decision must price
+  it as such.
 
 Both honor single-geometry-authority. The choice is decided by scroll, below.
 
@@ -70,25 +76,39 @@ arrive, past rows whose geometry the client may not have.
   them — the standard native-virtualized-list behavior, but with momentary blanks
   on large flings, and a server that renders a wider band per scroll for every
   client.
-- Under **B**, the client lays out any line locally from `document.text`, so a
-  fling never outruns its data: fully native momentum with no placeholders and no
-  per-scroll server work.
+- Under **B**, the client projects any line locally from `document.text` and so
+  never outruns its data — *provided* B compiled the whole projection boundary
+  (`GraphemeLayout` plus `Viewport` visual-row projection plus the diff
+  phantom-row source), not just grapheme segmentation. Compiling only
+  `GraphemeLayout` leaves the client unable to derive visual rows or wrap
+  boundaries, and a fling outruns geometry exactly as under A′. The fling
+  advantage is real only for the fully-scoped B.
 
-So if smooth momentum over large files is a product requirement, B is favored;
-if minimizing shipped client complexity and keeping the wire self-describing is
-paramount, A′ is favored and accepts fling placeholders. This is the decision the
-review must make. The recommendation is B scoped as narrowly as possible (only
-`GraphemeLayout`, not the whole renderer), because it removes the fling problem
-outright while keeping the server authoritative for wrap policy and
-`firstVisualRow` reconciliation; A′ is the fallback if the WASM build/ship cost
-is judged too high.
+So the fork is genuinely: A′ ships no client layout and accepts fling
+placeholders plus a wider server render band per client; fully-scoped B ships and
+loads a WASM projection boundary and gets placeholder-free native momentum with
+no per-scroll server work. The earlier "B is cheap, just `GraphemeLayout`"
+framing was wrong — B's cost is the projection boundary. The review must weigh
+that larger B against A′'s placeholders; the recommendation is deferred to the
+prototype-and-price step below rather than asserted here.
 
 ## Consequences either way
 
 - The overflow-scroller and client-owned offset for editor and tree are new
   regardless of A′/B. The reconciliation contract — client owns the pixel offset,
   server owns `firstVisualRow`, the client nudges via `scroll_to_fraction` — is
-  the load-bearing promise and wants a test.
+  the load-bearing promise and wants a test. It is incomplete without an explicit
+  arbitration rule for a server-initiated reveal that lands mid-fling: otherwise
+  a reveal publishes a new `firstVisualRow`, then the browser's next throttled,
+  now-stale `scroll_to_fraction` immediately overwrites it, snapping the view
+  back. The rule must be pinned, not left implicit. Candidate: every scroll nudge
+  carries the snapshot revision it was computed against, and the server ignores a
+  nudge whose basis predates its last authoritative reveal (an epoch check), so a
+  reveal wins and the browser re-derives its offset from the revealed
+  `firstVisualRow` on the next snapshot. The alternative — browser input suppresses
+  reveal until the fling goes idle — is worse: it lets a client's momentum defeat
+  a semantic reveal (e.g. jump-to-match). Whichever is chosen, it is a seam rule
+  with a knowable answer and wants a seam oracle named for it.
 - Off-screen rows the client paints itself (B) must reproduce the server's cell
   geometry exactly; that is only safe because it is the same code, and is the
   reason B compiles `GraphemeLayout` rather than reimplementing it. A JS
@@ -100,21 +120,27 @@ is judged too high.
 
 ## Open questions for review
 
-1. A′ vs B — the fork above. Momentum-over-large-files priority vs shipped-client
-   complexity and wire self-description.
-2. If B: what `GraphemeLayout` exports across the WASM boundary, and the build
-   cost (Emscripten toolchain, module size, load path).
+1. A′ vs B — the fork above, now correctly priced: A′'s fling placeholders and
+   wider per-client render band vs fully-scoped B's WASM projection boundary
+   (`GraphemeLayout` + `Viewport` projection + diff phantom-row source).
+2. If B: the exact export surface of the projection boundary across the WASM
+   boundary, and the build cost (Emscripten toolchain, module size, load path).
+   Confirm the boundary is a clean, side-effect-free unit before assuming it
+   compiles.
 3. If A′: the overscan band policy and the placeholder-during-fling behavior, and
    the per-client server render cost of a wider band.
-4. The scroll-reconciliation contract's exact shape (throttle, who wins on a
-   conflicting server-initiated reveal mid-fling).
+4. The scroll-reconciliation contract's exact shape: the throttle, and the
+   reveal-vs-fling arbitration (the epoch/revision-basis rule above), pinned by a
+   seam oracle so a red bar means the arbitration promise broke.
 
 ## Plan
 
 1. Prototype the overflow-scroller virtualization against a live
    `SessionSnapshot` to measure fling behavior under A′ (placeholder frequency,
    band width needed).
-2. Scope and price B: export surface for `GraphemeLayout`, module size, load.
+2. Scope and price B honestly: the export surface of the whole projection
+   boundary (`GraphemeLayout` + `Viewport` visual-row projection + diff
+   phantom-row source), module size, and load — not just grapheme segmentation.
 3. Decide A′ vs B from 1–2, record it here, then spec the chosen client's first
    runnable slice (read-only: render one visible screen, scroll it natively).
 4. On implementation, promote the reconciliation contract to a test and any
