@@ -105,12 +105,26 @@ scrollbar random *seek* (not a fling): it shows a single-RTT blank under A′ or
 any server-authoritative model, exactly as every virtualized remote list does.
 
 This substantially retires the fling risk that was A′'s main liability, and with
-it most of B's justification for momentum scrolling. The remaining unmeasured
-input is the cell-run bytes-per-row of the A′ section, which affects only
-bandwidth, not placeholder incidence. The decision now tilts toward A′ — simpler
-client, no WASM toolchain, self-describing wire — unless a non-scroll factor
-(fully offline operation, or eliminating per-client server render cost) is judged
-to outweigh it. The review and the bytes-per-row measurement should settle it.
+it most of B's justification for momentum scrolling.
+
+**Bandwidth is now measured, not modeled.** The naive form of the A′ cell-run
+section — one span per grapheme — is tens to hundreds of bytes per row and is the
+trap to avoid. Run-length packing collapses it to a couple of bytes per row for
+code, a handful for tab-indented or wide/CJK text, because a line's cell geometry
+is a few uniform runs (exceptions-only packing is smaller still for ASCII but
+degenerates on all-wide text, so the encoder run-length-packs, or picks the
+smaller of the two per line). A hard-fling envelope therefore costs on the order
+of a kilobyte, sent once and delta-reducible — negligible on any link. Syntax is
+not an A′ cost: whole-document spans already ride the semantic snapshot for every
+client, and the browser intersects the spans it holds with the visible window (a
+range query, not geometry re-derivation); folding resolved scope into the cell
+section is an option, not a requirement.
+
+With both the fling-placeholder risk and the bandwidth cost retired by
+measurement, the decision favors **A′** — no WASM toolchain, self-describing
+wire, simpler client — unless a non-scroll factor (fully offline operation, or
+eliminating per-client server render cost) is judged to outweigh it. B remains
+the fallback for a hard offline requirement.
 
 ## Consequences either way
 
@@ -161,10 +175,15 @@ to outweigh it. The review and the bytes-per-row measurement should settle it.
    release, so predictive banding (request the fling envelope up front) is
    placeholder-free to wide-area RTT at sub-screen overscan. Predictive banding
    is now a required element of the A′ client, not an optimization.
-2. Scope and price B honestly: the export surface of the whole projection
+2. Price B only if A′ is rejected: the export surface of the whole projection
    boundary (`GraphemeLayout` + `Viewport` visual-row projection + diff
-   phantom-row source), module size, and load — not just grapheme segmentation.
-3. Decide A′ vs B from 1–2, record it here, then spec the chosen client's first
-   runnable slice (read-only: render one visible screen, scroll it natively).
+   phantom-row source) as a WASM module, its size, and load cost. A′'s bandwidth
+   is measured and negligible (run-length-packed cell geometry is a few bytes per
+   row), so B is now the fallback for a hard offline requirement, not the default.
+3. Decide A′ vs B from 1–2 — measurement now favors A′ (placeholder-free
+   predictive banding, negligible run-length-packed bandwidth); record the
+   decision here, then spec the chosen client's first runnable slice (read-only:
+   render one visible screen, scroll it natively). The cell-run section must
+   run-length-pack, never ship one span per grapheme.
 4. On implementation, promote the reconciliation contract to a test and any
    deliberate refusal to a CONTRACT line; delete this file in that commit.
