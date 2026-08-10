@@ -10,8 +10,6 @@
 //
 // Construction failure contract: these types have no invalid values; types
 // with invariants live in config.h.
-//
-// See doc/spec.md §Foundation infrastructure for the full contract.
 
 #include <compare>
 #include <cstdint>

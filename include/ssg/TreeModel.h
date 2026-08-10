@@ -156,8 +156,8 @@ struct TreeProviderView {
     TreeProviderKind kind;
     std::vector<TreeNodeView> nodes;
     std::optional<TreeNodeId> selected;
-    // Scroll state resolved at snapshot time against the panel height (see
-    // doc/spec-scroll.md R2). `first_visible` is the index into `nodes` of the
+    // Scroll state resolved at snapshot time against the panel height.
+    // `first_visible` is the index into `nodes` of the
     // first on-screen node; `scrollbar` is its thumb geometry; `visible_node_ids`
     // is the bounded viewport_row -> node id hit map for the visible window only
     // (empty when the panel is hidden). `nodes` still carries the full expanded

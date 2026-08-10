@@ -1,6 +1,6 @@
 #pragma once
 
-// The composable box-tree layout engine (doc/spec-layout-engine.md).
+// The composable box-tree layout engine.
 //
 // A LayoutNode tree is solved against a bounding Rect into a flat list of
 // SolvedBoxes -- one rectangle per node, in tree (emission) order. The vocabulary

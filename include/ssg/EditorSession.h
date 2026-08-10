@@ -81,7 +81,7 @@ public:
     // EditorRuntime::dispatch, whose wrapper touches the session before
     // dispatching and so must refuse earlier.  A caller meeting this needs the
     // alternative, not just the prohibition -- composing commands is a
-    // supported thing to want (doc/spec-reentrant-dispatch.md).
+    // supported thing to want.
     static constexpr std::string_view kNestedDispatchRefusal =
         "a command handler may not dispatch another command directly; ask for "
         "it instead, so each command still advances the revision exactly once";

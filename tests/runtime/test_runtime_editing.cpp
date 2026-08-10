@@ -1193,8 +1193,8 @@ TEST(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret) {
     std::filesystem::remove_all(root);
 }
 
-// Single-source prompt rect (doc/spec-chrome-stacks.md §Single-source prompt
-// rect): the shell reservation (shell.prompt) and the prompt-status reservation
+// Single-source prompt rect: the shell reservation (shell.prompt) and the
+// prompt-status reservation
 // (promptStatus.prompt->rect) MUST be the SAME rect, and it MUST be the
 // full-width bottom strip -- so the a11y node, the hit region, and the rendered
 // controls cannot diverge. The panel is the combination that used to break this:
@@ -1250,8 +1250,8 @@ TEST(promptReservationIsSingleSourcedAndFullWidthAcrossPanel) {
     both(3);  // Replace = 3 rows
 }
 
-// Prompt focus is unambiguous by construction (doc/spec-chrome-stacks.md §Prompt
-// as a focusable region mode): there is one PromptSurface, so at most one prompt
+// Prompt focus is unambiguous by construction: there is one PromptSurface, so
+// at most one prompt
 // is active; focus is Prompt iff a prompt is active; and promptFocusRegion(kind)
 // names where that one prompt lives -- Header for the palette (its query IS the
 // header input line, no footer reservation), Footer for find/replace (a footer

@@ -122,8 +122,8 @@ struct ScrollbarMetrics {
 };
 
 // The scrollbar's two conversions, as one matched pair so they cannot use
-// different rounding (the source of the "thumb skips rows / top unreliable" bug,
-// doc/spec-scrollbar-grab.md amendment).  `scrollScaleRounded` is round-half-up
+// different rounding (the source of the "thumb skips rows / top unreliable"
+// bug).  `scrollScaleRounded` is round-half-up
 // integer scaling; both directions go through it, so they invert exactly:
 // `scrollThumbStart(scrollFirstRow(t)) == t` for every gutter row `t` (proven
 // exhaustively).  `travel = viewportRows - thumbSize` is the range of the thumb's
@@ -258,7 +258,7 @@ public:    // The scrollbar thumb geometry for a list of `total_rows` items show
     // (`total_rows <= viewport_rows`) the thumb is hidden: `maximum_first_row`,
     // `thumb_start`, and `thumb_size` collapse to a no-thumb sentinel.  Shared by
     // every scrollable region (editor, tree, palette) so thumb math lives in one
-    // place (see doc/spec-scroll.md).
+    // place.
     [[nodiscard]] ScrollbarMetrics scrollbarMetrics(
         uint32_t totalRows,
         uint32_t viewportRows,

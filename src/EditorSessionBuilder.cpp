@@ -69,7 +69,7 @@ std::unique_ptr<EditorSession> EditorSessionBuilder::build() {
     // Nothing is copied out of the catalog here.  The session holds it, so a
     // command registered after this returns is dispatchable without any
     // propagation step -- and cannot appear in the palette while being refused
-    // by dispatch (doc/spec-command-registry.md, R8).
+    // by dispatch.
     return std::make_unique<EditorSession>(impl_->catalog, impl_->services);
 }
 

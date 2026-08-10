@@ -1,4 +1,4 @@
-# M10-2 optional-subsystem construction audit (doc/spec-fast-startup.md).
+# M10-2 optional-subsystem construction audit.
 # A core library facility (linked into every ssg build) that optional subsystems
 # call to record their construction, so the fast-startup oracle can assert none
 # runs on the first-frame path.

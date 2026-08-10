@@ -26,7 +26,7 @@ namespace ssg {
 // PROCESS-LOCAL.  A handle means whatever the catalog that issued it says, and
 // registration order varies with which components and plugins registered.  It
 // is never persisted, never sent on the wire, and never compared across
-// processes (doc/spec-command-registry.md, R6).  The index is not publicly
+// processes.  The index is not publicly
 // readable, and there is deliberately no `toValue` overload for it, so encoding
 // one does not compile.
 class CommandHandle {

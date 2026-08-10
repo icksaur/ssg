@@ -1,6 +1,6 @@
 #pragma once
 
-// Composable chrome widgets (doc/spec-widget-chrome.md).
+// Composable chrome widgets.
 //
 // A widget is a self-contained UI element positioned by RELATIVE layout inside
 // its container. This header is the geometry core of the model: the widget
@@ -102,7 +102,7 @@ struct RowFit {
 //
 // These own "what text a widget shows", moved out of the renderer so the
 // configurable glyphs live with the widget rather than being stitched in at
-// paint time (doc/spec-widget-chrome.md §Ownership contract). Each is a pure
+// paint time. Each is a pure
 // string composition; the caller still blits the result and owns the row rect,
 // role, and caret.
 
@@ -179,7 +179,7 @@ struct InputLineLayout {
 // --- WidgetStack: one composable row (packLeft/packRight/center) -------------
 //
 // A `WidgetStack` lays out ONE row of the header or footer as three groups
-// (doc/spec-chrome-stacks.md): a LEFT group packed from the leading edge, a
+//: a LEFT group packed from the leading edge, a
 // RIGHT group packed from the trailing edge, and an optional single CENTER slot
 // between them. It is the one primitive that replaces `fitRow` + `packEnd` + the
 // input-line arithmetic; it is a pure value type with no renderer/runtime

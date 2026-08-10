@@ -115,11 +115,10 @@ CommandResult EditorSession::dispatch(ClientId clientId,
     // lock: the new revision below is computed from a value captured BEFORE the
     // handler runs, so a nested mutation would advance the revision and then be
     // overwritten -- two accepted mutations, one revision step, and a client
-    // replaying deltas silently misses an edit (doc/spec.md's I3).
+    // replaying deltas silently misses an edit.
     //
     // A handler that needs another command asks for it instead, and it runs as
-    // its own dispatch with its own revision step.  See
-    // doc/spec-reentrant-dispatch.md, and the oracle
+    // its own dispatch with its own revision step. The oracle
     // revisionAdvancesExactlyOncePerAcceptedMutation which pins this.
     //
     // (A handler that dispatched would also deadlock on the non-reentrant lock
@@ -144,7 +143,7 @@ CommandResult EditorSession::dispatch(ClientId clientId,
     // Straight from the live catalog, so a command registered a moment ago is
     // dispatchable now.  A snapshot taken when the session was built would
     // publish new commands to the palette and the keymap while refusing to run
-    // them (doc/spec-command-registry.md, R8).
+    // them.
     //
     // A handle names the command directly; a caller that has not resolved one
     // supplies only the name, which costs a lookup.

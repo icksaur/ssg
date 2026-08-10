@@ -1,5 +1,4 @@
-# Milestone 11 — M11-2: the app is transport only (doc/spec-library-contract.md,
-# INV-app-transport-only).
+# Milestone 11 — M11-2: the app is transport only.
 #
 # An independent ANSI decoder (round-trip self-tested) decodes the REAL `ssg`
 # binary's pty output and asserts the decoded screen equals render(snapshot) —

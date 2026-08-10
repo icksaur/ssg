@@ -3,7 +3,7 @@ project(ssg_embed_consumer CXX)
 
 # Minimal consumer proving SSG can still be embedded with add_subdirectory.
 #
-# This is the compatibility oracle for doc/spec-grammar-pipeline.md Phase B:
+# This is the compatibility oracle for the grammar pipeline:
 # removing SSG_TREESITTER made the vendored C (tree-sitter plus six grammars) a
 # hard build requirement for every consumer, so the embedder path must be proven
 # to still configure, build and link rather than assumed.

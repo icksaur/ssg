@@ -231,10 +231,9 @@ struct EditorRuntime::Impl final : CommandServices,
     KeymapViewState keymap{"default", {}};
     ThemeSnapshot theme{};
     // Chrome glyphs and dimensions, beside the theme because they are the same
-    // kind of thing: presentation this runtime owns and hands to layout.  See
-    // doc/spec-style.md.
+    // kind of thing: presentation this runtime owns and hands to layout.
     Style style{};
-    // The init.lua-composed header/footer (doc/spec-lua-widget-composition.md),
+    // The init.lua-composed header/footer,
     // pushed by the host after each init.lua evaluation via
     // EditorRuntime::setComposedChrome. nullopt keeps the built-in chrome; a
     // present region REPLACES that region's built-in status fields in shellView.
@@ -352,14 +351,13 @@ struct EditorRuntime::Impl final : CommandServices,
     // (reveal_tree_selection after a selection/expansion change, or tree.scroll
     // for a wheel) using the last cached height, so snapshot generation never
     // mutates it — one client's snapshot cannot move another client's scroll
-    // (see doc/spec-scroll.md R2).
     mutable std::uint32_t lastPanelContentRows = 0;
     std::uint32_t treeFirstVisible = 0;
     bool wordWrap = false;
     bool lineNumbers = false;
     // Cache of the active document's logical line count keyed by its revision,
     // so the line-number gutter width is not recomputed by scanning the whole
-    // document every frame (doc/spec-line-numbers.md).
+    // document every frame.
     mutable std::optional<Revision> lineCountRevision;
     mutable std::optional<FileDocumentId> lineCountDocument;
     mutable std::uint32_t lineCountCache = 1;
@@ -431,7 +429,7 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] std::string activeText() const;
     // The line-number gutter width for the active document: 0 when the setting is
     // off or there is no editor document, else digits(lineCount)+1. The whole-
-    // document line count is cached by revision (doc/spec-line-numbers.md).
+    // document line count is cached by revision.
     [[nodiscard]] int lineNumberGutterWidth() const;
     void resetSelectionForActiveDocument();
     // Collapses to a SINGLE caret at the primary's clamped position.  For a
@@ -479,8 +477,8 @@ struct EditorRuntime::Impl final : CommandServices,
     // Scroll the editor viewport minimally so the PRIMARY caret is visible, using
     // the last cached pane dimensions. Called on the command path after any edit
     // moves the caret (typing, delete, undo/redo, paste), so the view follows the
-    // caret instead of leaving the user typing off-screen (see doc/spec-scroll.md
-    // R5). The plain-caret analog of reveal_active_find_match.
+    // caret instead of leaving the user typing off-screen. The plain-caret
+    // analog of reveal_active_find_match.
     void revealPrimaryCaret();
     [[nodiscard]] TextEncodingViewState textEncodingView() const;
     [[nodiscard]] DocumentViewState documentView() const;
@@ -541,7 +539,7 @@ struct EditorRuntime::Impl final : CommandServices,
     // Walks the workspace into `fileCandidates`, honoring the gitignore setting.
     void rebuildFileCandidates();
     void refreshSyntax();
-    // M10 fast startup deferral (doc/spec-fast-startup.md M10-3/M10-4).  While
+    // M10 fast startup deferral.  While
     // `deferring_enrichment` is set (the pre-first-frame window when created with
     // defer_enrichment=true), refresh_tree and refresh_syntax record that work is
     // pending instead of running the O(workspace)/O(document) scan, so the first

@@ -1,5 +1,5 @@
 // Proves highlight queries are carried IN the binary rather than read from the
-// source tree at runtime (doc/spec-grammar-pipeline.md Phase A).
+// source tree at runtime.
 //
 // A separate executable on purpose: TreeSitterParser compiles a query lazily and
 // caches it, so any earlier test that highlights a language would make these

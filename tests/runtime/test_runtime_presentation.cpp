@@ -81,7 +81,7 @@ TEST(viewportShellSettingsAndThemeAreLiveSections) {
 // Line numbers default OFF; view.toggle_line_numbers turns the gutter on and a
 // second toggle turns it off. When on, the editor pane publishes a left
 // line-number gutter sized digits(lineCount)+1 and its content is inset by that
-// width (doc/spec-line-numbers.md).
+// width.
 TEST(lineNumberGutterTogglesAndSizesToTheLineCount) {
     auto root = uniqueRoot();  // long.txt has 80 lines + trailing newline = 81
     auto created = ssg::EditorRuntime::create(
@@ -416,7 +416,7 @@ TEST(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange) {
     if (rebound) ASSERT_EQ(detailOf(*rebound, "file.save"), std::string{"Alt+g"});
 }
 
-// doc/spec-header-prompt-input.md: a header-hosted prompt (palette / file finder)
+// A header-hosted prompt (palette / file finder)
 // publishes its KIND authoritatively even though it produces no footer layout
 // view, so a client detects "which prompt is open" from state and routes typed
 // text to it. A footer prompt publishes both the kind AND a layout view; no
@@ -548,7 +548,7 @@ TEST(shellStatusFieldsUseRegisteredProviders) {
     }
 }
 
-// doc/spec-lua-widget-composition.md phase 6: a composition pushed via
+// A composition pushed via
 // setComposedChrome REPLACES the built-in region, resolves provider widgets
 // through the live status fields, and reverts to built-in when cleared -- and a
 // real change advances the revision so a delta-gated client repaints.
@@ -1003,7 +1003,7 @@ TEST(panelProviderCycleSelectsTheBoundTreeProvider) {
 TEST(chromeNodeCaptionLabelsAreLowercase) {
     // Invariant guard: every shell chrome caption (provider tab, header/footer
     // field, footer/notice action) renders lowercase, across all providers
-    // (doc/spec-lowercase-labels.md).  Excludes the key-bearing footer hint
+    //.  Excludes the key-bearing footer hint
     // ("Alt+h  help") and document tab titles (filenames), which are not fixed
     // chrome captions.
     auto hasUpper = [](std::string const& s) {

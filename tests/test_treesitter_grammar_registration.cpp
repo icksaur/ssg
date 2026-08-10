@@ -1,4 +1,4 @@
-// The public grammar-registration seam (doc/spec-grammar-pipeline.md Phase C).
+// The public grammar-registration seam.
 //
 // This translation unit deliberately includes NO tree-sitter header. That is
 // half the point of the seam: a host registers a grammar through

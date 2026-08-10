@@ -379,8 +379,7 @@ TEST(mergedInlineModifiedRowNavigatesByRealBytesUnaffectedByGhostSpans) {
     // ONE merged row with the ghost "original " text visually spliced in.
     // Caret navigation must be entirely unaffected by that ghost text: it
     // does not exist in the document, so CursorLeft/CursorRight/vertical
-    // movement need no special ghost-span handling (see doc/spec-inline-
-    // word-diff.md and its accompanying review).
+    // movement need no special ghost-span handling.
     const std::string text = "one\ngamma modified line two\nthree";
     ssg::DiffFileView diff{ssg::DiffFileId{"doc.txt"}};
     diff.currentContent = text;

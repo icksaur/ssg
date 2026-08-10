@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <string>
 
-// M10 fast-startup structural oracle (doc/spec-fast-startup.md).
+// M10 fast-startup structural oracle.
 //
 // Deferred enrichment (syntax highlighting, workspace tree scan) must NOT run on
 // the first-frame path when the runtime is created with defer_enrichment=true;
@@ -119,7 +119,7 @@ TEST(eagerConstructionRunsEnrichmentImmediately) {
 }
 
 TEST(firstFrameConstructsNoOptionalSubsystem) {
-    // M10-2 (doc/spec-fast-startup.md): producing the first frame must construct
+    // M10-2: producing the first frame must construct
     // no optional subsystem (Lua, LSP, a real Tree-sitter grammar, a filesystem
     // watcher, HTTP) — project invariant I12.
     ssg::resetOptionalConstructionAudit();

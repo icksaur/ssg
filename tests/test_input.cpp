@@ -104,7 +104,7 @@ bool hasError(const std::vector<ssg::KeymapError>& errors,
 TEST(validateKeymapRejectsModifiedEnterBindings) {
     // Every Enter keypress is normalized to a bare Enter at the input decoder,
     // so a modified-Enter binding could never fire.  The validator refuses it
-    // rather than accept a dead binding (doc/spec-enter-newline.md).
+    // rather than accept a dead binding.
     const auto bareEnter = *ssg::KeyCodec{}.parseSequence({"Enter"});
     ssg::KeymapViewState ok{"m", {{bareEnter, "text.newline", "editor"}}};
     ASSERT_FALSE(hasError(ssg::KeymapMatcher{ok}.validate({}),

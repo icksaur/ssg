@@ -24,7 +24,7 @@ inline constexpr ClientId kScriptClientId{2};
 //
 // One ScriptHost lives for the process, so the Lua state outlives any single
 // evaluation: a function a script defines is still callable long after the
-// script that defined it finished running (doc/spec-lua-commands.md, L2).  This
+// script that defined it finished running.  This
 // is why it is a class rather than a function -- an `evaluateInitScript(script)`
 // free function can only ever build a state, use it and destroy it.
 //

@@ -1,5 +1,4 @@
-// Milestone 11 — M11-2: the app is transport only (doc/spec-library-contract.md,
-// INV-app-transport-only).
+// Milestone 11 — M11-2: the app is transport only.
 //
 // An INDEPENDENT terminal model decodes a byte stream in the renderer's output
 // vocabulary into a grid of {text, foreground, background} + a cursor cell, with

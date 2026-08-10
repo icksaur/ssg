@@ -64,7 +64,7 @@ enum class SemanticRole : std::uint8_t {
     HeaderBackground,
     FooterBackground,
     // The caret's line number in the gutter: a distinct foreground over a
-    // distinct background so the current line stands out (doc/spec-line-numbers).
+    // distinct background so the current line stands out.
     CurrentLineNumber,
     CurrentLineNumberBackground,
     // The gutter background behind inactive (non-current) line numbers, so the

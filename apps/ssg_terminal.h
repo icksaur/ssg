@@ -197,7 +197,7 @@ struct LaunchTarget {
 
 [[nodiscard]] LaunchTarget resolve_launch(std::filesystem::path const& argument);
 
-// K3a decoder (doc/spec-keymap.md): the outcome of decoding one input event as a
+// K3a decoder: the outcome of decoding one input event as a
 // KeyStroke (so it can drive keymap resolution) and/or committed text.
 enum class DecodeStatus : std::uint8_t {
     none,        // A recognized but unhandled byte was skipped (consumed > 0).
@@ -212,7 +212,6 @@ enum class DecodeStatus : std::uint8_t {
 // No real escape sequence approaches this length.  A scan that reaches it is
 // looking for a terminator that is not coming, and holding the buffer any longer
 // would stall every keystroke queued behind it
-// (doc/spec-terminal-capabilities.md, INV-decode-terminates).
 inline constexpr std::size_t kMaxSequenceBytes = 256;
 
 // A bracketed paste's payload is unbounded in principle, so it gets its own much
@@ -270,7 +269,7 @@ struct Decoded {
 // cursor hide is a frame-scoped mode entered through a guard, so every frame
 // leaves the cursor visible whether or not it had a caret.  A caret-less frame
 // -- the "too small" placeholder -- previously hid the cursor and never showed
-// it (doc/spec-terminal-escape-discipline.md).
+// it.
 //
 // `showCursor` false ends the frame with the cursor hidden, for a scrollbar drag
 // where a visible cursor only flickers around chasing each frame's caret.  That
@@ -322,7 +321,7 @@ private:
 
 // What the terminal can do beyond drawing colored text.  Each is answered by a
 // query at startup; each defaults to absent, so a terminal that stays silent
-// simply gets the conservative rendering (doc/spec-terminal-capabilities.md).
+// simply gets the conservative rendering.
 enum class Capability : std::uint8_t {
     SynchronizedOutput,  // DEC private mode 2026: tear-free full-frame redraw.
     KeyboardProtocol,    // The kitty keyboard protocol: disambiguated keys.

@@ -4,7 +4,7 @@ target_sources(ssg PRIVATE
 
 # Tree-sitter is compiled unconditionally.  Highlighting is disabled at RUNTIME
 # by constructing the runtime with a null EditorRuntimeConfig::syntaxParser,
-# which yields plain text; see doc/spec-grammar-pipeline.md.
+# which yields plain text.
 enable_language(C)
 
 set(_SSG_TREESITTER_VENDOR_DIR ${SSG_SOURCE_DIR}/vendor)

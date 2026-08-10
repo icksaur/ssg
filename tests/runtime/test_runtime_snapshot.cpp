@@ -408,7 +408,7 @@ TEST(curatedKeymapBindingsAreArgumentFree) {
     // Every bound command must dispatch with an empty payload without failing
     // for a missing/mistyped argument.  Benign state failures (e.g. a prompt
     // command with no open prompt) are allowed; an argument-shaped failure is
-    // not (doc/spec-keymap.md K5).
+    // not.
     std::set<std::string> commands;
     for (const auto& binding : snapshot->sections().keymap.bindings) {
         commands.insert(binding.commandId);

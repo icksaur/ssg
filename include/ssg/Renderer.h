@@ -96,7 +96,7 @@ public:
     [[nodiscard]] CellGrid render(SessionSnapshot const& snapshot) const;
 
     // Style is no longer a renderer member: it is read from the snapshot's
-    // published Style section (doc/spec-style.md Y4), so the runtime and the
+    // published Style section, so the runtime and the
     // renderer share the one instance the runtime owns rather than two that can
     // drift.
 

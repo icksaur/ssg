@@ -239,7 +239,6 @@ std::string encode_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth,
         // meant to persist until the drag ends and the next frame shows it again,
         // and terminal teardown restores every mode in kAllModes unconditionally,
         // so no exit path can leave the cursor hidden
-        // (doc/spec-terminal-escape-discipline.md).
         frame.append(kCursorHidden.enter);
     }
     return frame;
@@ -427,7 +426,6 @@ std::size_t utf8Length(unsigned char lead) {
 // (0x20-0x2F), then one final byte (0x40-0x7E).  Locating that final byte is the
 // only way to know where an unrecognized sequence ends; guessing at its length
 // is what lets a sequence's tail spill into the document as typed text
-// (doc/spec-terminal-capabilities.md, INV-reply-never-input).
 enum class CsiScan {
     complete,    // `end` is one past the final byte.
     incomplete,  // The final byte has not arrived; wait for more input.

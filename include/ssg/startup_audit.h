@@ -1,6 +1,6 @@
 #pragma once
 
-// M10-2 optional-subsystem construction audit (doc/spec-fast-startup.md).
+// M10-2 optional-subsystem construction audit.
 //
 // Project invariant I12: constructing and using the basic in-process editor —
 // and producing the first frame — must construct NO optional subsystem (Lua,

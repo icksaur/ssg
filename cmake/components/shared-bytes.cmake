@@ -1,4 +1,4 @@
-# shared-bytes component manifest (Milestone 13, doc/spec-large-files-loading.md)
+# shared-bytes component manifest
 #
 # The immutable ref-counted byte-buffer handle (LF-2) shared by the decoded text,
 # the piece-tree original, and the initial persisted_text (wired in LF-3b).

@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-// M9-T layout totality (doc/spec-terminal-robustness.md).
+// M9-T layout totality.
 //
 // The library layout is dimension-parametric and must be TOTAL: for any viewport
 // it produces either a well-formed snapshot (>= the 20x4 minimum) or the typed

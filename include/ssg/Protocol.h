@@ -181,7 +181,7 @@ struct CommandArgumentCodec {
 // Backed by the catalog rather than by a snapshot of it: a command registered
 // after this object was created is decodable immediately, because there is
 // nothing here to go stale.  Holding a copy would be a staleness bug the moment
-// registration became dynamic (doc/spec-command-registry.md, R8).
+// registration became dynamic.
 class CommandArgumentCodecRegistry {
 public:
     explicit CommandArgumentCodecRegistry(

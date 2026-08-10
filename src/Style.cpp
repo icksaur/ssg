@@ -131,7 +131,6 @@ namespace {
 // classified, so a control byte in either draws as a replacement glyph; a glyph
 // was copied verbatim, so scrollbar_track = "<ESC>(0" switched the terminal's
 // character set and every later byte drew as line art
-// (doc/spec-terminal-escape-discipline.md).
 //
 // Asked of the same layout engine everything else uses, so "safe to emit" and
 // "how wide is it" have one answer in this codebase rather than two.

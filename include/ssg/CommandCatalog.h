@@ -6,7 +6,6 @@
 // handle, and there is no point at which the catalog is declared complete.  It
 // never will be -- plugins and Lua extensions may register commands at any time
 // -- so completeness is not a property this design tries to have
-// (doc/spec-command-registry.md).
 //
 // Consequences worth knowing before using it:
 //
@@ -97,7 +96,6 @@ public:
     // under a single exclusive lock, so no reader can observe the catalog with
     // the old set gone and the new one not yet present -- which for a script
     // reload would be a palette momentarily listing none of the user's commands
-    // (doc/spec-lua-commands.md).
     //
     // ALL OR NOTHING.  Every addition is validated, and the batch checked
     // against the handle space, BEFORE anything is retired or added.  A batch
@@ -109,7 +107,7 @@ public:
     // Retiring frees a command's NAME while keeping its slot: the id may be
     // registered again -- receiving a NEW handle -- while the retired handle
     // stays permanently dead, so a stale handle resolves to nothing rather than
-    // to a different command (doc/spec-command-registry.md, R4).
+    // to a different command.
     //
     // Returns the handles of the added commands, in order.
     std::vector<CommandHandle> replaceGeneration(

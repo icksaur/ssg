@@ -1,6 +1,6 @@
 #pragma once
 
-// Color-depth adaptation (M9-C, doc/spec-terminal-robustness.md).
+// Color-depth adaptation.
 //
 // Themes are the sole source of color (spec.md I22): CellGrid carries a flat
 // color table (CellGrid.colors -- one slot per semantic role followed by one per

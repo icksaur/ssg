@@ -276,7 +276,7 @@ std::vector<KeymapError> KeymapMatcher::validate(
                               "binding contains an invalid key stroke"});
         }
         // Every Enter/Return keypress is normalized to a bare Enter stroke at the
-        // input decoder (doc/spec-enter-newline.md), so a binding on a modified
+        // input decoder, so a binding on a modified
         // Enter could never fire.  Reject it rather than accept a dead binding.
         if (std::ranges::any_of(binding.sequence, [](const KeyStroke& stroke) {
                 return stroke.code == KeyCode::Enter &&

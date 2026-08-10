@@ -23,7 +23,7 @@ namespace {
 // capability-gated script command is added.  Keeping these as two
 // independently maintained lists would let one drift out of sync with the
 // other: passing one gate but silently denied at the other.  No command needs
-// one today, so this is empty; see doc/spec-config.md's Risks -- never a
+// one today, so this is empty -- never a
 // wildcard grant.
 std::vector<CapabilityId> scriptCapabilities() { return {}; }
 
@@ -190,7 +190,7 @@ LuaResult ScriptHost::evaluate(std::string_view script) {
     // failed script -- or a batch the catalog refuses -- leaves the previous
     // evaluation's commands registered and callable.  Neither can undo effects
     // the script already caused before failing: a theme it applied stays
-    // applied (doc/spec-lua-commands.md, L5).
+    // applied.
     return impl_->host.evaluate(script);
 }
 

@@ -631,7 +631,7 @@ ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
             projected.size(), "viewport visual row count exceeds uint32");
         // The shared clamp, not a local one: the editor used to compute its own
         // maximumFirst here, which made it a second implementation of the rule
-        // listScrollView exists to own (doc/spec-scroll.md S-I3).
+        // listScrollView exists to own.
         const auto scroll =
             ScrollOffset{requestedFirstVisualRow}.resolve(totalRows,
                                                           dimensions.rows);

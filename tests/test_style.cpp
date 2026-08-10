@@ -175,7 +175,7 @@ TEST(sigilWidthIsMeasuredFromTheSigilNotDeclaredBesideIt) {
 
     // Change the sigil and the width follows with no second constant to update.
     // This is the pairing that would otherwise drift and misalign the input
-    // line (doc/spec-input-line.md).
+    // line.
     style.inputLineSigil = ":";
     ASSERT_EQ(style.sigilWidth(), 1);
 

@@ -17,7 +17,7 @@
 #include <string_view>
 #include <vector>
 
-// LF-1 (doc/spec-large-files-loading.md): the IMMUTABLE open-equivalence golden.
+// LF-1: the IMMUTABLE open-equivalence golden.
 //
 // For a fixed encoding corpus this records, from the CURRENT open path, the
 // fields that must stay byte-identical across LF-2..LF-4b: content

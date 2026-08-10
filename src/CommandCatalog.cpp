@@ -85,7 +85,7 @@ struct CommandCatalog::ValidatedSpec {
 //
 // Separated from applying it so a batch can be checked as a whole before any of
 // it takes effect: validating as it went would let a late spec fail after
-// earlier ones had already been installed (doc/spec-lua-commands.md).
+// earlier ones had already been installed.
 CommandCatalog::ValidatedSpec CommandCatalog::validate(
     CommandSpecBuilder spec, std::unordered_set<std::string> const& alsoTaken,
     std::unordered_set<std::string> const& beingFreed) const {
@@ -148,7 +148,7 @@ CommandHandle CommandCatalog::add(CommandSpecBuilder spec) {
     // A handle is a 16-bit index, so a catalog cannot exceed that space.
     // Truncating would alias a new command onto an existing handle and
     // misdispatch silently, which is the one failure mode handles must not
-    // have (doc/spec-command-registry.md, R4).
+    // have.
     requireCapacity(1);
     return appendValidated(validate(std::move(spec), {}, {}));
 }

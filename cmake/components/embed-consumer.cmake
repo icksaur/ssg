@@ -1,4 +1,4 @@
-# Compatibility oracle for doc/spec-grammar-pipeline.md Phase B.
+# Compatibility oracle for the grammar pipeline.
 #
 # Removing SSG_TREESITTER made the vendored tree-sitter C sources a hard build
 # requirement for EVERY consumer, including projects that pull SSG in with

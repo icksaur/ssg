@@ -15,7 +15,7 @@
 
 #include <unistd.h>
 
-// Milestone 11 — Library API is the contract (doc/spec-library-contract.md).
+// Milestone 11 — Library API is the contract.
 //
 // M11-1: the TUI screen is a pure function of the production EditorRuntime's
 // SessionSnapshot.  These tests drive the REAL runtime (not a hand-authored

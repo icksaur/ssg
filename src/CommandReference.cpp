@@ -95,8 +95,7 @@ std::string CommandReferenceRenderer::render(CommandCatalog const& catalog) cons
         << "edit: change the command's registration instead, then regenerate\n"
         << "with `SSG_UPDATE_DOCS=1 ./build/test_commands`.\n\n"
         << "`init.lua` may call the commands marked `init.lua`; the rest are\n"
-        << "available to the Lua API when a host grants them\n"
-        << "(see `doc/spec-command-registry.md`).\n\n"
+        << "available to the Lua API when a host grants them.\n\n"
         << "There are " << commands.size() << " commands.\n";
 
     for (auto const& [owner, owned] : byOwner) {

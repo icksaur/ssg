@@ -12,8 +12,8 @@
 namespace ssg {
 
 // Style is the UI's dimensions and chrome glyphs, separated from color (which
-// is the theme's job, see doc/spec-color.md) and from layout arithmetic (which
-// is ShellState's).  See doc/spec-style.md.
+// is the theme's job) and from layout arithmetic (which
+// is ShellState's).
 //
 // Everything here is DATA plus the small amount of logic needed to resolve that
 // data into a glyph.  Style deliberately knows nothing about a grid, a snapshot
@@ -133,7 +133,7 @@ public:
     int sigilWidth() const;
 
     // What the input line reserves from the status fields while a picker is
-    // open.  Independent of the typed query by design (doc/spec-input-line.md).
+    // open.  Independent of the typed query by design.
     int inputLineReservation() const;
 
     // The cell at `row` of a scrollbar column `trackHeight` rows tall.
@@ -145,7 +145,7 @@ public:
     ScrollbarCell scrollbarCell(int row, int thumbStart, int thumbSize,
                                  int trackHeight) const;
 
-    // Applies style.define's table (doc/spec-style.md): replaces ONLY the named
+    // Applies style.define's table: replaces ONLY the named
     // fields (an omitted name keeps this style's value).  The whole table is
     // validated before anything is applied, so a rejected call (unknown key, or
     // a non-integer or negative value for a `dim_` key) yields a result whose
@@ -166,7 +166,7 @@ public:
     [[nodiscard]] std::vector<std::pair<std::string, std::string>>
     glyphValues() const;
 
-    // Style is a published snapshot section (doc/spec-style.md Y4), so it
+    // Style is a published snapshot section, so it
     // participates in equality and wire round-trips like any other section.
     bool operator==(Style const&) const = default;
 };
@@ -175,7 +175,7 @@ public:
 // names the wire codec uses (scrollbar_track, tree_expanded, dim_header_height,
 // ...); a glyph value is the literal string, a `dim_` value is a decimal
 // integer.  The table may be PARTIAL -- a name absent from `values` keeps the
-// current style's value for that field (doc/spec-style.md).  This mirrors
+// current style's value for that field.  This mirrors
 // theme.define's partial-table shape and is the one shape the Lua seam permits.
 struct StyleDefineArguments {
     std::unordered_map<std::string, std::string> values;

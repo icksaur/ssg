@@ -4,7 +4,7 @@
 //
 // The library describes itself: given a catalog, this produces the whole of
 // `doc/commands.md`.  It holds formatting only -- no command data -- so the
-// catalog stays the single source (doc/spec-command-registry.md).
+// catalog stays the single source.
 //
 // This is not a build step.  Populating a catalog means running registration,
 // which needs a runtime, and constructing one creates directories; a build must

@@ -41,7 +41,7 @@ std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
 
 // ---------------------------------------------------------------------------
 
-// THE ORACLE for doc/spec-reentrant-dispatch.md.
+// THE ORACLE for reentrant dispatch.
 //
 // Counts accepted mutating dispatches independently of the revision counter --
 // each handler increments a plain integer when it runs -- and asserts the

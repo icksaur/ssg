@@ -792,7 +792,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
 
 TEST(renderPromptControlLabelsAreLowercaseChrome) {
     // Every prompt's rendered control captions are lowercase chrome, across the
-    // settings, goto-line, and open-file path prompts (doc/spec-lowercase-labels).
+    // settings, goto-line, and open-file path prompts.
     auto root = uniqueRoot();
     std::ofstream{root / "p.txt"} << "hello\n";
     auto runtime = makeRuntime(root);
@@ -1035,7 +1035,6 @@ TEST(renderTooSmallIsSafeAtOneByOne) {
 // The cursor is how a user can tell a text input has focus, and a picker holds
 // Prompt focus while reserving ZERO prompt rows -- so paintPrompt yields no
 // caret and the cursor was previously left wherever painting finished
-// (doc/spec-input-line.md).
 TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
@@ -1432,7 +1431,7 @@ TEST(urlDetectionStopsAtSentenceAndBracketBoundaries) {
     ASSERT_TRUE(linksFor("no links here at all\n").empty());
 }
 
-// The dead-color-role guard (doc/spec-prune-theme-roles.md). Proves the
+// The dead-color-role guard. Proves the
 // theme.set name surface equals the actually-color-consumed role surface, with
 // `Caret` the sole exception (a live cell-role TAG whose color is intentionally
 // unread). Not a tautology: it paints a snapshot exercising every surface
@@ -1591,7 +1590,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     for (auto const role : ssg::kAllSemanticRoles) {
         // Caret is a live cell-role TAG whose color is intentionally unread:
         // the primary caret is the terminal hardware cursor and the secondary
-        // caret inverts the cell it sits on. See doc/spec-prune-theme-roles.md.
+        // caret inverts the cell it sits on.
         if (role == SemanticRole::Caret) continue;
         auto const present =
             emitted.count(encode(theme.color(role))) != 0;

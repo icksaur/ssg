@@ -72,7 +72,7 @@ PromptStatusViewState EditorRuntime::Impl::promptStatusView(
     ViewportDimensions dimensions,
     std::optional<Rect> promptReservation) const {
     PromptStatusViewState view;
-    // Single-source prompt rect (doc/spec-chrome-stacks.md): when the shell laid
+    // Single-source prompt rect: when the shell laid
     // out a footer-anchored prompt it passes that rect here, so the controls are
     // laid out into the SAME reservation the shell reserved (identical a11y node,
     // hit region, and render). The fallback -- a full-width bottom strip derived
@@ -92,7 +92,7 @@ PromptStatusViewState EditorRuntime::Impl::promptStatusView(
     // The authoritative "which prompt is active" signal, set straight from the
     // prompt surface's request -- present even for a header-hosted prompt whose
     // query renders in the header input line and thus produces no footer `prompt`
-    // layout view (doc/spec-header-prompt-input.md). A client routes input by
+    // layout view. A client routes input by
     // this, not by the presence of the layout view.
     if (prompt.request()) view.activeKind = prompt.request()->kind;
     view.status = status.viewState();
@@ -169,7 +169,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     request.panelProviderLabel = std::string{shell.activePanelProvider()};
     request.headerFields = std::move(statusFields.headerFields);
     request.footerFields = std::move(statusFields.footerFields);
-    // A composed region (doc/spec-lua-widget-composition.md) REPLACES that
+    // A composed region REPLACES that
     // region's built-in status fields; an uncomposed region keeps request.header
     // Fields/footerFields above. A composed `provider` widget resolves through
     // the SAME projected+bound values the built-in fields carry, so an inherited
@@ -212,7 +212,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     request.tabs = std::move(labels);
     request.style = style;
     // Anchoring decision: a HEADER-anchored prompt hosts its query in the header
-    // input line (promptFocusRegion, doc/spec-chrome-stacks.md). The query/ghost
+    // input line. The query/ghost
     // text come from the picker report, which today only the palette populates.
     bool const headerPrompt = prompt.active() && prompt.request() &&
                               promptFocusRegion(prompt.request()->kind) ==

@@ -670,7 +670,7 @@ SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
           Revision{0}, LanguageId::plainText(), {}, config.tabWidth)) {
     // A real Tree-sitter grammar is only present when a parser is injected; the
     // plain-text fallback (parser == nullptr) constructs no grammar, so it is not
-    // counted by the startup audit (I12 / doc/spec-fast-startup.md M10-2).
+    // counted by the startup audit.
     if (parser_ != nullptr) {
         noteOptionalConstruction(OptionalSubsystem::TreeSitterGrammar);
     }

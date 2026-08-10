@@ -1,7 +1,7 @@
 #pragma once
 
-// Test/benchmark-only instrumentation for the file-open path (Milestone 13,
-// doc/spec-large-files-loading.md).  Every symbol here is a thread-local
+// Test/benchmark-only instrumentation for the file-open path (Milestone 13).
+// Every symbol here is a thread-local
 // diagnostic counter/timer, reset/read exactly like layout.h's cell_run_calls;
 // none of it is production state and no correctness logic reads it.  It lets the
 // LF measurement + oracle tests attribute the open cost and prove the

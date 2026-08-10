@@ -27,7 +27,6 @@ enum class PromptControlKind : std::uint8_t { Input, Toggle, Count };
 // the top of the buffer just below it); every other prompt reserves rows over
 // the FOOTER. This is the SINGLE place that "where does the focused prompt live"
 // is expressed, so the two scattered `kind == Palette` checks cannot drift
-// (doc/spec-chrome-stacks.md §Prompt as a focusable region mode).
 enum class PromptRegion : std::uint8_t { Header, Footer };
 
 // CONTRACT

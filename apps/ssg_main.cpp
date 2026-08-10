@@ -129,7 +129,7 @@ void writeAll(std::string_view bytes) {
 // The escape-sequence half is delegated to TerminalModes: each mode names its
 // own exit, and the bytes that undo whatever is currently entered are kept as
 // data so a fatal-signal handler can write them without traversing anything
-// (doc/spec-terminal-escape-discipline.md).  termios is not a mode in that
+//.  termios is not a mode in that
 // sense -- it is restored by value, and tcsetattr is not async-signal-safe --
 // so it stays here.
 class TerminalMode {
@@ -348,8 +348,8 @@ std::optional<std::string> readInitScriptIfPresent(
 // Loads and evaluates `init.lua` exactly once at startup, via
 // resolveInitScriptPath + readInitScriptIfPresent + evaluateInitScript.
 // Absent file, or any of the diagnostic-then-return-nullopt cases above:
-// silently continue starting with defaults (see doc/spec-config.md's
-// Invariants -- a broken config script must never block opening the
+// silently continue starting with defaults (a broken config script must
+// never block opening the
 // editor). Returns the content actually applied (or nullopt), so the
 // caller can seed InitScriptWatcher's "last applied" baseline and avoid
 // redundantly re-evaluating the SAME unchanged content on its first poll.
@@ -363,7 +363,7 @@ std::optional<std::string> loadInitScript(ssg::ScriptHost& scripts,
     return script;
 }
 // How often the background thread re-reads init.lua's content to check for
-// a change (doc/spec-config.md's auto-reload design). Content, not mtime/
+// a change. Content, not mtime/
 // size, is compared -- a same-size rewrite within one filesystem timestamp
 // tick would otherwise evade a stat-only check, and the content must be
 // read anyway to queue it for evaluation.
@@ -456,7 +456,7 @@ private:
         // with the constructor's seed) is the content last actually
         // queued for evaluation -- empty after a delete is observed, so a
         // later recreation compares against an empty baseline and reloads
-        // exactly like any other change (doc/spec-config.md: recreate
+        // exactly like any other change (recreate
         // behaves like the file appearing for the first time).
         std::optional<std::string> lastRead;
         std::unique_lock lock{mutex_};
@@ -480,7 +480,7 @@ private:
                 // Deleted, unreadable, or blank (readInitScriptIfPresentQuiet
                 // treats blank the same as absent -- see isBlank): clear the
                 // applied baseline so a later recreation is treated as
-                // fresh, per doc/spec-config.md -- but take NO action on
+                // fresh -- but take NO action on
                 // the runtime itself.
                 lastApplied_.clear();
             }
@@ -718,7 +718,7 @@ int main(int argc, char** argv) {
     auto const appliedInitScript = loadInitScript(scripts, runtime);
     STARTUP_MARK("post_init_script");
 
-    // doc/spec-config.md's auto-reload: watches the SAME path just loaded
+    // Auto-reload: watches the SAME path just loaded
     // above, on a background thread, and wakes the main loop's select() to
     // re-evaluate it when it changes. Absent if the config root itself
     // could not be resolved (already diagnosed by loadInitScript above).
@@ -840,8 +840,8 @@ int main(int argc, char** argv) {
     // query, selection, scroll offset and pane height together, so a second
     // picker cannot introduce a drifting copy of half of them.
     // The pane height is cached from the last snapshot (the palette pane == the
-    // editor pane, so it is populated before any picker opens; see
-    // doc/spec-scroll.md R3). The window is resolved with the shared list-scroll
+    // editor pane, so it is populated before any picker opens). The window is
+    // resolved with the shared list-scroll
     // primitive.
     ssg::PaletteWindowState picker{};
     // Mouse drag state (M8): a left press on the editor records the anchor and
@@ -874,7 +874,7 @@ int main(int argc, char** argv) {
     std::optional<GutterDrag> draggingGutter;
     // Double-click tracking (client-side: the terminal reports no click count).
     // A second left editor press on the same cell within the window selects the
-    // word (doc/spec-double-click-word.md).
+    // word.
     ssg::app::ClickTracker clickTracker;
     static constexpr auto kDoubleClickWindow = std::chrono::milliseconds{400};
     // The last pointer cell (0-based) from a press/drag, so a drag held still at
@@ -927,7 +927,7 @@ int main(int argc, char** argv) {
     // Re-center the client-owned palette window on the current selection
     // (keep-visible). Called ONLY when the selection changes (arrow navigation,
     // open, type, backspace); the per-frame build_report otherwise honors the
-    // free offset so a wheel scroll persists (see doc/spec-m8.md M8-P). Mirrors
+    // free offset so a wheel scroll persists. Mirrors
     // the tree's reveal_tree_selection.
     auto revealPaletteSelection = [&] {
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
@@ -991,8 +991,8 @@ int main(int argc, char** argv) {
         }
     };
     // Dispatch a resolved command, fulfilling prompt-context commands against the
-    // client-local palette view when a palette prompt is open (doc/spec-keymap.md
-    // Prompt-focus fulfillment).  Palette open/closed is reconciled from the
+    // client-local palette view when a palette prompt is open.  Palette
+    // open/closed is reconciled from the
     // server focus on the next snapshot, not forced here, so a failed submit (no
     // candidate / rejected execute) leaves the prompt open rather than
     // desynchronizing the client.
@@ -1139,8 +1139,8 @@ int main(int argc, char** argv) {
             // may be active while the find controller is still open, and find
             // fulfillment must not hijack that unrelated prompt's keys.
             auto const& findView = snapshot->sections().findReplace;
-            // The AUTHORITATIVE active-prompt kind (doc/spec-header-prompt-
-            // input.md): present even for a header-hosted prompt (palette / file
+            // The AUTHORITATIVE active-prompt kind: present even for a
+            // header-hosted prompt (palette / file
             // finder) whose query renders in the header input line and so
             // produces no footer `prompt` layout view. Deriving the open-flags
             // from this -- rather than from `promptStatus.prompt->kind`, which is
@@ -1460,7 +1460,7 @@ int main(int argc, char** argv) {
                     }
                     // A second left click on the same editor cell within the
                     // window selects the word there instead of just placing the
-                    // caret (doc/spec-double-click-word.md). Detected here so the
+                    // caret. Detected here so the
                     // word geometry stays server-side; the client only recognizes
                     // the gesture. The active tab id keys the tracker so a fast
                     // click on the same cell of a DIFFERENT document does not pair.
@@ -1659,7 +1659,6 @@ int main(int argc, char** argv) {
     // Clean exit (the loop quit without an exception): best-effort final flush of
     // every dirty draft, capturing edits newer than the last autosave tick. This
     // does NOT run on SIGKILL or a crash — those rely on the last debounced tick
-    // (the documented recovery point; see doc/spec-single-file-draft.md).
     runtime.flushAllAutosaveDrafts();
 
     return 0;

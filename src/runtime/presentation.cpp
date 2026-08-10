@@ -87,7 +87,7 @@ CommandHandlerResult scrollFraction(EditorRuntime::Impl& runtime, std::any const
     if (arguments == nullptr) return failure("view.scroll_to_fraction requires scroll-fraction payload");
     // Resolve maximum_first_row against the REAL pane cached from the last
     // snapshot, so a scrollbar drag to the bottom reaches the true last line on a
-    // terminal that is not 24 rows tall (see doc/spec-scroll.md R6). Route through
+    // terminal that is not 24 rows tall. Route through
     // the same wrap-gated viewport the snapshot uses so the drag maps to the same
     // total the scrollbar thumb was drawn from (M12).
     ViewportDimensions const viewport{

@@ -5,8 +5,7 @@ edit: change the command's registration instead, then regenerate
 with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 
 `init.lua` may call the commands marked `init.lua`; the rest are
-available to the Lua API when a host grants them
-(see `doc/spec-command-registry.md`).
+available to the Lua API when a host grants them.
 
 There are 189 commands.
 

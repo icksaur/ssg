@@ -103,7 +103,7 @@ class CompiledKeymap {
 public:
     // Takes the catalog because a binding names a command and a handle is a
     // position in a particular catalog.  Rebuild when the keymap OR the
-    // catalog's revision changes (doc/spec-command-registry.md, R7): a binding
+    // catalog's revision changes: a binding
     // for a command registered after this was built resolves only once the
     // client sees the new revision.
     CompiledKeymap(KeymapViewState const& keymap, CommandCatalog const& catalog);

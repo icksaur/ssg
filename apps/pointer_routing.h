@@ -6,7 +6,7 @@
 // I/O loop should dispatch and how the drag state changes.  This is a pure
 // function with no terminal or runtime dependency so it can be unit-tested
 // directly; the loop does only decode -> refresh -> hit_test -> resolve -> route
-// -> dispatch (see doc/spec-m8.md).
+// -> dispatch.
 
 #include "ssg_terminal.h"
 
@@ -147,7 +147,7 @@ struct PointerTargets {
 // range at the same lower bound (the only overlap `SelectionSet` normalization
 // permits), the FIRST hit in `baseline`'s order is returned -- the caret, which
 // normalizes before a range sharing its lower bound. Pure.
-// (doc/spec-alt-click-remove-caret.md)
+//
 [[nodiscard]] std::optional<std::size_t> caret_hit_index(
     std::vector<ssg::Selection> const& baseline, ssg::DocumentPosition position);
 

@@ -5,7 +5,6 @@
 // Every command the editor offers, for tests that must cover all of them.
 // Asked of a real runtime, because a command is declared by the component that
 // implements it and no single file lists them all
-// (doc/spec-command-registry.md).
 
 #include "../all_command_ids.h"
 

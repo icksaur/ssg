@@ -87,7 +87,6 @@ ssg::ViewportViewState clientView(std::uint32_t firstRow) {
 // bindingAnUndeclaredCommandIsRefusedAtTheBinding are deleted with the static
 // table.  Both existed to prove a declaration and its handler agreed, which a
 // single registration expression now makes true by construction
-// (doc/spec-command-registry.md).
 
 class TestServices final : public ssg::CommandServices {
 public:

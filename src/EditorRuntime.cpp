@@ -117,7 +117,7 @@ std::string liveDiffDocumentText(const DiffFileView& file) {
     return file.currentContent;
 }
 
-// The curated terminal runtime keymap (doc/spec-keymap.md K2): a small set of
+// The curated terminal runtime keymap: a small set of
 // argument-free bindings the TUI drives, plus the context-divergent navigation
 // keys.  Only argument-free-usable commands are bound (a bare stroke dispatches
 // with no payload); exhaustive reachability is the palette's job.  Every binding

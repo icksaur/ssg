@@ -1,4 +1,4 @@
-# M10-1 startup measurement harness (doc/spec-fast-startup.md).
+# M10-1 startup measurement harness.
 #
 # ssg_startup_probe: the app built WITH startup instrumentation compiled in
 # (SSG_STARTUP_TRACE_ENABLED). The shipped `ssg` (ssg-app.cmake) has it compiled

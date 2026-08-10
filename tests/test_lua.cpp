@@ -253,7 +253,7 @@ TEST(unsafeStandardLibrariesAndNativeLoaderAreAbsent) {
                     .accepted());
 }
 
-// --- doc/spec-lua-widget-composition.md phase 4: ssg.chrome staging ---
+// --- ssg.chrome staging ---
 
 LuaCommandHost chromeHost() {
     return LuaCommandHost{options(), [](LuaInvocation const&) {

@@ -117,7 +117,7 @@ ssg::ViewportViewState clientView(std::uint32_t firstRow) {
 // whole catalog, which is the point of the migration.  Handlers still come from
 // the static rows because these tests exercise the WIRE, not dispatch.
 //
-// Deleted with the static table (doc/spec-command-registry.md, D5).
+// Deleted with the static table.
 std::shared_ptr<ssg::CommandCatalog> staticTableCatalog() {
     static auto const catalog = [] {
         auto const root = std::filesystem::temp_directory_path() /
@@ -185,8 +185,7 @@ TEST(everySettingKeyRoundTripsThroughTheCommandCodec) {
 // are deleted with the registry constructor they exercised.  They checked that a
 // hand-assembled list of codecs covered every command exactly once; the registry
 // is now backed by the catalog itself, so a command's codec is found by looking
-// the command up.  There is no list to get wrong (doc/spec-command-registry.md,
-// R8).
+// the command up.  There is no list to get wrong.
 
 // ---------------------------------------------------------------------------
 // Command request round trips: one canonical fixture per argument shape.

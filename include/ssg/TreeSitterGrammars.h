@@ -25,7 +25,7 @@ using SyntaxLanguageHandle = const void*;
 // Returns the grammar's language pointer. A function rather than a value
 // because tree-sitter's entry points are functions, and calling one at
 // registration time would construct a grammar before the first frame, which
-// the startup budget forbids (doc/spec-fast-startup.md INV-no-optional-init).
+// the startup budget forbids.
 using SyntaxLanguageFactory = SyntaxLanguageHandle (*)();
 
 // One registerable grammar: how to name it, how to get it, and how to color it.

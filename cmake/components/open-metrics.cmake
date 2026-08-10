@@ -1,4 +1,4 @@
-# open-metrics component manifest (Milestone 13, doc/spec-large-files-loading.md)
+# open-metrics component manifest
 #
 # Adds the file-open instrumentation (thread-local phase timers + validation /
 # tree-materialization counters) to the ssg library, and registers:

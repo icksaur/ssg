@@ -1,6 +1,6 @@
 // Kind: seam.
 //
-// C0 of doc/spec-commands.md: proves the new compiled catalog is equal to the
+// Proves the new compiled catalog is equal to the
 // catalog it replaces, BEFORE anything is reprojected from it.
 //
 // The comparison covers only the fields C0 does not change -- ids, effect,
@@ -107,7 +107,7 @@ TEST(theGeneratedCommandReferenceIsCurrent) {
 
 }  // namespace
 
-// The migration's transition oracle (doc/spec-command-registry.md).
+// The migration's transition oracle.
 //
 // A command's declaration is moving from the static table into the component
 // that implements it, a few components per commit.  "The gate is green" does

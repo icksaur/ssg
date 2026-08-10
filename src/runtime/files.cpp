@@ -272,7 +272,7 @@ CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
     runtime.clampSelectionToActiveDocument();
     // Reveal the caret when switching to a different document, so the newly
     // active tab's caret is on-screen instead of inheriting the previous tab's
-    // scroll offset (doc/spec-scroll.md reveal policy).
+    // scroll offset.
     if (runtime.activeDocumentId() != documentBefore) {
         runtime.revealPrimaryCaret();
     }

@@ -114,7 +114,7 @@ TEST(injectedParserDrivesHighlighting) {
 
 // Without an injected parser the runtime falls back to plain-text spans.
 // The ONLY way to disable highlighting, now that tree-sitter is compiled
-// unconditionally (doc/spec-grammar-pipeline.md Phase B): construct the runtime
+// unconditionally: construct the runtime
 // with no parser and every span stays plain. Before Phase B a build could also
 // opt out at compile time, so this test was one of two proofs; it is now the
 // only one.

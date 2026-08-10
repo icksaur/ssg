@@ -260,7 +260,7 @@ double lineSimilarity(std::string_view baseline, std::string_view target) {
 // related lines being paired, not merely co-located at the same position --
 // positional pairing alone hid unrelated removed lines inside spurious
 // word diffs against whatever target line happened to sit at the same
-// index; see doc/spec-diff.md history). Threshold picked empirically: 0.5
+// index). Threshold picked empirically: 0.5
 // (half the tokens shared) was ambiguous for lines that share only common
 // filler words ("gamma", "line") with no real semantic overlap; 0.6
 // requires a clear majority of shared content while still catching a

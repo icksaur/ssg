@@ -379,7 +379,7 @@ std::vector<TerminalOp> classifyTerminalOps(std::string const& sequence) {
 }
 
 // Today's sequences are known good, so they are the reference the mode stack
-// must reproduce byte for byte (doc/spec-terminal-escape-discipline.md, step 1).
+// must reproduce byte for byte.
 // Refactors that only change structure must not change these bytes; the ONE
 // step that changes the wire output -- moving cursor visibility to a frame
 // guard -- edits this reference and nothing else does.
@@ -1279,7 +1279,7 @@ DrainResult drainInput(std::string_view bytes) {
     return result;
 }
 
-// Oracle (doc/spec-terminal-capabilities.md, INV-reply-never-input): a terminal
+// Oracle: a terminal
 // reply is a report, not typing.  Whatever the decoder makes of a sequence it
 // does not recognize, it must never turn its bytes into document text -- that is
 // a capability answer being inserted into the user's file.
@@ -2219,7 +2219,7 @@ TEST(routePointerAltPressAddsCollapsedCaret) {
     }
 }
 
-// doc/spec-alt-click-remove-caret.md: Alt+click on an existing caret/selection
+// Alt+click on an existing caret/selection
 // REMOVES it (Sublime toggle) via select.set_ranges of the baseline minus the
 // hit, and starts no drag; a click on empty space still ADDS; the sole caret is
 // never removed. These are pure-router hand cases.
@@ -2357,7 +2357,7 @@ TEST(altDoubleClickStillSelectsAWordNeverRemoves) {
     // path (which lives solely in route_pointer's Alt-press branch) is
     // unreachable for a double-click. Pin that the double-click seam yields word
     // selection and never a select.set_ranges/add_range, guarding the app-loop
-    // short-circuit against a future refactor. doc/spec-alt-click-remove-caret.md.
+    // short-circuit against a future refactor.
     auto const doubled = ssg::app::double_click_dispatch(posAt(5, 0, 5));
     ASSERT_EQ(doubled.commands.size(), std::size_t{1});
     if (doubled.commands.size() == 1) {
@@ -3037,7 +3037,7 @@ TEST(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52) {
     ASSERT_TRUE(gated.bytesFor(third, true).has_value());
 }
 
-// doc/spec-lua-widget-composition.md phase 6 host oracle: the SHARED
+// Host oracle: the SHARED
 // evaluateInitScript funnel (used by BOTH startup loadInitScript and reload
 // drainAndEvaluate) must push the script's chrome composition into the runtime,
 // so a refactor cannot silently stop wiring one path.

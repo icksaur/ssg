@@ -7,11 +7,11 @@
 namespace ssg {
 
 // The surface that currently receives keyboard input.  One value is authoritative
-// session state; clients route keys by it (doc/spec-navigation.md).
+// session state; clients route keys by it.
 enum class FocusTarget : std::uint8_t { Editor, Panel, Prompt };
 
 // The lowercase keymap-context name for a focus target.  A keymap binding's
-// context is this name (or "*"); see keymap_contexts() and doc/spec-keymap.md.
+// context is this name (or "*"); see keymap_contexts().
 [[nodiscard]] constexpr std::string_view focusTargetName(
     FocusTarget target) noexcept {
     switch (target) {

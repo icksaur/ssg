@@ -9,7 +9,7 @@
 #include <fstream>
 #include <string>
 
-// LF-1 (doc/spec-large-files-loading.md): the EVOLVING counter oracle.
+// LF-1: the EVOLVING counter oracle.
 //
 // These expected values quantify the redundancy the milestone removes and MOVE
 // as later steps land:

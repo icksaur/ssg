@@ -136,7 +136,7 @@ const PaneGeometry* paneGeometry(const ShellViewState& view, PaneId id) {
 double centerX(const Rect& rect) { return rect.x + rect.width / 2.0; }
 double centerY(const Rect& rect) { return rect.y + rect.height / 2.0; }
 
-// The shell's region geometry as a box tree (doc/spec-layout-engine.md). The
+// The shell's region geometry as a box tree. The
 // builder is where sizing POLICY lives: the caller passes the already-decided
 // panel width (0 when the panel is absent), and distraction-free collapses the
 // tree to just the document. The solver then computes every region rect. Chrome
@@ -414,7 +414,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     // and the one-row gap between the input line and the results).
     const bool showTabBar = !request.inputLineActive;
 
-    // Region geometry comes from the box-tree solver (doc/spec-layout-engine.md).
+    // Region geometry comes from the box-tree solver.
     // Sizing POLICY stays here: the panel width is decided with the same rule as
     // before (yield to keep the editor's minimum; absent below the threshold) and
     // handed to the builder, which turns it and the chrome heights into a tree the
@@ -458,7 +458,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         // Status fields FIRST, anchored at the header's left edge, so their
         // position does not depend on the input line's contents: typing into a
         // picker must not slide the working directory and branch rightward or
-        // collapse them out (doc/spec-input-line.md).
+        // collapse them out.
         //
         // The input line's needs are subtracted from the fields' width BEFORE
         // they are laid out, never after. Emitting fields first and then pulling
@@ -476,11 +476,11 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         }
 
         // Header status fields are a WidgetStack LEFT collapse group over the
-        // field width (doc/spec-chrome-stacks.md). The input line's fixed
+        // field width. The input line's fixed
         // reservation is already subtracted from `fieldWidth`, so the fields
         // collapse independently of the query -- the reservation is the floor
         // that protects the input's room, and the fields never reflow as the
-        // user types (doc/spec-input-line.md). The input line + ghost keep the
+        // user types. The input line + ghost keep the
         // `layoutTextInput` seam below (they become a prompt-mode TextInput
         // widget in the focus phase, where reserve/grow/ghost geometry is
         // designed rather than shoehorned into a stack item).
@@ -490,8 +490,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         if (composedHeader) {
             // A composed header REPLACES the built-in status fields, laid out
             // over the SAME fieldWidth the built-in uses so the input-line
-            // reservation floor is honored (doc/spec-lua-widget-composition.md
-            // §Replace semantics; header is left-group only). headerX advances
+            // reservation floor is honored (header is left-group only). headerX
+            // advances
             // to the group's consumed right edge -- which INCLUDES node-less
             // Spacers -- so the input line follows the whole group, never over a
             // spacer's cells.
@@ -559,7 +559,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 headerX += line.ghostWidth;
             }
         }
-        // The whole footer row is ONE WidgetStack (doc/spec-chrome-stacks.md):
+        // The whole footer row is ONE WidgetStack:
         // status fields are the LEFT collapse group, the help hint + status
         // actions are the RIGHT group (hint leftmost, actions after it, the last
         // action flush right -- the packEnd rule). The left fields resolve over
@@ -579,7 +579,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             // A composed footer REPLACES the whole built-in footer row (fields,
             // hint, actions). Unlike the header it supports full left/right/
             // center, so it lowers over the entire footer rect; every widget
-            // becomes a FooterField node (doc/spec-lua-widget-composition.md).
+            // becomes a FooterField node.
             lowerChromeRow(*request.composedChrome->footer,
                            {view.footer->x, view.footer->y, view.footer->width, 1},
                            ShellNodeKind::FooterField, SemanticRole::Footer,
@@ -775,7 +775,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         if (request.reservedPromptRows > 0) {
             // The prompt occupies the bottom rows of the screen, FULL WIDTH --
             // this rect is the single source for the footer-anchored prompt
-            // (doc/spec-chrome-stacks.md §Single-source prompt rect): the shell
+            //: the shell
             // reservation (here) and the prompt-status reservation
             // (runtime/snapshot.cpp) are the SAME rect, so the a11y node, the
             // hit region, and the rendered controls cannot diverge. It spans the

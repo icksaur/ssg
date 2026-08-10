@@ -6,7 +6,7 @@
 // A fake session needs the same command SET as the real one so a parity test
 // can dispatch anything the real editor would accept.  That set used to be
 // readable from the static table, but commands are migrating into the
-// components that implement them (doc/spec-command-registry.md), so the table
+// components that implement them, so the table
 // is no longer the whole story and no single file is.
 //
 // Asking a real runtime is therefore the only truthful answer -- and it stays

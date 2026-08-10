@@ -801,7 +801,7 @@ TEST(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile) {
 }
 
 TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
-    // Reveal-policy audit (doc/spec-scroll.md): opening a document must show the
+    // Reveal-policy audit: opening a document must show the
     // caret, not inherit the previous document's scroll offset. Two tall files.
     auto root = uniqueRoot("open_reveal");
     std::string tall;

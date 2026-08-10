@@ -1,6 +1,6 @@
 #pragma once
 
-// SharedBytes (Milestone 13, doc/spec-large-files-loading.md, LF-2): an immutable,
+// SharedBytes: an immutable,
 // shared, ref-counted handle over a contiguous byte buffer.
 //
 // The backing is abstract behind a `data()`/`size()` contract: today the only

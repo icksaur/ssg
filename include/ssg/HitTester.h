@@ -1,7 +1,7 @@
 #pragma once
 
 // Uniform pointer hit-testing over the scrollable regions a snapshot publishes
-// (see doc/spec-scroll.md R4). HitTester maps a terminal cell to the region and
+//. HitTester maps a terminal cell to the region and
 // item under it, or to a scrollbar position. It performs NO input handling —
 // milestone 8 (mouse) is the caller that turns a RegionHit into commands.
 
@@ -47,7 +47,7 @@ struct RegionHit {
     // feed view.scroll_to_fraction. The server maps it with round-half-up
     // (first_row = round(maximum_first_row * numerator / denominator), then
     // clamped), so it is the exact inverse of the rounded thumb render and no
-    // gutter row is skipped (doc/spec-scrollbar-grab.md amendment).
+    // gutter row is skipped.
     std::uint32_t scrollNumerator = 0;
     std::uint32_t scrollDenominator = 1;
     // Header/footer status-field hits: the published field id and optional command.

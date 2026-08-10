@@ -143,21 +143,21 @@ public:
     // the host (apps/ssg_main.cpp) immediately before every init.lua
     // evaluation (startup AND auto-reload), so keymap.bind/keymap.unbind
     // always start from a clean slate: init.lua's current content is the
-    // WHOLE keymap customization, never additive across reloads (see
-    // doc/spec-config.md's keymap.bind design). A dedicated method rather
+    // WHOLE keymap customization, never additive across reloads. A dedicated
+    // method rather
     // than ssg_main.cpp reaching into Impl fields directly.
     void resetKeymapToDefault();
     // Moves keyboard focus to the editor -- the same effect
     // ShellState::focusEditor() has internally (e.g. after tab.activate
-    // succeeds, per doc/spec-m8.md's M8-F), exposed as a dedicated method
+    // succeeds), exposed as a dedicated method
     // for the host (apps/ssg_main.cpp) to call after opening a
     // command-line file argument at startup, so focus lands on the
     // editor rather than wherever panel.show_files left it. Not a
     // Lua/keymap/palette command -- an app/runtime seam only, like
     // resetKeymapToDefault() above.
     void focusEditor();
-    // Installs the init.lua-composed header/footer (doc/spec-lua-widget-
-    // composition.md), or nullopt to keep/restore the built-in chrome. Called by
+    // Installs the init.lua-composed header/footer, or nullopt to keep/restore
+    // the built-in chrome. Called by
     // the host (apps/ssg_main.cpp) after every init.lua evaluation -- startup AND
     // auto-reload -- with the ScriptHost's currently published composition (which
     // already reflects rollback: a rejected reload keeps the prior value). Like
@@ -184,7 +184,7 @@ public:
     // M10 startup instrumentation: how many times the O(document) syntax
     // highlight pass and the O(workspace) tree scan have actually run.  Exposed
     // so the startup oracle can assert deferred enrichment does not run before
-    // prime_deferred() (doc/spec-fast-startup.md).
+    // prime_deferred().
     struct DeferredWorkCounts {
         std::uint64_t syntaxRuns = 0;
         std::uint64_t treeScans = 0;

@@ -1,7 +1,7 @@
 #pragma once
 
 // The init.lua chrome/widget composition descriptors and their decoder
-// (doc/spec-lua-widget-composition.md, phase 1). `init.lua` composes the header
+//. `init.lua` composes the header
 // and footer from a tree of widget descriptors; this header defines the pure
 // value types that tree decodes to, plus the decoder that turns a Lua-agnostic
 // value tree into a validated `ChromeComposition` (or a path-qualified error).
@@ -84,7 +84,7 @@ struct ValueSource {
 };
 
 // One composed widget. The SUPERSET type that also serves forms; the per-kind
-// CHROME-context field matrix (doc/spec-lua-widget-composition.md) governs which
+// CHROME-context field matrix governs which
 // fields are required/allowed/forbidden here, enforced by the decoder. `value`
 // is the text/caption source, `checked` the checkbox state source, `width` a
 // left/right `Spacer`'s blank width, `command` the click target (validated at
@@ -153,8 +153,8 @@ struct ChromeDecodeResult {    // A path-qualified message on failure (e.g. `hea
     [[nodiscard]] bool ok() const { return !error.has_value(); }
 };
 
-// Decode-time caps (mechanism, tunable -- doc/spec-lua-widget-composition.md
-// §Considerations). Exceeding either is a fail-loud, path-qualified error. In
+// Decode-time caps (mechanism, tunable). Exceeding either is a fail-loud,
+// path-qualified error. In
 // CHROME the per-side cap is what bites (a header's one side + a footer's three
 // slots is bounded well under the total); the total cap is a forward-looking
 // ceiling for the multi-row FORM reuse of this decoder. (A nesting-depth cap

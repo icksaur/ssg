@@ -106,7 +106,7 @@ private:
         }
         if (const auto* right = value.find("right")) {
             // The header is left-group only while the picker input line owns the
-            // trailing cells (doc/spec-lua-widget-composition.md §Replace); any
+            // trailing cells; any
             // `right` key in a header is rejected on presence.
             if (isHeader)
                 return failB(path + ".right",

@@ -348,7 +348,7 @@ void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
 // When the query exactly fills its node this lands on the ghost's first cell,
 // which is intended -- the ghost is unaccepted suggestion text and the insertion
 // point belongs on top of it.  The caret is therefore bounded by the HEADER row,
-// not by the query node (doc/spec-input-line.md).
+// not by the query node.
 std::optional<GridPosition> inputLineCaret(ShellViewState const& shell) {
     if (!shell.header) return std::nullopt;
     for (auto const& node : shell.accessibilityNodes) {
@@ -452,7 +452,7 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
 // Paint a scrollbar into a reserved 1-column gutter from resolved metrics.  When
 // the content fits, Style resolves the whole column to its gutter glyph (blank
 // by default), so a thumb appearing or vanishing never changes the content width
-// (see doc/spec-scroll.md).  Which glyph each row gets, and how a short thumb
+//.  Which glyph each row gets, and how a short thumb
 // degrades, is the style's rule -- this function only reconciles the metrics'
 // conventions with Style's and maps the resolved kind onto a color role.
 void paintScrollGutter(CellGrid& grid, int x, int y, int height,
@@ -528,7 +528,7 @@ void paintPanelTree(CellGrid& grid, Rect const& panel,
 }
 
 // Projects the palette's ranked results into the active pane while the palette
-// prompt is open.  The query and caret live in the header (see spec-palette.md);
+// prompt is open.  The query and caret live in the header;
 // this paints only the results window with the selected row highlighted.
 void paintPalette(CellGrid& grid, PaletteProjection const& palette,
                    ThemeSnapshot const& theme, std::uint8_t background,
@@ -959,7 +959,7 @@ void paintScrollbar(CellGrid& grid, PaneGeometry const& pane,
                         background, style);
 }
 
-// The left line-number gutter (doc/spec-line-numbers.md). Each visible row shows
+// The left line-number gutter. Each visible row shows
 // its 1-indexed logical line number right-aligned with a trailing space; a
 // wrapped continuation row (firstSpan != 0) shows a blank gutter; the caret's
 // logical line uses the current-line roles.
@@ -1089,8 +1089,8 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
 
 // Render the declined-layout ("terminal too small") screen: a placeholder grid
 // of the terminal's size carrying a centered library-owned message.  The library
-// owns this screen so a client contributes no cell content (M11-L,
-// doc/spec-library-contract.md).  Sized from the terminal dimensions the client
+// owns this screen so a client contributes no cell content (M11-L).  Sized
+// from the terminal dimensions the client
 // viewport carries, since the shell layout was declined (viewport {0,0}).
 CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme,
                          Style const& style) {
@@ -1300,7 +1300,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
     // picker paints its RESULTS through paintPalette (the `shell.palette`
     // branch), so a caret placed beside the prompt rows in the `else` branch
     // would never be reached while a picker is open.  The cursor is the primary
-    // way a user can tell a text input has focus (doc/spec-ux.md), so it must
+    // way a user can tell a text input has focus, so it must
     // not depend on which pane branch ran.
     if (shell.focus == FocusTarget::Prompt) {
         if (auto caret = inputLineCaret(shell)) grid.caret = *caret;

@@ -94,7 +94,7 @@ enum class FindReplaceCommand : std::uint8_t {
 // The typed argument for find.update_query / replace.update_replacement: the full
 // query (or replacement) text.  Carried as a command argument so the query lives
 // in the controller (server-authoritative), edited by the client which reports
-// the next full string (see doc/spec-m7.md F1).
+// the next full string.
 struct FindQueryArguments {
     std::string query;
     friend bool operator==(const FindQueryArguments&, const FindQueryArguments&) = default;

@@ -1,6 +1,6 @@
 #pragma once
 
-// Lowering a composed chrome row (doc/spec-lua-widget-composition.md, phase 2)
+// Lowering a composed chrome row
 // to accessibility nodes over a rect, reusing the shipped `WidgetStack`. This is
 // the server-side bridge from a validated `RowDescriptor` to the SAME
 // `(kind,id,label,rect,role,content,commandId)` nodes the built-in status-field

@@ -7,7 +7,7 @@
 // by chaining on the builder and hands the finished description to
 // `CommandCatalog::add`.  Because a builder passed to `add` is finished by
 // definition, passing it IS the completion signal -- which is why the catalog
-// needs no seal, finalise or build step (doc/spec-command-registry.md).
+// needs no seal, finalise or build step.
 //
 //     catalog.add(CommandSpecBuilder{"text.insert"}
 //                     .owner("text-input-commands")

@@ -11,7 +11,7 @@ namespace {
 
 // True when the click byte offset lands on `selection`: exactly on a collapsed
 // caret, or inside a range with an exclusive upper bound (matching the
-// caret-between-cells model). doc/spec-alt-click-remove-caret.md.
+// caret-between-cells model).
 bool selectionCoversPosition(ssg::Selection const& selection,
                              ssg::DocumentPosition position) noexcept {
     auto const lo = selection.lower().byteOffset.value();
@@ -32,7 +32,7 @@ constexpr ScrollableRegionDescriptor kScrollableRegions[] = {
      "tree.scroll_to_fraction"},
         // No command: the picker's ranked list is client-owned for latency, so its
     // scroll must never round-trip. route_pointer returns a ClientScroll for
-    // this one instead (doc/spec-scroll.md S-I5).
+    // this one instead.
     {ssg::HitRegion::Palette, ssg::HitRegion::PaletteScrollbar,
      WheelTarget::palette, {}},
 };
@@ -213,7 +213,6 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                     // it; a removal starts no drag. Otherwise ADD a collapsed
                     // caret (re-adding an existing one de-dups to a no-op, which
                     // is how an Alt+click on the sole caret becomes a no-op).
-                    // doc/spec-alt-click-remove-caret.md.
                     auto const hit_index =
                         altDragBaseline.size() > 1
                             ? caret_hit_index(altDragBaseline,

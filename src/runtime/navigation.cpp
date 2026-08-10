@@ -17,7 +17,6 @@ namespace {
 // stashed for the EditorRuntime dispatch wrapper to execute through the registry
 // (the session mutex is non-reentrant, so the handler cannot re-enter dispatch).
 // This keeps execution server-owned and rejects any id the palette never offered
-// (see doc/spec-palette.md P1).
 CommandHandlerResult validatePaletteTarget(EditorRuntime::Impl& runtime,
                                              CommandContext& context,
                                              std::string const& commandId) {

@@ -16,8 +16,6 @@
 // satisfies spec invariant I4 (valid state by construction; failures are
 // actionable).  Factory functions and default constructors always produce
 // valid objects.
-//
-// See doc/spec.md §Foundation infrastructure for the full contract.
 
 #include <cstdint>
 #include <stdexcept>

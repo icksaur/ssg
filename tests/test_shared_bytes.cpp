@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <string>
 
-// LF-2 (doc/spec-large-files-loading.md): SharedBytes is an immutable ref-counted
+// LF-2: SharedBytes is an immutable ref-counted
 // handle whose backing is swappable behind data()/size().  These tests prove the
 // two properties the plan relies on: copies SHARE one buffer (no double-allocate)
 // and an alternate backing works without touching consumers.

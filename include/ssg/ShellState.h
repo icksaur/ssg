@@ -117,7 +117,7 @@ struct ShellLayoutRequest {
     GridSize viewport;
     std::uint8_t reservedPromptRows = 0;
     // Width in columns of the editor's left line-number gutter, or 0 when line
-    // numbers are off (doc/spec-line-numbers.md). Carved from the LEFT of each
+    // numbers are off. Carved from the LEFT of each
     // editor pane's content; 0 reproduces today's layout exactly.
     int lineNumberGutterWidth = 0;
     // A draft-conflict notice to reserve one chrome row for, above the document
@@ -135,16 +135,16 @@ struct ShellLayoutRequest {
     std::optional<ShellFooterHint> footerHint;
     std::vector<TabLabel> tabs;
     // The header's single-line text input, shared by every picker (command
-    // palette, file finder, ...) -- see doc/spec-ux.md.  Named for the surface
+    // palette, file finder, ...).  Named for the surface
     // rather than one of its callers.
     bool inputLineActive = false;  // A picker is open on this client.
     std::string inputLineQuery;    // The client's current query text.
     std::string inputLineGhost;    // Fish-style completion of the top candidate.
     // Dimensions and chrome glyphs this layout is computed against.  Defaults
-    // reproduce the shipped appearance; see doc/spec-style.md.
+    // reproduce the shipped appearance.
     Style style;
-    // An optional init.lua-composed header/footer (doc/spec-lua-widget-
-    // composition.md). When a region is present here, its built-in status-field
+    // An optional init.lua-composed header/footer. When a region is present
+    // here, its built-in status-field
     // projection is REPLACED by lowering the composed row; an absent region (the
     // default) keeps the built-in path byte-identical. `chromeProviderResolver`
     // supplies live (value,label,command) for a composed widget's `provider`
@@ -159,7 +159,7 @@ struct PaneGeometry {
     Rect content;
     Rect scrollbar;
     // The left line-number gutter, carved from the frame's left edge. Empty
-    // ({0,0,0,0}) when line numbers are off (doc/spec-line-numbers.md).
+    // ({0,0,0,0}) when line numbers are off.
     Rect lineNumbers;
 
     friend bool operator==(const PaneGeometry&, const PaneGeometry&) = default;

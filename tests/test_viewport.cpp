@@ -291,7 +291,7 @@ TEST(unwrappedMergedInlineRowGhostSpansResolveHitTestsToRealBytesAroundThem) {
 }
 
 TEST(wrappedModifiedLineNeverMergesEvenWhenTheLineFitsOnOneRow) {
-    // Ghost spans are unwrapped-only (see doc/spec-inline-word-diff.md): the
+    // Ghost spans are unwrapped-only: the
     // WRAPPED projection must always keep the two-row baseline-phantom /
     // target-row split for a Modified line, even one short enough to have
     // fit as a single visual row.
@@ -664,7 +664,7 @@ TEST(wrappedEndByteOffsetIsTheVisualRowEnd) {
     ASSERT_EQ(proj.visibleRows[2].endByteOffset, 9u);   // last line, no newline
 }
 
-// The scrollbar mapping in isolation (doc/spec-scrollbar-grab.md amendment). The
+// The scrollbar mapping in isolation. The
 // render (firstRow -> thumbStart) and drag-inverse (thumbTop -> firstRow) are one
 // matched pair through scrollScaleRounded, so no gutter row is skipped and the
 // ends map to the ends. Driven purely by the pure functions -- no runtime, no app.

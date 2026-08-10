@@ -42,7 +42,7 @@ public:
     // "Modifier+...+Code" syntax parseStroke accepts) and parses each one.
     // Used to decode a Lua-supplied "Escape KeyF KeyT"-style sequence
     // string without widening the flat string->string Lua argument bridge
-    // to carry arrays (see doc/spec-config.md's keymap.bind design).
+    // to carry arrays.
     [[nodiscard]] std::optional<KeySequence> parseSequenceString(
         std::string_view encoded) const;
     [[nodiscard]] std::string formatSequence(const KeySequence& sequence) const;
@@ -125,7 +125,7 @@ private:
 // KeyCodec strokes, e.g. "Escape KeyF KeyT"), the command id it should
 // invoke, and the context it applies in ("*"/"editor"/"panel"/"prompt";
 // empty defaults to "*"). This is the ONLY argument shape keymap.bind
-// accepts (see doc/spec-config.md); one call binds exactly one sequence.
+// accepts; one call binds exactly one sequence.
 struct KeymapBindArguments {
     std::string sequence;
     std::string command;

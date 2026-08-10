@@ -1,4 +1,4 @@
-# Milestone 11 — Library API is the contract (doc/spec-library-contract.md).
+# Milestone 11 — Library API is the contract.
 # Proves the TUI screen is a pure function of the production EditorRuntime's
 # SessionSnapshot: render(snapshot).canonical() == checked-in goldens for the
 # normal, prompt, and too-small screens.

@@ -87,7 +87,7 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
     // Navigate and reveal against the REAL editor pane cached from the last
     // snapshot, not a fake {80, 24}: page motion advances by the real height and
     // the built-in caret reveal uses the real height/width (so a far-right column
-    // on a wide line is not clamped at column 80). See doc/spec-scroll.md R6.
+    // on a wide line is not clamped at column 80).
     ViewportDimensions const viewport{
         std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
         std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
@@ -413,8 +413,8 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             revealActiveFindMatch(runtime);
             // If no match remains to reveal (common after replace.all), still
             // reveal the primary caret so a replace with the caret off-screen
-            // scrolls into view, per the edits-reveal policy (doc/spec-scroll.md
-            // R5). When a match does remain, reveal_active_find_match already
+            // scrolls into view, per the edits-reveal policy. When a match does
+            // remain, reveal_active_find_match already
             // revealed it above the prompt; don't override that.
             auto const& fr = runtime.findReplace.viewState();
             if (!fr.open || !fr.activeMatch ||
@@ -493,7 +493,7 @@ void EditorRuntime::Impl::revealPrimaryCaret() {
 // The text-input commands, declared where they are implemented.
 //
 // The first component migrated off the static table
-// (doc/spec-command-registry.md, D3).  Each command's facts and its handler are
+//.  Each command's facts and its handler are
 // one expression, so the argument type is written once -- in `handler<...>` --
 // and the codec, the unwrap and the reference's argument column are all derived
 // from it.  There is no row elsewhere to keep in step.

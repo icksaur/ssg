@@ -84,7 +84,6 @@ TEST(handAuthoredGeometryGoldens) {
     // The prompt reserves the bottom rows FULL WIDTH (the footer-region width,
     // not the editor width), which is the single source both the shell and the
     // prompt-status view consume, and where the controls actually render
-    // (doc/spec-chrome-stacks.md §Single-source prompt rect).
     assertRect(*wideResult.view->prompt, {0, 10, 80, 2});
     // The pane content stays anchored at the top (y=2, directly below the tab
     // bar) and only loses height -- opening a prompt must never push it down.
@@ -368,7 +367,7 @@ TEST(hidingAnUnfocusedPanelLeavesFocusUntouched) {
 
 
 // ---------------------------------------------------------------------------
-// The header input line (doc/spec-input-line.md).
+// The header input line.
 
 const AccessibilityNode* findNode(const ShellViewState& view, std::string_view id) {
     for (const auto& node : view.accessibilityNodes) {
@@ -837,7 +836,7 @@ TEST(noTabSeparatorDanglesPastTheLastPlacedTab) {
     ASSERT_EQ(separators, result.view->tabHits.size() - 1);
 }
 
-// --- doc/spec-lua-widget-composition.md phase 3: composed-chrome routing ---
+// --- composed-chrome routing ---
 
 WidgetDescriptor literalField(std::string id, std::string text, int rank) {
     WidgetDescriptor w;

@@ -151,7 +151,7 @@ PromptLayoutResult computePromptLayout(const PromptSurface& surface,
 
     PromptViewState view{request.kind, request.accessibleLabel, reservation, {}};
 
-    // The prompt is a widget Container (doc/spec-widget-chrome.md): a Column of
+    // The prompt is a widget Container: a Column of
     // full-width input rows, plus -- for find/replace -- a trailing options Row
     // of fixed-width toggles (Checkbox widgets) and a flex match-count Label. The
     // box solver assigns every rect and fails loud when the toggles overflow the
