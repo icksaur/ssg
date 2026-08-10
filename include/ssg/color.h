@@ -2,7 +2,7 @@
 
 // Color-depth adaptation.
 //
-// Themes are the sole source of color (spec.md I22): CellGrid carries a flat
+// Themes are the sole source of color: CellGrid carries a flat
 // color table (CellGrid.colors -- one slot per semantic role followed by one per
 // syntax scope), plus the renderer-populated diff-tint and selection-fill
 // colors. A client never mints or substitutes editor color; ColorResolver only

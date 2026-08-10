@@ -68,6 +68,14 @@ code, its types, its tests, and any CONTRACT line — its plan and file list are
 git, and its exposition had no reader after the review. If part of a finished
 spec fits none of those destinations, that is evidence it was never load-bearing.
 
+The same rule governs plans, task lists, roadmaps, and milestone logs: they are
+scaffolding, not tracked artifacts. The project keeps no durable `plan.md`,
+`tasks/` directory, or spec corpus — a plan for in-flight work lives in your
+scratch space or a session, and lands in git history as the commits that
+delivered it, never as a standing document in the tree. If you need to track
+multi-step work, do it out of tree; do not add a planning document the next
+session must read.
+
 Recover a deleted spec:
 `git log --all --diff-filter=D --name-only -- 'doc/specs/*<slug>*'`
 then `git show <sha>^:<path>`.
