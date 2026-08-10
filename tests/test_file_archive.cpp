@@ -281,6 +281,38 @@ TEST(pruningRetainsAndReportsFutureDatedEntries) {
     ASSERT_EQ(report.retainedFutureDated, std::size_t{1});
 }
 
+// A real housekeeping failure -- an expired entry that cannot be removed --
+// must never become the caller's failure. prune returns without throwing,
+// records the trouble only in `message`, and loses nothing it could not safely
+// delete. This is the observable half of the FileArchive contract: opening a
+// workspace proceeds no matter what archive housekeeping runs into.
+TEST(pruningReportsButNeverFailsTheCallerWhenAnEntryCannotBeRemoved) {
+    TemporaryDirectory workspace;
+    const auto archiveRoot = workspace.path() / ".ssg" / "archive";
+    const auto now = at(2026, 3, 1);
+    const auto expired = ssg::FileArchive::entryDirectoryName(at(2020, 1, 1), 0);
+    writeOutOfBand(archiveRoot / expired / "ancient.txt", "expired");
+
+    // Remove write permission on the entry directory so unlinking the file
+    // inside it fails the way a locked or corrupt entry would.
+    fs::permissions(archiveRoot / expired, fs::perms::owner_write,
+                    fs::perm_options::remove);
+
+    ssg::FileArchive archive{archiveRoot};
+    const auto report = archive.prune(now, std::chrono::hours{24 * 14});
+
+    // Restore write immediately so the temporary directory can be cleaned up,
+    // regardless of the assertions below.
+    fs::permissions(archiveRoot / expired, fs::perms::owner_all,
+                    fs::perm_options::add);
+
+    // Housekeeping failed, but only the message says so: the caller is never
+    // stopped, and the copy it could not remove is still there.
+    ASSERT_FALSE(report.message.empty());
+    ASSERT_EQ(report.removed, std::size_t{0});
+    ASSERT_TRUE(fs::exists(archiveRoot / expired / "ancient.txt"));
+}
+
 }  // namespace
 
 int main() {
@@ -296,6 +328,7 @@ int main() {
     RUN(twoArchivesInTheSameSecondDoNotShareAnEntryDirectory);
     RUN(aFailedArchiveNeverRemovesAnEarlierEntry);
     RUN(pruningRetainsAndReportsFutureDatedEntries);
+    RUN(pruningReportsButNeverFailsTheCallerWhenAnEntryCannotBeRemoved);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }
