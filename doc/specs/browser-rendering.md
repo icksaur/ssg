@@ -88,9 +88,29 @@ So the fork is genuinely: A′ ships no client layout and accepts fling
 placeholders plus a wider server render band per client; fully-scoped B ships and
 loads a WASM projection boundary and gets placeholder-free native momentum with
 no per-scroll server work. The earlier "B is cheap, just `GraphemeLayout`"
-framing was wrong — B's cost is the projection boundary. The review must weigh
-that larger B against A′'s placeholders; the recommendation is deferred to the
-prototype-and-price step below rather than asserted here.
+framing was wrong — B's cost is the projection boundary.
+
+**Prototype finding (A′ fling, measured by kinematic simulation).** A native
+fling travels a bounded distance — a few screens at most — and its landing point
+is computable at flick release from velocity and the friction time-constant. A
+client that requests the whole fling *envelope* up front (predictive banding),
+rather than chasing the scroll with throttled requests, is placeholder-free
+across the whole tested latency range up to wide-area RTT, at an overscan under
+one screen. Gentle and medium flings never placeholder under either strategy;
+only a hard fling under naive chase at wide-area RTT shows a small fraction of
+placeholder frames, and predictive banding closes even that. Per-fling bandwidth
+is the envelope sent once and delta-reducible against rows already held — modest
+on any broadband link. The one case predictive banding cannot help is a
+scrollbar random *seek* (not a fling): it shows a single-RTT blank under A′ or
+any server-authoritative model, exactly as every virtualized remote list does.
+
+This substantially retires the fling risk that was A′'s main liability, and with
+it most of B's justification for momentum scrolling. The remaining unmeasured
+input is the cell-run bytes-per-row of the A′ section, which affects only
+bandwidth, not placeholder incidence. The decision now tilts toward A′ — simpler
+client, no WASM toolchain, self-describing wire — unless a non-scroll factor
+(fully offline operation, or eliminating per-client server render cost) is judged
+to outweigh it. The review and the bytes-per-row measurement should settle it.
 
 ## Consequences either way
 
@@ -136,8 +156,11 @@ prototype-and-price step below rather than asserted here.
 ## Plan
 
 1. Prototype the overflow-scroller virtualization against a live
-   `SessionSnapshot` to measure fling behavior under A′ (placeholder frequency,
-   band width needed).
+   `SessionSnapshot` to measure fling behavior under A′. Done by kinematic
+   simulation: native flings are bounded and their landing is knowable at
+   release, so predictive banding (request the fling envelope up front) is
+   placeholder-free to wide-area RTT at sub-screen overscan. Predictive banding
+   is now a required element of the A′ client, not an optimization.
 2. Scope and price B honestly: the export surface of the whole projection
    boundary (`GraphemeLayout` + `Viewport` visual-row projection + diff
    phantom-row source), module size, and load — not just grapheme segmentation.
