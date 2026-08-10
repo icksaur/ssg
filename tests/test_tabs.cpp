@@ -14,6 +14,8 @@ using namespace std::chrono_literals;
 class FakeLifecycle final : public ssg::TabLifecycle {
 public:
     std::vector<ssg::TabId> failClose;
+    std::vector<ssg::TabId> ephemeralClose;
+    std::vector<ssg::TabId> noCompensation;
     bool failReopen = false;
     std::optional<ssg::FileDocumentId> reopenedDocument;
     std::optional<ssg::JournalDocumentKey> reopenedDocumentKey;
@@ -32,6 +34,16 @@ public:
             failClose.end()) {
             return {ssg::TabError::DurabilityFailed, "durability failed",
                     std::nullopt, std::nullopt, std::nullopt, false};
+        }
+        if (std::find(ephemeralClose.begin(), ephemeralClose.end(), tab.id) !=
+            ephemeralClose.end()) {
+            return {ssg::TabError::None, {}, std::nullopt, std::nullopt,
+                    std::nullopt, false, true};
+        }
+        if (std::find(noCompensation.begin(), noCompensation.end(), tab.id) !=
+            noCompensation.end()) {
+            return {ssg::TabError::None, {}, std::nullopt, std::nullopt,
+                    std::nullopt, false, false};
         }
         return {ssg::TabError::None, {},
                 ssg::RecoveryRecordId{"closed-" +
@@ -301,6 +313,31 @@ TEST(badgesUpdateAndDeltaReplayIsExact) {
     ASSERT_FALSE(ssg::TabDeltaCodec{}.derive(target, target).state.has_value());
 }
 
+TEST(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab) {
+    FakeLifecycle lifecycle;
+    ssg::TabManager tabs{lifecycle};
+    const auto document = openSaved(tabs, 1, "a");
+    const auto output =
+        *tabs.openContent(ssg::TabKind::ReadOnlyOutput, "output:1", "Output",
+                          ssg::DocumentMode::ReadOnly)
+             .tab;
+
+    // An ephemeral (regenerable) tab returns no reopen record and closes anyway;
+    // it is not added to the reopen-closed history.
+    lifecycle.ephemeralClose.push_back(output);
+    ASSERT_TRUE(tabs.close(output, 100ms).accepted());
+    ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
+    ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
+
+    // A non-ephemeral tab that returns no compensation is a lifecycle bug: the
+    // close is refused and the tab is left in place.
+    lifecycle.noCompensation.push_back(document);
+    const auto refused = tabs.close(document, 100ms);
+    ASSERT_EQ(refused.error, ssg::TabError::LifecycleFailed);
+    ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
+    ASSERT_EQ(tabs.viewState().tabs[0].id, document);
+}
+
 }  // namespace
 
 int main() {
@@ -315,6 +352,7 @@ int main() {
     RUN(untitledLabelsAreSmallestAvailableAndReopenIsStable);
     RUN(reopenUntitledRebindsDocumentKeyForDedup);
     RUN(badgesUpdateAndDeltaReplayIsExact);
+    RUN(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
