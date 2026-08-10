@@ -159,10 +159,40 @@ current product goal.
   geometry exactly; that is only safe because it is the same code, and is the
   reason B compiles `GraphemeLayout` rather than reimplementing it. A JS
   reimplementation is out of scope: it would create a second geometry authority.
-- Chrome (tabs, tree, palette, prompt) rendering as native widgets vs staying on
-  the grid, and how caret/IME input maps back to byte offsets through cell
-  geometry, are deferred to the implementation slice and are not part of this
-  decision.
+- The native scroll *mechanism* and the native scroll *widget* are different
+  questions, and only the first is settled by the fork. Native momentum, touch,
+  rubber-band, and sub-row smoothness change only *how a row is reached*, not
+  which cells the server describes, so they are unambiguously permitted. A
+  browser-native **scrollbar**, however, is not free chrome: the library already
+  owns the editor/panel/palette scrollbars — `ScrollbarMetrics`
+  (`totalRows`, `viewportRows`, `firstRow`, `maximumFirstRow`, `thumbStart`,
+  `thumbSize`) ships in the viewport snapshot and the TUI paints it in a reserved
+  gutter column. A client-invented scrollbar with its own extent or thumb would be
+  a second geometry authority, the same violation the fork forbids for WASM
+  layout.
+  The resolution is affordance vs authority: a browser-native scrollbar is
+  permitted **only as a readability restyle and input affordance of the server's
+  scrollbar** — its track extent is the published `totalRows`/`maximumFirstRow`
+  and its thumb is the published `thumbStart`/`thumbSize`, and dragging it drives
+  the same `scroll_to_fraction` reconciliation as every other scroll input. It
+  introduces no independent extent, no independent thumb geometry, and no scroll
+  path that bypasses `firstVisualRow` reconciliation. Skinning the platform
+  scrollbar in place of painting the gutter column is the one geometry change the
+  rule blesses here — the reserved gutter column may be dropped on the browser
+  client because the platform chrome replaces it at the same track. This is a
+  deliberate refusal (no second scrollbar) that will read like a missing feature
+  to someone who expects a free browser scrollbar, so it becomes a **CONTRACT line
+  on merge**: a client's scrollbar is a restyle of the published `ScrollbarMetrics`,
+  never a second one, and never an independent scroll authority. The seam oracle
+  for reconciliation covers the drive path; the CONTRACT covers the refusal a test
+  cannot state.
+- The remaining chrome — tabs, tree, palette, prompt — rendering as native
+  widgets vs staying on the grid, and how caret/IME input maps back to byte
+  offsets through cell geometry, are deferred to the implementation slice. Each
+  is governed by the same affordance-vs-authority test the scrollbar just
+  resolved: a native widget is permitted only as a restyle of server-published
+  geometry, never as an element with independent geometry or an independent
+  authority path.
 
 ## Resolved and remaining
 
@@ -175,9 +205,12 @@ current product goal.
    promise broke.
 3. The A′ overscan band width (sub-screen, from the fling prototype) and the
    RLE cell-run encoder's format and worst case.
-4. Deferred to the implementation slice, not blocking: chrome (tabs, tree,
-   palette, prompt) as native widgets vs on the grid, and how caret/IME input
-   maps back to byte offsets through cell geometry.
+4. **Scrollbar — resolved:** a browser-native scrollbar is permitted only as a
+   restyle/affordance of the published `ScrollbarMetrics`, never a second scroll
+   authority (a CONTRACT on merge). The remaining chrome — tabs, tree, palette,
+   prompt — as native widgets vs on the grid, and caret/IME input mapping back to
+   byte offsets, are deferred to the implementation slice under the same
+   affordance-vs-authority test.
 
 ## Plan
 
@@ -201,7 +234,10 @@ The fork is closed (A′). Remaining steps deliver it.
    - **CONTRACT lines:** that the library remains the sole geometry authority and
      a client (including any future WASM one) reproduces cell geometry only from
      library code, never a reimplementation — a second geometry authority is a
-     deliberate refusal; and that the cell-run section is RLE-packed, never one
-     span per grapheme.
+     deliberate refusal; that the cell-run section is RLE-packed, never one span
+     per grapheme; and that a client's scrollbar is a restyle of the published
+     `ScrollbarMetrics` — same extent and thumb, driving the same
+     `scroll_to_fraction` reconciliation — never a second scrollbar with
+     independent geometry or an independent scroll authority.
    - Everything else — the A′-vs-B history, the measurements, this exposition —
      stays in git, not the tree.
