@@ -107,10 +107,9 @@ Exit code 0 is clean; 1 means findings to review.
 
 ## Project documentation
 
-- `doc/spec.md` — architecture, invariants, acceptance gates, and scope
-- `doc/features/` — detailed feature contracts
+- `AGENTS.md` — ambient contract: where a promise lives, when to spec, gates
 - `doc/config.md` — user guide: writing `init.lua`
+- `doc/commands.md` — generated command reference
 - `doc/learnings.md` — durable implementation and integration constraints
 - `cpp-values.md` — public C++ API design values
-- `AGENTS.md` — ambient contract: where a promise lives, when to spec, gates
 - `backlog.md` (repository root) — deferred work, and the process for it

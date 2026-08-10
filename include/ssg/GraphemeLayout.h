@@ -16,10 +16,10 @@
 // This module does NOT implement line wrapping, scrollbars, viewports, or
 // any renderer-specific type (see viewport-wrap-scrollbar for those).
 //
-// Invariant I7: layout is deterministic and renderer-neutral.
-// See doc/features/presentation-shell.md §Cell-width rules for the normative
-// contract, including tab expansion, control glyph widths, and invalid-byte
-// handling.
+// Invariant I7: layout is deterministic and renderer-neutral. Cell widths
+// follow UAX #11 East Asian Width (W/F -> 2 cells) plus emoji-data, with tab
+// expansion, control-glyph widths, and invalid-byte handling as implemented
+// here and pinned by tests/test_cell_layout.cpp.
 
 #include <cstdint>
 #include <string_view>

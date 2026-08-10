@@ -9,9 +9,8 @@
       wire; credential-less `HttpEditorSessionHost::attach()`; scrub auth from
       all specs/tasks. The capability/principal authorization model is retained.
 - [x] Resolve browser scope (decision: protocol stays browser-capable, no
-      shipped client). Scrubbed `ssg-editor`/bundled-client claims from
-      `doc/spec.md` and marked `doc/features/runnable-browser-application.md`
-      historical (retained as the `EditorRuntime` design record). Kept the I18
+      shipped client). Scrubbed `ssg-editor`/bundled-client claims and marked the
+      runnable-browser design record historical. Kept the I18
       browser-feasibility invariant and the browser-deliverable protocol framing.
 - [x] Add a LICENSE file (MIT) and reference it from the README. Vendored deps
       under `vendor/` keep their own licenses (tree-sitter grammars MIT; libgit2

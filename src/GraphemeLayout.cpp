@@ -1,7 +1,7 @@
 // UTF-8 grapheme segmentation and terminal cell layout.
 //
-// See include/ssg/GraphemeLayout.h for the public contract and
-// doc/features/presentation-shell.md §Cell-width rules for the normative spec.
+// See include/ssg/GraphemeLayout.h for the public contract. Cell-width rules
+// follow UAX #11; tests/test_cell_layout.cpp is the oracle.
 //
 // Unicode version: 15.0.0 (released 2022-09-13).
 // Grapheme clusters: UAX #29 extended grapheme clusters.

@@ -2,8 +2,8 @@
 //
 // Hand-authored grapheme segmentation and cell-run golden fixtures for
 // include/ssg/layout.h.  Expected values are derived from the pinned
-// fixture files in tests/fixtures/layout/cells/ and the normative contract
-// in doc/features/presentation-shell.md §Cell-width rules.
+// fixture files in tests/fixtures/layout/cells/ and the UAX #11 width rules
+// below.
 //
 // Unicode version: 15.0.0 (2022-09-13)
 // Grapheme cluster rules: UAX #29 extended grapheme clusters
