@@ -1,8 +1,8 @@
 # Browser rendering architecture
 
-Status: draft, in review. This file exists only until the decision it records
-lands; on merge its residue becomes types, tests, and CONTRACT lines, and the
-file is deleted in the same commit.
+Status: A′ ratified, fork closed. This file exists only until the first runnable
+slice lands; on merge its residue becomes types, tests, and CONTRACT lines (see
+the plan), and the file is deleted in the same commit.
 
 ## The decision
 
@@ -22,13 +22,14 @@ cell bitmap (discards web type, scroll, and input). Selection, caret, diff
 tints, and syntax colors are overlay layers driven by byte offsets mapped
 through cell geometry.
 
-The one open fork is **where the visible lines' cell geometry comes from**:
+The one open fork is **where the visible lines' cell geometry comes from**. It is
+now **closed in favor of A′** (see the measured evidence below); B is retained
+only as the fallback for a hard fully-offline requirement.
 
-- **A′ — server publishes visible cell runs.** Extend the snapshot with a
-  viewport-bounded section: for each visible logical line, the `CellRun` the
-  library already computes (grapheme → cell-column spans) plus each span's syntax
-  scope. All layout stays in C++; the wire stays semantic; no client-side layout
-  code ships.
+- **A′ — server publishes visible cell runs (CHOSEN).** Extend the snapshot with
+  a viewport-bounded section: for each visible logical line, the `CellRun` the
+  library already computes (grapheme → cell-column spans), run-length packed. All
+  layout stays in C++; the wire stays semantic; no client-side layout code ships.
 - **B — WASM the layout core.** Compile the layout code to WebAssembly so the
   browser, which holds the whole `document.text`, lays out any line locally
   against the server's policy. The geometry code is literally the same code, so
@@ -121,10 +122,11 @@ range query, not geometry re-derivation); folding resolved scope into the cell
 section is an option, not a requirement.
 
 With both the fling-placeholder risk and the bandwidth cost retired by
-measurement, the decision favors **A′** — no WASM toolchain, self-describing
-wire, simpler client — unless a non-scroll factor (fully offline operation, or
-eliminating per-client server render cost) is judged to outweigh it. B remains
-the fallback for a hard offline requirement.
+measurement, **the fork is closed in favor of A′** — no WASM toolchain,
+self-describing wire, simpler client. The standing reviewer ratified A′ and
+confirmed a B WASM size/load measurement is not required before choosing. B
+remains the fallback only for a hard fully-offline requirement, which is not a
+current product goal.
 
 ## Consequences either way
 
@@ -133,16 +135,26 @@ the fallback for a hard offline requirement.
   server owns `firstVisualRow`, the client nudges via `scroll_to_fraction` — is
   the load-bearing promise and wants a test. It is incomplete without an explicit
   arbitration rule for a server-initiated reveal that lands mid-fling: otherwise
-  a reveal publishes a new `firstVisualRow`, then the browser's next throttled,
-  now-stale `scroll_to_fraction` immediately overwrites it, snapping the view
-  back. The rule must be pinned, not left implicit. Candidate: every scroll nudge
-  carries the snapshot revision it was computed against, and the server ignores a
-  nudge whose basis predates its last authoritative reveal (an epoch check), so a
-  reveal wins and the browser re-derives its offset from the revealed
-  `firstVisualRow` on the next snapshot. The alternative — browser input suppresses
-  reveal until the fling goes idle — is worse: it lets a client's momentum defeat
-  a semantic reveal (e.g. jump-to-match). Whichever is chosen, it is a seam rule
-  with a knowable answer and wants a seam oracle named for it.
+  a reveal publishes a new `firstVisualRow`, then the browser's next throttled
+  `scroll_to_fraction` immediately overwrites it, snapping the view back. The rule
+  has two halves and needs both:
+  - **Server half:** every scroll nudge carries the snapshot revision it was
+    computed against, and the server ignores a nudge whose basis predates its
+    last authoritative reveal (an epoch check). This discards nudges already
+    in flight when the reveal happened.
+  - **Client half:** applying a reveal snapshot cancels the local fling
+    generation — it invalidates the current momentum, discards that fling's
+    pending scroll events, and re-derives the offset from the revealed
+    `firstVisualRow`, emitting no further nudge until new physical input begins a
+    fresh fling. Without this, momentum that continues past the reveal would emit
+    a nudge stamped with the *new* revision and immediately override the reveal —
+    the epoch check alone does not stop it, because that nudge is not stale.
+  The alternative — browser input suppresses reveal until the fling goes idle — is
+  worse: it lets a client's momentum defeat a semantic reveal (e.g.
+  jump-to-match). The chosen rule is a seam rule with a knowable answer; the seam
+  oracle must pin both halves, including the client's fling-generation cancel and
+  scroll-event suppression across the reveal, so a red bar means the arbitration
+  promise broke.
 - Off-screen rows the client paints itself (B) must reproduce the server's cell
   geometry exactly; that is only safe because it is the same code, and is the
   reason B compiles `GraphemeLayout` rather than reimplementing it. A JS
@@ -152,38 +164,44 @@ the fallback for a hard offline requirement.
   geometry, are deferred to the implementation slice and are not part of this
   decision.
 
-## Open questions for review
+## Resolved and remaining
 
-1. A′ vs B — the fork above, now correctly priced: A′'s fling placeholders and
-   wider per-client render band vs fully-scoped B's WASM projection boundary
-   (`GraphemeLayout` + `Viewport` projection + diff phantom-row source).
-2. If B: the exact export surface of the projection boundary across the WASM
-   boundary, and the build cost (Emscripten toolchain, module size, load path).
-   Confirm the boundary is a clean, side-effect-free unit before assuming it
-   compiles.
-3. If A′: the overscan band policy and the placeholder-during-fling behavior, and
-   the per-client server render cost of a wider band.
-4. The scroll-reconciliation contract's exact shape: the throttle, and the
-   reveal-vs-fling arbitration (the epoch/revision-basis rule above), pinned by a
-   seam oracle so a red bar means the arbitration promise broke.
+1. **A′ vs B — resolved: A′.** Ratified by review; both liabilities retired by
+   measurement. B is the fallback for a hard fully-offline requirement only, and
+   needs no size/load measurement unless that requirement appears.
+2. The scroll-reconciliation contract's exact shape: the throttle value, and the
+   reveal-vs-fling arbitration (server epoch check **and** client fling-generation
+   cancel, above), pinned by a seam oracle so a red bar means the arbitration
+   promise broke.
+3. The A′ overscan band width (sub-screen, from the fling prototype) and the
+   RLE cell-run encoder's format and worst case.
+4. Deferred to the implementation slice, not blocking: chrome (tabs, tree,
+   palette, prompt) as native widgets vs on the grid, and how caret/IME input
+   maps back to byte offsets through cell geometry.
 
 ## Plan
 
-1. Prototype the overflow-scroller virtualization against a live
-   `SessionSnapshot` to measure fling behavior under A′. Done by kinematic
-   simulation: native flings are bounded and their landing is knowable at
-   release, so predictive banding (request the fling envelope up front) is
-   placeholder-free to wide-area RTT at sub-screen overscan. Predictive banding
-   is now a required element of the A′ client, not an optimization.
-2. Price B only if A′ is rejected: the export surface of the whole projection
-   boundary (`GraphemeLayout` + `Viewport` visual-row projection + diff
-   phantom-row source) as a WASM module, its size, and load cost. A′'s bandwidth
-   is measured and negligible (run-length-packed cell geometry is a few bytes per
-   row), so B is now the fallback for a hard offline requirement, not the default.
-3. Decide A′ vs B from 1–2 — measurement now favors A′ (placeholder-free
-   predictive banding, negligible run-length-packed bandwidth); record the
-   decision here, then spec the chosen client's first runnable slice (read-only:
-   render one visible screen, scroll it natively). The cell-run section must
-   run-length-pack, never ship one span per grapheme.
-4. On implementation, promote the reconciliation contract to a test and any
-   deliberate refusal to a CONTRACT line; delete this file in that commit.
+The fork is closed (A′). Remaining steps deliver it.
+
+1. Design the A′ cell-run wire section: RLE-packed, per visible line plus a
+   sub-screen overscan band, with an encoder oracle (round-trip and worst-case
+   size). Predictive banding — request the fling envelope up front — is a required
+   element of the client, not an optimization.
+2. Build the first runnable slice: a read-only browser client that renders one
+   visible screen from a live `SessionSnapshot` as per-line native text runs
+   snapped to the cell grid, scrolled natively in an overflow container sized to
+   `totalVisualRows`.
+3. Add the client-owned pixel offset with server reconciliation (`firstVisualRow`
+   nudge via `scroll_to_fraction`) and the reveal-vs-fling arbitration (server
+   epoch check + client fling-generation cancel).
+4. On implementation, promote the residue and delete this file in that commit:
+   - **Tests (seam oracles):** the reveal-vs-fling arbitration (both halves); the
+     RLE cell-run encoder round-trip and worst-case bound; the client-owned
+     offset ↔ `firstVisualRow` reconciliation.
+   - **CONTRACT lines:** that the library remains the sole geometry authority and
+     a client (including any future WASM one) reproduces cell geometry only from
+     library code, never a reimplementation — a second geometry authority is a
+     deliberate refusal; and that the cell-run section is RLE-packed, never one
+     span per grapheme.
+   - Everything else — the A′-vs-B history, the measurements, this exposition —
+     stays in git, not the tree.
