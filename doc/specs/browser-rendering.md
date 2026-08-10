@@ -128,6 +128,44 @@ confirmed a B WASM size/load measurement is not required before choosing. B
 remains the fallback only for a hard fully-offline requirement, which is not a
 current product goal.
 
+## Input latency: local echo decouples typing from RTT
+
+Spikes 0–3 built `ssg --http PORT` in the same binary and drove real keystrokes
+through `EditorRuntime::dispatch` from a browser. Two measured facts settle the
+input model:
+
+- The edit itself is trivially cheap (`dispatch` ~0.1 ms); the round-trip cost is
+  the snapshot/delta ship, which on loopback is ~10 ms and on a tunnel is the
+  network round trip.
+- Per-stroke *blocking* — showing a character only when its server frame returns
+  — makes perceived typing latency equal to the round trip: measured ~70 ms at
+  40 ms one-way and ~150 ms at 80 ms one-way. A tunnel is unusable this way.
+
+The resolution is **client-side local echo with server reconciliation**: the
+client renders a predicted keystroke immediately and reconciles against the
+authoritative snapshot/delta when it arrives. Measured, this decouples perceived
+typing latency from RTT entirely (~0 ms at every latency) while the final text
+stays correct. The server remains the sole authority — it overwrites the
+prediction on reconciliation; the client's prediction is transient and visual,
+the same shape as the scroll offset (client owns a transient value, server owns
+the authoritative one).
+
+This is bounded by what the client can reproduce exactly. Prediction is
+permitted only for operations whose text effect the client can compute
+identically to the library — plain insertion and deletion at known caret
+positions. Anything the client cannot reproduce (autoindent, multi-cursor
+transforms, a command whose text effect is not local) falls back to blocking on
+the server, which is acceptable because it is rare relative to typing. A
+prediction the client cannot reproduce exactly would flicker or diverge, so the
+boundary is a **CONTRACT on merge**: a client may predict only operations it can
+reproduce byte-for-byte from the library's own rules, every prediction is
+reconciled against and overridden by the authoritative snapshot/delta, and the
+client is never a second editor. Reconciliation needs the snapshot/delta to carry
+a per-client applied-sequence so the client drops acknowledged predictions and
+rebases the unacknowledged ones; a seam oracle pins that a reconciled document
+equals the server's exactly and that an unreproducible operation blocks rather
+than mispredicts.
+
 ## Consequences either way
 
 - The overflow-scroller and client-owned offset for editor and tree are new
@@ -230,14 +268,19 @@ The fork is closed (A′). Remaining steps deliver it.
 4. On implementation, promote the residue and delete this file in that commit:
    - **Tests (seam oracles):** the reveal-vs-fling arbitration (both halves); the
      RLE cell-run encoder round-trip and worst-case bound; the client-owned
-     offset ↔ `firstVisualRow` reconciliation.
+     offset ↔ `firstVisualRow` reconciliation; and the local-echo reconciliation
+     (a reconciled document equals the server's exactly, and an unreproducible
+     operation blocks rather than mispredicts).
    - **CONTRACT lines:** that the library remains the sole geometry authority and
      a client (including any future WASM one) reproduces cell geometry only from
      library code, never a reimplementation — a second geometry authority is a
      deliberate refusal; that the cell-run section is RLE-packed, never one span
-     per grapheme; and that a client's scrollbar is a restyle of the published
+     per grapheme; that a client's scrollbar is a restyle of the published
      `ScrollbarMetrics` — same extent and thumb, driving the same
      `scroll_to_fraction` reconciliation — never a second scrollbar with
-     independent geometry or an independent scroll authority.
+     independent geometry or an independent scroll authority; and that a client
+     may locally predict only operations it can reproduce byte-for-byte from the
+     library's rules, every prediction reconciled against and overridden by the
+     authoritative snapshot/delta — the client is never a second editor.
    - Everything else — the A′-vs-B history, the measurements, this exposition —
      stays in git, not the tree.
