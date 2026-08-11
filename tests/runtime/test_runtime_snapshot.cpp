@@ -604,7 +604,7 @@ TEST(settingsOpenFocusesASettingsPrompt) {
     if (!snapshot) return;
     // The chord actually opens: focus moves to the prompt with a visible input.
     ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::Prompt);
-    ASSERT_TRUE(snapshot->sections().promptStatus.prompt.has_value());
+    ASSERT_TRUE(snapshot->presentation()->prompt.has_value());
 }
 
 } // namespace

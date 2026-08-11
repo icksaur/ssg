@@ -75,6 +75,11 @@ struct ClientSnapshotState {
 struct PresentationSnapshot {
     ViewportViewState viewport;
     Style style;
+    // The footer-anchored prompt's layout view (kind, rect, controls). Absent for
+    // a header-hosted prompt (palette/file finder) and when no prompt is active.
+    // Pure grid projection; "which prompt is open" is the semantic
+    // PromptStatusViewState::activeKind.
+    std::optional<PromptViewState> prompt;
 
     bool operator==(PresentationSnapshot const&) const = default;
 };
@@ -291,7 +296,8 @@ public:
         Revision revision, SessionTopology topology,
         InvocationPrincipal const& principal, ViewId viewId,
         ViewportViewState viewport, SessionSnapshotSections sections,
-        Style style = {}) const;
+        Style style = {},
+        std::optional<PromptViewState> prompt = {}) const;
     [[nodiscard]] SessionDelta deriveDelta(SessionSnapshot const& before,
                                            SessionSnapshot const& after) const;
     [[nodiscard]] SessionReplayResult replay(SessionSnapshot const& base,

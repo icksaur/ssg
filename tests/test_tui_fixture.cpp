@@ -52,8 +52,7 @@ public:
 
         ssg::PromptStatusViewState promptStatus;
         if (state_.prompt_open) {
-            promptStatus.prompt = ssg::PromptViewState{
-                ssg::PromptKind::Path, "Open workspace", {0, 2, 24, 1}, {}};
+            promptStatus.activeKind = ssg::PromptKind::Path;
         }
         promptStatus.status.items.push_back(
             {ssg::StatusId{7}, ssg::StatusPriority::Information, 3,

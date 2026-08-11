@@ -277,7 +277,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     ASSERT_EQ(find.matches[2].end.value(), std::uint64_t{11});
 
     // The find prompt projects the controller query and the 1-based match count.
-    auto const& prompt = snapshot->sections().promptStatus.prompt;
+    auto const& prompt = snapshot->presentation()->prompt;
     ASSERT_TRUE(prompt.has_value());
     if (prompt) {
         std::string queryValue;
@@ -338,9 +338,9 @@ TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
     auto before = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(before.has_value());
     if (before) {
-        ASSERT_TRUE(before->sections().promptStatus.prompt.has_value());
-        if (before->sections().promptStatus.prompt) {
-            ASSERT_EQ(before->sections().promptStatus.prompt->kind, ssg::PromptKind::Palette);
+        ASSERT_TRUE(before->presentation()->prompt.has_value());
+        if (before->presentation()->prompt) {
+            ASSERT_EQ(before->presentation()->prompt->kind, ssg::PromptKind::Palette);
         }
     }
 
@@ -350,9 +350,9 @@ TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
     auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
-        ASSERT_TRUE(after->sections().promptStatus.prompt.has_value());
-        if (after->sections().promptStatus.prompt) {
-            ASSERT_EQ(after->sections().promptStatus.prompt->kind, ssg::PromptKind::Palette);
+        ASSERT_TRUE(after->presentation()->prompt.has_value());
+        if (after->presentation()->prompt) {
+            ASSERT_EQ(after->presentation()->prompt->kind, ssg::PromptKind::Palette);
         }
     }
 }
@@ -385,7 +385,7 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     ASSERT_TRUE(after.has_value());
     if (after) {
         ASSERT_FALSE(after->sections().findReplace.open);
-        ASSERT_FALSE(after->sections().promptStatus.prompt.has_value());
+        ASSERT_FALSE(after->presentation()->prompt.has_value());
     }
 }
 
@@ -454,7 +454,7 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
             ASSERT_EQ(snap->sections().findReplace.replacement, std::string{"dog"});
             ASSERT_EQ(snap->sections().findReplace.matches.size(), std::size_t{3});
             // The replace prompt row 1 projects the replacement.
-            auto const& prompt = snap->sections().promptStatus.prompt;
+            auto const& prompt = snap->presentation()->prompt;
             ASSERT_TRUE(prompt.has_value());
             if (prompt) {
                 std::string replacementValue;
@@ -628,7 +628,7 @@ TEST(findCloseDismissesTheReplacePrompt) {
         ASSERT_TRUE(snap.has_value());
         if (snap) {
             ASSERT_TRUE(snap->sections().findReplace.open);
-            ASSERT_TRUE(snap->sections().promptStatus.prompt.has_value());
+            ASSERT_TRUE(snap->presentation()->prompt.has_value());
         }
     }
     // A single find.close must close the controller AND dismiss the replace
@@ -638,7 +638,7 @@ TEST(findCloseDismissesTheReplacePrompt) {
     ASSERT_TRUE(snap.has_value());
     if (snap) {
         ASSERT_FALSE(snap->sections().findReplace.open);
-        ASSERT_FALSE(snap->sections().promptStatus.prompt.has_value());
+        ASSERT_FALSE(snap->presentation()->prompt.has_value());
     }
 }
 
@@ -1014,9 +1014,9 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
         ASSERT_TRUE(findAfterSubmit->sections().findReplace.open);
         ASSERT_EQ(findAfterSubmit->sections().findReplace.activeMatch,
                   std::optional<std::size_t>{1});
-        ASSERT_TRUE(findAfterSubmit->sections().promptStatus.prompt.has_value());
-        if (findAfterSubmit->sections().promptStatus.prompt) {
-            ASSERT_EQ(findAfterSubmit->sections().promptStatus.prompt->kind,
+        ASSERT_TRUE(findAfterSubmit->presentation()->prompt.has_value());
+        if (findAfterSubmit->presentation()->prompt) {
+            ASSERT_EQ(findAfterSubmit->presentation()->prompt->kind,
                       ssg::PromptKind::Find);
         }
     }
@@ -1050,9 +1050,9 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
     std::uint64_t generationBeforeCancel = 0;
     if (replaceAfterSubmit) {
         generationBeforeCancel = replaceAfterSubmit->sections().findReplace.generation;
-        ASSERT_TRUE(replaceAfterSubmit->sections().promptStatus.prompt.has_value());
-        if (replaceAfterSubmit->sections().promptStatus.prompt) {
-            ASSERT_EQ(replaceAfterSubmit->sections().promptStatus.prompt->kind,
+        ASSERT_TRUE(replaceAfterSubmit->presentation()->prompt.has_value());
+        if (replaceAfterSubmit->presentation()->prompt) {
+            ASSERT_EQ(replaceAfterSubmit->presentation()->prompt->kind,
                       ssg::PromptKind::Replace);
         }
     }
@@ -1070,7 +1070,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
         ASSERT_TRUE(find.matches.empty());
         ASSERT_FALSE(find.activeMatch.has_value());
         ASSERT_TRUE(find.generation > generationBeforeCancel);
-        ASSERT_FALSE(afterCancel->sections().promptStatus.prompt.has_value());
+        ASSERT_FALSE(afterCancel->presentation()->prompt.has_value());
     }
     std::filesystem::remove_all(root);
 }
@@ -1108,7 +1108,7 @@ TEST(findWordUnderCursorSeedsTheCaretWordAndFindsEveryOccurrence) {
     ASSERT_EQ(find.matches.size(), std::size_t{2});
     ASSERT_FALSE(find.options.regex);
     // The find prompt is open with the query pre-filled.
-    auto const& prompt = snapshot->sections().promptStatus.prompt;
+    auto const& prompt = snapshot->presentation()->prompt;
     ASSERT_TRUE(prompt.has_value());
     // The query is live, not just prompt text: next moves to the second "alpha".
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.next", runtime.revision(), {}}).accepted());
@@ -1189,7 +1189,7 @@ TEST(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_FALSE(snapshot->sections().findReplace.open);
-    ASSERT_FALSE(snapshot->sections().promptStatus.prompt.has_value());
+    ASSERT_FALSE(snapshot->presentation()->prompt.has_value());
     std::filesystem::remove_all(root);
 }
 
@@ -1221,7 +1221,7 @@ TEST(promptReservationIsSingleSourcedAndFullWidthAcrossPanel) {
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         const auto& shellPrompt = snap->sections().shell.prompt;
-        const auto& statusPrompt = snap->sections().promptStatus.prompt;
+        const auto& statusPrompt = snap->presentation()->prompt;
         ASSERT_TRUE(shellPrompt.has_value());
         ASSERT_TRUE(statusPrompt.has_value());
         if (!shellPrompt || !statusPrompt) return;

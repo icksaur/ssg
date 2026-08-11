@@ -156,12 +156,13 @@ SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
     InvocationPrincipal const& principal, ViewId viewId,
     ViewportViewState viewport, SessionSnapshotSections sections,
-    Style style) const {
+    Style style, std::optional<PromptViewState> prompt) const {
     return {revision,
             std::move(topology),
             {principal.clientId(), viewId, principal.capabilities()},
             std::move(sections),
-            PresentationSnapshot{std::move(viewport), std::move(style)}};
+            PresentationSnapshot{std::move(viewport), std::move(style),
+                                 std::move(prompt)}};
 }
 
 SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
@@ -357,7 +358,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
             base.presentation()->style);
         presentation = PresentationSnapshot{
             viewport.value_or(base.presentation()->viewport),
-            std::move(style)};
+            std::move(style), base.presentation()->prompt};
     }
     return {SessionSnapshot{
                 delta.revision_,

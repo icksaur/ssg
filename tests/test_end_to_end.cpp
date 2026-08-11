@@ -193,11 +193,7 @@ public:
 
         ssg::PromptStatusViewState promptStatus;
         if (state_.prompt_open) {
-            promptStatus.prompt = ssg::PromptViewState{
-                ssg::PromptKind::Path, "Open a workspace path",
-                {0, 2, 80, 1},
-                {{ssg::PromptControlKind::Input, "path", "Workspace path", "",
-                  false, {0, 2, 80, 1}}}};
+            promptStatus.activeKind = ssg::PromptKind::Path;
         }
         promptStatus.status.items.push_back(
             {ssg::StatusId{7}, ssg::StatusPriority::Information, 3,
@@ -548,7 +544,7 @@ public:
              0, std::nullopt},
             {false, false, 0},
             {{}, {}, std::nullopt},
-            {std::nullopt, {{}, 0}},
+            {{{}, 0}},
             {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
              false},
             {0, false, false, revision, {}, {}, {}, {}, std::nullopt,

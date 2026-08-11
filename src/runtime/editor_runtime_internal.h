@@ -450,7 +450,8 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] ViewportViewState viewport(ViewportDimensions dimensions) const;
     [[nodiscard]] SessionSnapshotSections sections(ViewportDimensions dimensions,
                                                    PaletteReport const& paletteReport = {}) const;
-    [[nodiscard]] PromptStatusViewState promptStatusView(
+    [[nodiscard]] PromptStatusViewState promptStatusView() const;
+    [[nodiscard]] std::optional<PromptViewState> promptProjection(
         ViewportDimensions dimensions,
         std::optional<Rect> promptReservation = std::nullopt) const;
     void projectFindReplacePrompt(PromptViewState& promptView) const;

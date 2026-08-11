@@ -2467,7 +2467,6 @@ bool decodePresent(ProtocolValue const& value, std::optional<StatusActionInvocat
 
 ProtocolValue toValue(PromptStatusViewState const& value) {
     std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("prompt", toValue(value.prompt));
     fields.emplace_back("active_kind", toValue(value.activeKind));
     fields.emplace_back("status", toValue(value.status));
     return ProtocolValue::makeObject(std::move(fields));
@@ -2477,11 +2476,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptStatusViewSta
     if (!object) return false;
     auto status = requireField<StatusViewState>(value.field("status"));
     if (!status) return false;
-    std::optional<PromptViewState> prompt;
-    if (!decodeOptionalField(value.field("prompt"), prompt)) return false;
     std::optional<PromptKind> activeKind;
     if (!decodeOptionalField(value.field("active_kind"), activeKind)) return false;
-    out.emplace(PromptStatusViewState{std::move(prompt), *status, activeKind});
+    out.emplace(PromptStatusViewState{*status, activeKind});
     return true;
 }
 
@@ -4728,6 +4725,7 @@ ProtocolValue toValue(PresentationSnapshot const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("viewport", toValue(value.viewport));
     fields.emplace_back("style", toValue(value.style));
+    fields.emplace_back("prompt", toValue(value.prompt));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapshot>& out) {
@@ -4736,7 +4734,10 @@ bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapsho
     auto viewport = requireField<ViewportViewState>(value.field("viewport"));
     auto style = requireField<Style>(value.field("style"));
     if (!viewport || !style) return false;
-    out.emplace(PresentationSnapshot{*viewport, std::move(*style)});
+    std::optional<PromptViewState> prompt;
+    if (!decodeOptionalField(value.field("prompt"), prompt)) return false;
+    out.emplace(PresentationSnapshot{*viewport, std::move(*style),
+                                     std::move(prompt)});
     return true;
 }
 

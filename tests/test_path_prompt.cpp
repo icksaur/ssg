@@ -59,7 +59,7 @@ ssg::CommandResult run(ssg::EditorRuntime& runtime, std::string id,
 bool pathPromptOpen(ssg::EditorRuntime& runtime) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return false;
-    const auto& prompt = snapshot->sections().promptStatus.prompt;
+    const auto& prompt = snapshot->presentation()->prompt;
     return prompt.has_value() && prompt->kind == ssg::PromptKind::Path;
 }
 

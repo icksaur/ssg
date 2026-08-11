@@ -68,34 +68,34 @@ TextEncodingViewState EditorRuntime::Impl::textEncodingView() const {
     return {state ? state->encoding : TextEncodingStatus{}};
 }
 
-PromptStatusViewState EditorRuntime::Impl::promptStatusView(
+PromptStatusViewState EditorRuntime::Impl::promptStatusView() const {
+    // Semantic prompt state: which prompt is open (authoritative, present even for
+    // a header-hosted prompt with no footer view) and the status queue. No
+    // dimensions needed, so a semantic snapshot is obtainable without geometry.
+    PromptStatusViewState view;
+    if (prompt.request()) view.activeKind = prompt.request()->kind;
+    view.status = status.viewState();
+    return view;
+}
+
+std::optional<PromptViewState> EditorRuntime::Impl::promptProjection(
     ViewportDimensions dimensions,
     std::optional<Rect> promptReservation) const {
-    PromptStatusViewState view;
-    // Single-source prompt rect: when the shell laid
-    // out a footer-anchored prompt it passes that rect here, so the controls are
-    // laid out into the SAME reservation the shell reserved (identical a11y node,
-    // hit region, and render). The fallback -- a full-width bottom strip derived
-    // from the viewport -- covers the palette (zero prompt rows, its input lives
-    // in the header) and the no-active-prompt default, where the shell reserves
-    // nothing.
+    // Grid projection of the footer-anchored prompt. Single-source prompt rect:
+    // when the shell laid out a footer-anchored prompt it passes that rect here,
+    // so the controls are laid out into the SAME reservation the shell reserved
+    // (identical a11y node, hit region, and render). The fallback -- a full-width
+    // bottom strip derived from the viewport -- covers the palette (zero prompt
+    // rows, its input lives in the header) and the no-active-prompt default.
     auto rows = promptRowCount(prompt.request() ? prompt.request()->kind : PromptKind::CommandArgument);
     Rect reservation =
         promptReservation.value_or(
             Rect{0, static_cast<int>(dimensions.rows > rows ? dimensions.rows - rows : 0),
                  static_cast<int>(dimensions.columns), static_cast<int>(rows)});
     auto promptLayout = computePromptLayout(prompt, reservation);
-    if (promptLayout.accepted()) {
-        view.prompt = promptLayout.view;
-        projectFindReplacePrompt(*view.prompt);
-    }
-    // The authoritative "which prompt is active" signal, set straight from the
-    // prompt surface's request -- present even for a header-hosted prompt whose
-    // query renders in the header input line and thus produces no footer `prompt`
-    // layout view. A client routes input by
-    // this, not by the presence of the layout view.
-    if (prompt.request()) view.activeKind = prompt.request()->kind;
-    view.status = status.viewState();
+    if (!promptLayout.accepted()) return std::nullopt;
+    auto view = promptLayout.view;
+    projectFindReplacePrompt(*view);
     return view;
 }
 
@@ -297,7 +297,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             selection,
             currentHistory,
             clipboard.viewState(),
-            promptStatusView(dimensions, shell.prompt),
+            promptStatusView(),
             search.viewState(),
             findReplace.viewState(),
             settings.viewState(),

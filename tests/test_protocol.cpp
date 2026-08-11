@@ -67,7 +67,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         selection(marker.size(), static_cast<std::uint32_t>(marker.size())),
         {true, false, marker.size()},
         {{marker}, marker, std::nullopt},
-        {std::nullopt, {{}, marker.size()}, ssg::PromptKind::Palette},
+        {{{}, marker.size()}, ssg::PromptKind::Palette},
         {revision, true, marker, ssg::SearchMode::File, {}, std::nullopt,
          marker.size(), false},
         {marker.size(), true, false, revision, marker, {}, {}, {}, std::nullopt,

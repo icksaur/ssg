@@ -1147,7 +1147,7 @@ int main(int argc, char** argv) {
             // nullopt for a header-hosted prompt -- is what lets typed text reach
             // the picker query.
             auto const activeKind = snapshot->sections().promptStatus.activeKind;
-            auto const& activePrompt = snapshot->sections().promptStatus.prompt;
+            auto const& activePrompt = snapshot->presentation()->prompt;
             pickerOpen = activeKind == ssg::PromptKind::Palette;
             bool const findPromptActive = activeKind == ssg::PromptKind::Find;
             findOpen = findView.open && findPromptActive;

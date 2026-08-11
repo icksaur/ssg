@@ -121,15 +121,13 @@ private:
 };
 
 struct PromptStatusViewState {
-    std::optional<PromptViewState> prompt;
     StatusViewState status;
-    // The active prompt's KIND, authoritative and independent of whether `prompt`
-    // (the footer layout view) is present. A header-hosted prompt (the palette /
-    // file finder, whose query renders in the header input line) publishes its
-    // kind here with NO footer `prompt` view, so a client detects "which prompt
-    // is open" from state, never from a rendering artifact. nullopt when no
-    // prompt is active. Ordered
-    // last so existing `{prompt, status}` initializers keep compiling.
+    // The active prompt's KIND, authoritative and independent of any footer
+    // layout view (which is grid projection and now lives in PresentationSnapshot).
+    // A header-hosted prompt (the palette / file finder, whose query renders in
+    // the header input line) publishes its kind here with no footer view at all,
+    // so a client detects "which prompt is open" from state, never from a
+    // rendering artifact. nullopt when no prompt is active.
     std::optional<PromptKind> activeKind;
     friend bool operator==(const PromptStatusViewState&,
                            const PromptStatusViewState&) = default;

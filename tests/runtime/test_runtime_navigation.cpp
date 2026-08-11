@@ -1814,7 +1814,7 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto& prompt = snapshot->sections().promptStatus.prompt;
+    const auto& prompt = snapshot->presentation()->prompt;
     ASSERT_TRUE(prompt.has_value());
     if (!prompt) return;
     ASSERT_TRUE(prompt->kind == ssg::PromptKind::CommandArgument);

@@ -443,7 +443,7 @@ TEST(headerHostedPromptPublishesActiveKindWithoutAFooterView) {
         ASSERT_TRUE(snap.has_value());
         if (snap) {
             ASSERT_FALSE(snap->sections().promptStatus.activeKind.has_value());
-            ASSERT_FALSE(snap->sections().promptStatus.prompt.has_value());
+            ASSERT_FALSE(snap->presentation()->prompt.has_value());
         }
     }
 
@@ -460,7 +460,7 @@ TEST(headerHostedPromptPublishesActiveKindWithoutAFooterView) {
             ASSERT_TRUE(ps.activeKind.has_value());
             if (ps.activeKind)
                 ASSERT_EQ(*ps.activeKind, ssg::PromptKind::Palette);
-            ASSERT_FALSE(ps.prompt.has_value());  // renders in the header line
+            ASSERT_FALSE(snap->presentation()->prompt.has_value());  // renders in the header line
         }
     }
     ASSERT_TRUE(runtime
@@ -502,7 +502,7 @@ TEST(headerHostedPromptPublishesActiveKindWithoutAFooterView) {
             ASSERT_TRUE(ps.activeKind.has_value());
             if (ps.activeKind)
                 ASSERT_EQ(*ps.activeKind, ssg::PromptKind::CommandArgument);
-            ASSERT_TRUE(ps.prompt.has_value());  // footer layout view present
+            ASSERT_TRUE(snap->presentation()->prompt.has_value());  // footer layout view present
         }
     }
 }

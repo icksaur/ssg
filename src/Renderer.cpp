@@ -1240,7 +1240,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
 
             // Paint the reserved prompt rows (find/replace/settings) and place
             // the hardware cursor at the query when the prompt is focused.
-            auto const& prompt = snapshot.sections().promptStatus.prompt;
+            auto const& prompt = snapshot.presentation()->prompt;
             if (prompt) {
                 auto promptCaret =
                     paintPrompt(grid, *prompt, theme, background, style);

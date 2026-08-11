@@ -262,7 +262,7 @@ TEST(savingAHelpTabFailsGracefullyWithoutAPrompt) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
-        ASSERT_FALSE(snapshot->sections().promptStatus.prompt.has_value());
+        ASSERT_FALSE(snapshot->presentation()->prompt.has_value());
     }
 }
 
