@@ -5,6 +5,46 @@ supersedes most of `doc/specs/browser-rendering.md`. On merge, its residue is th
 reworded global rules, a few CONTRACT lines, and the surviving parts of the
 browser work; this file is then deleted.
 
+## Implementation progress (branch `reframe-wire-split`)
+
+Rows 1 and 4 landed on master (global-rule rewording; TUI behavior-coverage audit
+confirming the TUI is pinned semantically, not by grid goldens). Row 2 (the wire
+split) is in progress on `reframe-wire-split`:
+
+- **Done, gated (102/102), pushed:** the `PresentationSnapshot` container is
+  `std::optional` on `SessionSnapshot`; `ClientSnapshotState` is identity-only.
+  `ViewportViewState` and `Style` are carved out of the semantic
+  `SessionSnapshotSections` into `PresentationSnapshot`. `assemble()` takes a
+  trailing defaulted `Style`; the wire codec carries presentation as an optional
+  envelope field; delta derive/replay read/write viewport+style through
+  presentation. `SessionSnapshotBuilder` grew a `style()` setter.
+- **Remaining carves (each atomic: type + wire codec + delta + consumers + gate):**
+  - `PromptStatusViewState`: keep semantic `status` + `activeKind`; move the footer
+    `PromptViewState prompt` (pure layout: kind/label/rect/controls) into
+    `PresentationSnapshot`. Blast: ~30 `sections().promptStatus.prompt` reads in
+    runtime tests (mechanical → `presentation()->prompt`), 4 positional
+    `{std::nullopt, {...}}` inits in fixtures (drop the leading prompt), 2 fixtures
+    that set `promptStatus.prompt` (route into presentation), and `Renderer`/
+    `ssg_main` reads. Split `Impl::promptStatusView` into a dimension-free semantic
+    producer and a `promptProjection(dimensions, reservation)` producer.
+  - `ShellViewState`: keep semantic `focus` (FocusTarget — the TUI routes keyboard
+    from it); move the projection (viewport GridSize, rects, panes, tabHits,
+    accessibility geometry, palette projection) into `PresentationSnapshot`. The
+    existing `ShellSectionDelta shell_` repurposes to the projection.
+  - `SelectionViewState`: keep semantic `SelectionSet`; extract an explicit
+    internal selection-navigation state (scroll offsets + desiredCell) that the
+    reveal/edit paths consume (review round 6), and put the projection copy in
+    `PresentationSnapshot`.
+- **After the sections are semantic-only:** add the no-dimensions
+  `snapshot(ClientId)` overload (returns presentation == nullopt), the CONTRACT
+  line (semantic state not gated on grid geometry), and the semantic-only replay +
+  command-equivalence oracles; then delete this file and `browser-rendering.md`.
+
+Delta note: `viewport_`, `style_`, and `shell_` already exist as flat `SessionDelta`
+members, so the shell carve repurposes rather than adds; prompt and
+selection-projection each add one flat member (or, if it grows unwieldy, group all
+presentation deltas into one `std::optional<PresentationDelta>`).
+
 ## The problem
 
 SSG's stated invariant — *every UI element occupies server-described cells on the
