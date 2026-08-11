@@ -24,21 +24,37 @@ keyboard model, the same reversibility. None of that requires a shared grid.
 
 ## What the code already says
 
-The reframe is cheap because the library is already mostly semantic:
+The reframe is cheaper than a rewrite because the semantic *core* is already
+grid-independent, but the *snapshot wire is not yet clean* and separating it is
+real work:
 
-- `SessionSnapshot` and its sections (document text, selection as byte offsets,
-  syntax spans, theme roles, tabs, tree, palette candidates, settings, keymap)
-  reference neither `Renderer` nor `CellGrid`. The semantic model is independent
-  of the grid.
+- The core model — document text, selection as byte offsets, syntax spans, theme
+  roles, tabs, tree, palette candidates, settings, keymap — references neither
+  `Renderer` nor `CellGrid`. The semantic model is independent of the grid.
 - The grid is a separable consumer layer — `Renderer`/`CellGrid`,
   `Viewport` projection, `GraphemeLayout`, `Style` dimensions — that the terminal
   app drives. `ssg::Renderer{}.render(snapshot)` runs in the host, not the core.
 - There are no grid CONTRACT lines. The mandate exists only in AGENTS.md prose,
-  enforced by no type or test. Relaxing it changes no compiled contract.
+  enforced by no type or test. Relaxing the *policy* changes no compiled contract.
 
-The one real coupling: `EditorRuntime::snapshot()` takes `ViewportDimensions` and
-returns a viewport-geometry section (`firstVisualRow`, `ScrollbarMetrics`, wrap).
-That is the grid service — optional per client, not a universal law.
+But `SessionSnapshot` today is a **mixed** wire, not a semantic-only one, and this
+is the load-bearing work item (MUST, review round 1). It currently publishes:
+`ViewportViewState` (grid geometry: `firstVisualRow`, `ScrollbarMetrics`, wrap),
+terminal-only `Style`, grid `ShellViewState` rectangles, and cell-oriented scroll
+fields inside `SelectionViewState`; and `EditorRuntime::snapshot()` *requires* a
+`ViewportDimensions` argument to compute them. So a web client cannot simply
+"consume the same semantic channel and ignore the grid" until the wire is split.
+
+**Deliverable of the reframe (not just a policy edit):** define a **semantic
+snapshot/delta** (the core sections above, with no cell/grid geometry and no
+mandatory viewport dimensions) versus an **optional grid-presentation section**
+(`ViewportViewState`, `Style`, `ShellViewState`, cell scroll fields) that a grid
+client requests by supplying dimensions. Specify each half's delta and replay
+ownership: the semantic channel replays identically to every client; the
+presentation section is computed per grid client from its dimensions and is absent
+for a client that lays out natively. `EditorRuntime::snapshot()`'s
+`ViewportDimensions` becomes an optional grid-service request, not a precondition
+of getting semantic state.
 
 ## The reframe
 
@@ -101,13 +117,20 @@ only with explicit sign-off.
   constrained mirror. Reframe as: the feature set is library-defined and every
   target client can drive it through the typed API; a client may add native
   presentation affordances (scrollbars, touch, IME) on top.
+- **Reword (MUST, review round 1):** "`Theme` is the single source of all color:
+  exactly 16 indexed colors and semantic role mappings … no client introduces a
+  literal or computed color." The exactly-16-indexed-colors clause conflicts with
+  the sRGB semantic-role model above and the terminal-only 16-color path. Reword:
+  the theme is the single source of color as semantic roles with sRGB values;
+  each client maps a role to its medium (CSS custom property, terminal palette,
+  native color); the 16-indexed-color palette is a terminal capability, not a
+  cross-client wire law; no client invents a color outside the role set.
 - **Keep unchanged** (these are the real cross-client guarantees): one behavior
-  path (same command implementation, same snapshot/delta model); theme is the
-  single source of color as semantic roles; a connection's identity/capabilities
-  come from host policy; keyboard-first (every action has a keyboard route);
-  every user-visible action is registered and Lua-callable; platform services use
-  adapters with parity tests; no blocking modal, destructive actions reversible;
-  values live in code.
+  path (same command implementation, same snapshot/delta model); a connection's
+  identity/capabilities come from host policy; keyboard-first (every action has a
+  keyboard route); every user-visible action is registered and Lua-callable;
+  platform services use adapters with parity tests; no blocking modal, destructive
+  actions reversible; values live in code.
 
 ## What this deletes
 
@@ -151,18 +174,33 @@ semantics, not geometry:
 3. **Top-down web spike.** Let a web client drive what library affordances it
    actually needs — semantic document access, command dispatch, config,
    filesystem, feature enumeration — and let the boundary changes fall out of real
-   use rather than being designed up front. Reuse the `ssg --http` harness from
-   Spikes 0–3; carry local echo and deltas forward; drop the grid entirely on the
-   web side and lay out with CSS.
+   use rather than being designed up front. Note (MUST, review round 1): there is
+   no `ssg --http` host on master today; `HttpEditorServer` is a library adapter
+   exercised only by tests, and the Spike 0–3 harness lives on the
+   `spike-http-server` branch. The spike must name its actual host entrypoint
+   (wire `ssg --http PORT` into the app, or productize `HttpEditorServer` behind
+   `EditorRuntime&`), the affected wire/API files, and independent oracles for:
+   semantic-snapshot replay (a client reconstructs state from snapshot+deltas),
+   command equivalence (the same `ClientCommand` produces the same state on any
+   client), and the semantic-vs-presentation section boundary defined above.
+   Carry local echo and deltas forward; drop the grid on the web side and lay out
+   with CSS.
 
 ## Residue (what survives this file's deletion)
 
-- **Reworded global rules** in AGENTS.md (semantic-core, grid-as-service).
-- **CONTRACT lines:** the library owns semantic state and behavior and imposes no
-  presentation geometry — the grid is a service, not a contract; a client changes
-  presentation freely but never semantics or behavior. Attach on the seam that
-  owns the snapshot/command API.
-- **Tests:** the TUI-regression behavior coverage from step 2; local-echo
-  reconciliation and delta correctness from the surviving browser work.
+- **Reworded global rules** in AGENTS.md (semantic-core, grid-as-service, theme
+  roles). The "a client never changes semantics or behavior" promise stays a
+  **global rule**, not a CONTRACT line (MUST, review round 1): the library cannot
+  constrain unowned web/desktop presentation code from a seam it owns, so this is
+  precisely a multi-consumer rule with no owning artifact. It lives in AGENTS.md.
+- **CONTRACT lines**, reserved for a concrete behavioral seam the library *can*
+  enforce: on the snapshot/command API surface, that `EditorRuntime::snapshot()`
+  yields semantic state without a grid-presentation section unless a client
+  requests one by supplying dimensions — i.e. semantic state is not gated on grid
+  geometry. Attach on the type that owns that seam once the wire split (see What
+  the code already says) is implemented; do not write it before the split exists.
+- **Tests:** the semantic-vs-presentation wire split's replay and command-
+  equivalence oracles; the TUI-regression behavior coverage from step 2; local-
+  echo reconciliation and delta correctness from the surviving browser work.
 - The A′/cell-run/scrollbar-authority material in `browser-rendering.md` is
   deleted with that file, its history retained in git.
