@@ -1,13 +1,22 @@
 #include "http_serve.h"
 
 #include <ssg/EditorRuntime.h>
+#include <ssg/CommandCatalog.h>
+#include <ssg/CompiledKeymap.h>
+#include <ssg/FindReplace.h>
 #include <ssg/HttpEditorServer.h>
+#include <ssg/KeyCode.h>
+#include <ssg/Keymap.h>
 #include <ssg/Protocol.h>
-#include <ssg/TextInputCommands.h>
+#include <ssg/PromptRouting.h>
+#include <ssg/PromptSurface.h>
+#include <ssg/StatusQueue.h>
+#include <ssg/focus.h>
 #include <ssg/session_snapshot.h>
 
 #include <http.h>
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -109,13 +118,102 @@ ws.onclose = () => { statusEl.textContent += ' [closed]'; };
 ws.onerror = () => { statusEl.textContent = 'ws error'; };
 
 docEl.addEventListener('keydown', (ev) => {
-  if (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey) {
-    ev.preventDefault();
-    ws.send('TYPE:' + ev.key);
-  }
+  // Send every keydown as code + modifiers + (printable text, if any); the host
+  // resolves bindings and routes text through the one shared input seam.
+  const mods = (ev.ctrlKey ? 'c' : '') + (ev.altKey ? 'a' : '') +
+               (ev.metaKey ? 'm' : '') + (ev.shiftKey ? 's' : '');
+  const text = (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey) ? ev.key : '';
+  ev.preventDefault();
+  ws.send('KEY:' + ev.code + ':' + mods + ':' + text);
 });
 </script>
 )HTML";
+
+// Map the runtime's live focus and active prompt onto the shared routing seam,
+// so the web host makes the exact text-routing decision the TUI does. The
+// palette query is the one client-owned derived view: the browser edits it
+// locally, so an AppendPaletteQuery result dispatches nothing here.
+void routeText(EditorRuntime& runtime, ClientId client, std::string const& text) {
+    auto snapshot = runtime.snapshot(client);
+    if (!snapshot) return;
+    auto const& sections = snapshot->sections();
+    PromptRoutingState state;
+    state.focus = sections.focus;
+    if (sections.promptStatus.activeKind) {
+        switch (*sections.promptStatus.activeKind) {
+        case PromptKind::Palette:
+            state.prompt = ActivePrompt::Palette;
+            break;
+        case PromptKind::Find:
+            state.prompt = ActivePrompt::Find;
+            state.currentValue = sections.findReplace.query;
+            break;
+        case PromptKind::Replace:
+            state.prompt = ActivePrompt::Replace;
+            state.currentValue = sections.findReplace.replacement;
+            break;
+        case PromptKind::Path:
+        case PromptKind::Settings:
+        case PromptKind::CommandArgument:
+            state.prompt = ActivePrompt::TextPrompt;
+            break;
+        }
+    }
+    auto const route = PromptTextRouter{}.route(state, text);
+    switch (route.kind) {
+    case PromptTextRoute::Kind::Dispatch:
+        (void)runtime.dispatch(
+            client, {route.command, runtime.revision(), route.payload});
+        break;
+    case PromptTextRoute::Kind::AppendPaletteQuery:
+    case PromptTextRoute::Kind::Ignore:
+        break;
+    }
+}
+
+// Drive a KEY:<event.code>:<mods>:<text> frame exactly as the TUI's keystroke
+// path: a printable without a keycode routes as text; a keycode resolves against
+// the keymap for the current focus and dispatches when bound, otherwise falls
+// back to inserting its text. Single-stroke resolution mirrors the TUI, which
+// also passes one stroke per resolve; a per-connection pending buffer would give
+// the web host multi-stroke behavior the TUI does not have, so it is deferred
+// until the keymap grows a multi-stroke binding and both clients adopt it.
+void handleKey(EditorRuntime& runtime, ClientId client,
+               CompiledKeymap const& keymap, std::string_view body) {
+    auto const firstColon = body.find(':');
+    if (firstColon == std::string_view::npos) return;
+    auto const secondColon = body.find(':', firstColon + 1);
+    if (secondColon == std::string_view::npos) return;
+    std::string_view const codeName = body.substr(0, firstColon);
+    std::string_view const mods =
+        body.substr(firstColon + 1, secondColon - firstColon - 1);
+    std::string const text{body.substr(secondColon + 1)};
+
+    KeyStroke stroke;
+    stroke.code = keyCodeFromName(codeName);
+    stroke.control = mods.find('c') != std::string_view::npos;
+    stroke.alt = mods.find('a') != std::string_view::npos;
+    stroke.meta = mods.find('m') != std::string_view::npos;
+    stroke.shift = mods.find('s') != std::string_view::npos;
+
+    if (stroke.code == KeyCode::None) {
+        if (!text.empty()) routeText(runtime, client, text);
+        return;
+    }
+
+    FocusTarget focus = FocusTarget::Editor;
+    if (auto const snapshot = runtime.snapshot(client)) {
+        focus = snapshot->sections().focus;
+    }
+    auto const resolution =
+        keymap.resolve(std::array{CompiledKeymap::compile(stroke)}, focus);
+    if (resolution.kind == KeymapMatchKind::Resolved) {
+        (void)runtime.dispatch(client,
+                               {resolution.command, runtime.revision(), {}});
+    } else if (!text.empty()) {
+        routeText(runtime, client, text);
+    }
+}
 
 }  // namespace
 
@@ -143,6 +241,15 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     // mutating the first client's state. Multi-client is a later milestone.
     auto attached = std::make_shared<std::atomic<bool>>(false);
 
+    // Compile the runtime's keymap once for keystroke resolution. The --http
+    // path runs no init script, so the bindings are the defaults; rebuilding on
+    // a keymap change is deferred until the web path can load one.
+    std::shared_ptr<CompiledKeymap> compiledKeymap;
+    if (auto const initial = runtime.snapshot(client)) {
+        compiledKeymap = std::make_shared<CompiledKeymap>(
+            initial->sections().keymap, *runtime.commandCatalog());
+    }
+
     // The browser lays out natively, so it consumes the dimensionless semantic
     // snapshot -- no grid projection is sent.
     auto sendSnapshot = [&runtime, &server, client](Http::WebSocketHandle handle) {
@@ -164,15 +271,15 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
         Http::WebSocketHandler{
             .onOpen = {},
             .onMessage =
-                [&runtime, &server, client, sendSnapshot, attached](
-                    Http::WebSocketHandle handle,
-                    Http::WebSocketMessage message) {
+                [&runtime, &server, client, sendSnapshot, attached,
+                 compiledKeymap](Http::WebSocketHandle handle,
+                                 Http::WebSocketMessage message) {
                     std::string_view const payload{message.data};
-                    if (payload.rfind("TYPE:", 0) == 0) {
-                        (void)runtime.dispatch(
-                            client,
-                            {"text.insert", runtime.revision(),
-                             TextInputArguments{std::string{payload.substr(5)}}});
+                    if (payload.rfind("KEY:", 0) == 0) {
+                        if (compiledKeymap) {
+                            handleKey(runtime, client, *compiledKeymap,
+                                      payload.substr(4));
+                        }
                         sendSnapshot(handle);
                         return;
                     }
