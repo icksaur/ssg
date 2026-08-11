@@ -103,8 +103,8 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
     // The projections agree field-for-field: same visual row count, same first
     // row, same scrollbar metrics.  This is the part that would silently drift
     // if the builder reimplemented projection instead of calling it.
-    auto const& realViewport = real->client().viewport;
-    auto const& builtViewport = built.client().viewport;
+    auto const& realViewport = real->presentation()->viewport;
+    auto const& builtViewport = built.presentation()->viewport;
     ASSERT_EQ(realViewport.totalVisualRows, builtViewport.totalVisualRows);
     ASSERT_EQ(realViewport.firstVisualRow, builtViewport.firstVisualRow);
     ASSERT_EQ(realViewport.visibleRows.size(), builtViewport.visibleRows.size());

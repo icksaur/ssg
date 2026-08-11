@@ -1572,7 +1572,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     auto primed = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(primed.has_value());
     if (!primed) return;
-    ASSERT_EQ(primed->client().viewport.firstVisualColumn, std::uint32_t{0});
+    ASSERT_EQ(primed->presentation()->viewport.firstVisualColumn, std::uint32_t{0});
 
     // Move the caret to the end of the long line: it is past the pane width, so
     // the viewport scrolls horizontally to keep it visible.
@@ -1582,7 +1582,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     auto scrolled = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
-    auto const offset = scrolled->client().viewport.firstVisualColumn;
+    auto const offset = scrolled->presentation()->viewport.firstVisualColumn;
     ASSERT_TRUE(offset > 0);
     // The caret's cell (60) is within the visible horizontal window.
     ASSERT_TRUE(60u >= offset);
@@ -1595,7 +1595,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     auto reset = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(reset.has_value());
     if (!reset) return;
-    ASSERT_EQ(reset->client().viewport.firstVisualColumn, std::uint32_t{0});
+    ASSERT_EQ(reset->presentation()->viewport.firstVisualColumn, std::uint32_t{0});
     std::filesystem::remove_all(root);
 }
 
@@ -1630,9 +1630,9 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     auto off = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(off.has_value());
     if (!off) return;
-    ASSERT_EQ(off->client().viewport.totalVisualRows, std::uint32_t{3});
+    ASSERT_EQ(off->presentation()->viewport.totalVisualRows, std::uint32_t{3});
     std::uint32_t offRowsForLine0 = 0;
-    for (auto const& row : off->client().viewport.visibleRows) {
+    for (auto const& row : off->presentation()->viewport.visibleRows) {
         if (row.logicalLine == 0) ++offRowsForLine0;
     }
     ASSERT_EQ(offRowsForLine0, std::uint32_t{1});  // clipped, not wrapped
@@ -1645,9 +1645,9 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     auto on = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(on.has_value());
     if (!on) return;
-    ASSERT_TRUE(on->client().viewport.totalVisualRows > 3u);  // wrapped
+    ASSERT_TRUE(on->presentation()->viewport.totalVisualRows > 3u);  // wrapped
     std::uint32_t onRowsForLine0 = 0;
-    for (auto const& row : on->client().viewport.visibleRows) {
+    for (auto const& row : on->presentation()->viewport.visibleRows) {
         if (row.logicalLine == 0) ++onRowsForLine0;
     }
     ASSERT_EQ(onRowsForLine0, std::uint32_t{3});  // 200 cells / 80 -> 3 rows
@@ -1658,7 +1658,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     auto wrappedEnd = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(wrappedEnd.has_value());
     if (!wrappedEnd) return;
-    ASSERT_EQ(wrappedEnd->client().viewport.firstVisualColumn, std::uint32_t{0});
+    ASSERT_EQ(wrappedEnd->presentation()->viewport.firstVisualColumn, std::uint32_t{0});
     std::filesystem::remove_all(root);
 }
 

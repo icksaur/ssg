@@ -67,14 +67,14 @@ TEST(viewportShellSettingsAndThemeAreLiveSections) {
 
     auto before = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(before.has_value());
-    ASSERT_EQ(before->client().viewport.firstVisualRow, 0U);
+    ASSERT_EQ(before->presentation()->viewport.firstVisualRow, 0U);
     ASSERT_EQ(before->sections().theme.roleColors.size(), ssg::kSemanticRoleCount);
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{5}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
     auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(after.has_value());
-    ASSERT_EQ(after->client().viewport.firstVisualRow, 5U);
+    ASSERT_EQ(after->presentation()->viewport.firstVisualRow, 5U);
     ASSERT_TRUE(after->sections().shell.panel.has_value());
 }
 
@@ -224,7 +224,7 @@ TEST(wheelScrollDownPastTheEndHasNoDeadZone) {
     auto primed = runtime.snapshot(ssg::ClientId{1}, dims);  // caches the real pane height
     ASSERT_TRUE(primed.has_value());
     if (!primed) return;
-    auto const maxRow = primed->client().viewport.scrollbar.maximumFirstRow;
+    auto const maxRow = primed->presentation()->viewport.scrollbar.maximumFirstRow;
     ASSERT_TRUE(maxRow > 1U);  // the document is taller than the pane
 
     // Over-scroll far below the last line. The displayed top clamps to the max...
@@ -232,7 +232,7 @@ TEST(wheelScrollDownPastTheEndHasNoDeadZone) {
     auto bottom = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(bottom.has_value());
     if (!bottom) return;
-    ASSERT_EQ(bottom->client().viewport.firstVisualRow, maxRow);
+    ASSERT_EQ(bottom->presentation()->viewport.firstVisualRow, maxRow);
 
     // ...and a single line UP must move the view up by exactly one row.  Before
     // the fix the STORED request had drifted to ~5000, so an upward notch only
@@ -243,7 +243,7 @@ TEST(wheelScrollDownPastTheEndHasNoDeadZone) {
     auto up = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(up.has_value());
     if (!up) return;
-    ASSERT_EQ(up->client().viewport.firstVisualRow, maxRow - 1U);
+    ASSERT_EQ(up->presentation()->viewport.firstVisualRow, maxRow - 1U);
 }
 
 TEST(settingsDispatchMatchesSettingsModelOracleSnapshot) {
@@ -326,7 +326,7 @@ TEST(editorScrollUsesTheRealPaneHeightNotAHardcoded24) {
     auto afterPage = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(afterPage.has_value());
     if (!afterPage) return;
-    ASSERT_EQ(afterPage->client().viewport.firstVisualRow, paneRows);
+    ASSERT_EQ(afterPage->presentation()->viewport.firstVisualRow, paneRows);
 
     // Scroll-to-fraction(1/1) reaches the REAL maximum for this terminal (the last
     // line becomes visible), not the 24-row-derived maximum.
@@ -334,8 +334,8 @@ TEST(editorScrollUsesTheRealPaneHeightNotAHardcoded24) {
     auto afterBottom = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(afterBottom.has_value());
     if (!afterBottom) return;
-    ASSERT_EQ(afterBottom->client().viewport.firstVisualRow,
-              afterBottom->client().viewport.scrollbar.maximumFirstRow);
+    ASSERT_EQ(afterBottom->presentation()->viewport.firstVisualRow,
+              afterBottom->presentation()->viewport.scrollbar.maximumFirstRow);
     std::filesystem::remove_all(root);
 }
 

@@ -121,7 +121,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
         auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
-        auto const& view = snapshot->client().viewport;
+        auto const& view = snapshot->presentation()->viewport;
         auto const caretLine =
             snapshot->sections().selection.selections.primary().active.line.value();
         // The caret's line is always inside the window that is actually painted.
@@ -135,7 +135,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
     auto final = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(final.has_value());
     if (!final) return;
-    ASSERT_EQ(lastVisibleLine, final->client().viewport.totalVisualRows - 1);
+    ASSERT_EQ(lastVisibleLine, final->presentation()->viewport.totalVisualRows - 1);
 
     // Scrolling to the maximum offset shows the final line, so no row is
     // stranded past the end of the scroll range.
@@ -145,7 +145,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
     auto bottom = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(bottom.has_value());
     if (!bottom) return;
-    auto const& view = bottom->client().viewport;
+    auto const& view = bottom->presentation()->viewport;
     ASSERT_EQ(view.firstVisualRow, view.scrollbar.maximumFirstRow);
     ASSERT_EQ(view.firstVisualRow + view.visibleRows.size(),
               static_cast<std::size_t>(view.totalVisualRows));
@@ -177,7 +177,7 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& view = snapshot->client().viewport;
+    auto const& view = snapshot->presentation()->viewport;
     ASSERT_TRUE(view.totalVisualRows > view.visibleRows.size());
     ASSERT_TRUE(view.scrollbar.maximumFirstRow > 0);
     std::filesystem::remove_all(root);
@@ -387,7 +387,7 @@ TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& view = snapshot->client().viewport;
+    auto const& view = snapshot->presentation()->viewport;
     ASSERT_TRUE(view.totalVisualRows > 1);
     std::filesystem::remove_all(root);
 }

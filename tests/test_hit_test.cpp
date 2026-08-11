@@ -61,7 +61,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     ASSERT_FALSE(shell.panes.empty());
     if (shell.panes.empty()) return;
     auto const content = shell.panes.front().content;
-    auto const& targets = snapshot->client().viewport.hitTargets;
+    auto const& targets = snapshot->presentation()->viewport.hitTargets;
     ASSERT_FALSE(targets.empty());
     if (targets.empty()) return;
 
@@ -170,7 +170,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     // The document's last visual row is the trailing empty line (offset 8 == the
     // text end after "cde\n").
     auto const lastRowEnd =
-        snapshot->client().viewport.visibleRows.back().endByteOffset;
+        snapshot->presentation()->viewport.visibleRows.back().endByteOffset;
     auto below = ssg::HitTester{*snapshot}.at( content.x + 10, content.bottom() - 1);
     ASSERT_EQ(below.region, ssg::HitRegion::Editor);
     ASSERT_EQ(below.byteOffset, lastRowEnd);
@@ -247,8 +247,8 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
                           .baselineLines = {"removed\n"},
                           .targetLines = {}});
     const auto content = snapshot->sections().shell.panes.front().content;
-    auto client = snapshot->client();
-    client.viewport = ssg::Viewport{}.computeUnwrapped(
+    auto presentation = *snapshot->presentation();
+    presentation.viewport = ssg::Viewport{}.computeUnwrapped(
         text,
         ssg::ViewportDimensions{
             static_cast<std::uint32_t>(content.width),
@@ -256,8 +256,8 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
         0, 0, 4, &diff);
     auto sections = snapshot->sections();
     ssg::SessionSnapshot projected{
-        snapshot->revision(), snapshot->topology(), std::move(client),
-        std::move(sections)};
+        snapshot->revision(), snapshot->topology(), snapshot->client(),
+        std::move(sections), std::move(presentation)};
 
     const auto phantom =
         ssg::HitTester{projected}.at(content.x + 5, content.y + 1);
@@ -459,7 +459,7 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     auto const thumb = tester.gutterThumb(region);
     ASSERT_TRUE(thumb.has_value());
     if (!thumb) return;
-    auto const& metrics = snapshot->client().viewport.scrollbar;
+    auto const& metrics = snapshot->presentation()->viewport.scrollbar;
     ASSERT_EQ(thumb->gutterY, gutter.y);
     ASSERT_EQ(thumb->viewportRows, metrics.viewportRows);
     ASSERT_EQ(thumb->thumbStart, metrics.thumbStart);

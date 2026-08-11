@@ -150,10 +150,10 @@ public:
 
         for (auto const& mutate : mutators_) mutate(sections);
 
-        ClientSnapshotState client{ClientId{1}, ViewId{1}, {},
-                                    std::move(viewportState)};
+        ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
         return SessionSnapshot{revision_, SessionTopology{}, std::move(client),
-                                std::move(sections)};
+                                std::move(sections),
+                                PresentationSnapshot{std::move(viewportState)}};
     }
 
 private:

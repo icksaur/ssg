@@ -816,7 +816,7 @@ TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.firstVisualRow : 0U;
+        return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
 
     // Open A and scroll far down (free scroll leaves the caret off-screen above).
@@ -1011,7 +1011,7 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.firstVisualRow : 0U;
+        return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());

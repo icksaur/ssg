@@ -219,8 +219,8 @@ TEST(perClientCapabilitiesAndViewportsAreIsolated) {
 
     ASSERT_EQ(first.client().capabilities.size(), std::size_t{1});
     ASSERT_TRUE(second.client().capabilities.empty());
-    ASSERT_EQ(first.client().viewport.firstVisualRow, std::uint32_t{2});
-    ASSERT_EQ(second.client().viewport.firstVisualRow, std::uint32_t{7});
+    ASSERT_EQ(first.presentation()->viewport.firstVisualRow, std::uint32_t{2});
+    ASSERT_EQ(second.presentation()->viewport.firstVisualRow, std::uint32_t{7});
     ASSERT_EQ(first.sections(), second.sections());
 }
 

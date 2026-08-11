@@ -92,15 +92,18 @@ bool operator==(SessionSnapshotSections const& left,
 
 SessionSnapshot::SessionSnapshot(Revision revision, SessionTopology topology,
                                  ClientSnapshotState client,
-                                 SessionSnapshotSections sections)
+                                 SessionSnapshotSections sections,
+                                 std::optional<PresentationSnapshot> presentation)
     : revision_{revision},
       topology_{std::move(topology)},
       client_{std::move(client)},
-      sections_{std::move(sections)} {}
+      sections_{std::move(sections)},
+      presentation_{std::move(presentation)} {}
 
 bool SessionSnapshot::operator==(SessionSnapshot const& other) const {
     return revision_ == other.revision_ && topology_ == other.topology_ &&
-           client_ == other.client_ && sections_ == other.sections_;
+           client_ == other.client_ && sections_ == other.sections_ &&
+           presentation_ == other.presentation_;
 }
 
 SessionDelta::SessionDelta(
@@ -155,9 +158,9 @@ SessionSnapshot SessionSnapshotCodec::assemble(
     ViewportViewState viewport, SessionSnapshotSections sections) const {
     return {revision,
             std::move(topology),
-            {principal.clientId(), viewId, principal.capabilities(),
-             std::move(viewport)},
-            std::move(sections)};
+            {principal.clientId(), viewId, principal.capabilities()},
+            std::move(sections),
+            PresentationSnapshot{std::move(viewport)}};
 }
 
 SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
@@ -223,8 +226,10 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         {shellEqual(old.shell, next.shell)
              ? std::nullopt
              : std::optional{next.shell}},
-        Viewport{}.deriveDelta(before.client().viewport,
-                              after.client().viewport),
+        before.presentation() && after.presentation()
+            ? Viewport{}.deriveDelta(before.presentation()->viewport,
+                                     after.presentation()->viewport)
+            : ViewportDelta{false, std::nullopt},
     };
 }
 
@@ -310,8 +315,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     auto theme = delta.theme_.replacement.value_or(base.sections().theme);
     auto style = delta.style_.replacement.value_or(base.sections().style);
     auto shell = delta.shell_.replacement.value_or(base.sections().shell);
-    auto viewport = delta.viewport_.replacement.value_or(
-        base.client().viewport);
+    auto viewport = delta.viewport_.replacement;
     // The published palette candidate list is authoritative server state that the
     // delta does not carry (the P0 command catalog is static within a session), so
     // preserve it from the base rather than dropping it -- otherwise a
@@ -344,12 +348,17 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(palette),
     };
     ClientSnapshotState client = base.client();
-    client.viewport = std::move(viewport);
+    std::optional<PresentationSnapshot> presentation;
+    if (base.presentation()) {
+        presentation = PresentationSnapshot{
+            viewport.value_or(base.presentation()->viewport)};
+    }
     return {SessionSnapshot{
                 delta.revision_,
                 delta.topology_.value_or(base.topology()),
                 std::move(client),
-                std::move(sections)},
+                std::move(sections),
+                std::move(presentation)},
             {}};
 }
 

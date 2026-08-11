@@ -144,7 +144,7 @@ void paintDiagnostics(CellGrid& grid, SessionSnapshot const& snapshot,
     auto const& lsp = snapshot.sections().lspSync;
     if (lsp.documents.empty()) return;
     auto const& document = snapshot.sections().document;
-    auto const& viewport = snapshot.client().viewport;
+    auto const& viewport = snapshot.presentation()->viewport;
 
     // Highest severity wins per cell, so an error is never hidden by a hint
     // that happens to be painted after it.
@@ -210,7 +210,7 @@ void paintDiagnostics(CellGrid& grid, SessionSnapshot const& snapshot,
 void paintHyperlinks(CellGrid& grid, SessionSnapshot const& snapshot,
                       Rect const& content) {
     auto const& text = snapshot.sections().document.text;
-    auto const& viewport = snapshot.client().viewport;
+    auto const& viewport = snapshot.presentation()->viewport;
     if (text.empty() || viewport.hitTargets.empty()) return;
 
     // Where a URL stops.  Whitespace and the C0 range always end it; the closing
@@ -643,7 +643,7 @@ std::optional<GridPosition> screenCellFor(ViewportViewState const& viewport,
 void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                     Rect const& content, ThemeSnapshot const& theme,
                     std::uint8_t background, Style const& style) {
-    auto const& viewport = snapshot.client().viewport;
+    auto const& viewport = snapshot.presentation()->viewport;
     auto const activeDiff =
         snapshot.sections().diff.fileForDocument(snapshot.sections().document);
     std::unordered_map<std::size_t, DiffTint> rowTints;
@@ -966,7 +966,7 @@ void paintScrollbar(CellGrid& grid, PaneGeometry const& pane,
 void paintLineNumbers(CellGrid& grid, SessionSnapshot const& snapshot,
                        PaneGeometry const& pane, ThemeSnapshot const& theme) {
     if (pane.lineNumbers.width <= 0) return;
-    auto const& viewport = snapshot.client().viewport;
+    auto const& viewport = snapshot.presentation()->viewport;
     auto const numberFg = semanticIndex(theme, SemanticRole::LineNumber);
     auto const numberBg = semanticIndex(theme, SemanticRole::LineNumberBackground);
     auto const currentFg = semanticIndex(theme, SemanticRole::CurrentLineNumber);
@@ -1164,7 +1164,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
         // The shell layout was declined (viewport below the 20x4 minimum): the
         // library renders the too-small placeholder, sized from the terminal
         // dimensions the client viewport carries (M11-L).
-        auto const& dimensions = snapshot.client().viewport.dimensions;
+        auto const& dimensions = snapshot.presentation()->viewport.dimensions;
         return renderTooSmall(
             GridSize{static_cast<int>(dimensions.columns),
                      static_cast<int>(dimensions.rows)},
@@ -1235,7 +1235,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
             paintDiagnostics(grid, snapshot, shell.panes.front().content);
             paintHyperlinks(grid, snapshot, shell.panes.front().content);
             paintLineNumbers(grid, snapshot, shell.panes.front(), theme);
-            paintScrollbar(grid, shell.panes.front(), snapshot.client().viewport,
+            paintScrollbar(grid, shell.panes.front(), snapshot.presentation()->viewport,
                             theme, background, style);
 
             // Paint the reserved prompt rows (find/replace/settings) and place
@@ -1260,7 +1260,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
             // focused.
             if (shell.focus == FocusTarget::Editor) {
                 auto const& content = shell.panes.front().content;
-                auto const& viewport = snapshot.client().viewport;
+                auto const& viewport = snapshot.presentation()->viewport;
                 auto const& selections =
                     snapshot.sections().selection.selections;
                 auto const& primary = selections.primary();

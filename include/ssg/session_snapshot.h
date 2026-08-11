@@ -65,9 +65,18 @@ struct ClientSnapshotState {
     ClientId clientId;
     ViewId viewId;
     std::vector<CapabilityId> capabilities;
-    ViewportViewState viewport;
 
     bool operator==(ClientSnapshotState const&) const = default;
+};
+
+// The optional grid-presentation projection of a snapshot. Present only when a
+// client requested geometry by supplying ViewportDimensions; a native-layout
+// client (one that lays out the semantic model itself) receives a snapshot with
+// no presentation at all, so semantic state is never gated on grid geometry.
+struct PresentationSnapshot {
+    ViewportViewState viewport;
+
+    bool operator==(PresentationSnapshot const&) const = default;
 };
 
 // CONTRACT
@@ -81,7 +90,8 @@ class SessionSnapshot {
 public:
     SessionSnapshot(Revision revision, SessionTopology topology,
                     ClientSnapshotState client,
-                    SessionSnapshotSections sections);
+                    SessionSnapshotSections sections,
+                    std::optional<PresentationSnapshot> presentation = std::nullopt);
 
     SessionSnapshot(SessionSnapshot const&) = delete;
     SessionSnapshot& operator=(SessionSnapshot const&) = delete;
@@ -98,14 +108,19 @@ public:
     [[nodiscard]] SessionSnapshotSections const& sections() const noexcept {
         return sections_;
     }
+    [[nodiscard]] std::optional<PresentationSnapshot> const& presentation()
+        const noexcept {
+        return presentation_;
+    }
 
     bool operator==(SessionSnapshot const&) const;
 
-private:
+  private:
     Revision revision_;
     SessionTopology topology_;
     ClientSnapshotState client_;
     SessionSnapshotSections sections_;
+    std::optional<PresentationSnapshot> presentation_;
 };
 
 struct SettingsSectionDelta {

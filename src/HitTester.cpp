@@ -25,7 +25,7 @@ RegionHit scrollbarHit(HitRegion region, Rect const& /*gutter*/, int /*row*/) {
 
 RegionHit editorHit(SessionSnapshot const& snapshot, Rect const& content,
                      int column, int row) {
-    auto const& viewport = snapshot.client().viewport;
+    auto const& viewport = snapshot.presentation()->viewport;
     auto const viewportRow = static_cast<std::uint32_t>(row - content.y);
     auto const viewportColumn = static_cast<std::uint32_t>(column - content.x);
     for (auto const& target : viewport.hitTargets) {
@@ -191,7 +191,7 @@ std::optional<HitTester::GutterThumb> HitTester::gutterThumb(
     case HitRegion::EditorScrollbar:
         if (shell.panes.empty()) return std::nullopt;
         return make(shell.panes.front().scrollbar,
-                    snapshot_.client().viewport.scrollbar);
+                    snapshot_.presentation()->viewport.scrollbar);
     case HitRegion::PanelScrollbar: {
         if (!shell.panelScrollbar) return std::nullopt;
         auto const& tree = snapshot_.sections().tree;

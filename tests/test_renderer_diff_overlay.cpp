@@ -95,9 +95,9 @@ ssg::DiffFileView overlayDiff(std::string_view currentContent) {
 
 ssg::SessionSnapshot snapshotWith(
     const ssg::SessionSnapshot& base, ssg::SessionSnapshotSections sections,
-    ssg::ClientSnapshotState client) {
-    return {base.revision(), base.topology(), std::move(client),
-            std::move(sections)};
+    ssg::PresentationSnapshot presentation) {
+    return {base.revision(), base.topology(), base.client(),
+            std::move(sections), std::move(presentation)};
 }
 
 }
@@ -156,12 +156,11 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
     ASSERT_TRUE(hasDiffTintInPane(grid, paneContent));
 
     auto sections = snapshot->sections();
-    auto client = snapshot->client();
     sections.document.revision =
         ssg::Revision{sections.document.revision.value() + 1};
     ssg::SessionSnapshot mismatched{
-        snapshot->revision(), snapshot->topology(), std::move(client),
-        std::move(sections)};
+        snapshot->revision(), snapshot->topology(), snapshot->client(),
+        std::move(sections), snapshot->presentation()};
     const auto mismatchGrid = ssg::Renderer{}.render(mismatched);
     ASSERT_TRUE(hasDiffTintInPane(mismatchGrid, paneContent));
 }
@@ -177,7 +176,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     if (!base) return;
 
     auto sections = base->sections();
-    auto client = base->client();
+    auto presentation = *base->presentation();
     auto diffFile = overlayDiff(text);
     sections.document.diffFileIdentity = diffFile.id.value();
     sections.diff =
@@ -194,11 +193,11 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
         {},
         {},
     };
-    client.viewport = ssg::Viewport{}.computeUnwrapped(
-        text, client.viewport.dimensions, 0, 0, 4, &diffFile);
+    presentation.viewport = ssg::Viewport{}.computeUnwrapped(
+        text, presentation.viewport.dimensions, 0, 0, 4, &diffFile);
     const auto content = sections.shell.panes.front().content;
     auto overlay =
-        snapshotWith(*base, std::move(sections), std::move(client));
+        snapshotWith(*base, std::move(sections), std::move(presentation));
     const auto grid = ssg::Renderer{}.render(overlay);
 
     const auto [addedColumn, addedRow] =
@@ -245,11 +244,11 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
               ssg::DiffTint::RemovedRow);
 
     auto scrolledSections = overlay.sections();
-    auto scrolledClient = overlay.client();
-    scrolledClient.viewport = ssg::Viewport{}.computeUnwrapped(
-        text, scrolledClient.viewport.dimensions, 0, 8, 4, &diffFile);
+    auto scrolledPresentation = *overlay.presentation();
+    scrolledPresentation.viewport = ssg::Viewport{}.computeUnwrapped(
+        text, scrolledPresentation.viewport.dimensions, 0, 8, 4, &diffFile);
     auto scrolled = snapshotWith(
-        overlay, std::move(scrolledSections), std::move(scrolledClient));
+        overlay, std::move(scrolledSections), std::move(scrolledPresentation));
     const auto scrolledGrid = ssg::Renderer{}.render(scrolled);
     const auto [scrolledRemovedColumn, scrolledRemovedRow] =
         findText(scrolledGrid, "baseline");
@@ -261,7 +260,6 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     }
 
     auto precedenceSections = overlay.sections();
-    auto precedenceClient = overlay.client();
     const auto start = ssg::DocumentPosition{
         ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
     const auto end = ssg::DocumentPosition{
@@ -278,7 +276,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     };
     precedenceSections.findReplace.activeMatch = std::size_t{0};
     auto precedence = snapshotWith(
-        overlay, std::move(precedenceSections), std::move(precedenceClient));
+        overlay, std::move(precedenceSections), *overlay.presentation());
     const auto precedenceGrid = ssg::Renderer{}.render(precedence);
     ASSERT_EQ(precedenceGrid.at(addedColumn, addedRow).role,
               ssg::SemanticRole::Selection);
@@ -294,7 +292,6 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
               ssg::DiffTint::None);
 
     auto wordSelectionSections = overlay.sections();
-    auto wordSelectionClient = overlay.client();
     const auto wordStart = ssg::DocumentPosition{
         ssg::ByteOffset{34}, ssg::LineIndex{1}, ssg::CellIndex{14}};
     const auto wordEnd = ssg::DocumentPosition{
@@ -306,7 +303,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
         std::nullopt};
     auto wordSelection =
         snapshotWith(overlay, std::move(wordSelectionSections),
-                     std::move(wordSelectionClient));
+                     *overlay.presentation());
     const auto wordSelectionGrid = ssg::Renderer{}.render(wordSelection);
     ASSERT_EQ(wordSelectionGrid.at(modifiedColumn + 14, modifiedRow).role,
               ssg::SemanticRole::Selection);
@@ -314,13 +311,13 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
               ssg::DiffTint::None);
 
     auto noDiffSections = overlay.sections();
-    auto noDiffClient = overlay.client();
+    auto noDiffPresentation = *overlay.presentation();
     noDiffSections.diff = {};
     noDiffSections.document.diffFileIdentity.reset();
-    noDiffClient.viewport = ssg::Viewport{}.computeUnwrapped(
-        text, noDiffClient.viewport.dimensions, 0, 0, 4);
+    noDiffPresentation.viewport = ssg::Viewport{}.computeUnwrapped(
+        text, noDiffPresentation.viewport.dimensions, 0, 0, 4);
     auto noDiff = snapshotWith(
-        overlay, std::move(noDiffSections), std::move(noDiffClient));
+        overlay, std::move(noDiffSections), std::move(noDiffPresentation));
     const auto noDiffGrid = ssg::Renderer{}.render(noDiff);
     for (const auto& cell : noDiffGrid.cells) {
         ASSERT_EQ(cell.tint, ssg::DiffTint::None);
@@ -334,10 +331,9 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     }
 
     auto unidentifiedSections = noDiff.sections();
-    auto unidentifiedClient = noDiff.client();
     unidentifiedSections.diff = overlay.sections().diff;
     auto unidentified = snapshotWith(
-        noDiff, std::move(unidentifiedSections), std::move(unidentifiedClient));
+        noDiff, std::move(unidentifiedSections), *noDiff.presentation());
     ASSERT_EQ(ssg::Renderer{}.render(unidentified).canonical(),
               noDiffGrid.canonical());
 }

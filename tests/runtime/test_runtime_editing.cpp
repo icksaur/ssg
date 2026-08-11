@@ -411,7 +411,7 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
     {
         auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
-        if (snap) ASSERT_EQ(snap->client().viewport.firstVisualRow, std::uint32_t{0});
+        if (snap) ASSERT_EQ(snap->presentation()->viewport.firstVisualRow, std::uint32_t{0});
     }
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
@@ -422,7 +422,7 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
     auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (!snap) return;
-    auto const& viewport = snap->client().viewport;
+    auto const& viewport = snap->presentation()->viewport;
     ASSERT_TRUE(viewport.firstVisualRow > std::uint32_t{0});
     bool matchLineVisible = false;
     for (auto const& row : viewport.visibleRows) {
@@ -722,11 +722,11 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.firstVisualRow : 0U;
+        return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
     auto maximum = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.scrollbar.maximumFirstRow : 0U;
+        return snap ? snap->presentation()->viewport.scrollbar.maximumFirstRow : 0U;
     };
     // Snapshot once to populate the pane-height cache; the caret is at the top.
     ASSERT_EQ(firstRow(), 0U);
@@ -779,7 +779,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snap.has_value());
-        auto const& view = snap->client().viewport;
+        auto const& view = snap->presentation()->viewport;
         auto const caretLine =
             snap->sections().selection.selections.primary().active.line.value();
         ASSERT_TRUE(view.firstVisualRow > 0);  // did not follow the secondary caret
@@ -807,7 +807,7 @@ TEST(undoAndPasteRevealTheCaret) {
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.firstVisualRow : 0U;
+        return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
     ASSERT_EQ(firstRow(), 0U);
 
@@ -962,7 +962,7 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.firstVisualRow : 0U;
+        return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
     ASSERT_EQ(firstRow(), 0U);  // caret at top; the match is off-screen far below
 

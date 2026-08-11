@@ -638,7 +638,7 @@ TEST(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta) {
     ASSERT_TRUE(snapshotDecoded.accepted());
     ASSERT_TRUE(snapshotDecoded.snapshot.has_value());
     if (snapshotDecoded.snapshot) {
-        ASSERT_EQ(snapshotDecoded.snapshot->client().viewport.rowProjection,
+        ASSERT_EQ(snapshotDecoded.snapshot->presentation()->viewport.rowProjection,
                   projectedView.rowProjection);
     }
 
@@ -653,7 +653,7 @@ TEST(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta) {
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     if (replayed.snapshot) {
-        ASSERT_EQ(replayed.snapshot->client().viewport.rowProjection,
+        ASSERT_EQ(replayed.snapshot->presentation()->viewport.rowProjection,
                   projectedView.rowProjection);
     }
 }
@@ -733,9 +733,9 @@ TEST(twoClientCapabilityAndViewportIsolationSurvivesTheWire) {
     ASSERT_EQ(firstDecoded.snapshot->client().capabilities.size(),
              std::size_t{1});
     ASSERT_TRUE(secondDecoded.snapshot->client().capabilities.empty());
-    ASSERT_EQ(firstDecoded.snapshot->client().viewport.firstVisualRow,
+    ASSERT_EQ(firstDecoded.snapshot->presentation()->viewport.firstVisualRow,
              std::uint32_t{2});
-    ASSERT_EQ(secondDecoded.snapshot->client().viewport.firstVisualRow,
+    ASSERT_EQ(secondDecoded.snapshot->presentation()->viewport.firstVisualRow,
              std::uint32_t{7});
     ASSERT_EQ(firstDecoded.snapshot->sections(), secondDecoded.snapshot->sections());
 }
@@ -1154,7 +1154,7 @@ TEST(viewportFirstVisualColumnSurvivesTheWire) {
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
-    ASSERT_EQ(decoded.snapshot->client().viewport.firstVisualColumn,
+    ASSERT_EQ(decoded.snapshot->presentation()->viewport.firstVisualColumn,
               std::uint32_t{7});
     ASSERT_EQ(*decoded.snapshot, snapshot);
 }

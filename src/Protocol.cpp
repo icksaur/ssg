@@ -1320,6 +1320,8 @@ ProtocolValue toValue(SessionTopology const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SessionTopology>& out);
 ProtocolValue toValue(ClientSnapshotState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ClientSnapshotState>& out);
+ProtocolValue toValue(PresentationSnapshot const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapshot>& out);
 ProtocolValue toValue(SessionSnapshotSections const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out);
 
@@ -4709,7 +4711,6 @@ ProtocolValue toValue(ClientSnapshotState const& value) {
     fields.emplace_back("client_id", toValue(value.clientId));
     fields.emplace_back("view_id", toValue(value.viewId));
     fields.emplace_back("capabilities", toValue(value.capabilities));
-    fields.emplace_back("viewport", toValue(value.viewport));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<ClientSnapshotState>& out) {
@@ -4718,9 +4719,22 @@ bool decodePresent(ProtocolValue const& value, std::optional<ClientSnapshotState
     auto clientId = requireField<ClientId>(value.field("client_id"));
     auto viewId = requireField<ViewId>(value.field("view_id"));
     auto capabilities = requireField<std::vector<CapabilityId>>(value.field("capabilities"));
+    if (!clientId || !viewId || !capabilities) return false;
+    out.emplace(ClientSnapshotState{*clientId, *viewId, *capabilities});
+    return true;
+}
+
+ProtocolValue toValue(PresentationSnapshot const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("viewport", toValue(value.viewport));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapshot>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
     auto viewport = requireField<ViewportViewState>(value.field("viewport"));
-    if (!clientId || !viewId || !capabilities || !viewport) return false;
-    out.emplace(ClientSnapshotState{*clientId, *viewId, *capabilities, *viewport});
+    if (!viewport) return false;
+    out.emplace(PresentationSnapshot{*viewport});
     return true;
 }
 
@@ -5347,6 +5361,7 @@ std::string ProtocolCodec::encodeSessionSnapshot(SessionSnapshot const& snapshot
     fields.emplace_back("topology", toValue(snapshot.topology()));
     fields.emplace_back("client", toValue(snapshot.client()));
     fields.emplace_back("sections", toValue(snapshot.sections()));
+    fields.emplace_back("presentation", toValue(snapshot.presentation()));
     return encodeMessage(ProtocolMessageKind::SessionSnapshot,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5368,13 +5383,19 @@ DecodeSessionSnapshotResult ProtocolCodec::decodeSessionSnapshot(std::string_vie
     auto client = requireField<ClientSnapshotState>(payload.field("client"));
     auto sections =
         requireField<SessionSnapshotSections>(payload.field("sections"));
+    std::optional<PresentationSnapshot> presentation;
+    if (!decodeOptionalField(payload.field("presentation"), presentation)) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "session snapshot presentation is malformed"};
+    }
     if (!revision || !topology || !client || !sections) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "session snapshot payload is malformed"};
     }
     return {ProtocolError::None,
             SessionSnapshot{*revision, std::move(*topology),
-                            std::move(*client), std::move(*sections)},
+                            std::move(*client), std::move(*sections),
+                            std::move(presentation)},
             {}};
 }
 

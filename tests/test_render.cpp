@@ -68,7 +68,8 @@ ssg::SessionSnapshot withStyle(ssg::SessionSnapshot const& base,
     auto sections = base.sections();
     sections.style = std::move(style);
     return ssg::SessionSnapshot{base.revision(), base.topology(), base.client(),
-                                std::move(sections)};
+                                std::move(sections),
+                                base.presentation()};
 }
 
 }  // namespace
@@ -310,7 +311,7 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_TRUE(snapshot->client().viewport.firstVisualColumn > 0);
+    ASSERT_TRUE(snapshot->presentation()->viewport.firstVisualColumn > 0);
     auto grid = ssg::Renderer{}.render(*snapshot);
 
     // The end of the line is on screen; the start has scrolled off.
