@@ -781,7 +781,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
         ASSERT_TRUE(snap.has_value());
         auto const& view = snap->presentation()->viewport;
         auto const caretLine =
-            snap->sections().selection.selections.primary().active.line.value();
+            snap->sections().selection.primary().active.line.value();
         ASSERT_TRUE(view.firstVisualRow > 0);  // did not follow the secondary caret
         ASSERT_TRUE(caretLine >= view.firstVisualRow);
         ASSERT_TRUE(caretLine < view.firstVisualRow + view.visibleRows.size());
@@ -850,7 +850,7 @@ TEST(multiCursorPastePreservesAllCursors) {
     const ssg::ViewportDimensions dims{80, 24};
     auto selectionCount = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->sections().selection.selections.items().size() : std::size_t{0};
+        return snap ? snap->sections().selection.items().size() : std::size_t{0};
     };
 
     // Build two cursors (top of line 0 and top of line 1), copy, then paste. The
@@ -890,7 +890,7 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
     const ssg::ViewportDimensions dims{80, 24};
     auto selectionCount = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->sections().selection.selections.items().size()
+        return snap ? snap->sections().selection.items().size()
                     : std::size_t{0};
     };
 

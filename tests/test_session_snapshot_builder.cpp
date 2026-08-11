@@ -150,7 +150,7 @@ TEST(builderSettersReachTheRenderedScreen) {
                           .viewport(60, 12)
                           .build();
     auto const& primary =
-        positioned.sections().selection.selections.primary().active;
+        positioned.sections().selection.primary().active;
     ASSERT_EQ(primary.byteOffset, ssg::ByteOffset{4});
     ASSERT_EQ(primary.line, ssg::LineIndex{1});
     ASSERT_EQ(primary.cell, ssg::CellIndex{1});

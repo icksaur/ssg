@@ -18,8 +18,14 @@ bool shellEqual(ShellViewState const& left, ShellViewState const& right) {
            left.accessibilityNodes == right.accessibilityNodes;
 }
 
-SelectionViewDelta selectionDelta(SelectionViewState const& before,
-                                   SelectionViewState const& after) {
+SelectionSetDelta selectionDelta(SelectionSet const& before,
+                                 SelectionSet const& after) {
+    bool const changed = before != after;
+    return {changed, changed ? std::optional{after} : std::nullopt};
+}
+
+SelectionNavigationDelta selectionNavDelta(SelectionNavigation const& before,
+                                           SelectionNavigation const& after) {
     bool const changed = before != after;
     return {changed, changed ? std::optional{after} : std::nullopt};
 }
@@ -92,7 +98,8 @@ bool operator==(SessionSnapshotSections const& left,
 
 bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
     return viewport == other.viewport && style == other.style &&
-           prompt == other.prompt && shellEqual(shell, other.shell);
+           prompt == other.prompt && shellEqual(shell, other.shell) &&
+           selectionNav == other.selectionNav;
 }
 
 SessionSnapshot::SessionSnapshot(Revision revision, SessionTopology topology,
@@ -116,7 +123,7 @@ SessionDelta::SessionDelta(
     ViewId viewId, std::vector<CapabilityId> capabilities,
     std::optional<SessionTopology> topology,
     std::optional<DocumentDelta> document,
-    std::optional<ByteOffset> documentCaret, SelectionViewDelta selection,
+    std::optional<ByteOffset> documentCaret, SelectionSetDelta selection,
     HistoryDelta history, ClipboardDelta clipboard,
     PromptStatusDelta promptStatus, SearchDelta search,
     FindReplaceDelta findReplace, SettingsSectionDelta settings,
@@ -127,7 +134,7 @@ SessionDelta::SessionDelta(
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
     ThemeSectionDelta theme, StyleSectionDelta style,
     ShellSectionDelta shell, ViewportDelta viewport,
-    std::optional<FocusTarget> focus)
+    std::optional<FocusTarget> focus, SelectionNavigationDelta selectionNav)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -157,20 +164,22 @@ SessionDelta::SessionDelta(
       style_{std::move(style)},
       shell_{std::move(shell)},
       viewport_{std::move(viewport)},
-      focus_{focus} {}
+      focus_{focus},
+      selectionNav_{std::move(selectionNav)} {}
 
 SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
     InvocationPrincipal const& principal, ViewId viewId,
     ViewportViewState viewport, SessionSnapshotSections sections,
     Style style, std::optional<PromptViewState> prompt,
-    ShellViewState shell) const {
+    ShellViewState shell, SelectionNavigation selectionNav) const {
     return {revision,
             std::move(topology),
             {principal.clientId(), viewId, principal.capabilities()},
             std::move(sections),
             PresentationSnapshot{std::move(viewport), std::move(style),
-                                 std::move(prompt), std::move(shell)}};
+                                 std::move(prompt), std::move(shell),
+                                 std::move(selectionNav)}};
 }
 
 SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
@@ -250,6 +259,10 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
             : ViewportDelta{false, std::nullopt},
         old.focus == next.focus ? std::nullopt
                                 : std::optional{next.focus},
+        before.presentation() && after.presentation()
+            ? selectionNavDelta(before.presentation()->selectionNav,
+                                after.presentation()->selectionNav)
+            : SelectionNavigationDelta{},
     };
 }
 
@@ -372,10 +385,12 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
             base.presentation()->style);
         auto shell = delta.shell_.replacement.value_or(
             base.presentation()->shell);
+        auto selectionNav = delta.selectionNav_.replacement.value_or(
+            base.presentation()->selectionNav);
         presentation = PresentationSnapshot{
             viewport.value_or(base.presentation()->viewport),
             std::move(style), base.presentation()->prompt,
-            std::move(shell)};
+            std::move(shell), std::move(selectionNav)};
     }
     return {SessionSnapshot{
                 delta.revision_,
@@ -391,7 +406,7 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     ViewId viewId, std::vector<CapabilityId> capabilities,
     std::optional<SessionTopology> topology,
     std::optional<DocumentDelta> document,
-    std::optional<ByteOffset> documentCaret, SelectionViewDelta selection,
+    std::optional<ByteOffset> documentCaret, SelectionSetDelta selection,
     HistoryDelta history, ClipboardDelta clipboard,
     PromptStatusDelta promptStatus, SearchDelta search,
     FindReplaceDelta findReplace, SettingsSectionDelta settings,
@@ -403,7 +418,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     ThemeSectionDelta theme, StyleSectionDelta style,
     ShellSectionDelta shell,
     ViewportDelta viewport,
-    std::optional<FocusTarget> focus) const {
+    std::optional<FocusTarget> focus,
+    SelectionNavigationDelta selectionNav) const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,
@@ -433,7 +449,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(style),
                         std::move(shell),
                         std::move(viewport),
-                        focus};
+                        focus,
+                        std::move(selectionNav)};
 }
 
 }  // namespace ssg

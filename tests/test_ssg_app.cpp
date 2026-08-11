@@ -2413,7 +2413,7 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
     auto beforeSnap = runtime.snapshot(ssg::ClientId{1}, {80, 12});
     ASSERT_TRUE(beforeSnap.has_value());
     if (!beforeSnap) return;
-    auto const& items = beforeSnap->sections().selection.selections.items();
+    auto const& items = beforeSnap->sections().selection.items();
     ASSERT_EQ(items.size(), std::size_t{2});
     std::vector<ssg::Selection> baseline(items.begin(), items.end());
 
@@ -2432,7 +2432,7 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
     auto afterSnap = runtime.snapshot(ssg::ClientId{1}, {80, 12});
     ASSERT_TRUE(afterSnap.has_value());
     if (!afterSnap) return;
-    auto const& survivors = afterSnap->sections().selection.selections.items();
+    auto const& survivors = afterSnap->sections().selection.items();
     ASSERT_EQ(survivors.size(), std::size_t{1});
     if (survivors.size() == 1) {
         ASSERT_EQ(survivors[0], (ssg::Selection{*p7, *p7}));  // the un-clicked one

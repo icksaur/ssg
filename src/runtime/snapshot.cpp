@@ -292,7 +292,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
     // this, warming the panel-height cache that treeView() and viewport() read.
     auto treeSection = treeView();
     return {documentView(),
-            selection,
+            selection.selections,
             currentHistory,
             clipboard.viewState(),
             promptStatusView(),

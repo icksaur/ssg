@@ -580,9 +580,9 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
 
 // Whether a document byte offset falls inside any ranged (non-caret) selection.
 // Caret selections (anchor == active) have no width and are not highlighted.
-bool offsetInSelection(SelectionViewState const& selection,
+bool offsetInSelection(SelectionSet const& selection,
                          std::uint64_t offset) {
-    for (auto const& item : selection.selections.items()) {
+    for (auto const& item : selection.items()) {
         if (item.isCaret()) continue;
         auto const lo = item.lower().byteOffset.value();
         auto const hi = item.upper().byteOffset.value();
@@ -974,7 +974,7 @@ void paintLineNumbers(CellGrid& grid, SessionSnapshot const& snapshot,
         semanticIndex(theme, SemanticRole::CurrentLineNumberBackground);
     // Every caret's logical line highlights its gutter number, not just the
     // primary's, so multi-cursor edits show one lit number per cursor.
-    auto const& selections = snapshot.sections().selection.selections;
+    auto const& selections = snapshot.sections().selection;
     std::vector<std::uint32_t> caretLines;
     caretLines.reserve(selections.items().size());
     for (auto const& selection : selections.items()) {
@@ -1262,7 +1262,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
                 auto const& content = shell.panes.front().content;
                 auto const& viewport = snapshot.presentation()->viewport;
                 auto const& selections =
-                    snapshot.sections().selection.selections;
+                    snapshot.sections().selection;
                 auto const& primary = selections.primary();
                 if (auto cell = screenCellFor(viewport, content,
                                                 primary.active.line.value(),

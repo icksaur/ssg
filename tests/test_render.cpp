@@ -232,7 +232,7 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().selection.selections.items().size(),
+    ASSERT_EQ(snapshot->sections().selection.items().size(),
               std::size_t{2});
     auto const& pane = snapshot->presentation()->shell.panes.front();
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -580,7 +580,7 @@ TEST(renderPaintsSecondaryRangedSelectionCaret) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& items = snapshot->sections().selection.selections.items();
+    auto const& items = snapshot->sections().selection.items();
     if (items.size() < 2) return;  // Ranker may not find a second; skip if so.
     bool allRanged = true;
     for (auto const& item : items) if (item.isCaret()) allRanged = false;
@@ -617,7 +617,7 @@ TEST(renderPaintsSecondaryCaretAsACell) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().selection.selections.items().size(),
+    ASSERT_EQ(snapshot->sections().selection.items().size(),
               std::size_t{2});
     auto grid = ssg::Renderer{}.render(*snapshot);
     ASSERT_TRUE(grid.caret.has_value());
@@ -1506,13 +1506,11 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
                 // A ranged selection on line 0 paints real Selection-role
                 // cells, so Selection is proven consumed at the cell level, not
                 // only via grid.selectionFill.
-                sections.selection = ssg::SelectionViewState{
-                    ssg::SelectionSet{{ssg::Selection{
+                sections.selection = ssg::SelectionSet{{ssg::Selection{
                         {ssg::ByteOffset{0}, ssg::LineIndex{0},
                          ssg::CellIndex{0}},
                         {ssg::ByteOffset{4}, ssg::LineIndex{0},
-                         ssg::CellIndex{4}}}}},
-                    0, 0, std::nullopt};
+                         ssg::CellIndex{4}}}}};
                 // A diff overlay tints document rows, so the DiffAdded/
                 // DiffModified paths reach real cells (a removed line has no
                 // target row to tint; DiffRemoved's cell-level painting is

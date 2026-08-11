@@ -129,10 +129,8 @@ public:
 
         SessionSnapshotSections sections{
             DocumentViewState{revision_, text_, ByteOffset{caret}, std::nullopt},
-            SelectionViewState{
-                SelectionSet{{Selection{caretPosition(caret),
-                                        caretPosition(caret)}}},
-                firstRow_, 0, std::nullopt},
+            SelectionSet{{Selection{caretPosition(caret),
+                                    caretPosition(caret)}}},
             HistoryViewState{},
             ClipboardViewState{},
             PromptStatusViewState{},
@@ -162,7 +160,10 @@ public:
                                 std::move(sections),
                                 PresentationSnapshot{std::move(viewportState),
                                                      style_, std::nullopt,
-                                                     std::move(shellView)}};
+                                                     std::move(shellView),
+                                                     SelectionNavigation{
+                                                         firstRow_, 0,
+                                                         std::nullopt}}};
     }
 
 private:

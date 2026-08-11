@@ -123,7 +123,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
         if (!snapshot) return;
         auto const& view = snapshot->presentation()->viewport;
         auto const caretLine =
-            snapshot->sections().selection.selections.primary().active.line.value();
+            snapshot->sections().selection.primary().active.line.value();
         // The caret's line is always inside the window that is actually painted.
         ASSERT_TRUE(caretLine >= view.firstVisualRow);
         ASSERT_TRUE(caretLine < view.firstVisualRow + view.visibleRows.size());
@@ -588,7 +588,7 @@ TEST(addCursorChordProducesMultipleSelections) {
     auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (!after) return;
-    ASSERT_TRUE(after->sections().selection.selections.items().size() > std::size_t{1});
+    ASSERT_TRUE(after->sections().selection.items().size() > std::size_t{1});
 }
 
 TEST(settingsOpenFocusesASettingsPrompt) {

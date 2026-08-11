@@ -1733,7 +1733,7 @@ std::unique_ptr<ssg::EditorRuntime> gotoLineRuntime() {
 std::uint32_t gotoCaretLine(ssg::EditorRuntime& runtime) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     if (!snapshot) return 0;
-    return snapshot->sections().selection.selections.primary().active.line.value();
+    return snapshot->sections().selection.primary().active.line.value();
 }
 
 TEST(gotoLineClampsToTheOneBasedLineRange) {

@@ -55,6 +55,34 @@ struct SelectionViewState {
     bool operator==(const SelectionViewState&) const noexcept = default;
 };
 
+// Grid projection of selection navigation: the scroll anchor and the desired
+// cell a vertical move remembers. Pure presentation -- the semantic selection is
+// the SelectionSet in the snapshot's sections. Absent from a native-layout
+// client's snapshot, which scrolls its own view.
+struct SelectionNavigation {
+    std::uint32_t firstVisualRow = 0;
+    std::uint32_t firstVisualColumn = 0;
+    std::optional<CellIndex> desiredCell;
+
+    bool operator==(const SelectionNavigation&) const noexcept = default;
+};
+
+struct SelectionNavigationDelta {
+    bool changed = false;
+    std::optional<SelectionNavigation> replacement;
+
+    bool operator==(const SelectionNavigationDelta&) const noexcept = default;
+};
+
+// Semantic delta of the selection set (the carets/ranges), independent of any
+// grid scroll projection.
+struct SelectionSetDelta {
+    bool changed = false;
+    std::optional<SelectionSet> replacement;
+
+    bool operator==(const SelectionSetDelta&) const noexcept = default;
+};
+
 struct SelectionViewDelta {
     bool changed;
     std::optional<SelectionViewState> replacement;

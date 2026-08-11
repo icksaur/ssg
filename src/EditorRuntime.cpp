@@ -2449,11 +2449,14 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
     auto sections = impl_->sections(dimensions, paletteReport);
     auto viewport = impl_->viewport(dimensions);
     auto promptView = impl_->promptProjection(dimensions, shell.prompt);
+    ssg::SelectionNavigation selectionNav{impl_->selection.firstVisualRow,
+                                          impl_->selection.firstVisualColumn,
+                                          impl_->selection.desiredCell};
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
                                      std::move(viewport), std::move(sections),
                                      impl_->style, std::move(promptView),
-                                     std::move(shell));
+                                     std::move(shell), selectionNav);
 }
 
 int EditorRuntime::gitDiffWakeDescriptor() const {

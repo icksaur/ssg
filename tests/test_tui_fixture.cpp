@@ -115,8 +115,7 @@ public:
 
         return {
             {revision, state_.text, ssg::ByteOffset{byte}},
-            {ssg::SelectionSet{std::move(selections)}, state_.first_row,
-             0, std::nullopt},
+            ssg::SelectionSet{std::move(selections)},
             {!state_.undo_text.empty(), !state_.redo_text.empty(),
              state_.undo_text.size() + state_.redo_text.size()},
             {{state_.clipboard}, state_.clipboard, std::nullopt},
@@ -147,6 +146,10 @@ public:
         return lastShell_;
     }
 
+    ssg::SelectionNavigation selectionNav() const {
+        return {state_.first_row, 0, std::nullopt};
+    }
+
     ssg::ViewportViewState viewport() const {
         auto run = ssg::GraphemeLayout{}.computeRun(state_.text);
         return ssg::Viewport{}.compute(
@@ -175,7 +178,8 @@ public:
         auto sections = model.sections(session->revision());
         return ssg::SessionSnapshotCodec{}.assemble(
             session->revision(), session->topology(), principal, view,
-            model.viewport(), std::move(sections), {}, {}, model.shellView());
+            model.viewport(), std::move(sections), {}, {}, model.shellView(),
+            model.selectionNav());
     }
 
     FixtureModel model;

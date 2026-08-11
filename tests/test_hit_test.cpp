@@ -208,7 +208,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
         auto after = runtime->snapshot(ssg::ClientId{1}, {80, 24});
         if (!after) return 9999;
         return after->sections()
-            .selection.selections.primary()
+            .selection.primary()
             .active.byteOffset.value();
     };
 

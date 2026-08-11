@@ -269,7 +269,7 @@ public:
 
         return {
             {revision, state_.text, ssg::ByteOffset{state_.text.size()}},
-            {ssg::SelectionSet{std::move(sels)}, state_.first_row, 0, std::nullopt},
+            ssg::SelectionSet{std::move(sels)},
             {!state_.undo_text.empty(), !state_.redo_text.empty(),
              state_.undo_text.size() + state_.redo_text.size()},
             {{state_.clipboard}, state_.clipboard, std::nullopt},
@@ -300,6 +300,11 @@ public:
     ssg::ShellViewState shellView() const {
         std::lock_guard lock{mutex_};
         return lastShell_;
+    }
+
+    ssg::SelectionNavigation selectionNav() const {
+        std::lock_guard lock{mutex_};
+        return {state_.first_row, 0, std::nullopt};
     }
 
     ssg::ViewportViewState viewport() const {
@@ -341,7 +346,8 @@ struct EndToEndScenario {
         auto sections = model.sections(session->revision());
         return ssg::SessionSnapshotCodec{}.assemble(
             session->revision(), session->topology(), principal, viewId,
-            model.viewport(), std::move(sections), {}, {}, model.shellView());
+            model.viewport(), std::move(sections), {}, {}, model.shellView(),
+            model.selectionNav());
     }
 
     EndToEndFixtureModel model;
@@ -535,19 +541,15 @@ public:
     }
 
     ssg::SessionSnapshotSections sections(ssg::Revision revision,
-                                          ssg::ClientId client) const {
+                                          ssg::ClientId) const {
         std::lock_guard lock{mutex_};
-        auto firstRow = perClientRow_.count(client)
-                             ? perClientRow_.at(client)
-                             : std::uint32_t{0};
         ssg::DocumentPosition const pos{
             ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
         ssg::SettingsViewState settings;
         ssg::ThemeSnapshot theme{};
         return {
             {revision, "concurrent", ssg::ByteOffset{0}},
-            {ssg::SelectionSet{{ssg::Selection{pos, pos}}}, firstRow,
-             0, std::nullopt},
+            ssg::SelectionSet{{ssg::Selection{pos, pos}}},
             {false, false, 0},
             {{}, {}, std::nullopt},
             {{{}, 0}},

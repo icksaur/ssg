@@ -17,12 +17,11 @@ namespace {
 
 
 
-ssg::SelectionViewState selection(std::uint64_t byte,
-                                  std::uint32_t firstRow) {
+ssg::SelectionSet selection(std::uint64_t byte,
+                            std::uint32_t) {
     ssg::DocumentPosition const position{
         ssg::ByteOffset{byte}, ssg::LineIndex{0}, ssg::CellIndex{byte}};
-    return {ssg::SelectionSet{{ssg::Selection{position, position}}},
-            firstRow, 0, std::nullopt};
+    return ssg::SelectionSet{{ssg::Selection{position, position}}};
 }
 
 ssg::SessionSnapshotSections sections(ssg::Revision revision,

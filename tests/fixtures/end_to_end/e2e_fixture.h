@@ -51,8 +51,8 @@ inline CanonicalState canonical(ssg::SessionSnapshot const& snapshot) {
         sections.document.text,
         sections.clipboard.plainText,
         tab ? tab->label : std::string{},
-        sections.selection.selections.items().size(),
-        sections.selection.firstVisualRow,
+        sections.selection.items().size(),
+        snapshot.presentation()->selectionNav.firstVisualRow,
         tab ? tab->mode : ssg::DocumentMode::Edit,
         tab ? tab->kind : ssg::TabKind::Document,
         sections.followEdits.mode,
@@ -74,9 +74,10 @@ inline void apply(CanonicalState& state, ssg::SessionDelta const& delta) {
                            document.insertedText);
     }
     if (delta.selection().replacement) {
-        auto const& selection = *delta.selection().replacement;
-        state.selection_count = selection.selections.items().size();
-        state.first_row = selection.firstVisualRow;
+        state.selection_count = delta.selection().replacement->items().size();
+    }
+    if (delta.selectionNav().replacement) {
+        state.first_row = delta.selectionNav().replacement->firstVisualRow;
     }
     if (delta.clipboard().replacement)
         state.clipboard = delta.clipboard().replacement->plainText;

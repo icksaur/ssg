@@ -35,7 +35,7 @@ class SessionSnapshotCodec;
 
 struct SessionSnapshotSections {
     DocumentViewState document;
-    SelectionViewState selection;
+    SelectionSet selection;
     HistoryViewState history;
     ClipboardViewState clipboard;
     PromptStatusViewState promptStatus;
@@ -87,6 +87,9 @@ struct PresentationSnapshot {
     // accessibility geometry, palette projection. Pure projection; the semantic
     // focus is SessionSnapshotSections::focus.
     ShellViewState shell;
+    // The selection's grid scroll projection (scroll anchor + desired cell); the
+    // semantic selection set is SessionSnapshotSections::selection.
+    SelectionNavigation selectionNav;
 
     // Not defaulted: ShellViewState has no operator== (it is compared field-wise
     // excluding palette; see the .cpp).
@@ -181,8 +184,11 @@ public:
         const noexcept {
         return documentCaret_;
     }
-    [[nodiscard]] SelectionViewDelta const& selection() const noexcept {
+    [[nodiscard]] SelectionSetDelta const& selection() const noexcept {
         return selection_;
+    }
+    [[nodiscard]] SelectionNavigationDelta const& selectionNav() const noexcept {
+        return selectionNav_;
     }
     [[nodiscard]] HistoryDelta const& history() const noexcept {
         return history_;
@@ -250,7 +256,7 @@ private:
         std::optional<SessionTopology> topology,
         std::optional<DocumentDelta> document,
         std::optional<ByteOffset> documentCaret,
-        SelectionViewDelta selection, HistoryDelta history,
+        SelectionSetDelta selection, HistoryDelta history,
         ClipboardDelta clipboard, PromptStatusDelta promptStatus,
         SearchDelta search, FindReplaceDelta findReplace,
         SettingsSectionDelta settings, KeymapDelta keymap,
@@ -261,7 +267,8 @@ private:
         ThemeSectionDelta theme, StyleSectionDelta style,
         ShellSectionDelta shell,
         ViewportDelta viewport,
-        std::optional<FocusTarget> focus = std::nullopt);
+        std::optional<FocusTarget> focus = std::nullopt,
+        SelectionNavigationDelta selectionNav = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -271,7 +278,7 @@ private:
     std::optional<SessionTopology> topology_;
     std::optional<DocumentDelta> document_;
     std::optional<ByteOffset> documentCaret_;
-    SelectionViewDelta selection_;
+    SelectionSetDelta selection_;
     HistoryDelta history_;
     ClipboardDelta clipboard_;
     PromptStatusDelta promptStatus_;
@@ -293,6 +300,7 @@ private:
     ShellSectionDelta shell_;
     ViewportDelta viewport_;
     std::optional<FocusTarget> focus_;
+    SelectionNavigationDelta selectionNav_;
 };
 
 struct SessionReplayResult {
@@ -312,7 +320,8 @@ public:
         ViewportViewState viewport, SessionSnapshotSections sections,
         Style style = {},
         std::optional<PromptViewState> prompt = {},
-        ShellViewState shell = {}) const;
+        ShellViewState shell = {},
+        SelectionNavigation selectionNav = {}) const;
     [[nodiscard]] SessionDelta deriveDelta(SessionSnapshot const& before,
                                            SessionSnapshot const& after) const;
     [[nodiscard]] SessionReplayResult replay(SessionSnapshot const& base,
@@ -326,7 +335,7 @@ public:
         std::optional<SessionTopology> topology,
         std::optional<DocumentDelta> document,
         std::optional<ByteOffset> documentCaret,
-        SelectionViewDelta selection, HistoryDelta history,
+        SelectionSetDelta selection, HistoryDelta history,
         ClipboardDelta clipboard, PromptStatusDelta promptStatus,
         SearchDelta search, FindReplaceDelta findReplace,
         SettingsSectionDelta settings, KeymapDelta keymap,
@@ -337,7 +346,8 @@ public:
         ThemeSectionDelta theme, StyleSectionDelta style,
         ShellSectionDelta shell,
         ViewportDelta viewport,
-        std::optional<FocusTarget> focus = std::nullopt) const;
+        std::optional<FocusTarget> focus = std::nullopt,
+        SelectionNavigationDelta selectionNav = {}) const;
 };
 
 }  // namespace ssg

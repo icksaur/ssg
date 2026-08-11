@@ -1496,7 +1496,7 @@ int main(int argc, char** argv) {
                     effectiveAlt && hit.region == ssg::HitRegion::Editor &&
                     targets.document_position && snapshot) {
                     auto const& items =
-                        snapshot->sections().selection.selections.items();
+                        snapshot->sections().selection.items();
                     altDragBaseline.assign(items.begin(), items.end());
                 }
                 auto plan =

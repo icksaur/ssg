@@ -264,8 +264,8 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
         ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
     const auto end = ssg::DocumentPosition{
         ssg::ByteOffset{19}, ssg::LineIndex{0}, ssg::CellIndex{19}};
-    precedenceSections.selection = ssg::SelectionViewState{
-        ssg::SelectionSet{{ssg::Selection{start, end}}}, 0, 0, std::nullopt};
+    precedenceSections.selection =
+        ssg::SelectionSet{{ssg::Selection{start, end}}};
     precedenceSections.findReplace.open = true;
     precedenceSections.findReplace.sourceRevision =
         precedenceSections.document.revision;
@@ -296,11 +296,8 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
         ssg::ByteOffset{34}, ssg::LineIndex{1}, ssg::CellIndex{14}};
     const auto wordEnd = ssg::DocumentPosition{
         ssg::ByteOffset{36}, ssg::LineIndex{1}, ssg::CellIndex{16}};
-    wordSelectionSections.selection = ssg::SelectionViewState{
-        ssg::SelectionSet{{ssg::Selection{wordStart, wordEnd}}},
-        0,
-        0,
-        std::nullopt};
+    wordSelectionSections.selection =
+        ssg::SelectionSet{{ssg::Selection{wordStart, wordEnd}}};
     auto wordSelection =
         snapshotWith(overlay, std::move(wordSelectionSections),
                      *overlay.presentation());
