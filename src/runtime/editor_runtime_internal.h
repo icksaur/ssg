@@ -448,8 +448,8 @@ struct EditorRuntime::Impl final : CommandServices,
         ViewportDimensions dimensions, std::uint32_t firstRow,
         std::uint32_t firstColumn) const;
     [[nodiscard]] ViewportViewState viewport(ViewportDimensions dimensions) const;
-    [[nodiscard]] SessionSnapshotSections sections(ViewportDimensions dimensions,
-                                                   PaletteReport const& paletteReport = {}) const;
+    [[nodiscard]] SessionSnapshotSections sections(
+        PaletteReport const& paletteReport = {}) const;
     [[nodiscard]] PromptStatusViewState promptStatusView() const;
     [[nodiscard]] std::optional<PromptViewState> promptProjection(
         ViewportDimensions dimensions,

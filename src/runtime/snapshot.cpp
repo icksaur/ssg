@@ -279,8 +279,8 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     return view;
 }
 
-SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensions,
-                                                     PaletteReport const& paletteReport) const {
+SessionSnapshotSections EditorRuntime::Impl::sections(
+    PaletteReport const& paletteReport) const {
     auto currentHistory = HistoryViewState{false, false, 0};
     if (auto id = activeDocumentId()) {
         auto found = documentRuntimeStates.find(id->value());

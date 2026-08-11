@@ -2446,7 +2446,7 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
     // treeView() (inside sections) and viewport() resolve their scroll against.
     // Its geometry is the presentation's shell projection; its focus is semantic.
     auto shell = impl_->shellView(dimensions, paletteReport);
-    auto sections = impl_->sections(dimensions, paletteReport);
+    auto sections = impl_->sections(paletteReport);
     auto viewport = impl_->viewport(dimensions);
     auto promptView = impl_->promptProjection(dimensions, shell.prompt);
     ssg::SelectionNavigation selectionNav{impl_->selection.firstVisualRow,
@@ -2457,6 +2457,22 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
                                      std::move(viewport), std::move(sections),
                                      impl_->style, std::move(promptView),
                                      std::move(shell), selectionNav);
+}
+
+std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId,
+                                                       PaletteReport paletteReport) const {
+    const_cast<EditorRuntime::Impl*>(impl_.get())->drainGitDiffScans();
+    auto client = impl_->session->attachedClient(clientId);
+    if (!client) return std::nullopt;
+    // Semantic-only: no ViewportDimensions, so no shell layout, viewport, prompt
+    // projection, or selection scroll is computed, and the result carries no
+    // PresentationSnapshot. A native-layout client that lays out the semantic
+    // model itself uses this overload.
+    auto sections = impl_->sections(paletteReport);
+    return SessionSnapshot{impl_->session->revision(), impl_->session->topology(),
+                           {client->principal.clientId(), client->viewId,
+                            client->principal.capabilities()},
+                           std::move(sections)};
 }
 
 int EditorRuntime::gitDiffWakeDescriptor() const {

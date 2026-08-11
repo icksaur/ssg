@@ -607,6 +607,52 @@ TEST(settingsOpenFocusesASettingsPrompt) {
     ASSERT_TRUE(snapshot->presentation()->prompt.has_value());
 }
 
+TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
+    // The reframe's load-bearing seam: a client that lays out the semantic model
+    // itself asks for a snapshot WITHOUT ViewportDimensions and gets the identical
+    // semantic sections a grid client sees, but no PresentationSnapshot at all.
+    // Semantic state is never gated on grid geometry.
+    auto root = uniqueRoot("dimensionless_semantic");
+    std::ofstream{root / "workspace" / "m.txt"} << "alpha\nbeta\ngamma\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
+
+    // A grid client (with dimensions) and a native client (without) taken at the
+    // same revision.
+    auto grid = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto semantic = runtime.snapshot(ssg::ClientId{1});
+    ASSERT_TRUE(grid.has_value());
+    ASSERT_TRUE(semantic.has_value());
+    if (!grid || !semantic) return;
+
+    // The grid client carries a presentation projection; the native client does
+    // not -- and never pays for one.
+    ASSERT_TRUE(grid->presentation().has_value());
+    ASSERT_FALSE(semantic->presentation().has_value());
+
+    // The semantic sections are byte-for-byte identical: the document, the
+    // selection set, the tabs, the keymap, the theme roles, the focus. Geometry
+    // does not change what the model IS.
+    ASSERT_TRUE(grid->sections() == semantic->sections());
+
+    // The same command drives the same semantic result on the dimensionless path:
+    // an edit is visible in a subsequent dimensionless snapshot with no geometry
+    // supplied at any point.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                    {"text.insert", runtime.revision(),
+                     ssg::TextInputArguments{"X"}}).accepted());
+    auto edited = runtime.snapshot(ssg::ClientId{1});
+    ASSERT_TRUE(edited.has_value());
+    if (!edited) return;
+    ASSERT_FALSE(edited->presentation().has_value());
+    ASSERT_TRUE(edited->sections().document.text.find('X') != std::string::npos);
+    ASSERT_TRUE(edited->sections().document != semantic->sections().document);
+}
+
 } // namespace
 
 int main() {
@@ -625,6 +671,7 @@ int main() {
     RUN(curatedKeymapResolvesPerContext);
     RUN(addCursorChordProducesMultipleSelections);
     RUN(settingsOpenFocusesASettingsPrompt);
+    RUN(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
