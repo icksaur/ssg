@@ -25,4 +25,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
     add_test(NAME test_prompt_routing COMMAND test_prompt_routing)
+
+    add_executable(test_keymap_single_stroke
+        ${SSG_SOURCE_DIR}/tests/test_keymap_single_stroke.cpp
+    )
+    target_link_libraries(test_keymap_single_stroke PRIVATE ssg)
+    target_include_directories(test_keymap_single_stroke PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    add_test(NAME test_keymap_single_stroke COMMAND test_keymap_single_stroke)
 endif()

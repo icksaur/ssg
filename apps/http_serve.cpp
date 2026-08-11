@@ -122,7 +122,11 @@ docEl.addEventListener('keydown', (ev) => {
   // resolves bindings and routes text through the one shared input seam.
   const mods = (ev.ctrlKey ? 'c' : '') + (ev.altKey ? 'a' : '') +
                (ev.metaKey ? 'm' : '') + (ev.shiftKey ? 's' : '');
-  const text = (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey) ? ev.key : '';
+  // Array.from counts Unicode scalars, so a supplementary-plane character (two
+  // UTF-16 code units in ev.key) still registers as one printable scalar and is
+  // sent, consistent with the UTF-8 offset contract.
+  const printable = Array.from(ev.key).length === 1 && !ev.ctrlKey && !ev.metaKey;
+  const text = printable ? ev.key : '';
   ev.preventDefault();
   ws.send('KEY:' + ev.code + ':' + mods + ':' + text);
 });
@@ -155,7 +159,12 @@ void routeText(EditorRuntime& runtime, ClientId client, std::string const& text)
         case PromptKind::Path:
         case PromptKind::Settings:
         case PromptKind::CommandArgument:
-            state.prompt = ActivePrompt::TextPrompt;
+            // The generic text prompts do not publish their current value in the
+            // semantic snapshot, so routing prompt.update_value here with only
+            // the new text would OVERWRITE the existing value, not append. Leave
+            // the prompt unset (the seam then ignores the text) until that value
+            // is in the snapshot and the DOM renderer shows these prompts; the
+            // TUI, which holds the value app-side, is unaffected.
             break;
         }
     }
