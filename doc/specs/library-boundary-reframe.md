@@ -75,9 +75,49 @@ Specify each part's delta and replay ownership: the semantic model and interacti
 state replay identically to every client; the grid projection is computed per grid
 client from its dimensions. `EditorRuntime::snapshot()`'s `ViewportDimensions`
 becomes an optional grid-service request, not a precondition of getting semantic
-state.
+state. See "Field classification" below for the exact per-field verdict and the
+mechanic fork.
 
-## The reframe
+## Field classification (row 2)
+
+Verified field-by-field against the current types. `SessionSnapshotSections` holds
+the shared sections; `ClientSnapshotState` already isolates `ViewportViewState`
+per client — the one grid section that is *not* currently mixed into the shared
+sections, which the split can leave where it is.
+
+- **Semantic model** — `document`, `history`, `clipboard`, `search`,
+  `findReplace`, `settings`, `keymap`, `textEncoding`, `tabs`, `diff`,
+  `externalModification`, `followEdits`, `tree`, `syntax`, `lspSync`,
+  `lspFeatures`, `theme`; `PaletteViewState` candidates; `SelectionViewState`'s
+  `SelectionSet`; and the field *content* of `StatusViewState`.
+- **Semantic interaction** — `ShellViewState::focus` (`FocusTarget`) and
+  `PromptStatusViewState::activeKind` (`PromptKind`; its own comment says a client
+  detects which prompt is open "from state, never from a rendering artifact").
+- **Grid projection** — `Style`; `ShellViewState`'s `viewport`/`header`/`footer`/
+  `tabBar`/`panel`/`panelScrollbar`/`prompt` rects, `panes`, `tabHits`,
+  `accessibilityNodes` geometry, `palette` projection; `SelectionViewState`'s
+  `firstVisualRow`/`firstVisualColumn`/`desiredCell`; `PromptStatusViewState`'s
+  footer `prompt` view and status layout; `ClientSnapshotState::viewport`
+  (`ViewportViewState`, already per-client).
+
+**Mechanic fork (decide before surgery).** Two ways to carry the split:
+
+1. *Split the struct types* — carve each mixed struct into a semantic sub-struct
+   and a projection sub-struct in-process. Truest to the model but touches every
+   one of the ~10 consumers of these types and the grid service that fills them.
+2. *Split only at the codec/wire* — keep the in-process structs unified (the grid
+   service still fills them for a grid client), and have `SessionSnapshotCodec`
+   emit two envelopes: a semantic-model + interaction envelope every client
+   receives, and an optional grid-presentation envelope emitted only when a client
+   supplied `ViewportDimensions`. `EditorRuntime::snapshot()` gains an overload
+   (or optional dimensions) that skips grid computation entirely when none are
+   given, so a native-layout client pays nothing for geometry it ignores.
+
+Option 2 is lower-risk and is what the reframe actually requires — the *wire* is
+the cross-client contract, not the in-process struct layout — so it is the
+recommended path unless review prefers the stronger in-process separation of
+option 1. Either way the semantic replay must become assertable without the grid
+(see Residue and the TUI audit's delta-replay note).
 
 **The library owns semantics and behavior; each client owns presentation.**
 
