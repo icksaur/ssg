@@ -118,6 +118,37 @@ The grid service fills only the projection sub-structs; `EditorRuntime::snapshot
 produces them only when a client supplies `ViewportDimensions`, so a native-layout
 client gets a snapshot with no projection sub-structs at all.
 
+**Implementation finding (row 2, discovered during surgery).** The four mixed
+types are *not* uniform in how the runtime holds them, which sequences the work:
+
+- `ShellViewState` and `PromptStatusViewState` are **pure projection producers** —
+  the runtime holds the durable `ShellState` model and *derives* these DTOs on
+  demand from dimensions (`Impl::shellView(ViewportDimensions,...)`,
+  `Impl::promptStatusView(...)`). Their only semantic fields (`focus`,
+  `activeKind`, `StatusViewState`) come from the durable model. Splitting them is
+  clean: the projection producer stays, and the semantic fields route to the
+  semantic sections directly from the model, not through the DTO.
+- `SelectionViewState` and `Style` are **reused as durable runtime state** —
+  `Impl` stores `SelectionViewState selection` (the scroll anchor
+  `firstVisualRow`/`firstVisualColumn` is read back into `requestedFirstVisualRow`
+  across edits) and `Style style`. Carving the *wire* type to be semantic-only
+  therefore requires the runtime to hold its scroll anchor and active style as
+  internal fields distinct from the wire DTO. This is the bounded extra ripple
+  (~6 sites: `presentation.cpp`, `editing.cpp`, `EditorRuntime.cpp`) and does not
+  overturn option 1 — the wire type is still made semantic-only by construction;
+  the runtime's internal bookkeeping simply stops borrowing the wire type.
+
+Sequencing: carve the two clean projection producers first (establish the pattern,
+keep gates green), then the two runtime-held types with their internal/wire
+separation.
+
+For `SelectionViewState` specifically (SHOULD, review round 6): extract a grid-only
+internal selection-navigation state (scroll offsets + desired cell) that lives
+alongside the durable `SelectionSet`, and make the reveal/edit paths
+(`SelectionNavigator`) consume that internal projection *explicitly*, rather than
+retaining a renamed `SelectionViewState`. This prevents the new semantic selection
+DTO from reacquiring grid fields through the reveal/edit paths.
+
 The rejected alternative (split only at the codec/wire, keeping unified in-process
 structs) was cheaper but leaves the invalid state representable and the filtering
 duty on every consumer — a tier-3 prose promise where a tier-1 type will do.
