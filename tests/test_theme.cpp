@@ -234,6 +234,16 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
     ASSERT_TRUE(violations.empty());
 }
 
+TEST(theWebRendererRoleOrdinalsMatchTheSemanticRoleEnum) {
+    // The served web client indexes theme.role_colors by these ordinals to build
+    // its CSS custom properties (const ROLE in http_serve.cpp's page). A reorder
+    // of SemanticRole without updating the client would silently mis-color it.
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Text), 0);
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Canvas), 1);
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Caret), 2);
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Selection), 3);
+}
+
 } // namespace
 
 int main() {
@@ -246,6 +256,7 @@ int main() {
     RUN(anEmptyThemeSetTableIsAcceptedAndChangesNothing);
     RUN(editorRuntimeStartsFromTheDefaultTheme);
     RUN(sourceAndConfigHaveNoIndependentColorSources);
+    RUN(theWebRendererRoleOrdinalsMatchTheSemanticRoleEnum);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

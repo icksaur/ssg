@@ -35,20 +35,31 @@ std::atomic<bool> g_stop{false};
 
 void onSignal(int) { g_stop.store(true); }
 
-// A minimal browser client: it opens the WebSocket, sends the real attach
-// preamble, decodes the semantic snapshot's ProtocolValue tree, renders the
-// document text, and forwards single-character keystrokes as TYPE frames.  The
-// tag decoder mirrors protocol/schema/README.md's wire encoding.  Full DOM/CSS
-// presentation of the semantic model is M2; this proves the same-binary
-// serve/attach/round-trip seam.
+// The browser client: opens the WebSocket, sends the real attach preamble,
+// decodes the semantic snapshot's ProtocolValue tree, and renders it natively in
+// the DOM -- document text colored by syntax scope, caret and selection from the
+// semantic selection set, and a tab strip -- with every color drawn from the
+// theme's roles mapped to CSS custom properties. Keystrokes go back as KEY
+// frames. The tag decoder mirrors protocol/schema/README.md's wire encoding.
 constexpr char kPage[] = R"HTML(<!doctype html>
 <meta charset="utf-8">
 <title>ssg</title>
-<body style="font:13px/1.4 monospace;margin:0">
-<div id="status" style="padding:4px 8px;border-bottom:1px solid">connecting...</div>
-<pre id="doc" tabindex="0" style="margin:0;padding:8px;white-space:pre-wrap;outline:none;min-height:80vh"></pre>
+<style>
+  body { margin:0; font:13px/1.4 monospace; color:var(--ssg-text); background:var(--ssg-canvas); }
+  #status { padding:2px 8px; border-bottom:1px solid; opacity:.6; }
+  #tabs { display:flex; gap:1px; padding:2px 4px; border-bottom:1px solid; }
+  #tabs .tab { padding:2px 8px; opacity:.55; }
+  #tabs .tab.active { opacity:1; font-weight:bold; }
+  #doc { margin:0; padding:8px; white-space:pre-wrap; outline:none; min-height:80vh; }
+  #doc .sel { background:var(--ssg-selection); }
+  #doc .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
+</style>
+<div id="status">connecting...</div>
+<div id="tabs"></div>
+<pre id="doc" tabindex="0"></pre>
 <script>
 const statusEl = document.getElementById('status');
+const tabsEl = document.getElementById('tabs');
 const docEl = document.getElementById('doc');
 
 // Decode one tagged ProtocolValue from a DataView at {p}. Returns [value,next].
@@ -83,21 +94,114 @@ function decodeValue(dv, p) {
   }
 }
 
-// Recursively find the first {document:{text:...}} in the decoded tree.
-function findDocumentText(node) {
+// Find the sections object: the first node with a document.text string. Its
+// siblings (selection, syntax, tabs, theme, focus) are the semantic model.
+function findSections(node) {
   if (Array.isArray(node)) {
-    for (const item of node) { const f = findDocumentText(item); if (f !== null) return f; }
+    for (const item of node) { const f = findSections(item); if (f) return f; }
   } else if (node && typeof node === 'object') {
     if (node.document && typeof node.document === 'object' &&
-        typeof node.document.text === 'string') {
-      return node.document.text;
-    }
-    for (const k of Object.keys(node)) { const f = findDocumentText(node[k]); if (f !== null) return f; }
+        typeof node.document.text === 'string') return node;
+    for (const k of Object.keys(node)) { const f = findSections(node[k]); if (f) return f; }
   }
   return null;
 }
 
-let serverText = '';
+const num = (v) => typeof v === 'bigint' ? Number(v) : v;
+const hex2 = (n) => (n & 255).toString(16).padStart(2, '0');
+const cssColor = (c) => c ? ('#' + hex2(num(c.red)) + hex2(num(c.green)) + hex2(num(c.blue))) : '';
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString() : x);
+
+// Map char-boundary byte offsets to UTF-16 string indices: document positions
+// are UTF-8 byte offsets, JS slices by UTF-16 code unit.
+function byteToIndex(text, offsets) {
+  const want = new Set(offsets.map(num));
+  const map = new Map();
+  let byte = 0, idx = 0;
+  if (want.has(0)) map.set(0, 0);
+  for (const ch of text) {
+    const cp = ch.codePointAt(0);
+    byte += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+    idx += ch.length;
+    if (want.has(byte)) map.set(byte, idx);
+  }
+  return map;
+}
+
+// Role ordinals the renderer maps to CSS custom properties; pinned by
+// test_theme's role-ordinal contract so a reorder cannot silently mis-color.
+const ROLE = { text: 0, canvas: 1, caret: 2, selection: 3 };
+
+function applyTheme(theme) {
+  const root = document.documentElement.style;
+  const rc = (theme && Array.isArray(theme.role_colors)) ? theme.role_colors : [];
+  // Re-derive every property each snapshot, clearing any set by an earlier theme,
+  // so a short or absent role table never leaves a stale color on screen.
+  const set = (name, i) => { const c = cssColor(rc[i]); if (c) root.setProperty(name, c); else root.removeProperty(name); };
+  set('--ssg-text', ROLE.text);
+  set('--ssg-canvas', ROLE.canvas);
+  set('--ssg-caret', ROLE.caret);
+  set('--ssg-selection', ROLE.selection);
+  return (theme && Array.isArray(theme.syntax_colors)) ? theme.syntax_colors : [];
+}
+
+function renderTabs(tabs) {
+  tabsEl.textContent = '';
+  if (!tabs || !Array.isArray(tabs.tabs)) return;
+  const activeId = idKey(tabs.active);
+  for (const t of tabs.tabs) {
+    const el = document.createElement('span');
+    el.className = 'tab' + (idKey(t.id) === activeId ? ' active' : '');
+    el.textContent = (t.dirty ? '\u25CF ' : '') + (t.label || '');
+    tabsEl.appendChild(el);
+  }
+}
+
+// Segment the text at every syntax-span edge, selection edge, and the caret;
+// color each segment by its syntax scope through the theme and mark selected
+// segments and the caret. Geometry is the browser's; only offsets are semantic.
+function renderDoc(sections, syntaxColors) {
+  const text = sections.document.text;
+  const caret = num(sections.document.caret);
+  const spans = (sections.syntax && Array.isArray(sections.syntax.spans)) ? sections.syntax.spans : [];
+  const sels = (sections.selection && Array.isArray(sections.selection.selections)) ? sections.selection.selections : [];
+
+  const ranges = [];
+  for (const s of sels) {
+    const a = num(s.anchor.byte_offset), b = num(s.active.byte_offset);
+    if (a !== b) ranges.push([Math.min(a, b), Math.max(a, b)]);
+  }
+
+  const total = new TextEncoder().encode(text).length;
+  const bounds = new Set([0, total, caret]);
+  for (const sp of spans) { bounds.add(num(sp.begin)); bounds.add(num(sp.end)); }
+  for (const r of ranges) { bounds.add(r[0]); bounds.add(r[1]); }
+  const cuts = [...bounds].filter(b => b >= 0 && b <= total).sort((a, b) => a - b);
+  const map = byteToIndex(text, cuts);
+
+  const scopeAt = (byte) => { for (const sp of spans) { if (byte >= num(sp.begin) && byte < num(sp.end)) return num(sp.scope); } return -1; };
+  const selectedAt = (byte) => ranges.some(r => byte >= r[0] && byte < r[1]);
+
+  let html = '';
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    const a = cuts[i], b = cuts[i + 1];
+    if (a === caret) html += '<span class="caret"></span>';
+    const ia = map.get(a), ib = map.get(b);
+    if (ia === undefined || ib === undefined || ib <= ia) continue;
+    const scope = scopeAt(a);
+    // Both span.scope and syntax_colors come from the same snapshot, so the
+    // index is self-consistent (unlike the hardcoded role ordinals); the bounds
+    // check only guards a truncated palette, degrading to the default color.
+    const color = (scope >= 0 && scope < syntaxColors.length) ? cssColor(syntaxColors[scope]) : '';
+    const cls = selectedAt(a) ? ' class="sel"' : '';
+    const style = color ? ' style="color:' + color + '"' : '';
+    html += '<span' + cls + style + '>' + esc(text.substring(ia, ib)) + '</span>';
+  }
+  if (caret >= total) html += '<span class="caret"></span>';
+  docEl.innerHTML = html;
+}
+
 const ws = new WebSocket('ws://' + location.host + '/session');
 ws.binaryType = 'arraybuffer';
 
@@ -107,12 +211,14 @@ ws.onmessage = (e) => {
   try {
     const dv = new DataView(e.data);
     const [tree] = decodeValue(dv, 2);
-    const text = findDocumentText(tree);
-    if (text !== null) serverText = text;
-    docEl.textContent = serverText;
+    const sections = findSections(tree);
+    if (!sections) { statusEl.textContent = 'no sections in snapshot'; return; }
+    const syntaxColors = applyTheme(sections.theme);
+    renderTabs(sections.tabs);
+    renderDoc(sections, syntaxColors);
     statusEl.textContent = 'live (' + e.data.byteLength + ' bytes)';
     docEl.focus();
-  } catch (err) { statusEl.textContent = 'decode error: ' + err.message; }
+  } catch (err) { statusEl.textContent = 'render error: ' + err.message; }
 };
 ws.onclose = () => { statusEl.textContent += ' [closed]'; };
 ws.onerror = () => { statusEl.textContent = 'ws error'; };
