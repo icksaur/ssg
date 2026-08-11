@@ -146,8 +146,14 @@ only with explicit sign-off.
   each client maps a role to its medium (CSS custom property, terminal palette,
   native color); the 16-indexed-color palette is a terminal capability, not a
   cross-client wire law; no client invents a color outside the role set.
-- **Keep unchanged** (these are the real cross-client guarantees): one behavior
-  path (same command implementation, same snapshot/delta model); a connection's
+- **Reword (MUST, review round 4):** the one-behavior-path rule currently promises
+  in-process and WebSocket hosts "call the same command implementation and consume
+  the same snapshot/delta model." After the three-way split a native client
+  deliberately does not consume the grid-presentation section. Reword: every client
+  calls the same command implementation and consumes the same semantic-model and
+  interaction snapshot/delta channel; grid-presentation sections are explicitly
+  client-requested and optional. There is still one behavior path.
+- **Keep unchanged** (these are the real cross-client guarantees): a connection's
   identity/capabilities come from host policy; keyboard-first (every action has a
   keyboard route); every user-visible action is registered and Lua-callable;
   platform services use adapters with parity tests; no blocking modal, destructive
