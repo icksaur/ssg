@@ -9,6 +9,7 @@
 // editing arrive in later milestones; quitting is an application lifecycle
 // concern owned here.
 
+#include "http_serve.h"
 #include "pointer_routing.h"
 #include "ssg_terminal.h"
 
@@ -46,6 +47,7 @@
 #include <algorithm>
 #include <any>
 #include <cctype>
+#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -637,10 +639,29 @@ int main(int argc, char** argv) {
     // openable (`ssg -- --capabilities`).  Without it the first flag this binary
     // ever grew would have quietly made a filename unreachable.
     int firstOperand = 1;
+    std::optional<unsigned short> httpPort;
     if (argc > 1 && std::string_view{argv[1]} == "--") {
         firstOperand = 2;
     } else if (argc > 1 && std::string_view{argv[1]} == "--capabilities") {
         return reportCapabilities();
+    } else if (argc > 1 && std::string_view{argv[1]} == "--http") {
+        if (argc <= 2) {
+            std::fprintf(stderr, "ssg: --http requires a PORT\n");
+            return 2;
+        }
+        std::string_view const portText{argv[2]};
+        unsigned long value = 0;
+        auto const parsed = std::from_chars(
+            portText.data(), portText.data() + portText.size(), value);
+        if (parsed.ec != std::errc{} ||
+            parsed.ptr != portText.data() + portText.size() || value == 0 ||
+            value > 65535) {
+            std::fprintf(stderr, "ssg: --http PORT must be 1-65535\n");
+            return 2;
+        }
+        httpPort = static_cast<unsigned short>(value);
+        // An optional path operand may follow the port (`ssg --http 8080 dir`).
+        firstOperand = 3;
     }
     fs::path argument =
         argc > firstOperand ? fs::path{argv[firstOperand]} : fs::path{};
@@ -701,6 +722,9 @@ int main(int argc, char** argv) {
         return 1;
     }
     auto& runtime = *created.runtime;
+    if (httpPort) {
+        return ssg::app::run_http_server(runtime, *httpPort);
+    }
     int const gitDiffWakeFd = runtime.gitDiffWakeDescriptor();
     STARTUP_MARK("post_create");
 

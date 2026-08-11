@@ -13,10 +13,11 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/apps/ssg_terminal.cpp
         ${SSG_SOURCE_DIR}/apps/pointer_routing.cpp
         ${SSG_SOURCE_DIR}/apps/init_script.cpp
+        ${SSG_SOURCE_DIR}/apps/http_serve.cpp
     )
     target_include_directories(ssg_startup_probe PRIVATE ${SSG_SOURCE_DIR}/apps)
     target_compile_definitions(ssg_startup_probe PRIVATE SSG_STARTUP_TRACE_ENABLED)
-    target_link_libraries(ssg_startup_probe PRIVATE ssg)
+    target_link_libraries(ssg_startup_probe PRIVATE ssg http ssg_http_server)
 
     add_executable(startup_benchmark
         ${SSG_SOURCE_DIR}/benchmarks/startup_benchmark.cpp

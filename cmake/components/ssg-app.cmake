@@ -7,10 +7,11 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/apps/ssg_terminal.cpp
         ${SSG_SOURCE_DIR}/apps/pointer_routing.cpp
         ${SSG_SOURCE_DIR}/apps/init_script.cpp
+        ${SSG_SOURCE_DIR}/apps/http_serve.cpp
     )
     set_target_properties(ssg_app PROPERTIES OUTPUT_NAME ssg)
     target_include_directories(ssg_app PRIVATE ${SSG_SOURCE_DIR}/apps)
-    target_link_libraries(ssg_app PRIVATE ssg)
+    target_link_libraries(ssg_app PRIVATE ssg http ssg_http_server)
 
     add_executable(test_ssg_app
         ${SSG_SOURCE_DIR}/tests/test_ssg_app.cpp
