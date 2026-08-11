@@ -153,22 +153,34 @@ entry.
 Do not add, reword, or remove an entry on your own initiative — ask the user
 first. A change here alters what every future session is told.
 
-- The library is the authoritative source of editor, workspace, command, theme,
-  and view-model state; a host invents no UI element, product behavior, state, or
-  default. → wants the seam narrow enough that a host physically cannot.
-- Every interaction enters through the typed client API and every observable view
-  leaves through a snapshot or delta on it; there is no out-of-band UI,
-  filesystem, clipboard, or control channel. A WebSocket host carries the whole
-  product over one ordered connection. → wants a chokepoint on the API surface.
-- `Theme` is the single source of all color: exactly 16 indexed colors and
-  semantic role mappings flow through the API. No client, plugin, syntax
-  definition, or adapter introduces a literal or computed color. → wants a lint
-  over the render path.
+- The library owns semantic editor, workspace, command, theme-role, and
+  view-model state and editing behavior; each client owns presentation. A host
+  invents no product behavior, state, or default, and never changes semantics or
+  behavior — but presents the semantic model in its native idiom (cells for a
+  terminal, DOM/CSS for the web, native toolkit or GL for desktop). → wants the
+  seam narrow enough that a host can restyle but not redefine the product.
+- The library offers a monospace grid-layout service (`Renderer`, `Viewport`,
+  `GraphemeLayout`, `Style`) that grid clients such as the TUI may use; geometry
+  is not a cross-client contract. A client that lays out natively ignores it. →
+  wants the grid to be an optional service, not a universal authority.
+- Every interaction enters through the typed client API, and the authoritative
+  semantic model and interaction state leave through a snapshot or delta on it;
+  there is no out-of-band UI, filesystem, clipboard, or control channel. Grid
+  presentation sections are optional and client-requested (by supplying viewport
+  dimensions), not part of the semantic channel. A WebSocket host carries the
+  whole product over one ordered connection. → wants a chokepoint on the API
+  surface.
+- The theme is the single source of color as semantic roles with sRGB values;
+  each client maps a role to its medium (CSS custom property, terminal palette,
+  native color). The 16-indexed-color palette is a terminal capability, not a
+  cross-client wire law. No client, plugin, syntax definition, or adapter invents
+  a color outside the role set. → wants a lint over the render path.
 - A connection's identity and capabilities come only from the host's policy,
   never from a client-supplied field. → wants a chokepoint at the attach seam.
-- In-process and WebSocket hosts call the same command implementation and consume
-  the same snapshot/delta model. There is one behavior path. → wants the duplicate
-  path to be impossible to write, not merely absent.
+- Every client calls the same command implementation and consumes the same
+  semantic-model and interaction snapshot/delta channel; grid-presentation
+  sections are explicitly client-requested and optional. There is one behavior
+  path. → wants the duplicate path to be impossible to write, not merely absent.
 - Linux and Windows are required; platform services use adapters with parity
   tests on both. → wants the adapter seam to be the only platform-specific site.
 - SSG is keyboard-first: every user-visible action is operable through
@@ -176,9 +188,11 @@ first. A change here alters what every future session is told.
   client exposes the server-owned configuration input through a global binding
   that works in every client state. Pointer input may supplement, never replace.
   → wants a test that every action has a keyboard route.
-- Every UI element occupies server-described cells on the shared monospace grid;
-  a client may restyle for readability but never change geometry, semantics, or
-  behavior. → wants the grid to be the only geometry authority.
+- Every UI element the grid service produces occupies server-described cells on
+  the monospace grid; a grid client may restyle for readability but never change
+  geometry, semantics, or behavior. This binds grid clients only; a native-layout
+  client owns its own geometry. → wants the grid to be the only geometry authority
+  for clients that opt into it.
 - No blocking dialog or confirmation modal. A command takes effect immediately,
   reports through the view model, and makes a destructive action reversible
   through recovery, reopen, backup, or a compensating command. → wants the
@@ -187,8 +201,11 @@ first. A change here alters what every future session is told.
   through the versioned Lua API, except lifecycle, raw platform I/O, and
   capability-grant decisions. → wants registration to be the only path to a
   user-visible action.
-- No feature exists that a current standards-based browser cannot expose through
-  the client API. → wants the feasibility check at the API seam.
+- The feature set is library-defined and every target client — terminal, web,
+  desktop — can drive it through the typed API; the web is a first-class client,
+  not a constrained mirror. A client may add native presentation affordances
+  (scrollbars, touch, IME) on top without changing the product. → wants the
+  feasibility check at the API seam.
 - Values and budgets live in code; prose names symbols, never numbers. → wants a
   lint over CONTRACT lines and Markdown.
 
