@@ -58,14 +58,15 @@ not binary** (MUST, review round 2). Classify each mixed view type field-by-fiel
   semantic channel; name its owner for native clients so a web or desktop client
   routes input the same way the TUI does. `ShellViewState` and
   `PromptStatusViewState` are therefore split field-by-field, not classed wholesale
-  as grid presentation. **Open decision — palette selection ownership** (MUST,
-  review round 3): palette selection is *not* server-owned today; `ssg_main` owns
-  `PaletteWindowState` (query, selection, scroll) and supplies a `PaletteReport`
-  when requesting a snapshot. The reframe must choose, not assume: either keep it
-  explicitly **client-local interaction state** (each client owns its palette
-  cursor; the library only supplies candidates), or **promote** it to a
-  server-owned per-client model and specify its commands, delta, and replay
-  semantics. Do not declare it replayable without picking an owner.
+  as grid presentation. **Palette selection ownership (decided — review rounds 3
+  and 5): client-local.** Palette query, selection, and scroll stay client-local
+  interaction state (`ssg_main`'s `PaletteWindowState` today); the library owns
+  candidate membership and match ranking and validates `palette.execute` against a
+  published candidate id. The cursor is ephemeral per-open navigation that does not
+  alter command semantics, so promoting it to server-owned per-client state would
+  add commands, revisions, and replay traffic without improving authoritative
+  behavior. Each client submits the selected published candidate's id; ranking
+  behavior stays in the library so every client's list order matches.
 - **Grid projection** — `ViewportViewState` (`firstVisualRow`, `ScrollbarMetrics`,
   wrap), terminal-only `Style`, `ShellViewState` rectangles, cell scroll fields,
   and the layout-projection fields of `PromptStatusViewState`. Optional; requested
@@ -90,9 +91,14 @@ sections, which the split can leave where it is.
   `externalModification`, `followEdits`, `tree`, `syntax`, `lspSync`,
   `lspFeatures`, `theme`; `PaletteViewState` candidates; `SelectionViewState`'s
   `SelectionSet`; and the field *content* of `StatusViewState`.
-- **Semantic interaction** — `ShellViewState::focus` (`FocusTarget`) and
+- **Semantic interaction** — `ShellViewState::focus` (`FocusTarget`),
   `PromptStatusViewState::activeKind` (`PromptKind`; its own comment says a client
-  detects which prompt is open "from state, never from a rendering artifact").
+  detects which prompt is open "from state, never from a rendering artifact"), and
+  `StatusViewState::selected` (MUST, review round 5): a keyboard-driven cursor over
+  server-owned status items, driven by `StatusQueue::next/previous` and held
+  server-side in `StatusQueue::selected_`. Unlike the palette cursor it is already
+  server-owned, so it stays on the semantic-interaction channel; activation
+  references `statusId`+`actionId`+`generation`.
 - **Grid projection** — `Style`; `ShellViewState`'s `viewport`/`header`/`footer`/
   `tabBar`/`panel`/`panelScrollbar`/`prompt` rects, `panes`, `tabHits`,
   `accessibilityNodes` geometry, `palette` projection; `SelectionViewState`'s
@@ -100,24 +106,21 @@ sections, which the split can leave where it is.
   footer `prompt` view and status layout; `ClientSnapshotState::viewport`
   (`ViewportViewState`, already per-client).
 
-**Mechanic fork (decide before surgery).** Two ways to carry the split:
+**Mechanic (decided — review round 5, MUST): split the struct types (option 1).**
+The public snapshot types are the library/client seam, not an internal detail;
+keeping mixed structs would make an invalid semantic snapshot representable and
+leave every codec consumer responsible for filtering grid fields. Carve each mixed
+struct into a semantic (and interaction) sub-struct and a projection sub-struct so
+omission, independent replay, and geometry-free native snapshots are enforceable
+*by construction* — the strongest bucket. The bounded rewrite of the ~10 consumers
+and the per-sub-struct delta codecs is warranted for this load-bearing boundary.
+The grid service fills only the projection sub-structs; `EditorRuntime::snapshot()`
+produces them only when a client supplies `ViewportDimensions`, so a native-layout
+client gets a snapshot with no projection sub-structs at all.
 
-1. *Split the struct types* — carve each mixed struct into a semantic sub-struct
-   and a projection sub-struct in-process. Truest to the model but touches every
-   one of the ~10 consumers of these types and the grid service that fills them.
-2. *Split only at the codec/wire* — keep the in-process structs unified (the grid
-   service still fills them for a grid client), and have `SessionSnapshotCodec`
-   emit two envelopes: a semantic-model + interaction envelope every client
-   receives, and an optional grid-presentation envelope emitted only when a client
-   supplied `ViewportDimensions`. `EditorRuntime::snapshot()` gains an overload
-   (or optional dimensions) that skips grid computation entirely when none are
-   given, so a native-layout client pays nothing for geometry it ignores.
-
-Option 2 is lower-risk and is what the reframe actually requires — the *wire* is
-the cross-client contract, not the in-process struct layout — so it is the
-recommended path unless review prefers the stronger in-process separation of
-option 1. Either way the semantic replay must become assertable without the grid
-(see Residue and the TUI audit's delta-replay note).
+The rejected alternative (split only at the codec/wire, keeping unified in-process
+structs) was cheaper but leaves the invalid state representable and the filtering
+duty on every consumer — a tier-3 prose promise where a tier-1 type will do.
 
 **The library owns semantics and behavior; each client owns presentation.**
 
