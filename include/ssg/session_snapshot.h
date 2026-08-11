@@ -94,8 +94,8 @@ struct PresentationSnapshot {
     // (nodes, selection, expansion) is SessionSnapshotSections::tree.
     std::vector<TreeWindow> treeWindows;
 
-    // Not defaulted: ShellViewState has no operator== (it is compared field-wise
-    // excluding palette; see the .cpp).
+    // Not defaulted: ShellViewState has no operator==; it is compared field-wise
+    // via shellEqual (see the .cpp).
     bool operator==(PresentationSnapshot const&) const;
 };
 
