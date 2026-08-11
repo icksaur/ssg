@@ -53,12 +53,19 @@ not binary** (MUST, review round 2). Classify each mixed view type field-by-fiel
   every client.
 - **Semantic interaction state** — server-owned focus and selection that drive
   *behavior*, not pixels: `ShellViewState::FocusTarget` (the TUI reads this to
-  route keyboard input), and the interaction fields of `PromptStatusViewState` and
-  palette selection. This is part of "the same keyboard model and behavior" and
-  MUST stay on the semantic channel; name its owner for native clients so a web or
-  desktop client routes input the same way the TUI does. `ShellViewState` and
+  route keyboard input) and the interaction fields of `PromptStatusViewState`.
+  This is part of "the same keyboard model and behavior" and MUST stay on the
+  semantic channel; name its owner for native clients so a web or desktop client
+  routes input the same way the TUI does. `ShellViewState` and
   `PromptStatusViewState` are therefore split field-by-field, not classed wholesale
-  as grid presentation.
+  as grid presentation. **Open decision — palette selection ownership** (MUST,
+  review round 3): palette selection is *not* server-owned today; `ssg_main` owns
+  `PaletteWindowState` (query, selection, scroll) and supplies a `PaletteReport`
+  when requesting a snapshot. The reframe must choose, not assume: either keep it
+  explicitly **client-local interaction state** (each client owns its palette
+  cursor; the library only supplies candidates), or **promote** it to a
+  server-owned per-client model and specify its commands, delta, and replay
+  semantics. Do not declare it replayable without picking an owner.
 - **Grid projection** — `ViewportViewState` (`firstVisualRow`, `ScrollbarMetrics`,
   wrap), terminal-only `Style`, `ShellViewState` rectangles, cell scroll fields,
   and the layout-projection fields of `PromptStatusViewState`. Optional; requested
