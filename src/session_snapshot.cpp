@@ -15,7 +15,8 @@ bool shellEqual(ShellViewState const& left, ShellViewState const& right) {
            left.prompt == right.prompt &&
            left.panes == right.panes &&
            left.tabHits == right.tabHits &&
-           left.accessibilityNodes == right.accessibilityNodes;
+           left.accessibilityNodes == right.accessibilityNodes &&
+           left.palette == right.palette;
 }
 
 SelectionSetDelta selectionDelta(SelectionSet const& before,
@@ -134,7 +135,8 @@ SessionDelta::SessionDelta(
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
     ThemeSectionDelta theme, StyleSectionDelta style,
     ShellSectionDelta shell, ViewportDelta viewport,
-    std::optional<FocusTarget> focus, SelectionNavigationDelta selectionNav)
+    std::optional<FocusTarget> focus, SelectionNavigationDelta selectionNav,
+    PromptProjectionDelta promptProjection)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -165,7 +167,8 @@ SessionDelta::SessionDelta(
       shell_{std::move(shell)},
       viewport_{std::move(viewport)},
       focus_{focus},
-      selectionNav_{std::move(selectionNav)} {}
+      selectionNav_{std::move(selectionNav)},
+      promptProjection_{std::move(promptProjection)} {}
 
 SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
@@ -190,6 +193,15 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         before.client().capabilities != after.client().capabilities) {
         throw std::invalid_argument{
             "session deltas require one immutable client attachment"};
+    }
+    // A delta stream is within one client's chosen mode: either both snapshots
+    // carry a grid-presentation projection (a grid client supplying dimensions)
+    // or neither does (a native-layout client). A presence transition cannot be
+    // expressed by the per-field presentation deltas and would replay wrong, so
+    // reject it loudly rather than silently drop or fabricate a projection.
+    if (before.presentation().has_value() != after.presentation().has_value()) {
+        throw std::invalid_argument{
+            "session deltas require a stable presentation mode for one client"};
     }
     if (after.revision() < before.revision() ||
         before.revision() == after.revision()) {
@@ -263,6 +275,12 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
             ? selectionNavDelta(before.presentation()->selectionNav,
                                 after.presentation()->selectionNav)
             : SelectionNavigationDelta{},
+        (before.presentation() && after.presentation() &&
+                 before.presentation()->prompt == after.presentation()->prompt)
+            ? PromptProjectionDelta{}
+            : (after.presentation()
+                   ? PromptProjectionDelta{true, after.presentation()->prompt}
+                   : PromptProjectionDelta{}),
     };
 }
 
@@ -387,9 +405,12 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
             base.presentation()->shell);
         auto selectionNav = delta.selectionNav_.replacement.value_or(
             base.presentation()->selectionNav);
+        auto prompt = delta.promptProjection_.changed
+                          ? delta.promptProjection_.replacement
+                          : base.presentation()->prompt;
         presentation = PresentationSnapshot{
             viewport.value_or(base.presentation()->viewport),
-            std::move(style), base.presentation()->prompt,
+            std::move(style), std::move(prompt),
             std::move(shell), std::move(selectionNav)};
     }
     return {SessionSnapshot{
@@ -419,7 +440,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     ShellSectionDelta shell,
     ViewportDelta viewport,
     std::optional<FocusTarget> focus,
-    SelectionNavigationDelta selectionNav) const {
+    SelectionNavigationDelta selectionNav,
+    PromptProjectionDelta promptProjection) const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,
@@ -450,7 +472,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(shell),
                         std::move(viewport),
                         focus,
-                        std::move(selectionNav)};
+                        std::move(selectionNav),
+                        std::move(promptProjection)};
 }
 
 }  // namespace ssg

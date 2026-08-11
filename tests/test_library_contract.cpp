@@ -313,6 +313,11 @@ TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
         {"select.line_down", {}},
         {"panel.toggle", {}},
         {"view.scroll_lines", ssg::ScrollLinesArguments{1}},
+        // A footer-anchored prompt opening and closing: the footer prompt lives in
+        // PresentationSnapshot and MUST round-trip through the delta (it had no
+        // delta member once, so a prompt change replayed to a stale prompt).
+        {"goto.line", {}},
+        {"prompt.cancel", {}},
     };
 
     auto previous = runtime->snapshot(ssg::ClientId{1}, dims);

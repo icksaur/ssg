@@ -1118,6 +1118,8 @@ ProtocolValue toValue(SelectionNavigationDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionNavigationDelta>& out);
 ProtocolValue toValue(SelectionSetDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionSetDelta>& out);
+ProtocolValue toValue(PromptProjectionDelta const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptProjectionDelta>& out);
 ProtocolValue toValue(HistoryViewState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<HistoryViewState>& out);
 ProtocolValue toValue(HistoryDelta const& value);
@@ -2144,6 +2146,23 @@ bool decodePresent(ProtocolValue const& value, std::optional<SelectionSetDelta>&
     std::optional<SelectionSet> replacement;
     if (!decodeOptionalField(value.field("replacement"), replacement)) return false;
     out.emplace(SelectionSetDelta{*changed, std::move(replacement)});
+    return true;
+}
+
+ProtocolValue toValue(PromptProjectionDelta const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("changed", toValue(value.changed));
+    fields.emplace_back("replacement", toValue(value.replacement));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<PromptProjectionDelta>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto changed = requireField<bool>(value.field("changed"));
+    if (!changed) return false;
+    std::optional<PromptViewState> replacement;
+    if (!decodeOptionalField(value.field("replacement"), replacement)) return false;
+    out.emplace(PromptProjectionDelta{*changed, std::move(replacement)});
     return true;
 }
 
@@ -5495,6 +5514,7 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     fields.emplace_back("viewport", toValue(delta.viewport()));
     fields.emplace_back("focus", toValue(delta.focus()));
     fields.emplace_back("selection_nav", toValue(delta.selectionNav()));
+    fields.emplace_back("prompt_projection", toValue(delta.promptProjection()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5558,13 +5578,14 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
     auto shell = requireField<ShellSectionDelta>(payload.field("shell"));
     auto viewport = requireField<ViewportDelta>(payload.field("viewport"));
     auto selectionNav = requireField<SelectionNavigationDelta>(payload.field("selection_nav"));
+    auto promptProjection = requireField<PromptProjectionDelta>(payload.field("prompt_projection"));
 
     if (!optionalOk || !baseRevision || !revision || !clientId || !viewId ||
         !capabilities || !selection || !history || !clipboard ||
         !promptStatus || !search || !findReplace || !settings || !keymap ||
         !tabs || !diff || !externalModification || !followEdits || !tree ||
         !syntax || !lspSync || !lspFeatures || !theme || !style || !shell ||
-        !viewport || !selectionNav) {
+        !viewport || !selectionNav || !promptProjection) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "session delta payload is malformed"};
     }
@@ -5584,7 +5605,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*lspFeatures), std::move(*theme),
                 std::move(*style),
                 std::move(*shell), std::move(*viewport), std::move(focus),
-                std::move(*selectionNav)),
+                std::move(*selectionNav), std::move(*promptProjection)),
             {}};
 }
 

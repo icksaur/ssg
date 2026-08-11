@@ -156,6 +156,14 @@ struct ShellSectionDelta {
     std::optional<ShellViewState> replacement;
 };
 
+// Delta of the optional footer-prompt projection. `changed` is explicit because
+// the prompt is itself optional: {true, nullopt} means the prompt closed,
+// {true, value} a new prompt, {false, _} unchanged. Read `changed` first.
+struct PromptProjectionDelta {
+    bool changed = false;
+    std::optional<PromptViewState> replacement;
+};
+
 struct SessionReplayResult;
 
 class SessionDelta {
@@ -189,6 +197,9 @@ public:
     }
     [[nodiscard]] SelectionNavigationDelta const& selectionNav() const noexcept {
         return selectionNav_;
+    }
+    [[nodiscard]] PromptProjectionDelta const& promptProjection() const noexcept {
+        return promptProjection_;
     }
     [[nodiscard]] HistoryDelta const& history() const noexcept {
         return history_;
@@ -268,7 +279,8 @@ private:
         ShellSectionDelta shell,
         ViewportDelta viewport,
         std::optional<FocusTarget> focus = std::nullopt,
-        SelectionNavigationDelta selectionNav = {});
+        SelectionNavigationDelta selectionNav = {},
+        PromptProjectionDelta promptProjection = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -301,6 +313,7 @@ private:
     ViewportDelta viewport_;
     std::optional<FocusTarget> focus_;
     SelectionNavigationDelta selectionNav_;
+    PromptProjectionDelta promptProjection_;
 };
 
 struct SessionReplayResult {
@@ -347,7 +360,8 @@ public:
         ShellSectionDelta shell,
         ViewportDelta viewport,
         std::optional<FocusTarget> focus = std::nullopt,
-        SelectionNavigationDelta selectionNav = {}) const;
+        SelectionNavigationDelta selectionNav = {},
+        PromptProjectionDelta promptProjection = {}) const;
 };
 
 }  // namespace ssg
