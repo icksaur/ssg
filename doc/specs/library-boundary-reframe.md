@@ -45,16 +45,30 @@ fields inside `SelectionViewState`; and `EditorRuntime::snapshot()` *requires* a
 `ViewportDimensions` argument to compute them. So a web client cannot simply
 "consume the same semantic channel and ignore the grid" until the wire is split.
 
-**Deliverable of the reframe (not just a policy edit):** define a **semantic
-snapshot/delta** (the core sections above, with no cell/grid geometry and no
-mandatory viewport dimensions) versus an **optional grid-presentation section**
-(`ViewportViewState`, `Style`, `ShellViewState`, cell scroll fields) that a grid
-client requests by supplying dimensions. Specify each half's delta and replay
-ownership: the semantic channel replays identically to every client; the
-presentation section is computed per grid client from its dimensions and is absent
-for a client that lays out natively. `EditorRuntime::snapshot()`'s
-`ViewportDimensions` becomes an optional grid-service request, not a precondition
-of getting semantic state.
+**Deliverable of the reframe (not just a policy edit):** the split is **three-way,
+not binary** (MUST, review round 2). Classify each mixed view type field-by-field:
+
+- **Semantic model** — document text, selection byte offsets, syntax spans, theme
+  roles, tabs, tree, palette candidates, settings, keymap. Replays identically to
+  every client.
+- **Semantic interaction state** — server-owned focus and selection that drive
+  *behavior*, not pixels: `ShellViewState::FocusTarget` (the TUI reads this to
+  route keyboard input), and the interaction fields of `PromptStatusViewState` and
+  palette selection. This is part of "the same keyboard model and behavior" and
+  MUST stay on the semantic channel; name its owner for native clients so a web or
+  desktop client routes input the same way the TUI does. `ShellViewState` and
+  `PromptStatusViewState` are therefore split field-by-field, not classed wholesale
+  as grid presentation.
+- **Grid projection** — `ViewportViewState` (`firstVisualRow`, `ScrollbarMetrics`,
+  wrap), terminal-only `Style`, `ShellViewState` rectangles, cell scroll fields,
+  and the layout-projection fields of `PromptStatusViewState`. Optional; requested
+  by a grid client supplying dimensions; absent for a native-layout client.
+
+Specify each part's delta and replay ownership: the semantic model and interaction
+state replay identically to every client; the grid projection is computed per grid
+client from its dimensions. `EditorRuntime::snapshot()`'s `ViewportDimensions`
+becomes an optional grid-service request, not a precondition of getting semantic
+state.
 
 ## The reframe
 
@@ -161,8 +175,11 @@ semantics, not geometry:
 ## Path forward
 
 1. **Move the invariants (this spec).** Review the reframe and the proposed
-   global-rule edits; on sign-off, reword AGENTS.md's global rules and add a
-   CONTRACT line where a promise now needs one (see Residue).
+   global-rule edits; on sign-off, reword AGENTS.md's global rules. This step is
+   policy only — **no CONTRACT line is written here** (MUST, review round 2): the
+   concrete seam contract is added later, inside the wire-split implementation
+   that can enforce it (see Residue). Sequence: reword global rules first; split
+   the wire; then attach the contract on the type that now owns the split seam.
 2. **Double-check TUI regression safety.** Before relaxing anything, confirm the
    TUI's behavior is pinned by contracts and tests that assert *semantics and
    behavior*, not merely grid goldens — so removing the universal-grid claim
