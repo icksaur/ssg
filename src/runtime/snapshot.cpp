@@ -312,7 +312,6 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             lspSync,
             lspFeatures,
             theme,
-            style,
             std::move(shell),
             paletteView()};
 }

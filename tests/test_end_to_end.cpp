@@ -296,7 +296,6 @@ public:
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},
             std::move(theme),
-            ssg::Style{},
             std::move(shell),
         };
     }
@@ -567,7 +566,6 @@ public:
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},
             std::move(theme),
-            ssg::Style{},
             std::move(shell),
         };
     }

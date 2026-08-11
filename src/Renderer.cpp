@@ -1159,7 +1159,7 @@ std::string CellGrid::canonical() const {
 CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
     auto const& shell = snapshot.sections().shell;
     auto const& theme = snapshot.sections().theme;
-    auto const& style = snapshot.sections().style;
+    auto const& style = snapshot.presentation()->style;
     if (shell.viewport.columns <= 0 || shell.viewport.rows <= 0) {
         // The shell layout was declined (viewport below the 20x4 minimum): the
         // library renders the too-small placeholder, sized from the terminal

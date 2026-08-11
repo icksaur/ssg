@@ -100,6 +100,13 @@ public:
         return *this;
     }
 
+    // Override the grid-presentation Style (a projection field, not a semantic
+    // section). Applied when the PresentationSnapshot is built.
+    SessionSnapshotBuilder& style(Style style) {
+        style_ = std::move(style);
+        return *this;
+    }
+
     [[nodiscard]] SessionSnapshot build() const {
         auto const caret = caret_ > text_.size() ? text_.size() : caret_;
 
@@ -144,7 +151,6 @@ public:
             LspSyncViewState{},
             LspFeatureViewState{},
             defaultTheme(),
-            Style{},
             layout.view ? *layout.view : ShellViewState{},
             PaletteViewState{}};
 
@@ -153,7 +159,8 @@ public:
         ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
         return SessionSnapshot{revision_, SessionTopology{}, std::move(client),
                                 std::move(sections),
-                                PresentationSnapshot{std::move(viewportState)}};
+                                PresentationSnapshot{std::move(viewportState),
+                                                     style_}};
     }
 
 private:
@@ -186,6 +193,7 @@ private:
     std::vector<TabLabel> tabs_;
     std::vector<std::function<void(SessionSnapshotSections&)>> mutators_;
     std::vector<std::function<void(ShellLayoutRequest&)>> shellMutators_;
+    Style style_{};
 };
 
 }  // namespace ssg::test

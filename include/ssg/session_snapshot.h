@@ -53,7 +53,6 @@ struct SessionSnapshotSections {
     LspSyncViewState lspSync;
     LspFeatureViewState lspFeatures;
     ThemeSnapshot theme;
-    Style style;
     ShellViewState shell;
     PaletteViewState palette;
 };
@@ -75,6 +74,7 @@ struct ClientSnapshotState {
 // no presentation at all, so semantic state is never gated on grid geometry.
 struct PresentationSnapshot {
     ViewportViewState viewport;
+    Style style;
 
     bool operator==(PresentationSnapshot const&) const = default;
 };
@@ -290,7 +290,8 @@ public:
     [[nodiscard]] SessionSnapshot assemble(
         Revision revision, SessionTopology topology,
         InvocationPrincipal const& principal, ViewId viewId,
-        ViewportViewState viewport, SessionSnapshotSections sections) const;
+        ViewportViewState viewport, SessionSnapshotSections sections,
+        Style style = {}) const;
     [[nodiscard]] SessionDelta deriveDelta(SessionSnapshot const& before,
                                            SessionSnapshot const& after) const;
     [[nodiscard]] SessionReplayResult replay(SessionSnapshot const& base,

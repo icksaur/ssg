@@ -135,11 +135,13 @@ TEST(builderSettersReachTheRenderedScreen) {
     auto snapshot = ssg::test::SessionSnapshotBuilder{}
                         .document("body\n")
                         .viewport(60, 12)
-                        .sections([](ssg::SessionSnapshotSections& sections) {
-                            sections.style.unrenderable = "?";
-                        })
+                        .style([] {
+                            ssg::Style s;
+                            s.unrenderable = "?";
+                            return s;
+                        }())
                         .build();
-    ASSERT_EQ(snapshot.sections().style.unrenderable, std::string{"?"});
+    ASSERT_EQ(snapshot.presentation()->style.unrenderable, std::string{"?"});
 
     // And the caret is placed at a consistent document position.
     auto positioned = ssg::test::SessionSnapshotBuilder{}

@@ -2446,7 +2446,8 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
     auto viewport = impl_->viewport(dimensions);
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
-                                     std::move(viewport), std::move(sections));
+                                     std::move(viewport), std::move(sections),
+                                     impl_->style);
 }
 
 int EditorRuntime::gitDiffWakeDescriptor() const {

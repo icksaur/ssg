@@ -4727,14 +4727,16 @@ bool decodePresent(ProtocolValue const& value, std::optional<ClientSnapshotState
 ProtocolValue toValue(PresentationSnapshot const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("viewport", toValue(value.viewport));
+    fields.emplace_back("style", toValue(value.style));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapshot>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto viewport = requireField<ViewportViewState>(value.field("viewport"));
-    if (!viewport) return false;
-    out.emplace(PresentationSnapshot{*viewport});
+    auto style = requireField<Style>(value.field("style"));
+    if (!viewport || !style) return false;
+    out.emplace(PresentationSnapshot{*viewport, std::move(*style)});
     return true;
 }
 
@@ -4759,7 +4761,6 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back("lsp_sync", toValue(value.lspSync));
     fields.emplace_back("lsp_features", toValue(value.lspFeatures));
     fields.emplace_back("theme", toValue(value.theme));
-    fields.emplace_back("style", toValue(value.style));
     fields.emplace_back("shell", toValue(value.shell));
     return ProtocolValue::makeObject(std::move(fields));
 }
@@ -4786,19 +4787,18 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     auto lspSync = requireField<LspSyncViewState>(value.field("lsp_sync"));
     auto lspFeatures = requireField<LspFeatureViewState>(value.field("lsp_features"));
     auto theme = requireField<ThemeSnapshot>(value.field("theme"));
-    auto style = requireField<Style>(value.field("style"));
     auto shell = requireField<ShellViewState>(value.field("shell"));
     if (!document || !selection || !history || !clipboard || !promptStatus || !search ||
         !findReplace || !settings || !keymap || !textEncoding || !tabs || !diff ||
         !externalModification || !followEdits || !tree || !syntax || !lspSync ||
-        !lspFeatures || !theme || !style || !shell) {
+        !lspFeatures || !theme || !shell) {
         return false;
     }
     out.emplace(SessionSnapshotSections{
         *document, *selection, *history, *clipboard, *promptStatus, *search,
         *findReplace, *settings, *keymap, *textEncoding, *tabs, *diff,
         *externalModification, *followEdits, *tree, std::move(*syntax), *lspSync,
-        *lspFeatures, *theme, std::move(*style), *shell});
+        *lspFeatures, *theme, *shell});
     return true;
 }
 

@@ -65,11 +65,11 @@ bool gridContains(ssg::CellGrid const& grid, std::string_view needle) {
 // that the renderer and runtime share the one instance.
 ssg::SessionSnapshot withStyle(ssg::SessionSnapshot const& base,
                                ssg::Style style) {
-    auto sections = base.sections();
-    sections.style = std::move(style);
+    auto presentation = *base.presentation();
+    presentation.style = std::move(style);
     return ssg::SessionSnapshot{base.revision(), base.topology(), base.client(),
-                                std::move(sections),
-                                base.presentation()};
+                                base.sections(),
+                                std::move(presentation)};
 }
 
 }  // namespace
@@ -366,7 +366,7 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
     sections.shell.palette = projection;
 
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), std::move(sections)};
+                                   snapshot->client(), std::move(sections), snapshot->presentation()};
     auto grid = ssg::Renderer{}.render(projected);
 
     // Results replace the document text in the pane.
@@ -926,7 +926,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     }
     sections.shell.palette = projection;
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), std::move(sections)};
+                                   snapshot->client(), std::move(sections), snapshot->presentation()};
     auto grid = ssg::Renderer{}.render(projected);
 
     // The window shows cmd-20.. (not cmd-00), and the absolute-25 selection lands
@@ -974,7 +974,7 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     projection.rows = {{"a", ""}, {"b", ""}};
     sections.shell.palette = projection;
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), std::move(sections)};
+                                   snapshot->client(), std::move(sections), snapshot->presentation()};
     auto grid = ssg::Renderer{}.render(projected);
     // The gutter is reserved (column exists) but blank: no thumb/track glyphs.
     for (int y = projection.scrollbarRect.y;
@@ -1214,9 +1214,7 @@ TEST(theDocumentReplacementGlyphComesFromStyle) {
         ssg::test::SessionSnapshotBuilder{}
             .document("a\x01" "b\n")
             .viewport(80, 24)
-            .sections([&](ssg::SessionSnapshotSections& sections) {
-                sections.style = restyled;
-            })
+            .style(restyled)
             .build());
     ASSERT_TRUE(gridContains(grid, "a?b"));
     ASSERT_FALSE(gridContains(grid, "\xef\xbf\xbd"));
@@ -1254,8 +1252,8 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The published section carries the new glyphs.
-    ASSERT_EQ(snapshot->sections().style.scrollbar.track, std::string{":"});
-    ASSERT_EQ(snapshot->sections().style.tree.expanded, std::string{"- "});
+    ASSERT_EQ(snapshot->presentation()->style.scrollbar.track, std::string{":"});
+    ASSERT_EQ(snapshot->presentation()->style.tree.expanded, std::string{"- "});
 
     // And the rendered screen shows them, with the shipped glyphs gone.
     auto const grid = ssg::Renderer{}.render(*snapshot);
@@ -1294,7 +1292,7 @@ TEST(styleDefineRejectionLeavesTheLiveStyleUnchanged) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The good key in the rejected table did NOT leak into the live style.
-    ASSERT_EQ(snapshot->sections().style.tree.expanded, ssg::Style{}.tree.expanded);
+    ASSERT_EQ(snapshot->presentation()->style.tree.expanded, ssg::Style{}.tree.expanded);
 }
 
 // LSP diagnostics reach the cells they cover, and only those cells.  The ranges
