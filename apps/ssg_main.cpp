@@ -20,6 +20,7 @@
 #include <ssg/HitTester.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
+#include <ssg/PromptRouting.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/ScriptHost.h>
 #include <ssg/PaletteSearcher.h>
@@ -1082,17 +1083,31 @@ int main(int argc, char** argv) {
         }
     };
     auto routeText = [&](std::string const& text) {
-        switch (ssg::SemanticInputRouter{}.textRouting(ssg::focusTargetName(focus))) {
-        case ssg::TextRouting::Insert:
-            dispatch("text.insert", ssg::TextInputArguments{text});
+        ssg::PromptRoutingState state;
+        state.focus = focus;
+        if (pickerOpen) {
+            state.prompt = ssg::ActivePrompt::Palette;
+        } else if (replaceOpen) {
+            state.prompt = ssg::ActivePrompt::Replace;
+            state.currentValue = replaceReplacement;
+        } else if (findOpen) {
+            state.prompt = ssg::ActivePrompt::Find;
+            state.currentValue = findQuery;
+        } else if (textPromptOpen) {
+            state.prompt = ssg::ActivePrompt::TextPrompt;
+            state.currentValue = textPromptValue;
+        }
+        auto const route = ssg::PromptTextRouter{}.route(state, text);
+        switch (route.kind) {
+        case ssg::PromptTextRoute::Kind::Dispatch:
+            dispatch(route.command.name(), route.payload);
             break;
-        case ssg::TextRouting::PromptQuery:
-            if (pickerOpen) { picker.query += text; picker.selected = 0; revealPaletteSelection(); }
-            else if (replaceOpen) { dispatch("replace.update_replacement", ssg::FindQueryArguments{replaceReplacement + text}); }
-            else if (findOpen) { dispatch("find.update_query", ssg::FindQueryArguments{findQuery + text}); }
-            else if (textPromptOpen) { dispatch("prompt.update_value", ssg::PromptValueArguments{0, textPromptValue + text}); }
+        case ssg::PromptTextRoute::Kind::AppendPaletteQuery:
+            picker.query += route.appendText;
+            picker.selected = 0;
+            revealPaletteSelection();
             break;
-        case ssg::TextRouting::Ignore:
+        case ssg::PromptTextRoute::Kind::Ignore:
             break;
         }
     };
