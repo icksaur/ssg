@@ -3068,7 +3068,7 @@ TEST(evaluateInitScriptPushesChromeCompositionToTheRuntime) {
     const auto hasHeaderField = [&](std::string_view id) {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         if (!snap) return false;
-        for (const auto& node : snap->sections().shell.accessibilityNodes) {
+        for (const auto& node : snap->presentation()->shell.accessibilityNodes) {
             if (node.kind == ssg::ShellNodeKind::HeaderField && node.id == id)
                 return true;
         }

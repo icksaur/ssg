@@ -184,8 +184,6 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
                                       std::string const& marker) {
     ssg::SettingsViewState settings;
     ssg::ThemeSnapshot theme;
-    ssg::ShellViewState shell;
-    shell.viewport = {20, 8};
     return {
         {revision, marker, ssg::ByteOffset{marker.size()}},
         selection(marker.size()),
@@ -209,7 +207,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
         {revision, {}},
         {revision, {}, std::nullopt, {}, {}},
         theme,
-        std::move(shell),
+        ssg::FocusTarget::Editor,
     };
 }
 

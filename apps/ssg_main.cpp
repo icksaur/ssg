@@ -1092,7 +1092,7 @@ int main(int argc, char** argv) {
     auto refresh = [&]() -> std::optional<ssg::SessionSnapshot> {
         auto snapshot = runtime.snapshot(client, terminalSize(), buildReport());
         if (snapshot) {
-            focus = snapshot->sections().shell.focus;
+            focus = snapshot->sections().focus;
             // The compiled index is derived from the authored keymap AND the
             // catalog, so it is rebuilt when either changes -- a keymap.bind, a
             // config reload, or a command registered since -- and never per
@@ -1114,7 +1114,7 @@ int main(int argc, char** argv) {
             // lags one frame before keep-visible re-settles — the same one-frame
             // clamp the editor's server-side scroll offset already has, and it
             // self-corrects on the next snapshot.
-            auto const& shell = snapshot->sections().shell;
+            auto const& shell = snapshot->presentation()->shell;
             if (!shell.panes.empty()) {
                 picker.paneRows = static_cast<std::uint32_t>(
                     std::max(shell.panes.front().content.height, 1));
@@ -1237,10 +1237,10 @@ int main(int argc, char** argv) {
             // scroll one line and re-extend the selection to the new edge cell, so a
             // drag held still at the edge keeps scrolling and selecting.
             std::optional<int> dragEdge;
-            if (dragging && snapshot && !snapshot->sections().shell.panes.empty()) {
+            if (dragging && snapshot && !snapshot->presentation()->shell.panes.empty()) {
                 dragEdge = ssg::app::edge_scroll(
                     dragging, lastPointerRow,
-                    snapshot->sections().shell.panes.front().content);
+                    snapshot->presentation()->shell.panes.front().content);
             }
             if (dragEdge) {
                 auto const ready = waitReadiness(kEdgeScrollIntervalMs, signalPipe[0], -1);
@@ -1256,8 +1256,8 @@ int main(int argc, char** argv) {
                     dispatch("view.scroll_lines", ssg::ScrollLinesArguments{*dragEdge});
                     auto scrolled = refresh();
                     if (scrolled && dragAnchor &&
-                        !scrolled->sections().shell.panes.empty()) {
-                        auto const content = scrolled->sections().shell.panes.front().content;
+                        !scrolled->presentation()->shell.panes.empty()) {
+                        auto const content = scrolled->presentation()->shell.panes.front().content;
                         int const edgeRow =
                             *dragEdge < 0 ? content.y : content.bottom() - 1;
                         int const column = std::clamp(lastPointerColumn, content.x,

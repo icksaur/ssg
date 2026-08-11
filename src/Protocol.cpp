@@ -2251,7 +2251,6 @@ ProtocolValue toValue(ShellViewState const& value) {
     fields.emplace_back("panes", toValue(value.panes));
     fields.emplace_back("tab_hits", toValue(value.tabHits));
     fields.emplace_back("accessibility_nodes", toValue(value.accessibilityNodes));
-    fields.emplace_back("focus", toValue(value.focus));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<ShellViewState>& out) {
@@ -2265,11 +2264,6 @@ bool decodePresent(ProtocolValue const& value, std::optional<ShellViewState>& ou
     if (!viewport || !panes || !tabHits || !accessibilityNodes) return false;
     ShellViewState result;
     result.viewport = *viewport;
-    if (auto const* focusField = value.field("focus")) {
-        std::optional<FocusTarget> focus;
-        if (!decodePresent(*focusField, focus) || !focus) return false;
-        result.focus = *focus;
-    }
     if (!decodeOptionalField(value.field("header"), result.header)) return false;
     if (!decodeOptionalField(value.field("footer"), result.footer)) return false;
     if (!decodeOptionalField(value.field("tab_bar"), result.tabBar)) return false;
@@ -4726,6 +4720,7 @@ ProtocolValue toValue(PresentationSnapshot const& value) {
     fields.emplace_back("viewport", toValue(value.viewport));
     fields.emplace_back("style", toValue(value.style));
     fields.emplace_back("prompt", toValue(value.prompt));
+    fields.emplace_back("shell", toValue(value.shell));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapshot>& out) {
@@ -4733,11 +4728,12 @@ bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapsho
     if (!object) return false;
     auto viewport = requireField<ViewportViewState>(value.field("viewport"));
     auto style = requireField<Style>(value.field("style"));
-    if (!viewport || !style) return false;
+    auto shell = requireField<ShellViewState>(value.field("shell"));
+    if (!viewport || !style || !shell) return false;
     std::optional<PromptViewState> prompt;
     if (!decodeOptionalField(value.field("prompt"), prompt)) return false;
     out.emplace(PresentationSnapshot{*viewport, std::move(*style),
-                                     std::move(prompt)});
+                                     std::move(prompt), std::move(*shell)});
     return true;
 }
 
@@ -4762,7 +4758,7 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back("lsp_sync", toValue(value.lspSync));
     fields.emplace_back("lsp_features", toValue(value.lspFeatures));
     fields.emplace_back("theme", toValue(value.theme));
-    fields.emplace_back("shell", toValue(value.shell));
+    fields.emplace_back("focus", toValue(value.focus));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
@@ -4788,18 +4784,18 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     auto lspSync = requireField<LspSyncViewState>(value.field("lsp_sync"));
     auto lspFeatures = requireField<LspFeatureViewState>(value.field("lsp_features"));
     auto theme = requireField<ThemeSnapshot>(value.field("theme"));
-    auto shell = requireField<ShellViewState>(value.field("shell"));
+    auto focus = requireField<FocusTarget>(value.field("focus"));
     if (!document || !selection || !history || !clipboard || !promptStatus || !search ||
         !findReplace || !settings || !keymap || !textEncoding || !tabs || !diff ||
         !externalModification || !followEdits || !tree || !syntax || !lspSync ||
-        !lspFeatures || !theme || !shell) {
+        !lspFeatures || !theme || !focus) {
         return false;
     }
     out.emplace(SessionSnapshotSections{
         *document, *selection, *history, *clipboard, *promptStatus, *search,
         *findReplace, *settings, *keymap, *textEncoding, *tabs, *diff,
         *externalModification, *followEdits, *tree, std::move(*syntax), *lspSync,
-        *lspFeatures, *theme, *shell});
+        *lspFeatures, *theme, *focus});
     return true;
 }
 
@@ -5432,6 +5428,7 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     fields.emplace_back("style", toValue(delta.style()));
     fields.emplace_back("shell", toValue(delta.shell()));
     fields.emplace_back("viewport", toValue(delta.viewport()));
+    fields.emplace_back("focus", toValue(delta.focus()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5460,10 +5457,12 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
     std::optional<DocumentDelta> document;
     std::optional<ByteOffset> documentCaret;
     std::optional<TextEncodingDelta> textEncoding;
+    std::optional<FocusTarget> focus;
     bool const optionalOk =
         decodeOptionalField(payload.field("topology"), topology) &&
         decodeOptionalField(payload.field("document"), document) &&
         decodeOptionalField(payload.field("document_caret"), documentCaret) &&
+        decodeOptionalField(payload.field("focus"), focus) &&
         decodeOptionalField(payload.field("text_encoding"), textEncoding);
 
     auto selection = requireField<SelectionViewDelta>(payload.field("selection"));
@@ -5517,7 +5516,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*tree), std::move(*syntax), std::move(*lspSync),
                 std::move(*lspFeatures), std::move(*theme),
                 std::move(*style),
-                std::move(*shell), std::move(*viewport)),
+                std::move(*shell), std::move(*viewport), std::move(focus)),
             {}};
 }
 

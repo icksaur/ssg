@@ -1038,14 +1038,14 @@ TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::Prompt);
+    ASSERT_EQ(snapshot->sections().focus, ssg::FocusTarget::Prompt);
     ASSERT_FALSE(snapshot->sections().palette.candidates.empty());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.close", runtime.revision(), {}}).accepted());
     auto closed = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(closed.has_value());
     if (!closed) return;
-    ASSERT_EQ(closed->sections().shell.focus, ssg::FocusTarget::Editor);
+    ASSERT_EQ(closed->sections().focus, ssg::FocusTarget::Editor);
 }
 
 // The open-picker kind is derived from the prompt after every dispatch rather
@@ -1231,7 +1231,7 @@ TEST(paletteExecuteValidatesCandidateMembership) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::Editor);
+    ASSERT_EQ(snapshot->sections().focus, ssg::FocusTarget::Editor);
 }
 
 TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
@@ -1433,7 +1433,7 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->sections().shell.focus : ssg::FocusTarget::Editor;
+        return snap ? snap->sections().focus : ssg::FocusTarget::Editor;
     };
     // Showing the panel now focuses it (QOL); expand the root so a directory node
     // and a file node are both visible/selectable.

@@ -121,7 +121,7 @@ void runState(const UiState& state) {
         auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot.has_value()) continue;
-        auto const& shell = snapshot->sections().shell;
+        auto const& shell = snapshot->presentation()->shell;
 
         bool const belowMinimum =
             static_cast<int>(dims.columns) < kMinimumColumns ||

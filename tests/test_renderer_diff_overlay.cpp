@@ -149,10 +149,10 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
     }
     ASSERT_EQ(snapshot->sections().document.diffFileIdentity,
               std::optional<std::string>{"overlay-id"});
-    ASSERT_FALSE(snapshot->sections().shell.panes.empty());
-    if (snapshot->sections().shell.panes.empty()) return;
+    ASSERT_FALSE(snapshot->presentation()->shell.panes.empty());
+    if (snapshot->presentation()->shell.panes.empty()) return;
     const auto grid = ssg::Renderer{}.render(*snapshot);
-    const auto paneContent = snapshot->sections().shell.panes.front().content;
+    const auto paneContent = snapshot->presentation()->shell.panes.front().content;
     ASSERT_TRUE(hasDiffTintInPane(grid, paneContent));
 
     auto sections = snapshot->sections();
@@ -195,7 +195,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     };
     presentation.viewport = ssg::Viewport{}.computeUnwrapped(
         text, presentation.viewport.dimensions, 0, 0, 4, &diffFile);
-    const auto content = sections.shell.panes.front().content;
+    const auto content = presentation.shell.panes.front().content;
     auto overlay =
         snapshotWith(*base, std::move(sections), std::move(presentation));
     const auto grid = ssg::Renderer{}.render(overlay);

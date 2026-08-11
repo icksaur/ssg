@@ -217,7 +217,6 @@ struct ShellViewState {
     // rectangle and its index into `sections().tabs.tabs`.
     std::vector<TabHit> tabHits;
     std::vector<AccessibilityNode> accessibilityNodes;
-    FocusTarget focus = FocusTarget::Editor;
     std::optional<PaletteProjection> palette;
 
     [[nodiscard]] std::size_t scrollbarCount() const noexcept {

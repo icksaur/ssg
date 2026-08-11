@@ -72,7 +72,7 @@ std::string activeTabNodeContent(const ssg::EditorRuntime& runtime) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, {120, 24});
     if (!snapshot) return {};
     std::string content;
-    for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+    for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
         if (node.kind == ssg::ShellNodeKind::Tab && !node.content.empty()) {
             content = node.content;  // single tab in these tests
         }
@@ -84,7 +84,7 @@ std::optional<ssg::AccessibilityNode> footerHintNode(
     const ssg::EditorRuntime& runtime) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, {120, 24});
     if (!snapshot) return std::nullopt;
-    for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+    for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
         if (node.kind == ssg::ShellNodeKind::FooterHint) return node;
     }
     return std::nullopt;

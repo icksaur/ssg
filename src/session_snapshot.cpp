@@ -86,8 +86,13 @@ bool operator==(SessionSnapshotSections const& left,
            left.lspSync == right.lspSync &&
            left.lspFeatures == right.lspFeatures &&
            left.theme == right.theme &&
-           shellEqual(left.shell, right.shell) &&
+           left.focus == right.focus &&
            left.palette == right.palette;
+}
+
+bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
+    return viewport == other.viewport && style == other.style &&
+           prompt == other.prompt && shellEqual(shell, other.shell);
 }
 
 SessionSnapshot::SessionSnapshot(Revision revision, SessionTopology topology,
@@ -121,7 +126,8 @@ SessionDelta::SessionDelta(
     FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
     ThemeSectionDelta theme, StyleSectionDelta style,
-    ShellSectionDelta shell, ViewportDelta viewport)
+    ShellSectionDelta shell, ViewportDelta viewport,
+    std::optional<FocusTarget> focus)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -150,19 +156,21 @@ SessionDelta::SessionDelta(
       theme_{std::move(theme)},
       style_{std::move(style)},
       shell_{std::move(shell)},
-      viewport_{std::move(viewport)} {}
+      viewport_{std::move(viewport)},
+      focus_{focus} {}
 
 SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
     InvocationPrincipal const& principal, ViewId viewId,
     ViewportViewState viewport, SessionSnapshotSections sections,
-    Style style, std::optional<PromptViewState> prompt) const {
+    Style style, std::optional<PromptViewState> prompt,
+    ShellViewState shell) const {
     return {revision,
             std::move(topology),
             {principal.clientId(), viewId, principal.capabilities()},
             std::move(sections),
             PresentationSnapshot{std::move(viewport), std::move(style),
-                                 std::move(prompt)}};
+                                 std::move(prompt), std::move(shell)}};
 }
 
 SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
@@ -229,13 +237,19 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
              : (after.presentation()
                     ? std::optional{after.presentation()->style}
                     : std::nullopt)},
-        {shellEqual(old.shell, next.shell)
+        {before.presentation() && after.presentation() &&
+                 shellEqual(before.presentation()->shell,
+                            after.presentation()->shell)
              ? std::nullopt
-             : std::optional{next.shell}},
+             : (after.presentation()
+                    ? std::optional{after.presentation()->shell}
+                    : std::nullopt)},
         before.presentation() && after.presentation()
             ? Viewport{}.deriveDelta(before.presentation()->viewport,
                                      after.presentation()->viewport)
             : ViewportDelta{false, std::nullopt},
+        old.focus == next.focus ? std::nullopt
+                                : std::optional{next.focus},
     };
 }
 
@@ -319,8 +333,8 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     }
 
     auto theme = delta.theme_.replacement.value_or(base.sections().theme);
-    auto shell = delta.shell_.replacement.value_or(base.sections().shell);
     auto viewport = delta.viewport_.replacement;
+    auto focus = delta.focus_.value_or(base.sections().focus);
     // The published palette candidate list is authoritative server state that the
     // delta does not carry (the P0 command catalog is static within a session), so
     // preserve it from the base rather than dropping it -- otherwise a
@@ -348,7 +362,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(*lspSync.state),
         std::move(*lspFeatures.state),
         std::move(theme),
-        std::move(shell),
+        focus,
         std::move(palette),
     };
     ClientSnapshotState client = base.client();
@@ -356,9 +370,12 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     if (base.presentation()) {
         auto style = delta.style_.replacement.value_or(
             base.presentation()->style);
+        auto shell = delta.shell_.replacement.value_or(
+            base.presentation()->shell);
         presentation = PresentationSnapshot{
             viewport.value_or(base.presentation()->viewport),
-            std::move(style), base.presentation()->prompt};
+            std::move(style), base.presentation()->prompt,
+            std::move(shell)};
     }
     return {SessionSnapshot{
                 delta.revision_,
@@ -385,7 +402,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
     ThemeSectionDelta theme, StyleSectionDelta style,
     ShellSectionDelta shell,
-    ViewportDelta viewport) const {
+    ViewportDelta viewport,
+    std::optional<FocusTarget> focus) const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,
@@ -414,7 +432,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(theme),
                         std::move(style),
                         std::move(shell),
-                        std::move(viewport)};
+                        std::move(viewport),
+                        focus};
 }
 
 }  // namespace ssg

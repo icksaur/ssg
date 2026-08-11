@@ -288,10 +288,8 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             currentHistory = found->second.history.viewState();
         }
     }
-    // Compute the shell layout first: it caches the panel height that tree_view
-    // resolves the tree scroll offset against (the aggregate below does not
-    // guarantee evaluation order).
-    auto shell = shellView(dimensions, paletteReport);
+    // The shell layout is computed by the caller (EditorRuntime::snapshot) before
+    // this, warming the panel-height cache that treeView() and viewport() read.
     auto treeSection = treeView();
     return {documentView(),
             selection,
@@ -312,7 +310,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             lspSync,
             lspFeatures,
             theme,
-            std::move(shell),
+            shell.focus(),
             paletteView()};
 }
 

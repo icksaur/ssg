@@ -93,7 +93,7 @@ TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {60, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto& shell = snapshot->sections().shell;
+    const auto& shell = snapshot->presentation()->shell;
     ASSERT_TRUE(shell.header.has_value());
     ASSERT_TRUE(shell.footer.has_value());
     ASSERT_TRUE(shell.tabBar.has_value());
@@ -182,7 +182,7 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& pane = snapshot->sections().shell.panes.front();
+    auto const& pane = snapshot->presentation()->shell.panes.front();
     ASSERT_TRUE(pane.lineNumbers.width > 0);
     auto grid = ssg::Renderer{}.render(*snapshot);
     int const gx = pane.lineNumbers.x;
@@ -234,7 +234,7 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().selection.selections.items().size(),
               std::size_t{2});
-    auto const& pane = snapshot->sections().shell.panes.front();
+    auto const& pane = snapshot->presentation()->shell.panes.front();
     auto grid = ssg::Renderer{}.render(*snapshot);
     int const gx = pane.lineNumbers.x;
     auto roleAt = [&](int row) {
@@ -356,17 +356,18 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
     // Without a palette projection the document content is painted.
     ASSERT_TRUE(gridContains(ssg::Renderer{}.render(*snapshot), "alpha"));
 
-    auto sections = snapshot->sections();
-    ASSERT_FALSE(sections.shell.panes.empty());
-    if (sections.shell.panes.empty()) return;
+    auto presentation = *snapshot->presentation();
+    ASSERT_FALSE(presentation.shell.panes.empty());
+    if (presentation.shell.panes.empty()) return;
     ssg::PaletteProjection projection;
-    projection.rect = sections.shell.panes.front().content;
+    projection.rect = presentation.shell.panes.front().content;
     projection.rows = {{"file.save", "ESC s"}, {"file.quit", "ESC q"}};
     projection.selected = std::uint32_t{1};
-    sections.shell.palette = projection;
+    presentation.shell.palette = projection;
 
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), std::move(sections), snapshot->presentation()};
+                                   snapshot->client(), snapshot->sections(),
+                                   std::move(presentation)};
     auto grid = ssg::Renderer{}.render(projected);
 
     // Results replace the document text in the pane.
@@ -846,7 +847,7 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->sections().shell;
+    auto const& shell = snapshot->presentation()->shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -879,7 +880,7 @@ TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->sections().shell;
+    auto const& shell = snapshot->presentation()->shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -906,13 +907,13 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto sections = snapshot->sections();
-    ASSERT_FALSE(sections.shell.panes.empty());
-    if (sections.shell.panes.empty()) return;
+    auto presentation = *snapshot->presentation();
+    ASSERT_FALSE(presentation.shell.panes.empty());
+    if (presentation.shell.panes.empty()) return;
 
     // A 40-item ranked list windowed to rows [20, 20+height); the absolute
     // selection is 25, so the on-screen highlight is at window row 5.
-    auto const& pane = sections.shell.panes.front();
+    auto const& pane = presentation.shell.panes.front();
     std::uint32_t const rows = static_cast<std::uint32_t>(pane.content.height);
     ssg::PaletteProjection projection;
     projection.rect = pane.content;
@@ -924,9 +925,10 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
         projection.rows.push_back(
             {"cmd-" + std::to_string(20 + i), ""});
     }
-    sections.shell.palette = projection;
+    presentation.shell.palette = projection;
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), std::move(sections), snapshot->presentation()};
+                                   snapshot->client(), snapshot->sections(),
+                                   std::move(presentation)};
     auto grid = ssg::Renderer{}.render(projected);
 
     // The window shows cmd-20.. (not cmd-00), and the absolute-25 selection lands
@@ -962,8 +964,8 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto sections = snapshot->sections();
-    auto const& pane = sections.shell.panes.front();
+    auto presentation = *snapshot->presentation();
+    auto const& pane = presentation.shell.panes.front();
     ssg::PaletteProjection projection;
     projection.rect = pane.content;
     projection.scrollbarRect = pane.scrollbar;
@@ -972,9 +974,10 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     projection.scrollbar =
         ssg::Viewport{}.scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
     projection.rows = {{"a", ""}, {"b", ""}};
-    sections.shell.palette = projection;
+    presentation.shell.palette = projection;
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), std::move(sections), snapshot->presentation()};
+                                   snapshot->client(), snapshot->sections(),
+                                   std::move(presentation)};
     auto grid = ssg::Renderer{}.render(projected);
     // The gutter is reserved (column exists) but blank: no thumb/track glyphs.
     for (int y = projection.scrollbarRect.y;
@@ -988,7 +991,7 @@ TEST(renderTooSmallViewportProducesLibraryPlaceholder) {
     // M11-L: below the 20x4 minimum the library (not the app) renders the
     // placeholder screen, sized to the terminal, so no app code authors cells.
     auto snapshot = ssg::test::SessionSnapshotBuilder{}.viewport(10, 5).build();
-    ASSERT_EQ(snapshot.sections().shell.viewport.columns, 0);  // declined layout
+    ASSERT_EQ(snapshot.presentation()->shell.viewport.columns, 0);  // declined layout
     ssg::CellGrid grid;
     ASSERT_NO_THROW(grid = ssg::Renderer{}.render(snapshot));
     ASSERT_EQ(grid.size.columns, 10);
@@ -1060,7 +1063,7 @@ TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
     ASSERT_EQ(grid.caret->row, std::uint32_t{0});
 
     // And exactly one cell past the last drawn character of "> save".
-    auto const& shell = snapshot->sections().shell;
+    auto const& shell = snapshot->presentation()->shell;
     const ssg::AccessibilityNode* query = nullptr;
     for (auto const& node : shell.accessibilityNodes) {
         if (node.id == "input_line.query") query = &node;
@@ -1093,7 +1096,7 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
 
-    auto const& shell = snapshot->sections().shell;
+    auto const& shell = snapshot->presentation()->shell;
     const ssg::AccessibilityNode* query = nullptr;
     for (auto const& node : shell.accessibilityNodes) {
         if (node.id == "input_line.query") query = &node;
@@ -1130,7 +1133,7 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
     // Inside the header, not run off the right edge by the untruncated query.
     ASSERT_TRUE(grid.caret->column < std::uint32_t{80});
 
-    auto const& shell = snapshot->sections().shell;
+    auto const& shell = snapshot->presentation()->shell;
     const ssg::AccessibilityNode* query = nullptr;
     for (auto const& node : shell.accessibilityNodes) {
         if (node.id == "input_line.query") query = &node;
@@ -1162,7 +1165,7 @@ TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->sections().shell;
+    auto const& shell = snapshot->presentation()->shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
 
@@ -1257,7 +1260,7 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
 
     // And the rendered screen shows them, with the shipped glyphs gone.
     auto const grid = ssg::Renderer{}.render(*snapshot);
-    auto const& shell = snapshot->sections().shell;
+    auto const& shell = snapshot->presentation()->shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
     int const gx = shell.panelScrollbar->x;

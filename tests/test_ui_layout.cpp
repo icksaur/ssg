@@ -1021,7 +1021,6 @@ std::string serializeLayout(const ShellLayoutResult& result) {
     }
     const auto& v = *result.view;
     o << "viewport=" << v.viewport.columns << 'x' << v.viewport.rows << '\n';
-    o << "focus=" << static_cast<int>(v.focus) << '\n';
     dumpOptRect(o, "header", v.header);
     dumpOptRect(o, "footer", v.footer);
     dumpOptRect(o, "tabBar", v.tabBar);

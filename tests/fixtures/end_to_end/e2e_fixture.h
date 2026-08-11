@@ -41,7 +41,7 @@ inline CanonicalState canonical(ssg::SessionSnapshot const& snapshot) {
         sections.tabs.tabs.empty() ? nullptr : &sections.tabs.tabs.front();
     bool workspace_open = false;
     bool word_wrap = false;
-    for (auto const& node : sections.shell.accessibilityNodes) {
+    for (auto const& node : snapshot.presentation()->shell.accessibilityNodes) {
         workspace_open =
             workspace_open || node.label.starts_with("Workspace ");
         word_wrap = word_wrap || node.label == "Word wrap on";

@@ -403,7 +403,6 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
 
     ShellViewState view;
     view.viewport = request.viewport;
-    view.focus = state.focus();
     const bool distractionFree = state.impl_->distractionFree;
     const int gutterWidth = request.style.dimensions.scrollbarGutterWidth;
     const int headerHeight = request.style.dimensions.headerHeight;

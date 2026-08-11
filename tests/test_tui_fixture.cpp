@@ -111,6 +111,7 @@ public:
             {ssg::ShellNodeKind::Footer, "footer", "Recovery ready",
              *shell.footer, ssg::SemanticRole::Footer},
         };
+        lastShell_ = shell;
 
         return {
             {revision, state_.text, ssg::ByteOffset{byte}},
@@ -138,8 +139,12 @@ public:
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},
             std::move(theme),
-            std::move(shell),
+            ssg::FocusTarget::Editor,
         };
+    }
+
+    ssg::ShellViewState shellView() const {
+        return lastShell_;
     }
 
     ssg::ViewportViewState viewport() const {
@@ -151,6 +156,7 @@ public:
 
 private:
     e2e::FixtureState state_;
+    mutable ssg::ShellViewState lastShell_;
 };
 
 class Scenario {
@@ -166,9 +172,10 @@ public:
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
                                   ssg::ViewId view) const {
+        auto sections = model.sections(session->revision());
         return ssg::SessionSnapshotCodec{}.assemble(
             session->revision(), session->topology(), principal, view,
-            model.viewport(), model.sections(session->revision()));
+            model.viewport(), std::move(sections), {}, {}, model.shellView());
     }
 
     FixtureModel model;

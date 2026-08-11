@@ -59,9 +59,6 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
     theme.roleColors[0].red = static_cast<std::uint8_t>(marker.size());
     theme.syntaxColors[0].green = static_cast<std::uint8_t>(marker.size());
 
-    ssg::ShellViewState shell;
-    shell.viewport = {static_cast<int>(20 + marker.size()), 8};
-
     return {
         {revision, marker, ssg::ByteOffset{marker.size()}},
         selection(marker.size(), static_cast<std::uint32_t>(marker.size())),
@@ -92,7 +89,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         {revision, {}},
         {revision, {}, std::nullopt, {}, marker},
         theme,
-        std::move(shell),
+        ssg::FocusTarget::Editor,
     };
 }
 
@@ -754,17 +751,19 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
                                  ssg::TreeNodeId{"files:b"}};
     sectionsValue.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
     // Also exercise the shell panel scrollbar gutter geometry on the wire.
-    sectionsValue.shell.panel = ssg::Rect{0, 1, 24, 10};
-    sectionsValue.shell.panelScrollbar = ssg::Rect{23, 2, 1, 9};
+    ssg::ShellViewState shell;
+    shell.panel = ssg::Rect{0, 1, 24, 10};
+    shell.panelScrollbar = ssg::Rect{23, 2, 1, 9};
     // And the typed per-tab hit map.
-    sectionsValue.shell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
-                                     ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
+    shell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
+                     ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
     auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(3), std::move(sectionsValue));
+        ssg::ViewId{9}, clientView(3), std::move(sectionsValue), {}, {},
+        std::move(shell));
     auto const decoded =
         ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
@@ -776,11 +775,11 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
     ASSERT_EQ(p.firstVisible, std::uint32_t{3});
     ASSERT_EQ(p.scrollbar, ssg::Viewport{}.scrollbarMetrics(40, 9, 3));
     ASSERT_EQ(p.visibleNodeIds.size(), std::size_t{2});
-    ASSERT_TRUE(decoded.snapshot->sections().shell.panelScrollbar.has_value());
-    ASSERT_EQ(decoded.snapshot->sections().shell.panelScrollbar,
-              snapshot.sections().shell.panelScrollbar);
-    ASSERT_EQ(decoded.snapshot->sections().shell.tabHits,
-              snapshot.sections().shell.tabHits);
+    ASSERT_TRUE(decoded.snapshot->presentation()->shell.panelScrollbar.has_value());
+    ASSERT_EQ(decoded.snapshot->presentation()->shell.panelScrollbar,
+              snapshot.presentation()->shell.panelScrollbar);
+    ASSERT_EQ(decoded.snapshot->presentation()->shell.tabHits,
+              snapshot.presentation()->shell.tabHits);
 }
 
 // ---------------------------------------------------------------------------

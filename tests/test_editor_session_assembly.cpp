@@ -66,7 +66,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
         {revision, {}},
         {revision, {}, std::nullopt, {}, marker},
         theme,
-        std::move(shell),
+        ssg::FocusTarget::Editor,
     };
 }
 
@@ -224,24 +224,26 @@ TEST(perClientCapabilitiesAndViewportsAreIsolated) {
 }
 
 TEST(shellDeltaDetectsAPanelScrollbarOnlyChange) {
-    auto oldSections = sections(ssg::Revision{4}, "same");
-    oldSections.shell.panel = ssg::Rect{0, 1, 24, 10};
-    oldSections.shell.panelScrollbar = ssg::Rect{23, 2, 1, 9};
-    auto newSections = oldSections;
+    ssg::ShellViewState oldShell;
+    oldShell.panel = ssg::Rect{0, 1, 24, 10};
+    oldShell.panelScrollbar = ssg::Rect{23, 2, 1, 9};
+    ssg::ShellViewState newShell = oldShell;
     // Only the gutter geometry differs (e.g. a taller panel): the shell delta
     // must not treat this as unchanged.
-    newSections.shell.panelScrollbar = ssg::Rect{23, 2, 1, 12};
+    newShell.panelScrollbar = ssg::Rect{23, 2, 1, 12};
 
     auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), std::move(oldSections));
+        ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "same"),
+        {}, {}, std::move(oldShell));
     auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), std::move(newSections));
+        ssg::ViewId{9}, clientView(1), sections(ssg::Revision{5}, "same"),
+        {}, {}, std::move(newShell));
     auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
     ASSERT_TRUE(delta.shell().replacement.has_value());
     auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
@@ -250,24 +252,26 @@ TEST(shellDeltaDetectsAPanelScrollbarOnlyChange) {
 }
 
 TEST(shellDeltaDetectsATabHitOnlyChange) {
-    auto oldSections = sections(ssg::Revision{4}, "same");
-    oldSections.shell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0}};
-    auto newSections = oldSections;
+    ssg::ShellViewState oldShell;
+    oldShell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0}};
+    ssg::ShellViewState newShell = oldShell;
     // A second tab opens: only the tab hit map differs. The shell delta must not
     // treat this as unchanged (or pointer hit-testing would target a stale map).
-    newSections.shell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
-                                   ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
+    newShell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
+                        ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
     auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), std::move(oldSections));
+        ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "same"),
+        {}, {}, std::move(oldShell));
     auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), std::move(newSections));
+        ssg::ViewId{9}, clientView(1), sections(ssg::Revision{5}, "same"),
+        {}, {}, std::move(newShell));
     auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
     ASSERT_TRUE(delta.shell().replacement.has_value());
     auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);

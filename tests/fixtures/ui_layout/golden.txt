@@ -1,6 +1,5 @@
 === min-20x4 ===
 viewport=20x4
-focus=0
 header=0,0,20,1
 footer=0,3,20,1
 tabBar=0,1,20,1
@@ -24,7 +23,6 @@ palette=none
 
 === min-20x4-panel ===
 viewport=20x4
-focus=0
 header=0,0,20,1
 footer=0,3,20,1
 tabBar=0,1,20,1
@@ -51,7 +49,6 @@ ERROR code=0 msg=viewport must be at least 20 columns by 4 rows
 
 === std-80x24 ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -85,7 +82,6 @@ palette=none
 
 === std-80x24-panel ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=24,1,56,1
@@ -122,7 +118,6 @@ palette=none
 
 === tall-100x40-panel ===
 viewport=100x40
-focus=0
 header=0,0,100,1
 footer=0,39,100,1
 tabBar=24,1,76,1
@@ -160,7 +155,6 @@ palette=none
 
 === odd-33x11-panel ===
 viewport=33x11
-focus=0
 header=0,0,33,1
 footer=0,10,33,1
 tabBar=13,1,20,1
@@ -190,7 +184,6 @@ palette=none
 
 === panel-threshold-31 ===
 viewport=31x24
-focus=0
 header=0,0,31,1
 footer=0,23,31,1
 tabBar=0,1,31,1
@@ -217,7 +210,6 @@ palette=none
 
 === panel-threshold-32 ===
 viewport=32x24
-focus=0
 header=0,0,32,1
 footer=0,23,32,1
 tabBar=12,1,20,1
@@ -247,7 +239,6 @@ palette=none
 
 === panel-threshold-43 ===
 viewport=43x24
-focus=0
 header=0,0,43,1
 footer=0,23,43,1
 tabBar=23,1,20,1
@@ -278,7 +269,6 @@ palette=none
 
 === panel-threshold-44 ===
 viewport=44x24
-focus=0
 header=0,0,44,1
 footer=0,23,44,1
 tabBar=24,1,20,1
@@ -309,7 +299,6 @@ palette=none
 
 === panel-threshold-45 ===
 viewport=45x24
-focus=0
 header=0,0,45,1
 footer=0,23,45,1
 tabBar=24,1,21,1
@@ -340,7 +329,6 @@ palette=none
 
 === prompt-rows-0 ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -374,7 +362,6 @@ palette=none
 
 === prompt-rows-1 ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -409,7 +396,6 @@ palette=none
 
 === prompt-rows-2 ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -444,7 +430,6 @@ palette=none
 
 === prompt-rows-3 ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -485,7 +470,6 @@ ERROR code=1 msg=reserved prompt rows must be in [0, 3]
 
 === inputline-query-ghost ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=none
@@ -518,7 +502,6 @@ palette=none
 
 === inputline-long-query ===
 viewport=60x24
-focus=0
 header=0,0,60,1
 footer=0,23,60,1
 tabBar=none
@@ -547,7 +530,6 @@ palette=none
 
 === split-horizontal ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -584,7 +566,6 @@ palette=none
 
 === split-vertical ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -621,7 +602,6 @@ palette=none
 
 === split-nested ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -661,7 +641,6 @@ palette=none
 
 === tabs-none ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -693,7 +672,6 @@ palette=none
 
 === tabs-many-narrow ===
 viewport=30x24
-focus=0
 header=0,0,30,1
 footer=0,23,30,1
 tabBar=0,1,30,1
@@ -726,7 +704,6 @@ palette=none
 
 === tabs-multibyte ===
 viewport=40x24
-focus=0
 header=0,0,40,1
 footer=0,23,40,1
 tabBar=0,1,40,1
@@ -754,7 +731,6 @@ palette=none
 
 === focus-panel ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=24,1,56,1
@@ -791,7 +767,6 @@ palette=none
 
 === focus-prompt ===
 viewport=80x24
-focus=2
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -825,7 +800,6 @@ palette=none
 
 === empty-state ===
 viewport=80x24
-focus=0
 header=0,0,80,1
 footer=0,23,80,1
 tabBar=0,1,80,1
@@ -860,7 +834,6 @@ palette=none
 
 === distraction-free ===
 viewport=80x24
-focus=0
 header=none
 footer=none
 tabBar=none
@@ -877,7 +850,6 @@ palette=none
 
 === distraction-free-with-prompt ===
 viewport=80x24
-focus=0
 header=none
 footer=none
 tabBar=none
@@ -894,7 +866,6 @@ palette=none
 
 === non-default-style-panel ===
 viewport=80x24
-focus=0
 header=0,0,80,2
 footer=0,22,80,2
 tabBar=30,2,50,2

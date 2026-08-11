@@ -265,6 +265,7 @@ public:
             {ssg::ShellNodeKind::FooterField, "wrap",
              state_.word_wrap ? "Word wrap on" : "Word wrap off", *shell.footer,
              ssg::SemanticRole::Footer});
+        lastShell_ = shell;
 
         return {
             {revision, state_.text, ssg::ByteOffset{state_.text.size()}},
@@ -292,8 +293,13 @@ public:
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},
             std::move(theme),
-            std::move(shell),
+            ssg::FocusTarget::Editor,
         };
+    }
+
+    ssg::ShellViewState shellView() const {
+        std::lock_guard lock{mutex_};
+        return lastShell_;
     }
 
     ssg::ViewportViewState viewport() const {
@@ -312,6 +318,7 @@ public:
 
 private:
     mutable std::mutex mutex_;
+    mutable ssg::ShellViewState lastShell_;
     e2e::FixtureState state_;
 };
 
@@ -331,9 +338,10 @@ struct EndToEndScenario {
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
                                   ssg::ViewId viewId) const {
+        auto sections = model.sections(session->revision());
         return ssg::SessionSnapshotCodec{}.assemble(
             session->revision(), session->topology(), principal, viewId,
-            model.viewport(), model.sections(session->revision()));
+            model.viewport(), std::move(sections), {}, {}, model.shellView());
     }
 
     EndToEndFixtureModel model;
@@ -536,8 +544,6 @@ public:
             ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
         ssg::SettingsViewState settings;
         ssg::ThemeSnapshot theme{};
-        ssg::ShellViewState shell;
-        shell.viewport = {80, 24};
         return {
             {revision, "concurrent", ssg::ByteOffset{0}},
             {ssg::SelectionSet{{ssg::Selection{pos, pos}}}, firstRow,
@@ -562,7 +568,7 @@ public:
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},
             std::move(theme),
-            std::move(shell),
+            ssg::FocusTarget::Editor,
         };
     }
 

@@ -2442,13 +2442,18 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
     // arguments to one call their evaluation order would be unspecified, so the
     // viewport could be built against the PREVIOUS frame's pane height -- which
     // is wrong on the frame a resize or a prompt changes it.
+    // The shell layout is computed FIRST: it caches the panel content height that
+    // treeView() (inside sections) and viewport() resolve their scroll against.
+    // Its geometry is the presentation's shell projection; its focus is semantic.
+    auto shell = impl_->shellView(dimensions, paletteReport);
     auto sections = impl_->sections(dimensions, paletteReport);
     auto viewport = impl_->viewport(dimensions);
-    auto promptView = impl_->promptProjection(dimensions, sections.shell.prompt);
+    auto promptView = impl_->promptProjection(dimensions, shell.prompt);
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
                                      std::move(viewport), std::move(sections),
-                                     impl_->style, std::move(promptView));
+                                     impl_->style, std::move(promptView),
+                                     std::move(shell));
 }
 
 int EditorRuntime::gitDiffWakeDescriptor() const {

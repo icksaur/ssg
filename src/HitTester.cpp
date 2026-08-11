@@ -92,7 +92,7 @@ RegionHit panelHit(SessionSnapshot const& snapshot, Rect const& panel,
 
 RegionHit HitTester::at(int column, int row) const {
     auto const& snapshot = snapshot_;
-    auto const& shell = snapshot.sections().shell;
+    auto const& shell = snapshot.presentation()->shell;
     if (column < 0 || row < 0 || column >= shell.viewport.columns ||
         row >= shell.viewport.rows) {
         return {};
@@ -183,7 +183,7 @@ RegionHit HitTester::at(int column, int row) const {
 
 std::optional<HitTester::GutterThumb> HitTester::gutterThumb(
     HitRegion region) const {
-    auto const& shell = snapshot_.sections().shell;
+    auto const& shell = snapshot_.presentation()->shell;
     auto const make = [](Rect const& gutter, ScrollbarMetrics const& m) {
         return GutterThumb{gutter.y, m.viewportRows, m.thumbStart, m.thumbSize};
     };

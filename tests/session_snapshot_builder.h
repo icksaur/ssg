@@ -151,16 +151,18 @@ public:
             LspSyncViewState{},
             LspFeatureViewState{},
             defaultTheme(),
-            layout.view ? *layout.view : ShellViewState{},
+            shell.focus(),
             PaletteViewState{}};
 
         for (auto const& mutate : mutators_) mutate(sections);
 
+        ShellViewState shellView = layout.view ? *layout.view : ShellViewState{};
         ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
         return SessionSnapshot{revision_, SessionTopology{}, std::move(client),
                                 std::move(sections),
                                 PresentationSnapshot{std::move(viewportState),
-                                                     style_}};
+                                                     style_, std::nullopt,
+                                                     std::move(shellView)}};
     }
 
 private:

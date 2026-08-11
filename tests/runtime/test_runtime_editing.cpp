@@ -653,11 +653,11 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->sections().shell.focus : ssg::FocusTarget::Editor;
+        return snap ? snap->sections().focus : ssg::FocusTarget::Editor;
     };
     auto focusPanel = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        bool const shown = snap && snap->sections().shell.panel.has_value();
+        bool const shown = snap && snap->presentation()->shell.panel.has_value();
         if (!shown) {
             ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
         }
@@ -1220,7 +1220,7 @@ TEST(promptReservationIsSingleSourcedAndFullWidthAcrossPanel) {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
-        const auto& shellPrompt = snap->sections().shell.prompt;
+        const auto& shellPrompt = snap->presentation()->shell.prompt;
         const auto& statusPrompt = snap->presentation()->prompt;
         ASSERT_TRUE(shellPrompt.has_value());
         ASSERT_TRUE(statusPrompt.has_value());
@@ -1289,7 +1289,7 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
     {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snap.has_value());
-        if (snap) ASSERT_TRUE(snap->sections().shell.focus != ssg::FocusTarget::Prompt);
+        if (snap) ASSERT_TRUE(snap->sections().focus != ssg::FocusTarget::Prompt);
     }
 
     // Palette (a picker) is HEADER-anchored: focus is Prompt, the header input
@@ -1300,15 +1300,15 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         const auto& s = snap->sections();
-        ASSERT_EQ(s.shell.focus, ssg::FocusTarget::Prompt);
-        ASSERT_TRUE(hasInputLine(s.shell));       // header hosts the query
-        ASSERT_FALSE(s.shell.prompt.has_value()); // no footer reservation
+        ASSERT_EQ(s.focus, ssg::FocusTarget::Prompt);
+        ASSERT_TRUE(hasInputLine(snap->presentation()->shell));       // header hosts the query
+        ASSERT_FALSE(snap->presentation()->shell.prompt.has_value()); // no footer reservation
     }
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.close", runtime.revision(), {}}).accepted());
     {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snap.has_value());
-        if (snap) ASSERT_TRUE(snap->sections().shell.focus != ssg::FocusTarget::Prompt);
+        if (snap) ASSERT_TRUE(snap->sections().focus != ssg::FocusTarget::Prompt);
     }
 
     // Find is FOOTER-anchored: focus is Prompt, a footer reservation exists, and
@@ -1319,9 +1319,9 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         const auto& s = snap->sections();
-        ASSERT_EQ(s.shell.focus, ssg::FocusTarget::Prompt);
-        ASSERT_TRUE(s.shell.prompt.has_value());  // footer reservation hosts it
-        ASSERT_FALSE(hasInputLine(s.shell));      // not the header input line
+        ASSERT_EQ(s.focus, ssg::FocusTarget::Prompt);
+        ASSERT_TRUE(snap->presentation()->shell.prompt.has_value());  // footer reservation hosts it
+        ASSERT_FALSE(hasInputLine(snap->presentation()->shell));      // not the header input line
     }
 }
 

@@ -53,7 +53,10 @@ struct SessionSnapshotSections {
     LspSyncViewState lspSync;
     LspFeatureViewState lspFeatures;
     ThemeSnapshot theme;
-    ShellViewState shell;
+    // Semantic interaction: which surface has keyboard focus. A client routes
+    // input by this; it is not grid geometry. The shell's layout projection lives
+    // in PresentationSnapshot.
+    FocusTarget focus = FocusTarget::Editor;
     PaletteViewState palette;
 };
 
@@ -80,8 +83,14 @@ struct PresentationSnapshot {
     // Pure grid projection; "which prompt is open" is the semantic
     // PromptStatusViewState::activeKind.
     std::optional<PromptViewState> prompt;
+    // The shell's grid layout: viewport GridSize, chrome rects, panes, tab hits,
+    // accessibility geometry, palette projection. Pure projection; the semantic
+    // focus is SessionSnapshotSections::focus.
+    ShellViewState shell;
 
-    bool operator==(PresentationSnapshot const&) const = default;
+    // Not defaulted: ShellViewState has no operator== (it is compared field-wise
+    // excluding palette; see the .cpp).
+    bool operator==(PresentationSnapshot const&) const;
 };
 
 // CONTRACT
@@ -225,6 +234,9 @@ public:
     [[nodiscard]] ViewportDelta const& viewport() const noexcept {
         return viewport_;
     }
+    [[nodiscard]] std::optional<FocusTarget> const& focus() const noexcept {
+        return focus_;
+    }
 
 private:
     friend class SessionSnapshotCodec;
@@ -248,7 +260,8 @@ private:
         LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
         ThemeSectionDelta theme, StyleSectionDelta style,
         ShellSectionDelta shell,
-        ViewportDelta viewport);
+        ViewportDelta viewport,
+        std::optional<FocusTarget> focus = std::nullopt);
 
     Revision baseRevision_;
     Revision revision_;
@@ -279,6 +292,7 @@ private:
     StyleSectionDelta style_;
     ShellSectionDelta shell_;
     ViewportDelta viewport_;
+    std::optional<FocusTarget> focus_;
 };
 
 struct SessionReplayResult {
@@ -297,7 +311,8 @@ public:
         InvocationPrincipal const& principal, ViewId viewId,
         ViewportViewState viewport, SessionSnapshotSections sections,
         Style style = {},
-        std::optional<PromptViewState> prompt = {}) const;
+        std::optional<PromptViewState> prompt = {},
+        ShellViewState shell = {}) const;
     [[nodiscard]] SessionDelta deriveDelta(SessionSnapshot const& before,
                                            SessionSnapshot const& after) const;
     [[nodiscard]] SessionReplayResult replay(SessionSnapshot const& base,
@@ -321,7 +336,8 @@ public:
         LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
         ThemeSectionDelta theme, StyleSectionDelta style,
         ShellSectionDelta shell,
-        ViewportDelta viewport) const;
+        ViewportDelta viewport,
+        std::optional<FocusTarget> focus = std::nullopt) const;
 };
 
 }  // namespace ssg

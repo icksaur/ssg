@@ -87,7 +87,7 @@ std::vector<std::filesystem::path> archivedDrafts(const std::filesystem::path& r
 const ssg::AccessibilityNode* findShellNode(const ssg::SessionSnapshot& snapshot,
                                             ssg::ShellNodeKind kind,
                                             std::string_view id = {}) {
-    for (const auto& node : snapshot.sections().shell.accessibilityNodes) {
+    for (const auto& node : snapshot.presentation()->shell.accessibilityNodes) {
         if (node.kind == kind && (id.empty() || node.id == id)) return &node;
     }
     return nullptr;
@@ -542,8 +542,8 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     ASSERT_FALSE(hasNoticeBar(*restoredSnap));
 
     ASSERT_EQ(conflict.activeDocumentText(), restored.activeDocumentText());
-    const auto& withNotice = conflictSnap->sections().shell.panes.front().content;
-    const auto& without = restoredSnap->sections().shell.panes.front().content;
+    const auto& withNotice = conflictSnap->presentation()->shell.panes.front().content;
+    const auto& without = restoredSnap->presentation()->shell.panes.front().content;
     // Reserved from the top: same left edge and width, top pushed down one, one
     // fewer content row -- the document is not shifted, it just shows one less
     // row (exactly like the prompt reservation costs a row from the bottom).
@@ -981,7 +981,7 @@ TEST(tabActivateFocusesTheEditor) {
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->sections().shell.focus : ssg::FocusTarget::Editor;
+        return snap ? snap->sections().focus : ssg::FocusTarget::Editor;
     };
 
     // Move focus to the panel, then activating a tab (a tab click) returns focus

@@ -75,7 +75,7 @@ TEST(viewportShellSettingsAndThemeAreLiveSections) {
     auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(after.has_value());
     ASSERT_EQ(after->presentation()->viewport.firstVisualRow, 5U);
-    ASSERT_TRUE(after->sections().shell.panel.has_value());
+    ASSERT_TRUE(after->presentation()->shell.panel.has_value());
 }
 
 // Line numbers default OFF; view.toggle_line_numbers turns the gutter on and a
@@ -97,7 +97,7 @@ TEST(lineNumberGutterTogglesAndSizesToTheLineCount) {
     const ssg::ViewportDimensions dims{80, 12};
     auto pane = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap->sections().shell.panes.front();
+        return snap->presentation()->shell.panes.front();
     };
 
     // Default off: no gutter, content spans the pane (minus the right scrollbar).
@@ -140,7 +140,7 @@ TEST(lineNumberGutterWidthTracksTheActiveDocumentNotJustItsRevision) {
     const ssg::ViewportDimensions dims{80, 12};
     auto width = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap->sections().shell.panes.front().lineNumbers.width;
+        return snap->presentation()->shell.panes.front().lineNumbers.width;
     };
 
     // short.txt: 3 lines -> 1 digit -> width 2.
@@ -180,7 +180,7 @@ TEST(paletteIsPopulatedOnTheFrameItOpens) {
     auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (!snap) return;
-    auto const& palette = snap->sections().shell.palette;
+    auto const& palette = snap->presentation()->shell.palette;
     ASSERT_TRUE(palette.has_value());
     if (!palette) return;
     ASSERT_TRUE(!palette->rows.empty());
@@ -205,7 +205,7 @@ TEST(fileFinderIsPopulatedOnTheFrameItOpens) {
     auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (!snap) return;
-    auto const& palette = snap->sections().shell.palette;
+    auto const& palette = snap->presentation()->shell.palette;
     ASSERT_TRUE(palette.has_value());
     if (!palette) return;
     ASSERT_TRUE(!palette->rows.empty());
@@ -318,7 +318,7 @@ TEST(editorScrollUsesTheRealPaneHeightNotAHardcoded24) {
     auto snap0 = runtime.snapshot(ssg::ClientId{1}, dims);  // populate the cache
     ASSERT_TRUE(snap0.has_value());
     if (!snap0) return;
-    auto const paneRows = static_cast<std::uint32_t>(snap0->sections().shell.panes.front().content.height);
+    auto const paneRows = static_cast<std::uint32_t>(snap0->presentation()->shell.panes.front().content.height);
     ASSERT_TRUE(paneRows != 24);  // the whole point: not the hardcoded value
 
     // PageDown advances by the real pane height, not 24.
@@ -534,7 +534,7 @@ TEST(shellStatusFieldsUseRegisteredProviders) {
     if (!snapshot) return;
 
     const auto* statusField = [&]() -> const ssg::AccessibilityNode* {
-        for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+        for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
             if (node.kind == ssg::ShellNodeKind::FooterField &&
                 node.id == "status") {
                 return &node;
@@ -571,7 +571,7 @@ TEST(composedChromeReplacesBuiltinChromeAndTracksRevision) {
     const ssg::ViewportDimensions dims{80, 12};
     const auto findNode = [](const auto& snap, ssg::ShellNodeKind kind,
                              std::string_view id) -> const ssg::AccessibilityNode* {
-        for (const auto& node : snap->sections().shell.accessibilityNodes) {
+        for (const auto& node : snap->presentation()->shell.accessibilityNodes) {
             if (node.kind == kind && node.id == id) return &node;
         }
         return nullptr;
@@ -663,7 +663,7 @@ TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {    auto root = uni
 
     std::vector<const ssg::AccessibilityNode*> headerFields;
     std::vector<const ssg::AccessibilityNode*> footerFields;
-    for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+    for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
         if (node.kind == ssg::ShellNodeKind::HeaderField &&
             (node.id == "path" || node.id == "branch")) {
             headerFields.push_back(&node);
@@ -730,7 +730,7 @@ TEST(shellStatusFieldsRenderBranchWhenGitBranchIsApplied) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     const auto* branchField = [&]() -> const ssg::AccessibilityNode* {
-        for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+        for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
             if (node.kind == ssg::ShellNodeKind::HeaderField &&
                 node.id == "branch") {
                 return &node;
@@ -764,7 +764,7 @@ TEST(liveDiffTabTitlePrefixesGlyphWithoutChangingDocumentTabs) {
 
     std::optional<std::string> documentTitle;
     std::optional<std::string> liveDiffTitle;
-    for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+    for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
         if (node.kind != ssg::ShellNodeKind::Tab) {
             continue;
         }
@@ -806,7 +806,7 @@ TEST(liveDiffTabGlyphColorTracksThemePalette) {
     if (!documentTabId) return;
     auto darkGrid = ssg::Renderer{}.render(*darkSnapshot);
     const auto* darkLiveTab = [&]() -> const ssg::AccessibilityNode* {
-        for (const auto& node : darkSnapshot->sections().shell.accessibilityNodes) {
+        for (const auto& node : darkSnapshot->presentation()->shell.accessibilityNodes) {
             if (node.kind == ssg::ShellNodeKind::Tab &&
                 node.content.starts_with("D ")) {
                 return &node;
@@ -831,7 +831,7 @@ TEST(liveDiffTabGlyphColorTracksThemePalette) {
     auto inactiveGrid = ssg::Renderer{}.render(*inactiveSnapshot);
     const auto* inactiveLiveTab = [&]() -> const ssg::AccessibilityNode* {
         for (const auto& node :
-             inactiveSnapshot->sections().shell.accessibilityNodes) {
+             inactiveSnapshot->presentation()->shell.accessibilityNodes) {
             if (node.kind == ssg::ShellNodeKind::Tab &&
                 node.content.starts_with("D ")) {
                 return &node;
@@ -859,7 +859,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
                     .accepted());
 
     auto providerLabel = [&](ssg::SessionSnapshot const& snapshot) {
-        for (const auto& node : snapshot.sections().shell.accessibilityNodes) {
+        for (const auto& node : snapshot.presentation()->shell.accessibilityNodes) {
             if (node.kind == ssg::ShellNodeKind::PanelProvider &&
                 node.id == "panel.provider") {
                 return node.content;
@@ -872,14 +872,14 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
         runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_FALSE(snapshot->sections().shell.panel.has_value());
+    ASSERT_FALSE(snapshot->presentation()->shell.panel.has_value());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                 {"panel.show_files", runtime.revision(), {}})
                     .accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_TRUE(snapshot->presentation()->shell.panel.has_value());
     ASSERT_EQ(providerLabel(*snapshot), std::string{"files"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -887,14 +887,14 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
                     .accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_FALSE(snapshot->sections().shell.panel.has_value());
+    ASSERT_FALSE(snapshot->presentation()->shell.panel.has_value());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                 {"panel.show_files", runtime.revision(), {}})
                     .accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_TRUE(snapshot->presentation()->shell.panel.has_value());
     ASSERT_EQ(providerLabel(*snapshot), std::string{"files"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -902,7 +902,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
                     .accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_TRUE(snapshot->presentation()->shell.panel.has_value());
     ASSERT_EQ(providerLabel(*snapshot), std::string{"git"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -910,7 +910,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
                     .accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_TRUE(snapshot->presentation()->shell.panel.has_value());
     ASSERT_EQ(providerLabel(*snapshot), std::string{"files"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -918,7 +918,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
                     .accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_TRUE(snapshot->presentation()->shell.panel.has_value());
     ASSERT_EQ(providerLabel(*snapshot), std::string{"git"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -926,14 +926,14 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
                     .accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_FALSE(snapshot->sections().shell.panel.has_value());
+    ASSERT_FALSE(snapshot->presentation()->shell.panel.has_value());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                 {"panel.show_files", runtime.revision(), {}})
                     .accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_TRUE(snapshot->presentation()->shell.panel.has_value());
     ASSERT_EQ(providerLabel(*snapshot), std::string{"files"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -941,7 +941,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
                     .accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_FALSE(snapshot->sections().shell.panel.has_value());
+    ASSERT_FALSE(snapshot->presentation()->shell.panel.has_value());
 }
 
 TEST(panelProviderCycleSelectsTheBoundTreeProvider) {
@@ -1012,7 +1012,7 @@ TEST(chromeNodeCaptionLabelsAreLowercase) {
         });
     };
     auto assertLowercaseCaptions = [&](ssg::SessionSnapshot const& snapshot) {
-        for (const auto& node : snapshot.sections().shell.accessibilityNodes) {
+        for (const auto& node : snapshot.presentation()->shell.accessibilityNodes) {
             switch (node.kind) {
             case ssg::ShellNodeKind::HeaderField:
             case ssg::ShellNodeKind::FooterField:
