@@ -465,6 +465,7 @@ struct EditorRuntime::Impl final : CommandServices,
     // The tree view state with its scroll offset, scrollbar, and visible-window
     // hit map resolved against the last panel height (keep-selection-visible).
     [[nodiscard]] TreeViewState treeView() const;
+    [[nodiscard]] std::vector<TreeWindow> treeWindows() const;
     // Scroll the tree so the selected node is visible, using the last cached
     // panel height. Called on the command path after a selection/expansion change
     // (never during snapshot generation), so it cannot perturb another client.

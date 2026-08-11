@@ -199,10 +199,10 @@ public:
     // EditorRuntime::snapshot: the semantic model and interaction state are never
     //   gated on grid geometry. The dimension-taking overload adds an optional
     //   PresentationSnapshot (viewport, style, footer prompt, shell layout,
-    //   selection scroll); the dimension-less overload returns the identical
-    //   semantic sections with presentation() == nullopt. A client that lays out
-    //   the model natively obtains full semantic state without supplying, or
-    //   paying for, any grid projection.
+    //   selection scroll, tree scroll windows); the dimension-less overload
+    //   returns the identical semantic sections with presentation() == nullopt. A
+    //   client that lays out the model natively obtains full semantic state
+    //   without supplying, or paying for, any grid projection.
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
         ClientId clientId, ViewportDimensions dimensions,
         PaletteReport paletteReport = {}) const;

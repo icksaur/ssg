@@ -79,12 +79,14 @@ RegionHit panelHit(SessionSnapshot const& snapshot, Rect const& panel,
     if (row == panel.y) return {};
     auto const& tree = snapshot.sections().tree;
     if (tree.providers.empty()) return {};
-    auto const& provider = tree.providers.front();
+    auto const& windows = snapshot.presentation()->treeWindows;
+    if (windows.empty()) return {};
+    auto const& window = windows.front();
     auto const viewportRow = static_cast<std::size_t>(row - (panel.y + 1));
-    if (viewportRow >= provider.visibleNodeIds.size()) return {};
+    if (viewportRow >= window.visibleNodeIds.size()) return {};
     RegionHit hit;
     hit.region = HitRegion::Panel;
-    hit.nodeId = provider.visibleNodeIds[viewportRow];
+    hit.nodeId = window.visibleNodeIds[viewportRow];
     return hit;
 }
 
@@ -194,9 +196,9 @@ std::optional<HitTester::GutterThumb> HitTester::gutterThumb(
                     snapshot_.presentation()->viewport.scrollbar);
     case HitRegion::PanelScrollbar: {
         if (!shell.panelScrollbar) return std::nullopt;
-        auto const& tree = snapshot_.sections().tree;
-        if (tree.providers.empty()) return std::nullopt;
-        return make(*shell.panelScrollbar, tree.providers.front().scrollbar);
+        auto const& windows = snapshot_.presentation()->treeWindows;
+        if (windows.empty()) return std::nullopt;
+        return make(*shell.panelScrollbar, windows.front().scrollbar);
     }
     case HitRegion::PaletteScrollbar:
         if (!shell.palette) return std::nullopt;

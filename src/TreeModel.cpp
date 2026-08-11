@@ -647,8 +647,7 @@ TreeDelta TreeDeltaCodec::derive(const TreeViewState& base,
             const auto& added = target.providers[targetIndex];
             result.providers.push_back(TreeProviderDelta{
                 added.providerId, added.kind, false, 0, 0, added.nodes,
-                added.selected, added.firstVisible, added.scrollbar,
-                added.visibleNodeIds});
+                added.selected});
             ++targetIndex;
             continue;
         }
@@ -680,8 +679,7 @@ TreeDelta TreeDeltaCodec::derive(const TreeViewState& base,
                 std::vector<TreeNodeView>{
                     after.nodes.begin() + static_cast<std::ptrdiff_t>(prefix),
                     after.nodes.end() - static_cast<std::ptrdiff_t>(suffix)},
-                after.selected, after.firstVisible, after.scrollbar,
-                after.visibleNodeIds});
+                after.selected});
         }
         ++baseIndex;
         ++targetIndex;
@@ -731,10 +729,7 @@ TreeReplayResult TreeDeltaCodec::replay(const TreeViewState& base,
             }
             state.providers.insert(
                 provider, TreeProviderView{change.providerId, change.kind,
-                                           change.insert, change.selected,
-                                           change.firstVisible,
-                                           change.scrollbar,
-                                           change.visibleNodeIds});
+                                           change.insert, change.selected});
             continue;
         }
         if (change.start > provider->nodes.size() ||
@@ -749,9 +744,6 @@ TreeReplayResult TreeDeltaCodec::replay(const TreeViewState& base,
         first = provider->nodes.erase(first, last);
         provider->nodes.insert(first, change.insert.begin(), change.insert.end());
         provider->selected = change.selected;
-        provider->firstVisible = change.firstVisible;
-        provider->scrollbar = change.scrollbar;
-        provider->visibleNodeIds = change.visibleNodeIds;
     }
     state.revision = delta.revision;
     return {std::move(state), TreeReplayError::None};

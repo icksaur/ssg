@@ -314,9 +314,9 @@ TEST(panelRowMapsToItsTreeNodeId) {
     auto const& shell = snapshot->presentation()->shell;
     ASSERT_TRUE(shell.panel.has_value());
     if (!shell.panel) return;
-    auto const& provider = snapshot->sections().tree.providers.front();
-    ASSERT_FALSE(provider.visibleNodeIds.empty());
-    if (provider.visibleNodeIds.empty()) return;
+    auto const& window = snapshot->presentation()->treeWindows.front();
+    ASSERT_FALSE(window.visibleNodeIds.empty());
+    if (window.visibleNodeIds.empty()) return;
 
     // The provider-label row (panel.y) is not a node.
     auto label = ssg::HitTester{*snapshot}.at( shell.panel->x, shell.panel->y);
@@ -326,7 +326,7 @@ TEST(panelRowMapsToItsTreeNodeId) {
     auto hit = ssg::HitTester{*snapshot}.at( shell.panel->x, shell.panel->y + 1);
     ASSERT_EQ(hit.region, ssg::HitRegion::Panel);
     ASSERT_TRUE(hit.nodeId.has_value());
-    if (hit.nodeId) ASSERT_EQ(*hit.nodeId, provider.visibleNodeIds.front());
+    if (hit.nodeId) ASSERT_EQ(*hit.nodeId, window.visibleNodeIds.front());
 
     // A row below the last visible node is empty.
     auto empty = ssg::HitTester{*snapshot}.at( shell.panel->x, shell.panel->bottom() - 1);

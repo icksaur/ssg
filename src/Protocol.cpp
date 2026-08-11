@@ -1120,6 +1120,8 @@ ProtocolValue toValue(SelectionSetDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionSetDelta>& out);
 ProtocolValue toValue(PromptProjectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptProjectionDelta>& out);
+ProtocolValue toValue(TreeWindowsDelta const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeWindowsDelta>& out);
 ProtocolValue toValue(HistoryViewState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<HistoryViewState>& out);
 ProtocolValue toValue(HistoryDelta const& value);
@@ -1240,6 +1242,8 @@ ProtocolValue toValue(TreeNodeView const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeView>& out);
 ProtocolValue toValue(TreeProviderView const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderView>& out);
+ProtocolValue toValue(TreeWindow const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeWindow>& out);
 ProtocolValue toValue(TreeViewState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeViewState>& out);
 ProtocolValue toValue(TreeProviderDelta const& value);
@@ -2163,6 +2167,23 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptProjectionDel
     std::optional<PromptViewState> replacement;
     if (!decodeOptionalField(value.field("replacement"), replacement)) return false;
     out.emplace(PromptProjectionDelta{*changed, std::move(replacement)});
+    return true;
+}
+
+ProtocolValue toValue(TreeWindowsDelta const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("changed", toValue(value.changed));
+    fields.emplace_back("replacement", toValue(value.replacement));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<TreeWindowsDelta>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto changed = requireField<bool>(value.field("changed"));
+    if (!changed) return false;
+    std::optional<std::vector<TreeWindow>> replacement;
+    if (!decodeOptionalField(value.field("replacement"), replacement)) return false;
+    out.emplace(TreeWindowsDelta{*changed, std::move(replacement)});
     return true;
 }
 
@@ -3989,9 +4010,6 @@ ProtocolValue toValue(TreeProviderView const& value) {
     fields.emplace_back("kind", toValue(value.kind));
     fields.emplace_back("nodes", toValue(value.nodes));
     fields.emplace_back("selected", toValue(value.selected));
-    fields.emplace_back("first_visible", toValue(value.firstVisible));
-    fields.emplace_back("scrollbar", toValue(value.scrollbar));
-    fields.emplace_back("visible_node_ids", toValue(value.visibleNodeIds));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderView>& out) {
@@ -4003,14 +4021,27 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderView>& 
     std::optional<TreeNodeId> selected;
     if (!providerId || !kind || !nodes) return false;
     if (!decodeOptionalField(value.field("selected"), selected)) return false;
+    out.emplace(TreeProviderView{*providerId, *kind, *nodes, selected});
+    return true;
+}
+
+ProtocolValue toValue(TreeWindow const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("first_visible", toValue(value.firstVisible));
+    fields.emplace_back("scrollbar", toValue(value.scrollbar));
+    fields.emplace_back("visible_node_ids", toValue(value.visibleNodeIds));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<TreeWindow>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
     auto firstVisible = requireField<std::uint32_t>(value.field("first_visible"));
     auto scrollbar = requireField<ScrollbarMetrics>(value.field("scrollbar"));
     auto visibleNodeIds =
         requireField<std::vector<TreeNodeId>>(value.field("visible_node_ids"));
     if (!firstVisible || !scrollbar || !visibleNodeIds) return false;
-    out.emplace(TreeProviderView{*providerId, *kind, *nodes, selected,
-                                 *firstVisible, *scrollbar,
-                                 std::move(*visibleNodeIds)});
+    out.emplace(TreeWindow{*firstVisible, *scrollbar,
+                           std::move(*visibleNodeIds)});
     return true;
 }
 
@@ -4039,9 +4070,6 @@ ProtocolValue toValue(TreeProviderDelta const& value) {
     fields.emplace_back("erase_count", toValue(static_cast<std::uint64_t>(value.eraseCount)));
     fields.emplace_back("insert", toValue(value.insert));
     fields.emplace_back("selected", toValue(value.selected));
-    fields.emplace_back("first_visible", toValue(value.firstVisible));
-    fields.emplace_back("scrollbar", toValue(value.scrollbar));
-    fields.emplace_back("visible_node_ids", toValue(value.visibleNodeIds));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderDelta>& out) {
@@ -4058,16 +4086,10 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderDelta>&
     }
     std::optional<TreeNodeId> selected;
     if (!decodeOptionalField(value.field("selected"), selected)) return false;
-    auto firstVisible = requireField<std::uint32_t>(value.field("first_visible"));
-    auto scrollbar = requireField<ScrollbarMetrics>(value.field("scrollbar"));
-    auto visibleNodeIds =
-        requireField<std::vector<TreeNodeId>>(value.field("visible_node_ids"));
-    if (!firstVisible || !scrollbar || !visibleNodeIds) return false;
     out.emplace(TreeProviderDelta{*providerId, *kind, *removeProvider,
                                   static_cast<std::size_t>(*start),
                                   static_cast<std::size_t>(*eraseCount), *insert,
-                                  selected, *firstVisible, *scrollbar,
-                                  std::move(*visibleNodeIds)});
+                                  selected});
     return true;
 }
 
@@ -4803,6 +4825,7 @@ ProtocolValue toValue(PresentationSnapshot const& value) {
     fields.emplace_back("prompt", toValue(value.prompt));
     fields.emplace_back("shell", toValue(value.shell));
     fields.emplace_back("selection_nav", toValue(value.selectionNav));
+    fields.emplace_back("tree_windows", toValue(value.treeWindows));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapshot>& out) {
@@ -4812,12 +4835,13 @@ bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapsho
     auto style = requireField<Style>(value.field("style"));
     auto shell = requireField<ShellViewState>(value.field("shell"));
     auto selectionNav = requireField<SelectionNavigation>(value.field("selection_nav"));
-    if (!viewport || !style || !shell || !selectionNav) return false;
+    auto treeWindows = requireField<std::vector<TreeWindow>>(value.field("tree_windows"));
+    if (!viewport || !style || !shell || !selectionNav || !treeWindows) return false;
     std::optional<PromptViewState> prompt;
     if (!decodeOptionalField(value.field("prompt"), prompt)) return false;
     out.emplace(PresentationSnapshot{*viewport, std::move(*style),
                                      std::move(prompt), std::move(*shell),
-                                     *selectionNav});
+                                     *selectionNav, std::move(*treeWindows)});
     return true;
 }
 
@@ -5515,6 +5539,7 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     fields.emplace_back("focus", toValue(delta.focus()));
     fields.emplace_back("selection_nav", toValue(delta.selectionNav()));
     fields.emplace_back("prompt_projection", toValue(delta.promptProjection()));
+    fields.emplace_back("tree_windows", toValue(delta.treeWindows()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5579,13 +5604,14 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
     auto viewport = requireField<ViewportDelta>(payload.field("viewport"));
     auto selectionNav = requireField<SelectionNavigationDelta>(payload.field("selection_nav"));
     auto promptProjection = requireField<PromptProjectionDelta>(payload.field("prompt_projection"));
+    auto treeWindows = requireField<TreeWindowsDelta>(payload.field("tree_windows"));
 
     if (!optionalOk || !baseRevision || !revision || !clientId || !viewId ||
         !capabilities || !selection || !history || !clipboard ||
         !promptStatus || !search || !findReplace || !settings || !keymap ||
         !tabs || !diff || !externalModification || !followEdits || !tree ||
         !syntax || !lspSync || !lspFeatures || !theme || !style || !shell ||
-        !viewport || !selectionNav || !promptProjection) {
+        !viewport || !selectionNav || !promptProjection || !treeWindows) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "session delta payload is malformed"};
     }
@@ -5605,7 +5631,8 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*lspFeatures), std::move(*theme),
                 std::move(*style),
                 std::move(*shell), std::move(*viewport), std::move(focus),
-                std::move(*selectionNav), std::move(*promptProjection)),
+                std::move(*selectionNav), std::move(*promptProjection),
+                std::move(*treeWindows)),
             {}};
 }
 

@@ -156,16 +156,21 @@ struct TreeProviderView {
     TreeProviderKind kind;
     std::vector<TreeNodeView> nodes;
     std::optional<TreeNodeId> selected;
-    // Scroll state resolved at snapshot time against the panel height.
-    // `first_visible` is the index into `nodes` of the
-    // first on-screen node; `scrollbar` is its thumb geometry; `visible_node_ids`
-    // is the bounded viewport_row -> node id hit map for the visible window only
-    // (empty when the panel is hidden). `nodes` still carries the full expanded
-    // list; render and hit-testing window it with `first_visible`.
+    bool operator==(const TreeProviderView&) const = default;
+};
+
+// Grid projection of a tree provider's scroll window, resolved at snapshot time
+// against the panel height. Pure presentation -- lives in PresentationSnapshot,
+// not the semantic tree section. `firstVisible` is the index into the provider's
+// `nodes` of the first on-screen node; `scrollbar` is its thumb geometry;
+// `visibleNodeIds` is the bounded viewport_row -> node id hit map for the visible
+// window only (empty when the panel is hidden). The semantic `nodes` carries the
+// full expanded list; a grid client windows it with this.
+struct TreeWindow {
     std::uint32_t firstVisible = 0;
     ScrollbarMetrics scrollbar{};
     std::vector<TreeNodeId> visibleNodeIds;
-    bool operator==(const TreeProviderView&) const = default;
+    bool operator==(const TreeWindow&) const = default;
 };
 
 struct TreeViewState {
@@ -262,13 +267,7 @@ struct TreeProviderDelta {
     std::size_t start = 0;
     std::size_t eraseCount = 0;
     std::vector<TreeNodeView> insert;
-    // Resolved scroll state carried so a delta reproduces the provider view even
-    // when only the panel-height-resolved scroll state changed (e.g. showing the
-    // panel) with no node edit or tree-revision bump.  Ignored for removals.
     std::optional<TreeNodeId> selected;
-    std::uint32_t firstVisible = 0;
-    ScrollbarMetrics scrollbar{};
-    std::vector<TreeNodeId> visibleNodeIds;
     bool operator==(const TreeProviderDelta&) const = default;
 };
 

@@ -100,7 +100,8 @@ bool operator==(SessionSnapshotSections const& left,
 bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
     return viewport == other.viewport && style == other.style &&
            prompt == other.prompt && shellEqual(shell, other.shell) &&
-           selectionNav == other.selectionNav;
+           selectionNav == other.selectionNav &&
+           treeWindows == other.treeWindows;
 }
 
 SessionSnapshot::SessionSnapshot(Revision revision, SessionTopology topology,
@@ -136,7 +137,7 @@ SessionDelta::SessionDelta(
     ThemeSectionDelta theme, StyleSectionDelta style,
     ShellSectionDelta shell, ViewportDelta viewport,
     std::optional<FocusTarget> focus, SelectionNavigationDelta selectionNav,
-    PromptProjectionDelta promptProjection)
+    PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -168,21 +169,24 @@ SessionDelta::SessionDelta(
       viewport_{std::move(viewport)},
       focus_{focus},
       selectionNav_{std::move(selectionNav)},
-      promptProjection_{std::move(promptProjection)} {}
+      promptProjection_{std::move(promptProjection)},
+      treeWindows_{std::move(treeWindows)} {}
 
 SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
     InvocationPrincipal const& principal, ViewId viewId,
     ViewportViewState viewport, SessionSnapshotSections sections,
     Style style, std::optional<PromptViewState> prompt,
-    ShellViewState shell, SelectionNavigation selectionNav) const {
+    ShellViewState shell, SelectionNavigation selectionNav,
+    std::vector<TreeWindow> treeWindows) const {
     return {revision,
             std::move(topology),
             {principal.clientId(), viewId, principal.capabilities()},
             std::move(sections),
             PresentationSnapshot{std::move(viewport), std::move(style),
                                  std::move(prompt), std::move(shell),
-                                 std::move(selectionNav)}};
+                                 std::move(selectionNav),
+                                 std::move(treeWindows)}};
 }
 
 SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
@@ -281,6 +285,13 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
             : (after.presentation()
                    ? PromptProjectionDelta{true, after.presentation()->prompt}
                    : PromptProjectionDelta{}),
+        (before.presentation() && after.presentation() &&
+                 before.presentation()->treeWindows ==
+                     after.presentation()->treeWindows)
+            ? TreeWindowsDelta{}
+            : (after.presentation()
+                   ? TreeWindowsDelta{true, after.presentation()->treeWindows}
+                   : TreeWindowsDelta{}),
     };
 }
 
@@ -408,10 +419,15 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         auto prompt = delta.promptProjection_.changed
                           ? delta.promptProjection_.replacement
                           : base.presentation()->prompt;
+        auto treeWindows = delta.treeWindows_.changed
+                               ? delta.treeWindows_.replacement.value_or(
+                                     std::vector<TreeWindow>{})
+                               : base.presentation()->treeWindows;
         presentation = PresentationSnapshot{
             viewport.value_or(base.presentation()->viewport),
             std::move(style), std::move(prompt),
-            std::move(shell), std::move(selectionNav)};
+            std::move(shell), std::move(selectionNav),
+            std::move(treeWindows)};
     }
     return {SessionSnapshot{
                 delta.revision_,
@@ -441,7 +457,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     ViewportDelta viewport,
     std::optional<FocusTarget> focus,
     SelectionNavigationDelta selectionNav,
-    PromptProjectionDelta promptProjection) const {
+    PromptProjectionDelta promptProjection,
+    TreeWindowsDelta treeWindows) const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,
@@ -473,7 +490,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(viewport),
                         focus,
                         std::move(selectionNav),
-                        std::move(promptProjection)};
+                        std::move(promptProjection),
+                        std::move(treeWindows)};
 }
 
 }  // namespace ssg

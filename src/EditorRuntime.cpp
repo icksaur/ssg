@@ -2452,11 +2452,13 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
     ssg::SelectionNavigation selectionNav{impl_->selection.firstVisualRow,
                                           impl_->selection.firstVisualColumn,
                                           impl_->selection.desiredCell};
+    auto treeWindows = impl_->treeWindows();
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
                                      std::move(viewport), std::move(sections),
                                      impl_->style, std::move(promptView),
-                                     std::move(shell), selectionNav);
+                                     std::move(shell), selectionNav,
+                                     std::move(treeWindows));
 }
 
 std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId,

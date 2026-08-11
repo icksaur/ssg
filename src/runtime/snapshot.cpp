@@ -315,14 +315,20 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
 }
 
 TreeViewState EditorRuntime::Impl::treeView() const {
+    // Semantic only: providers, nodes, selection, expansion. The grid scroll
+    // window is a presentation projection produced by treeWindows().
+    return tree.viewState();
+}
+
+std::vector<TreeWindow> EditorRuntime::Impl::treeWindows() const {
     auto view = tree.viewState();
-    if (view.providers.empty()) return view;
+    if (view.providers.empty()) return {};
     // Only the active (front) provider is rendered. Resolve a display window from
     // the command-set offset and the current client's panel height WITHOUT
     // persisting anything: keep-visible ran on the command path, so here we only
     // clamp the offset to this height and window the nodes. This keeps snapshot
     // generation a pure read (no cross-client scroll interference).
-    auto& provider = view.providers.front();
+    auto const& provider = view.providers.front();
     std::optional<std::uint32_t> selectedIndex;
     if (provider.selected) {
         for (std::size_t i = 0; i < provider.nodes.size(); ++i) {
@@ -336,15 +342,15 @@ TreeViewState EditorRuntime::Impl::treeView() const {
         static_cast<std::uint32_t>(provider.nodes.size()),
         lastPanelContentRows, treeFirstVisible, selectedIndex,
         /*keep_selection_visible=*/false);
-    provider.firstVisible = scroll.firstVisible;
-    provider.scrollbar = scroll.scrollbar;
-    provider.visibleNodeIds.clear();
-    provider.visibleNodeIds.reserve(scroll.visibleCount);
+    TreeWindow window;
+    window.firstVisible = scroll.firstVisible;
+    window.scrollbar = scroll.scrollbar;
+    window.visibleNodeIds.reserve(scroll.visibleCount);
     for (std::uint32_t row = 0; row < scroll.visibleCount; ++row) {
-        provider.visibleNodeIds.push_back(
+        window.visibleNodeIds.push_back(
             provider.nodes[scroll.firstVisible + row].node.id);
     }
-    return view;
+    return {std::move(window)};
 }
 
 void EditorRuntime::Impl::revealTreeSelection() {

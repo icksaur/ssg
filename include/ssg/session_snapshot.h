@@ -90,6 +90,9 @@ struct PresentationSnapshot {
     // The selection's grid scroll projection (scroll anchor + desired cell); the
     // semantic selection set is SessionSnapshotSections::selection.
     SelectionNavigation selectionNav;
+    // Per-provider tree scroll windows (grid projection); the semantic tree
+    // (nodes, selection, expansion) is SessionSnapshotSections::tree.
+    std::vector<TreeWindow> treeWindows;
 
     // Not defaulted: ShellViewState has no operator== (it is compared field-wise
     // excluding palette; see the .cpp).
@@ -164,6 +167,13 @@ struct PromptProjectionDelta {
     std::optional<PromptViewState> replacement;
 };
 
+// Delta of the tree scroll windows (whole-value replacement; the windows are a
+// pure projection recomputed each snapshot, so no incremental encoding).
+struct TreeWindowsDelta {
+    bool changed = false;
+    std::optional<std::vector<TreeWindow>> replacement;
+};
+
 struct SessionReplayResult;
 
 class SessionDelta {
@@ -200,6 +210,9 @@ public:
     }
     [[nodiscard]] PromptProjectionDelta const& promptProjection() const noexcept {
         return promptProjection_;
+    }
+    [[nodiscard]] TreeWindowsDelta const& treeWindows() const noexcept {
+        return treeWindows_;
     }
     [[nodiscard]] HistoryDelta const& history() const noexcept {
         return history_;
@@ -280,7 +293,8 @@ private:
         ViewportDelta viewport,
         std::optional<FocusTarget> focus = std::nullopt,
         SelectionNavigationDelta selectionNav = {},
-        PromptProjectionDelta promptProjection = {});
+        PromptProjectionDelta promptProjection = {},
+        TreeWindowsDelta treeWindows = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -314,6 +328,7 @@ private:
     std::optional<FocusTarget> focus_;
     SelectionNavigationDelta selectionNav_;
     PromptProjectionDelta promptProjection_;
+    TreeWindowsDelta treeWindows_;
 };
 
 struct SessionReplayResult {
@@ -334,7 +349,8 @@ public:
         Style style = {},
         std::optional<PromptViewState> prompt = {},
         ShellViewState shell = {},
-        SelectionNavigation selectionNav = {}) const;
+        SelectionNavigation selectionNav = {},
+        std::vector<TreeWindow> treeWindows = {}) const;
     [[nodiscard]] SessionDelta deriveDelta(SessionSnapshot const& before,
                                            SessionSnapshot const& after) const;
     [[nodiscard]] SessionReplayResult replay(SessionSnapshot const& base,
@@ -361,7 +377,8 @@ public:
         ViewportDelta viewport,
         std::optional<FocusTarget> focus = std::nullopt,
         SelectionNavigationDelta selectionNav = {},
-        PromptProjectionDelta promptProjection = {}) const;
+        PromptProjectionDelta promptProjection = {},
+        TreeWindowsDelta treeWindows = {}) const;
 };
 
 }  // namespace ssg

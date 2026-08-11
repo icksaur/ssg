@@ -480,7 +480,8 @@ void paintScrollGutter(CellGrid& grid, int x, int y, int height,
 
 void paintPanelTree(CellGrid& grid, Rect const& panel,
                       std::optional<Rect> const& panelScrollbar,
-                      TreeViewState const& tree, ThemeSnapshot const& theme,
+                      TreeViewState const& tree, TreeWindow const& window,
+                      ThemeSnapshot const& theme,
                       std::uint8_t background, bool focused,
                       Style const& style) {
     if (tree.providers.empty() || panel.width <= 0) return;
@@ -496,7 +497,7 @@ void paintPanelTree(CellGrid& grid, Rect const& panel,
     // Window the visible nodes at the resolved scroll offset.
     for (int row = 0; row < rows; ++row) {
         std::size_t const index =
-            static_cast<std::size_t>(provider.firstVisible) +
+            static_cast<std::size_t>(window.firstVisible) +
             static_cast<std::size_t>(row);
         if (index >= provider.nodes.size()) break;
         auto const& view = provider.nodes[index];
@@ -522,7 +523,7 @@ void paintPanelTree(CellGrid& grid, Rect const& panel,
     // Paint the reserved gutter (blank when the tree fits).
     if (panelScrollbar) {
         paintScrollGutter(grid, panelScrollbar->x, panelScrollbar->y,
-                            panelScrollbar->height, provider.scrollbar, theme,
+                            panelScrollbar->height, window.scrollbar, theme,
                             background, style);
     }
 }
@@ -1219,8 +1220,14 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
     paintShellLeaves(grid, shell, theme, background, panelBackground, style);
 
     if (shell.panel) {
+        // The tree window (grid projection) lives in presentation; it holds the
+        // active provider's scroll offset and thumb. Empty when no provider or no
+        // presentation (a native-layout client never calls this renderer).
+        static TreeWindow const emptyWindow{};
+        auto const& windows = snapshot.presentation()->treeWindows;
+        auto const& window = windows.empty() ? emptyWindow : windows.front();
         paintPanelTree(grid, *shell.panel, shell.panelScrollbar,
-                         snapshot.sections().tree, theme,
+                         snapshot.sections().tree, window, theme,
                          panelBackground, snapshot.sections().focus == FocusTarget::Panel,
                          style);
     }

@@ -1308,13 +1308,14 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         auto const& p = snap->sections().tree.providers.front();
+        auto const& w = snap->presentation()->treeWindows.front();
         ASSERT_TRUE(p.nodes.size() >= 40);
-        ASSERT_EQ(p.firstVisible, std::uint32_t{0});
-        ASSERT_TRUE(p.scrollbar.maximumFirstRow > 0);          // scrollable
-        ASSERT_TRUE(p.scrollbar.thumbSize < p.scrollbar.viewportRows);
-        ASSERT_EQ(p.visibleNodeIds.size(),
-                  std::size_t{p.scrollbar.viewportRows});       // window bound
-        ASSERT_EQ(p.visibleNodeIds.front(), p.nodes.front().node.id);
+        ASSERT_EQ(w.firstVisible, std::uint32_t{0});
+        ASSERT_TRUE(w.scrollbar.maximumFirstRow > 0);          // scrollable
+        ASSERT_TRUE(w.scrollbar.thumbSize < w.scrollbar.viewportRows);
+        ASSERT_EQ(w.visibleNodeIds.size(),
+                  std::size_t{w.scrollbar.viewportRows});       // window bound
+        ASSERT_EQ(w.visibleNodeIds.front(), p.nodes.front().node.id);
     }
 
     // Move the selection to the bottom: the window scrolls to keep it shown.
@@ -1327,6 +1328,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         auto const& p = snap->sections().tree.providers.front();
+        auto const& w = snap->presentation()->treeWindows.front();
         ASSERT_TRUE(p.selected.has_value());
         // The selected node's absolute index lies within the visible window.
         std::optional<std::uint32_t> selIndex;
@@ -1334,15 +1336,15 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
             if (p.nodes[i].node.id == *p.selected) { selIndex = i; break; }
         }
         ASSERT_TRUE(selIndex.has_value());
-        ASSERT_TRUE(p.firstVisible > 0);
-        ASSERT_TRUE(*selIndex >= p.firstVisible &&
-                    *selIndex < p.firstVisible + p.visibleNodeIds.size());
+        ASSERT_TRUE(w.firstVisible > 0);
+        ASSERT_TRUE(*selIndex >= w.firstVisible &&
+                    *selIndex < w.firstVisible + w.visibleNodeIds.size());
         // The hit map maps each viewport row to the correct on-screen node id.
-        for (std::size_t row = 0; row < p.visibleNodeIds.size(); ++row) {
-            ASSERT_EQ(p.visibleNodeIds[row],
-                      p.nodes[p.firstVisible + row].node.id);
+        for (std::size_t row = 0; row < w.visibleNodeIds.size(); ++row) {
+            ASSERT_EQ(w.visibleNodeIds[row],
+                      p.nodes[w.firstVisible + row].node.id);
         }
-        deepFirst = p.firstVisible;
+        deepFirst = w.firstVisible;
     }
     ASSERT_TRUE(deepFirst > 0);
 
@@ -1354,7 +1356,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
-        ASSERT_EQ(snap->sections().tree.providers.front().firstVisible, std::uint32_t{0});
+        ASSERT_EQ(snap->presentation()->treeWindows.front().firstVisible, std::uint32_t{0});
     }
     std::filesystem::remove_all(root);
 }
@@ -1501,8 +1503,9 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(baseline.has_value());
     if (!baseline) return;
     auto const& p0 = baseline->sections().tree.providers.front();
-    ASSERT_EQ(p0.firstVisible, std::uint32_t{0});
-    ASSERT_TRUE(p0.scrollbar.maximumFirstRow > 0);
+    auto const& w0 = baseline->presentation()->treeWindows.front();
+    ASSERT_EQ(w0.firstVisible, std::uint32_t{0});
+    ASSERT_TRUE(w0.scrollbar.maximumFirstRow > 0);
     auto const selectedBefore = p0.selected;
 
     // Wheel down: the viewport offset advances, but the selection does not move.
@@ -1513,7 +1516,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
     auto const& p1 = scrolled->sections().tree.providers.front();
-    ASSERT_EQ(p1.firstVisible, std::uint32_t{3});
+    ASSERT_EQ(scrolled->presentation()->treeWindows.front().firstVisible, std::uint32_t{3});
     ASSERT_EQ(p1.selected, selectedBefore);  // selection unchanged
 
     // Wheel up past the top clamps at 0.
@@ -1523,7 +1526,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     auto topped = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(topped.has_value());
     if (!topped) return;
-    ASSERT_EQ(topped->sections().tree.providers.front().firstVisible, std::uint32_t{0});
+    ASSERT_EQ(topped->presentation()->treeWindows.front().firstVisible, std::uint32_t{0});
 
     // Wheel down past the bottom clamps at maximum_first_row.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -1532,8 +1535,8 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     auto bottomed = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(bottomed.has_value());
     if (!bottomed) return;
-    auto const& p3 = bottomed->sections().tree.providers.front();
-    ASSERT_EQ(p3.firstVisible, p3.scrollbar.maximumFirstRow);
+    auto const& w3 = bottomed->presentation()->treeWindows.front();
+    ASSERT_EQ(w3.firstVisible, w3.scrollbar.maximumFirstRow);
 
     // A missing payload is rejected.
     ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},

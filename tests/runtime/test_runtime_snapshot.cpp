@@ -620,6 +620,10 @@ TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
+    // Show the panel and select a node so the tree has a live scroll window: the
+    // window is grid projection and must NOT leak into the semantic tree section.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
 
     // A grid client (with dimensions) and a native client (without) taken at the
     // same revision.
@@ -634,10 +638,17 @@ TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
     ASSERT_TRUE(grid->presentation().has_value());
     ASSERT_FALSE(semantic->presentation().has_value());
 
-    // The semantic sections are byte-for-byte identical: the document, the
-    // selection set, the tabs, the keymap, the theme roles, the focus. Geometry
-    // does not change what the model IS.
+    // The grid client's tree scroll window is live (populated), proving the
+    // windowing happens in presentation -- not in the semantic tree section.
+    ASSERT_FALSE(grid->presentation()->treeWindows.empty());
+    ASSERT_FALSE(grid->presentation()->treeWindows.front().visibleNodeIds.empty());
+
+    // The semantic sections are byte-for-byte identical: document, selection set,
+    // tabs, keymap, theme roles, focus, AND the tree (nodes/selection/expansion,
+    // with no scroll window). Geometry does not change what the model IS.
     ASSERT_TRUE(grid->sections() == semantic->sections());
+    ASSERT_TRUE(grid->sections().tree == semantic->sections().tree);
+    ASSERT_FALSE(semantic->sections().tree.providers.empty());
 
     // The same command drives the same semantic result on the dimensionless path:
     // an edit is visible in a subsequent dimensionless snapshot with no geometry

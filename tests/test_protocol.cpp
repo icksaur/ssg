@@ -744,11 +744,13 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
         ssg::TreeProviderId{"files"}, ssg::TreeProviderKind::Filesystem,
         {ssg::TreeNodeView{nodeA, 0, false}, ssg::TreeNodeView{nodeB, 0, false}},
         ssg::TreeNodeId{"files:b"}};
-    provider.firstVisible = 3;
-    provider.scrollbar = ssg::Viewport{}.scrollbarMetrics(40, 9, 3);
-    provider.visibleNodeIds = {ssg::TreeNodeId{"files:a"},
-                                 ssg::TreeNodeId{"files:b"}};
     sectionsValue.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
+    // The tree scroll window is a presentation projection.
+    ssg::TreeWindow treeWindow;
+    treeWindow.firstVisible = 3;
+    treeWindow.scrollbar = ssg::Viewport{}.scrollbarMetrics(40, 9, 3);
+    treeWindow.visibleNodeIds = {ssg::TreeNodeId{"files:a"},
+                                 ssg::TreeNodeId{"files:b"}};
     // Also exercise the shell panel scrollbar gutter geometry on the wire.
     ssg::ShellViewState shell;
     shell.panel = ssg::Rect{0, 1, 24, 10};
@@ -762,18 +764,19 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3), std::move(sectionsValue), {}, {},
-        std::move(shell));
+        std::move(shell), {}, {treeWindow});
     auto const decoded =
         ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
-    // Whole-section equality proves the new scroll fields survive the wire.
+    // Whole-section equality proves the semantic tree survives the wire.
     ASSERT_EQ(decoded.snapshot->sections().tree, snapshot.sections().tree);
-    auto const& p = decoded.snapshot->sections().tree.providers.front();
-    ASSERT_EQ(p.firstVisible, std::uint32_t{3});
-    ASSERT_EQ(p.scrollbar, ssg::Viewport{}.scrollbarMetrics(40, 9, 3));
-    ASSERT_EQ(p.visibleNodeIds.size(), std::size_t{2});
+    // And the presentation tree window round-trips.
+    auto const& w = decoded.snapshot->presentation()->treeWindows.front();
+    ASSERT_EQ(w.firstVisible, std::uint32_t{3});
+    ASSERT_EQ(w.scrollbar, ssg::Viewport{}.scrollbarMetrics(40, 9, 3));
+    ASSERT_EQ(w.visibleNodeIds.size(), std::size_t{2});
     ASSERT_TRUE(decoded.snapshot->presentation()->shell.panelScrollbar.has_value());
     ASSERT_EQ(decoded.snapshot->presentation()->shell.panelScrollbar,
               snapshot.presentation()->shell.panelScrollbar);
