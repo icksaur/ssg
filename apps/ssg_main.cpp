@@ -24,6 +24,7 @@
 #include <ssg/LuaCommandHost.h>
 #include <ssg/ScriptHost.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/PaletteSubmit.h>
 #include <ssg/Picker.h>
 #include <ssg/platform_files.h>
 #include <ssg/session_snapshot.h>
@@ -1002,17 +1003,8 @@ int main(int argc, char** argv) {
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
         if (order.empty() || picker.selected >= order.size()) return;
         auto const& id = candidates[order[picker.selected]].id;
-        switch (pickerMode) {
-        case ssg::SearchMode::Command:
-            dispatch("palette.execute", ssg::PaletteExecuteArguments{id});
-            break;
-        case ssg::SearchMode::File:
-            // The server closes the picker when the open succeeds, so a
-            // rejected open leaves it up with the query intact.
-            dispatch("file.open", id);
-            break;
-        default:
-            break;
+        if (auto const submit = ssg::paletteSubmitCommand(pickerMode, id)) {
+            dispatch(submit->command.name(), submit->payload);
         }
     };
     // Dispatch a resolved command, fulfilling prompt-context commands against the
