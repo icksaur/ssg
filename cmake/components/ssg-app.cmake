@@ -1,38 +1,15 @@
 # The \`ssg\` terminal editor application.  Owns terminal I/O only; all editor,
 # layout, and rendering behavior is in the ssg library.
+#
+# The web client asset served by `ssg --http` is embedded by
+# app-web-asset.cmake, which sorts before this manifest and defines
+# SSG_WEB_ASSET_TU. Both ssg_app and ssg_startup_probe compile it in.
 
-# The web client asset (served by `ssg --http`) is embedded into the binary at
-# build so a node test can exercise the real reconcile.mjs and the markup/JS stay
-# readable files. SSG_WEB_ASSET_TU is reused by ssg_startup_probe, which compiles
-# the same http_serve.cpp; component includes share scope, and this manifest
-# sorts before startup-benchmark.cmake.
-set(_SSG_WEB_ASSETS
-    "index.html=${SSG_SOURCE_DIR}/apps/web/index.html"
-    "client.mjs=${SSG_SOURCE_DIR}/apps/web/client.mjs"
-    "reconcile.mjs=${SSG_SOURCE_DIR}/apps/web/reconcile.mjs"
-)
-set(_SSG_WEB_ASSET_FILES
-    ${SSG_SOURCE_DIR}/apps/web/index.html
-    ${SSG_SOURCE_DIR}/apps/web/client.mjs
-    ${SSG_SOURCE_DIR}/apps/web/reconcile.mjs
-)
-set(SSG_WEB_ASSET_TU ${CMAKE_BINARY_DIR}/generated/web_assets.cpp)
-set(_SSG_WEB_ASSET_SPEC ${CMAKE_BINARY_DIR}/generated/web_assets.spec)
-string(JOIN "\n" _SSG_WEB_ASSET_TEXT ${_SSG_WEB_ASSETS})
-file(GENERATE OUTPUT ${_SSG_WEB_ASSET_SPEC} CONTENT "${_SSG_WEB_ASSET_TEXT}\n")
-add_custom_command(
-    OUTPUT ${SSG_WEB_ASSET_TU}
-    COMMAND ${CMAKE_COMMAND}
-        -DEMBED_SPEC_FILE=${_SSG_WEB_ASSET_SPEC}
-        -DEMBED_OUTPUT=${SSG_WEB_ASSET_TU}
-        -DEMBED_NAMESPACE=ssg::app
-        -DEMBED_ACCESSOR=embeddedWebAsset
-        -P ${SSG_SOURCE_DIR}/cmake/embed_text.cmake
-    DEPENDS ${_SSG_WEB_ASSET_FILES}
-            ${_SSG_WEB_ASSET_SPEC}
-            ${SSG_SOURCE_DIR}/cmake/embed_text.cmake
-    COMMENT "Embedding ssg web client asset"
-    VERBATIM)
+if(NOT DEFINED SSG_WEB_ASSET_TU)
+    message(FATAL_ERROR
+        "SSG_WEB_ASSET_TU is unset: app-web-asset.cmake must be included before "
+        "ssg-app.cmake")
+endif()
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(ssg_app
@@ -62,4 +39,20 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_ssg_app PRIVATE ssg)
     add_test(NAME test_ssg_app COMMAND test_ssg_app)
+
+    # The web client's local-echo reconciliation is exercised by running the real
+    # reconcile.mjs under node -- the client code the browser ships, not a copy.
+    # Guarded by node's presence: absence skips (not fails) the test, since node
+    # is not a build dependency of the C++ editor.
+    find_program(SSG_NODE_EXECUTABLE node)
+    if(SSG_NODE_EXECUTABLE)
+        add_test(NAME test_web_reconcile
+                 COMMAND ${SSG_NODE_EXECUTABLE}
+                         ${SSG_SOURCE_DIR}/tests/web/test_reconcile.mjs)
+    else()
+        message(WARNING
+            "node not found: the web client's local-echo reconciliation oracle "
+            "(test_web_reconcile) is SKIPPED, leaving reconcile.mjs untested on "
+            "this configuration")
+    endif()
 endif()

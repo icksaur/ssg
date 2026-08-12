@@ -18,10 +18,13 @@
 
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -57,10 +60,12 @@ constexpr std::array<WebAsset, 3> kWebAssets{{
 // Map the runtime's live focus and active prompt onto the shared routing seam,
 // so the web host makes the exact text-routing decision the TUI does. The
 // palette query is the one client-owned derived view: the browser edits it
-// locally, so an AppendPaletteQuery result dispatches nothing here.
-void routeText(EditorRuntime& runtime, ClientId client, std::string const& text) {
+// locally, so an AppendPaletteQuery result dispatches nothing here. Returns true
+// when a library command was actually dispatched, so the caller settles a
+// predicted edit only once it has genuinely been resolved by the runtime.
+bool routeText(EditorRuntime& runtime, ClientId client, std::string const& text) {
     auto snapshot = runtime.snapshot(client);
-    if (!snapshot) return;
+    if (!snapshot) return false;
     auto const& sections = snapshot->sections();
     PromptRoutingState state;
     state.focus = sections.focus;
@@ -94,41 +99,68 @@ void routeText(EditorRuntime& runtime, ClientId client, std::string const& text)
     case PromptTextRoute::Kind::Dispatch:
         (void)runtime.dispatch(
             client, {route.command, runtime.revision(), route.payload});
-        break;
+        return true;
     case PromptTextRoute::Kind::AppendPaletteQuery:
     case PromptTextRoute::Kind::Ignore:
         break;
     }
+    return false;
 }
 
-// Drive a KEY:<event.code>:<mods>:<text> frame exactly as the TUI's keystroke
-// path: a printable without a keycode routes as text; a keycode resolves against
-// the keymap for the current focus and dispatches when bound, otherwise falls
-// back to inserting its text. Single-stroke resolution mirrors the TUI, which
-// also passes one stroke per resolve; a per-connection pending buffer would give
-// the web host multi-stroke behavior the TUI does not have, so it is deferred
-// until the keymap grows a multi-stroke binding and both clients adopt it.
-void handleKey(EditorRuntime& runtime, ClientId client,
-               CompiledKeymap const& keymap, std::string_view body) {
-    auto const firstColon = body.find(':');
-    if (firstColon == std::string_view::npos) return;
-    auto const secondColon = body.find(':', firstColon + 1);
-    if (secondColon == std::string_view::npos) return;
-    std::string_view const codeName = body.substr(0, firstColon);
-    std::string_view const mods =
-        body.substr(firstColon + 1, secondColon - firstColon - 1);
-    std::string const text{body.substr(secondColon + 1)};
+// A parsed KEY:<event.code>:<mods>:<editId>:<text> frame. editId is present when
+// the client predicted this input locally (caret-anchored text insertion) and
+// wants it settled; it comes before text so text may itself contain ':'.
+struct KeyFrame {
+    std::string_view code;
+    std::string_view mods;
+    std::optional<std::uint64_t> editId;
+    std::string text;
+};
 
+std::optional<KeyFrame> parseKeyFrame(std::string_view body) {
+    auto const c1 = body.find(':');
+    if (c1 == std::string_view::npos) return std::nullopt;
+    auto const c2 = body.find(':', c1 + 1);
+    if (c2 == std::string_view::npos) return std::nullopt;
+    auto const c3 = body.find(':', c2 + 1);
+    if (c3 == std::string_view::npos) return std::nullopt;
+    KeyFrame frame;
+    frame.code = body.substr(0, c1);
+    frame.mods = body.substr(c1 + 1, c2 - c1 - 1);
+    auto const idText = body.substr(c2 + 1, c3 - c2 - 1);
+    frame.text = std::string{body.substr(c3 + 1)};
+    if (!idText.empty()) {
+        std::uint64_t value = 0;
+        auto const parsed = std::from_chars(
+            idText.data(), idText.data() + idText.size(), value);
+        if (parsed.ec == std::errc{} &&
+            parsed.ptr == idText.data() + idText.size()) {
+            frame.editId = value;
+        }
+    }
+    return frame;
+}
+
+// Drive a parsed KEY frame exactly as the TUI's keystroke path: a printable
+// without a keycode routes as text; a keycode resolves against the keymap for the
+// current focus and dispatches when bound, otherwise falls back to inserting its
+// text. Single-stroke resolution mirrors the TUI, which also passes one stroke
+// per resolve; a per-connection pending buffer would give the web host
+// multi-stroke behavior the TUI does not have, so it is deferred until the keymap
+// grows a multi-stroke binding and both clients adopt it. Returns true when a
+// command was dispatched, so a predicted edit is settled only once resolved.
+bool handleKey(EditorRuntime& runtime, ClientId client,
+               CompiledKeymap const& keymap, KeyFrame const& frame) {
     KeyStroke stroke;
-    stroke.code = keyCodeFromName(codeName);
-    stroke.control = mods.find('c') != std::string_view::npos;
-    stroke.alt = mods.find('a') != std::string_view::npos;
-    stroke.meta = mods.find('m') != std::string_view::npos;
-    stroke.shift = mods.find('s') != std::string_view::npos;
+    stroke.code = keyCodeFromName(frame.code);
+    stroke.control = frame.mods.find('c') != std::string_view::npos;
+    stroke.alt = frame.mods.find('a') != std::string_view::npos;
+    stroke.meta = frame.mods.find('m') != std::string_view::npos;
+    stroke.shift = frame.mods.find('s') != std::string_view::npos;
 
     if (stroke.code == KeyCode::None) {
-        if (!text.empty()) routeText(runtime, client, text);
-        return;
+        if (!frame.text.empty()) return routeText(runtime, client, frame.text);
+        return false;
     }
 
     FocusTarget focus = FocusTarget::Editor;
@@ -140,9 +172,28 @@ void handleKey(EditorRuntime& runtime, ClientId client,
     if (resolution.kind == KeymapMatchKind::Resolved) {
         (void)runtime.dispatch(client,
                                {resolution.command, runtime.revision(), {}});
-    } else if (!text.empty()) {
-        routeText(runtime, client, text);
+        return true;
     }
+    if (!frame.text.empty()) return routeText(runtime, client, frame.text);
+    return false;
+}
+
+// Sentinel settled-id meaning "nothing settled yet". Client edit ids start at 1,
+// so 0 is unambiguous.
+constexpr std::uint64_t kNoSettlement = 0;
+
+// Frame the browser reads: an 8-byte little-endian settledClientEditId envelope,
+// then an OPTIONAL library-encoded body (a snapshot or a delta). A header-only
+// frame (no body) is a pure settlement of a command that advanced no revision.
+std::vector<std::uint8_t> makeEnvelope(std::uint64_t settledId,
+                                       std::string_view body) {
+    std::vector<std::uint8_t> frame;
+    frame.reserve(8 + body.size());
+    for (int shift = 0; shift < 64; shift += 8) {
+        frame.push_back(static_cast<std::uint8_t>((settledId >> shift) & 0xFFU));
+    }
+    frame.insert(frame.end(), body.begin(), body.end());
+    return frame;
 }
 
 }  // namespace
@@ -180,17 +231,44 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
             initial->sections().keymap, *runtime.commandCatalog());
     }
 
-    // The browser lays out natively, so it consumes the dimensionless semantic
-    // snapshot -- no grid projection is sent.
-    auto sendSnapshot = [&runtime, &server, client](Http::WebSocketHandle handle) {
+    // Per-connection reconciliation state: the last semantic snapshot sent (to
+    // derive the next delta against) and the highest client edit id settled.
+    // The host serves one client, so a single cell suffices.
+    auto prevSnapshot = std::make_shared<std::optional<SessionSnapshot>>();
+    auto settledId = std::make_shared<std::atomic<std::uint64_t>>(kNoSettlement);
+
+    // Send the whole semantic snapshot as the envelope body -- the first frame
+    // after attach, and the base every later delta re-bases onto. The browser
+    // lays out natively, so it consumes the dimensionless snapshot (no grid).
+    auto sendSnapshot = [&runtime, &server, client, prevSnapshot,
+                         settledId](Http::WebSocketHandle handle) {
         auto snapshot = runtime.snapshot(client);
         if (!snapshot) {
             (void)server.send(handle, std::string{"no snapshot for client"});
             return;
         }
         auto const bytes = ProtocolCodec{}.encodeSessionSnapshot(*snapshot);
-        (void)server.send(
-            handle, std::vector<std::uint8_t>{bytes.begin(), bytes.end()});
+        (void)server.send(handle,
+                          makeEnvelope(settledId->load(), bytes));
+        *prevSnapshot = std::move(snapshot);
+    };
+
+    // After a dispatched command, ship what changed: a delta from the previous
+    // snapshot when the revision advanced, or a header-only settlement when it
+    // did not, always stamping the highest settled client edit id.
+    auto sendUpdate = [&runtime, &server, client, prevSnapshot,
+                       settledId](Http::WebSocketHandle handle) {
+        auto current = runtime.snapshot(client);
+        if (!current) return;
+        std::string body;
+        if (prevSnapshot->has_value() &&
+            (*prevSnapshot)->revision() != current->revision()) {
+            auto delta =
+                SessionSnapshotCodec{}.deriveDelta(**prevSnapshot, *current);
+            body = ProtocolCodec{}.encodeSessionDelta(delta);
+            *prevSnapshot = std::move(current);
+        }
+        (void)server.send(handle, makeEnvelope(settledId->load(), body));
     };
 
     for (auto const& asset : kWebAssets) {
@@ -205,16 +283,28 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
         Http::WebSocketHandler{
             .onOpen = {},
             .onMessage =
-                [&runtime, &server, client, sendSnapshot, attached,
-                 compiledKeymap](Http::WebSocketHandle handle,
-                                 Http::WebSocketMessage message) {
+                [&runtime, &server, client, sendSnapshot, sendUpdate, attached,
+                 compiledKeymap, settledId](Http::WebSocketHandle handle,
+                                            Http::WebSocketMessage message) {
                     std::string_view const payload{message.data};
                     if (payload.rfind("KEY:", 0) == 0) {
-                        if (compiledKeymap) {
-                            handleKey(runtime, client, *compiledKeymap,
-                                      payload.substr(4));
+                        // Only an attached connection may drive the runtime; a
+                        // key before a valid attach is ignored, never dispatched.
+                        if (!attached->load()) return;
+                        auto const frame = parseKeyFrame(payload.substr(4));
+                        if (frame && compiledKeymap) {
+                            bool const dispatched =
+                                handleKey(runtime, client, *compiledKeymap, *frame);
+                            // Settle the predicted edit only once it is actually
+                            // resolved (applied or rejected) by a real dispatch;
+                            // a malformed or no-op frame must not falsely
+                            // acknowledge and drop the client's prediction. Ids
+                            // are monotonic and settle in message order.
+                            if (dispatched && frame->editId) {
+                                settledId->store(*frame->editId);
+                            }
                         }
-                        sendSnapshot(handle);
+                        sendUpdate(handle);
                         return;
                     }
                     auto const attach = decodeSessionAttachRequest(message.data);

@@ -72,3 +72,50 @@ export function byteToIndex(text, offsets) {
   }
   return map;
 }
+
+export const utf8Bytes = (s) => new TextEncoder().encode(s).length;
+
+// --- M3 local-echo reconciliation (pure; the browser and the node test share
+// this exact code so the client behavior is what the test pins) ---
+
+// Apply one authoritative DocumentDelta splice to the current text. The delta's
+// start and erased_bytes are UTF-8 byte offsets; inserted_text is the new text.
+export function applyDocumentDelta(text, delta) {
+  const start = num(delta.start);
+  const erased = num(delta.erased_bytes);
+  const map = byteToIndex(text, [start, start + erased]);
+  const si = map.get(start);
+  const ei = map.get(start + erased);
+  if (si === undefined || ei === undefined) return text;  // out-of-range: ignore
+  return text.slice(0, si) + (delta.inserted_text || '') + text.slice(ei);
+}
+
+// The still-unacknowledged predicted text, in type order.
+export const predictedText = (pending) => pending.map((p) => p.text).join('');
+
+// Drop every prediction the host has settled (applied or rejected): both leave
+// the authoritative document as truth, so re-basing keeps only ids beyond it.
+export const dropSettled = (pending, settledId) =>
+  pending.filter((p) => num(p.id) > num(settledId));
+
+// Project the authoritative document plus caret-anchored predictions into what
+// to show: the predicted text spliced in at the caret, the displayed caret moved
+// past it, and the byte range the prediction occupies (rendered unstyled).
+export function project(authText, authCaret, pending) {
+  const pred = predictedText(pending);
+  const ci = byteToIndex(authText, [authCaret]).get(authCaret);
+  const at = ci === undefined ? authText.length : ci;
+  const predBytes = utf8Bytes(pred);
+  return {
+    text: authText.slice(0, at) + pred + authText.slice(at),
+    caret: authCaret + predBytes,
+    predStart: authCaret,
+    predEnd: authCaret + predBytes,
+  };
+}
+
+// Shift an authoritative byte offset into projected coordinates: content at or
+// after the caret moves right by the predicted byte length.
+export const shiftOffset = (offset, predStart, predBytes) =>
+  offset >= predStart ? offset + predBytes : offset;
+
