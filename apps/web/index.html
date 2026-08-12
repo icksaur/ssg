@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ssg</title>
+<style>
+  body { margin:0; font:13px/1.4 monospace; color:var(--ssg-text); background:var(--ssg-canvas); }
+  #status { padding:2px 8px; border-bottom:1px solid; opacity:.6; }
+  #tabs { display:flex; gap:1px; padding:2px 4px; border-bottom:1px solid; }
+  #tabs .tab { padding:2px 8px; opacity:.55; }
+  #tabs .tab.active { opacity:1; font-weight:bold; }
+  #doc { margin:0; padding:8px; white-space:pre-wrap; outline:none; min-height:80vh; }
+  #doc .sel { background:var(--ssg-selection); }
+  #doc .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
+</style>
+<div id="status">connecting...</div>
+<div id="tabs"></div>
+<pre id="doc" tabindex="0"></pre>
+<script type="module" src="/client.mjs"></script>

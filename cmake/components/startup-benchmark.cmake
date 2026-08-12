@@ -14,6 +14,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/apps/pointer_routing.cpp
         ${SSG_SOURCE_DIR}/apps/init_script.cpp
         ${SSG_SOURCE_DIR}/apps/http_serve.cpp
+        ${SSG_WEB_ASSET_TU}
     )
     target_include_directories(ssg_startup_probe PRIVATE ${SSG_SOURCE_DIR}/apps)
     target_compile_definitions(ssg_startup_probe PRIVATE SSG_STARTUP_TRACE_ENABLED)
