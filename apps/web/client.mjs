@@ -169,21 +169,29 @@ ws.onclose = () => { statusEl.textContent += ' [closed]'; };
 ws.onerror = () => { statusEl.textContent = 'ws error'; };
 
 docEl.addEventListener('keydown', (ev) => {
-  const mods = (ev.ctrlKey ? 'c' : '') + (ev.altKey ? 'a' : '') +
-               (ev.metaKey ? 'm' : '') + (ev.shiftKey ? 's' : '');
+  // Ctrl/Meta chords belong to the browser: ssg's keymap uses Alt as its chord
+  // modifier, so the web client never claims a Ctrl/Meta combo. Letting them
+  // through keeps native zoom, copy/paste, and find working -- the browser is a
+  // first-class client that may add its own affordances. (The one library action
+  // reachable only via Ctrl+Shift+Home/End, select-to-document-extreme, has no
+  // Alt twin and is thus unreachable on web until the keymap grows one.)
+  if (ev.ctrlKey || ev.metaKey) return;
+
+  const mods = (ev.altKey ? 'a' : '') + (ev.shiftKey ? 's' : '');
   // Array.from counts Unicode scalars, so a supplementary-plane character (two
   // UTF-16 code units in ev.key) still registers as one printable scalar and is
   // sent, consistent with the UTF-8 offset contract.
-  const printable = Array.from(ev.key).length === 1 && !ev.ctrlKey && !ev.metaKey;
+  const printable = Array.from(ev.key).length === 1;
   const text = printable ? ev.key : '';
   ev.preventDefault();
 
   // Predict a caret-anchored insertion locally only when the editor has focus
-  // (typing into a prompt is not a document edit); the char shows this frame and
-  // the host's settlement re-bases it. Everything else round-trips without echo.
+  // and no chord modifier is held (typing into a prompt, or an Alt chord, is not
+  // a document insert); the char shows this frame and the host's settlement
+  // re-bases it. Everything else round-trips without echo.
   let editId = '';
   const focus = state.sections ? num(state.sections.focus) : -1;
-  if (printable && focus === FOCUS_EDITOR) {
+  if (printable && !ev.altKey && focus === FOCUS_EDITOR) {
     const id = state.nextEditId++;
     state.pending.push({ id, text });
     editId = String(id);
