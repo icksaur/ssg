@@ -119,3 +119,52 @@ export function project(authText, authCaret, pending) {
 export const shiftOffset = (offset, predStart, predBytes) =>
   offset >= predStart ? offset + predBytes : offset;
 
+// Parse the host envelope: [u64 LE settledClientEditId][u8 sectionCount], then
+// sectionCount sections each [u8 tag][u32 LE length][bytes]. Returns the settled
+// id and each section as a tag plus a DataView over its bytes, so the caller
+// decodes tag 0 (library body) and tag 1 (palette report JSON) each its own way.
+export function parseEnvelope(buffer) {
+  const dv = new DataView(buffer);
+  const settledId = dv.getBigUint64(0, true);
+  let p = 8;
+  const count = dv.getUint8(p); p += 1;
+  const sections = [];
+  for (let i = 0; i < count; i++) {
+    const tag = dv.getUint8(p); p += 1;
+    const len = dv.getUint32(p, true); p += 4;
+    sections.push({ tag, dv: new DataView(buffer, p, len), length: len });
+    p += len;
+  }
+  return { settledId, sections };
+}
+
+// A palette report is applied only when it is not stale -- its requestId is at
+// least the latest request the client has sent -- so an out-of-order or slow
+// response can never overwrite newer query/selection state.
+export const paletteReportIsFresh = (report, latestRequestId) =>
+  report.requestId >= latestRequestId;
+
+// Which window row (index into report.rows) is the selected one, or -1 when the
+// selection is outside the window. report.selected is an ABSOLUTE index into the
+// full ranked order; report.rows is the visible slice starting at firstVisible.
+export function paletteSelectedWindowRow(report) {
+  if (!report || report.selected == null || report.selected < 0) return -1;
+  const row = report.selected - (report.firstVisible || 0);
+  const rows = report.rows ? report.rows.length : 0;
+  return row >= 0 && row < rows ? row : -1;
+}
+
+// FocusTarget::Prompt and PromptKind::Palette ordinals, and the wire field names
+// the decoded snapshot uses. The sections object is the decoded ProtocolValue
+// tree, so its keys are the encoder's snake_case names (prompt_status,
+// active_kind) -- NOT camelCase. This one function owns that coupling so a
+// mis-spelling cannot silently hide the palette overlay again.
+export const FOCUS_PROMPT = 2;
+export const PROMPT_PALETTE = 5;
+export function isPalettePromptOpen(sections) {
+  if (!sections) return false;
+  if (num(sections.focus) !== FOCUS_PROMPT) return false;
+  const ps = sections.prompt_status;
+  return !!ps && ps.active_kind != null && num(ps.active_kind) === PROMPT_PALETTE;
+}
+

@@ -7,15 +7,20 @@
 #include <ssg/HttpEditorServer.h>
 #include <ssg/KeyCode.h>
 #include <ssg/Keymap.h>
+#include <ssg/PaletteSearcher.h>
+#include <ssg/PaletteSubmit.h>
 #include <ssg/Protocol.h>
 #include <ssg/PromptRouting.h>
 #include <ssg/PromptSurface.h>
+#include <ssg/Search.h>
 #include <ssg/StatusQueue.h>
+#include <ssg/Viewport.h>
 #include <ssg/focus.h>
 #include <ssg/session_snapshot.h>
 
 #include <http.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <charconv>
@@ -182,18 +187,100 @@ bool handleKey(EditorRuntime& runtime, ClientId client,
 // so 0 is unambiguous.
 constexpr std::uint64_t kNoSettlement = 0;
 
-// Frame the browser reads: an 8-byte little-endian settledClientEditId envelope,
-// then an OPTIONAL library-encoded body (a snapshot or a delta). A header-only
-// frame (no body) is a pure settlement of a command that advanced no revision.
+// Envelope section tags. tag 0 is the optional library message (a snapshot or a
+// delta, version+kind+value); tag 1 is a host-defined palette report the browser
+// renders for its client-owned query. Each tag has its own decoder, so the two
+// encodings never collide.
+constexpr std::uint8_t kSectionLibraryBody = 0;
+constexpr std::uint8_t kSectionPaletteReport = 1;
+
+struct EnvelopeSection {
+    std::uint8_t tag;
+    std::string bytes;
+};
+
+void pushU32LE(std::vector<std::uint8_t>& out, std::uint32_t value) {
+    for (int shift = 0; shift < 32; shift += 8) {
+        out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFFU));
+    }
+}
+
+// Parse a whole numeric field, rejecting a partial or malformed one so a bad
+// frame never silently becomes zero (which could execute the first ranked
+// command or scroll host state).
+bool parseWholeU64(std::string_view text, std::uint64_t& out) {
+    auto const result =
+        std::from_chars(text.data(), text.data() + text.size(), out);
+    return result.ec == std::errc{} &&
+           result.ptr == text.data() + text.size();
+}
+
+// Frame the browser reads: an 8-byte little-endian settledClientEditId, a section
+// count, then that many [tag][u32 length][bytes] sections. Zero sections is a
+// pure settlement of a command that advanced no revision.
 std::vector<std::uint8_t> makeEnvelope(std::uint64_t settledId,
-                                       std::string_view body) {
+                                       std::vector<EnvelopeSection> const& sections) {
     std::vector<std::uint8_t> frame;
-    frame.reserve(8 + body.size());
     for (int shift = 0; shift < 64; shift += 8) {
         frame.push_back(static_cast<std::uint8_t>((settledId >> shift) & 0xFFU));
     }
-    frame.insert(frame.end(), body.begin(), body.end());
+    frame.push_back(static_cast<std::uint8_t>(sections.size()));
+    for (auto const& section : sections) {
+        frame.push_back(section.tag);
+        pushU32LE(frame, static_cast<std::uint32_t>(section.bytes.size()));
+        frame.insert(frame.end(), section.bytes.begin(), section.bytes.end());
+    }
     return frame;
+}
+
+void jsonEscape(std::string& out, std::string_view text) {
+    for (char const raw : text) {
+        auto const c = static_cast<unsigned char>(raw);
+        switch (c) {
+        case '"': out += "\\\""; break;
+        case '\\': out += "\\\\"; break;
+        case '\n': out += "\\n"; break;
+        case '\r': out += "\\r"; break;
+        case '\t': out += "\\t"; break;
+        default:
+            if (c < 0x20) {
+                char buf[8];
+                std::snprintf(buf, sizeof buf, "\\u%04x", c);
+                out += buf;
+            } else {
+                out += raw;
+            }
+        }
+    }
+}
+
+// The palette report as JSON: host presentation data for the browser's
+// client-owned query, echoing the paletteRequestId so a stale report can be
+// dropped. The library ranker (PaletteSearcher) produced the rows and order.
+std::string paletteReportJson(std::uint64_t requestId, PaletteReport const& report) {
+    std::string out = "{\"requestId\":";
+    out += std::to_string(requestId);
+    out += ",\"query\":\"";
+    jsonEscape(out, report.query);
+    out += "\",\"ghost\":\"";
+    jsonEscape(out, report.ghost);
+    out += "\",\"selected\":";
+    out += report.selected ? std::to_string(*report.selected) : "-1";
+    out += ",\"firstVisible\":";
+    out += std::to_string(report.firstVisible);
+    out += ",\"rows\":[";
+    for (std::size_t i = 0; i < report.rows.size(); ++i) {
+        if (i != 0) out += ',';
+        out += "{\"id\":\"";
+        jsonEscape(out, report.rows[i].id);
+        out += "\",\"label\":\"";
+        jsonEscape(out, report.rows[i].label);
+        out += "\",\"detail\":\"";
+        jsonEscape(out, report.rows[i].detail);
+        out += "\"}";
+    }
+    out += "]}";
+    return out;
 }
 
 }  // namespace
@@ -248,8 +335,9 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
             return;
         }
         auto const bytes = ProtocolCodec{}.encodeSessionSnapshot(*snapshot);
-        (void)server.send(handle,
-                          makeEnvelope(settledId->load(), bytes));
+        (void)server.send(
+            handle, makeEnvelope(settledId->load(),
+                                 {{kSectionLibraryBody, bytes}}));
         *prevSnapshot = std::move(snapshot);
     };
 
@@ -260,15 +348,55 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                        settledId](Http::WebSocketHandle handle) {
         auto current = runtime.snapshot(client);
         if (!current) return;
-        std::string body;
+        std::vector<EnvelopeSection> sections;
         if (prevSnapshot->has_value() &&
             (*prevSnapshot)->revision() != current->revision()) {
             auto delta =
                 SessionSnapshotCodec{}.deriveDelta(**prevSnapshot, *current);
-            body = ProtocolCodec{}.encodeSessionDelta(delta);
+            sections.push_back(
+                {kSectionLibraryBody, ProtocolCodec{}.encodeSessionDelta(delta)});
             *prevSnapshot = std::move(current);
         }
-        (void)server.send(handle, makeEnvelope(settledId->load(), body));
+        (void)server.send(handle, makeEnvelope(settledId->load(), sections));
+    };
+
+    // The connection's palette window: the browser owns the query and selection
+    // (a client-owned derived view), the host runs the library ranker on them.
+    // firstVisible persists so a wheel scroll survives a re-rank; paneRows is a
+    // fixed presentation budget for the overlay's visible rows (the browser does
+    // not report its viewport height -- coupling layout to the protocol is not
+    // worth it for a bounded candidate list).
+    auto paletteWindow = std::make_shared<PaletteWindowState>();
+    paletteWindow->paneRows = 12;
+
+    // Rank the current candidates for the browser's query+selection and send the
+    // resulting report, echoing requestId so the client can drop a stale one.
+    auto sendPaletteReport = [&runtime, &server, client, settledId,
+                              paletteWindow](Http::WebSocketHandle handle,
+                                             std::uint64_t requestId) {
+        auto snapshot = runtime.snapshot(client);
+        if (!snapshot) return;
+        auto const& candidates = snapshot->sections().palette.candidates;
+        // Keep the selection visible: an arrow-key move must scroll the window to
+        // it, the way the TUI's revealPaletteSelection does. report() decouples
+        // scroll from selection (it reveals only on a clamp), because a wheel
+        // scroll -- Phase B -- must not snap back; Phase A only moves selection,
+        // so revealing here is correct.
+        auto const order = PaletteSearcher{}.rank(candidates, paletteWindow->query);
+        if (!order.empty()) {
+            auto const sel = std::min<std::size_t>(paletteWindow->selected,
+                                                   order.size() - 1);
+            ScrollOffset offset{paletteWindow->firstVisible};
+            offset.revealSelection(static_cast<std::uint32_t>(sel),
+                                   static_cast<std::uint32_t>(order.size()),
+                                   paletteWindow->paneRows);
+            paletteWindow->firstVisible = offset.firstVisible();
+        }
+        auto report = PaletteSearcher{}.report(candidates, *paletteWindow);
+        (void)server.send(
+            handle, makeEnvelope(settledId->load(),
+                                 {{kSectionPaletteReport,
+                                   paletteReportJson(requestId, report)}}));
     };
 
     for (auto const& asset : kWebAssets) {
@@ -283,9 +411,10 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
         Http::WebSocketHandler{
             .onOpen = {},
             .onMessage =
-                [&runtime, &server, client, sendSnapshot, sendUpdate, attached,
-                 compiledKeymap, settledId](Http::WebSocketHandle handle,
-                                            Http::WebSocketMessage message) {
+                [&runtime, &server, client, sendSnapshot, sendUpdate,
+                 sendPaletteReport, paletteWindow, attached, compiledKeymap,
+                 settledId](Http::WebSocketHandle handle,
+                            Http::WebSocketMessage message) {
                     std::string_view const payload{message.data};
                     if (payload.rfind("KEY:", 0) == 0) {
                         // Only an attached connection may drive the runtime; a
@@ -302,6 +431,65 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                             // are monotonic and settle in message order.
                             if (dispatched && frame->editId) {
                                 settledId->store(*frame->editId);
+                            }
+                        }
+                        sendUpdate(handle);
+                        return;
+                    }
+                    // The browser's palette query/selection changed: rank and
+                    // report. PICK:<requestId>:<selected>:<query> (query last so
+                    // it may contain ':').
+                    if (payload.rfind("PICK:", 0) == 0) {
+                        if (!attached->load()) return;
+                        auto const body = payload.substr(5);
+                        auto const c1 = body.find(':');
+                        auto const c2 = body.find(':', c1 + 1);
+                        if (c1 == std::string_view::npos ||
+                            c2 == std::string_view::npos) {
+                            return;
+                        }
+                        std::uint64_t requestId = 0;
+                        std::uint64_t selected = 0;
+                        if (!parseWholeU64(body.substr(0, c1), requestId) ||
+                            !parseWholeU64(body.substr(c1 + 1, c2 - c1 - 1),
+                                           selected)) {
+                            return;
+                        }
+                        std::string newQuery{body.substr(c2 + 1)};
+                        // A changed query re-ranks from the top, so the retained
+                        // scroll window must not leave the new selection above it.
+                        if (newQuery != paletteWindow->query) {
+                            paletteWindow->firstVisible = 0;
+                        }
+                        paletteWindow->query = std::move(newQuery);
+                        paletteWindow->selected = selected;
+                        sendPaletteReport(handle, requestId);
+                        return;
+                    }
+                    // Submit the selected candidate. PSUB:<selected>:<query>.
+                    if (payload.rfind("PSUB:", 0) == 0) {
+                        if (!attached->load()) return;
+                        auto const body = payload.substr(5);
+                        auto const c1 = body.find(':');
+                        if (c1 == std::string_view::npos) return;
+                        std::uint64_t selected = 0;
+                        if (!parseWholeU64(body.substr(0, c1), selected)) return;
+                        std::string const query{body.substr(c1 + 1)};
+                        auto snapshot = runtime.snapshot(client);
+                        if (snapshot) {
+                            auto const& palette = snapshot->sections().palette;
+                            auto const order = PaletteSearcher{}.rank(
+                                palette.candidates, query);
+                            if (selected < order.size()) {
+                                auto const& id =
+                                    palette.candidates[order[selected]].id;
+                                if (auto const submit = paletteSubmitCommand(
+                                        palette.mode, id)) {
+                                    (void)runtime.dispatch(
+                                        client, {submit->command,
+                                                 runtime.revision(),
+                                                 submit->payload});
+                                }
                             }
                         }
                         sendUpdate(handle);

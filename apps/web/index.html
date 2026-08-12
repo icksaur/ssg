@@ -10,8 +10,16 @@
   #doc { margin:0; padding:8px; white-space:pre-wrap; outline:none; min-height:80vh; }
   #doc .sel { background:var(--ssg-selection); }
   #doc .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
+  #palette { display:none; position:fixed; top:0; left:0; right:0; border-bottom:2px solid;
+             background:var(--ssg-canvas); color:var(--ssg-text); max-height:60vh; overflow:auto; }
+  #palette.open { display:block; }
+  #palette .query { padding:4px 8px; border-bottom:1px solid; }
+  #palette .row { padding:2px 8px; display:flex; gap:8px; }
+  #palette .row.sel { background:var(--ssg-selection); }
+  #palette .row .detail { opacity:.55; }
 </style>
 <div id="status">connecting...</div>
 <div id="tabs"></div>
 <pre id="doc" tabindex="0"></pre>
+<div id="palette"></div>
 <script type="module" src="/client.mjs"></script>

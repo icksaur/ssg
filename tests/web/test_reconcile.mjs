@@ -11,6 +11,8 @@
 import assert from 'node:assert/strict';
 import {
   applyDocumentDelta, dropSettled, project, byteToIndex, utf8Bytes,
+  parseEnvelope, paletteReportIsFresh, paletteSelectedWindowRow,
+  isPalettePromptOpen,
 } from '../../apps/web/reconcile.mjs';
 
 let checks = 0;
@@ -136,6 +138,65 @@ check('a rejected prediction is dropped on settlement, authoritative wins', () =
   assert.equal(project(authText, authCaret, pending).text, 'x');   // predicted
   pending = dropSettled(pending, 1); // host settles id 1 (rejected)
   assert.equal(project(authText, authCaret, pending).text, '');    // re-based away
+});
+
+// --- Host envelope framing and the palette stale-report guard ---
+check('parseEnvelope splits settledId and tagged sections', () => {
+  // [u64 settledId=7][count=2][tag0 len3 'abc'][tag1 len2 '{}']
+  const bytes = [];
+  const push64 = (v) => { let b = BigInt(v); for (let i = 0; i < 8; i++) { bytes.push(Number(b & 0xffn)); b >>= 8n; } };
+  const push32 = (v) => { for (let i = 0; i < 4; i++) bytes.push((v >> (i * 8)) & 0xff); };
+  push64(7); bytes.push(2);
+  bytes.push(0); push32(3); bytes.push(97, 98, 99);      // tag 0 "abc"
+  bytes.push(1); push32(2); bytes.push(123, 125);        // tag 1 "{}"
+  const buf = new Uint8Array(bytes).buffer;
+  const { settledId, sections } = parseEnvelope(buf);
+  assert.equal(settledId, 7n);
+  assert.equal(sections.length, 2);
+  assert.equal(sections[0].tag, 0);
+  assert.equal(sections[0].length, 3);
+  assert.equal(sections[1].tag, 1);
+  const s1 = new TextDecoder().decode(new Uint8Array(sections[1].dv.buffer, sections[1].dv.byteOffset, sections[1].length));
+  assert.equal(s1, '{}');
+});
+
+check('a stale palette report (older requestId) is rejected', () => {
+  // Client has sent up to request 5; a report for 3 must not be applied.
+  assert.equal(paletteReportIsFresh({ requestId: 5 }, 5), true);
+  assert.equal(paletteReportIsFresh({ requestId: 6 }, 5), true);
+  assert.equal(paletteReportIsFresh({ requestId: 3 }, 5), false);
+});
+
+check('palette selection highlight uses the absolute index minus the window start', () => {
+  // rows is the visible window; selected is an ABSOLUTE ranked index.
+  const rows = [{}, {}, {}]; // a 3-row window
+  // Window starts at 10, selection 12 -> visible row 2.
+  assert.equal(paletteSelectedWindowRow({ selected: 12, firstVisible: 10, rows }), 2);
+  // Window starts at 10, selection 10 -> visible row 0.
+  assert.equal(paletteSelectedWindowRow({ selected: 10, firstVisible: 10, rows }), 0);
+  // Selection above the window -> not highlighted.
+  assert.equal(paletteSelectedWindowRow({ selected: 4, firstVisible: 10, rows }), -1);
+  // Selection below the window -> not highlighted.
+  assert.equal(paletteSelectedWindowRow({ selected: 13, firstVisible: 10, rows }), -1);
+  // No selection.
+  assert.equal(paletteSelectedWindowRow({ selected: -1, firstVisible: 0, rows }), -1);
+});
+
+check('palette-prompt detection reads the wire snake_case field names', () => {
+  // The decoded sections object uses the encoder's names: prompt_status and
+  // active_kind, NOT camelCase. A regression here silently hides the overlay
+  // (the picker captures input but nothing renders), which is why it is pinned.
+  const editor = { focus: 0, prompt_status: { active_kind: null } };
+  assert.equal(isPalettePromptOpen(editor), false);
+  // Focus on prompt with the palette kind (5) -> open.
+  const palette = { focus: 2, prompt_status: { active_kind: 5 } };
+  assert.equal(isPalettePromptOpen(palette), true);
+  // BigInt ordinals (as the wire decoder yields) are handled.
+  assert.equal(isPalettePromptOpen({ focus: 2n, prompt_status: { active_kind: 5n } }), true);
+  // A camelCase object (the old bug) must NOT be seen as open.
+  assert.equal(isPalettePromptOpen({ focus: 2, promptStatus: { activeKind: 5 } }), false);
+  // Prompt focus but a non-palette prompt kind (e.g. a path prompt) -> closed.
+  assert.equal(isPalettePromptOpen({ focus: 2, prompt_status: { active_kind: 1 } }), false);
 });
 
 console.log('reconcile oracle: ' + checks + ' checks passed');

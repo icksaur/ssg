@@ -8,12 +8,14 @@
 
 import {
   decodeValue, findSections, num, cssColor, byteToIndex, utf8Bytes,
-  applyDocumentDelta, dropSettled, project,
+  applyDocumentDelta, dropSettled, project, parseEnvelope, paletteReportIsFresh,
+  paletteSelectedWindowRow, isPalettePromptOpen,
 } from '/reconcile.mjs';
 
 const statusEl = document.getElementById('status');
 const tabsEl = document.getElementById('tabs');
 const docEl = document.getElementById('doc');
+const paletteEl = document.getElementById('palette');
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString() : x);
@@ -21,11 +23,32 @@ const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toStr
 // Role ordinals the renderer maps to CSS custom properties; pinned by
 // test_theme's role-ordinal contract so a reorder cannot silently mis-color.
 const ROLE = { text: 0, canvas: 1, caret: 2, selection: 3 };
-const FOCUS_EDITOR = 0;  // FocusTarget::Editor ordinal.
+const FOCUS_EDITOR = 0;   // FocusTarget::Editor ordinal.
 
 // Persistent client model: the authoritative sections plus the still-unsettled
 // local predictions. Snapshots replace `sections`; deltas mutate it in place.
-const state = { sections: null, pending: [], nextEditId: 1 };
+const state = {
+  sections: null,
+  pending: [],
+  nextEditId: 1,
+  // The palette/finder is a client-owned derived view: the browser owns the
+  // query text and selection index and the host ranks them (PaletteSearcher).
+  palette: { query: '', selected: 0, requestId: 0, report: null },
+};
+
+// Is a picker (command palette or file finder) the active prompt? The wire
+// field-name coupling lives in isPalettePromptOpen (reconcile.mjs).
+function paletteOpen() {
+  return isPalettePromptOpen(state.sections);
+}
+
+// Send the current query+selection and ask the host to rank. The monotonic
+// requestId lets a stale report be dropped when responses arrive out of order.
+function requestPalette() {
+  state.palette.requestId += 1;
+  ws.send('PICK:' + state.palette.requestId + ':' + state.palette.selected +
+          ':' + state.palette.query);
+}
 
 function applyTheme(theme) {
   const root = document.documentElement.style;
@@ -52,9 +75,38 @@ function renderTabs(tabs) {
   }
 }
 
-// Apply one authoritative delta to the persistent model, mirroring
-// SessionSnapshotCodec::replay for the sections the client renders. A null
-// optional field means "unchanged", exactly as the wire encodes it.
+// Render the palette/finder overlay from the host's ranked report: a query line
+// and the candidate rows the library ranker returned, the selected row
+// highlighted. The browser never ranks -- it only shows what the host ranked.
+function renderPalette() {
+  const open = paletteOpen();
+  paletteEl.classList.toggle('open', open);
+  if (!open) { paletteEl.textContent = ''; return; }
+  const report = state.palette.report;
+  let html = '<div class="query">' + esc(state.palette.query || '') +
+             '<span style="opacity:.4">' + esc(report ? (report.ghost || '') : '') +
+             '</span></div>';
+  const rows = report && Array.isArray(report.rows) ? report.rows : [];
+  const selectedRow = paletteSelectedWindowRow(report);
+  for (let i = 0; i < rows.length; i++) {
+    const cls = 'row' + (i === selectedRow ? ' sel' : '');
+    html += '<div class="' + cls + '"><span class="label">' + esc(rows[i].label || '') +
+            '</span><span class="detail">' + esc(rows[i].detail || '') + '</span></div>';
+  }
+  paletteEl.innerHTML = html;
+}
+
+// Adopt a host palette report unless it is stale (an older requestId than the
+// latest the client sent), so an out-of-order response never overwrites newer
+// query/selection state.
+function applyPaletteReport(report) {
+  if (!paletteReportIsFresh(report, state.palette.requestId)) return;
+  state.palette.report = report;
+  if (report.selected != null && report.selected >= 0) {
+    state.palette.selected = report.selected;
+  }
+  renderPalette();
+}
 function applyDelta(d) {
   const s = state.sections;
   if (!s) return;
@@ -71,12 +123,12 @@ function applyDelta(d) {
     s.syntax.spans = d.syntax.spans;
   }
   if (d.theme && d.theme.replacement != null) s.theme = d.theme.replacement;
-  // Focus and prompt state gate local prediction and (later) prompt rendering.
-  // A null optional means unchanged, so keep the last value; without this the
-  // client would keep predicting document inserts after focus moved to a prompt.
+  // Focus and prompt state gate local prediction and prompt rendering. A null
+  // optional means unchanged, so keep the last value; the field names match the
+  // wire's snake_case (the sections object is the decoded ProtocolValue tree).
   if (d.focus != null) s.focus = num(d.focus);
-  if (d.prompt_status && d.prompt_status.replacement != null) s.promptStatus = d.prompt_status.replacement;
-  if (d.find_replace && d.find_replace.replacement != null) s.findReplace = d.find_replace.replacement;
+  if (d.prompt_status && d.prompt_status.replacement != null) s.prompt_status = d.prompt_status.replacement;
+  if (d.find_replace && d.find_replace.replacement != null) s.find_replace = d.find_replace.replacement;
 }
 
 // Segment the projected text at every syntax-span edge, selection edge, and the
@@ -136,7 +188,10 @@ function render() {
   }
   if (caret >= total) html += '<span class="caret"></span>';
   docEl.innerHTML = html;
+  renderPalette();
 }
+
+let wasPaletteOpen = false;
 
 const ws = new WebSocket('ws://' + location.host + '/session');
 ws.binaryType = 'arraybuffer';
@@ -145,21 +200,34 @@ ws.onopen = () => { statusEl.textContent = 'attached; awaiting snapshot'; ws.sen
 ws.onmessage = (e) => {
   if (typeof e.data === 'string') { statusEl.textContent = e.data; return; }
   try {
-    const dv = new DataView(e.data);
-    // Envelope: 8-byte little-endian settledClientEditId, then an optional
-    // library body (version + kind + value). Drop settled predictions first.
-    const settledId = dv.getBigUint64(0, true);
+    const { settledId, sections } = parseEnvelope(e.data);
     state.pending = dropSettled(state.pending, settledId);
-    if (e.data.byteLength > 8) {
-      const kind = dv.getUint8(9);      // version at 8, kind at 9, value at 10.
-      const [payload] = decodeValue(dv, 10);
-      if (kind === 1) {                 // SessionSnapshot
-        state.sections = findSections(payload);
-      } else if (kind === 2) {          // SessionDelta
-        applyDelta(payload);
+    for (const sec of sections) {
+      if (sec.tag === 0) {                 // library body: version@0, kind@1, value@2
+        const kind = sec.dv.getUint8(1);
+        const [payload] = decodeValue(sec.dv, 2);
+        if (kind === 1) state.sections = findSections(payload);
+        else if (kind === 2) applyDelta(payload);
+      } else if (sec.tag === 1) {          // host palette report (JSON)
+        const bytes = new Uint8Array(sec.dv.buffer, sec.dv.byteOffset, sec.length);
+        applyPaletteReport(JSON.parse(new TextDecoder().decode(bytes)));
       }
     }
     if (!state.sections) { statusEl.textContent = 'no sections yet'; return; }
+
+    // On the transition into an open picker, reset the browser-owned query and
+    // ask the host for the first ranking; on close, clear it.
+    const nowOpen = paletteOpen();
+    if (nowOpen && !wasPaletteOpen) {
+      state.palette.query = '';
+      state.palette.selected = 0;
+      state.palette.report = null;
+      requestPalette();
+    } else if (!nowOpen && wasPaletteOpen) {
+      state.palette.report = null;
+    }
+    wasPaletteOpen = nowOpen;
+
     render();
     statusEl.textContent = 'live (' + e.data.byteLength + ' bytes)';
     docEl.focus();
@@ -176,6 +244,46 @@ docEl.addEventListener('keydown', (ev) => {
   // reachable only via Ctrl+Shift+Home/End, select-to-document-extreme, has no
   // Alt twin and is thus unreachable on web until the keymap grows one.)
   if (ev.ctrlKey || ev.metaKey) return;
+
+  // When a picker is open, the browser owns its query and selection (a
+  // client-owned derived view). Query edits and selection moves re-request a
+  // host ranking; Enter submits the selected candidate; Escape closes via the
+  // library keymap (prompt.cancel). Nothing here touches the document.
+  if (paletteOpen()) {
+    const p = state.palette;
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      ws.send('PSUB:' + p.selected + ':' + p.query);
+      return;
+    }
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      // selected is an absolute ranked index; move it optimistically and let the
+      // host clamp to the candidate count and window it in the returned report.
+      p.selected = ev.key === 'ArrowDown'
+        ? p.selected + 1
+        : Math.max(p.selected - 1, 0);
+      requestPalette();
+      return;
+    }
+    if (ev.key === 'Backspace') {
+      ev.preventDefault();
+      p.query = Array.from(p.query).slice(0, -1).join('');
+      p.selected = 0;
+      requestPalette();
+      renderPalette();
+      return;
+    }
+    if (Array.from(ev.key).length === 1 && !ev.altKey) {
+      ev.preventDefault();
+      p.query += ev.key;
+      p.selected = 0;
+      requestPalette();
+      renderPalette();
+      return;
+    }
+    // Escape and other keys fall through to the keymap (Escape -> prompt.cancel).
+  }
 
   const mods = (ev.altKey ? 'a' : '') + (ev.shiftKey ? 's' : '');
   // Array.from counts Unicode scalars, so a supplementary-plane character (two

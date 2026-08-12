@@ -36,6 +36,15 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(test_palette_submit PRIVATE ssg)
     add_test(NAME test_palette_submit COMMAND test_palette_submit)
 
+    add_executable(test_palette_host_ranking
+        ${SSG_SOURCE_DIR}/tests/test_palette_host_ranking.cpp
+    )
+    target_include_directories(test_palette_host_ranking PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    target_link_libraries(test_palette_host_ranking PRIVATE ssg)
+    add_test(NAME test_palette_host_ranking COMMAND test_palette_host_ranking)
+
     add_executable(test_picker
         ${SSG_SOURCE_DIR}/tests/test_picker.cpp
     )
