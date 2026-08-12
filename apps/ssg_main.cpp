@@ -725,6 +725,15 @@ int main(int argc, char** argv) {
     }
     auto& runtime = *created.runtime;
     if (httpPort) {
+        // Apply the same init.lua the TUI does BEFORE the web host attaches and
+        // compiles the keymap, so both clients share the user's configured
+        // bindings -- the library owns the keymap, and a host must not diverge
+        // from it. `scripts` outlives run_http_server (which blocks until the
+        // server stops), keeping any function init.lua defines callable. Live
+        // reload of init.lua on the web path is deferred; startup parity is the
+        // correctness fix.
+        ssg::ScriptHost httpScripts{runtime};
+        (void)loadInitScript(httpScripts, runtime);
         return ssg::app::run_http_server(runtime, *httpPort);
     }
     int const gitDiffWakeFd = runtime.gitDiffWakeDescriptor();
