@@ -35,4 +35,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_mutation_patch PRIVATE ssg)
     add_test(NAME test_mutation_patch COMMAND test_mutation_patch)
+
+    add_executable(test_keyboard_focus
+        ${SSG_SOURCE_DIR}/tests/test_keyboard_focus.cpp
+    )
+    target_link_libraries(test_keyboard_focus PRIVATE ssg)
+    add_test(NAME test_keyboard_focus COMMAND test_keyboard_focus)
 endif()
