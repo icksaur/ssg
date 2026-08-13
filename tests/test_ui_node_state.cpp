@@ -83,7 +83,7 @@ TEST(labelFieldStateMatchesTuiNodeOrDrop) {
          providerField("f.empty", "missing")});
     const UiSchema schema{Generation{1}, comp.regions};
 
-    const auto section = resolveUiState(schema, resolver);
+    const auto section = resolveUiState(ValidatedSchema::validate(schema).takeSchema(), resolver);
     std::vector<AccessibilityNode> nodes;
     const auto lowered = lowerUiChromeRegion(
         schema.regions[0], {0, 0, kWideWidth, 1}, ShellNodeKind::FooterField,
@@ -135,7 +135,7 @@ TEST(checkboxStateMatchesIndependentExpectation) {
 
     const auto comp = ssgtest::composeFooter({litBox, provBox});
     const UiSchema schema{Generation{1}, comp.regions};
-    const auto section = resolveUiState(schema, resolver);
+    const auto section = resolveUiState(ValidatedSchema::validate(schema).takeSchema(), resolver);
 
     std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
     collectLeaves(schema.regions[0].root, leaves);
@@ -176,7 +176,7 @@ TEST(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord) {
     const auto empty = [](std::string_view) -> std::optional<ResolvedProvider> {
         return std::nullopt;
     };
-    const auto section = resolveUiState(schema, empty);
+    const auto section = resolveUiState(ValidatedSchema::validate(schema).takeSchema(), empty);
 
     ASSERT_EQ(section.generation.value(), std::uint64_t{4});
 

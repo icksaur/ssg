@@ -382,11 +382,11 @@ void collectNodeStates(const UiNode& node,
 
 }  // namespace
 
-UiStateSection resolveUiState(const UiSchema& schema,
+UiStateSection resolveUiState(const ValidatedSchema& schema,
                               const ChromeProviderResolver& resolveProvider) {
     UiStateSection section;
-    section.generation = schema.generation;
-    for (const auto& region : schema.regions) {
+    section.generation = schema.generation();
+    for (const auto& region : schema.schema().regions) {
         collectNodeStates(region.root, resolveProvider, section.nodes);
     }
     return section;

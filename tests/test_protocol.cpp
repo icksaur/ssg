@@ -121,7 +121,8 @@ ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
             return ssg::ResolvedProvider{marker, "Current path", std::nullopt};
         return std::nullopt;
     };
-    result.uiState = ssg::resolveUiState(result.ui, resolver);
+    result.uiState = ssg::resolveUiState(
+        ssg::ValidatedSchema::validate(result.ui).takeSchema(), resolver);
     return result;
 }
 
