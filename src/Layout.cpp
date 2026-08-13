@@ -20,10 +20,10 @@ void solveNode(const LayoutNode& node, Rect frame, std::vector<SolvedBox>& out,
     if (node.children.empty()) return;
 
     const Rect content{
-        frame.x + node.inset.left,
-        frame.y + node.inset.top,
-        frame.width - node.inset.left - node.inset.right,
-        frame.height - node.inset.top - node.inset.bottom,
+        frame.x + node.inset.left(),
+        frame.y + node.inset.top(),
+        frame.width - node.inset.left() - node.inset.right(),
+        frame.height - node.inset.top() - node.inset.bottom(),
     };
     const bool row = node.axis == Axis::Row;
     const int extent = row ? content.width : content.height;
@@ -31,8 +31,8 @@ void solveNode(const LayoutNode& node, Rect frame, std::vector<SolvedBox>& out,
     int exactTotal = 0;
     int flexCount = 0;
     for (const auto& child : node.children) {
-        if (child.size.kind == SizeKind::Exact) {
-            exactTotal += child.size.cells;
+        if (child.size.kind() == SizeKind::Exact) {
+            exactTotal += child.size.extent();
         } else {
             ++flexCount;
         }
@@ -54,8 +54,8 @@ void solveNode(const LayoutNode& node, Rect frame, std::vector<SolvedBox>& out,
     int flexSeen = 0;
     for (const auto& child : node.children) {
         int mainSize = 0;
-        if (child.size.kind == SizeKind::Exact) {
-            mainSize = child.size.cells;
+        if (child.size.kind() == SizeKind::Exact) {
+            mainSize = child.size.extent();
         } else {
             ++flexSeen;
             mainSize = flexBase + (flexSeen == flexCount ? flexExtra : 0);

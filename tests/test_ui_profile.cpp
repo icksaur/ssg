@@ -2,6 +2,7 @@
 // §Missing-widget detection). Asserts the rejection seam names the unsupported
 // kind and that the profile is a distinct, positive-declaration set.
 
+#include "ssg/RegionRoot.h"
 #include "ssg/UiProfile.h"
 #include "ssg/Widget.h"
 #include "test_helpers.h"
@@ -14,7 +15,10 @@
 namespace {
 
 using ssg::ClientUiProfile;
+using ssg::kAllRegionRoles;
 using ssg::kAllWidgetKinds;
+using ssg::RegionRole;
+using ssg::regionRoleName;
 using ssg::WidgetKind;
 using ssg::widgetKindName;
 
@@ -39,11 +43,23 @@ TEST(defaultProfileSupportsNoWidgetKind) {
     }
 }
 
-// The full profile renders the whole current vocabulary.
+// The full profile renders the whole current vocabulary -- widgets AND regions.
 TEST(fullProfileSupportsEveryWidgetKind) {
     const ClientUiProfile full = ClientUiProfile::full();
     for (const WidgetKind kind : kAllWidgetKinds) {
         ASSERT_TRUE(full.supports(kind));
+    }
+    for (const RegionRole role : kAllRegionRoles) {
+        ASSERT_TRUE(full.supports(role));
+    }
+}
+
+// A default profile also supports no region role: region placement, like widget
+// rendering, must be positively declared.
+TEST(defaultProfileSupportsNoRegionRole) {
+    const ClientUiProfile empty;
+    for (const RegionRole role : kAllRegionRoles) {
+        ASSERT_TRUE(!empty.supports(role));
     }
 }
 
@@ -85,6 +101,29 @@ TEST(profileNeverAdmitsAnInvalidWidgetKind) {
     ASSERT_TRUE(threw);
 }
 
+// The rejection oracle covers region roles too: a composition targeting a region
+// the profile does not support is rejected and NAMES the first unsupported role.
+TEST(profileRejectsAndNamesTheFirstUnsupportedRegion) {
+    ClientUiProfile profile;
+    profile.allowRegions({RegionRole::Top, RegionRole::Bottom});
+    const std::vector roles{RegionRole::Top, RegionRole::Overlay,
+                            RegionRole::Leading};
+    const std::optional<RegionRole> rejected = profile.firstUnsupported(roles);
+    ASSERT_TRUE(rejected.has_value());
+    ASSERT_EQ(*rejected, RegionRole::Overlay);
+    ASSERT_EQ(regionRoleName(*rejected), std::string_view{"overlay"});
+}
+
+// A profile supporting the required regions accepts them (nullopt).
+TEST(profileAcceptsSupportedRegions) {
+    ClientUiProfile profile;
+    profile.allowRegions({RegionRole::Top, RegionRole::Bottom});
+    ASSERT_TRUE(!profile
+                     .firstUnsupported(std::vector{RegionRole::Bottom,
+                                                   RegionRole::Top})
+                     .has_value());
+}
+
 // The profile is a positive set built from the vocabulary alone, independent of
 // the authorization capability set: value-comparable, carrying no principal or
 // permission.
@@ -102,9 +141,12 @@ int main() {
     RUN(everyWidgetKindHasADistinctName);
     RUN(defaultProfileSupportsNoWidgetKind);
     RUN(fullProfileSupportsEveryWidgetKind);
+    RUN(defaultProfileSupportsNoRegionRole);
     RUN(profileAcceptsSupportedAndEmptyCompositions);
     RUN(profileRejectsAndNamesTheFirstUnsupportedKind);
     RUN(profileNeverAdmitsAnInvalidWidgetKind);
+    RUN(profileRejectsAndNamesTheFirstUnsupportedRegion);
+    RUN(profileAcceptsSupportedRegions);
     RUN(profileIsAValueBuiltFromTheVocabularyAlone);
     return failed == 0 ? 0 : 1;
 }

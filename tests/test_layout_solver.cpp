@@ -2,6 +2,7 @@
 #include "test_helpers.h"
 
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -62,7 +63,7 @@ TEST(singleFlexTakesAllRemainder) {
 // fills the content rect (frame minus inset).
 TEST(insetReservesTheFrameOnEveryEdge) {
     LayoutNode root{
-        "box", std::nullopt, Size::flex(), Axis::Column, {2, 3, 1, 4},
+        "box", std::nullopt, Size::flex(), Axis::Column, Inset::of(2, 3, 1, 4),
         {leaf("inner", Size::flex())}};
     auto solved = solveLayout(root, {0, 0, 20, 20});
     ASSERT_TRUE(solved.has_value());
@@ -76,7 +77,7 @@ TEST(insetReservesTheFrameOnEveryEdge) {
 // share the inset-reduced width and sit at the inset top.
 TEST(insetAppliesBeforeChildAxisDistribution) {
     LayoutNode root{
-        "outer", std::nullopt, Size::flex(), Axis::Row, {1, 1, 1, 1},
+        "outer", std::nullopt, Size::flex(), Axis::Row, Inset::of(1, 1, 1, 1),
         {leaf("a", Size::exact(4)), leaf("b", Size::flex())}};
     auto solved = solveLayout(root, {0, 0, 10, 6});
     ASSERT_TRUE(solved.has_value());
@@ -130,6 +131,27 @@ TEST(structuralKindIsPreservedThroughSolving) {
     ASSERT_TRUE(box(*solved, "header").kind.has_value());
 }
 
+// The lifted constraint vocabulary excludes invalid geometry at construction: a
+// negative extent or inset edge would make the solver emit a negative or enlarged
+// rectangle, so it can never be built.
+TEST(constraintsRejectNegativeGeometryAtConstruction) {
+    bool sizeThrew = false;
+    try {
+        (void)Size::exact(-1);
+    } catch (const std::invalid_argument&) {
+        sizeThrew = true;
+    }
+    ASSERT_TRUE(sizeThrew);
+
+    bool insetThrew = false;
+    try {
+        (void)Inset::of(0, -1, 0, 0);
+    } catch (const std::invalid_argument&) {
+        insetThrew = true;
+    }
+    ASSERT_TRUE(insetThrew);
+}
+
 }  // namespace
 
 int main() {
@@ -142,6 +164,7 @@ int main() {
     RUN(exactOverflowInAChildFails);
     RUN(zeroFlexWithLeftoverIsAllowed);
     RUN(structuralKindIsPreservedThroughSolving);
+    RUN(constraintsRejectNegativeGeometryAtConstruction);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }
