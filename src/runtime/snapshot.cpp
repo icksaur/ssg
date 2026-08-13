@@ -4,6 +4,7 @@
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/UiChromeBridge.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -311,7 +312,11 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             lspFeatures,
             theme,
             shell.focus(),
-            paletteView()};
+            paletteView(),
+            composedChrome
+                ? uiSchemaFromChrome(*composedChrome,
+                                     Generation{chromeGeneration})
+                : UiSchema{Generation{chromeGeneration}, {}}};
 }
 
 TreeViewState EditorRuntime::Impl::treeView() const {

@@ -14,6 +14,7 @@
 #include <string>
 #include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
+#include <ssg/UiChromeBridge.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -90,6 +91,34 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         theme,
         ssg::FocusTarget::Editor,
     };
+}
+
+// A sections fixture whose medium-agnostic ui section is non-empty, so the wire
+// round-trip actually exercises the tree encoding.
+ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
+                                            std::string marker) {
+    ssg::SessionSnapshotSections result = sections(revision, marker);
+    ssg::ChromeComposition chrome;
+    ssg::RowDescriptor header;
+    ssg::WidgetDescriptor path;
+    path.kind = ssg::WidgetKind::Field;
+    path.id = "path";
+    path.value = ssg::ValueSource{false, marker, ""};
+    path.command = "file.reveal";
+    header.left = {path};
+    header.center = [&] {
+        ssg::WidgetDescriptor t;
+        t.kind = ssg::WidgetKind::Label;
+        t.id = "title";
+        t.value = ssg::ValueSource{false, "SSG", ""};
+        return t;
+    }();
+    header.centerWidth = ssg::CenterWidth::Fixed;
+    header.centerFixed = 6;
+    header.separator = 2;
+    chrome.header = header;
+    result.ui = ssg::uiSchemaFromChrome(chrome, ssg::Generation{marker.size()});
+    return result;
 }
 
 ssg::ViewportViewState clientView(std::uint32_t firstRow) {
@@ -580,6 +609,48 @@ TEST(sessionSnapshotRoundTripsANonDefaultStyle) {
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
     ASSERT_TRUE(decoded.snapshot->presentation()->style == style);
+}
+
+// The medium-agnostic ui section survives a snapshot wire round-trip, and a
+// delta carrying a ui change replays to the new schema -- so the published tree
+// is really on the wire, not silently dropped.
+TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
+            {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, clientView(3), sectionsWithUi(ssg::Revision{4}, "alpha"));
+    ASSERT_TRUE(!snapshot.sections().ui.regions.empty());
+
+    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    ASSERT_TRUE(decoded.snapshot.has_value());
+    ASSERT_TRUE(decoded.snapshot->sections().ui == snapshot.sections().ui);
+
+    // A delta from a no-ui base to the ui snapshot carries the ui replacement.
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
+            {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, clientView(3), sections(ssg::Revision{4}, "alpha"));
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
+            {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, clientView(3), sectionsWithUi(ssg::Revision{5}, "alpha"));
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    ASSERT_TRUE(delta.ui().replacement.has_value());
+
+    auto const decodedDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        ssg::ProtocolCodec{}.encodeSessionDelta(delta));
+    ASSERT_TRUE(decodedDelta.delta.has_value());
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_TRUE(replayed.snapshot->sections().ui == after.sections().ui);
 }
 
 TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
@@ -1309,6 +1380,7 @@ int main() {
     RUN(sessionSnapshotRoundTripsANonDefaultStyle);
     RUN(styleDefineKeysExactlyMatchTheWireCodecFields);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
+    RUN(sessionSnapshotAndDeltaCarryTheUiSection);
     RUN(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta);
     RUN(diffWordRangesRoundTripThroughSnapshotAndDelta);
     RUN(twoClientCapabilityAndViewportIsolationSurvivesTheWire);

@@ -2234,6 +2234,7 @@ void EditorRuntime::setComposedChrome(std::optional<ChromeComposition> compositi
     // repaint when the host re-pushes an identical composition on every reload.
     if (impl_->composedChrome == composition) return;
     impl_->composedChrome = std::move(composition);
+    ++impl_->chromeGeneration;
     if (impl_->session) impl_->session->advanceRevision();
 }
 

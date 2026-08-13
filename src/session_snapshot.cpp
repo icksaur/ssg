@@ -94,7 +94,8 @@ bool operator==(SessionSnapshotSections const& left,
            left.lspFeatures == right.lspFeatures &&
            left.theme == right.theme &&
            left.focus == right.focus &&
-           left.palette == right.palette;
+           left.palette == right.palette &&
+           left.ui == right.ui;
 }
 
 bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
@@ -137,7 +138,8 @@ SessionDelta::SessionDelta(
     ThemeSectionDelta theme, StyleSectionDelta style,
     ShellSectionDelta shell, ViewportDelta viewport,
     std::optional<FocusTarget> focus, SelectionNavigationDelta selectionNav,
-    PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows)
+    PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows,
+    UiSectionDelta ui)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -170,7 +172,8 @@ SessionDelta::SessionDelta(
       focus_{focus},
       selectionNav_{std::move(selectionNav)},
       promptProjection_{std::move(promptProjection)},
-      treeWindows_{std::move(treeWindows)} {}
+      treeWindows_{std::move(treeWindows)},
+      ui_{std::move(ui)} {}
 
 SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
@@ -292,6 +295,8 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
             : (after.presentation()
                    ? TreeWindowsDelta{true, after.presentation()->treeWindows}
                    : TreeWindowsDelta{}),
+        UiSectionDelta{old.ui == next.ui ? std::nullopt
+                                         : std::optional{next.ui}},
     };
 }
 
@@ -383,6 +388,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     // delta-replaying client loses its command catalog and diverges from a fresh
     // snapshot.
     auto palette = base.sections().palette;
+    auto ui = delta.ui_.replacement.value_or(base.sections().ui);
 
     SessionSnapshotSections sections{
         std::move(*document),
@@ -406,6 +412,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(theme),
         focus,
         std::move(palette),
+        std::move(ui),
     };
     ClientSnapshotState client = base.client();
     std::optional<PresentationSnapshot> presentation;
@@ -458,7 +465,7 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     std::optional<FocusTarget> focus,
     SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection,
-    TreeWindowsDelta treeWindows) const {
+    TreeWindowsDelta treeWindows, UiSectionDelta ui) const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,
@@ -491,7 +498,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         focus,
                         std::move(selectionNav),
                         std::move(promptProjection),
-                        std::move(treeWindows)};
+                        std::move(treeWindows),
+                        std::move(ui)};
 }
 
 }  // namespace ssg

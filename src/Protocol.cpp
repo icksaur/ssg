@@ -12,6 +12,7 @@
 #include <ssg/Settings.h>
 #include <ssg/TextCodec.h>
 #include <ssg/TextInputCommands.h>
+#include <ssg/UiTreeProtocol.h>
 
 #include <any>
 #include <array>
@@ -4867,6 +4868,7 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back("lsp_features", toValue(value.lspFeatures));
     fields.emplace_back("theme", toValue(value.theme));
     fields.emplace_back("focus", toValue(value.focus));
+    fields.emplace_back("ui", encodeUiSchema(value.ui));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
@@ -4893,6 +4895,11 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     auto lspFeatures = requireField<LspFeatureViewState>(value.field("lsp_features"));
     auto theme = requireField<ThemeSnapshot>(value.field("theme"));
     auto focus = requireField<FocusTarget>(value.field("focus"));
+    std::optional<UiSchema> ui;
+    if (const ProtocolValue* uiField = value.field("ui")) {
+        ui = decodeUiSchema(*uiField);
+        if (!ui) return false;
+    }
     if (!document || !selection || !history || !clipboard || !promptStatus || !search ||
         !findReplace || !settings || !keymap || !textEncoding || !tabs || !diff ||
         !externalModification || !followEdits || !tree || !syntax || !lspSync ||
@@ -4904,6 +4911,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         *findReplace, *settings, *keymap, *textEncoding, *tabs, *diff,
         *externalModification, *followEdits, *tree, std::move(*syntax), *lspSync,
         *lspFeatures, *theme, *focus});
+    if (ui) out->ui = std::move(*ui);
     return true;
 }
 
@@ -5540,6 +5548,9 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     fields.emplace_back("selection_nav", toValue(delta.selectionNav()));
     fields.emplace_back("prompt_projection", toValue(delta.promptProjection()));
     fields.emplace_back("tree_windows", toValue(delta.treeWindows()));
+    fields.emplace_back("ui", delta.ui().replacement
+                                  ? encodeUiSchema(*delta.ui().replacement)
+                                  : ProtocolValue::makeNull());
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5605,6 +5616,17 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
     auto selectionNav = requireField<SelectionNavigationDelta>(payload.field("selection_nav"));
     auto promptProjection = requireField<PromptProjectionDelta>(payload.field("prompt_projection"));
     auto treeWindows = requireField<TreeWindowsDelta>(payload.field("tree_windows"));
+    UiSectionDelta uiDelta;
+    if (const ProtocolValue* uiField = payload.field("ui")) {
+        if (uiField->kind() != ProtocolValue::Kind::NullValue) {
+            auto ui = decodeUiSchema(*uiField);
+            if (!ui) {
+                return {ProtocolError::MalformedMessage, std::nullopt,
+                        "session delta payload is malformed"};
+            }
+            uiDelta.replacement = std::move(*ui);
+        }
+    }
 
     if (!optionalOk || !baseRevision || !revision || !clientId || !viewId ||
         !capabilities || !selection || !history || !clipboard ||
@@ -5632,7 +5654,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*style),
                 std::move(*shell), std::move(*viewport), std::move(focus),
                 std::move(*selectionNav), std::move(*promptProjection),
-                std::move(*treeWindows)),
+                std::move(*treeWindows), std::move(uiDelta)),
             {}};
 }
 

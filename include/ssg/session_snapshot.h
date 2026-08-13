@@ -22,6 +22,7 @@
 #include <ssg/Theme.h>
 #include <ssg/Style.h>
 #include <ssg/TreeModel.h>
+#include <ssg/UiTree.h>
 #include <ssg/ShellState.h>
 #include <ssg/Viewport.h>
 
@@ -58,6 +59,12 @@ struct SessionSnapshotSections {
     // in PresentationSnapshot.
     FocusTarget focus = FocusTarget::Editor;
     PaletteViewState palette;
+    // The medium-agnostic UI-VM tree: the header/footer chrome as a generic node
+    // tree a native client renders directly (the grid client lowers the same tree
+    // through lowerUiChromeRegion). Published alongside the legacy grid path; a
+    // client that does not consume it simply ignores it. Empty when no chrome is
+    // composed.
+    UiSchema ui;
 };
 
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,
@@ -149,6 +156,13 @@ struct SettingsSectionDelta {
 
 struct ThemeSectionDelta {
     std::optional<ThemeSnapshot> replacement;
+};
+
+// Whole-value delta of the medium-agnostic UI section (like ThemeSectionDelta):
+// the tree changes only on a chrome/generation change, so a change replaces it
+// wholesale; nullopt means unchanged.
+struct UiSectionDelta {
+    std::optional<UiSchema> replacement;
 };
 
 struct StyleSectionDelta {
@@ -255,6 +269,7 @@ public:
     [[nodiscard]] ThemeSectionDelta const& theme() const noexcept {
         return theme_;
     }
+    [[nodiscard]] UiSectionDelta const& ui() const noexcept { return ui_; }
     [[nodiscard]] StyleSectionDelta const& style() const noexcept {
         return style_;
     }
@@ -294,7 +309,7 @@ private:
         std::optional<FocusTarget> focus = std::nullopt,
         SelectionNavigationDelta selectionNav = {},
         PromptProjectionDelta promptProjection = {},
-        TreeWindowsDelta treeWindows = {});
+        TreeWindowsDelta treeWindows = {}, UiSectionDelta ui = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -329,6 +344,7 @@ private:
     SelectionNavigationDelta selectionNav_;
     PromptProjectionDelta promptProjection_;
     TreeWindowsDelta treeWindows_;
+    UiSectionDelta ui_;
 };
 
 struct SessionReplayResult {
@@ -378,7 +394,7 @@ public:
         std::optional<FocusTarget> focus = std::nullopt,
         SelectionNavigationDelta selectionNav = {},
         PromptProjectionDelta promptProjection = {},
-        TreeWindowsDelta treeWindows = {}) const;
+        TreeWindowsDelta treeWindows = {}, UiSectionDelta ui = {}) const;
 };
 
 }  // namespace ssg
