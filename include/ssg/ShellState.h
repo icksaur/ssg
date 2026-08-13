@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ssg/ChromeComposition.h"
 #include "ssg/UiTree.h"
+#include "ssg/UiWidget.h"
 #include "ssg/focus.h"
 #include "ssg/Geometry.h"
 #include "ssg/Style.h"

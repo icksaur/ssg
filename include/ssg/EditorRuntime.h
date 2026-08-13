@@ -89,7 +89,7 @@ struct GitDiffScanResult {
 };
 
 // CONTRACT
-// EditorRuntime: resetKeymapToDefault, focusEditor, setComposedChrome,
+// EditorRuntime: resetKeymapToDefault, focusEditor, setComposedUi,
 //   primeDeferred, and the autosave-flush methods are host-only orchestration
 //   seams, called on the session thread. They deliberately bypass the command
 //   registry and are not user-visible actions, so they are never registered or
@@ -165,7 +165,7 @@ public:
     // ssg.chrome stages a nested widget tree, not a flat command argument. A real
     // change advances the session revision so delta-based clients repaint; an
     // identical re-push is a no-op.
-    void setComposedChrome(std::optional<ChromeComposition> composition);
+    void setComposedUi(std::optional<UiComposition> composition);
     // M10 fast startup: run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
     // syntax highlighting), then publish it through the normal snapshot/delta

@@ -235,11 +235,11 @@ struct EditorRuntime::Impl final : CommandServices,
     Style style{};
     // The init.lua-composed header/footer,
     // pushed by the host after each init.lua evaluation via
-    // EditorRuntime::setComposedChrome. nullopt keeps the built-in chrome; a
+    // EditorRuntime::setComposedUi. nullopt keeps the built-in chrome; a
     // present region REPLACES that region's built-in status fields in shellView.
-    std::optional<ChromeComposition> composedChrome;
-    // Bumped whenever composedChrome changes, so the published medium-agnostic UI
-    // schema (uiSchemaFromChrome) is stamped with a generation that advances only
+    std::optional<UiComposition> composedUi;
+    // Bumped whenever composedUi changes, so the published medium-agnostic UI
+    // schema is stamped with a generation that advances only
     // on a real chrome/structure change.
     std::uint64_t chromeGeneration = 0;
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;

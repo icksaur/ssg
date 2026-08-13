@@ -14,7 +14,7 @@
 #include <string>
 #include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
-#include <ssg/UiChromeBridge.h>
+#include "chrome_authoring.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -98,26 +98,20 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
 ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
                                             std::string marker) {
     ssg::SessionSnapshotSections result = sections(revision, marker);
-    ssg::ChromeComposition chrome;
-    ssg::RowDescriptor header;
     ssg::WidgetDescriptor path;
     path.kind = ssg::WidgetKind::Field;
     path.id = "path";
     path.value = ssg::ValueSource{false, marker, ""};
     path.command = "file.reveal";
-    header.left = {path};
-    header.center = [&] {
-        ssg::WidgetDescriptor t;
-        t.kind = ssg::WidgetKind::Label;
-        t.id = "title";
-        t.value = ssg::ValueSource{false, "SSG", ""};
-        return t;
-    }();
-    header.centerWidth = ssg::CenterWidth::Fixed;
-    header.centerFixed = 6;
-    header.separator = 2;
-    chrome.header = header;
-    result.ui = ssg::uiSchemaFromChrome(chrome, ssg::Generation{marker.size()});
+    ssg::WidgetDescriptor title;
+    title.kind = ssg::WidgetKind::Label;
+    title.id = "title";
+    title.value = ssg::ValueSource{false, "SSG", ""};
+    // Footer (not header) so the center widget is allowed; this fixture only needs
+    // a non-empty schema to exercise the wire tree encoding.
+    const auto comp = ssgtest::composeFooter({path}, {}, title,
+                                             ssg::CenterWidth::Fixed, 6, 2);
+    result.ui = ssg::UiSchema{ssg::Generation{marker.size()}, comp.regions};
     return result;
 }
 

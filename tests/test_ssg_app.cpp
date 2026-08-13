@@ -3041,7 +3041,7 @@ TEST(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52) {
 // evaluateInitScript funnel (used by BOTH startup loadInitScript and reload
 // drainAndEvaluate) must push the script's chrome composition into the runtime,
 // so a refactor cannot silently stop wiring one path.
-TEST(evaluateInitScriptPushesChromeCompositionToTheRuntime) {
+TEST(evaluateInitScriptPushesComposedChromeToTheRuntime) {
     auto root = fs::temp_directory_path() / "ssg-init-chrome";
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
@@ -3094,7 +3094,7 @@ TEST(evaluateInitScriptPushesChromeCompositionToTheRuntime) {
 
 int main() {
     RUN(resolveLaunchNoArgumentOpensCwd);
-    RUN(evaluateInitScriptPushesChromeCompositionToTheRuntime);
+    RUN(evaluateInitScriptPushesComposedChromeToTheRuntime);
     RUN(resolveLaunchDirectoryOpensThatDirectory);
     RUN(resolveLaunchFileOpensParentDirectoryAndFile);
     RUN(everyDeclaredModeLeavesExactlyWhatItEnters);

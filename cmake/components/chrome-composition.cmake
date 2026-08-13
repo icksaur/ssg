@@ -1,5 +1,5 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/ChromeComposition.cpp
+    ${SSG_SOURCE_DIR}/src/ChromeDecode.cpp
     ${SSG_SOURCE_DIR}/src/ChromeLowering.cpp
 )
 

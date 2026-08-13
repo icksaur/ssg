@@ -194,8 +194,8 @@ LuaResult ScriptHost::evaluate(std::string_view script) {
     return impl_->host.evaluate(script);
 }
 
-std::optional<ChromeComposition> const& ScriptHost::chromeComposition() const {
-    return impl_->host.composition();
+std::optional<UiComposition> const& ScriptHost::composedUi() const {
+    return impl_->host.composedUi();
 }
 
 // Offers what an evaluation registered to the catalog, before the host makes

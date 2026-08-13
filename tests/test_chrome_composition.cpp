@@ -1,4 +1,6 @@
-#include "ssg/ChromeComposition.h"
+#include "ssg/ChromeDecode.h"
+
+#include "chrome_authoring.h"
 #include "test_helpers.h"
 
 #include <string>
@@ -14,7 +16,16 @@ std::vector<std::string> providers() {
 }
 
 ChromeDecodeResult decode(const CV& root) {
-    return decodeChromeComposition(root, providers());
+    return decodeChrome(root, providers());
+}
+
+// The header/footer row reconstructed from a decoded composition, so a decoder
+// test asserts on the widget groups without walking the container tree by hand.
+ssgtest::RowView headerOf(const ChromeDecodeResult& r) {
+    return ssgtest::rowOf(ssgtest::regionByRole(*r.composition, RegionRole::Top));
+}
+ssgtest::RowView footerOf(const ChromeDecodeResult& r) {
+    return ssgtest::rowOf(ssgtest::regionByRole(*r.composition, RegionRole::Bottom));
 }
 
 CV str(std::string s) { return CV::ofString(std::move(s)); }
@@ -50,30 +61,26 @@ TEST(decodesHeaderLeftAndFooterGroups) {
     ASSERT_TRUE(out.composition.has_value());
     if (!out.composition) return;
 
-    ChromeComposition expected;
-    RowDescriptor header;
-    header.left.push_back(
-        {WidgetKind::Field, "header.left[0]", ValueSource{true, "", "path"}, {},
-         {}, {}, {}, 0, false, Overflow::None, ""});
-    header.left.push_back(
-        {WidgetKind::Field, "header.left[1]", ValueSource{true, "", "branch"}, {},
-         {}, {}, {}, 0, false, Overflow::None, ""});
-    expected.header = header;
-    RowDescriptor footer;
-    footer.left.push_back(
-        {WidgetKind::Field, "footer.left[0]", ValueSource{true, "", "status"}, {},
-         {}, {}, {}, 0, false, Overflow::None, ""});
-    footer.right.push_back(
-        {WidgetKind::Label, "footer.right[0]", ValueSource{false, "RO", ""}, {},
-         {}, std::optional<std::string>{"footer"}, {}, 0, false, Overflow::None,
-         ""});
-    footer.right.push_back(
-        {WidgetKind::Field, "footer.right[1]", ValueSource{false, "reload", ""},
-         {}, {}, {}, std::optional<std::string>{"config.reload"}, 0, false,
-         Overflow::None, ""});
-    expected.footer = footer;
+    // Reference comparison: expectations are literal here, independent of the
+    // decoder, so a decode regression cannot match them.
+    const auto h = headerOf(out);
+    ASSERT_EQ(h.left.size(), std::size_t{2});
+    ASSERT_EQ(h.left[0].id, std::string{"header.left[0]"});
+    ASSERT_TRUE(h.left[0].value->isProvider);
+    ASSERT_EQ(h.left[0].value->provider, std::string{"path"});
+    ASSERT_EQ(h.left[1].value->provider, std::string{"branch"});
+    ASSERT_TRUE(h.right.empty());
 
-    ASSERT_TRUE(*out.composition == expected);
+    const auto f = footerOf(out);
+    ASSERT_EQ(f.left.size(), std::size_t{1});
+    ASSERT_EQ(f.left[0].value->provider, std::string{"status"});
+    ASSERT_EQ(f.right.size(), std::size_t{2});
+    ASSERT_EQ(f.right[0].value->literal, std::string{"RO"});
+    ASSERT_TRUE(f.right[0].role.has_value());
+    ASSERT_EQ(*f.right[0].role, std::string{"footer"});
+    ASSERT_EQ(f.right[1].value->literal, std::string{"reload"});
+    ASSERT_TRUE(f.right[1].command.has_value());
+    ASSERT_EQ(*f.right[1].command, std::string{"config.reload"});
 }
 
 // An omitted region keeps its built-in chrome (nullopt), separator defaults 1.
@@ -83,16 +90,18 @@ TEST(omittedRegionIsNulloptAndSeparatorDefaultsToOne) {
                                               {{"kind", str("field")},
                                                {"text", str("x")}})})}})}}));
     ASSERT_TRUE(out.ok());
-    ASSERT_FALSE(out.composition->header.has_value());
-    ASSERT_TRUE(out.composition->footer.has_value());
-    ASSERT_EQ(out.composition->footer->separator, 1);
+    ASSERT_FALSE(ssgtest::hasRegion(*out.composition, RegionRole::Top));
+    ASSERT_TRUE(ssgtest::hasRegion(*out.composition, RegionRole::Bottom));
+    const auto f = footerOf(out);
+    ASSERT_EQ(f.separator, 1);
 }
 
 TEST(explicitSeparatorIsRead) {
     const auto out = decode(CV::ofTable(
         {{"footer", CV::ofTable({{"separator", CV::ofInt(3)}})}}));
     ASSERT_TRUE(out.ok());
-    ASSERT_EQ(out.composition->footer->separator, 3);
+    const auto f = footerOf(out);
+    ASSERT_EQ(f.separator, 3);
 }
 
 // An omitted `id` defaults to the decode path (stable/unique); an author id wins.
@@ -105,8 +114,9 @@ TEST(idDefaultsToPathAndAuthorIdWins) {
                                                       {"id", str("mine")},
                                                       {"text", str("b")}})})}})}}));
     ASSERT_TRUE(out.ok());
-    ASSERT_EQ(out.composition->footer->left[0].id, std::string{"footer.left[0]"});
-    ASSERT_EQ(out.composition->footer->left[1].id, std::string{"mine"});
+    const auto f = footerOf(out);
+    ASSERT_EQ(f.left[0].id, std::string{"footer.left[0]"});
+    ASSERT_EQ(f.left[1].id, std::string{"mine"});
 }
 
 // Negative geometry values are fail-loud, not silently degraded.
@@ -138,16 +148,18 @@ TEST(textLiteralAndProviderAreDistinctSources) {
                                               {{"kind", str("label")},
                                                {"text", str("hi")}})})}})}}));
     ASSERT_TRUE(lit.ok());
-    ASSERT_EQ(lit.composition->footer->left[0].value->isProvider, false);
-    ASSERT_EQ(lit.composition->footer->left[0].value->literal, std::string{"hi"});
+    const auto litRow = footerOf(lit);
+    ASSERT_EQ(litRow.left[0].value->isProvider, false);
+    ASSERT_EQ(litRow.left[0].value->literal, std::string{"hi"});
 
     const auto prov = decode(CV::ofTable(
         {{"footer", CV::ofTable({{"left", CV::ofArray({widget(
                                               {{"kind", str("field")},
                                                {"provider", str("branch")}})})}})}}));
     ASSERT_TRUE(prov.ok());
-    ASSERT_EQ(prov.composition->footer->left[0].value->isProvider, true);
-    ASSERT_EQ(prov.composition->footer->left[0].value->provider,
+    const auto provRow = footerOf(prov);
+    ASSERT_EQ(provRow.left[0].value->isProvider, true);
+    ASSERT_EQ(provRow.left[0].value->provider,
               std::string{"branch"});
 }
 
@@ -219,8 +231,9 @@ TEST(checkboxCheckedFromBoolAndProvider) {
                                                {"text", str("case")},
                                                {"checked", CV::ofBool(true)}})})}})}}));
     ASSERT_TRUE(boolean.ok());
-    ASSERT_EQ(boolean.composition->footer->left[0].checked->isProvider, false);
-    ASSERT_EQ(boolean.composition->footer->left[0].checked->literal,
+    const auto boolRow = footerOf(boolean);
+    ASSERT_EQ(boolRow.left[0].checked->isProvider, false);
+    ASSERT_EQ(boolRow.left[0].checked->literal,
               std::string{"true"});
 
     const auto prov = decode(CV::ofTable(
@@ -228,8 +241,9 @@ TEST(checkboxCheckedFromBoolAndProvider) {
                                               {{"kind", str("checkbox")},
                                                {"checked_provider", str("follow")}})})}})}}));
     ASSERT_TRUE(prov.ok());
-    ASSERT_EQ(prov.composition->footer->left[0].checked->isProvider, true);
-    ASSERT_EQ(prov.composition->footer->left[0].checked->provider,
+    const auto provRow = footerOf(prov);
+    ASSERT_EQ(provRow.left[0].checked->isProvider, true);
+    ASSERT_EQ(provRow.left[0].checked->provider,
               std::string{"follow"});
 }
 
@@ -271,7 +285,8 @@ TEST(leftRightSpacerRequiresIntegerWidth) {
                                               {{"kind", str("spacer")},
                                                {"width", CV::ofInt(4)}})})}})}}));
     ASSERT_TRUE(ok.ok());
-    ASSERT_EQ(*ok.composition->footer->left[0].width, 4);
+    const auto f = footerOf(ok);
+    ASSERT_EQ(*f.left[0].width, 4);
 }
 
 TEST(widthForbiddenOnLeftRightNonSpacer) {
@@ -292,16 +307,18 @@ TEST(centerWidthFlexAndFixed) {
                                                     {"text", str("m")},
                                                     {"width", str("flex")}})}})}}));
     ASSERT_TRUE(flex.ok());
-    ASSERT_TRUE(flex.composition->footer->center.has_value());
-    ASSERT_TRUE(flex.composition->footer->centerWidth == CenterWidth::Flex);
+    const auto flexRow = footerOf(flex);
+    ASSERT_TRUE(flexRow.center.has_value());
+    ASSERT_TRUE(flexRow.centerWidth == CenterWidth::Flex);
 
     const auto fixed = decode(CV::ofTable(
         {{"footer", CV::ofTable({{"center", widget({{"kind", str("label")},
                                                     {"text", str("m")},
                                                     {"width", CV::ofInt(12)}})}})}}));
     ASSERT_TRUE(fixed.ok());
-    ASSERT_TRUE(fixed.composition->footer->centerWidth == CenterWidth::Fixed);
-    ASSERT_EQ(fixed.composition->footer->centerFixed, 12);
+    const auto fixedRow = footerOf(fixed);
+    ASSERT_TRUE(fixedRow.centerWidth == CenterWidth::Fixed);
+    ASSERT_EQ(fixedRow.centerFixed, 12);
 }
 
 // --- Header is left-group only ---
@@ -398,7 +415,8 @@ TEST(largeValidCompositionUnderCapsSucceeds) {
                                  {"center", widget({{"kind", str("spacer")}})}})}});
     const auto out = decode(root);
     ASSERT_TRUE(out.ok());
-    ASSERT_EQ(out.composition->footer->left.size(), std::size_t{64});
+    const auto f = footerOf(out);
+    ASSERT_EQ(f.left.size(), std::size_t{64});
 }
 
 // --- overflow ---
@@ -420,7 +438,8 @@ TEST(overflowTruncateParses) {
                                                {"text", str("x")},
                                                {"overflow", str("truncate")}})})}})}}));
     ASSERT_TRUE(out.ok());
-    ASSERT_TRUE(out.composition->footer->left[0].overflow == Overflow::Truncate);
+    const auto f = footerOf(out);
+    ASSERT_TRUE(f.left[0].overflow == Overflow::Truncate);
 }
 
 // --- structural ---

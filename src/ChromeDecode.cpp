@@ -1,4 +1,6 @@
-#include <ssg/ChromeComposition.h>
+#include <ssg/ChromeDecode.h>
+
+#include <ssg/RegionRoot.h>  // regionRoleName
 
 #include <array>
 #include <limits>
@@ -50,6 +52,72 @@ std::optional<Overflow> parseOverflow(std::string_view s) {
 
 enum class Slot { Left, Right, Center };
 
+// The decoder's per-region scratch: the widget groups plus the center width
+// policy and separator. Not exported -- it exists only between decoding a region
+// table and assembling its UiRegion tree. The public output is a UiComposition of
+// region trees; this shape never crosses a module boundary.
+struct DecodedRow {
+    std::vector<WidgetDescriptor> left;
+    std::vector<WidgetDescriptor> right;
+    std::optional<WidgetDescriptor> center;
+    CenterWidth centerWidth = CenterWidth::Flex;
+    int centerFixed = 0;
+    int separator = 1;
+};
+
+UiNode leafFor(const WidgetDescriptor& widget, std::string id, Size size) {
+    return UiNode{UiNodeId{std::move(id)}, size, UiLeaf{widget}};
+}
+
+// A group container holding the given widgets as leaves. Its Size is Auto
+// (content-sized: it never grows to fill), so the left group renders flush at the
+// start and the right group flush at the end, with the flex middle between them
+// absorbing the slack. `gap` is the separator between items.
+UiNode groupFor(std::string id, const std::vector<WidgetDescriptor>& widgets,
+                int gap) {
+    UiContainer container;
+    container.axis = Axis::Row;
+    container.gap = Gap::of(gap);
+    for (std::size_t i = 0; i < widgets.size(); ++i) {
+        container.children.push_back(
+            leafFor(widgets[i], id + "." + std::to_string(i), Size::autoSize()));
+    }
+    return UiNode{UiNodeId{std::move(id)}, Size::autoSize(), std::move(container)};
+}
+
+// Assemble a decoded row into the canonical chrome region tree:
+// Row = [ left(Auto), middle(Flex), right(Auto) ]. The Auto end groups size to
+// content and the Flex middle absorbs the slack, so the packing (left flush,
+// right flush) is encoded in the SIZING, not positional convention. The center
+// widget, if any, sits at the start of the flex middle; its own Size carries the
+// width policy (Flex fills; Exact is a fixed center right after the left group).
+UiRegion assembleRegion(const DecodedRow& row, RegionRole role) {
+    const std::string base{regionRoleName(role)};
+    UiNode left = groupFor(base + ".left", row.left, row.separator);
+    UiNode right = groupFor(base + ".right", row.right, 0);
+
+    UiContainer middleContainer;
+    middleContainer.axis = Axis::Row;
+    if (row.center) {
+        const Size centerSize = row.centerWidth == CenterWidth::Fixed
+                                    ? Size::exact(row.centerFixed)
+                                    : Size::flex();
+        middleContainer.children.push_back(
+            leafFor(*row.center, base + ".middle.0", centerSize));
+    }
+    UiNode middle{UiNodeId{base + ".middle"}, Size::flex(),
+                  std::move(middleContainer)};
+
+    UiContainer rootContainer;
+    rootContainer.axis = Axis::Row;
+    rootContainer.children.push_back(std::move(left));
+    rootContainer.children.push_back(std::move(middle));
+    rootContainer.children.push_back(std::move(right));
+
+    return UiRegion{
+        role, UiNode{UiNodeId{base}, Size::flex(), std::move(rootContainer)}};
+}
+
 // Fail-loud recursive decoder. The first error short-circuits; every message is
 // path-qualified so a Lua author can locate the offending field.
 class Decoder {
@@ -64,18 +132,18 @@ public:
             if (key != "header" && key != "footer")
                 return fail("chrome." + key, "unknown field");
         }
-        ChromeComposition out;
+        UiComposition out;
         if (const auto* h = root.find("header")) {
-            RowDescriptor row;
+            DecodedRow row;
             if (!decodeRegion(*h, "header", /*isHeader=*/true, row))
                 return {error_, std::nullopt};
-            out.header = std::move(row);
+            out.regions.push_back(assembleRegion(row, RegionRole::Top));
         }
         if (const auto* f = root.find("footer")) {
-            RowDescriptor row;
+            DecodedRow row;
             if (!decodeRegion(*f, "footer", /*isHeader=*/false, row))
                 return {error_, std::nullopt};
-            out.footer = std::move(row);
+            out.regions.push_back(assembleRegion(row, RegionRole::Bottom));
         }
         return {std::nullopt, std::move(out)};
     }
@@ -91,7 +159,7 @@ private:
     }
 
     bool decodeRegion(const ChromeValue& value, const std::string& path,
-                      bool isHeader, RowDescriptor& out) {
+                      bool isHeader, DecodedRow& out) {
         if (value.kind != ChromeValue::Kind::Table)
             return failB(path, "expected a table");
         for (const auto& [key, _] : value.table) {
@@ -399,7 +467,7 @@ private:
 
 }  // namespace
 
-ChromeDecodeResult decodeChromeComposition(
+ChromeDecodeResult decodeChrome(
     const ChromeValue& root, const std::vector<std::string>& validProviders) {
     return Decoder{validProviders}.decode(root);
 }

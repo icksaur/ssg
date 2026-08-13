@@ -1,5 +1,7 @@
 #include "../test_helpers.h"
 
+#include "../chrome_authoring.h"
+
 #include <ssg/CommandCatalog.h>
 #include <ssg/EditorRuntime.h>
 #include <ssg/EditorSessionBuilder.h>
@@ -549,7 +551,7 @@ TEST(shellStatusFieldsUseRegisteredProviders) {
 }
 
 // A composition pushed via
-// setComposedChrome REPLACES the built-in region, resolves provider widgets
+// setComposedUi REPLACES the built-in region, resolves provider widgets
 // through the live status fields, and reverts to built-in when cleared -- and a
 // real change advances the revision so a delta-gated client repaints.
 TEST(composedChromeReplacesBuiltinChromeAndTracksRevision) {
@@ -584,8 +586,6 @@ TEST(composedChromeReplacesBuiltinChromeAndTracksRevision) {
                 nullptr);
 
     // Compose a header of one provider widget (id "my.path" -> provider "path").
-    ssg::ChromeComposition comp;
-    ssg::RowDescriptor header;
     ssg::WidgetDescriptor widget;
     widget.kind = ssg::WidgetKind::Field;
     widget.id = "my.path";
@@ -593,11 +593,10 @@ TEST(composedChromeReplacesBuiltinChromeAndTracksRevision) {
     src.isProvider = true;
     src.provider = "path";
     widget.value = src;
-    header.left.push_back(widget);
-    comp.header = header;
+    const auto comp = ssgtest::composeHeader({widget});
 
     auto const revBefore = runtime.revision();
-    runtime.setComposedChrome(comp);
+    runtime.setComposedUi(comp);
     // A real change advanced the revision (delta-gated clients will repaint).
     ASSERT_TRUE(runtime.revision().value() > revBefore.value());
 
@@ -622,11 +621,11 @@ TEST(composedChromeReplacesBuiltinChromeAndTracksRevision) {
 
     // Re-pushing the identical composition is a no-op: no revision bump.
     auto const revStable = runtime.revision();
-    runtime.setComposedChrome(comp);
+    runtime.setComposedUi(comp);
     ASSERT_EQ(runtime.revision().value(), revStable.value());
 
     // Clearing reverts to built-in and advances the revision again.
-    runtime.setComposedChrome(std::nullopt);
+    runtime.setComposedUi(std::nullopt);
     ASSERT_TRUE(runtime.revision().value() > revStable.value());
     auto reverted = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(reverted.has_value());

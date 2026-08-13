@@ -16,9 +16,9 @@
 // SOURCES (WidgetDescriptor's ValueSource), never resolved values, which is what
 // keeps it immutable within a generation.
 
-#include <ssg/ChromeComposition.h>   // WidgetDescriptor, ValueSource
 #include <ssg/LayoutConstraints.h>   // Axis, Size, Inset
 #include <ssg/RegionRoot.h>          // RegionRole
+#include <ssg/UiWidget.h>            // WidgetDescriptor, ValueSource
 
 #include <cstdint>
 #include <optional>
@@ -116,6 +116,17 @@ struct UiSchema {
     std::vector<UiRegion> regions;
 
     friend bool operator==(const UiSchema&, const UiSchema&) = default;
+};
+
+// A generationless set of region trees: what the chrome decoder produces and the
+// runtime OWNS as composed input. It carries no Generation because a generation
+// belongs to one PUBLISHED schema; the runtime stamps the current generation when
+// it publishes a composition as a UiSchema, so authorship (decode) never fixes a
+// generation and the runtime stays the sole generation authority.
+struct UiComposition {
+    std::vector<UiRegion> regions;
+
+    friend bool operator==(const UiComposition&, const UiComposition&) = default;
 };
 
 struct UiSchemaValidation {

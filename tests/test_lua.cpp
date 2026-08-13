@@ -2,6 +2,7 @@
 
 
 #include "all_command_ids.h"
+#include "chrome_authoring.h"
 #include <ssg/LuaCommandHost.h>
 
 #include <fstream>
@@ -265,19 +266,20 @@ LuaCommandHost chromeHost() {
 // decoded through the nested-table walker (providers resolved, regions kept).
 TEST(chromeCallStagesTheComposition) {
     auto host = chromeHost();
-    ASSERT_FALSE(host.composition().has_value());
+    ASSERT_FALSE(host.composedUi().has_value());
     auto const result = host.evaluate(
         "ssg.chrome{ header = { left = { { kind = 'field', provider = 'path' } } },"
         " footer = { left = { { kind = 'label', text = 'RO' } } } }");
     ASSERT_TRUE(result.accepted());
-    ASSERT_TRUE(host.composition().has_value());
-    ASSERT_TRUE(host.composition()->header.has_value());
-    ASSERT_TRUE(host.composition()->footer.has_value());
-    ASSERT_EQ(host.composition()->header->left.size(), std::size_t{1});
-    ASSERT_TRUE(host.composition()->header->left[0].value.has_value());
-    ASSERT_TRUE(host.composition()->header->left[0].value->isProvider);
-    ASSERT_EQ(host.composition()->header->left[0].value->provider,
-              std::string{"path"});
+    ASSERT_TRUE(host.composedUi().has_value());
+    ASSERT_TRUE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Top));
+    ASSERT_TRUE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Bottom));
+    const auto header = ssgtest::rowOf(
+        ssgtest::regionByRole(*host.composedUi(), RegionRole::Top));
+    ASSERT_EQ(header.left.size(), std::size_t{1});
+    ASSERT_TRUE(header.left[0].value.has_value());
+    ASSERT_TRUE(header.left[0].value->isProvider);
+    ASSERT_EQ(header.left[0].value->provider, std::string{"path"});
 }
 
 // Second ssg.chrome call in one evaluation replaces the first (last wins).
@@ -287,9 +289,9 @@ TEST(chromeLastCallWins) {
         "ssg.chrome{ header = { left = { { kind = 'label', text = 'A' } } } }"
         "\nssg.chrome{ footer = { left = { { kind = 'label', text = 'B' } } } }")
                     .accepted());
-    ASSERT_TRUE(host.composition().has_value());
-    ASSERT_FALSE(host.composition()->header.has_value());
-    ASSERT_TRUE(host.composition()->footer.has_value());
+    ASSERT_TRUE(host.composedUi().has_value());
+    ASSERT_FALSE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Top));
+    ASSERT_TRUE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Bottom));
 }
 
 // A script that calls ssg.chrome then errors leaves the PRIOR composition
@@ -300,7 +302,7 @@ TEST(chromeRollsBackOnLaterScriptError) {
     ASSERT_TRUE(host.evaluate(
         "ssg.chrome{ header = { left = { { kind = 'label', text = 'keep' } } } }")
                     .accepted());
-    ASSERT_TRUE(host.composition().has_value());
+    ASSERT_TRUE(host.composedUi().has_value());
 
     // A second evaluation composes different chrome then raises: the previous
     // composition must survive unchanged.
@@ -308,13 +310,13 @@ TEST(chromeRollsBackOnLaterScriptError) {
         "ssg.chrome{ footer = { left = { { kind = 'label', text = 'gone' } } } }"
         "\nerror('boom')");
     ASSERT_FALSE(errored.accepted());
-    ASSERT_TRUE(host.composition().has_value());
-    ASSERT_TRUE(host.composition()->header.has_value());
-    ASSERT_FALSE(host.composition()->footer.has_value());
+    ASSERT_TRUE(host.composedUi().has_value());
+    ASSERT_TRUE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Top));
+    ASSERT_FALSE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Bottom));
 
     // A clean reload with no ssg.chrome reverts to built-in.
     ASSERT_TRUE(host.evaluate("local x = 1").accepted());
-    ASSERT_FALSE(host.composition().has_value());
+    ASSERT_FALSE(host.composedUi().has_value());
 }
 
 // An invalid descriptor fails the whole call loud (path-qualified) and stages
@@ -325,7 +327,7 @@ TEST(chromeInvalidDescriptorFailsLoud) {
         "ssg.chrome{ header = { left = { { kind = 'buton', text = 'x' } } } }");
     ASSERT_EQ(unknownKind.error, LuaError::InvalidScript);
     ASSERT_TRUE(unknownKind.message.find("unknown kind") != std::string::npos);
-    ASSERT_FALSE(host.composition().has_value());
+    ASSERT_FALSE(host.composedUi().has_value());
 
     auto const unknownProvider = host.evaluate(
         "ssg.chrome{ header = { left = { { kind = 'field', provider = 'nope' } } } }");
@@ -345,7 +347,7 @@ TEST(chromeCyclicTableIsRejected) {
     ASSERT_FALSE(result.accepted());
     ASSERT_EQ(result.error, LuaError::InvalidScript);
     ASSERT_TRUE(result.message.find("nests too deeply") != std::string::npos);
-    ASSERT_FALSE(host.composition().has_value());
+    ASSERT_FALSE(host.composedUi().has_value());
 }
 
 // A non-string key inside a descriptor table is rejected, not dropped -- the
@@ -358,7 +360,7 @@ TEST(chromeMalformedTableShapesFailLoud) {
     auto const mixedWidget = host.evaluate(
         "ssg.chrome{ header = { left = { { kind = 'label', text = 'x', [1] = 'oops' } } } }");
     ASSERT_EQ(mixedWidget.error, LuaError::InvalidScript);
-    ASSERT_FALSE(host.composition().has_value());
+    ASSERT_FALSE(host.composedUi().has_value());
 
     // A boolean key is neither a name nor an index.
     auto const boolKey = host.evaluate(
@@ -373,9 +375,9 @@ TEST(chromeMalformedTableShapesFailLoud) {
 
     // An empty root composes nothing (valid, no override).
     ASSERT_TRUE(host.evaluate("ssg.chrome{}").accepted());
-    ASSERT_TRUE(host.composition().has_value());
-    ASSERT_FALSE(host.composition()->header.has_value());
-    ASSERT_FALSE(host.composition()->footer.has_value());
+    ASSERT_TRUE(host.composedUi().has_value());
+    ASSERT_FALSE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Top));
+    ASSERT_FALSE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Bottom));
 }
 
 }  // namespace

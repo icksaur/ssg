@@ -4,7 +4,7 @@
 // (never a partial). The corpus reuses the chrome bridge so the published shape
 // is the real one.
 
-#include "ssg/UiChromeBridge.h"
+#include "chrome_authoring.h"
 #include "ssg/UiTree.h"
 #include "ssg/UiTreeProtocol.h"
 #include "test_helpers.h"
@@ -15,13 +15,10 @@
 
 namespace {
 
-using ssg::ChromeComposition;
 using ssg::decodeUiSchema;
 using ssg::encodeUiSchema;
 using ssg::Generation;
 using ssg::ProtocolValue;
-using ssg::RowDescriptor;
-using ssg::uiSchemaFromChrome;
 using ssg::UiSchema;
 using ssg::ValueSource;
 using ssg::WidgetDescriptor;
@@ -41,8 +38,6 @@ std::vector<UiSchema> corpus() {
     std::vector<UiSchema> all;
 
     {  // header + footer, providers, checkbox, spacer, overflow, center, ranks
-        ChromeComposition c;
-        RowDescriptor header;
         WidgetDescriptor path;
         path.kind = WidgetKind::Field;
         path.id = "path";
@@ -63,26 +58,19 @@ std::vector<UiSchema> corpus() {
         sp.kind = WidgetKind::Spacer;
         sp.id = "sp";
         sp.width = 3;
-        header.left = {path, dirty, sp};
-        header.center = label("title", "SSG");
-        header.right = {label("enc", "utf-8")};
-        header.centerWidth = ssg::CenterWidth::Fixed;
-        header.centerFixed = 8;
-        header.separator = 2;
         WidgetDescriptor msg;
         msg.kind = WidgetKind::Field;
         msg.id = "msg";
         msg.value = ValueSource{false, "scrolling status", ""};
         msg.overflow = ssg::Overflow::ScrollTail;
         msg.sigil = ">";
-        RowDescriptor footer;
-        footer.left = {msg};
-        c.header = header;
-        c.footer = footer;
-        all.push_back(uiSchemaFromChrome(c, Generation{7}));
+        const auto comp = ssgtest::composeHeaderAndFooter(
+            {path, dirty, sp}, {msg}, {label("enc", "utf-8")}, label("title", "SSG"),
+            ssg::CenterWidth::Fixed, 8, /*headerSeparator=*/2);
+        all.push_back(UiSchema{Generation{7}, comp.regions});
     }
     {  // empty composition -> empty schema
-        all.push_back(uiSchemaFromChrome(ChromeComposition{}, Generation{1}));
+        all.push_back(UiSchema{Generation{1}, {}});
     }
     return all;
 }

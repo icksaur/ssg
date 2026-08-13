@@ -18,8 +18,8 @@ void evaluateInitScript(ScriptHost& scripts, EditorRuntime& runtime,
     // Push the currently PUBLISHED composition (already reflects rollback: a
     // rejected reload keeps the prior value) into the runtime on BOTH the
     // startup and auto-reload paths, since this is their shared funnel. An
-    // unchanged composition is a no-op inside setComposedChrome.
-    runtime.setComposedChrome(scripts.chromeComposition());
+    // unchanged composition is a no-op inside setComposedUi.
+    runtime.setComposedUi(scripts.composedUi());
 }
 
 }  // namespace ssg::app

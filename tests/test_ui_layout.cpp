@@ -1,5 +1,5 @@
 #include "ssg/ShellState.h"
-#include "ssg/UiChromeBridge.h"
+#include "chrome_authoring.h"
 #include "test_helpers.h"
 
 #include <algorithm>
@@ -868,14 +868,10 @@ WidgetDescriptor providerField(std::string id, std::string provider, int rank) {
 TEST(composedChromeReplacesBuiltinHeaderAndFooter) {
     ShellState state;
     auto value = request(100, 24);
-    ChromeComposition comp;
-    RowDescriptor header;
-    header.left.push_back(literalField("custom.header", "HELLO", 0));
-    comp.header = header;
-    RowDescriptor footer;
-    footer.left.push_back(literalField("custom.footer", "WORLD", 0));
-    comp.footer = footer;
-    value.composedUi = uiSchemaFromChrome(comp, Generation{1});
+    const auto comp = ssgtest::composeHeaderAndFooter(
+        {literalField("custom.header", "HELLO", 0)},
+        {literalField("custom.footer", "WORLD", 0)});
+    value.composedUi = UiSchema{Generation{1}, comp.regions};
 
     auto result = computeShellLayout(value, state);
     ASSERT_TRUE(result.accepted());
@@ -907,11 +903,9 @@ TEST(composedChromeReplacesBuiltinHeaderAndFooter) {
 TEST(composingOneRegionLeavesTheOtherBuiltin) {
     ShellState state;
     auto footerOnly = request(100, 24);
-    ChromeComposition comp;
-    RowDescriptor footer;
-    footer.left.push_back(literalField("custom.footer", "WORLD", 0));
-    comp.footer = footer;
-    footerOnly.composedUi = uiSchemaFromChrome(comp, Generation{1});
+    const auto comp = ssgtest::composeFooter(
+        {literalField("custom.footer", "WORLD", 0)});
+    footerOnly.composedUi = UiSchema{Generation{1}, comp.regions};
 
     auto result = computeShellLayout(footerOnly, state);
     ASSERT_TRUE(result.accepted());
@@ -930,11 +924,8 @@ TEST(composedHeaderResolvesProvidersAndKeepsTheInputLine) {
     auto value = request(100, 24);
     value.inputLineActive = true;
     value.inputLineQuery = "abc";
-    ChromeComposition comp;
-    RowDescriptor header;
-    header.left.push_back(providerField("live.path", "path", 0));
-    comp.header = header;
-    value.composedUi = uiSchemaFromChrome(comp, Generation{1});
+    const auto comp = ssgtest::composeHeader({providerField("live.path", "path", 0)});
+    value.composedUi = UiSchema{Generation{1}, comp.regions};
     value.chromeProviderResolver =
         [](std::string_view id) -> std::optional<ResolvedProvider> {
         if (id == "path")
@@ -968,16 +959,13 @@ TEST(composedHeaderSpacerPushesTheInputLinePastItsCells) {
     auto value = request(100, 24);
     value.inputLineActive = true;
     value.inputLineQuery = "abc";
-    ChromeComposition comp;
-    RowDescriptor header;
-    header.left.push_back(literalField("h.field", "X", 0));
     WidgetDescriptor spacer;
     spacer.kind = WidgetKind::Spacer;
     spacer.id = "h.spacer";
     spacer.width = 20;
-    header.left.push_back(spacer);
-    comp.header = header;
-    value.composedUi = uiSchemaFromChrome(comp, Generation{1});
+    const auto comp = ssgtest::composeHeader(
+        {literalField("h.field", "X", 0), spacer});
+    value.composedUi = UiSchema{Generation{1}, comp.regions};
 
     auto result = computeShellLayout(value, state);
     ASSERT_TRUE(result.accepted());

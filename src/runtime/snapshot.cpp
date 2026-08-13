@@ -4,7 +4,7 @@
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/PaletteSearcher.h>
-#include <ssg/UiChromeBridge.h>
+#include <ssg/UiTree.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -179,9 +179,9 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     // but by-value keeps the resolver independent of the moved-from request
     // vectors) -- field.id equals the provider/catalog id (projectStatusFields
     // keys providers by entry id), so the scan is the natural lookup.
-    if (composedChrome) {
+    if (composedUi) {
         request.composedUi =
-            uiSchemaFromChrome(*composedChrome, Generation{chromeGeneration});
+            UiSchema{Generation{chromeGeneration}, composedUi->regions};
         request.chromeProviderResolver =
             [header = request.headerFields, footer = request.footerFields](
                 std::string_view id) -> std::optional<ResolvedProvider> {
@@ -314,9 +314,8 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             theme,
             shell.focus(),
             paletteView(),
-            composedChrome
-                ? uiSchemaFromChrome(*composedChrome,
-                                     Generation{chromeGeneration})
+            composedUi
+                ? UiSchema{Generation{chromeGeneration}, composedUi->regions}
                 : UiSchema{Generation{chromeGeneration}, {}}};
 }
 

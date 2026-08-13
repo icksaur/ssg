@@ -1,5 +1,5 @@
 #include <ssg/LuaCommandHost.h>
-#include <ssg/ChromeComposition.h>
+#include <ssg/ChromeDecode.h>
 #include <ssg/startup_audit.h>
 
 extern "C" {
@@ -46,7 +46,7 @@ struct RegistrationTransaction {
     // The composition staged by this evaluation's LAST `ssg.chrome` call (last
     // wins); nullopt when the evaluation called `ssg.chrome` never. Published
     // wholesale on success, dropped on rollback.
-    std::optional<ChromeComposition> stagedChrome;
+    std::optional<UiComposition> stagedChrome;
 };
 
 // Convert a Lua value at `index` into the decoder's Lua-agnostic `ChromeValue`.
@@ -459,7 +459,7 @@ struct LuaCommandHost::Impl {
                 int nodeBudget = kMaxChromeWalkNodes;
                 ChromeValue root =
                     luaToChromeValue(callbackState, 1, 0, nodeBudget);
-                auto decoded = decodeChromeComposition(
+                auto decoded = decodeChrome(
                     root, host.options.chromeProviders);
                 if (!decoded.ok()) {
                     host.pendingError = LuaError::InvalidScript;
@@ -590,7 +590,7 @@ struct LuaCommandHost::Impl {
     lua_State* state{};
     std::unordered_map<std::string, LuaCommand> catalog;
     std::unordered_map<std::string, int> pluginCommands;
-    std::optional<ChromeComposition> publishedChrome;
+    std::optional<UiComposition> publishedChrome;
     std::vector<RegistrationTransaction> registrationStack;
     std::vector<HandleSlot> handles;
     std::string callbackMessage;
@@ -622,7 +622,7 @@ std::vector<std::string> LuaCommandHost::registeredCommands() const {
     return ids;
 }
 
-std::optional<ChromeComposition> const& LuaCommandHost::composition() const noexcept {
+std::optional<UiComposition> const& LuaCommandHost::composedUi() const noexcept {
     return impl_->publishedChrome;
 }
 

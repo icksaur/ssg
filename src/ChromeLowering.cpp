@@ -125,9 +125,9 @@ StackItem stackItemFor(const WidgetDescriptor& w, std::string stackId,
 }  // namespace
 
 // Shared core: lower three ordered widget groups (left, optional center, right)
-// plus their separator/center params into accessibility nodes. Both the legacy
-// RowDescriptor path and the medium-agnostic tree path feed this, so they build
-// the identical WidgetStack and cannot diverge by construction.
+// plus their separator/center params into accessibility nodes. lowerUiChromeRegion
+// reads these groups off the canonical region tree and feeds them here, so the
+// grid lowering has one entry point.
 static int lowerChromeGroups(
     const std::vector<const WidgetDescriptor*>& left,
     const std::vector<const WidgetDescriptor*>& right,
@@ -194,23 +194,6 @@ static int lowerChromeGroups(
     for (std::size_t i = 0; i < right.size(); ++i)
         emit("R" + std::to_string(i));
     return consumedRight;
-}
-
-int lowerChromeRow(const RowDescriptor& row, const Rect& rect,
-                   ShellNodeKind nodeKind, SemanticRole defaultRole,
-                   const Style& style,
-                   const ChromeProviderResolver& resolveProvider,
-                   std::vector<AccessibilityNode>& out) {
-    std::vector<const WidgetDescriptor*> left;
-    left.reserve(row.left.size());
-    for (const auto& w : row.left) left.push_back(&w);
-    std::vector<const WidgetDescriptor*> right;
-    right.reserve(row.right.size());
-    for (const auto& w : row.right) right.push_back(&w);
-    return lowerChromeGroups(left, right, row.center ? &*row.center : nullptr,
-                             row.separator, row.centerWidth, row.centerFixed,
-                             rect, nodeKind, defaultRole, style, resolveProvider,
-                             out);
 }
 
 namespace {
