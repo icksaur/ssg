@@ -8,6 +8,7 @@
 
 #include <ssg/ShellState.h>  // AccessibilityNode, ShellNodeKind, Rect
 #include <ssg/Style.h>
+#include <ssg/UiNodeState.h>  // UiStateSection
 #include <ssg/UiTree.h>      // UiRegion
 #include <ssg/UiWidget.h>    // ChromeProviderResolver
 
@@ -41,5 +42,15 @@ struct UiChromeLowerResult {
     SemanticRole defaultRole, const Style& style,
     const ChromeProviderResolver& resolveProvider,
     std::vector<AccessibilityNode>& out);
+
+// Resolve the dynamic node state for a validated composed schema: one UiNodeState
+// per node (every node present), each leaf resolved to its semantic
+// (value, label, command, checked) through the same source resolution the TUI
+// lowering uses, but GEOMETRY-INDEPENDENT -- no width-based collapse or fit, and no
+// TUI glyph composition. A Label/Field whose value or label resolves empty gets no
+// leaf state (the semantic drop); a checkbox always gets leaf state; a spacer and a
+// container get none. The section is stamped with `generation`.
+[[nodiscard]] UiStateSection resolveUiState(
+    const UiSchema& schema, const ChromeProviderResolver& resolveProvider);
 
 }  // namespace ssg

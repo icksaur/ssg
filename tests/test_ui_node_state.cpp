@@ -1,0 +1,204 @@
+// Parity oracle (algorithm): the semantic dynamic node state agrees with the TUI
+// lowering on what it resolves, at a non-collapsing width so resolution is isolated
+// from layout. Label/Field entries are compared field-for-field against the
+// AccessibilityNode the TUI emits (or its drop); a checkbox is compared against an
+// INDEPENDENT expectation derived from its sources, because the TUI node exposes
+// only the composed glyph, not the semantic checked/caption/label.
+
+#include "ssg/ChromeLowering.h"
+
+#include "chrome_authoring.h"
+#include "ssg/Style.h"
+#include "ssg/UiNodeState.h"
+#include "test_helpers.h"
+
+#include <optional>
+#include <string>
+#include <variant>
+#include <vector>
+
+namespace {
+
+using namespace ssg;
+
+// A wide rect: no widget rank-collapses, so the TUI emits every non-dropped widget.
+constexpr int kWideWidth = 1000;
+
+ChromeProviderResolver resolverFrom(
+    std::vector<std::pair<std::string, ResolvedProvider>> table) {
+    return [table = std::move(table)](
+               std::string_view id) -> std::optional<ResolvedProvider> {
+        for (const auto& [key, value] : table)
+            if (key == id) return value;
+        return std::nullopt;
+    };
+}
+
+WidgetDescriptor literalField(std::string id, std::string text) {
+    WidgetDescriptor w;
+    w.kind = WidgetKind::Field;
+    w.id = std::move(id);
+    w.value = ValueSource{false, std::move(text), ""};
+    return w;
+}
+
+WidgetDescriptor providerField(std::string id, std::string provider) {
+    WidgetDescriptor w;
+    w.kind = WidgetKind::Field;
+    w.id = std::move(id);
+    w.value = ValueSource{true, "", std::move(provider)};
+    return w;
+}
+
+// The (tree node id, widget) of every leaf in a region, in tree order.
+void collectLeaves(const UiNode& node,
+                   std::vector<std::pair<UiNodeId, const WidgetDescriptor*>>& out) {
+    if (const auto* leaf = std::get_if<UiLeaf>(&node.content))
+        out.emplace_back(node.id, &leaf->widget);
+    if (const auto* container = std::get_if<UiContainer>(&node.content))
+        for (const auto& child : container->children) collectLeaves(child, out);
+}
+
+const UiNodeState* stateFor(const UiStateSection& section, const UiNodeId& id) {
+    for (const auto& node : section.nodes)
+        if (node.id == id) return &node;
+    return nullptr;
+}
+
+const AccessibilityNode* nodeFor(const std::vector<AccessibilityNode>& nodes,
+                                 const std::string& id) {
+    for (const auto& node : nodes)
+        if (node.id == id) return &node;
+    return nullptr;
+}
+
+// Label/Field: the resolved-state entry matches the TUI's emitted node exactly, and
+// a TUI drop matches an absent leaf state.
+TEST(labelFieldStateMatchesTuiNodeOrDrop) {
+    const auto resolver = resolverFrom(
+        {{"path", {"~/proj", "Current path",
+                   std::optional<std::string>{"panel.show_files"}}}});
+    const auto comp = ssgtest::composeFooter(
+        {literalField("f.lit", "hello"), providerField("f.prov", "path"),
+         providerField("f.empty", "missing")});
+    const UiSchema schema{Generation{1}, comp.regions};
+
+    const auto section = resolveUiState(schema, resolver);
+    std::vector<AccessibilityNode> nodes;
+    const auto lowered = lowerUiChromeRegion(
+        schema.regions[0], {0, 0, kWideWidth, 1}, ShellNodeKind::FooterField,
+        SemanticRole::Footer, Style{}, resolver, nodes);
+    ASSERT_TRUE(lowered.ok());
+
+    std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
+    collectLeaves(schema.regions[0].root, leaves);
+
+    for (const auto& [nodeId, widget] : leaves) {
+        const UiNodeState* state = stateFor(section, nodeId);
+        ASSERT_TRUE(state != nullptr);
+        if (!state) continue;
+        ASSERT_TRUE(state->present);
+        const AccessibilityNode* tui = nodeFor(nodes, widget->id);
+        if (tui == nullptr) {
+            // The TUI dropped it (empty value/label): no semantic leaf either.
+            ASSERT_FALSE(state->leaf.has_value());
+        } else {
+            ASSERT_TRUE(state->leaf.has_value());
+            if (!state->leaf) continue;
+            ASSERT_EQ(state->leaf->value, tui->content);
+            ASSERT_EQ(state->leaf->label, tui->label);
+            ASSERT_TRUE(state->leaf->command == tui->commandId);
+            ASSERT_FALSE(state->leaf->checked.has_value());
+        }
+    }
+}
+
+// Checkbox: never dropped, and its semantic fields match an expectation derived
+// from its sources -- NOT from the TUI node, whose content is the composed glyph.
+TEST(checkboxStateMatchesIndependentExpectation) {
+    const auto resolver = resolverFrom(
+        {{"wrapcap", {"Wrap", "Wrap mode", std::nullopt}},
+         {"wrapchk", {"false", "", std::nullopt}}});
+
+    WidgetDescriptor litBox;
+    litBox.kind = WidgetKind::Checkbox;
+    litBox.id = "c.lit";
+    litBox.value = ValueSource{false, "case", ""};
+    litBox.checked = ValueSource{false, "true", ""};
+    litBox.command = "find.toggle_case";
+
+    WidgetDescriptor provBox;
+    provBox.kind = WidgetKind::Checkbox;
+    provBox.id = "c.prov";
+    provBox.value = ValueSource{true, "", "wrapcap"};
+    provBox.checked = ValueSource{true, "", "wrapchk"};
+
+    const auto comp = ssgtest::composeFooter({litBox, provBox});
+    const UiSchema schema{Generation{1}, comp.regions};
+    const auto section = resolveUiState(schema, resolver);
+
+    std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
+    collectLeaves(schema.regions[0].root, leaves);
+    ASSERT_EQ(leaves.size(), std::size_t{2});
+
+    // Literal caption: value+label are the caption, checked=true, command from the
+    // descriptor.
+    const UiNodeState* lit = stateFor(section, leaves[0].first);
+    ASSERT_TRUE(lit != nullptr && lit->leaf.has_value());
+    if (lit && lit->leaf) {
+        ASSERT_EQ(lit->leaf->value, std::string{"case"});
+        ASSERT_EQ(lit->leaf->label, std::string{"case"});
+        ASSERT_TRUE(lit->leaf->checked.has_value() && *lit->leaf->checked);
+        ASSERT_TRUE(lit->leaf->command.has_value());
+        ASSERT_EQ(*lit->leaf->command, std::string{"find.toggle_case"});
+    }
+    // Provider caption: value is the provider value, label the provider label,
+    // checked=false from the checked provider, no command.
+    const UiNodeState* prov = stateFor(section, leaves[1].first);
+    ASSERT_TRUE(prov != nullptr && prov->leaf.has_value());
+    if (prov && prov->leaf) {
+        ASSERT_EQ(prov->leaf->value, std::string{"Wrap"});
+        ASSERT_EQ(prov->leaf->label, std::string{"Wrap mode"});
+        ASSERT_TRUE(prov->leaf->checked.has_value() && !*prov->leaf->checked);
+        ASSERT_FALSE(prov->leaf->command.has_value());
+    }
+}
+
+// A spacer is present with no leaf state; every node gets exactly one record.
+TEST(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord) {
+    WidgetDescriptor spacer;
+    spacer.kind = WidgetKind::Spacer;
+    spacer.id = "sp";
+    spacer.width = 3;
+    const auto comp =
+        ssgtest::composeFooter({literalField("f", "x"), spacer});
+    const UiSchema schema{Generation{4}, comp.regions};
+    const auto empty = [](std::string_view) -> std::optional<ResolvedProvider> {
+        return std::nullopt;
+    };
+    const auto section = resolveUiState(schema, empty);
+
+    ASSERT_EQ(section.generation.value(), std::uint64_t{4});
+
+    std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
+    collectLeaves(schema.regions[0].root, leaves);
+    for (const auto& [nodeId, widget] : leaves) {
+        const UiNodeState* state = stateFor(section, nodeId);
+        ASSERT_TRUE(state != nullptr);
+        if (state && widget->kind == WidgetKind::Spacer) {
+            ASSERT_TRUE(state->present);
+            ASSERT_FALSE(state->leaf.has_value());
+        }
+    }
+    // One record per node id in the schema (no duplicates, no omissions).
+    ASSERT_EQ(section.nodes.size(), uiSchemaNodeIds(schema).size());
+}
+
+}  // namespace
+
+int main() {
+    RUN(labelFieldStateMatchesTuiNodeOrDrop);
+    RUN(checkboxStateMatchesIndependentExpectation);
+    RUN(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord);
+    return 0;
+}

@@ -34,26 +34,51 @@ struct Resolved {
 
 bool truthy(std::string_view value) { return value == "true"; }
 
-// Resolve a widget's displayed content + accessible label + inherited command.
-Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
-                       const ChromeProviderResolver& resolveProvider) {
-    Resolved r;
+// The resolved sources shared by the TUI's glyph lowering and the semantic
+// dynamic-state resolution, so the two cannot diverge on how a source resolves.
+struct Sources {
     std::string value;
     std::string providerLabel;
     std::optional<std::string> inheritedCommand;
     bool fromProvider = false;
+};
+
+Sources resolveSources(const WidgetDescriptor& w,
+                       const ChromeProviderResolver& resolveProvider) {
+    Sources s;
     if (w.value) {
         if (w.value->isProvider) {
-            fromProvider = true;
+            s.fromProvider = true;
             if (const auto resolved = resolveProvider(w.value->provider)) {
-                value = resolved->value;
-                providerLabel = resolved->accessibleLabel;
-                inheritedCommand = resolved->commandId;
+                s.value = resolved->value;
+                s.providerLabel = resolved->accessibleLabel;
+                s.inheritedCommand = resolved->commandId;
             }
         } else {
-            value = w.value->literal;
+            s.value = w.value->literal;
         }
     }
+    return s;
+}
+
+bool resolveChecked(const WidgetDescriptor& w,
+                    const ChromeProviderResolver& resolveProvider) {
+    if (!w.checked) return false;
+    if (w.checked->isProvider) {
+        const auto resolved = resolveProvider(w.checked->provider);
+        return resolved && truthy(resolved->value);
+    }
+    return truthy(w.checked->literal);
+}
+
+// Resolve a widget's displayed content + accessible label + inherited command for
+// the GRID lowering: content is the glyph a terminal draws (a checkbox composes its
+// box), and a literal checkbox labels itself with that glyph. Byte-identical to the
+// shipped behavior; the semantic resolution below is a separate, glyph-free path.
+Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
+                       const ChromeProviderResolver& resolveProvider) {
+    Resolved r;
+    const Sources s = resolveSources(w, resolveProvider);
 
     switch (w.kind) {
     case WidgetKind::Label:
@@ -61,27 +86,19 @@ Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
         // A provider widget's label is the provider's; a literal widget labels
         // itself with its own text. Match the built-in status-field skip: drop
         // when EITHER the value or the accessible label is empty.
-        const std::string label = fromProvider ? providerLabel : value;
-        if (value.empty() || label.empty()) {
+        const std::string label = s.fromProvider ? s.providerLabel : s.value;
+        if (s.value.empty() || label.empty()) {
             r.drop = true;
             return r;
         }
-        r.content = value;
+        r.content = s.value;
         r.label = label;
         break;
     }
     case WidgetKind::Checkbox: {
-        bool checked = false;
-        if (w.checked) {
-            if (w.checked->isProvider) {
-                const auto resolved = resolveProvider(w.checked->provider);
-                checked = resolved && truthy(resolved->value);
-            } else {
-                checked = truthy(w.checked->literal);
-            }
-        }
-        r.content = checkboxText(checked, value, style.toggle);
-        r.label = providerLabel.empty() ? r.content : providerLabel;
+        const bool checked = resolveChecked(w, resolveProvider);
+        r.content = checkboxText(checked, s.value, style.toggle);
+        r.label = s.providerLabel.empty() ? r.content : s.providerLabel;
         break;
     }
     case WidgetKind::Spacer:
@@ -93,8 +110,33 @@ Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
     }
 
     // The descriptor's own command overrides an inherited one.
-    r.command = w.command ? w.command : inheritedCommand;
+    r.command = w.command ? w.command : s.inheritedCommand;
     return r;
+}
+
+// The SEMANTIC leaf state a non-grid client renders, glyph-free and
+// geometry-independent. A Label/Field with an empty value or label resolves to no
+// leaf state (the semantic drop); a checkbox always resolves (its caption is the
+// bare value, its label the semantic caption/provider label, plus the checked
+// bool); a spacer/container resolve to none. The command precedence matches the
+// grid path (descriptor overrides inherited).
+std::optional<UiLeafState> semanticLeafState(
+    const WidgetDescriptor& w, const ChromeProviderResolver& resolveProvider) {
+    const Sources s = resolveSources(w, resolveProvider);
+    const std::string label = s.fromProvider ? s.providerLabel : s.value;
+    const std::optional<std::string> command =
+        w.command ? w.command : s.inheritedCommand;
+    switch (w.kind) {
+    case WidgetKind::Label:
+    case WidgetKind::Field:
+        if (s.value.empty() || label.empty()) return std::nullopt;
+        return UiLeafState{s.value, label, command, std::nullopt};
+    case WidgetKind::Checkbox:
+        return UiLeafState{s.value, label, command,
+                           resolveChecked(w, resolveProvider)};
+    default:
+        return std::nullopt;  // Spacer/Container carry no leaf state
+    }
 }
 
 int widgetDesired(const WidgetDescriptor& w, const Resolved& resolved) {
@@ -315,6 +357,39 @@ UiChromeLowerResult lowerUiChromeRegion(
         *leftWidgets, *rightWidgets, center, separator, centerWidth, centerFixed,
         rect, nodeKind, defaultRole, style, resolveProvider, out);
     return {std::nullopt, rightEdge};
+}
+
+namespace {
+
+// Pre-order walk: record each node's presence (always present in phase 6) and, for
+// a leaf, its semantic state.
+void collectNodeStates(const UiNode& node,
+                       const ChromeProviderResolver& resolveProvider,
+                       std::vector<UiNodeState>& out) {
+    UiNodeState state;
+    state.id = node.id;
+    state.present = true;
+    if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
+        state.leaf = semanticLeafState(leaf->widget, resolveProvider);
+    }
+    out.push_back(std::move(state));
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            collectNodeStates(child, resolveProvider, out);
+        }
+    }
+}
+
+}  // namespace
+
+UiStateSection resolveUiState(const UiSchema& schema,
+                              const ChromeProviderResolver& resolveProvider) {
+    UiStateSection section;
+    section.generation = schema.generation;
+    for (const auto& region : schema.regions) {
+        collectNodeStates(region.root, resolveProvider, section.nodes);
+    }
+    return section;
 }
 
 }  // namespace ssg
