@@ -3,6 +3,7 @@
 #include <ssg/CommandCatalog.h>
 
 #include <ssg/CommandCatalog.h>
+#include <ssg/ChromeLowering.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/UiTree.h>
 
@@ -13,6 +14,25 @@
 namespace ssg {
 
 namespace {
+
+// A resolver from projected status fields: id -> (value, label, command). Shared by
+// the grid lowering and the semantic dynamic-state resolution so a composed
+// provider widget resolves to the same values on either path.
+ChromeProviderResolver chromeResolverFor(std::vector<StatusField> header,
+                                         std::vector<StatusField> footer) {
+    return [header = std::move(header), footer = std::move(footer)](
+               std::string_view id) -> std::optional<ResolvedProvider> {
+        for (const auto* group : {&header, &footer}) {
+            for (const auto& field : *group) {
+                if (field.id == id) {
+                    return ResolvedProvider{field.value, field.accessibleLabel,
+                                            field.commandId};
+                }
+            }
+        }
+        return std::nullopt;
+    };
+}
 
 std::string composedTabTitle(const TabState& tab, const Style& style) {
     // Per-mode affordance: a live-diff tab keeps its prefix; a read-only tab
@@ -130,6 +150,22 @@ void EditorRuntime::Impl::projectFindReplacePrompt(PromptViewState& promptView) 
     }
 }
 
+StatusFieldProjection EditorRuntime::Impl::chromeStatusFields() const {
+    auto statusProjection = status.footerProjection();
+    auto followProjection = follow.footerProjection();
+    auto fields = projectStatusFields(
+        statusFieldCatalog, statusFieldProviders,
+        {.workspaceRoot = root,
+         .homeDirectory = homeDirectory,
+         .currentBranch = currentGitBranch,
+         .statusValue = statusProjection.value,
+         .followMode = followProjection.mode,
+         .cwdPrefix = style.cwdPrefix});
+    bindStatusFieldCommands(fields.headerFields, followProjection);
+    bindStatusFieldCommands(fields.footerFields, followProjection);
+    return fields;
+}
+
 ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
                                                PaletteReport const& paletteReport) const {
     std::vector<TabLabel> labels;
@@ -138,17 +174,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
                           tabs.viewState().active == tab.id, tab.dirty});
     }
     auto statusProjection = status.footerProjection();
-    auto followProjection = follow.footerProjection();
-    auto statusFields = projectStatusFields(
-        statusFieldCatalog, statusFieldProviders,
-        {.workspaceRoot = root,
-         .homeDirectory = homeDirectory,
-         .currentBranch = currentGitBranch,
-         .statusValue = statusProjection.value,
-         .followMode = followProjection.mode,
-         .cwdPrefix = style.cwdPrefix});
-    bindStatusFieldCommands(statusFields.headerFields, followProjection);
-    bindStatusFieldCommands(statusFields.footerFields, followProjection);
+    auto statusFields = chromeStatusFields();
     ShellLayoutRequest request;    request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
     request.lineNumberGutterWidth = lineNumberGutterWidth();
@@ -183,18 +209,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
         request.composedUi =
             UiSchema{Generation{chromeGeneration}, composedUi->composition().regions};
         request.chromeProviderResolver =
-            [header = request.headerFields, footer = request.footerFields](
-                std::string_view id) -> std::optional<ResolvedProvider> {
-            for (const auto* group : {&header, &footer}) {
-                for (const auto& field : *group) {
-                    if (field.id == id) {
-                        return ResolvedProvider{field.value, field.accessibleLabel,
-                                                field.commandId};
-                    }
-                }
-            }
-            return std::nullopt;
-        };
+            chromeResolverFor(request.headerFields, request.footerFields);
     }
     request.footerActions = statusProjection.actions;
     // The persistent bottom-right help hint. Its key label tracks the live
@@ -293,6 +308,17 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
     // The shell layout is computed by the caller (EditorRuntime::snapshot) before
     // this, warming the panel-height cache that treeView() and viewport() read.
     auto treeSection = treeView();
+    UiSchema uiSchema =
+        composedUi
+            ? UiSchema{Generation{chromeGeneration}, composedUi->composition().regions}
+            : UiSchema{Generation{chromeGeneration}, {}};
+    UiStateSection uiState = [&] {
+        if (!composedUi) return UiStateSection{Generation{chromeGeneration}, {}};
+        auto fields = chromeStatusFields();
+        return resolveUiState(
+            uiSchema, chromeResolverFor(std::move(fields.headerFields),
+                                        std::move(fields.footerFields)));
+    }();
     return {documentView(),
             selection.selections,
             currentHistory,
@@ -314,9 +340,8 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             theme,
             shell.focus(),
             paletteView(),
-            composedUi
-                ? UiSchema{Generation{chromeGeneration}, composedUi->composition().regions}
-                : UiSchema{Generation{chromeGeneration}, {}}};
+            std::move(uiSchema),
+            std::move(uiState)};
 }
 
 TreeViewState EditorRuntime::Impl::treeView() const {

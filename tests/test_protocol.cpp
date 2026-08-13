@@ -1,6 +1,7 @@
 #include "test_helpers.h"
 
 #include <ssg/EditorSessionBuilder.h>
+#include <ssg/ChromeLowering.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>
 #include <ssg/CommandCatalog.h>
@@ -112,6 +113,15 @@ ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
     const auto comp = ssgtest::composeFooter({path}, {}, title,
                                              ssg::CenterWidth::Fixed, 6, 2);
     result.ui = ssg::UiSchema{ssg::Generation{marker.size()}, comp.regions};
+    // Resolve the dynamic state for the same schema (a resolver mapping the one
+    // provider used above), so the round-trip exercises the ui_state section too.
+    const auto resolver =
+        [&](std::string_view id) -> std::optional<ssg::ResolvedProvider> {
+        if (id == "path")
+            return ssg::ResolvedProvider{marker, "Current path", std::nullopt};
+        return std::nullopt;
+    };
+    result.uiState = ssg::resolveUiState(result.ui, resolver);
     return result;
 }
 
@@ -616,11 +626,14 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), sectionsWithUi(ssg::Revision{4}, "alpha"));
     ASSERT_TRUE(!snapshot.sections().ui.regions.empty());
+    ASSERT_TRUE(!snapshot.sections().uiState.nodes.empty());
 
     auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
         ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.snapshot.has_value());
     ASSERT_TRUE(decoded.snapshot->sections().ui == snapshot.sections().ui);
+    ASSERT_TRUE(decoded.snapshot->sections().uiState ==
+                snapshot.sections().uiState);
 
     // A delta from a no-ui base to the ui snapshot carries the ui replacement.
     auto before = ssg::SessionSnapshotCodec{}.assemble(
@@ -637,6 +650,7 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
         ssg::ViewId{9}, clientView(3), sectionsWithUi(ssg::Revision{5}, "alpha"));
     auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
     ASSERT_TRUE(delta.ui().replacement.has_value());
+    ASSERT_TRUE(delta.uiState().replacement.has_value());
 
     auto const decodedDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(delta));
@@ -645,6 +659,7 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
         ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot->sections().ui == after.sections().ui);
+    ASSERT_TRUE(replayed.snapshot->sections().uiState == after.sections().uiState);
 }
 
 TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {

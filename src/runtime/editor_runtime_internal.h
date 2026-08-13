@@ -465,6 +465,11 @@ struct EditorRuntime::Impl final : CommandServices,
     void reconcileFindDocument();
     [[nodiscard]] ShellViewState shellView(ViewportDimensions dimensions,
                                             PaletteReport const& paletteReport = {}) const;
+    // The projected + command-bound header/footer status fields the composed chrome
+    // resolves its provider widgets against. Shared by shellView (built-in fields +
+    // the grid resolver) and sections (the semantic dynamic-state resolver), so the
+    // two resolve provider values identically.
+    [[nodiscard]] StatusFieldProjection chromeStatusFields() const;
     [[nodiscard]] PaletteViewState paletteView() const;
     // The tree view state with its scroll offset, scrollbar, and visible-window
     // hit map resolved against the last panel height (keep-selection-visible).
