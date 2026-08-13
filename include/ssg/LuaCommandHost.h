@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ssg/CommandInvocation.h>
-#include <ssg/UiTree.h>  // UiComposition
+#include <ssg/ChromeDecode.h>
 
 #include <chrono>
 #include <compare>
@@ -118,7 +118,7 @@ public:
     // consumer falls back to the built-in header/footer). Replaced wholesale by
     // each successful evaluation -- a reload that drops the `ssg.chrome` call
     // reverts to built-in, matching the command/keymap reset-then-reapply model.
-    [[nodiscard]] std::optional<UiComposition> const& composedUi() const noexcept;
+    [[nodiscard]] std::optional<ValidatedComposition> const& composedUi() const noexcept;
     [[nodiscard]] LuaResult invoke(std::string_view pluginCommand);
     [[nodiscard]] bool hasCommand(std::string_view pluginCommand) const;
 

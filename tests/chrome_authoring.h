@@ -117,7 +117,7 @@ inline ssg::UiComposition composeFooter(
           rowTable(left, right, center, centerWidth, centerFixed, separator)}});
     auto decoded = ssg::decodeChrome(root, providers);
     if (!decoded.ok()) std::abort();
-    return *decoded.composition;
+    return decoded.composition->composition();
 }
 
 // The single region of a footer-only composition.
@@ -135,6 +135,21 @@ inline ssg::UiRegion composeFooterRegion(
 // A header composition (header is left-group only) as a UiComposition.
 inline ssg::UiComposition composeHeader(std::vector<ssg::WidgetDescriptor> left,
                                         int separator = 1) {
+    using ssg::ChromeValue;
+    std::vector<std::string> providers;
+    collectProviders(left, providers);
+    ChromeValue root = ChromeValue::ofTable(
+        {{"header", rowTable(left, {}, std::nullopt, ssg::CenterWidth::Flex, 0,
+                             separator)}});
+    auto decoded = ssg::decodeChrome(root, providers);
+    if (!decoded.ok()) std::abort();
+    return decoded.composition->composition();
+}
+
+// A header composition as the VALIDATED type setComposedUi requires (only the
+// decoder can produce one), for tests that drive the runtime rather than inspect.
+inline ssg::ValidatedComposition composeHeaderValidated(
+    std::vector<ssg::WidgetDescriptor> left, int separator = 1) {
     using ssg::ChromeValue;
     std::vector<std::string> providers;
     collectProviders(left, providers);
@@ -203,7 +218,7 @@ inline ssg::UiComposition composeHeaderAndFooter(
                              centerFixed, footerSeparator)}});
     auto decoded = ssg::decodeChrome(root, providers);
     if (!decoded.ok()) std::abort();
-    return *decoded.composition;
+    return decoded.composition->composition();
 }
 
 inline bool hasRegion(const ssg::UiComposition& comp, ssg::RegionRole role) {

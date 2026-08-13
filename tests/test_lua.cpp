@@ -272,10 +272,10 @@ TEST(chromeCallStagesTheComposition) {
         " footer = { left = { { kind = 'label', text = 'RO' } } } }");
     ASSERT_TRUE(result.accepted());
     ASSERT_TRUE(host.composedUi().has_value());
-    ASSERT_TRUE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Top));
-    ASSERT_TRUE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Bottom));
+    ASSERT_TRUE(ssgtest::hasRegion(host.composedUi()->composition(), RegionRole::Top));
+    ASSERT_TRUE(ssgtest::hasRegion(host.composedUi()->composition(), RegionRole::Bottom));
     const auto header = ssgtest::rowOf(
-        ssgtest::regionByRole(*host.composedUi(), RegionRole::Top));
+        ssgtest::regionByRole(host.composedUi()->composition(), RegionRole::Top));
     ASSERT_EQ(header.left.size(), std::size_t{1});
     ASSERT_TRUE(header.left[0].value.has_value());
     ASSERT_TRUE(header.left[0].value->isProvider);
@@ -290,8 +290,8 @@ TEST(chromeLastCallWins) {
         "\nssg.chrome{ footer = { left = { { kind = 'label', text = 'B' } } } }")
                     .accepted());
     ASSERT_TRUE(host.composedUi().has_value());
-    ASSERT_FALSE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Top));
-    ASSERT_TRUE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Bottom));
+    ASSERT_FALSE(ssgtest::hasRegion(host.composedUi()->composition(), RegionRole::Top));
+    ASSERT_TRUE(ssgtest::hasRegion(host.composedUi()->composition(), RegionRole::Bottom));
 }
 
 // A script that calls ssg.chrome then errors leaves the PRIOR composition
@@ -311,8 +311,8 @@ TEST(chromeRollsBackOnLaterScriptError) {
         "\nerror('boom')");
     ASSERT_FALSE(errored.accepted());
     ASSERT_TRUE(host.composedUi().has_value());
-    ASSERT_TRUE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Top));
-    ASSERT_FALSE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Bottom));
+    ASSERT_TRUE(ssgtest::hasRegion(host.composedUi()->composition(), RegionRole::Top));
+    ASSERT_FALSE(ssgtest::hasRegion(host.composedUi()->composition(), RegionRole::Bottom));
 
     // A clean reload with no ssg.chrome reverts to built-in.
     ASSERT_TRUE(host.evaluate("local x = 1").accepted());
@@ -376,8 +376,8 @@ TEST(chromeMalformedTableShapesFailLoud) {
     // An empty root composes nothing (valid, no override).
     ASSERT_TRUE(host.evaluate("ssg.chrome{}").accepted());
     ASSERT_TRUE(host.composedUi().has_value());
-    ASSERT_FALSE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Top));
-    ASSERT_FALSE(ssgtest::hasRegion(*host.composedUi(), RegionRole::Bottom));
+    ASSERT_FALSE(ssgtest::hasRegion(host.composedUi()->composition(), RegionRole::Top));
+    ASSERT_FALSE(ssgtest::hasRegion(host.composedUi()->composition(), RegionRole::Bottom));
 }
 
 }  // namespace

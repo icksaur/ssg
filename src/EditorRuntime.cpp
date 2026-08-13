@@ -2225,7 +2225,7 @@ void EditorRuntime::resetKeymapToDefault() {
 
 void EditorRuntime::focusEditor() { impl_->shell.focusEditor(); }
 
-void EditorRuntime::setComposedUi(std::optional<UiComposition> composition) {
+void EditorRuntime::setComposedUi(std::optional<ValidatedComposition> composition) {
     // A composition-only reload (a script that just calls ssg.chrome, or one
     // that drops the call) runs outside command dispatch, so nothing else
     // advances the session revision. Delta-gated clients derive a frame only

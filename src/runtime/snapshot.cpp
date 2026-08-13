@@ -181,7 +181,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     // keys providers by entry id), so the scan is the natural lookup.
     if (composedUi) {
         request.composedUi =
-            UiSchema{Generation{chromeGeneration}, composedUi->regions};
+            UiSchema{Generation{chromeGeneration}, composedUi->composition().regions};
         request.chromeProviderResolver =
             [header = request.headerFields, footer = request.footerFields](
                 std::string_view id) -> std::optional<ResolvedProvider> {
@@ -315,7 +315,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             shell.focus(),
             paletteView(),
             composedUi
-                ? UiSchema{Generation{chromeGeneration}, composedUi->regions}
+                ? UiSchema{Generation{chromeGeneration}, composedUi->composition().regions}
                 : UiSchema{Generation{chromeGeneration}, {}}};
 }
 

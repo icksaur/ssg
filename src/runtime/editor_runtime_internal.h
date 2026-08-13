@@ -237,7 +237,7 @@ struct EditorRuntime::Impl final : CommandServices,
     // pushed by the host after each init.lua evaluation via
     // EditorRuntime::setComposedUi. nullopt keeps the built-in chrome; a
     // present region REPLACES that region's built-in status fields in shellView.
-    std::optional<UiComposition> composedUi;
+    std::optional<ValidatedComposition> composedUi;
     // Bumped whenever composedUi changes, so the published medium-agnostic UI
     // schema is stamped with a generation that advances only
     // on a real chrome/structure change.

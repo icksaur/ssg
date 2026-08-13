@@ -593,7 +593,7 @@ TEST(composedChromeReplacesBuiltinChromeAndTracksRevision) {
     src.isProvider = true;
     src.provider = "path";
     widget.value = src;
-    const auto comp = ssgtest::composeHeader({widget});
+    const auto comp = ssgtest::composeHeaderValidated({widget});
 
     auto const revBefore = runtime.revision();
     runtime.setComposedUi(comp);

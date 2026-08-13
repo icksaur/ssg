@@ -22,10 +22,10 @@ ChromeDecodeResult decode(const CV& root) {
 // The header/footer row reconstructed from a decoded composition, so a decoder
 // test asserts on the widget groups without walking the container tree by hand.
 ssgtest::RowView headerOf(const ChromeDecodeResult& r) {
-    return ssgtest::rowOf(ssgtest::regionByRole(*r.composition, RegionRole::Top));
+    return ssgtest::rowOf(ssgtest::regionByRole(r.composition->composition(), RegionRole::Top));
 }
 ssgtest::RowView footerOf(const ChromeDecodeResult& r) {
-    return ssgtest::rowOf(ssgtest::regionByRole(*r.composition, RegionRole::Bottom));
+    return ssgtest::rowOf(ssgtest::regionByRole(r.composition->composition(), RegionRole::Bottom));
 }
 
 CV str(std::string s) { return CV::ofString(std::move(s)); }
@@ -90,8 +90,8 @@ TEST(omittedRegionIsNulloptAndSeparatorDefaultsToOne) {
                                               {{"kind", str("field")},
                                                {"text", str("x")}})})}})}}));
     ASSERT_TRUE(out.ok());
-    ASSERT_FALSE(ssgtest::hasRegion(*out.composition, RegionRole::Top));
-    ASSERT_TRUE(ssgtest::hasRegion(*out.composition, RegionRole::Bottom));
+    ASSERT_FALSE(ssgtest::hasRegion(out.composition->composition(), RegionRole::Top));
+    ASSERT_TRUE(ssgtest::hasRegion(out.composition->composition(), RegionRole::Bottom));
     const auto f = footerOf(out);
     ASSERT_EQ(f.separator, 1);
 }

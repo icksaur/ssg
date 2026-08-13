@@ -125,33 +125,38 @@ public:
     explicit Decoder(const std::vector<std::string>& validProviders)
         : validProviders_{validProviders} {}
 
-    ChromeDecodeResult decode(const ChromeValue& root) {
+    std::optional<UiComposition> decode(const ChromeValue& root) {
         if (root.kind != ChromeValue::Kind::Table)
-            return fail("chrome", "expected a table");
+            return failC("chrome", "expected a table");
         for (const auto& [key, _] : root.table) {
             if (key != "header" && key != "footer")
-                return fail("chrome." + key, "unknown field");
+                return failC("chrome." + key, "unknown field");
         }
         UiComposition out;
         if (const auto* h = root.find("header")) {
             DecodedRow row;
             if (!decodeRegion(*h, "header", /*isHeader=*/true, row))
-                return {error_, std::nullopt};
+                return std::nullopt;
             out.regions.push_back(assembleRegion(row, RegionRole::Top));
         }
         if (const auto* f = root.find("footer")) {
             DecodedRow row;
             if (!decodeRegion(*f, "footer", /*isHeader=*/false, row))
-                return {error_, std::nullopt};
+                return std::nullopt;
             out.regions.push_back(assembleRegion(row, RegionRole::Bottom));
         }
-        return {std::nullopt, std::move(out)};
+        return out;
+    }
+
+    [[nodiscard]] const std::optional<std::string>& error() const {
+        return error_;
     }
 
 private:
-    ChromeDecodeResult fail(const std::string& path, const std::string& why) {
+    std::optional<UiComposition> failC(const std::string& path,
+                                       const std::string& why) {
         error_ = path + ": " + why;
-        return {error_, std::nullopt};
+        return std::nullopt;
     }
     bool failB(const std::string& path, const std::string& why) {
         error_ = path + ": " + why;
@@ -469,7 +474,10 @@ private:
 
 ChromeDecodeResult decodeChrome(
     const ChromeValue& root, const std::vector<std::string>& validProviders) {
-    return Decoder{validProviders}.decode(root);
+    Decoder decoder{validProviders};
+    auto composition = decoder.decode(root);
+    if (!composition) return {decoder.error(), std::nullopt};
+    return {std::nullopt, ValidatedComposition{std::move(*composition)}};
 }
 
 }  // namespace ssg

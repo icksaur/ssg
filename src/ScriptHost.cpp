@@ -194,7 +194,7 @@ LuaResult ScriptHost::evaluate(std::string_view script) {
     return impl_->host.evaluate(script);
 }
 
-std::optional<UiComposition> const& ScriptHost::composedUi() const {
+std::optional<ValidatedComposition> const& ScriptHost::composedUi() const {
     return impl_->host.composedUi();
 }
 

@@ -46,7 +46,7 @@ struct RegistrationTransaction {
     // The composition staged by this evaluation's LAST `ssg.chrome` call (last
     // wins); nullopt when the evaluation called `ssg.chrome` never. Published
     // wholesale on success, dropped on rollback.
-    std::optional<UiComposition> stagedChrome;
+    std::optional<ValidatedComposition> stagedChrome;
 };
 
 // Convert a Lua value at `index` into the decoder's Lua-agnostic `ChromeValue`.
@@ -590,7 +590,7 @@ struct LuaCommandHost::Impl {
     lua_State* state{};
     std::unordered_map<std::string, LuaCommand> catalog;
     std::unordered_map<std::string, int> pluginCommands;
-    std::optional<UiComposition> publishedChrome;
+    std::optional<ValidatedComposition> publishedChrome;
     std::vector<RegistrationTransaction> registrationStack;
     std::vector<HandleSlot> handles;
     std::string callbackMessage;
@@ -622,7 +622,7 @@ std::vector<std::string> LuaCommandHost::registeredCommands() const {
     return ids;
 }
 
-std::optional<UiComposition> const& LuaCommandHost::composedUi() const noexcept {
+std::optional<ValidatedComposition> const& LuaCommandHost::composedUi() const noexcept {
     return impl_->publishedChrome;
 }
 

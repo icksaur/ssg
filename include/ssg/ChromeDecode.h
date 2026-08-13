@@ -73,11 +73,39 @@ struct ChromeValue {
     [[nodiscard]] const ChromeValue* find(std::string_view key) const;
 };
 
+struct ChromeDecodeResult;
+
+// A UiComposition that PASSED the chrome decoder. Its only construction path is
+// decodeChrome, so a value of this type is a proof that the composition satisfies
+// every decoder rule -- canonical region geometry AND the full per-kind widget
+// matrix (allowed kinds, required/forbidden fields, source canonicality, value
+// domains, caps). setComposedUi requires this type, so a hand-built UiComposition
+// that skipped the decoder cannot be published; the decoder is the single
+// validation authority and no second, drifting matrix is maintained. The wrapped
+// composition is generationless -- the runtime stamps a generation at publish.
+class ValidatedComposition {
+public:
+    [[nodiscard]] const UiComposition& composition() const noexcept {
+        return composition_;
+    }
+    friend bool operator==(const ValidatedComposition&,
+                           const ValidatedComposition&) = default;
+
+private:
+    explicit ValidatedComposition(UiComposition composition)
+        : composition_{std::move(composition)} {}
+    friend ChromeDecodeResult decodeChrome(
+        const ChromeValue& root,
+        const std::vector<std::string>& validProviders);
+
+    UiComposition composition_;
+};
+
 struct ChromeDecodeResult {
     // A path-qualified message on failure (e.g. `header.left[2]: unknown kind
     // "buton"`); nullopt on success.
     std::optional<std::string> error;
-    std::optional<UiComposition> composition;
+    std::optional<ValidatedComposition> composition;
 
     [[nodiscard]] bool ok() const { return !error.has_value(); }
 };

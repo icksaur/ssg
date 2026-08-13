@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 
 namespace ssg {
@@ -510,6 +511,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 {view.header->x, view.header->y, fieldWidth, 1},
                 ShellNodeKind::HeaderField, SemanticRole::Header, request.style,
                 chromeResolver, view.accessibilityNodes);
+            if (!lowered.ok()) throw std::invalid_argument(*lowered.error);
             headerX = std::max(headerX, lowered.rightEdge);
         } else {
         WidgetStack headerStack{1};
@@ -595,7 +597,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 {view.footer->x, view.footer->y, view.footer->width, 1},
                 ShellNodeKind::FooterField, SemanticRole::Footer, request.style,
                 chromeResolver, view.accessibilityNodes);
-            (void)lowered;
+            if (!lowered.ok()) throw std::invalid_argument(*lowered.error);
         } else {
         WidgetStack footer{1};
         std::vector<const StatusField*> fieldSource;

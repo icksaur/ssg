@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ssg/DiffModel.h>
+#include <ssg/ChromeDecode.h>
 #include <ssg/EditorSession.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/GitDiffSource.h>
@@ -165,7 +166,7 @@ public:
     // ssg.chrome stages a nested widget tree, not a flat command argument. A real
     // change advances the session revision so delta-based clients repaint; an
     // identical re-push is a no-op.
-    void setComposedUi(std::optional<UiComposition> composition);
+    void setComposedUi(std::optional<ValidatedComposition> composition);
     // M10 fast startup: run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
     // syntax highlighting), then publish it through the normal snapshot/delta
