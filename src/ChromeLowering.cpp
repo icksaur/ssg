@@ -4,8 +4,11 @@
 #include <ssg/Theme.h>  // semanticRoleFromName
 #include <ssg/Widget.h>
 
+#include <optional>
 #include <string>
 #include <utility>
+#include <variant>
+#include <vector>
 
 namespace ssg {
 
@@ -121,12 +124,19 @@ StackItem stackItemFor(const WidgetDescriptor& w, std::string stackId,
 
 }  // namespace
 
-int lowerChromeRow(const RowDescriptor& row, const Rect& rect,
-                   ShellNodeKind nodeKind, SemanticRole defaultRole,
-                   const Style& style,
-                   const ChromeProviderResolver& resolveProvider,
-                   std::vector<AccessibilityNode>& out) {
-    WidgetStack stack{row.separator};
+// Shared core: lower three ordered widget groups (left, optional center, right)
+// plus their separator/center params into accessibility nodes. Both the legacy
+// RowDescriptor path and the medium-agnostic tree path feed this, so they build
+// the identical WidgetStack and cannot diverge by construction.
+static int lowerChromeGroups(
+    const std::vector<const WidgetDescriptor*>& left,
+    const std::vector<const WidgetDescriptor*>& right,
+    const WidgetDescriptor* center, int separator, CenterWidth centerWidth,
+    int centerFixed, const Rect& rect, ShellNodeKind nodeKind,
+    SemanticRole defaultRole, const Style& style,
+    const ChromeProviderResolver& resolveProvider,
+    std::vector<AccessibilityNode>& out) {
+    WidgetStack stack{separator};
     std::vector<Packed> packed;
 
     const auto pack = [&](const WidgetDescriptor& w, const std::string& stackId,
@@ -135,7 +145,7 @@ int lowerChromeRow(const RowDescriptor& row, const Rect& rect,
         if (resolved.drop) return;
         StackItem item = stackItemFor(w, stackId, resolved);
         if (isCenter) {
-            stack.center(std::move(item), row.centerWidth, row.centerFixed);
+            stack.center(std::move(item), centerWidth, centerFixed);
         } else if (isLeft) {
             stack.packLeft(std::move(item));
         } else {
@@ -145,11 +155,11 @@ int lowerChromeRow(const RowDescriptor& row, const Rect& rect,
                           resolved.command, widgetRole(w, defaultRole)});
     };
 
-    for (std::size_t i = 0; i < row.left.size(); ++i)
-        pack(row.left[i], "L" + std::to_string(i), true, false);
-    for (std::size_t i = 0; i < row.right.size(); ++i)
-        pack(row.right[i], "R" + std::to_string(i), false, false);
-    if (row.center) pack(*row.center, "C", false, true);
+    for (std::size_t i = 0; i < left.size(); ++i)
+        pack(*left[i], "L" + std::to_string(i), true, false);
+    for (std::size_t i = 0; i < right.size(); ++i)
+        pack(*right[i], "R" + std::to_string(i), false, false);
+    if (center) pack(*center, "C", false, true);
 
     const auto solved = stack.resolve(rect.width);
     if (!solved) return rect.x;  // a well-formed row cannot fail; guard defensively
@@ -178,12 +188,150 @@ int lowerChromeRow(const RowDescriptor& row, const Rect& rect,
     };
 
     // Emit left → center → right, so hit-test order is deterministic.
-    for (std::size_t i = 0; i < row.left.size(); ++i)
+    for (std::size_t i = 0; i < left.size(); ++i)
         emit("L" + std::to_string(i));
-    if (row.center) emit("C");
-    for (std::size_t i = 0; i < row.right.size(); ++i)
+    if (center) emit("C");
+    for (std::size_t i = 0; i < right.size(); ++i)
         emit("R" + std::to_string(i));
     return consumedRight;
+}
+
+int lowerChromeRow(const RowDescriptor& row, const Rect& rect,
+                   ShellNodeKind nodeKind, SemanticRole defaultRole,
+                   const Style& style,
+                   const ChromeProviderResolver& resolveProvider,
+                   std::vector<AccessibilityNode>& out) {
+    std::vector<const WidgetDescriptor*> left;
+    left.reserve(row.left.size());
+    for (const auto& w : row.left) left.push_back(&w);
+    std::vector<const WidgetDescriptor*> right;
+    right.reserve(row.right.size());
+    for (const auto& w : row.right) right.push_back(&w);
+    return lowerChromeGroups(left, right, row.center ? &*row.center : nullptr,
+                             row.separator, row.centerWidth, row.centerFixed,
+                             rect, nodeKind, defaultRole, style, resolveProvider,
+                             out);
+}
+
+namespace {
+
+// The leaves of a group container, in order; nullopt if any child is not a leaf
+// (a malformed chrome group).
+std::optional<std::vector<const WidgetDescriptor*>> groupLeaves(
+    const UiNode& group) {
+    const auto* container = std::get_if<UiContainer>(&group.content);
+    if (!container) return std::nullopt;
+    std::vector<const WidgetDescriptor*> widgets;
+    for (const auto& child : container->children) {
+        const auto* leaf = std::get_if<UiLeaf>(&child.content);
+        if (!leaf) return std::nullopt;
+        widgets.push_back(&leaf->widget);
+    }
+    return widgets;
+}
+
+}  // namespace
+
+UiChromeLowerResult lowerUiChromeRegion(
+    const UiRegion& region, const Rect& rect, ShellNodeKind nodeKind,
+    SemanticRole defaultRole, const Style& style,
+    const ChromeProviderResolver& resolveProvider,
+    std::vector<AccessibilityNode>& out) {
+    // The canonical chrome shape: a Row root of exactly three groups --
+    // left(Auto, Row), middle(Flex, Row), right(Auto, Row) -- so the packing is
+    // encoded in the sizing. Every field the shape depends on is CHECKED here (no
+    // silently-ignored axis/size/gap), so a tree a generic client would lay out
+    // differently is rejected rather than lowered.
+    const auto* root = std::get_if<UiContainer>(&region.root.content);
+    if (!root || root->axis != Axis::Row) {
+        return {"chrome region root must be a Row container"};
+    }
+    if (root->children.size() != 3) {
+        return {"chrome region root must have exactly three groups "
+                "(left, middle, right)"};
+    }
+
+    const UiNode& leftGroup = root->children[0];
+    const UiNode& middleGroup = root->children[1];
+    const UiNode& rightGroup = root->children[2];
+
+    const auto* leftContainer = std::get_if<UiContainer>(&leftGroup.content);
+    const auto* middleContainer = std::get_if<UiContainer>(&middleGroup.content);
+    const auto* rightContainer = std::get_if<UiContainer>(&rightGroup.content);
+    if (!leftContainer || !middleContainer || !rightContainer) {
+        return {"chrome region groups must be containers"};
+    }
+    if (leftContainer->axis != Axis::Row || middleContainer->axis != Axis::Row ||
+        rightContainer->axis != Axis::Row) {
+        return {"chrome region groups must be Row containers"};
+    }
+    // Sizing encodes the packing: Auto ends, Flex middle. A deviation would render
+    // differently on a generic client, so reject it.
+    if (leftGroup.size.kind() != SizeKind::Auto ||
+        rightGroup.size.kind() != SizeKind::Auto ||
+        middleGroup.size.kind() != SizeKind::Flex) {
+        return {"chrome region groups must be Auto/Flex/Auto sized"};
+    }
+    // A chrome row reserves no inset at the root or any group, and only the left
+    // group carries a gap (the separator); the right group's gap is zero. Checked,
+    // not ignored, so a generic client and the grid agree on the geometry.
+    if (root->inset != Inset{} || leftContainer->inset != Inset{} ||
+        middleContainer->inset != Inset{} || rightContainer->inset != Inset{}) {
+        return {"chrome region reserves no inset"};
+    }
+    // The root spaces its three groups by the packing sizing alone, not a gap;
+    // a root gap would be honored by a generic client but ignored by the grid.
+    if (root->gap != Gap{} || rightContainer->gap != Gap{}) {
+        return {"chrome region root/right group must have no gap"};
+    }
+
+    const auto leftWidgets = groupLeaves(leftGroup);
+    const auto rightWidgets = groupLeaves(rightGroup);
+    if (!leftWidgets || !rightWidgets) {
+        return {"chrome region left/right groups must hold only leaves"};
+    }
+    // Every left/right leaf is content-sized (Auto), matching the group's packing.
+    for (const auto& child :
+         std::get<UiContainer>(leftGroup.content).children) {
+        if (child.size.kind() != SizeKind::Auto) {
+            return {"chrome region left leaves must be Auto sized"};
+        }
+    }
+    for (const auto& child :
+         std::get<UiContainer>(rightGroup.content).children) {
+        if (child.size.kind() != SizeKind::Auto) {
+            return {"chrome region right leaves must be Auto sized"};
+        }
+    }
+
+    const int separator = leftContainer->gap.extent();
+
+    // The middle group holds zero or one leaf (the center); its Size carries the
+    // width policy (Flex fills, Exact is a fixed center -- Auto is not valid here).
+    const WidgetDescriptor* center = nullptr;
+    CenterWidth centerWidth = CenterWidth::Flex;
+    int centerFixed = 0;
+    if (middleContainer->children.size() > 1) {
+        return {"chrome region middle group has more than one widget"};
+    }
+    if (middleContainer->children.size() == 1) {
+        const UiNode& centerNode = middleContainer->children.front();
+        const auto* leaf = std::get_if<UiLeaf>(&centerNode.content);
+        if (!leaf) return {"chrome region center is not a leaf"};
+        center = &leaf->widget;
+        if (centerNode.size.kind() == SizeKind::Auto) {
+            return {"chrome region center leaf must be Flex or Exact sized"};
+        }
+        if (centerNode.size.kind() == SizeKind::Exact) {
+            centerWidth = CenterWidth::Fixed;
+            centerFixed = centerNode.size.extent();
+        }
+    }
+
+    const int rightEdge = lowerChromeGroups(
+        *leftWidgets, *rightWidgets, center, separator, centerWidth, centerFixed,
+        rect, nodeKind, defaultRole, style, resolveProvider, out);
+    return {std::nullopt, rightEdge};
 }
 
 }  // namespace ssg

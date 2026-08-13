@@ -9,7 +9,10 @@
 #include <ssg/ChromeComposition.h>  // RowDescriptor, ChromeProviderResolver
 #include <ssg/ShellState.h>  // AccessibilityNode, ShellNodeKind, Rect
 #include <ssg/Style.h>
+#include <ssg/UiTree.h>  // UiRegion
 
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace ssg {
@@ -34,5 +37,27 @@ int lowerChromeRow(const RowDescriptor& row, const Rect& rect,
                    const Style& style,
                    const ChromeProviderResolver& resolveProvider,
                    std::vector<AccessibilityNode>& out);
+
+// The result of lowering a medium-agnostic chrome region tree: on a malformed
+// tree shape, a named error and no nodes emitted (fail-loud, never a plausible
+// partial); otherwise the row's consumed right edge, as lowerChromeRow returns.
+struct UiChromeLowerResult {
+    std::optional<std::string> error;
+    int rightEdge = 0;
+
+    [[nodiscard]] bool ok() const { return !error.has_value(); }
+};
+
+// Lower a medium-agnostic chrome region (built by uiChromeRegionFromRow) DIRECTLY
+// into accessibility nodes over `rect`, reading the left/center/right groups, the
+// separator (the left group's gap), and the center width policy (the center
+// leaf's Size) from the tree itself -- no RowDescriptor reconstruction. The tree
+// must be the canonical chrome shape (a root container of exactly three group
+// containers); a malformed tree returns a named error and emits nothing.
+[[nodiscard]] UiChromeLowerResult lowerUiChromeRegion(
+    const UiRegion& region, const Rect& rect, ShellNodeKind nodeKind,
+    SemanticRole defaultRole, const Style& style,
+    const ChromeProviderResolver& resolveProvider,
+    std::vector<AccessibilityNode>& out);
 
 }  // namespace ssg

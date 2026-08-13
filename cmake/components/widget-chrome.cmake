@@ -3,6 +3,7 @@ target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/RegionRoot.cpp
     ${SSG_SOURCE_DIR}/src/UiTree.cpp
     ${SSG_SOURCE_DIR}/src/MutationPatch.cpp
+    ${SSG_SOURCE_DIR}/src/UiChromeBridge.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -47,4 +48,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_interaction_state PRIVATE ssg)
     add_test(NAME test_interaction_state COMMAND test_interaction_state)
+
+    add_executable(test_ui_chrome_bridge
+        ${SSG_SOURCE_DIR}/tests/test_ui_chrome_bridge.cpp
+    )
+    target_link_libraries(test_ui_chrome_bridge PRIVATE ssg)
+    add_test(NAME test_ui_chrome_bridge COMMAND test_ui_chrome_bridge)
 endif()

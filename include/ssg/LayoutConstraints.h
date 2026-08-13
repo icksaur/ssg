@@ -21,20 +21,24 @@ namespace ssg {
 // placed along the main (leading-to-trailing) axis. Column: placed top-to-bottom.
 enum class Axis : std::uint8_t { Row, Column };
 
-enum class SizeKind : std::uint8_t { Exact, Flex };
+enum class SizeKind : std::uint8_t { Exact, Flex, Auto };
 
 // A node's size along its PARENT's axis. Exact reserves `extent` units of the
 // consumer's medium; Flex takes an equal share of whatever remains after the
-// Exact siblings are placed. `extent` is unit-neutral by design: the grid reads
-// it as cells, a DOM client as its own unit. Int (like Rect) so a large authored
-// dimension cannot wrap before it is solved. A Size cannot be constructed with a
-// negative extent (the solver would emit a negative rectangle): the factories are
-// the only construction path and reject it.
+// Exact/Auto siblings are placed; Auto sizes to the node's own content (its
+// intrinsic size), never growing to fill. `extent` is unit-neutral by design: the
+// grid reads it as cells, a DOM client as its own unit. Int (like Rect) so a large
+// authored dimension cannot wrap before it is solved. A Size cannot be constructed
+// with a negative extent (the solver would emit a negative rectangle): the
+// factories are the only construction path and reject it.
 class Size {
 public:
     Size() = default;  // Flex, 0 -- valid
 
     [[nodiscard]] static Size flex() noexcept { return Size{SizeKind::Flex, 0}; }
+    [[nodiscard]] static Size autoSize() noexcept {
+        return Size{SizeKind::Auto, 0};
+    }
     [[nodiscard]] static Size exact(int extent) {
         if (extent < 0) {
             throw std::invalid_argument("Size::exact: negative extent");
@@ -82,6 +86,28 @@ private:
         : left_(left), right_(right), top_(top), bottom_(bottom) {}
 
     int left_ = 0, right_ = 0, top_ = 0, bottom_ = 0;
+};
+
+// Nonnegative spacing between a container's adjacent children on its axis. A
+// value type so a negative gap is unrepresentable, not merely rejected downstream.
+// Default is zero; Gap::of rejects a negative.
+class Gap {
+public:
+    Gap() = default;  // zero -- valid
+
+    [[nodiscard]] static Gap of(int cells) {
+        if (cells < 0) throw std::invalid_argument("Gap::of: negative gap");
+        return Gap{cells};
+    }
+
+    [[nodiscard]] int extent() const noexcept { return cells_; }
+
+    bool operator==(const Gap&) const = default;
+
+private:
+    explicit Gap(int cells) noexcept : cells_(cells) {}
+
+    int cells_ = 0;
 };
 
 }  // namespace ssg

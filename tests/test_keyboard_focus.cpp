@@ -82,6 +82,7 @@ TEST(reconcileDropsOnlyAbsentCaptures) {
         ssg::UiNode{UiNodeId{"panelOverlay"}, ssg::Size::flex(),
                     ssg::UiContainer{ssg::Axis::Column,
                                      {},
+                                     {},
                                      {ssg::UiNode{UiNodeId{"palette"},
                                                   ssg::Size::flex(),
                                                   ssg::UiLeaf{}}}}}}};

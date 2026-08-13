@@ -45,7 +45,7 @@ UiNode leaf(std::string id) {
 }
 UiNode container(std::string id, std::vector<UiNode> children) {
     return UiNode{UiNodeId{std::move(id)}, Size::flex(),
-                  UiContainer{Axis::Column, {}, std::move(children)}};
+                  UiContainer{Axis::Column, {}, {}, std::move(children)}};
 }
 
 ValidatedSchema validated() {

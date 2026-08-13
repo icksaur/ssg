@@ -152,6 +152,20 @@ TEST(constraintsRejectNegativeGeometryAtConstruction) {
     ASSERT_TRUE(insetThrew);
 }
 
+// The grid box solver does not support Auto (content) sizing; handing it an Auto
+// child is a misuse that fails distinctly, not the nullopt that means "no fit".
+TEST(solveLayoutRejectsAutoSizeDistinctly) {
+    LayoutNode root{"root", std::nullopt, Size::flex(), Axis::Row, {},
+                    {leaf("a", Size::autoSize())}};
+    bool threw = false;
+    try {
+        (void)solveLayout(root, {0, 0, 10, 1});
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    ASSERT_TRUE(threw);
+}
+
 }  // namespace
 
 int main() {
@@ -165,6 +179,7 @@ int main() {
     RUN(zeroFlexWithLeftoverIsAllowed);
     RUN(structuralKindIsPreservedThroughSolving);
     RUN(constraintsRejectNegativeGeometryAtConstruction);
+    RUN(solveLayoutRejectsAutoSizeDistinctly);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

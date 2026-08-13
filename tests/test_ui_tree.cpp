@@ -36,7 +36,7 @@ UiNode leaf(std::string id, WidgetKind kind = WidgetKind::Label) {
 
 UiNode container(std::string id, std::vector<UiNode> children) {
     return UiNode{UiNodeId{std::move(id)}, Size::flex(),
-                  UiContainer{Axis::Row, {}, std::move(children)}};
+                  UiContainer{Axis::Row, {}, {}, std::move(children)}};
 }
 
 TEST(wellFormedSchemaValidates) {
