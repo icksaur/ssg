@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <stdexcept>
 #include <variant>
 
 namespace ssg {
@@ -151,7 +152,7 @@ void EditorRuntime::Impl::projectFindReplacePrompt(PromptViewState& promptView) 
 }
 
 StatusFieldProjection EditorRuntime::Impl::chromeStatusFields(
-    std::string_view cwdPrefix) const {
+    ChromeFieldMode mode) const {
     auto statusProjection = status.footerProjection();
     auto followProjection = follow.footerProjection();
     auto fields = projectStatusFields(
@@ -161,7 +162,8 @@ StatusFieldProjection EditorRuntime::Impl::chromeStatusFields(
          .currentBranch = currentGitBranch,
          .statusValue = statusProjection.value,
          .followMode = followProjection.mode,
-         .cwdPrefix = std::string{cwdPrefix}});
+         .cwdPrefix = mode == ChromeFieldMode::Grid ? style.cwdPrefix
+                                                    : std::string{}});
     bindStatusFieldCommands(fields.headerFields, followProjection);
     bindStatusFieldCommands(fields.footerFields, followProjection);
     return fields;
@@ -175,7 +177,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
                           tabs.viewState().active == tab.id, tab.dirty});
     }
     auto statusProjection = status.footerProjection();
-    auto statusFields = chromeStatusFields(style.cwdPrefix);
+    auto statusFields = chromeStatusFields(ChromeFieldMode::Grid);
     ShellLayoutRequest request;    request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
     request.lineNumberGutterWidth = lineNumberGutterWidth();
@@ -316,12 +318,15 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
     UiStateSection uiState = [&] {
         if (!composedUi) return UiStateSection{Generation{chromeGeneration}, {}};
         auto validated = ValidatedSchema::validate(uiSchema);
-        if (!validated.ok())
-            return UiStateSection{Generation{chromeGeneration}, {}};
-        // Semantic values only: no cwd glyph prefix (that is a grid presentation
-        // detail applied on the TUI path alone), so a native client receives no
-        // terminal styling.
-        auto fields = chromeStatusFields("");
+        // The schema comes from a decoder-validated ValidatedComposition, so it has
+        // unique node ids; a validation failure here is a broken invariant, not an
+        // expected outcome, and must fail loud rather than publish a plausible empty
+        // section that would violate schema/state correspondence.
+        if (!validated.ok()) {
+            throw std::logic_error(
+                "resolveUiState: composed schema failed validation");
+        }
+        auto fields = chromeStatusFields(ChromeFieldMode::Semantic);
         return resolveUiState(
             validated.schema(),
             chromeResolverFor(std::move(fields.headerFields),

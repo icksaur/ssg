@@ -469,8 +469,13 @@ struct EditorRuntime::Impl final : CommandServices,
     // resolves its provider widgets against. Shared by shellView (built-in fields +
     // the grid resolver) and sections (the semantic dynamic-state resolver), so the
     // two resolve provider values identically.
+    // The status-field styling a chrome resolution wants: the grid path prefixes
+    // the cwd with a terminal glyph; the semantic dynamic-state path takes none, so
+    // a native client receives no presentation styling. A strong mode (not a raw
+    // prefix) makes semantic purity a named choice at each call site.
+    enum class ChromeFieldMode { Grid, Semantic };
     [[nodiscard]] StatusFieldProjection chromeStatusFields(
-        std::string_view cwdPrefix) const;
+        ChromeFieldMode mode) const;
     [[nodiscard]] PaletteViewState paletteView() const;
     // The tree view state with its scroll offset, scrollbar, and visible-window
     // hit map resolved against the last panel height (keep-selection-visible).
