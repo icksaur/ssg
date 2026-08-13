@@ -22,6 +22,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -126,5 +127,69 @@ struct UiSchemaValidation {
 // non-empty and unique across the whole generation, and each region role appears
 // at most once. Fails loud with a path-qualified message. Pure.
 [[nodiscard]] UiSchemaValidation validateUiSchema(const UiSchema& schema);
+
+// The set of every node id in a schema (all regions). Meaningful only for a
+// schema whose ids are unique; used by ValidatedSchema.
+[[nodiscard]] std::set<UiNodeId> uiSchemaNodeIds(const UiSchema& schema);
+
+class ValidatedSchema;
+
+struct ValidatedSchemaResult;
+
+// A schema that has passed validateUiSchema. The only construction path is
+// ValidatedSchema::validate, so a consumer that requires a ValidatedSchema (the
+// mutation interpreter, the interaction state) cannot be handed a schema with
+// duplicate or empty node ids -- the uniqueness the id-based rules depend on is a
+// type fact at that boundary, not a runtime hope. It also caches the schema's node
+// id set, so a capture or reference can be checked for schema membership.
+class ValidatedSchema {
+public:
+    [[nodiscard]] static ValidatedSchemaResult validate(UiSchema schema);
+
+    [[nodiscard]] const UiSchema& schema() const noexcept { return schema_; }
+    [[nodiscard]] Generation generation() const noexcept {
+        return schema_.generation;
+    }
+    [[nodiscard]] const std::set<UiNodeId>& nodeIds() const noexcept {
+        return nodeIds_;
+    }
+    [[nodiscard]] bool contains(const UiNodeId& id) const {
+        return nodeIds_.contains(id);
+    }
+
+private:
+    explicit ValidatedSchema(UiSchema schema);
+
+    UiSchema schema_;
+    std::set<UiNodeId> nodeIds_;
+};
+
+// The outcome of validating a schema into a ValidatedSchema: exactly one of a
+// validated schema or the path-qualified error, encoded as a variant so "both or
+// neither" is unrepresentable. Defined after ValidatedSchema so the variant holds
+// a complete type.
+class ValidatedSchemaResult {
+public:
+    explicit ValidatedSchemaResult(ValidatedSchema schema)
+        : value_{std::move(schema)} {}
+    explicit ValidatedSchemaResult(std::string error)
+        : value_{std::move(error)} {}
+
+    [[nodiscard]] bool ok() const {
+        return std::holds_alternative<ValidatedSchema>(value_);
+    }
+    [[nodiscard]] const ValidatedSchema& schema() const {
+        return std::get<ValidatedSchema>(value_);
+    }
+    [[nodiscard]] ValidatedSchema takeSchema() {
+        return std::get<ValidatedSchema>(std::move(value_));
+    }
+    [[nodiscard]] const std::string& error() const {
+        return std::get<std::string>(value_);
+    }
+
+private:
+    std::variant<ValidatedSchema, std::string> value_;
+};
 
 }  // namespace ssg

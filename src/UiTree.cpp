@@ -54,4 +54,30 @@ UiSchemaValidation validateUiSchema(const UiSchema& schema) {
     return {};
 }
 
+namespace {
+
+void collectIds(const UiNode& node, std::set<UiNodeId>& out) {
+    out.insert(node.id);
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) collectIds(child, out);
+    }
+}
+
+}  // namespace
+
+std::set<UiNodeId> uiSchemaNodeIds(const UiSchema& schema) {
+    std::set<UiNodeId> ids;
+    for (const auto& region : schema.regions) collectIds(region.root, ids);
+    return ids;
+}
+
+ValidatedSchema::ValidatedSchema(UiSchema schema)
+    : schema_{std::move(schema)}, nodeIds_{uiSchemaNodeIds(schema_)} {}
+
+ValidatedSchemaResult ValidatedSchema::validate(UiSchema schema) {
+    UiSchemaValidation validation = validateUiSchema(schema);
+    if (!validation.ok()) return ValidatedSchemaResult{*validation.error};
+    return ValidatedSchemaResult{ValidatedSchema{std::move(schema)}};
+}
+
 }  // namespace ssg

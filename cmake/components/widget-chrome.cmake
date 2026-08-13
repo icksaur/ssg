@@ -41,4 +41,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_keyboard_focus PRIVATE ssg)
     add_test(NAME test_keyboard_focus COMMAND test_keyboard_focus)
+
+    add_executable(test_interaction_state
+        ${SSG_SOURCE_DIR}/tests/test_interaction_state.cpp
+    )
+    target_link_libraries(test_interaction_state PRIVATE ssg)
+    add_test(NAME test_interaction_state COMMAND test_interaction_state)
 endif()

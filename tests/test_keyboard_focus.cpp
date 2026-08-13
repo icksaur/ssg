@@ -75,9 +75,20 @@ TEST(reconcileDropsOnlyAbsentCaptures) {
     focus.pushCapture(FocusCapture{UiNodeId{"panelOverlay"}, FocusTarget::Panel});
     focus.pushCapture(prompt("palette"));
 
-    PresenceConfig presence;
-    presence.set(UiNodeId{"panelOverlay"}, true);
-    presence.set(UiNodeId{"palette"}, false);  // top hidden
+    // A schema with both nodes; presence hides only the top (palette).
+    ssg::UiSchema rawSchema;
+    rawSchema.regions = {ssg::UiRegion{
+        ssg::RegionRole::Overlay,
+        ssg::UiNode{UiNodeId{"panelOverlay"}, ssg::Size::flex(),
+                    ssg::UiContainer{ssg::Axis::Column,
+                                     {},
+                                     {ssg::UiNode{UiNodeId{"palette"},
+                                                  ssg::Size::flex(),
+                                                  ssg::UiLeaf{}}}}}}};
+    auto vr = ssg::ValidatedSchema::validate(rawSchema);
+    const ssg::ValidatedSchema schema = vr.takeSchema();
+    const PresenceConfig presence =
+        PresenceConfig::initial(schema, {UiNodeId{"palette"}});
     focus.reconcile(presence);
 
     ASSERT_TRUE(focus.hasCapture());

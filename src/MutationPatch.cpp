@@ -1,13 +1,19 @@
 #include <ssg/MutationPatch.h>
 
 #include <set>
+#include <stdexcept>
+#include <utility>
 #include <string>
 #include <variant>
 
 namespace ssg {
 
-PresenceConfig PresenceConfig::allPresent(const UiSchema& schema) {
+PresenceConfig PresenceConfig::initial(const ValidatedSchema& validated,
+                                       const std::vector<UiNodeId>& hidden) {
+    const UiSchema& schema = validated.schema();
     PresenceConfig config;
+    config.generation_ = schema.generation;
+    config.basis_ = PresenceBasis{0};
     for (const auto& region : schema.regions) {
         // Walk each region's tree, marking every node present.
         std::vector<const UiNode*> stack{&region.root};
@@ -19,6 +25,35 @@ PresenceConfig PresenceConfig::allPresent(const UiSchema& schema) {
                     std::get_if<UiContainer>(&node->content)) {
                 for (const auto& child : container->children) {
                     stack.push_back(&child);
+                }
+            }
+        }
+    }
+    for (const auto& id : hidden) {
+        if (!validated.contains(id)) {
+            throw std::invalid_argument(
+                "PresenceConfig::initial: hidden id outside the schema");
+        }
+    }
+
+    // Hiding a node hides its whole subtree -- the same semantics a patch hide
+    // applies -- so an initially-hidden container never leaves a descendant marked
+    // present. Find each hidden node, then mark it and its descendants absent.
+    const std::set<UiNodeId> hiddenSet{hidden.begin(), hidden.end()};
+    if (!hiddenSet.empty()) {
+        std::vector<std::pair<const UiNode*, bool>> stack;  // node, ancestorHidden
+        for (const auto& region : schema.regions) {
+            stack.emplace_back(&region.root, false);
+        }
+        while (!stack.empty()) {
+            const auto [node, ancestorHidden] = stack.back();
+            stack.pop_back();
+            const bool hide = ancestorHidden || hiddenSet.contains(node->id);
+            if (hide) config.set(node->id, false);
+            if (const auto* container =
+                    std::get_if<UiContainer>(&node->content)) {
+                for (const auto& child : container->children) {
+                    stack.emplace_back(&child, hide);
                 }
             }
         }
@@ -86,19 +121,30 @@ struct Index {
 
 }  // namespace
 
-PatchResult applyMutationPatch(const UiSchema& schema,
+PatchResult applyMutationPatch(const ValidatedSchema& validated,
                                const PresenceConfig& pre,
                                const MutationPatch& patch) {
+    const UiSchema& schema = validated.schema();
     if (patch.generation != schema.generation) {
         return {"mutation patch targets a different generation"};
+    }
+    if (pre.generation() != schema.generation) {
+        return {"presence pre-state is from a different generation"};
+    }
+    if (patch.basis != pre.basis()) {
+        return {"mutation patch was predicted against a stale presence basis"};
     }
 
     const Index index = Index::build(schema);
 
-    // Every op must name a real node, and no two ops may name the same node
-    // (a conflict is rejected, never order-resolved).
+    // Every op must name a real node, carry a valid kind, and no two ops may name
+    // the same node (a conflict is rejected, never order-resolved).
     std::set<UiNodeId> targeted;
     for (const auto& op : patch.ops) {
+        if (op.kind != MutationOpKind::Show && op.kind != MutationOpKind::Hide &&
+            op.kind != MutationOpKind::Toggle) {
+            return {"mutation patch has a corrupt operation kind"};
+        }
         if (!index.all.contains(op.target)) {
             return {"mutation patch names unknown node \"" + op.target.value() +
                     "\""};
@@ -146,6 +192,7 @@ PatchResult applyMutationPatch(const UiSchema& schema,
     PresenceConfig post = pre;
     for (const auto& id : requiredHide) post.set(id, false);
     for (const auto& id : requiredShow) post.set(id, true);
+    post.basis_ = pre.basis().next();
     return {std::nullopt, post};
 }
 
