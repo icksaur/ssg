@@ -703,23 +703,33 @@ tests for the types it introduces, or the phases are not independently gateable.
    step from the switch itself.
 
 6. **Make the web client consume the published model.** Replace the browser's
-   reinvented header/footer with a DOM interpreter over the published schema:
-   mapping kinds to DOM and roles to CSS custom properties, applying mutation
-   patches as class/`display` flips, and reading triggers off the widgets. Because
-   this is the first consumer of interaction state, it is where the **interaction-
-   state wire publication deferred from phase 4** lands: the runtime takes ownership
-   of a live `UiInteractionState` and publishes generation-scoped node-state/presence
-   deltas, the mutation vocabulary, and canonical focus on the channel, pinned by a
-   round-trip oracle before the web interpreter reads them. This is
-   where the reinvention is deleted and missing-widget detection earns its keep —
-   the host holds the web client build's implementation-derived UI profile, and any
-   gap (a widget, a region role, or a patch operation it lacks) is a loud, tested
-   rejection.
+   reinvented/absent header/footer with a DOM interpreter over the published schema:
+   mapping kinds to DOM and roles to CSS custom properties, showing the resolved
+   widget values, gating `display` by node presence, and reading triggers off the
+   widgets. The schema carries value SOURCES, not resolved values, so this is where
+   the **resolved dynamic node state deferred from phase 4** lands: the runtime
+   publishes a generation-scoped, per-node `(present + resolved value/label/command/
+   checked)` section — built by the same resolver and empty-drop rule the TUI lowering
+   uses — on the channel, pinned by a round-trip oracle before the web interpreter
+   reads it. Presence is derived all-present from the validated schema; the runtime
+   does NOT yet own a live `UiInteractionState`, and the mutation-patch wire and
+   canonical-focus routing stay deferred to phase 7 (no command emits a patch and
+   prompt focus has no schema node until ephemeral nodes exist). This is
+   where missing-widget detection earns its keep — the web build declares the UI
+   profile its interpreter implements, and any gap (a widget kind or a region role it
+   lacks) is a loud, tested client-side rejection BEFORE interpretation; host-side
+   attach enforcement of a served build's profile stays a later-phase concern.
 
-7. **Generalize ephemeral ownership.** Turn the palette's hand-wired
-   client-authoritative window into the typed per-field ownership model the router
-   reads as data (the three definitions the hard part above commits to), retiring
-   the three bespoke mechanisms. This is the phase that touches the shared routing
+7. **Generalize ephemeral ownership and land runtime interaction.** Turn the palette's
+   hand-wired client-authoritative window into the typed per-field ownership model the
+   router reads as data (the three definitions the hard part above commits to),
+   retiring the three bespoke mechanisms. This is also where the interaction-state
+   half deferred from phase 6 lands, because ephemeral ownership is what creates its
+   preconditions: the runtime takes ownership of a live `UiInteractionState` over
+   ephemeral prompt/palette schema nodes, routes canonical focus through it, and
+   publishes the mutation vocabulary (the reconciled optimistic patch protocol) on the
+   channel — the first commands that emit a `MutationPatch` and the first client that
+   reconciles one appear here. This is the phase that touches the shared routing
    chokepoint and warrants its own review before code, per the hard part above.
 
 8. **Complete the conformance suite.** Each prior phase has already landed its slice
