@@ -3,11 +3,32 @@
 #include <ssg/GraphemeLayout.h>
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <numeric>
 #include <optional>
+#include <stdexcept>
+#include <string_view>
 #include <utility>
 
 namespace ssg {
+
+namespace {
+constexpr std::array kWidgetKindNames{
+    std::string_view{"container"}, std::string_view{"label"},
+    std::string_view{"field"},     std::string_view{"checkbox"},
+    std::string_view{"text_input"}, std::string_view{"spacer"},
+};
+static_assert(kWidgetKindNames.size() == kWidgetKindCount);
+}  // namespace
+
+std::string_view widgetKindName(WidgetKind kind) {
+    const auto index = static_cast<std::size_t>(kind);
+    if (index >= kWidgetKindCount) {
+        throw std::invalid_argument("widgetKindName: unrecognized WidgetKind");
+    }
+    return kWidgetKindNames[index];
+}
 
 RowFit fitRow(const std::vector<FitItem>& items, int extent, int separator,
               Align align) {

@@ -14,6 +14,8 @@
 #include <ssg/Geometry.h>    // Rect
 #include <ssg/Style.h>       // ToggleGlyphs
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -33,6 +35,24 @@ enum class WidgetKind : std::uint8_t {
     TextInput,   // a one-line editable region: sigil + scrolling tail + caret
     Spacer,      // a flexible gap
 };
+
+// The vocabulary made enumerable, mirroring SemanticRole's discipline: a count,
+// a mirrored array, and a static_assert binding them. A client's UI profile
+// (UiProfile.h) is a subset of this set, so both must enumerate the same kinds;
+// keeping the enum, the count, and the array bound at compile time is what makes
+// "the profile says X" and "the vocabulary has X" checkable against one source.
+inline constexpr std::size_t kWidgetKindCount = 6;
+inline constexpr std::array kAllWidgetKinds{
+    WidgetKind::Container, WidgetKind::Label,     WidgetKind::Field,
+    WidgetKind::Checkbox,  WidgetKind::TextInput, WidgetKind::Spacer,
+};
+static_assert(kAllWidgetKinds.size() == kWidgetKindCount);
+
+// The stable wire/diagnostic name of a widget kind. Used to name the unsupported
+// kind when a composition exceeds a client's UI profile. Throws
+// std::invalid_argument on a corrupt/out-of-range enumerator, never a silent
+// wrong slot.
+[[nodiscard]] std::string_view widgetKindName(WidgetKind kind);
 
 // Which end of the container the retained items pack toward. Start packs from
 // the container's leading edge (header status fields); End packs flush to its

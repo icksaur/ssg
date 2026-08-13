@@ -8,4 +8,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_widget PRIVATE ssg)
     add_test(NAME test_widget COMMAND test_widget)
+
+    add_executable(test_ui_profile
+        ${SSG_SOURCE_DIR}/tests/test_ui_profile.cpp
+    )
+    target_link_libraries(test_ui_profile PRIVATE ssg)
+    add_test(NAME test_ui_profile COMMAND test_ui_profile)
 endif()
