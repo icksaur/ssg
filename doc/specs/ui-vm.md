@@ -673,12 +673,28 @@ tests for the types it introduces, or the phases are not independently gateable.
    (after any hide, focus references a present node; no stale or duplicate
    prompt-backed capture). `PromptSurface` alone cannot prevent a stale capture entry
    unless the canonical owner couples focus to presence, so this must precede either
-   client consuming patches. Publish the new model on
-   the channel **alongside** the existing path, and prove faithfulness by a
-   **differential oracle**: the TUI lowering the published schema through the
-   existing `lowerChromeRow` path produces **byte-for-byte-unchanged** output versus
-   the legacy composition, across a corpus of states and after each mutation. This
-   phase changes nothing a user sees; the differential proof is its whole product.
+   client consuming patches. Publish the **schema** on the channel **alongside** the
+   existing path — a semantic `ui` section carrying the generation-scoped tree, whole-
+   value replaced per generation — and prove faithfulness by a **differential oracle**:
+   the TUI lowering the published schema through the existing `lowerChromeRow` path
+   produces **byte-for-byte-unchanged** output versus the legacy composition, across a
+   corpus of states and after each mutation. This phase changes nothing a user sees;
+   the differential proof is its whole product.
+
+   **Publication boundary.** Phase 4 *lands and pins* the interaction-state types —
+   the mutation-patch validator/interpreter, the canonical focus owner, and the
+   presence model — as library types with their oracles, because the schema and its
+   faithfulness proof depend on them existing and being correct. It does **not** wire
+   those types onto the channel: publishing generation-scoped node-state/presence
+   deltas, the mutation vocabulary, and canonical focus over the wire requires the
+   runtime to *own* a live `UiInteractionState`, and there is no runtime owner and no
+   client consuming patches until the TUI switches (phase 5) and the web interpreter
+   lands (phase 6). Interaction-state **wire publication** is therefore deferred to
+   phase 6/7, where the router generalization introduces the runtime ownership and the
+   first consumer that gives it meaning. Publishing focus/presence/mutation deltas
+   before a consumer exists would be speculative wire reshaped once phase 6/7 gives it
+   a real reader; the schema is publishable now because the TUI differential oracle
+   consumes it immediately.
 
 5. **Switch the TUI onto the published model and remove the legacy shape.** Once the
    differential oracle is green, make the published schema the TUI's only source and
@@ -689,7 +705,12 @@ tests for the types it introduces, or the phases are not independently gateable.
 6. **Make the web client consume the published model.** Replace the browser's
    reinvented header/footer with a DOM interpreter over the published schema:
    mapping kinds to DOM and roles to CSS custom properties, applying mutation
-   patches as class/`display` flips, and reading triggers off the widgets. This is
+   patches as class/`display` flips, and reading triggers off the widgets. Because
+   this is the first consumer of interaction state, it is where the **interaction-
+   state wire publication deferred from phase 4** lands: the runtime takes ownership
+   of a live `UiInteractionState` and publishes generation-scoped node-state/presence
+   deltas, the mutation vocabulary, and canonical focus on the channel, pinned by a
+   round-trip oracle before the web interpreter reads them. This is
    where the reinvention is deleted and missing-widget detection earns its keep —
    the host holds the web client build's implementation-derived UI profile, and any
    gap (a widget, a region role, or a patch operation it lacks) is a loud, tested
