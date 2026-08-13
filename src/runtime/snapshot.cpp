@@ -180,7 +180,8 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     // vectors) -- field.id equals the provider/catalog id (projectStatusFields
     // keys providers by entry id), so the scan is the natural lookup.
     if (composedChrome) {
-        request.composedChrome = composedChrome;
+        request.composedUi =
+            uiSchemaFromChrome(*composedChrome, Generation{chromeGeneration});
         request.chromeProviderResolver =
             [header = request.headerFields, footer = request.footerFields](
                 std::string_view id) -> std::optional<ResolvedProvider> {

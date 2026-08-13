@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ssg/ChromeComposition.h"
+#include "ssg/UiTree.h"
 #include "ssg/focus.h"
 #include "ssg/Geometry.h"
 #include "ssg/Style.h"
@@ -143,13 +144,15 @@ struct ShellLayoutRequest {
     // Dimensions and chrome glyphs this layout is computed against.  Defaults
     // reproduce the shipped appearance.
     Style style;
-    // An optional init.lua-composed header/footer. When a region is present
-    // here, its built-in status-field
-    // projection is REPLACED by lowering the composed row; an absent region (the
-    // default) keeps the built-in path byte-identical. `chromeProviderResolver`
-    // supplies live (value,label,command) for a composed widget's `provider`
-    // references; when unset, provider widgets resolve to nothing and drop.
-    std::optional<ChromeComposition> composedChrome;
+    // The init.lua-composed chrome as the published medium-agnostic UI schema.
+    // A region present here (by role: Top=header, Bottom=footer) REPLACES that
+    // region's built-in status-field projection by lowering the region tree; an
+    // absent region (the default) keeps the built-in path byte-identical. This is
+    // the SAME schema published on the semantic channel, so the TUI and any other
+    // client lower one source. `chromeProviderResolver` supplies live
+    // (value,label,command) for a composed widget's `provider` references; when
+    // unset, provider widgets resolve to nothing and drop.
+    std::optional<UiSchema> composedUi;
     ChromeProviderResolver chromeProviderResolver;
 };
 

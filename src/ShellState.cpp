@@ -15,6 +15,16 @@
 namespace ssg {
 namespace {
 
+// The composed region for a role (Top=header, Bottom=footer) in the published
+// schema, or nullptr when absent -- in which case the built-in projection stands.
+const UiRegion* composedRegion(const std::optional<UiSchema>& schema,
+                               RegionRole role) {
+    if (!schema) return nullptr;
+    for (const auto& region : schema->regions)
+        if (region.role == role) return &region;
+    return nullptr;
+}
+
 // Width of a label in terminal CELLS.  Layout budgets are cell counts, so
 // measuring bytes would mis-size any label -- or any configured style glyph --
 // outside ASCII.
@@ -484,8 +494,9 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         // widget in the focus phase, where reserve/grow/ghost geometry is
         // designed rather than shoehorned into a stack item).
         int headerX = view.header->x;
-        const bool composedHeader =
-            request.composedChrome && request.composedChrome->header;
+        const UiRegion* headerRegion =
+            composedRegion(request.composedUi, RegionRole::Top);
+        const bool composedHeader = headerRegion != nullptr;
         if (composedHeader) {
             // A composed header REPLACES the built-in status fields, laid out
             // over the SAME fieldWidth the built-in uses so the input-line
@@ -494,13 +505,12 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             // to the group's consumed right edge -- which INCLUDES node-less
             // Spacers -- so the input line follows the whole group, never over a
             // spacer's cells.
-            headerX = std::max(
-                headerX,
-                lowerChromeRow(*request.composedChrome->header,
-                               {view.header->x, view.header->y, fieldWidth, 1},
-                               ShellNodeKind::HeaderField, SemanticRole::Header,
-                               request.style, chromeResolver,
-                               view.accessibilityNodes));
+            const auto lowered = lowerUiChromeRegion(
+                *headerRegion,
+                {view.header->x, view.header->y, fieldWidth, 1},
+                ShellNodeKind::HeaderField, SemanticRole::Header, request.style,
+                chromeResolver, view.accessibilityNodes);
+            headerX = std::max(headerX, lowered.rightEdge);
         } else {
         WidgetStack headerStack{1};
         std::vector<const StatusField*> headerFieldSource;
@@ -572,17 +582,20 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         const bool hasHint =
             request.footerHint && !request.footerHint->label.empty();
 
-        const bool composedFooter =
-            request.composedChrome && request.composedChrome->footer;
+        const UiRegion* footerRegion =
+            composedRegion(request.composedUi, RegionRole::Bottom);
+        const bool composedFooter = footerRegion != nullptr;
         if (composedFooter) {
             // A composed footer REPLACES the whole built-in footer row (fields,
             // hint, actions). Unlike the header it supports full left/right/
             // center, so it lowers over the entire footer rect; every widget
             // becomes a FooterField node.
-            lowerChromeRow(*request.composedChrome->footer,
-                           {view.footer->x, view.footer->y, view.footer->width, 1},
-                           ShellNodeKind::FooterField, SemanticRole::Footer,
-                           request.style, chromeResolver, view.accessibilityNodes);
+            const auto lowered = lowerUiChromeRegion(
+                *footerRegion,
+                {view.footer->x, view.footer->y, view.footer->width, 1},
+                ShellNodeKind::FooterField, SemanticRole::Footer, request.style,
+                chromeResolver, view.accessibilityNodes);
+            (void)lowered;
         } else {
         WidgetStack footer{1};
         std::vector<const StatusField*> fieldSource;

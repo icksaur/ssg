@@ -1,4 +1,5 @@
 #include "ssg/ShellState.h"
+#include "ssg/UiChromeBridge.h"
 #include "test_helpers.h"
 
 #include <algorithm>
@@ -874,7 +875,7 @@ TEST(composedChromeReplacesBuiltinHeaderAndFooter) {
     RowDescriptor footer;
     footer.left.push_back(literalField("custom.footer", "WORLD", 0));
     comp.footer = footer;
-    value.composedChrome = comp;
+    value.composedUi = uiSchemaFromChrome(comp, Generation{1});
 
     auto result = computeShellLayout(value, state);
     ASSERT_TRUE(result.accepted());
@@ -910,7 +911,7 @@ TEST(composingOneRegionLeavesTheOtherBuiltin) {
     RowDescriptor footer;
     footer.left.push_back(literalField("custom.footer", "WORLD", 0));
     comp.footer = footer;
-    footerOnly.composedChrome = comp;
+    footerOnly.composedUi = uiSchemaFromChrome(comp, Generation{1});
 
     auto result = computeShellLayout(footerOnly, state);
     ASSERT_TRUE(result.accepted());
@@ -933,7 +934,7 @@ TEST(composedHeaderResolvesProvidersAndKeepsTheInputLine) {
     RowDescriptor header;
     header.left.push_back(providerField("live.path", "path", 0));
     comp.header = header;
-    value.composedChrome = comp;
+    value.composedUi = uiSchemaFromChrome(comp, Generation{1});
     value.chromeProviderResolver =
         [](std::string_view id) -> std::optional<ResolvedProvider> {
         if (id == "path")
@@ -976,7 +977,7 @@ TEST(composedHeaderSpacerPushesTheInputLinePastItsCells) {
     spacer.width = 20;
     header.left.push_back(spacer);
     comp.header = header;
-    value.composedChrome = comp;
+    value.composedUi = uiSchemaFromChrome(comp, Generation{1});
 
     auto result = computeShellLayout(value, state);
     ASSERT_TRUE(result.accepted());
