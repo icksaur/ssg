@@ -100,10 +100,12 @@ function renderChromeNode(node, theme, parentAxis = AXIS.ROW) {
     div.className = 'group';
     div.style.display = 'flex';
     div.style.flexDirection = node.axis === 1 ? 'column' : 'row';  // Axis: Row=0, Column=1
-    div.style.alignItems = 'center';
+    // stretch: a child shares the parent's cross extent (the Row/Column contract),
+    // rather than shrinking to its content on the cross axis.
+    div.style.alignItems = 'stretch';
     div.style.boxSizing = 'border-box';  // inset stays inside the published extent
     applySize(div, node.size, parentAxis);
-    applyInset(div, node.inset);
+    applyInset(div, node.inset, node.size, parentAxis);
     if (node.gap) div.style.gap = node.gap + 'ch';
     for (const child of node.children) {
       const el = renderChromeNode(child, theme, node.axis);
@@ -136,16 +138,17 @@ function renderChromeNode(node, theme, parentAxis = AXIS.ROW) {
 }
 
 // Apply a published Size to a flex child ALONG the parent's main axis: Exact => a
-// fixed extent that neither grows nor shrinks (including a literal zero extent),
-// Flex => grow to fill (extent is the grow weight, default 1), Auto => content-sized.
-// A Row parent measures width; a Column parent measures height. SIZE ordinals mirror
-// the C++ SizeKind enum.
+// fixed extent that neither grows nor shrinks (including a literal zero extent, whose
+// content is CLIPPED so it truly occupies zero), Flex => grow to fill (extent is the
+// grow weight, default 1), Auto => content-sized. A Row parent measures width; a
+// Column parent measures height. SIZE ordinals mirror the C++ SizeKind enum.
 function applySize(el, size, parentAxis) {
   if (!size) return;
   const dim = parentAxis === AXIS.COLUMN ? 'height' : 'width';
   if (size.kind === SIZE.EXACT) {
     el.style.flex = '0 0 auto';
     el.style[dim] = (size.extent || 0) + 'ch';  // Exact(0) is a real zero extent
+    el.style.overflow = 'hidden';  // content beyond the extent is clipped, not overflowed
   } else if (size.kind === SIZE.FLEX) {
     el.style.flex = (size.extent > 0 ? size.extent : 1) + ' 1 0';
   } else {
@@ -153,12 +156,26 @@ function applySize(el, size, parentAxis) {
   }
 }
 
-// Apply a container Inset as padding (cells => ch), so published edge insets render.
-function applyInset(el, inset) {
+// Apply a container Inset as padding (cells => ch). When the node has an Exact
+// main-axis extent, the same-axis inset is clamped so their sum never exceeds the
+// extent -- otherwise the CSS used border-box size floors at the padding and an
+// Exact(0)+inset frame would occupy nonzero space. The cross-axis inset is not
+// extent-bound. `parentAxis` names the axis the extent measures along.
+function applyInset(el, inset, size, parentAxis) {
   if (!inset) return;
-  el.style.padding =
-    (inset.top || 0) + 'ch ' + (inset.right || 0) + 'ch ' +
-    (inset.bottom || 0) + 'ch ' + (inset.left || 0) + 'ch';
+  let top = inset.top || 0, right = inset.right || 0;
+  let bottom = inset.bottom || 0, left = inset.left || 0;
+  // Clamp the same-axis inset pair so it cannot exceed an Exact extent (else the
+  // used border-box size floors at the padding and the extent is violated).
+  if (size && size.kind === SIZE.EXACT) {
+    const extent = size.extent || 0;
+    if (parentAxis === AXIS.COLUMN) {
+      if (top + bottom > extent) { top = Math.min(top, extent); bottom = Math.max(0, extent - top); }
+    } else {
+      if (left + right > extent) { left = Math.min(left, extent); right = Math.max(0, extent - left); }
+    }
+  }
+  el.style.padding = top + 'ch ' + right + 'ch ' + bottom + 'ch ' + left + 'ch';
 }
 
 // Interpret the published UI-VM schema + dynamic node state into the Top/Bottom
