@@ -168,3 +168,107 @@ export function isPalettePromptOpen(sections) {
   return !!ps && ps.active_kind != null && num(ps.active_kind) === PROMPT_PALETTE;
 }
 
+// --- UI-VM: the web interpreter over the published schema + dynamic node state ---
+//
+// Wire ordinals, pinned by the C++ enums (WidgetKind, RegionRole). The schema's
+// leaves carry `kind`; regions carry `role`.
+export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPUT: 4, SPACER: 5 };
+export const REGION = { TOP: 0, BOTTOM: 1, LEADING: 2, TRAILING: 3, OVERLAY: 4 };
+
+// The primitives THIS web build's interpreter can draw: header/footer chrome, so
+// Container/Label/Field/Checkbox/Spacer leaves in the Top/Bottom regions. TextInput
+// and the side/overlay regions are not implemented, so a schema using one is a loud,
+// tested rejection -- never a silently dropped element.
+export const WEB_UI_PROFILE = {
+  widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.SPACER]),
+  regions: new Set([REGION.TOP, REGION.BOTTOM]),
+};
+
+// The first schema primitive `profile` does not support, as
+// { kind: 'widget'|'region', ordinal }, or null when every region role and leaf
+// widget kind is supported. The interpreter runs only when this returns null.
+export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
+  if (!schema || !Array.isArray(schema.regions)) return null;
+  const walk = (node) => {
+    if (!node) return null;
+    if (node.leaf && typeof node.leaf === 'object') {
+      const kind = num(node.leaf.kind);
+      if (!profile.widgets.has(kind)) return { kind: 'widget', ordinal: kind };
+    }
+    if (node.container && Array.isArray(node.container.children)) {
+      for (const child of node.container.children) {
+        const bad = walk(child);
+        if (bad) return bad;
+      }
+    }
+    return null;
+  };
+  for (const region of schema.regions) {
+    const role = num(region.role);
+    if (!profile.regions.has(role)) return { kind: 'region', ordinal: role };
+    const bad = walk(region.root);
+    if (bad) return bad;
+  }
+  return null;
+}
+
+// Interpret the schema (structure) + dynamic state (resolved values/presence) into
+// an ordered, per-region list of draw instructions the DOM builder applies, keyed by
+// node id. Presence is necessary but not sufficient: a Label/Field draws only when
+// present AND it has resolved leaf state (a present-but-stateless leaf is the
+// resolved drop); a Checkbox draws whenever present (its state always exists); a
+// Spacer draws a structural gap whenever present; a Container lays out its present
+// children. Returns null (do not interpret; wait for a consistent frame) when the
+// schema and state are from different frames -- different generation, or a node-id
+// set that does not correspond -- or when a primitive is unsupported.
+export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
+  if (!schema || !Array.isArray(schema.regions) || !state) return null;
+  if (firstUnsupportedPrimitive(schema, profile)) return null;
+  if (num(schema.generation) !== num(state.generation)) return null;
+
+  const stateById = new Map();
+  for (const n of (state.nodes || [])) stateById.set(n.id, num(n.present) ? n : { ...n, present: false });
+
+  // Collect the schema's node ids to require one-to-one correspondence.
+  const schemaIds = new Set();
+  const collect = (node) => {
+    if (!node) return;
+    schemaIds.add(node.id);
+    if (node.container && Array.isArray(node.container.children))
+      for (const c of node.container.children) collect(c);
+  };
+  for (const region of schema.regions) collect(region.root);
+  if (schemaIds.size !== (state.nodes || []).length) return null;
+  for (const id of schemaIds) if (!stateById.has(id)) return null;
+
+  const regions = [];
+  for (const region of schema.regions) {
+    const items = [];
+    const walk = (node) => {
+      const st = stateById.get(node.id);
+      if (!st || !st.present) return;  // hidden subtree is not drawn
+      if (node.container && typeof node.container === 'object') {
+        for (const child of (node.container.children || [])) walk(child);
+        return;
+      }
+      if (!node.leaf) return;
+      const kind = num(node.leaf.kind);
+      const leaf = st.leaf && typeof st.leaf === 'object' ? st.leaf : null;
+      if (kind === WIDGET.SPACER) { items.push({ id: node.id, kind, spacer: true }); return; }
+      if (kind === WIDGET.CHECKBOX) {
+        if (!leaf) return;  // a checkbox always resolves; defensively skip if absent
+        items.push({ id: node.id, kind, text: leaf.value || '', checked: !!num(leaf.checked),
+                     command: leaf.command != null ? leaf.command : null, role: node.leaf.role || null });
+        return;
+      }
+      // Label/Field: draw only when a leaf state exists (the resolved drop is nullopt).
+      if (!leaf) return;
+      items.push({ id: node.id, kind, text: leaf.value || '',
+                   command: leaf.command != null ? leaf.command : null, role: node.leaf.role || null });
+    };
+    walk(region.root);
+    regions.push({ role: num(region.role), items });
+  }
+  return { regions };
+}
+

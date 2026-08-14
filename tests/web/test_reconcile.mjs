@@ -199,4 +199,75 @@ check('palette-prompt detection reads the wire snake_case field names', () => {
   assert.equal(isPalettePromptOpen({ focus: 2, prompt_status: { active_kind: 1 } }), false);
 });
 
+// --- UI-VM: profile rejection + schema/state interpretation ---
+import {
+  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, REGION,
+} from '../../apps/web/reconcile.mjs';
+
+// A leaf node on the wire: { id, size, leaf: { kind, ... , role? } }.
+const leafNode = (id, kind, role) => ({ id, size: {}, leaf: role ? { kind, role } : { kind } });
+const rowRegion = (role, children) => ({
+  role,
+  root: { id: 'r' + role, size: {}, container: { children } },
+});
+// The dynamic-state record for a node.
+const st = (id, leaf) => ({ id, present: 1, leaf: leaf || null });
+
+check('firstUnsupportedPrimitive accepts a supported header/footer schema', () => {
+  const schema = { generation: 1, regions: [
+    rowRegion(REGION.TOP, [leafNode('a', WIDGET.FIELD), leafNode('b', WIDGET.SPACER)]),
+    rowRegion(REGION.BOTTOM, [leafNode('c', WIDGET.CHECKBOX)]),
+  ] };
+  assert.equal(firstUnsupportedPrimitive(schema), null);
+});
+
+check('firstUnsupportedPrimitive rejects an unsupported widget kind (TextInput)', () => {
+  const schema = { generation: 1, regions: [
+    rowRegion(REGION.TOP, [leafNode('a', WIDGET.TEXT_INPUT)]),
+  ] };
+  assert.deepEqual(firstUnsupportedPrimitive(schema), { kind: 'widget', ordinal: WIDGET.TEXT_INPUT });
+});
+
+check('firstUnsupportedPrimitive rejects an unsupported region role (Overlay)', () => {
+  const schema = { generation: 1, regions: [ rowRegion(REGION.OVERLAY, []) ] };
+  assert.deepEqual(firstUnsupportedPrimitive(schema), { kind: 'region', ordinal: REGION.OVERLAY });
+});
+
+check('interpretChrome applies the per-kind render gate', () => {
+  const schema = { generation: 4, regions: [
+    rowRegion(REGION.TOP, [
+      leafNode('lit', WIDGET.FIELD),      // present with leaf -> drawn
+      leafNode('empty', WIDGET.LABEL),    // present, nullopt leaf -> NOT drawn (resolved drop)
+      leafNode('sp', WIDGET.SPACER),      // present spacer -> drawn as a gap despite no leaf
+      leafNode('box', WIDGET.CHECKBOX),   // checkbox -> drawn
+    ]),
+  ] };
+  const state = { generation: 4, nodes: [
+    st('r0'), // the container node
+    st('lit', { value: 'hello', label: 'hello', command: 'open.thing' }),
+    st('empty', null),
+    st('sp', null),
+    st('box', { value: 'case', label: 'case', checked: 1 }),
+  ] };
+  const out = interpretChrome(schema, state);
+  assert.ok(out);
+  assert.equal(out.regions.length, 1);
+  const items = out.regions[0].items;
+  // lit (drawn), sp (gap), box (checkbox) -- empty Label is dropped.
+  assert.deepEqual(items.map((i) => i.id), ['lit', 'sp', 'box']);
+  assert.equal(items[0].text, 'hello');
+  assert.equal(items[0].command, 'open.thing');
+  assert.equal(items[1].spacer, true);
+  assert.equal(items[2].checked, true);
+  assert.equal(items[2].text, 'case');
+});
+
+check('interpretChrome returns null on a generation or node-id mismatch', () => {
+  const schema = { generation: 4, regions: [ rowRegion(REGION.TOP, [leafNode('a', WIDGET.FIELD)]) ] };
+  // Generation mismatch.
+  assert.equal(interpretChrome(schema, { generation: 3, nodes: [st('r0'), st('a', { value: 'x', label: 'x' })] }), null);
+  // Node-id set mismatch (missing 'a').
+  assert.equal(interpretChrome(schema, { generation: 4, nodes: [st('r0')] }), null);
+});
+
 console.log('reconcile oracle: ' + checks + ' checks passed');
