@@ -436,6 +436,20 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                         sendUpdate(handle);
                         return;
                     }
+                    // A chrome widget was clicked: dispatch its library-resolved
+                    // command. CMD:<command_id>. The id comes from the published
+                    // dynamic node state; an unknown id is rejected by dispatch with
+                    // no side effect, so no separate validation is needed.
+                    if (payload.rfind("CMD:", 0) == 0) {
+                        if (!attached->load()) return;
+                        std::string const command{payload.substr(4)};
+                        if (!command.empty()) {
+                            (void)runtime.dispatch(
+                                client, {command, runtime.revision(), {}});
+                        }
+                        sendUpdate(handle);
+                        return;
+                    }
                     // The browser's palette query/selection changed: rank and
                     // report. PICK:<requestId>:<selected>:<query> (query last so
                     // it may contain ':').

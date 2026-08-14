@@ -242,6 +242,8 @@ TEST(theWebRendererRoleOrdinalsMatchTheSemanticRoleEnum) {
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Canvas), 1);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Caret), 2);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Selection), 3);
+    // The web client also maps StatusWarning (the chrome error line's color).
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::StatusWarning), 13);
 }
 
 } // namespace

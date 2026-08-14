@@ -7,6 +7,17 @@
   #tabs { display:flex; gap:1px; padding:2px 4px; border-bottom:1px solid; }
   #tabs .tab { padding:2px 8px; opacity:.55; }
   #tabs .tab.active { opacity:1; font-weight:bold; }
+  /* Library-composed header/footer chrome, interpreted from the published UI-VM
+     schema + dynamic node state. Geometry is the browser's; only structure,
+     values, roles, and triggers come from the library. */
+  .chrome { display:flex; align-items:center; gap:0; padding:2px 8px; min-height:1.4em; }
+  #chrome-top { border-bottom:1px solid; }
+  #chrome-bottom { border-top:1px solid; }
+  .chrome .w { white-space:pre; }
+  .chrome .w.clickable { cursor:pointer; text-decoration:underline dotted; }
+  .chrome .w.spacer { flex:1 1 auto; }
+  .chrome .w + .w { margin-left:1ch; }
+  #chrome-error { padding:2px 8px; color:var(--ssg-status-warning); font-weight:bold; }
   #doc { margin:0; padding:8px; white-space:pre-wrap; outline:none; min-height:80vh; }
   #doc .sel { background:var(--ssg-selection); }
   #doc .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
@@ -19,7 +30,10 @@
   #palette .row .detail { opacity:.55; }
 </style>
 <div id="status">connecting...</div>
+<div id="chrome-error"></div>
+<div id="chrome-top" class="chrome"></div>
 <div id="tabs"></div>
 <pre id="doc" tabindex="0"></pre>
+<div id="chrome-bottom" class="chrome"></div>
 <div id="palette"></div>
 <script type="module" src="/client.mjs"></script>

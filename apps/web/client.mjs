@@ -10,19 +10,23 @@ import {
   decodeValue, findSections, num, cssColor, byteToIndex, utf8Bytes,
   applyDocumentDelta, dropSettled, project, parseEnvelope, paletteReportIsFresh,
   paletteSelectedWindowRow, isPalettePromptOpen,
+  interpretChrome, firstUnsupportedPrimitive, REGION,
 } from '/reconcile.mjs';
 
 const statusEl = document.getElementById('status');
 const tabsEl = document.getElementById('tabs');
 const docEl = document.getElementById('doc');
 const paletteEl = document.getElementById('palette');
+const chromeTopEl = document.getElementById('chrome-top');
+const chromeBottomEl = document.getElementById('chrome-bottom');
+const chromeErrorEl = document.getElementById('chrome-error');
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString() : x);
 
 // Role ordinals the renderer maps to CSS custom properties; pinned by
 // test_theme's role-ordinal contract so a reorder cannot silently mis-color.
-const ROLE = { text: 0, canvas: 1, caret: 2, selection: 3 };
+const ROLE = { text: 0, canvas: 1, caret: 2, selection: 3, statusWarning: 13 };
 const FOCUS_EDITOR = 0;   // FocusTarget::Editor ordinal.
 
 // Persistent client model: the authoritative sections plus the still-unsettled
@@ -60,6 +64,7 @@ function applyTheme(theme) {
   set('--ssg-canvas', ROLE.canvas);
   set('--ssg-caret', ROLE.caret);
   set('--ssg-selection', ROLE.selection);
+  set('--ssg-status-warning', ROLE.statusWarning);
   return (theme && Array.isArray(theme.syntax_colors)) ? theme.syntax_colors : [];
 }
 
@@ -72,6 +77,55 @@ function renderTabs(tabs) {
     el.className = 'tab' + (idKey(t.id) === activeId ? ' active' : '');
     el.textContent = (t.dirty ? '\u25CF ' : '') + (t.label || '');
     tabsEl.appendChild(el);
+  }
+}
+
+// The SemanticRole ordinal a widget wants its text drawn in, mapped to a CSS var.
+// Only the roles the theme exposes to the web are mapped; an unmapped role inherits.
+function chromeRoleColor(role) {
+  return role != null ? 'var(--ssg-text)' : '';
+}
+
+// Interpret the published UI-VM schema + dynamic node state into the Top/Bottom
+// chrome. The browser owns geometry (flex row); structure, values, roles, and the
+// click command are the library's. A schema using a primitive this build does not
+// implement is a loud, visible refusal -- never a silently dropped element.
+function renderChrome(sections) {
+  const schema = sections.ui;
+  const stateSection = sections.ui_state;
+  chromeTopEl.textContent = '';
+  chromeBottomEl.textContent = '';
+  chromeErrorEl.textContent = '';
+  if (!schema || !Array.isArray(schema.regions) || schema.regions.length === 0) return;
+
+  const unsupported = firstUnsupportedPrimitive(schema);
+  if (unsupported) {
+    chromeErrorEl.textContent =
+      'unsupported UI ' + unsupported.kind + ' ' + unsupported.ordinal +
+      ' -- this client build cannot render the composed chrome';
+    return;
+  }
+  const interpreted = interpretChrome(schema, stateSection);
+  if (!interpreted) return;  // schema/state from different frames; wait
+
+  for (const region of interpreted.regions) {
+    const host = region.role === REGION.TOP ? chromeTopEl
+               : region.role === REGION.BOTTOM ? chromeBottomEl : null;
+    if (!host) continue;
+    for (const item of region.items) {
+      const el = document.createElement('span');
+      if (item.spacer) { el.className = 'w spacer'; host.appendChild(el); continue; }
+      el.className = 'w' + (item.command ? ' clickable' : '');
+      el.textContent = (item.checked != null ? (item.checked ? '\u2611 ' : '\u2610 ') : '') +
+                       (item.text || '');
+      const color = chromeRoleColor(item.role);
+      if (color) el.style.color = color;
+      if (item.command) {
+        el.title = item.command;
+        el.addEventListener('click', () => ws.send('CMD:' + item.command));
+      }
+      host.appendChild(el);
+    }
   }
 }
 
@@ -140,6 +194,7 @@ function render() {
   if (!s) return;
   const syntaxColors = applyTheme(s.theme);
   renderTabs(s.tabs);
+  renderChrome(s);
 
   const authText = s.document.text;
   const authCaret = num(s.document.caret);
