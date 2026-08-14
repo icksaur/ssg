@@ -10,7 +10,7 @@ import {
   decodeValue, findSections, num, cssColor, byteToIndex, utf8Bytes,
   applyDocumentDelta, dropSettled, project, parseEnvelope, paletteReportIsFresh,
   paletteSelectedWindowRow, isPalettePromptOpen,
-  interpretChrome, firstUnsupportedPrimitive, REGION, SIZE,
+  interpretChrome, firstUnsupportedPrimitive, REGION, SIZE, AXIS,
 } from '/reconcile.mjs';
 
 const statusEl = document.getElementById('status');
@@ -90,8 +90,10 @@ function roleColor(ordinal, theme) {
 
 // Build the DOM for one interpreted render node, mirroring the generic tree: a
 // container becomes a flex div on its axis (a Flex node grows, a gap spaces its
-// children); a leaf becomes a span. Returns null for an omitted node.
-function renderChromeNode(node, theme) {
+// children); a leaf becomes a span. `parentAxis` is the axis the node's own Size
+// measures along (a child sizes along its parent's main axis). Returns null for an
+// omitted node.
+function renderChromeNode(node, theme, parentAxis = AXIS.ROW) {
   if (!node) return null;
   if (node.kind === 'container') {
     const div = document.createElement('div');
@@ -99,11 +101,12 @@ function renderChromeNode(node, theme) {
     div.style.display = 'flex';
     div.style.flexDirection = node.axis === 1 ? 'column' : 'row';  // Axis: Row=0, Column=1
     div.style.alignItems = 'center';
-    applySize(div, node.size);
+    div.style.boxSizing = 'border-box';  // inset stays inside the published extent
+    applySize(div, node.size, parentAxis);
     applyInset(div, node.inset);
     if (node.gap) div.style.gap = node.gap + 'ch';
     for (const child of node.children) {
-      const el = renderChromeNode(child, theme);
+      const el = renderChromeNode(child, theme, node.axis);
       if (el) div.appendChild(el);
     }
     return div;
@@ -113,8 +116,10 @@ function renderChromeNode(node, theme) {
     const gap = document.createElement('span');
     gap.className = 'w spacer';
     gap.style.display = 'inline-block';
-    if (node.width != null) { gap.style.width = node.width + 'ch'; gap.style.flex = '0 0 auto'; }
-    else applySize(gap, node.size);
+    if (node.width != null) {
+      gap.style[parentAxis === AXIS.COLUMN ? 'height' : 'width'] = node.width + 'ch';
+      gap.style.flex = '0 0 auto';
+    } else applySize(gap, node.size, parentAxis);
     return gap;
   }
   const el = document.createElement('span');
@@ -122,7 +127,7 @@ function renderChromeNode(node, theme) {
   el.textContent = (node.checked != null ? (node.checked ? '\u2611 ' : '\u2610 ') : '') + (node.text || '');
   const color = roleColor(node.role, theme);
   if (color) el.style.color = color;
-  applySize(el, node.size);
+  applySize(el, node.size, parentAxis);
   if (node.command) {
     el.title = node.command;
     el.addEventListener('click', () => ws.send('CMD:' + node.command));
@@ -130,15 +135,17 @@ function renderChromeNode(node, theme) {
   return el;
 }
 
-// Apply a published Size to a flex child: Exact => a fixed extent that neither grows
-// nor shrinks, Flex => grow to fill (extent is the grow weight, default 1), Auto =>
-// content-sized. SIZE ordinals mirror the C++ SizeKind enum.
-function applySize(el, size) {
+// Apply a published Size to a flex child ALONG the parent's main axis: Exact => a
+// fixed extent that neither grows nor shrinks (including a literal zero extent),
+// Flex => grow to fill (extent is the grow weight, default 1), Auto => content-sized.
+// A Row parent measures width; a Column parent measures height. SIZE ordinals mirror
+// the C++ SizeKind enum.
+function applySize(el, size, parentAxis) {
   if (!size) return;
+  const dim = parentAxis === AXIS.COLUMN ? 'height' : 'width';
   if (size.kind === SIZE.EXACT) {
-    const ext = size.extent || 0;
     el.style.flex = '0 0 auto';
-    if (ext > 0) el.style.width = ext + 'ch';
+    el.style[dim] = (size.extent || 0) + 'ch';  // Exact(0) is a real zero extent
   } else if (size.kind === SIZE.FLEX) {
     el.style.flex = (size.extent > 0 ? size.extent : 1) + ' 1 0';
   } else {
