@@ -242,7 +242,11 @@ TEST(theWebRendererRoleOrdinalsMatchTheSemanticRoleEnum) {
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Canvas), 1);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Caret), 2);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Selection), 3);
-    // The web client also maps StatusWarning (the chrome error line's color).
+    // The web chrome interpreter also maps these roles (ROLE_ORDINAL in
+    // reconcile.mjs) to color a composed widget through the theme.
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Header), 10);
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Footer), 11);
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::StatusInfo), 12);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::StatusWarning), 13);
 }
 

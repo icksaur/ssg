@@ -80,16 +80,59 @@ function renderTabs(tabs) {
   }
 }
 
-// The SemanticRole ordinal a widget wants its text drawn in, mapped to a CSS var.
-// Only the roles the theme exposes to the web are mapped; an unmapped role inherits.
-function chromeRoleColor(role) {
-  return role != null ? 'var(--ssg-text)' : '';
+// The color for a SemanticRole ordinal, from the live theme's role_colors table, or
+// '' to inherit. Every chrome color comes through the theme this way; the client never
+// invents one.
+function roleColor(ordinal, theme) {
+  const rc = (theme && Array.isArray(theme.role_colors)) ? theme.role_colors : [];
+  return ordinal != null && ordinal >= 0 && ordinal < rc.length ? cssColor(rc[ordinal]) : '';
+}
+
+// Build the DOM for one interpreted render node, mirroring the generic tree: a
+// container becomes a flex div on its axis (a Flex node grows, a gap spaces its
+// children); a leaf becomes a span. Returns null for an omitted node.
+function renderChromeNode(node, theme) {
+  if (!node) return null;
+  if (node.kind === 'container') {
+    const div = document.createElement('div');
+    div.className = 'group';
+    div.style.display = 'flex';
+    div.style.flexDirection = node.axis === 1 ? 'column' : 'row';  // Axis: Row=0, Column=1
+    div.style.alignItems = 'center';
+    if (node.flex) div.style.flex = '1 1 auto';
+    if (node.gap) div.style.gap = node.gap + 'ch';
+    for (const child of node.children) {
+      const el = renderChromeNode(child, theme);
+      if (el) div.appendChild(el);
+    }
+    return div;
+  }
+  // leaf
+  if (node.spacer) {
+    const gap = document.createElement('span');
+    gap.className = 'w spacer';
+    if (node.width != null) { gap.style.display = 'inline-block'; gap.style.width = node.width + 'ch'; gap.style.flex = '0 0 auto'; }
+    else if (node.flex) gap.style.flex = '1 1 auto';
+    return gap;
+  }
+  const el = document.createElement('span');
+  el.className = 'w' + (node.command ? ' clickable' : '');
+  el.textContent = (node.checked != null ? (node.checked ? '\u2611 ' : '\u2610 ') : '') + (node.text || '');
+  const color = roleColor(node.role, theme);
+  if (color) el.style.color = color;
+  if (node.flex) el.style.flex = '1 1 auto';
+  if (node.command) {
+    el.title = node.command;
+    el.addEventListener('click', () => ws.send('CMD:' + node.command));
+  }
+  return el;
 }
 
 // Interpret the published UI-VM schema + dynamic node state into the Top/Bottom
-// chrome. The browser owns geometry (flex row); structure, values, roles, and the
-// click command are the library's. A schema using a primitive this build does not
-// implement is a loud, visible refusal -- never a silently dropped element.
+// chrome, mirroring the generic tree (structure, values, roles, triggers are the
+// library's; geometry is the browser's flex layout). A schema using a primitive this
+// build does not implement is a loud, visible refusal -- never a silently dropped
+// element.
 function renderChrome(sections) {
   const schema = sections.ui;
   const stateSection = sections.ui_state;
@@ -112,20 +155,8 @@ function renderChrome(sections) {
     const host = region.role === REGION.TOP ? chromeTopEl
                : region.role === REGION.BOTTOM ? chromeBottomEl : null;
     if (!host) continue;
-    for (const item of region.items) {
-      const el = document.createElement('span');
-      if (item.spacer) { el.className = 'w spacer'; host.appendChild(el); continue; }
-      el.className = 'w' + (item.command ? ' clickable' : '');
-      el.textContent = (item.checked != null ? (item.checked ? '\u2611 ' : '\u2610 ') : '') +
-                       (item.text || '');
-      const color = chromeRoleColor(item.role);
-      if (color) el.style.color = color;
-      if (item.command) {
-        el.title = item.command;
-        el.addEventListener('click', () => ws.send('CMD:' + item.command));
-      }
-      host.appendChild(el);
-    }
+    const el = renderChromeNode(region.node, sections.theme);
+    if (el) host.appendChild(el);
   }
 }
 
