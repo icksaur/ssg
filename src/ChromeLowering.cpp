@@ -121,19 +121,27 @@ Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
 // bool); a spacer/container resolve to none. The command precedence matches the
 // grid path (descriptor overrides inherited).
 std::optional<UiLeafState> semanticLeafState(
-    const WidgetDescriptor& w, const ChromeProviderResolver& resolveProvider) {
+    const WidgetDescriptor& w, const ChromeProviderResolver& resolveProvider,
+    SemanticRole defaultRole) {
     const Sources s = resolveSources(w, resolveProvider);
     const std::string label = s.fromProvider ? s.providerLabel : s.value;
     const std::optional<std::string> command =
         w.command ? w.command : s.inheritedCommand;
+    // The effective role the library owns: the widget's own valid role name, else
+    // the region default. Resolved here so a client colors by ordinal, never by
+    // re-deriving role names.
+    SemanticRole role = defaultRole;
+    if (w.role) {
+        if (const auto parsed = semanticRoleFromName(*w.role)) role = *parsed;
+    }
     switch (w.kind) {
     case WidgetKind::Label:
     case WidgetKind::Field:
         if (s.value.empty() || label.empty()) return std::nullopt;
-        return UiLeafState{s.value, label, command, std::nullopt};
+        return UiLeafState{s.value, label, command, std::nullopt, role};
     case WidgetKind::Checkbox:
         return UiLeafState{s.value, label, command,
-                           resolveChecked(w, resolveProvider)};
+                           resolveChecked(w, resolveProvider), role};
     default:
         return std::nullopt;  // Spacer/Container carry no leaf state
     }
@@ -361,21 +369,35 @@ UiChromeLowerResult lowerUiChromeRegion(
 
 namespace {
 
+// The default SemanticRole a region's widgets take when a widget declares none --
+// the same defaults the grid lowering passes (Header for the top edge, Footer for
+// the bottom). Other roles have no chrome default; their widgets fall back to Text.
+SemanticRole regionDefaultRole(RegionRole role) {
+    switch (role) {
+    case RegionRole::Top: return SemanticRole::Header;
+    case RegionRole::Bottom: return SemanticRole::Footer;
+    default: return SemanticRole::Text;
+    }
+}
+
 // Pre-order walk: record each node's presence (always present in phase 6) and, for
-// a leaf, its semantic state.
+// a leaf, its semantic state (including its effective role, resolved against the
+// region default).
 void collectNodeStates(const UiNode& node,
                        const ChromeProviderResolver& resolveProvider,
+                       SemanticRole defaultRole,
                        std::vector<UiNodeState>& out) {
     UiNodeState state;
     state.id = node.id;
     state.present = true;
     if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
-        state.leaf = semanticLeafState(leaf->widget, resolveProvider);
+        state.leaf =
+            semanticLeafState(leaf->widget, resolveProvider, defaultRole);
     }
     out.push_back(std::move(state));
     if (const auto* container = std::get_if<UiContainer>(&node.content)) {
         for (const auto& child : container->children) {
-            collectNodeStates(child, resolveProvider, out);
+            collectNodeStates(child, resolveProvider, defaultRole, out);
         }
     }
 }
@@ -387,7 +409,8 @@ UiStateSection resolveUiState(const ValidatedSchema& schema,
     UiStateSection section;
     section.generation = schema.generation();
     for (const auto& region : schema.schema().regions) {
-        collectNodeStates(region.root, resolveProvider, section.nodes);
+        collectNodeStates(region.root, resolveProvider,
+                          regionDefaultRole(region.role), section.nodes);
     }
     return section;
 }

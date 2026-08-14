@@ -201,7 +201,7 @@ check('palette-prompt detection reads the wire snake_case field names', () => {
 
 // --- UI-VM: profile rejection + schema/state interpretation ---
 import {
-  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, REGION,
+  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, REGION, SIZE,
 } from '../../apps/web/reconcile.mjs';
 
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
@@ -274,31 +274,36 @@ check('interpretChrome applies the per-kind render gate', () => {
   assert.equal(items[2].text, 'case');
 });
 
-check('interpretChrome preserves the left/middle/right grouping and flex packing', () => {
+check('interpretChrome preserves the left/middle/right grouping and its sizing', () => {
   // Row[ left(Auto container), middle(Flex container w/ center), right(Auto container) ].
   const grp = (id, sizeKind, children) => ({ id, size: { kind: sizeKind }, container: { axis: 0, gap: 0, children } });
   const schema = { generation: 2, regions: [ {
     role: REGION.BOTTOM,
-    root: grp('root', 1 /*Flex*/, [
-      grp('left', 2 /*Auto*/, [leafNode('l0', WIDGET.FIELD)]),
-      grp('mid', 1 /*Flex*/, [{ id: 'c0', size: { kind: 1 }, leaf: { kind: WIDGET.LABEL } }]),
-      grp('right', 2 /*Auto*/, [leafNode('r0', WIDGET.FIELD, { command: 'do.it' })]),
+    root: grp('root', SIZE.FLEX, [
+      grp('left', SIZE.AUTO, [leafNode('l0', WIDGET.FIELD)]),
+      grp('mid', SIZE.FLEX, [{ id: 'c0', size: { kind: SIZE.EXACT, extent: 12 }, leaf: { kind: WIDGET.LABEL } }]),
+      grp('right', SIZE.AUTO, [leafNode('r0', WIDGET.FIELD, { command: 'do.it' })]),
     ]),
   } ] };
   const state = { generation: 2, nodes: [
-    st('root'), st('left'), st('l0', { value: 'L', label: 'L' }),
-    st('mid'), st('c0', { value: 'C', label: 'C' }),
-    st('right'), st('r0', { value: 'R', label: 'R', command: 'do.it' }),
+    st('root'), st('left'), st('l0', { value: 'L', label: 'L', role: 11 }),
+    st('mid'), st('c0', { value: 'C', label: 'C', role: 11 }),
+    st('right'), st('r0', { value: 'R', label: 'R', command: 'do.it', role: 11 }),
   ] };
   const out = interpretChrome(schema, state);
   assert.ok(out);
   const root = out.regions[0].node;
   assert.equal(root.kind, 'container');
   assert.equal(root.children.length, 3);
-  assert.equal(root.children[1].flex, true);   // the middle group is Flex-sized
-  assert.equal(root.children[0].flex, false);   // the left group is Auto
-  // The middle's center leaf is present and flex.
-  assert.equal(root.children[1].children[0].text, 'C');
+  assert.equal(root.children[1].size.kind, SIZE.FLEX);   // the middle group is Flex-sized
+  assert.equal(root.children[0].size.kind, SIZE.AUTO);   // the left group is Auto
+  // The middle's center leaf preserves its Exact extent (a fixed center width).
+  const center = root.children[1].children[0];
+  assert.equal(center.text, 'C');
+  assert.equal(center.size.kind, SIZE.EXACT);
+  assert.equal(center.size.extent, 12);
+  // The published role ordinal flows through to the leaf.
+  assert.equal(center.role, 11);
 });
 
 check('interpretChrome returns null on a generation or node-id mismatch', () => {
@@ -324,6 +329,19 @@ check('interpretChrome returns null on a state/schema SHAPE disagreement', () =>
   // Container carrying leaf state -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
     st('r0', { value: 'x', label: 'x' }), st('box', { value: '', label: '', checked: 0 }), st('sp', null),
+  ] }), null);
+  // Checkbox WITH leaf state but MISSING its `checked` -> wait.
+  assert.equal(interpretChrome(schema, { generation: 5, nodes: [
+    st('r0'), st('box', { value: 'c', label: 'c' }), st('sp', null),
+  ] }), null);
+});
+
+check('interpretChrome returns null when a Label/Field leaf state carries checked', () => {
+  const schema = { generation: 6, regions: [ rowRegion(REGION.TOP, [
+    leafNode('f', WIDGET.FIELD),
+  ]) ] };
+  assert.equal(interpretChrome(schema, { generation: 6, nodes: [
+    st('r0'), st('f', { value: 'x', label: 'x', checked: 1 }),
   ] }), null);
 });
 

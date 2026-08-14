@@ -109,8 +109,40 @@ TEST(labelFieldStateMatchesTuiNodeOrDrop) {
             ASSERT_EQ(state->leaf->label, tui->label);
             ASSERT_TRUE(state->leaf->command == tui->commandId);
             ASSERT_FALSE(state->leaf->checked.has_value());
+            // No widget here declares a role, so each takes the region default.
+            ASSERT_TRUE(state->leaf->role == SemanticRole::Footer);
         }
     }
+}
+
+// A widget's own valid role name overrides the region default; an unknown or
+// absent name falls back to the default.
+TEST(explicitRoleOverridesRegionDefault) {
+    const auto empty = [](std::string_view) -> std::optional<ResolvedProvider> {
+        return std::nullopt;
+    };
+    WidgetDescriptor roled = literalField("f.roled", "warn");
+    roled.role = "status_warning";
+    WidgetDescriptor bogus = literalField("f.bogus", "plain");
+    bogus.role = "not_a_role";
+    const auto comp = ssgtest::composeFooter({roled, bogus});
+    const UiSchema schema{Generation{1}, comp.regions};
+    const auto section =
+        resolveUiState(ValidatedSchema::validate(schema).takeSchema(), empty);
+
+    std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
+    collectLeaves(schema.regions[0].root, leaves);
+    ASSERT_EQ(leaves.size(), std::size_t{2});
+
+    const UiNodeState* roledState = stateFor(section, leaves[0].first);
+    ASSERT_TRUE(roledState != nullptr && roledState->leaf.has_value());
+    if (roledState && roledState->leaf)
+        ASSERT_TRUE(roledState->leaf->role == SemanticRole::StatusWarning);
+
+    const UiNodeState* bogusState = stateFor(section, leaves[1].first);
+    ASSERT_TRUE(bogusState != nullptr && bogusState->leaf.has_value());
+    if (bogusState && bogusState->leaf)
+        ASSERT_TRUE(bogusState->leaf->role == SemanticRole::Footer);
 }
 
 // Checkbox: never dropped, and its semantic fields match an expectation derived
@@ -198,6 +230,7 @@ TEST(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord) {
 
 int main() {
     RUN(labelFieldStateMatchesTuiNodeOrDrop);
+    RUN(explicitRoleOverridesRegionDefault);
     RUN(checkboxStateMatchesIndependentExpectation);
     RUN(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord);
     return 0;

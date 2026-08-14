@@ -27,7 +27,8 @@ UiStateSection sample() {
                     std::nullopt}});
     section.nodes.push_back(UiNodeState{
         UiNodeId{"c"}, true,
-        UiLeafState{"case", "case", std::nullopt, std::optional<bool>{true}}});
+        UiLeafState{"case", "case", std::nullopt, std::optional<bool>{true},
+                    SemanticRole::StatusWarning}});
     section.nodes.push_back(UiNodeState{UiNodeId{"sp"}, true, std::nullopt});
     return section;
 }
@@ -84,6 +85,7 @@ TEST(malformedLeafFieldTypeDecodesToNullopt) {
                                    {{"value", ProtocolValue::makeText("v")},
                                     {"label", ProtocolValue::makeText("l")},
                                     {"command", ProtocolValue::makeNull()},
+                                    {"role", ProtocolValue::makeUint(0)},
                                     {"checked", ProtocolValue::makeText("yes")}})))
                      .has_value());
     // command is a bool, not a string.
@@ -91,11 +93,27 @@ TEST(malformedLeafFieldTypeDecodesToNullopt) {
                                    {{"value", ProtocolValue::makeText("v")},
                                     {"label", ProtocolValue::makeText("l")},
                                     {"command", ProtocolValue::makeBool(true)},
+                                    {"role", ProtocolValue::makeUint(0)},
                                     {"checked", ProtocolValue::makeNull()}})))
                      .has_value());
     // value is missing.
     ASSERT_FALSE(decodeUiState(sectionWithLeaf(ProtocolValue::makeObject(
                                    {{"label", ProtocolValue::makeText("l")}})))
+                     .has_value());
+    // role is missing.
+    ASSERT_FALSE(decodeUiState(sectionWithLeaf(ProtocolValue::makeObject(
+                                   {{"value", ProtocolValue::makeText("v")},
+                                    {"label", ProtocolValue::makeText("l")},
+                                    {"command", ProtocolValue::makeNull()},
+                                    {"checked", ProtocolValue::makeNull()}})))
+                     .has_value());
+    // role names no real SemanticRole ordinal.
+    ASSERT_FALSE(decodeUiState(sectionWithLeaf(ProtocolValue::makeObject(
+                                   {{"value", ProtocolValue::makeText("v")},
+                                    {"label", ProtocolValue::makeText("l")},
+                                    {"command", ProtocolValue::makeNull()},
+                                    {"role", ProtocolValue::makeUint(999)},
+                                    {"checked", ProtocolValue::makeNull()}})))
                      .has_value());
 }
 

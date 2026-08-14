@@ -26,7 +26,9 @@ ProtocolValue encodeLeaf(const UiLeafState& leaf) {
          {"command", leaf.command ? ProtocolValue::makeText(*leaf.command)
                                   : ProtocolValue::makeNull()},
          {"checked", leaf.checked ? ProtocolValue::makeBool(*leaf.checked)
-                                  : ProtocolValue::makeNull()}});
+                                  : ProtocolValue::makeNull()},
+         {"role", ProtocolValue::makeUint(
+                      static_cast<std::uint64_t>(leaf.role))}});
 }
 
 ProtocolValue encodeNode(const UiNodeState& node) {
@@ -60,6 +62,12 @@ std::optional<UiLeafState> decodeLeaf(const ProtocolValue& value) {
         if (!asBool) return std::nullopt;
         leaf.checked = *asBool;
     }
+    // The effective role is required and must name a real SemanticRole ordinal;
+    // a missing or out-of-range role is malformed.
+    const ProtocolValue* role = value.field("role");
+    if (!role || !role->asUint()) return std::nullopt;
+    if (*role->asUint() >= kSemanticRoleCount) return std::nullopt;
+    leaf.role = static_cast<SemanticRole>(*role->asUint());
     return leaf;
 }
 

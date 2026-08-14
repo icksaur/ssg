@@ -15,6 +15,7 @@
 // state; a spacer and a container carry none. The content is SEMANTIC -- a
 // checkbox's `checked` bool and bare caption, never the TUI's composed glyph.
 
+#include <ssg/Theme.h>   // SemanticRole
 #include <ssg/UiTree.h>  // UiNodeId, Generation
 
 #include <optional>
@@ -25,12 +26,16 @@ namespace ssg {
 
 // The resolved semantic state of a leaf a client renders. `value` is the caption
 // or field text; `label` the accessible label; `command` the click target;
-// `checked` is present only for a checkbox.
+// `checked` is present only for a checkbox; `role` is the effective SemanticRole
+// the library resolved (the widget's own role, or the region's default), so a
+// client colors the widget by a semantic role ordinal and never re-derives role
+// names.
 struct UiLeafState {
     std::string value;
     std::string label;
     std::optional<std::string> command;
     std::optional<bool> checked;
+    SemanticRole role = SemanticRole::Text;
 
     friend bool operator==(const UiLeafState&, const UiLeafState&) = default;
 };

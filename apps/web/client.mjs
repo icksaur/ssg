@@ -10,7 +10,7 @@ import {
   decodeValue, findSections, num, cssColor, byteToIndex, utf8Bytes,
   applyDocumentDelta, dropSettled, project, parseEnvelope, paletteReportIsFresh,
   paletteSelectedWindowRow, isPalettePromptOpen,
-  interpretChrome, firstUnsupportedPrimitive, REGION,
+  interpretChrome, firstUnsupportedPrimitive, REGION, SIZE,
 } from '/reconcile.mjs';
 
 const statusEl = document.getElementById('status');
@@ -99,7 +99,8 @@ function renderChromeNode(node, theme) {
     div.style.display = 'flex';
     div.style.flexDirection = node.axis === 1 ? 'column' : 'row';  // Axis: Row=0, Column=1
     div.style.alignItems = 'center';
-    if (node.flex) div.style.flex = '1 1 auto';
+    applySize(div, node.size);
+    applyInset(div, node.inset);
     if (node.gap) div.style.gap = node.gap + 'ch';
     for (const child of node.children) {
       const el = renderChromeNode(child, theme);
@@ -111,8 +112,9 @@ function renderChromeNode(node, theme) {
   if (node.spacer) {
     const gap = document.createElement('span');
     gap.className = 'w spacer';
-    if (node.width != null) { gap.style.display = 'inline-block'; gap.style.width = node.width + 'ch'; gap.style.flex = '0 0 auto'; }
-    else if (node.flex) gap.style.flex = '1 1 auto';
+    gap.style.display = 'inline-block';
+    if (node.width != null) { gap.style.width = node.width + 'ch'; gap.style.flex = '0 0 auto'; }
+    else applySize(gap, node.size);
     return gap;
   }
   const el = document.createElement('span');
@@ -120,12 +122,36 @@ function renderChromeNode(node, theme) {
   el.textContent = (node.checked != null ? (node.checked ? '\u2611 ' : '\u2610 ') : '') + (node.text || '');
   const color = roleColor(node.role, theme);
   if (color) el.style.color = color;
-  if (node.flex) el.style.flex = '1 1 auto';
+  applySize(el, node.size);
   if (node.command) {
     el.title = node.command;
     el.addEventListener('click', () => ws.send('CMD:' + node.command));
   }
   return el;
+}
+
+// Apply a published Size to a flex child: Exact => a fixed extent that neither grows
+// nor shrinks, Flex => grow to fill (extent is the grow weight, default 1), Auto =>
+// content-sized. SIZE ordinals mirror the C++ SizeKind enum.
+function applySize(el, size) {
+  if (!size) return;
+  if (size.kind === SIZE.EXACT) {
+    const ext = size.extent || 0;
+    el.style.flex = '0 0 auto';
+    if (ext > 0) el.style.width = ext + 'ch';
+  } else if (size.kind === SIZE.FLEX) {
+    el.style.flex = (size.extent > 0 ? size.extent : 1) + ' 1 0';
+  } else {
+    el.style.flex = '0 0 auto';  // Auto: content extent
+  }
+}
+
+// Apply a container Inset as padding (cells => ch), so published edge insets render.
+function applyInset(el, inset) {
+  if (!inset) return;
+  el.style.padding =
+    (inset.top || 0) + 'ch ' + (inset.right || 0) + 'ch ' +
+    (inset.bottom || 0) + 'ch ' + (inset.left || 0) + 'ch';
 }
 
 // Interpret the published UI-VM schema + dynamic node state into the Top/Bottom

@@ -177,14 +177,6 @@ export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPU
 export const REGION = { TOP: 0, BOTTOM: 1, LEADING: 2, TRAILING: 3, OVERLAY: 4 };
 export const AXIS = { ROW: 0, COLUMN: 1 };
 export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
-// SemanticRole name -> ordinal for the roles chrome widgets use, matched to the C++
-// SemanticRole enum. A widget's own role overrides the region default (Header for a
-// Top region, Footer for a Bottom region); the color is looked up in theme.role_colors
-// by ordinal, so a client never invents a color.
-export const ROLE_ORDINAL = {
-  text: 0, header: 10, footer: 11, status_info: 12, status_warning: 13,
-};
-const REGION_DEFAULT_ROLE = { [REGION.TOP]: ROLE_ORDINAL.header, [REGION.BOTTOM]: ROLE_ORDINAL.footer };
 
 // The primitives THIS web build's interpreter can draw: header/footer chrome, so
 // Container/Label/Field/Checkbox/Spacer leaves in the Top/Bottom regions. TextInput
@@ -225,20 +217,23 @@ export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
 
 // Interpret the schema (structure) + dynamic state (resolved values/presence) into a
 // per-region RENDER TREE the DOM builder mirrors 1:1 -- the generic container tree is
-// preserved (axis, flex sizing, gap, and the left/middle/right grouping), so packing
-// follows the published tree rather than a flattened item list. Each node:
-//   container: { id, kind:'container', axis, gap, flex, children:[...] }
-//   leaf:      { id, kind:'leaf', widget, flex, text, checked?, command?, role, spacer? }
+// preserved (axis, gap, the left/middle/right grouping, and the FULL published sizing:
+// each node carries its Size {kind, extent} and each container its Inset), so packing
+// follows the published tree rather than a flattened, flex-only item list. Each node:
+//   container: { id, kind:'container', axis, gap, size, inset, children:[...] }
+//   leaf:      { id, kind:'leaf', widget, size, text, checked?, command?, role, spacer? }
 // A non-present node (and its subtree) is omitted; a Label/Field with no resolved leaf
 // state is the resolved drop and is omitted; a Checkbox always renders; a Spacer renders
-// a gap. `role` is the effective SemanticRole ordinal (the widget's own role or the
-// region default) the DOM builder colors from the theme.
+// a gap. `role` is the effective SemanticRole ordinal the SERVER resolved (the widget's
+// own role or the region default) and published in the dynamic state, so the client
+// colors from theme.role_colors by ordinal and never re-derives a role name.
 //
 // Returns null (do not interpret; wait for a consistent frame) when the schema and
 // state are from different frames (different generation, or a node-id set that does not
 // correspond one-to-one), when a primitive is unsupported, or when a state record's
-// SHAPE disagrees with its schema node (a container or spacer carrying leaf state, or a
-// checkbox missing it) -- a malformed frame is never partially drawn.
+// SHAPE disagrees with its schema node (a container or spacer carrying leaf state, a
+// checkbox missing leaf state or missing its `checked`, or a Label/Field leaf state that
+// carries `checked`) -- a malformed frame is never partially drawn.
 export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
   if (!schema || !Array.isArray(schema.regions) || !state) return null;
   if (firstUnsupportedPrimitive(schema, profile)) return null;
@@ -260,8 +255,18 @@ export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
   for (const id of schemaIds) if (!stateById.has(id)) return null;
 
   let shapeOk = true;
-  const isFlex = (node) => !!(node.size && num(node.size.kind) === SIZE.FLEX);
-  const build = (node, defaultRole) => {
+  // The published sizing, carried verbatim so the DOM builder honors every constraint:
+  // { kind, extent } (Exact => a fixed extent, Flex => a grow weight, Auto => content).
+  const sizeOf = (node) => {
+    const s = node.size && typeof node.size === 'object' ? node.size : {};
+    return { kind: num(s.kind), extent: s.extent != null ? num(s.extent) : 0 };
+  };
+  const insetOf = (container) => {
+    const i = container.inset && typeof container.inset === 'object' ? container.inset : {};
+    return { left: num(i.left) || 0, right: num(i.right) || 0,
+             top: num(i.top) || 0, bottom: num(i.bottom) || 0 };
+  };
+  const build = (node) => {
     const st = stateById.get(node.id);
     const hasLeafState = st.leaf != null && typeof st.leaf === 'object';
     const isContainer = node.container != null && typeof node.container === 'object';
@@ -270,32 +275,37 @@ export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
       if (hasLeafState) { shapeOk = false; return null; }
       const children = [];
       for (const c of (node.container.children || [])) {
-        const built = build(c, defaultRole);
+        const built = build(c);
         if (built) children.push(built);
       }
       if (!num(st.present)) return null;  // hidden subtree not drawn
       return { id: node.id, kind: 'container', axis: num(node.container.axis),
-               gap: num(node.container.gap) || 0, flex: isFlex(node), children };
+               gap: num(node.container.gap) || 0, size: sizeOf(node),
+               inset: insetOf(node.container), children };
     }
     if (!node.leaf || typeof node.leaf !== 'object') { shapeOk = false; return null; }
     const wk = num(node.leaf.kind);
     if (wk === WIDGET.SPACER && hasLeafState) { shapeOk = false; return null; }
-    if (wk === WIDGET.CHECKBOX && !hasLeafState) { shapeOk = false; return null; }
+    if (wk === WIDGET.CHECKBOX) {
+      // A checkbox must carry leaf state AND a resolved `checked`.
+      if (!hasLeafState || st.leaf.checked == null) { shapeOk = false; return null; }
+    } else if (wk === WIDGET.LABEL || wk === WIDGET.FIELD) {
+      // A Label/Field must NOT carry `checked` -- that field is a checkbox's alone.
+      if (hasLeafState && st.leaf.checked != null) { shapeOk = false; return null; }
+    }
     if (!num(st.present)) return null;  // hidden leaf not drawn
-    const role = node.leaf.role && ROLE_ORDINAL[node.leaf.role] != null
-      ? ROLE_ORDINAL[node.leaf.role] : defaultRole;
     if (wk === WIDGET.SPACER) {
       const w = node.leaf.width != null ? num(node.leaf.width) : null;
-      return { id: node.id, kind: 'leaf', widget: wk, spacer: true, width: w, flex: isFlex(node) };
+      return { id: node.id, kind: 'leaf', widget: wk, spacer: true, width: w, size: sizeOf(node) };
     }
     if (wk === WIDGET.CHECKBOX) {
-      return { id: node.id, kind: 'leaf', widget: wk, flex: isFlex(node), role,
+      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node), role: num(st.leaf.role),
                text: st.leaf.value || '', checked: !!num(st.leaf.checked),
                command: st.leaf.command != null ? st.leaf.command : null };
     }
     // Label/Field: no leaf state is the resolved drop (not drawn, not an error).
     if (!hasLeafState) return null;
-    return { id: node.id, kind: 'leaf', widget: wk, flex: isFlex(node), role,
+    return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node), role: num(st.leaf.role),
              text: st.leaf.value || '',
              command: st.leaf.command != null ? st.leaf.command : null };
   };
@@ -303,7 +313,7 @@ export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
   const regions = [];
   for (const region of schema.regions) {
     const role = num(region.role);
-    const node = build(region.root, REGION_DEFAULT_ROLE[role] != null ? REGION_DEFAULT_ROLE[role] : ROLE_ORDINAL.text);
+    const node = build(region.root);
     regions.push({ role, node });
   }
   if (!shapeOk) return null;
