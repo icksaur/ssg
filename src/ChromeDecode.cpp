@@ -1,5 +1,7 @@
 #include <ssg/ChromeDecode.h>
 
+#include <ssg/ChromeRegionShape.h>
+
 
 #include <array>
 #include <limits>
@@ -64,57 +66,12 @@ struct DecodedRow {
     int separator = 1;
 };
 
-UiNode leafFor(const WidgetDescriptor& widget, std::string id, Size size) {
-    return UiNode{UiNodeId{std::move(id)}, size, UiLeaf{widget}};
-}
-
-// A group container holding the given widgets as leaves. Its Size is Auto
-// (content-sized: it never grows to fill), so the left group renders flush at the
-// start and the right group flush at the end, with the flex middle between them
-// absorbing the slack. `gap` is the separator between items.
-UiNode groupFor(std::string id, const std::vector<WidgetDescriptor>& widgets,
-                int gap) {
-    UiContainer container;
-    container.axis = Axis::Row;
-    container.gap = Gap::of(gap);
-    for (std::size_t i = 0; i < widgets.size(); ++i) {
-        container.children.push_back(
-            leafFor(widgets[i], id + "." + std::to_string(i), Size::autoSize()));
-    }
-    return UiNode{UiNodeId{std::move(id)}, Size::autoSize(), std::move(container)};
-}
-
 // Assemble a decoded row into a chrome subtree rooted at `base` (a well-known node
-// id such as "header"/"footer"):
-// Row = [ left(Auto), middle(Flex), right(Auto) ]. The Auto end groups size to
-// content and the Flex middle absorbs the slack, so the packing (left flush,
-// right flush) is encoded in the SIZING, not positional convention. The center
-// widget, if any, sits at the start of the flex middle; its own Size carries the
-// width policy (Flex fills; Exact is a fixed center right after the left group).
+// id such as "header"/"footer") using the shared canonical region shape, so a
+// composed region and a built-in synthesized region are the SAME shape.
 UiNode assembleRegion(const DecodedRow& row, std::string_view base) {
-    const std::string baseId{base};
-    UiNode left = groupFor(baseId + ".left", row.left, row.separator);
-    UiNode right = groupFor(baseId + ".right", row.right, 0);
-
-    UiContainer middleContainer;
-    middleContainer.axis = Axis::Row;
-    if (row.center) {
-        const Size centerSize = row.centerWidth == CenterWidth::Fixed
-                                    ? Size::exact(row.centerFixed)
-                                    : Size::flex();
-        middleContainer.children.push_back(
-            leafFor(*row.center, baseId + ".middle.0", centerSize));
-    }
-    UiNode middle{UiNodeId{baseId + ".middle"}, Size::flex(),
-                  std::move(middleContainer)};
-
-    UiContainer rootContainer;
-    rootContainer.axis = Axis::Row;
-    rootContainer.children.push_back(std::move(left));
-    rootContainer.children.push_back(std::move(middle));
-    rootContainer.children.push_back(std::move(right));
-
-    return UiNode{UiNodeId{baseId}, Size::flex(), std::move(rootContainer)};
+    return chromeRegion(base, row.left, row.right, row.center, row.centerWidth,
+                        row.centerFixed, row.separator);
 }
 
 // Fail-loud recursive decoder. The first error short-circuits; every message is

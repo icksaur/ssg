@@ -110,6 +110,17 @@ struct UiNode {
 inline constexpr std::string_view kRootNodeId = "root";
 inline constexpr std::string_view kHeaderNodeId = "header";
 inline constexpr std::string_view kFooterNodeId = "footer";
+// The whole-screen body and its two columns, and the four view-leaf surfaces they
+// hold. Placement is these ids plus tree structure; a client keys off an id. These
+// name nodes the whole-screen assembly builds; the WellKnownArea contract promotes
+// them to required only when the runtime actually publishes the assembled tree.
+inline constexpr std::string_view kBodyNodeId = "body";
+inline constexpr std::string_view kPanelNodeId = "panel";
+inline constexpr std::string_view kContentNodeId = "content";
+inline constexpr std::string_view kFileTreeNodeId = "filetree";
+inline constexpr std::string_view kGitStatusNodeId = "gitstatus";
+inline constexpr std::string_view kTabViewNodeId = "tabview";
+inline constexpr std::string_view kFindResultsNodeId = "findresults";
 
 // The typed well-known areas: a closed set a native client may key off to hand a
 // subtree to its own toolkit. A raw id string is not a placement contract; this
