@@ -349,14 +349,20 @@ with its own parity oracle — not carried speculatively now.
    `tests/test_ui_profile.cpp`, `apps/web/reconcile.mjs`'s `WEB_UI_PROFILE` +
    `firstUnsupportedPrimitive`, `include/ssg/UiTreeProtocol.h` +
    `src/UiTreeProtocol.cpp`, `apps/web/client.mjs` (render).
-2. Collapse `UiSchema` to a single root `UiNode`; delete `RegionRole`/`UiRegion`;
-   construct and validate the concrete canonical tree (7A.4) — now constructible
-   because the view leaves exist — with typed well-known identities +
-   existence/kind/ancestry validation in `validateUiSchema`. Header/footer
-   differential oracle stays byte-identical. Also add the non-rejecting logical
-   layout pass + clip (the fit-vs-presence overflow rule above): `src/Layout.cpp`
-   (nonnegative logical solve, `Flex` remainder clamped at zero), `src/Renderer.cpp`
-   (clip logical layout to the viewport), with an undersized-viewport oracle
+2. Collapse `UiSchema` to a single root `UiNode`; delete `RegionRole`/`UiRegion`.
+   The schema here is COMPOSED-ONLY (it carries just the `ssg.chrome` header/footer
+   overrides), so the whole-screen contract is staged: generic `validateUiSchema`
+   checks unique ids + per-leaf shape for any tree; a separate typed
+   `validateWellKnownAreas` (applied at the wire boundary and the publish path)
+   enforces the ROOT as a required area and header/footer as OPTIONAL areas
+   (kind + ancestry only when present, since an empty/header-only/footer-only
+   composition is valid). The full canonical tree and REQUIRED existence of
+   header/footer/body/panel/content land in step 4, once the runtime assembles the
+   built-in areas into the schema. Header/footer differential oracle stays
+   byte-identical. Also add the non-rejecting logical layout pass + clip (the
+   fit-vs-presence overflow rule above): `src/Layout.cpp` (nonnegative logical
+   solve, `Flex` remainder clamped at zero), `src/Renderer.cpp` (clip logical layout
+   to the viewport), with an undersized-viewport oracle
    (`tests/test_layout_overflow.cpp`) proving a viewport smaller than the summed
    fixed extents lays out logically and clips without dropping a present node.
    Files: `include/ssg/UiTree.h`
