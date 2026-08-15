@@ -23,6 +23,10 @@ const params = {
   exactCaseBonus: 1,
   lengthCap: 100,
 };
+// The published parameter-magnitude domain bound (palette section's
+// max_parameter_magnitude). In the running client it is read off the wire; the test
+// supplies the same value the library publishes.
+const maxMagnitude = 1_000_000;
 
 function loadCorpus() {
   const text = readFileSync(fixture, 'utf8');
@@ -50,7 +54,7 @@ if (candidates.length === 0 || queries.length === 0) {
   failures++;
 }
 for (const { query, expected } of queries) {
-  const order = fuzzyRank(candidates, query, params);
+  const order = fuzzyRank(candidates, query, params, maxMagnitude);
   const ids = order.map((i) => candidates[i].id);
   const got = ids.join(',');
   const want = expected.join(',');
@@ -72,7 +76,7 @@ const bigParams = Object.fromEntries(
   Object.entries(params).map(([k, v]) => [k, BigInt(v)]),
 );
 for (const { query, expected } of queries) {
-  const ids = fuzzyRank(candidates, query, bigParams).map((i) => candidates[i].id);
+  const ids = fuzzyRank(candidates, query, bigParams, BigInt(maxMagnitude)).map((i) => candidates[i].id);
   if (ids.join(',') !== expected.join(',')) {
     console.error(`  FAIL: BigInt params query "${query}" -> [${ids.join(',')}]`);
     process.exit(1);
@@ -84,7 +88,7 @@ console.log(`fuzzy corpus oracle: ${queries.length} queries matched the C++ refe
 // An out-of-domain parameter is refused by the web matcher, mirroring the C++ decoder
 // rejecting the frame -- a malformed frame cannot silently diverge the two clients.
 try {
-  fuzzyRank(candidates, 'save', { ...params, baseScore: 2_000_000 });
+  fuzzyRank(candidates, 'save', { ...params, baseScore: 2_000_000 }, maxMagnitude);
   console.error('  FAIL: expected out-of-domain parameters to be refused');
   process.exit(1);
 } catch (e) {

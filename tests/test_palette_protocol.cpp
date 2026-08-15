@@ -55,7 +55,8 @@ TEST(decodeRejectsCandidateMissingAField) {
          {"candidates", ProtocolValue::makeArray(std::move(candidates))},
          {"parameters", encodePalette(PaletteViewState{}).field("parameters")
                             ? *encodePalette(PaletteViewState{}).field("parameters")
-                            : ProtocolValue::makeNull()}});
+                            : ProtocolValue::makeNull()},
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -68,7 +69,8 @@ TEST(decodeRejectsParametersMissingAField) {
     ProtocolValue value = ProtocolValue::makeObject(
         {{"mode", ProtocolValue::makeUint(4)},
          {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", parameters}});
+         {"parameters", parameters},
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -76,7 +78,8 @@ TEST(decodeRejectsOutOfRangeMode) {
     ProtocolValue value = ProtocolValue::makeObject(
         {{"mode", ProtocolValue::makeUint(99)},
          {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")}});
+         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -84,7 +87,8 @@ TEST(decodeRejectsNonArrayCandidates) {
     ProtocolValue value = ProtocolValue::makeObject(
         {{"mode", ProtocolValue::makeUint(4)},
          {"candidates", ProtocolValue::makeText("not an array")},
-         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")}});
+         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -102,7 +106,8 @@ TEST(decodeRejectsOutOfDomainParameter) {
     ProtocolValue value = ProtocolValue::makeObject(
         {{"mode", ProtocolValue::makeUint(4)},
          {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", parameters}});
+         {"parameters", parameters},
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -117,7 +122,30 @@ TEST(decodeRejectsParameterOutsideIntRange) {
     ProtocolValue value = ProtocolValue::makeObject(
         {{"mode", ProtocolValue::makeUint(4)},
          {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", parameters}});
+         {"parameters", parameters},
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
+    ASSERT_FALSE(decodePalette(value).has_value());
+}
+
+TEST(decodeRejectsMissingMagnitude) {
+    // The published domain bound must be present; a frame without it is malformed.
+    ProtocolValue value = ProtocolValue::makeObject(
+        {{"mode", ProtocolValue::makeUint(4)},
+         {"candidates", ProtocolValue::makeArray({})},
+         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")}});
+    ASSERT_FALSE(decodePalette(value).has_value());
+}
+
+TEST(decodeRejectsMismatchedMagnitude) {
+    // A frame stamped with a domain bound other than the library's own is refused --
+    // the C++ authority scores with its compiled constant and must not admit a frame
+    // claiming a different bound.
+    ProtocolValue value = ProtocolValue::makeObject(
+        {{"mode", ProtocolValue::makeUint(4)},
+         {"candidates", ProtocolValue::makeArray({})},
+         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
+         {"max_parameter_magnitude",
+          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude - 1)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -132,5 +160,7 @@ int main() {
     RUN(decodeRejectsNonArrayCandidates);
     RUN(decodeRejectsOutOfDomainParameter);
     RUN(decodeRejectsParameterOutsideIntRange);
+    RUN(decodeRejectsMissingMagnitude);
+    RUN(decodeRejectsMismatchedMagnitude);
     return failed;
 }

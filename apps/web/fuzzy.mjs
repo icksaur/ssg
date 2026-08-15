@@ -9,22 +9,18 @@
 
 const enc = new TextEncoder();
 
-// The matcher-parameter magnitude domain, mirrored from the C++
-// kMaxMatcherParameterMagnitude (include/ssg/PaletteSearcher.h). The browser decodes
-// the palette section itself (it does not run the C++ decoder), so it must enforce the
-// SAME domain before scoring: an out-of-domain or imprecise value is refused here just
-// as decodePalette refuses it on the C++ side, so a malformed frame cannot make the
-// two clients diverge.
-const MAX_MATCHER_PARAMETER_MAGNITUDE = 1_000_000;
-
 function inDomain(value, lo, hi) {
   return Number.isInteger(value) && value >= lo && value <= hi;
 }
 
-// True iff every weight is within +/-MAX and lengthCap is within [0, MAX].
-export function matcherParametersInDomain(p) {
-  const m = MAX_MATCHER_PARAMETER_MAGNITUDE;
+// True iff every weight is within +/-maxMagnitude and lengthCap is within
+// [0, maxMagnitude]. `maxMagnitude` is the library-owned bound published on the
+// palette wire section (max_parameter_magnitude), NOT a constant hardcoded here, so
+// the client's accepted domain cannot drift from the library's.
+export function matcherParametersInDomain(p, maxMagnitude) {
+  const m = maxMagnitude;
   return (
+    Number.isInteger(m) && m > 0 &&
     inDomain(p.baseScore, -m, m) &&
     inDomain(p.wordBoundaryBonus, -m, m) &&
     inDomain(p.contiguityBonus, -m, m) &&
@@ -40,16 +36,19 @@ function fold(byte) {
 }
 
 // Score `query` as a case-folded subsequence of `candidate` (both UTF-8 byte arrays);
-// null when not a subsequence. Weights come from `p` (the published parameters).
-function fuzzyScore(candidate, query, p) {
+// null when not a subsequence. Weights come from `p`; `scoredCap` caps the candidate
+// bytes scored so the score stays bounded (mirrors the C++ cap, which is the same
+// published magnitude), keeping the double score exact and equal to C++.
+function fuzzyScore(candidate, query, p, scoredCap) {
   if (query.length === 0) return 0;
+  const scoredSize = Math.min(candidate.length, scoredCap);
   let score = 0;
   let cursor = 0;
   let previous = -1;
   for (const wanted of query) {
     const needle = fold(wanted);
-    while (cursor < candidate.length && fold(candidate[cursor]) !== needle) cursor++;
-    if (cursor === candidate.length) return null;
+    while (cursor < scoredSize && fold(candidate[cursor]) !== needle) cursor++;
+    if (cursor === scoredSize) return null;
     score += p.baseScore;
     const prev = candidate[cursor - 1];
     if (cursor === 0 || prev === 0x2f || prev === 0x5f || prev === 0x2d || prev === 0x2e) {
@@ -60,7 +59,7 @@ function fuzzyScore(candidate, query, p) {
     previous = cursor;
     cursor++;
   }
-  score -= Math.min(candidate.length, Math.max(p.lengthCap, 0));
+  score -= Math.min(scoredSize, Math.max(p.lengthCap, 0));
   return score;
 }
 
@@ -76,10 +75,12 @@ function compareBytes(a, b) {
 
 // Rank candidates ({ id, label, detail }) for `query` using parameters `p`; returns
 // the matching candidate indices in contract order (descending score; ties by label
-// then id ascending, stable). Non-matches are dropped. Parameter fields may arrive as
-// BigInt off the wire (the web decoder yields BigInt for signed integers), so they are
-// normalized to Number here -- mixing BigInt with the numeric scores would throw.
-export function fuzzyRank(candidates, query, params) {
+// then id ascending, stable). Non-matches are dropped. `maxMagnitude` is the palette
+// section's published max_parameter_magnitude (the library-owned domain bound and the
+// scored-byte cap in one). Parameter fields may arrive as BigInt off the wire, so they
+// are normalized to Number first -- mixing BigInt with numeric scores would throw.
+export function fuzzyRank(candidates, query, params, maxMagnitude) {
+  const cap = Number(maxMagnitude);
   const p = {
     baseScore: Number(params.baseScore),
     wordBoundaryBonus: Number(params.wordBoundaryBonus),
@@ -87,9 +88,9 @@ export function fuzzyRank(candidates, query, params) {
     exactCaseBonus: Number(params.exactCaseBonus),
     lengthCap: Number(params.lengthCap),
   };
-  // Enforce the same domain the C++ decoder enforces; a frame the server would never
-  // publish (or a corrupted one) is refused loudly rather than scored divergently.
-  if (!matcherParametersInDomain(p)) {
+  // Enforce the published domain; a frame the server would never publish (or a
+  // corrupted one) is refused loudly rather than scored divergently.
+  if (!matcherParametersInDomain(p, cap)) {
     throw new RangeError('matcher parameters out of domain');
   }
   const q = enc.encode(query);
@@ -97,8 +98,8 @@ export function fuzzyRank(candidates, query, params) {
   for (let i = 0; i < candidates.length; i++) {
     const label = enc.encode(candidates[i].label);
     const id = enc.encode(candidates[i].id);
-    const ls = fuzzyScore(label, q, p);
-    const is = fuzzyScore(id, q, p);
+    const ls = fuzzyScore(label, q, p, cap);
+    const is = fuzzyScore(id, q, p, cap);
     if (ls === null && is === null) continue;
     const score = Math.max(ls === null ? -Infinity : ls, is === null ? -Infinity : is);
     scored.push({ index: i, score, label, id });

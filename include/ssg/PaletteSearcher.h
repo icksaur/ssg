@@ -42,13 +42,21 @@ struct MatcherParameters {
         default;
 };
 
-// The magnitude every published matcher weight and the length cap must stay within.
-// A matched query runs at most one scoring step per candidate byte, and a candidate is
-// wire-bounded (<= 8 MiB), so the maximum accumulated score is ~4 * this magnitude *
-// 8Mi. That must stay under 2^53 so the C++ int64 score and the JavaScript double
-// score are bit-identical (and it far exceeds any semantically useful weight). A
-// parameter outside this domain is a rejected wire frame, not a silently clamped value.
-inline constexpr int kMaxMatcherParameterMagnitude = 1'000'000;
+// The magnitude every published matcher weight and the length cap must stay within,
+// AND the maximum candidate byte length the matcher will score. A matched query adds
+// at most a fixed number of weights per scored candidate byte, so capping both the
+// weight magnitude and the scored byte count bounds the score by construction --
+// independent of any wire limit or in-process input length. The static_assert below
+// proves that bound stays under the exact-integer range of a double, so the C++ int64
+// score and the JavaScript double score are always bit-identical. A parameter outside
+// the domain is a rejected frame, and this magnitude is published on the palette wire
+// so a client reads it rather than hardcoding its own copy.
+inline constexpr std::int64_t kMaxMatcherParameterMagnitude = 1'000'000;
+
+// At most four weights are added per scored candidate byte (base + word-boundary +
+// contiguity + exact-case); the accumulated score must remain an exact double.
+static_assert(4 * kMaxMatcherParameterMagnitude * kMaxMatcherParameterMagnitude <
+              (std::int64_t{1} << 53));
 
 // True iff every weight is within +/- kMaxMatcherParameterMagnitude and lengthCap is
 // within [0, kMaxMatcherParameterMagnitude].

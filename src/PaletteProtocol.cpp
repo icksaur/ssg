@@ -83,7 +83,12 @@ ProtocolValue encodePalette(const PaletteViewState& palette) {
         {{"mode", ProtocolValue::makeUint(
                       static_cast<std::uint8_t>(palette.mode))},
          {"candidates", ProtocolValue::makeArray(std::move(candidates))},
-         {"parameters", encodeParameters(palette.parameters)}});
+         {"parameters", encodeParameters(palette.parameters)},
+         // The parameter magnitude domain, published from the library-owned constant
+         // so a non-C++ client validates parameters against the SAME bound the C++
+         // decoder enforces, rather than hardcoding its own copy.
+         {"max_parameter_magnitude",
+          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
 }
 
 std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
@@ -91,10 +96,15 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
     const ProtocolValue* modeField = value.field("mode");
     const ProtocolValue* candidatesField = value.field("candidates");
     const ProtocolValue* parametersField = value.field("parameters");
+    const ProtocolValue* magnitudeField = value.field("max_parameter_magnitude");
     if (!modeField || !candidatesField || !candidatesField->asArray() ||
-        !parametersField) {
+        !parametersField || !magnitudeField || !magnitudeField->asInt()) {
         return std::nullopt;
     }
+    // The published bound must equal the library's own -- a frame claiming a different
+    // domain is a mismatch the C++ authority rejects (the C++ side scores with the
+    // compiled constant, so it must not admit a frame stamped with another bound).
+    if (*magnitudeField->asInt() != kMaxMatcherParameterMagnitude) return std::nullopt;
     auto mode = decodeMode(*modeField);
     auto parameters = decodeParameters(*parametersField);
     if (!mode || !parameters) return std::nullopt;

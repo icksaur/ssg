@@ -29,15 +29,22 @@ std::optional<std::int64_t> fuzzyScore(std::string_view candidate,
                                        std::string_view query,
                                        MatcherParameters const& params) {
     if (query.empty()) return 0;
+    // Score at most kMaxMatcherParameterMagnitude candidate bytes, so the score is
+    // bounded by construction regardless of candidate length (the static_assert in the
+    // header pairs this cap with the weight magnitude to keep the score an exact
+    // double). A longer candidate is truncated for scoring -- far beyond any real one.
+    const std::size_t scoredSize = std::min<std::size_t>(
+        candidate.size(),
+        static_cast<std::size_t>(kMaxMatcherParameterMagnitude));
     std::int64_t score = 0;
     std::size_t cursor = 0;
     std::size_t previous = std::string_view::npos;
     for (const char wanted : query) {
         const char needle = folded(wanted);
-        while (cursor < candidate.size() && folded(candidate[cursor]) != needle) {
+        while (cursor < scoredSize && folded(candidate[cursor]) != needle) {
             ++cursor;
         }
-        if (cursor == candidate.size()) return std::nullopt;
+        if (cursor == scoredSize) return std::nullopt;
         score += params.baseScore;
         if (cursor == 0 || candidate[cursor - 1] == '/' ||
             candidate[cursor - 1] == '_' || candidate[cursor - 1] == '-' ||
@@ -51,7 +58,7 @@ std::optional<std::int64_t> fuzzyScore(std::string_view candidate,
         previous = cursor++;
     }
     score -= static_cast<std::int64_t>(std::min<std::size_t>(
-        candidate.size(), static_cast<std::size_t>(std::max(params.lengthCap, 0))));
+        scoredSize, static_cast<std::size_t>(std::max(params.lengthCap, 0))));
     return score;
 }
 
@@ -95,8 +102,10 @@ std::vector<std::size_t> referenceRank(PaletteViewState const& state,
 }
 
 bool matcherParametersInDomain(const MatcherParameters& params) {
-    constexpr int m = kMaxMatcherParameterMagnitude;
-    auto ok = [](int value, int lo, int hi) { return value >= lo && value <= hi; };
+    constexpr std::int64_t m = kMaxMatcherParameterMagnitude;
+    auto ok = [](std::int64_t value, std::int64_t lo, std::int64_t hi) {
+        return value >= lo && value <= hi;
+    };
     return ok(params.baseScore, -m, m) && ok(params.wordBoundaryBonus, -m, m) &&
            ok(params.contiguityBonus, -m, m) && ok(params.exactCaseBonus, -m, m) &&
            ok(params.lengthCap, 0, m);
