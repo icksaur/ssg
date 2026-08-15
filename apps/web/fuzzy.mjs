@@ -9,6 +9,12 @@
 
 const enc = new TextEncoder();
 
+// The number of weight terms that may be added for a single matched candidate byte
+// (base + word-boundary + contiguity + exact-case). Named so the exactness check below
+// is symbols, not a literal. Mirrors the C++ kMaxWeightsPerScoredByte -- a structural
+// property of the shared scoring algorithm, not a tunable.
+const MAX_WEIGHTS_PER_SCORED_BYTE = 4;
+
 function inDomain(value, lo, hi) {
   return Number.isInteger(value) && value >= lo && value <= hi;
 }
@@ -32,13 +38,15 @@ export function matcherParametersInDomain(p, maxMagnitude) {
 // The score-exactness proof, checked client-side against the published bounds rather
 // than trusted: at most four weights are added per matched candidate byte over at most
 // maxCandidateBytes bytes, plus a length penalty of at most maxMagnitude, so the
-// maximum score magnitude must stay an exact integer (Number.MAX_SAFE_INTEGER = 2^53-1).
-// A corrupted or oversized published bound that would let the score lose precision is
+// maximum score magnitude must stay an exact integer (Number.isSafeInteger). A
+// corrupted or oversized published bound that would let the score lose precision is
 // refused, matching the C++ decoder's rejection.
 function scoreBoundsAreExact(maxMagnitude, maxCandidateBytes) {
   if (!Number.isInteger(maxMagnitude) || maxMagnitude <= 0) return false;
   if (!Number.isInteger(maxCandidateBytes) || maxCandidateBytes <= 0) return false;
-  return Number.isSafeInteger(4 * maxMagnitude * maxCandidateBytes + maxMagnitude);
+  const worst =
+    MAX_WEIGHTS_PER_SCORED_BYTE * maxMagnitude * maxCandidateBytes + maxMagnitude;
+  return Number.isSafeInteger(worst);
 }
 
 // ASCII-only fold: A-Z -> a-z, every other byte (including UTF-8 continuation bytes)

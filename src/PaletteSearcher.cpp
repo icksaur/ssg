@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 
 namespace ssg {
 namespace {
@@ -55,34 +56,24 @@ std::optional<std::int64_t> fuzzyScore(std::string_view candidate,
 
 std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidates,
                                   std::string_view query,
-                                  MatcherParameters const& rawParams);
-
-std::int64_t clampWeight(int value, std::int64_t lo, std::int64_t hi) {
-    return std::clamp(static_cast<std::int64_t>(value), lo, hi);
-}
-
-// Clamp parameters into the safe domain so scoring cannot overflow regardless of how
-// the parameters were obtained (wire decode already rejects out-of-domain frames; this
-// makes the matcher itself total and safe for any in-process caller too). Clamping is a
-// no-op for in-domain parameters, so it never changes behavior for valid input.
-MatcherParameters clampedToDomain(MatcherParameters const& params) {
-    constexpr std::int64_t m = kMaxMatcherParameterMagnitude;
-    return MatcherParameters{
-        static_cast<int>(clampWeight(params.baseScore, -m, m)),
-        static_cast<int>(clampWeight(params.wordBoundaryBonus, -m, m)),
-        static_cast<int>(clampWeight(params.contiguityBonus, -m, m)),
-        static_cast<int>(clampWeight(params.exactCaseBonus, -m, m)),
-        static_cast<int>(clampWeight(params.lengthCap, 0, m))};
-}
-
-std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidates,
-                                  std::string_view query,
-                                  MatcherParameters const& rawParams) {
-    // Enforce the safety domain at the matcher boundary, not only at wire decode: clamp
-    // the weights and skip any candidate longer than kMaxCandidateBytes, so a public
-    // in-process caller cannot drive the score outside the proven-exact range.
-    const MatcherParameters params = clampedToDomain(rawParams);
+                                  MatcherParameters const& params) {
+    // Reject loudly at the matcher boundary, matching the web client: malformed input
+    // (out-of-domain weights, or a candidate over kMaxCandidateBytes) would breach the
+    // score-exactness invariant, so it is refused rather than silently normalized into a
+    // plausible ranking. The honest wire path never reaches here -- decode already
+    // rejected such a frame -- so this is a programming-error signal for an in-process
+    // caller, not an expected runtime outcome.
+    if (!matcherParametersInDomain(params)) {
+        throw std::invalid_argument(
+            "PaletteSearcher: matcher parameters out of domain");
+    }
     const std::size_t maxBytes = static_cast<std::size_t>(kMaxCandidateBytes);
+    for (auto const& candidate : candidates) {
+        if (candidate.label.size() > maxBytes || candidate.id.size() > maxBytes) {
+            throw std::invalid_argument(
+                "PaletteSearcher: candidate exceeds the score-exact byte bound");
+        }
+    }
     struct Ranked {
         std::size_t index;
         std::int64_t score;
@@ -91,8 +82,6 @@ std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidate
     ranked.reserve(candidates.size());
     for (std::size_t index = 0; index < candidates.size(); ++index) {
         auto const& candidate = candidates[index];
-        if (candidate.label.size() > maxBytes || candidate.id.size() > maxBytes)
-            continue;
         auto const labelScore = fuzzyScore(candidate.label, query, params);
         auto const idScore = fuzzyScore(candidate.id, query, params);
         if (!labelScore && !idScore) continue;

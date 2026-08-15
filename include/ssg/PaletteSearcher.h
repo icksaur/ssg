@@ -52,14 +52,25 @@ inline constexpr std::int64_t kMaxMatcherParameterMagnitude = 1'000'000;
 // full-byte subsequence). Published on the palette wire alongside the magnitude.
 inline constexpr std::int64_t kMaxCandidateBytes = 1'000'000;
 
-// At most four weights are added per matched candidate byte (base + word-boundary +
-// contiguity + exact-case), over at most kMaxCandidateBytes bytes, and a length penalty
-// of at most kMaxMatcherParameterMagnitude is then applied; the total magnitude must
-// remain an exact double for the C++ int64 score and the JavaScript double score to be
-// bit-identical. This is the matcher-owned safety proof, independent of any wire limit.
-static_assert(4 * kMaxMatcherParameterMagnitude * kMaxCandidateBytes +
-                      kMaxMatcherParameterMagnitude <
-                  (std::int64_t{1} << 53));
+// The number of weight terms that may be added for a single matched candidate byte
+// (base + word-boundary + contiguity + exact-case). A proof constant, named so the
+// exactness bound below is symbols, not a literal.
+inline constexpr std::int64_t kMaxWeightsPerScoredByte = 4;
+
+// 2^53: the largest integer a double represents exactly (Number.MAX_SAFE_INTEGER + 1).
+// A score whose magnitude stays below this is bit-identical between the C++ int64 score
+// and the JavaScript double score.
+inline constexpr std::int64_t kMaxExactDoubleInteger = std::int64_t{1} << 53;
+
+// At most kMaxWeightsPerScoredByte weights are added per matched candidate byte, over at
+// most kMaxCandidateBytes bytes, and a length penalty of at most
+// kMaxMatcherParameterMagnitude is then applied; the total magnitude must stay exactly
+// representable as a double. This is the matcher-owned safety proof, independent of any
+// wire limit.
+static_assert(kMaxWeightsPerScoredByte * kMaxMatcherParameterMagnitude *
+                      kMaxCandidateBytes +
+                  kMaxMatcherParameterMagnitude <
+              kMaxExactDoubleInteger);
 
 // True iff every weight is within +/- kMaxMatcherParameterMagnitude and lengthCap is
 // within [0, kMaxMatcherParameterMagnitude].
@@ -120,7 +131,10 @@ public:
 // query is a case-folded (ASCII-only) subsequence of a candidate's label OR id, over
 // raw UTF-8 bytes. Order: descending score (scored with `state.parameters`), ties
 // broken by label then id ascending, stable. Returns candidate indices in order;
-// non-matches are dropped.
+// non-matches are dropped. Throws std::invalid_argument if `state.parameters` are out
+// of domain or a candidate exceeds kMaxCandidateBytes -- the score-exactness invariant
+// cannot hold for such input, so it is refused rather than silently normalized (the
+// honest wire path never produces it; decodePalette rejects such a frame first).
 [[nodiscard]] std::vector<std::size_t> referenceRank(PaletteViewState const& state,
                                                      std::string_view query);
 
