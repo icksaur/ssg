@@ -36,8 +36,8 @@ export function matcherParametersInDomain(p, maxMagnitude) {
 }
 
 // The score-exactness proof, checked client-side against the published bounds rather
-// than trusted: at most four weights are added per matched candidate byte over at most
-// maxCandidateBytes bytes, plus a length penalty of at most maxMagnitude, so the
+// than trusted: at most MAX_WEIGHTS_PER_SCORED_BYTE weights are added per matched
+// candidate byte over at most maxCandidateBytes bytes, plus a length penalty of at most maxMagnitude, so the
 // maximum score magnitude must stay an exact integer (Number.isSafeInteger). A
 // corrupted or oversized published bound that would let the score lose precision is
 // refused, matching the C++ decoder's rejection.

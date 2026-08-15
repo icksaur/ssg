@@ -57,7 +57,7 @@ inline constexpr std::int64_t kMaxCandidateBytes = 1'000'000;
 // exactness bound below is symbols, not a literal.
 inline constexpr std::int64_t kMaxWeightsPerScoredByte = 4;
 
-// 2^53: the largest integer a double represents exactly (Number.MAX_SAFE_INTEGER + 1).
+// The largest integer a double represents exactly (one past Number.MAX_SAFE_INTEGER).
 // A score whose magnitude stays below this is bit-identical between the C++ int64 score
 // and the JavaScript double score.
 inline constexpr std::int64_t kMaxExactDoubleInteger = std::int64_t{1} << 53;
