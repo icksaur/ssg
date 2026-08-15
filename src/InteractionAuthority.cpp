@@ -50,6 +50,9 @@ bool InteractionAuthority::apply(const CommandTransition& transition) {
     if (!prepared) return false;
     std::move(*prepared).installInto(truth_, interaction_, prompt_, tree_,
                                      nextTreeRevision_);
+    // A finder (re)establishes picker content; advance the epoch even on a File->File
+    // reopen (openPicker unchanged) so a candidate owner always refreshes.
+    if (std::holds_alternative<OpenFinder>(transition)) ++pickerEpoch_;
     return true;
 }
 

@@ -232,6 +232,64 @@ TEST(updateCompositionWithoutStructuralChangeDoesNotAdvance) {
 
 // --- Editor/panel focus -------------------------------------------------------------
 
+TEST(pickerEpochAdvancesOnEveryFinderOpenIncludingAReopen) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    const std::uint64_t start = authority.pickerEpoch();
+    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
+    const std::uint64_t afterOpen = authority.pickerEpoch();
+    ASSERT_TRUE(afterOpen > start);
+    // Close then reopen the SAME kind: openPicker returns to File, but the epoch must still
+    // advance so a candidate owner refreshes.
+    ASSERT_TRUE(authority.apply(CloseFinder{}));
+    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
+    ASSERT_TRUE(authority.pickerEpoch() > afterOpen);
+}
+
+TEST(promptOverPanelClosesBackToPanelFocus) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Panel);
+    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::Command}));
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
+    ASSERT_TRUE(authority.apply(CloseFinder{}));
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Panel);
+}
+
+TEST(panelHideWhilePromptCapturedRestoresBaseUnderThePrompt) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::Command}));
+    // Hide the panel while the prompt is captured: the prompt still routes focus, but the
+    // base focus underneath is restored to the panel-return focus (Editor).
+    ASSERT_TRUE(authority.apply(TogglePanel{}));
+    ASSERT_FALSE(authority.truth().panelPresent);
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
+    ASSERT_TRUE(authority.apply(CloseFinder{}));
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+}
+
+TEST(providerCyclingWhileHiddenAndEditorFocusedPreservesBoth) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    // Panel hidden, editor-focused: switching provider changes only the selection.
+    ASSERT_TRUE(authority.apply(SwitchPanelProvider{PanelProvider::GitStatus}));
+    ASSERT_FALSE(authority.truth().panelPresent);
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+    ASSERT_TRUE(authority.truth().selectedProvider == PanelProvider::GitStatus);
+}
+
+TEST(editorFocusWithThePanelVisibleKeepsThePanelPresent) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    authority.focusEditor();
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+    ASSERT_TRUE(authority.truth().panelPresent);  // focus moved, panel stayed
+}
+
 TEST(focusPanelRequiresThePanelThenFocusEditorReturns) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
@@ -279,5 +337,10 @@ int main() {
     RUN(updateCompositionWithoutStructuralChangeDoesNotAdvance);
     RUN(focusPanelRequiresThePanelThenFocusEditorReturns);
     RUN(focusChangeUnderAnOpenPromptSurfacesWhenThePromptCloses);
+    RUN(pickerEpochAdvancesOnEveryFinderOpenIncludingAReopen);
+    RUN(promptOverPanelClosesBackToPanelFocus);
+    RUN(panelHideWhilePromptCapturedRestoresBaseUnderThePrompt);
+    RUN(providerCyclingWhileHiddenAndEditorFocusedPreservesBoth);
+    RUN(editorFocusWithThePanelVisibleKeepsThePanelPresent);
     return failed;
 }

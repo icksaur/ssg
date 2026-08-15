@@ -123,6 +123,39 @@ struct TransitionBuilder {
         return make(std::move(next), inputs.schema, inputs.prompt, std::nullopt);
     }
 
+    // Fully prepare the tree backing for `provider` so commit is infallible, or signal
+    // rejection. Match id AND kind: an id present under the wrong kind is not the provider
+    // we want, so it must be recreated, not activated. A non-matching Filesystem provider
+    // is a genuine rejection -- it is seeded with real nodes, never created or replaced
+    // empty. A new snapshot's revision comes from the single revision source, never
+    // invented as existing+1 (which could overflow or run ahead of that source and make a
+    // later replacement reject); preflight rejects a source that cannot lead the provider
+    // it replaces (desync) or has no successor (exhaustion), so both replaceProvider and
+    // the source's post-install advance are infallible. Returns false on rejection.
+    static bool prepareTreeBacking(PanelProvider provider, const TransitionInputs& inputs,
+                                   std::optional<TreeBackingPlan>& out) {
+        const TreeProviderBinding binding = panelProviderTreeBinding(provider);
+        const auto existing = std::find_if(
+            inputs.presentProviders.begin(), inputs.presentProviders.end(),
+            [&](const TreeProviderPresence& p) { return p.binding.id == binding.id; });
+        const bool matching = existing != inputs.presentProviders.end() &&
+                              existing->binding.kind == binding.kind;
+        TreeBackingPlan plan{binding.id, std::nullopt};
+        if (!matching) {
+            if (binding.kind == TreeProviderKind::Filesystem) return false;
+            const std::uint64_t next = inputs.nextTreeRevision.value();
+            if (next == std::numeric_limits<std::uint64_t>::max()) return false;
+            if (existing != inputs.presentProviders.end() &&
+                next <= existing->revision.value()) {
+                return false;
+            }
+            plan.create =
+                TreeProviderSnapshot{binding.id, binding.kind, inputs.nextTreeRevision, {}};
+        }
+        out = std::move(plan);
+        return true;
+    }
+
     static std::optional<PreparedTransition> prepare(ShowPanelProvider request,
                                                      const TransitionInputs& inputs) {
         const WholeScreenTruth& truth = inputs.truth;
@@ -131,40 +164,25 @@ struct TransitionBuilder {
             return hidePanel(truth, inputs);
         }
 
-        // Fully prepare the tree backing so commit is infallible. Match id AND kind: an
-        // id present under the wrong kind is not the provider we want, so it must be
-        // recreated, not activated. A non-matching Filesystem provider is a genuine
-        // rejection -- it is seeded with real nodes, never created or replaced empty here.
-        // A new snapshot's revision comes from the runtime's single revision source
-        // (nextTreeRevision), never invented as existing+1 (which could overflow or run
-        // ahead of that source and make a later replacement reject). Preflight rejects a
-        // source that cannot lead the provider it replaces (desync) or has no successor
-        // (exhaustion), so both the replaceProvider and the source's post-install advance
-        // are infallible.
-        const TreeProviderBinding binding = panelProviderTreeBinding(request.provider);
-        const auto existing = std::find_if(
-            inputs.presentProviders.begin(), inputs.presentProviders.end(),
-            [&](const TreeProviderPresence& p) { return p.binding.id == binding.id; });
-        const bool matching = existing != inputs.presentProviders.end() &&
-                              existing->binding.kind == binding.kind;
-        TreeBackingPlan plan{binding.id, std::nullopt};
-        if (!matching) {
-            if (binding.kind == TreeProviderKind::Filesystem) return std::nullopt;
-            const std::uint64_t next = inputs.nextTreeRevision.value();
-            if (next == std::numeric_limits<std::uint64_t>::max()) return std::nullopt;
-            if (existing != inputs.presentProviders.end() &&
-                next <= existing->revision.value()) {
-                return std::nullopt;
-            }
-            plan.create =
-                TreeProviderSnapshot{binding.id, binding.kind, inputs.nextTreeRevision, {}};
-        }
+        std::optional<TreeBackingPlan> plan;
+        if (!prepareTreeBacking(request.provider, inputs, plan)) return std::nullopt;
 
         WholeScreenTruth next = truth;
         if (!truth.panelPresent) next.panelReturnFocus = truth.baseFocus;
         next.panelPresent = true;
         next.selectedProvider = request.provider;
         next.baseFocus = BaseFocus::Panel;
+        return make(std::move(next), inputs.schema, inputs.prompt, std::move(plan));
+    }
+
+    static std::optional<PreparedTransition> prepare(SwitchPanelProvider request,
+                                                     const TransitionInputs& inputs) {
+        // Change the provider backing only; panel visibility and focus are preserved (this
+        // is cycling next/previous, not a show). Never toggles off on reselect.
+        std::optional<TreeBackingPlan> plan;
+        if (!prepareTreeBacking(request.provider, inputs, plan)) return std::nullopt;
+        WholeScreenTruth next = inputs.truth;
+        next.selectedProvider = request.provider;
         return make(std::move(next), inputs.schema, inputs.prompt, std::move(plan));
     }
 

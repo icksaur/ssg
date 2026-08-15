@@ -81,6 +81,11 @@ public:
     [[nodiscard]] std::optional<PickerKind> openPicker() const noexcept {
         return truth_.openPicker;
     }
+    // Advances every time a finder transition (re)opens a picker, INCLUDING a File->File
+    // reopen where openPicker is unchanged. A candidate-owning caller keys its rebuild off
+    // this epoch so reopening the file finder always refreshes, and comparing openPicker
+    // alone cannot miss a same-kind reopen.
+    [[nodiscard]] std::uint64_t pickerEpoch() const noexcept { return pickerEpoch_; }
 
 private:
     // Adopt a prospective truth and prompt together: reconcile a stale picker identity
@@ -94,6 +99,7 @@ private:
     WholeScreenSchema schema_;
     TreeModel& tree_;
     std::uint64_t nextTreeRevision_;
+    std::uint64_t pickerEpoch_ = 0;
     PromptSurface prompt_;
     WholeScreenTruth truth_;
     UiInteractionState interaction_;

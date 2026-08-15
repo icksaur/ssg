@@ -175,6 +175,54 @@ TEST(reselectingTheShownProviderHidesThePanel) {
     ASSERT_FALSE(prepared->tree().has_value());
 }
 
+// --- SwitchPanelProvider (cycling: preserve visibility + focus) ---------------------
+
+TEST(switchProviderWhileHiddenPreservesHiddenAndFocus) {
+    WholeScreenTruth truth;  // hidden, Editor-focused, FileTree selected
+    const auto prepared = prepareTransition(
+        SwitchPanelProvider{PanelProvider::GitStatus},
+        inputs(truth, {presence(filesystem(), 1),
+                       presence(TreeProviderBinding{TreeProviderId{"git"},
+                                                    TreeProviderKind::Git}, 2)}));
+    ASSERT_TRUE(prepared.has_value());
+    ASSERT_FALSE(prepared->truth().panelPresent);            // stayed hidden
+    ASSERT_TRUE(prepared->truth().baseFocus == BaseFocus::Editor);  // focus untouched
+    ASSERT_TRUE(prepared->truth().selectedProvider == PanelProvider::GitStatus);
+    ASSERT_FALSE(prepared->tree()->create.has_value());      // matching -> activate only
+}
+
+TEST(switchProviderWhileShownPreservesShownAndFocus) {
+    WholeScreenTruth truth;
+    truth.panelPresent = true;
+    truth.baseFocus = BaseFocus::Panel;
+    truth.selectedProvider = PanelProvider::FileTree;
+    const auto prepared = prepareTransition(
+        SwitchPanelProvider{PanelProvider::Symbols}, inputs(truth, {presence(filesystem(), 1)}));
+    ASSERT_TRUE(prepared.has_value());
+    ASSERT_TRUE(prepared->truth().panelPresent);             // stayed shown
+    ASSERT_TRUE(prepared->truth().baseFocus == BaseFocus::Panel);   // focus untouched
+    ASSERT_TRUE(prepared->truth().selectedProvider == PanelProvider::Symbols);
+    ASSERT_TRUE(prepared->tree()->create.has_value());       // symbols absent -> create
+}
+
+TEST(switchProviderNeverTogglesOffOnReselect) {
+    WholeScreenTruth truth;
+    truth.panelPresent = true;
+    truth.selectedProvider = PanelProvider::FileTree;
+    // ShowPanelProvider would hide here; SwitchPanelProvider keeps it shown.
+    const auto prepared = prepareTransition(
+        SwitchPanelProvider{PanelProvider::FileTree}, inputs(truth, {presence(filesystem(), 1)}));
+    ASSERT_TRUE(prepared.has_value());
+    ASSERT_TRUE(prepared->truth().panelPresent);
+}
+
+TEST(switchProviderRejectsMissingFilesystem) {
+    WholeScreenTruth truth;
+    const auto prepared = prepareTransition(
+        SwitchPanelProvider{PanelProvider::FileTree}, inputs(truth, {}));
+    ASSERT_FALSE(prepared.has_value());
+}
+
 // --- OpenFinder / CloseFinder -------------------------------------------------------
 
 TEST(openFinderCarriesPickerIdentityAndOpensThePrompt) {
@@ -251,6 +299,10 @@ int main() {
     RUN(showProviderRejectsARecreateWhenTheRevisionSourceHasDesynced);
     RUN(showAMissingFilesystemProviderIsRejected);
     RUN(reselectingTheShownProviderHidesThePanel);
+    RUN(switchProviderWhileHiddenPreservesHiddenAndFocus);
+    RUN(switchProviderWhileShownPreservesShownAndFocus);
+    RUN(switchProviderNeverTogglesOffOnReselect);
+    RUN(switchProviderRejectsMissingFilesystem);
     RUN(openFinderCarriesPickerIdentityAndOpensThePrompt);
     RUN(openFinderReplacesAnAlreadyActivePromptWithoutNewRejection);
     RUN(closeFinderClearsThePickerAndCancelsThePrompt);

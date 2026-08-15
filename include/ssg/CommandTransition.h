@@ -51,7 +51,15 @@ enum class CycleDirection : std::uint8_t { Next, Previous };
 // --- The transition requests --------------------------------------------------------
 
 struct TogglePanel {};
+// Show the panel on a chosen provider (clicking the path/branch): shows and focuses the
+// panel, and reselecting the shown provider hides it.
 struct ShowPanelProvider {
+    PanelProvider provider = PanelProvider::FileTree;
+};
+// Change the panel's provider backing WITHOUT changing its visibility or focus (cycling
+// next/previous provider): the panel stays hidden if hidden, shown if shown, and focus is
+// untouched. Never toggles the panel off.
+struct SwitchPanelProvider {
     PanelProvider provider = PanelProvider::FileTree;
 };
 struct OpenFinder {
@@ -59,8 +67,8 @@ struct OpenFinder {
 };
 struct CloseFinder {};
 
-using CommandTransition =
-    std::variant<TogglePanel, ShowPanelProvider, OpenFinder, CloseFinder>;
+using CommandTransition = std::variant<TogglePanel, ShowPanelProvider,
+                                       SwitchPanelProvider, OpenFinder, CloseFinder>;
 
 // --- The tree-provider backing a commit installs ------------------------------------
 
