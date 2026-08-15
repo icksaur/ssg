@@ -53,12 +53,13 @@ inline constexpr std::int64_t kMaxMatcherParameterMagnitude = 1'000'000;
 inline constexpr std::int64_t kMaxCandidateBytes = 1'000'000;
 
 // At most four weights are added per matched candidate byte (base + word-boundary +
-// contiguity + exact-case), over at most kMaxCandidateBytes bytes, so the accumulated
-// score must remain an exact double for the C++ int64 score and the JavaScript double
-// score to be bit-identical. This is the matcher-owned safety proof, independent of any
-// wire text limit.
-static_assert(4 * kMaxMatcherParameterMagnitude * kMaxCandidateBytes <
-              (std::int64_t{1} << 53));
+// contiguity + exact-case), over at most kMaxCandidateBytes bytes, and a length penalty
+// of at most kMaxMatcherParameterMagnitude is then applied; the total magnitude must
+// remain an exact double for the C++ int64 score and the JavaScript double score to be
+// bit-identical. This is the matcher-owned safety proof, independent of any wire limit.
+static_assert(4 * kMaxMatcherParameterMagnitude * kMaxCandidateBytes +
+                      kMaxMatcherParameterMagnitude <
+                  (std::int64_t{1} << 53));
 
 // True iff every weight is within +/- kMaxMatcherParameterMagnitude and lengthCap is
 // within [0, kMaxMatcherParameterMagnitude].

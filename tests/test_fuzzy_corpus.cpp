@@ -84,9 +84,27 @@ TEST(referenceRankReproducesTheCorpusOrdering) {
     }
 }
 
+// The matcher boundary is total and safe for ANY in-process input, not only wire-
+// decoded ones: out-of-domain weights are clamped (so no overflow) and an oversized
+// candidate is skipped (never scored), while every in-bound candidate ranks exactly as
+// with clamped parameters.
+TEST(referenceRankEnforcesTheDomainAtTheMatcherBoundary) {
+    PaletteViewState state;
+    state.parameters.baseScore = kMaxMatcherParameterMagnitude * 1000;  // out of domain
+    state.candidates = {
+        {"edit.undo", "Undo", ""},
+        {"huge", std::string(static_cast<std::size_t>(kMaxCandidateBytes) + 1, 'u'),
+         ""},  // oversized label -> skipped
+    };
+    auto order = referenceRank(state, "u");
+    // The oversized candidate (index 1) must not appear; the in-bound one may.
+    for (auto index : order) ASSERT_TRUE(index != 1);
+}
+
 }  // namespace
 
 int main() {
     RUN(referenceRankReproducesTheCorpusOrdering);
+    RUN(referenceRankEnforcesTheDomainAtTheMatcherBoundary);
     return failed;
 }

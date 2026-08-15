@@ -18,19 +18,11 @@ char folded(char value) {
 }
 
 // Score `query` as a case-folded subsequence of `candidate`, iterating raw UTF-8
-// bytes; nullopt when `query` is not a subsequence. Weights come from `params` so
-// the score is a pure function of the published parameters. The accumulator is 64-bit
-// because a matched query runs at most one scoring step per candidate byte (the loop
-// stops when the candidate is exhausted), and a wire-bounded candidate (<= 8 MiB) with
-// in-domain weights (<= kMaxMatcherParameterMagnitude) yields at most ~4 * cap * 8Mi
-// which overflows a 32-bit int but is well within int64 AND under 2^53, so the C++
-// int64 score and the JavaScript double score are bit-identical.
-// Score `query` as a case-folded subsequence of `candidate`, iterating raw UTF-8
 // bytes over the WHOLE candidate (a full-byte subsequence, never truncated); nullopt
-// when `query` is not a subsequence. Weights come from `params`. Exactness of the
-// int64 score (and its parity with the JS double score) is guaranteed by the
-// kMaxCandidateBytes/kMaxMatcherParameterMagnitude invariant in the header, enforced
-// at decode -- so a scored candidate is always within the proven-safe domain.
+// when `query` is not a subsequence. `params` is already clamped into the domain and
+// `candidate` is already within kMaxCandidateBytes (rankWith enforces both), so the
+// int64 score cannot overflow and is bit-identical to the JS double score -- the
+// header's static_assert proves that from those two bounds.
 std::optional<std::int64_t> fuzzyScore(std::string_view candidate,
                                        std::string_view query,
                                        MatcherParameters const& params) {
@@ -63,7 +55,34 @@ std::optional<std::int64_t> fuzzyScore(std::string_view candidate,
 
 std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidates,
                                   std::string_view query,
-                                  MatcherParameters const& params) {
+                                  MatcherParameters const& rawParams);
+
+std::int64_t clampWeight(int value, std::int64_t lo, std::int64_t hi) {
+    return std::clamp(static_cast<std::int64_t>(value), lo, hi);
+}
+
+// Clamp parameters into the safe domain so scoring cannot overflow regardless of how
+// the parameters were obtained (wire decode already rejects out-of-domain frames; this
+// makes the matcher itself total and safe for any in-process caller too). Clamping is a
+// no-op for in-domain parameters, so it never changes behavior for valid input.
+MatcherParameters clampedToDomain(MatcherParameters const& params) {
+    constexpr std::int64_t m = kMaxMatcherParameterMagnitude;
+    return MatcherParameters{
+        static_cast<int>(clampWeight(params.baseScore, -m, m)),
+        static_cast<int>(clampWeight(params.wordBoundaryBonus, -m, m)),
+        static_cast<int>(clampWeight(params.contiguityBonus, -m, m)),
+        static_cast<int>(clampWeight(params.exactCaseBonus, -m, m)),
+        static_cast<int>(clampWeight(params.lengthCap, 0, m))};
+}
+
+std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidates,
+                                  std::string_view query,
+                                  MatcherParameters const& rawParams) {
+    // Enforce the safety domain at the matcher boundary, not only at wire decode: clamp
+    // the weights and skip any candidate longer than kMaxCandidateBytes, so a public
+    // in-process caller cannot drive the score outside the proven-exact range.
+    const MatcherParameters params = clampedToDomain(rawParams);
+    const std::size_t maxBytes = static_cast<std::size_t>(kMaxCandidateBytes);
     struct Ranked {
         std::size_t index;
         std::int64_t score;
@@ -72,6 +91,8 @@ std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidate
     ranked.reserve(candidates.size());
     for (std::size_t index = 0; index < candidates.size(); ++index) {
         auto const& candidate = candidates[index];
+        if (candidate.label.size() > maxBytes || candidate.id.size() > maxBytes)
+            continue;
         auto const labelScore = fuzzyScore(candidate.label, query, params);
         auto const idScore = fuzzyScore(candidate.id, query, params);
         if (!labelScore && !idScore) continue;
