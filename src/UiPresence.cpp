@@ -34,10 +34,10 @@ UiPresenceSection buildPresenceSection(const ValidatedSchema& schema,
 }
 
 UiPresenceSection defaultUiPresence() {
-    UiPresenceSection section;
-    section.nodes.push_back(
-        UiPresenceRecord{UiNodeId{std::string{kRootNodeId}}, true});
-    return section;
+    // Derive from the same empty root the default schema uses, so a change to the
+    // default tree cannot silently leave the default schema/presence pair mismatched.
+    auto validated = ValidatedSchema::validate(UiSchema{}).takeSchema();
+    return buildPresenceSection(validated, PresenceConfig::allPresent(validated));
 }
 
 }  // namespace ssg
