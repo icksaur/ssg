@@ -99,13 +99,13 @@ TEST(exactlyTheSelectedProviderIsPresent) {
 
 TEST(contentShowsTabViewXorFindResultsByFinderState) {
     WholeScreenTruth closed;
-    closed.finderOpen = false;
+    closed.openPicker = std::nullopt;
     const auto a = buildWholeScreenInteraction(schemaOf({}), closed);
     ASSERT_TRUE(present(a, kTabViewNodeId));
     ASSERT_FALSE(present(a, kFindResultsNodeId));
 
     WholeScreenTruth open;
-    open.finderOpen = true;
+    open.openPicker = PickerKind::File;
     const auto b = buildWholeScreenInteraction(schemaOf({}), open);
     ASSERT_FALSE(present(b, kTabViewNodeId));
     ASSERT_TRUE(present(b, kFindResultsNodeId));
@@ -131,7 +131,7 @@ TEST(rebuildOverANewGenerationPreservesTruthAndResetsBasis) {
     WholeScreenTruth truth;
     truth.panelPresent = true;
     truth.selectedProvider = PanelProvider::Symbols;
-    truth.finderOpen = true;
+    truth.openPicker = PickerKind::Command;
 
     // Generation 0.
     const auto g0 = buildWholeScreenInteraction(schemaOf({}), truth);

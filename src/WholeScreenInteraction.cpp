@@ -40,9 +40,10 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
          {kFileTreeNodeId, kGitStatusNodeId, kSymbolsNodeId}) {
         if (provider != selected) hidden.push_back(nodeId(provider));
     }
-    // Content shows exactly one of tabview/findresults: the finder when open, else the
-    // document tab view.
-    hidden.push_back(nodeId(truth.finderOpen ? kTabViewNodeId : kFindResultsNodeId));
+    // Content shows exactly one of tabview/findresults: the finder when a picker is
+    // open, else the document tab view.
+    const bool finderOpen = truth.openPicker.has_value();
+    hidden.push_back(nodeId(finderOpen ? kTabViewNodeId : kFindResultsNodeId));
 
     UiInteractionState state{std::move(schema), std::move(hidden)};
 
@@ -51,9 +52,9 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
         truth.baseFocus == BaseFocus::Panel && truth.panelPresent ? BaseFocus::Panel
                                                                   : BaseFocus::Editor);
 
-    // The finder holds a prompt-backed focus capture on the findresults node while open;
-    // captureFocus admits it only because findresults is present when the finder is open.
-    if (truth.finderOpen) {
+    // The finder holds a prompt-backed focus capture on the findresults node while a
+    // picker is open; captureFocus admits it only because findresults is present then.
+    if (finderOpen) {
         state.captureFocus(
             FocusCapture{nodeId(kFindResultsNodeId), FocusTarget::Prompt});
     }

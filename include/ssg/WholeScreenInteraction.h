@@ -10,9 +10,11 @@
 // reset the basis, and never strand base focus on an absent panel).
 
 #include <cstdint>
+#include <optional>
 
 #include <ssg/InteractionState.h>  // UiInteractionState
 #include <ssg/KeyboardFocus.h>     // BaseFocus
+#include <ssg/Picker.h>            // PickerKind
 
 namespace ssg {
 
@@ -21,28 +23,32 @@ namespace ssg {
 // out-of-domain selection unconstructable rather than silently coerced.
 enum class PanelProvider : std::uint8_t { FileTree, GitStatus, Symbols };
 
-// The semantic inputs that determine whole-screen presence and focus, read from the
-// authoritative subsystems (ShellState panel state + active provider, the open picker).
-// A plain value; buildWholeScreenInteraction is a pure function of it.
+// The semantic inputs that determine whole-screen presence and focus, owned by the
+// interaction aggregate (not read from scattered subsystems). A plain value;
+// buildWholeScreenInteraction is a pure function of it.
 struct WholeScreenTruth {
-    // Whether the side panel is shown (ShellState::panelRequested).
+    // Whether the side panel is shown.
     bool panelPresent = false;
     // The selected panel provider. Its node is present only when the panel is present;
     // the persistent last-active choice lives in the separate provider hint, not here.
     PanelProvider selectedProvider = PanelProvider::FileTree;
-    // Whether a picker (command palette or file finder) is open -- both publish through
-    // the palette section and show the findresults content surface.
-    bool finderOpen = false;
-    // The persistent base focus. Panel is honored only when the panel is present; else
-    // it falls back to Editor, so base focus never strands on an absent panel.
+    // The open picker, if any -- the aggregate owns the picker IDENTITY, not merely a
+    // finder-open bit, so truth distinguishes command from file candidates. Both kinds
+    // show the findresults content surface.
+    std::optional<PickerKind> openPicker;
+    // The current base focus. Panel is honored only when the panel is present; else it
+    // falls back to Editor, so base focus never strands on an absent panel.
     BaseFocus baseFocus = BaseFocus::Editor;
+    // The base focus to restore when the panel hides -- retained by the aggregate across
+    // a panel show so hiding the panel returns focus where it was, not blindly to Editor.
+    BaseFocus panelReturnFocus = BaseFocus::Editor;
 };
 
 // Build the interaction aggregate for `schema` from `truth`: presence hides the panel and
 // ALL its provider children when the panel is absent, else the two non-selected panel
 // providers, and whichever of tabview/findresults
 // the finder state excludes; base focus is Editor unless the panel is present and focused;
-// the finder capture is pushed on the findresults node when the finder is open. Rebuilding
+// the finder capture is pushed on the findresults node when a picker is open. Rebuilding
 // with the same truth over a new schema generation IS the migration.
 [[nodiscard]] UiInteractionState buildWholeScreenInteraction(
     ValidatedSchema schema, const WholeScreenTruth& truth);

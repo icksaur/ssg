@@ -6,6 +6,7 @@ target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/UiPresence.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenSchema.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenInteraction.cpp
+    ${SSG_SOURCE_DIR}/src/CommandTransition.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -63,4 +64,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(test_whole_screen_interaction PRIVATE ssg)
     add_test(NAME test_whole_screen_interaction
              COMMAND test_whole_screen_interaction)
+
+    add_executable(test_command_transition
+        ${SSG_SOURCE_DIR}/tests/test_command_transition.cpp
+    )
+    target_link_libraries(test_command_transition PRIVATE ssg)
+    add_test(NAME test_command_transition COMMAND test_command_transition)
 endif()
