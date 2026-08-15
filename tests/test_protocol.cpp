@@ -687,6 +687,35 @@ TEST(snapshotDecodeRejectsNonCorrespondingPresence) {
     ASSERT_FALSE(decoded.snapshot.has_value());
 }
 
+// Replay refuses a delta that advances the schema but not its presence section
+// (a one-sided replacement): the resulting pair would not correspond. deriveDelta
+// naturally produces such a delta when only the schema generation changes.
+TEST(replayRejectsADeltaThatReplacesOnlyTheSchema) {
+    auto beforeSections = sectionsWithUi(ssg::Revision{4}, "alpha");
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
+            {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, clientView(3), beforeSections);
+    auto afterSections = sectionsWithUi(ssg::Revision{5}, "alpha");
+    // Advance only the schema generation; presence stays at the original generation,
+    // so the delta carries a ui replacement but no presence replacement.
+    afterSections.ui.generation =
+        ssg::Generation{afterSections.ui.generation.value() + 1};
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
+            {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, clientView(3), afterSections);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    ASSERT_TRUE(delta.ui().replacement.has_value());
+    ASSERT_FALSE(delta.uiPresence().replacement.has_value());
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    ASSERT_FALSE(replayed.accepted());
+}
+
 TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
     auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
@@ -1416,6 +1445,7 @@ int main() {
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
     RUN(sessionSnapshotAndDeltaCarryTheUiSection);
     RUN(snapshotDecodeRejectsNonCorrespondingPresence);
+    RUN(replayRejectsADeltaThatReplacesOnlyTheSchema);
     RUN(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta);
     RUN(diffWordRangesRoundTripThroughSnapshotAndDelta);
     RUN(twoClientCapabilityAndViewportIsolationSurvivesTheWire);
