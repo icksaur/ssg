@@ -65,6 +65,12 @@ const UiNodeState* stateFor(const UiStateSection& section, const UiNodeId& id) {
     return nullptr;
 }
 
+// The footer area subtree (the sole child of a footer-only composition's root),
+// which is the 3-group Row the chrome lowering consumes.
+const UiNode& footerArea(const UiSchema& schema) {
+    return std::get<UiContainer>(schema.root.content).children.front();
+}
+
 const AccessibilityNode* nodeFor(const std::vector<AccessibilityNode>& nodes,
                                  const std::string& id) {
     for (const auto& node : nodes)
@@ -81,17 +87,17 @@ TEST(labelFieldStateMatchesTuiNodeOrDrop) {
     const auto comp = ssgtest::composeFooter(
         {literalField("f.lit", "hello"), providerField("f.prov", "path"),
          providerField("f.empty", "missing")});
-    const UiSchema schema{Generation{1}, comp.regions};
+    const UiSchema schema{Generation{1}, comp.root};
 
     const auto section = resolveUiState(ValidatedSchema::validate(schema).takeSchema(), resolver);
     std::vector<AccessibilityNode> nodes;
     const auto lowered = lowerUiChromeRegion(
-        schema.regions[0], {0, 0, kWideWidth, 1}, ShellNodeKind::FooterField,
+        footerArea(schema), {0, 0, kWideWidth, 1}, ShellNodeKind::FooterField,
         SemanticRole::Footer, Style{}, resolver, nodes);
     ASSERT_TRUE(lowered.ok());
 
     std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
-    collectLeaves(schema.regions[0].root, leaves);
+    collectLeaves(footerArea(schema), leaves);
 
     for (const auto& [nodeId, widget] : leaves) {
         const UiNodeState* state = stateFor(section, nodeId);
@@ -126,12 +132,12 @@ TEST(explicitRoleOverridesRegionDefault) {
     WidgetDescriptor bogus = literalField("f.bogus", "plain");
     bogus.role = "not_a_role";
     const auto comp = ssgtest::composeFooter({roled, bogus});
-    const UiSchema schema{Generation{1}, comp.regions};
+    const UiSchema schema{Generation{1}, comp.root};
     const auto section =
         resolveUiState(ValidatedSchema::validate(schema).takeSchema(), empty);
 
     std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
-    collectLeaves(schema.regions[0].root, leaves);
+    collectLeaves(footerArea(schema), leaves);
     ASSERT_EQ(leaves.size(), std::size_t{2});
 
     const UiNodeState* roledState = stateFor(section, leaves[0].first);
@@ -166,11 +172,11 @@ TEST(checkboxStateMatchesIndependentExpectation) {
     provBox.checked = ValueSource{true, "", "wrapchk"};
 
     const auto comp = ssgtest::composeFooter({litBox, provBox});
-    const UiSchema schema{Generation{1}, comp.regions};
+    const UiSchema schema{Generation{1}, comp.root};
     const auto section = resolveUiState(ValidatedSchema::validate(schema).takeSchema(), resolver);
 
     std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
-    collectLeaves(schema.regions[0].root, leaves);
+    collectLeaves(footerArea(schema), leaves);
     ASSERT_EQ(leaves.size(), std::size_t{2});
 
     // Literal caption: value+label are the caption, checked=true, command from the
@@ -204,7 +210,7 @@ TEST(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord) {
     spacer.width = 3;
     const auto comp =
         ssgtest::composeFooter({literalField("f", "x"), spacer});
-    const UiSchema schema{Generation{4}, comp.regions};
+    const UiSchema schema{Generation{4}, comp.root};
     const auto empty = [](std::string_view) -> std::optional<ResolvedProvider> {
         return std::nullopt;
     };
@@ -213,7 +219,7 @@ TEST(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord) {
     ASSERT_EQ(section.generation.value(), std::uint64_t{4});
 
     std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
-    collectLeaves(schema.regions[0].root, leaves);
+    collectLeaves(footerArea(schema), leaves);
     for (const auto& [nodeId, widget] : leaves) {
         const UiNodeState* state = stateFor(section, nodeId);
         ASSERT_TRUE(state != nullptr);

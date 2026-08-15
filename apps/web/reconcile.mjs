@@ -181,24 +181,25 @@ export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
 export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3 };
 
 // The primitives THIS web build's interpreter can draw: header/footer chrome, so
-// Container/Label/Field/Checkbox/Spacer leaves in the Top/Bottom regions. TextInput
-// and the side/overlay regions are not implemented, so a schema using one is a loud,
-// tested rejection -- never a silently dropped element. The View kind is enumerated,
-// but supporting the kind does not imply supporting a surface: `surfaces` declares
-// which surface ids this build renders (none yet -- the surface renderers land with
-// the whole-screen tree), so a View naming an unrendered surface is rejected too.
+// Container/Label/Field/Checkbox/Spacer leaves. TextInput is not implemented, so a
+// schema using one is a loud, tested rejection -- never a silently dropped element.
+// The View kind is enumerated, but supporting the kind does not imply supporting a
+// surface: `surfaces` declares which surface ids this build renders (none yet -- the
+// surface renderers land with the whole-screen tree), so a View naming an unrendered
+// surface is rejected too. Placement is tree structure + well-known node ids, so
+// there is no region-role set.
 export const WEB_UI_PROFILE = {
   widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.SPACER, WIDGET.VIEW]),
-  regions: new Set([REGION.TOP, REGION.BOTTOM]),
   surfaces: new Set(),
 };
 
 // The first schema primitive `profile` does not support, as
-// { kind: 'widget'|'region'|'surface', ordinal }, or null when every region role,
-// leaf widget kind, and view surface is supported. The interpreter runs only when
-// this returns null.
+// { kind: 'widget'|'surface', ordinal }, or null when every leaf widget kind and
+// view surface is supported. Placement is a property of tree structure + well-known
+// node ids, so there is no region-role check. The interpreter runs only when this
+// returns null.
 export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
-  if (!schema || !Array.isArray(schema.regions)) return null;
+  if (!schema || !schema.root) return null;
   const surfaces = profile.surfaces || new Set();
   const walk = (node) => {
     if (!node) return null;
@@ -218,26 +219,21 @@ export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
     }
     return null;
   };
-  for (const region of schema.regions) {
-    const role = num(region.role);
-    if (!profile.regions.has(role)) return { kind: 'region', ordinal: role };
-    const bad = walk(region.root);
-    if (bad) return bad;
-  }
-  return null;
+  return walk(schema.root);
 }
 
-// Interpret the schema (structure) + dynamic state (resolved values/presence) into a
-// per-region RENDER TREE the DOM builder mirrors 1:1 -- the generic container tree is
-// preserved (axis, gap, the left/middle/right grouping, and the FULL published sizing:
-// each node carries its Size {kind, extent} and each container its Inset), so packing
-// follows the published tree rather than a flattened, flex-only item list. Each node:
+// Interpret the schema (a single root node) + dynamic state (resolved values/presence)
+// into a RENDER TREE (rooted at `root`) the DOM builder mirrors 1:1 -- the generic
+// container tree is preserved (axis, gap, the left/middle/right grouping, and the FULL
+// published sizing: each node carries its Size {kind, extent} and each container its
+// Inset), so packing follows the published tree rather than a flattened, flex-only item
+// list. Each node:
 //   container: { id, kind:'container', axis, gap, size, inset, children:[...] }
 //   leaf:      { id, kind:'leaf', widget, size, text, checked?, command?, role, spacer? }
 // A non-present node (and its subtree) is omitted; a Label/Field with no resolved leaf
 // state is the resolved drop and is omitted; a Checkbox always renders; a Spacer renders
 // a gap. `role` is the effective SemanticRole ordinal the SERVER resolved (the widget's
-// own role or the region default) and published in the dynamic state, so the client
+// own role or the area default) and published in the dynamic state, so the client
 // colors from theme.role_colors by ordinal and never re-derives a role name.
 //
 // Returns null (do not interpret; wait for a consistent frame) when the schema and
@@ -245,9 +241,10 @@ export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
 // correspond one-to-one), when a primitive is unsupported, or when a state record's
 // SHAPE disagrees with its schema node (a container or spacer carrying leaf state, a
 // checkbox missing leaf state or missing its `checked`, or a Label/Field leaf state that
-// carries `checked`) -- a malformed frame is never partially drawn.
+// carries `checked`) -- a malformed frame is never partially drawn. `root` is the
+// interpreted render root; its children are the well-known areas (id "header"/"footer").
 export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
-  if (!schema || !Array.isArray(schema.regions) || !state) return null;
+  if (!schema || !schema.root || !state) return null;
   if (firstUnsupportedPrimitive(schema, profile)) return null;
   if (num(schema.generation) !== num(state.generation)) return null;
 
@@ -262,7 +259,7 @@ export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
     if (node.container && Array.isArray(node.container.children))
       for (const c of node.container.children) collect(c);
   };
-  for (const region of schema.regions) collect(region.root);
+  collect(schema.root);
   if ((state.nodes || []).length !== schemaIds.length) return null;
   for (const id of schemaIds) if (!stateById.has(id)) return null;
 
@@ -322,13 +319,8 @@ export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
              command: st.leaf.command != null ? st.leaf.command : null };
   };
 
-  const regions = [];
-  for (const region of schema.regions) {
-    const role = num(region.role);
-    const node = build(region.root);
-    regions.push({ role, node });
-  }
+  const rootNode = build(schema.root);
   if (!shapeOk) return null;
-  return { regions };
+  return { root: rootNode };
 }
 

@@ -313,41 +313,26 @@ std::optional<UiNode> decodeNode(const ProtocolValue& value) {
 }  // namespace
 
 ProtocolValue encodeUiSchema(const UiSchema& schema) {
-    std::vector<ProtocolValue> regions;
-    regions.reserve(schema.regions.size());
-    for (const auto& region : schema.regions) {
-        regions.push_back(ProtocolValue::makeObject(
-            {{"role", enumValue(region.role)},
-             {"root", encodeNode(region.root)}}));
-    }
     return ProtocolValue::makeObject(
         {{"generation", ProtocolValue::makeUint(schema.generation.value())},
-         {"regions", ProtocolValue::makeArray(std::move(regions))}});
+         {"root", encodeNode(schema.root)}});
 }
 
 std::optional<UiSchema> decodeUiSchema(const ProtocolValue& value) {
     if (!value.asObject()) return std::nullopt;
     const auto generation = uintField(value, "generation");
-    const ProtocolValue* regionsField = value.field("regions");
-    if (!generation || !regionsField || !regionsField->asArray()) {
-        return std::nullopt;
-    }
+    const ProtocolValue* rootField = value.field("root");
+    if (!generation || !rootField) return std::nullopt;
+
+    auto root = decodeNode(*rootField);
+    if (!root) return std::nullopt;
 
     UiSchema schema;
     schema.generation = Generation{*generation};
-    for (const auto& regionValue : *regionsField->asArray()) {
-        if (!regionValue.asObject()) return std::nullopt;
-        const auto role =
-            decodeEnumIn(uintField(regionValue, "role"), kAllRegionRoles);
-        const ProtocolValue* rootField = regionValue.field("root");
-        if (!role || !rootField) return std::nullopt;
-        auto root = decodeNode(*rootField);
-        if (!root) return std::nullopt;
-        schema.regions.push_back(UiRegion{*role, std::move(*root)});
-    }
+    schema.root = std::move(*root);
     // A decoded schema must satisfy the same structural rules as one built
-    // in-process (unique non-empty node ids, one tree per region role); malformed
-    // wire can never enter the semantic channel as a plausible schema.
+    // in-process (unique non-empty node ids, per-leaf shape); malformed wire can
+    // never enter the semantic channel as a plausible schema.
     if (!validateUiSchema(schema).ok()) return std::nullopt;
     return schema;
 }

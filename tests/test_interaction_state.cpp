@@ -31,7 +31,6 @@ using ssg::UiInteractionState;
 using ssg::UiLeaf;
 using ssg::UiNode;
 using ssg::UiNodeId;
-using ssg::UiRegion;
 using ssg::UiSchema;
 using ssg::ValidatedSchema;
 using ssg::WidgetDescriptor;
@@ -51,9 +50,7 @@ UiNode container(std::string id, std::vector<UiNode> children) {
 ValidatedSchema validated() {
     UiSchema s;
     s.generation = Generation{1};
-    s.regions = {UiRegion{RegionRole::Overlay,
-                          container("group", {container("overlay",
-                                                        {leaf("palette")})})}};
+    s.root = container("group", {container("overlay", {leaf("palette")})});
     auto r = ValidatedSchema::validate(s);
     if (!r.ok()) throw std::logic_error("schema must validate");
     return r.takeSchema();

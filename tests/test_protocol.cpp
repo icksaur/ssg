@@ -112,7 +112,7 @@ ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
     // a non-empty schema to exercise the wire tree encoding.
     const auto comp = ssgtest::composeFooter({path}, {}, title,
                                              ssg::CenterWidth::Fixed, 6, 2);
-    result.ui = ssg::UiSchema{ssg::Generation{marker.size()}, comp.regions};
+    result.ui = ssg::UiSchema{ssg::Generation{marker.size()}, comp.root};
     // Resolve the dynamic state for the same schema (a resolver mapping the one
     // provider used above), so the round-trip exercises the ui_state section too.
     const auto resolver =
@@ -626,7 +626,8 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), sectionsWithUi(ssg::Revision{4}, "alpha"));
-    ASSERT_TRUE(!snapshot.sections().ui.regions.empty());
+    ASSERT_TRUE(!std::get<ssg::UiContainer>(snapshot.sections().ui.root.content)
+                     .children.empty());
     ASSERT_TRUE(!snapshot.sections().uiState.nodes.empty());
 
     auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(

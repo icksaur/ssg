@@ -67,10 +67,13 @@ std::vector<UiSchema> corpus() {
         const auto comp = ssgtest::composeHeaderAndFooter(
             {path, dirty, sp}, {msg}, {label("enc", "utf-8")}, label("title", "SSG"),
             ssg::CenterWidth::Fixed, 8, /*headerSeparator=*/2);
-        all.push_back(UiSchema{Generation{7}, comp.regions});
+        all.push_back(UiSchema{Generation{7}, comp.root});
     }
-    {  // empty composition -> empty schema
-        all.push_back(UiSchema{Generation{1}, {}});
+    {  // empty composition -> empty schema (a valid empty root)
+        all.push_back(UiSchema{
+            Generation{1},
+            ssg::UiNode{ssg::UiNodeId{"root"}, ssg::Size::flex(),
+                        ssg::UiContainer{ssg::Axis::Column, {}, {}, {}}}});
     }
     {  // a View leaf carries its surface across the wire
         WidgetDescriptor view;
@@ -84,8 +87,7 @@ std::vector<UiSchema> corpus() {
                         ssg::UiLeaf{view}});
         ssg::UiNode root{ssg::UiNodeId{"body"}, ssg::Size::flex(),
                          std::move(body)};
-        all.push_back(UiSchema{
-            Generation{3}, {ssg::UiRegion{ssg::RegionRole::Overlay, root}}});
+        all.push_back(UiSchema{Generation{3}, std::move(root)});
     }
     return all;
 }
@@ -105,10 +107,10 @@ TEST(uiSchemaRoundTripsThroughTheWire) {
 TEST(malformedWireDecodesToNullopt) {
     ASSERT_TRUE(!decodeUiSchema(ProtocolValue::makeUint(5)).has_value());
     ASSERT_TRUE(!decodeUiSchema(ProtocolValue::makeObject({})).has_value());
-    // A regions array whose entry is not an object.
+    // A schema whose root is not an object.
     const ProtocolValue badEntry = ProtocolValue::makeObject(
         {{"generation", ProtocolValue::makeUint(1)},
-         {"regions", ProtocolValue::makeArray({ProtocolValue::makeUint(3)})}});
+         {"root", ProtocolValue::makeUint(3)}});
     ASSERT_TRUE(!decodeUiSchema(badEntry).has_value());
 
     // A node with BOTH a container and a leaf is malformed (exactly one).
@@ -141,9 +143,7 @@ TEST(malformedWireDecodesToNullopt) {
          {"container", containerObj},
          {"leaf", leafObj}});
     const ProtocolValue bothSchema = ProtocolValue::makeObject(
-        {{"generation", ProtocolValue::makeUint(1)},
-         {"regions", ProtocolValue::makeArray({ProtocolValue::makeObject(
-             {{"role", ProtocolValue::makeUint(0)}, {"root", bothNode}})})}});
+        {{"generation", ProtocolValue::makeUint(1)}, {"root", bothNode}});
     ASSERT_TRUE(!decodeUiSchema(bothSchema).has_value());
 }
 
@@ -169,9 +169,7 @@ TEST(malformedSurfaceDecodesToNullopt) {
                        {"extent", ProtocolValue::makeUint(0)}})},
          {"leaf", leafObj}});
     const ProtocolValue schema = ProtocolValue::makeObject(
-        {{"generation", ProtocolValue::makeUint(1)},
-         {"regions", ProtocolValue::makeArray({ProtocolValue::makeObject(
-             {{"role", ProtocolValue::makeUint(0)}, {"root", node}})})}});
+        {{"generation", ProtocolValue::makeUint(1)}, {"root", node}});
     ASSERT_TRUE(!decodeUiSchema(schema).has_value());
 }
 

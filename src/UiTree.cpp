@@ -69,19 +69,9 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
 
 UiSchemaValidation validateUiSchema(const UiSchema& schema) {
     std::set<std::string> seenIds;
-    std::set<RegionRole> seenRoles;
     std::optional<std::string> error;
-
-    for (const auto& region : schema.regions) {
-        if (!seenRoles.insert(region.role).second) {
-            return {std::string{regionRoleName(region.role)} +
-                    ": duplicate region role"};
-        }
-        walk(region.root, std::string{regionRoleName(region.role)}, seenIds,
-             error);
-        if (error) return {error};
-    }
-
+    walk(schema.root, std::string{}, seenIds, error);
+    if (error) return {error};
     return {};
 }
 
@@ -98,8 +88,13 @@ void collectIds(const UiNode& node, std::set<UiNodeId>& out) {
 
 std::set<UiNodeId> uiSchemaNodeIds(const UiSchema& schema) {
     std::set<UiNodeId> ids;
-    for (const auto& region : schema.regions) collectIds(region.root, ids);
+    collectIds(schema.root, ids);
     return ids;
+}
+
+UiNode emptyUiRoot() {
+    return UiNode{UiNodeId{std::string{kRootNodeId}}, Size::flex(),
+                  UiContainer{Axis::Column, {}, {}, {}}};
 }
 
 ValidatedSchema::ValidatedSchema(UiSchema schema)

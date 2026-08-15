@@ -201,17 +201,15 @@ check('palette-prompt detection reads the wire snake_case field names', () => {
 
 // --- UI-VM: profile rejection + schema/state interpretation ---
 import {
-  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, REGION, SIZE, SURFACE,
+  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, SIZE, SURFACE,
 } from '../../apps/web/reconcile.mjs';
 
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
 const leafNode = (id, kind, extra) => ({ id, size: {}, leaf: { kind, ...(extra || {}) } });
-// A region whose root is a Row container over `children`. The container's id 'r'+role
-// gets a state record too, so correspondence holds.
-const rowRegion = (role, children) => ({
-  role,
-  root: { id: 'r' + role, size: {}, container: { axis: 0, gap: 0, children } },
-});
+// A Row container node over `children`.
+const rowNode = (id, children) => ({ id, size: {}, container: { axis: 0, gap: 0, children } });
+// A schema is a single root node; placement is tree structure + well-known ids.
+const schemaOf = (generation, root) => ({ generation, root });
 // The dynamic-state record for a node.
 const st = (id, leaf) => ({ id, present: 1, leaf: leaf || null });
 
@@ -224,65 +222,51 @@ function drawnLeaves(node, out = []) {
 }
 
 check('firstUnsupportedPrimitive accepts a supported header/footer schema', () => {
-  const schema = { generation: 1, regions: [
-    rowRegion(REGION.TOP, [leafNode('a', WIDGET.FIELD), leafNode('b', WIDGET.SPACER)]),
-    rowRegion(REGION.BOTTOM, [leafNode('c', WIDGET.CHECKBOX)]),
-  ] };
-  assert.equal(firstUnsupportedPrimitive(schema), null);
+  const root = { id: 'root', size: {}, container: { axis: 1, gap: 0, children: [
+    rowNode('header', [leafNode('a', WIDGET.FIELD), leafNode('b', WIDGET.SPACER)]),
+    rowNode('footer', [leafNode('c', WIDGET.CHECKBOX)]),
+  ] } };
+  assert.equal(firstUnsupportedPrimitive(schemaOf(1, root)), null);
 });
 
 check('firstUnsupportedPrimitive rejects an unsupported widget kind (TextInput)', () => {
-  const schema = { generation: 1, regions: [
-    rowRegion(REGION.TOP, [leafNode('a', WIDGET.TEXT_INPUT)]),
-  ] };
-  assert.deepEqual(firstUnsupportedPrimitive(schema), { kind: 'widget', ordinal: WIDGET.TEXT_INPUT });
-});
-
-check('firstUnsupportedPrimitive rejects an unsupported region role (Overlay)', () => {
-  const schema = { generation: 1, regions: [ rowRegion(REGION.OVERLAY, []) ] };
-  assert.deepEqual(firstUnsupportedPrimitive(schema), { kind: 'region', ordinal: REGION.OVERLAY });
+  const root = rowNode('root', [leafNode('a', WIDGET.TEXT_INPUT)]);
+  assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root)), { kind: 'widget', ordinal: WIDGET.TEXT_INPUT });
 });
 
 // Supporting the View KIND does not imply supporting a surface: a View naming a
 // surface the profile lacks is rejected, naming the surface ordinal.
 check('firstUnsupportedPrimitive rejects a View naming an unsupported surface', () => {
-  const schema = { generation: 1, regions: [
-    rowRegion(REGION.TOP, [leafNode('v', WIDGET.VIEW, { surface: SURFACE.GITSTATUS })]),
-  ] };
-  assert.deepEqual(firstUnsupportedPrimitive(schema), { kind: 'surface', ordinal: SURFACE.GITSTATUS });
+  const root = rowNode('root', [leafNode('v', WIDGET.VIEW, { surface: SURFACE.GITSTATUS })]);
+  assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root)), { kind: 'surface', ordinal: SURFACE.GITSTATUS });
 });
 
 // A profile that declares the surface accepts the same View leaf.
 check('firstUnsupportedPrimitive accepts a View whose surface the profile declares', () => {
   const profile = { ...WEB_UI_PROFILE, surfaces: new Set([SURFACE.GITSTATUS]) };
-  const schema = { generation: 1, regions: [
-    rowRegion(REGION.TOP, [leafNode('v', WIDGET.VIEW, { surface: SURFACE.GITSTATUS })]),
-  ] };
-  assert.equal(firstUnsupportedPrimitive(schema, profile), null);
+  const root = rowNode('root', [leafNode('v', WIDGET.VIEW, { surface: SURFACE.GITSTATUS })]);
+  assert.equal(firstUnsupportedPrimitive(schemaOf(1, root), profile), null);
 });
 
 check('interpretChrome applies the per-kind render gate', () => {
-  const schema = { generation: 4, regions: [
-    rowRegion(REGION.TOP, [
-      leafNode('lit', WIDGET.FIELD),      // present with leaf -> drawn
-      leafNode('empty', WIDGET.LABEL),    // present, nullopt leaf -> NOT drawn (resolved drop)
-      leafNode('sp', WIDGET.SPACER),      // present spacer -> drawn as a gap despite no leaf
-      leafNode('box', WIDGET.CHECKBOX),   // checkbox -> drawn
-    ]),
-  ] };
+  const root = rowNode('root', [
+    leafNode('lit', WIDGET.FIELD),      // present with leaf -> drawn
+    leafNode('empty', WIDGET.LABEL),    // present, nullopt leaf -> NOT drawn (resolved drop)
+    leafNode('sp', WIDGET.SPACER),      // present spacer -> drawn as a gap despite no leaf
+    leafNode('box', WIDGET.CHECKBOX),   // checkbox -> drawn
+  ]);
   const state = { generation: 4, nodes: [
-    st('r0'), // the container node
+    st('root'), // the container node
     st('lit', { value: 'hello', label: 'hello', command: 'open.thing' }),
     st('empty', null),
     st('sp', null),
     st('box', { value: 'case', label: 'case', checked: 1 }),
   ] };
-  const out = interpretChrome(schema, state);
+  const out = interpretChrome(schemaOf(4, root), state);
   assert.ok(out);
-  assert.equal(out.regions.length, 1);
   // The render tree preserves the container; flatten to drawn leaves.
-  assert.equal(out.regions[0].node.kind, 'container');
-  const items = drawnLeaves(out.regions[0].node);
+  assert.equal(out.root.kind, 'container');
+  const items = drawnLeaves(out.root);
   // lit (drawn), sp (gap), box (checkbox) -- empty Label is dropped.
   assert.deepEqual(items.map((i) => i.id), ['lit', 'sp', 'box']);
   assert.equal(items[0].text, 'hello');
@@ -295,28 +279,25 @@ check('interpretChrome applies the per-kind render gate', () => {
 check('interpretChrome preserves the left/middle/right grouping and its sizing', () => {
   // Row[ left(Auto container), middle(Flex container w/ center), right(Auto container) ].
   const grp = (id, sizeKind, children) => ({ id, size: { kind: sizeKind }, container: { axis: 0, gap: 0, children } });
-  const schema = { generation: 2, regions: [ {
-    role: REGION.BOTTOM,
-    root: grp('root', SIZE.FLEX, [
-      grp('left', SIZE.AUTO, [leafNode('l0', WIDGET.FIELD)]),
-      grp('mid', SIZE.FLEX, [{ id: 'c0', size: { kind: SIZE.EXACT, extent: 12 }, leaf: { kind: WIDGET.LABEL } }]),
-      grp('right', SIZE.AUTO, [leafNode('r0', WIDGET.FIELD, { command: 'do.it' })]),
-    ]),
-  } ] };
+  const root = grp('root', SIZE.FLEX, [
+    grp('left', SIZE.AUTO, [leafNode('l0', WIDGET.FIELD)]),
+    grp('mid', SIZE.FLEX, [{ id: 'c0', size: { kind: SIZE.EXACT, extent: 12 }, leaf: { kind: WIDGET.LABEL } }]),
+    grp('right', SIZE.AUTO, [leafNode('r0', WIDGET.FIELD, { command: 'do.it' })]),
+  ]);
   const state = { generation: 2, nodes: [
     st('root'), st('left'), st('l0', { value: 'L', label: 'L', role: 11 }),
     st('mid'), st('c0', { value: 'C', label: 'C', role: 11 }),
     st('right'), st('r0', { value: 'R', label: 'R', command: 'do.it', role: 11 }),
   ] };
-  const out = interpretChrome(schema, state);
+  const out = interpretChrome(schemaOf(2, root), state);
   assert.ok(out);
-  const root = out.regions[0].node;
-  assert.equal(root.kind, 'container');
-  assert.equal(root.children.length, 3);
-  assert.equal(root.children[1].size.kind, SIZE.FLEX);   // the middle group is Flex-sized
-  assert.equal(root.children[0].size.kind, SIZE.AUTO);   // the left group is Auto
+  const rootOut = out.root;
+  assert.equal(rootOut.kind, 'container');
+  assert.equal(rootOut.children.length, 3);
+  assert.equal(rootOut.children[1].size.kind, SIZE.FLEX);   // the middle group is Flex-sized
+  assert.equal(rootOut.children[0].size.kind, SIZE.AUTO);   // the left group is Auto
   // The middle's center leaf preserves its Exact extent (a fixed center width).
-  const center = root.children[1].children[0];
+  const center = rootOut.children[1].children[0];
   assert.equal(center.text, 'C');
   assert.equal(center.size.kind, SIZE.EXACT);
   assert.equal(center.size.extent, 12);
@@ -325,41 +306,39 @@ check('interpretChrome preserves the left/middle/right grouping and its sizing',
 });
 
 check('interpretChrome returns null on a generation or node-id mismatch', () => {
-  const schema = { generation: 4, regions: [ rowRegion(REGION.TOP, [leafNode('a', WIDGET.FIELD)]) ] };
+  const schema = schemaOf(4, rowNode('root', [leafNode('a', WIDGET.FIELD)]));
   // Generation mismatch.
-  assert.equal(interpretChrome(schema, { generation: 3, nodes: [st('r0'), st('a', { value: 'x', label: 'x' })] }), null);
+  assert.equal(interpretChrome(schema, { generation: 3, nodes: [st('root'), st('a', { value: 'x', label: 'x' })] }), null);
   // Node-id set mismatch (missing 'a').
-  assert.equal(interpretChrome(schema, { generation: 4, nodes: [st('r0')] }), null);
+  assert.equal(interpretChrome(schema, { generation: 4, nodes: [st('root')] }), null);
 });
 
 check('interpretChrome returns null on a state/schema SHAPE disagreement', () => {
-  const schema = { generation: 5, regions: [ rowRegion(REGION.TOP, [
+  const schema = schemaOf(5, rowNode('root', [
     leafNode('box', WIDGET.CHECKBOX), leafNode('sp', WIDGET.SPACER),
-  ]) ] };
+  ]));
   // Checkbox missing its leaf state -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
-    st('r0'), st('box', null), st('sp', null),
+    st('root'), st('box', null), st('sp', null),
   ] }), null);
   // Spacer carrying leaf state -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
-    st('r0'), st('box', { value: '', label: '', checked: 0 }), st('sp', { value: 'x', label: 'x' }),
+    st('root'), st('box', { value: '', label: '', checked: 0 }), st('sp', { value: 'x', label: 'x' }),
   ] }), null);
   // Container carrying leaf state -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
-    st('r0', { value: 'x', label: 'x' }), st('box', { value: '', label: '', checked: 0 }), st('sp', null),
+    st('root', { value: 'x', label: 'x' }), st('box', { value: '', label: '', checked: 0 }), st('sp', null),
   ] }), null);
   // Checkbox WITH leaf state but MISSING its `checked` -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
-    st('r0'), st('box', { value: 'c', label: 'c' }), st('sp', null),
+    st('root'), st('box', { value: 'c', label: 'c' }), st('sp', null),
   ] }), null);
 });
 
 check('interpretChrome returns null when a Label/Field leaf state carries checked', () => {
-  const schema = { generation: 6, regions: [ rowRegion(REGION.TOP, [
-    leafNode('f', WIDGET.FIELD),
-  ]) ] };
+  const schema = schemaOf(6, rowNode('root', [leafNode('f', WIDGET.FIELD)]));
   assert.equal(interpretChrome(schema, { generation: 6, nodes: [
-    st('r0'), st('f', { value: 'x', label: 'x', checked: 1 }),
+    st('root'), st('f', { value: 'x', label: 'x', checked: 1 }),
   ] }), null);
 });
 

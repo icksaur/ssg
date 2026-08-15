@@ -266,7 +266,7 @@ std::optional<std::vector<const WidgetDescriptor*>> groupLeaves(
 }  // namespace
 
 UiChromeLowerResult lowerUiChromeRegion(
-    const UiRegion& region, const Rect& rect, ShellNodeKind nodeKind,
+    const UiNode& regionRoot, const Rect& rect, ShellNodeKind nodeKind,
     SemanticRole defaultRole, const Style& style,
     const ChromeProviderResolver& resolveProvider,
     std::vector<AccessibilityNode>& out) {
@@ -275,7 +275,7 @@ UiChromeLowerResult lowerUiChromeRegion(
     // encoded in the sizing. Every field the shape depends on is CHECKED here (no
     // silently-ignored axis/size/gap), so a tree a generic client would lay out
     // differently is rejected rather than lowered.
-    const auto* root = std::get_if<UiContainer>(&region.root.content);
+    const auto* root = std::get_if<UiContainer>(&regionRoot.content);
     if (!root || root->axis != Axis::Row) {
         return {"chrome region root must be a Row container"};
     }
@@ -385,15 +385,13 @@ UiChromeLowerResult lowerUiChromeRegion(
 
 namespace {
 
-// The default SemanticRole a region's widgets take when a widget declares none --
-// the same defaults the grid lowering passes (Header for the top edge, Footer for
-// the bottom). Other roles have no chrome default; their widgets fall back to Text.
-SemanticRole regionDefaultRole(RegionRole role) {
-    switch (role) {
-    case RegionRole::Top: return SemanticRole::Header;
-    case RegionRole::Bottom: return SemanticRole::Footer;
-    default: return SemanticRole::Text;
-    }
+// The default SemanticRole a well-known area's widgets take when a widget declares
+// none: Header for the header subtree, Footer for the footer subtree, else Text.
+// Keyed on the well-known node id, since placement is id-based, not a region enum.
+SemanticRole defaultRoleForArea(const UiNodeId& id) {
+    if (id.value() == kHeaderNodeId) return SemanticRole::Header;
+    if (id.value() == kFooterNodeId) return SemanticRole::Footer;
+    return SemanticRole::Text;
 }
 
 // Pre-order walk: record each node's presence (always present in phase 6) and, for
@@ -424,9 +422,15 @@ UiStateSection resolveUiState(const ValidatedSchema& schema,
                               const ChromeProviderResolver& resolveProvider) {
     UiStateSection section;
     section.generation = schema.generation();
-    for (const auto& region : schema.schema().regions) {
-        collectNodeStates(region.root, resolveProvider,
-                          regionDefaultRole(region.role), section.nodes);
+    const UiNode& root = schema.schema().root;
+    // The root carries the well-known areas as children; each area's widgets take
+    // that area's default role. The root node itself has no leaf.
+    section.nodes.push_back(UiNodeState{root.id, true, std::nullopt});
+    if (const auto* container = std::get_if<UiContainer>(&root.content)) {
+        for (const auto& area : container->children) {
+            collectNodeStates(area, resolveProvider,
+                              defaultRoleForArea(area.id), section.nodes);
+        }
     }
     return section;
 }

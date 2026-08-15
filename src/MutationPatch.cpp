@@ -14,9 +14,9 @@ PresenceConfig PresenceConfig::initial(const ValidatedSchema& validated,
     PresenceConfig config;
     config.generation_ = schema.generation;
     config.basis_ = PresenceBasis{0};
-    for (const auto& region : schema.regions) {
-        // Walk each region's tree, marking every node present.
-        std::vector<const UiNode*> stack{&region.root};
+    {
+        // Walk the root tree, marking every node present.
+        std::vector<const UiNode*> stack{&schema.root};
         while (!stack.empty()) {
             const UiNode* node = stack.back();
             stack.pop_back();
@@ -42,9 +42,7 @@ PresenceConfig PresenceConfig::initial(const ValidatedSchema& validated,
     const std::set<UiNodeId> hiddenSet{hidden.begin(), hidden.end()};
     if (!hiddenSet.empty()) {
         std::vector<std::pair<const UiNode*, bool>> stack;  // node, ancestorHidden
-        for (const auto& region : schema.regions) {
-            stack.emplace_back(&region.root, false);
-        }
+        stack.emplace_back(&schema.root, false);
         while (!stack.empty()) {
             const auto [node, ancestorHidden] = stack.back();
             stack.pop_back();
@@ -95,9 +93,7 @@ struct Index {
 
     [[nodiscard]] static Index build(const UiSchema& schema) {
         Index index;
-        for (const auto& region : schema.regions) {
-            index.addNode(region.root, nullptr);
-        }
+        index.addNode(schema.root, nullptr);
         return index;
     }
 

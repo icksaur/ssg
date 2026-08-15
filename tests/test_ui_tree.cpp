@@ -21,7 +21,6 @@ using ssg::UiContainer;
 using ssg::UiLeaf;
 using ssg::UiNode;
 using ssg::UiNodeId;
-using ssg::UiRegion;
 using ssg::UiSchema;
 using ssg::validateUiSchema;
 using ssg::WidgetDescriptor;
@@ -50,54 +49,40 @@ UiNode viewLeaf(std::string id, ssg::ViewSurface surface, Size size) {
 TEST(wellFormedSchemaValidates) {
     UiSchema schema;
     schema.generation = Generation{1};
-    schema.regions = {
-        UiRegion{RegionRole::Top,
-                 container("header", {leaf("path"), leaf("branch")})},
-        UiRegion{RegionRole::Bottom, container("footer", {leaf("hint")})},
-    };
+    schema.root = container(
+        "root", {container("header", {leaf("path"), leaf("branch")}),
+                 container("footer", {leaf("hint")})});
     ASSERT_TRUE(validateUiSchema(schema).ok());
 }
 
 // A node id must be unique across the WHOLE generation, not merely among
 // siblings: the id addresses patches/state/focus, so a collision anywhere is a
 // rejection.
-TEST(duplicateNodeIdAcrossRegionsIsRejected) {
+TEST(duplicateNodeIdAcrossSubtreesIsRejected) {
     UiSchema schema;
-    schema.regions = {
-        UiRegion{RegionRole::Top, container("root_a", {leaf("shared")})},
-        UiRegion{RegionRole::Bottom, container("root_b", {leaf("shared")})},
-    };
-    const auto result = validateUiSchema(schema);
-    ASSERT_TRUE(!result.ok());
+    schema.root = container(
+        "root", {container("sub_a", {leaf("shared")}),
+                 container("sub_b", {leaf("shared")})});
+    ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 
 TEST(duplicateNodeIdAmongSiblingsIsRejected) {
     UiSchema schema;
-    schema.regions = {
-        UiRegion{RegionRole::Top,
-                 container("root", {leaf("dup"), leaf("dup")})},
-    };
+    schema.root = container("root", {leaf("dup"), leaf("dup")});
     ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 
 TEST(emptyNodeIdIsRejected) {
     UiSchema schema;
-    schema.regions = {UiRegion{RegionRole::Top, container("root", {leaf("")})}};
+    schema.root = container("root", {leaf("")});
     ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 
-// A region role may root only one tree; two Top regions is malformed.
-TEST(duplicateRegionRoleIsRejected) {
+// A minimal valid schema is a single root node with a non-empty id.
+TEST(minimalRootValidates) {
     UiSchema schema;
-    schema.regions = {
-        UiRegion{RegionRole::Top, container("a", {})},
-        UiRegion{RegionRole::Top, container("b", {})},
-    };
-    ASSERT_TRUE(!validateUiSchema(schema).ok());
-}
-
-TEST(emptySchemaValidates) {
-    ASSERT_TRUE(validateUiSchema(UiSchema{}).ok());
+    schema.root = container("root", {});
+    ASSERT_TRUE(validateUiSchema(schema).ok());
 }
 
 // A node is exactly one of container or leaf, by construction (the variant).
@@ -113,10 +98,9 @@ TEST(nodeIsExactlyContainerOrLeaf) {
 // A View leaf names a client-rendered surface and is sized Exact or Flex.
 TEST(wellFormedViewLeafValidates) {
     UiSchema schema;
-    schema.regions = {UiRegion{
-        RegionRole::Overlay,
-        container("body", {viewLeaf("tv", ssg::ViewSurface::TabView,
-                                    Size::flex())})}};
+    schema.root = container(
+        "body",
+        {viewLeaf("tv", ssg::ViewSurface::TabView, Size::flex())});
     ASSERT_TRUE(validateUiSchema(schema).ok());
 }
 
@@ -126,20 +110,17 @@ TEST(viewLeafWithoutSurfaceIsRejected) {
     widget.kind = WidgetKind::View;
     widget.id = "tv";
     UiSchema schema;
-    schema.regions = {UiRegion{
-        RegionRole::Overlay,
-        container("body", {UiNode{UiNodeId{"tv"}, Size::flex(),
-                                  UiLeaf{std::move(widget)}}})}};
+    schema.root = container(
+        "body", {UiNode{UiNodeId{"tv"}, Size::flex(), UiLeaf{std::move(widget)}}});
     ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 
 // An opaque View has no content to hug, so an Auto-sized View leaf is rejected.
 TEST(autoSizedViewLeafIsRejected) {
     UiSchema schema;
-    schema.regions = {UiRegion{
-        RegionRole::Overlay,
-        container("body", {viewLeaf("tv", ssg::ViewSurface::TabView,
-                                    Size::autoSize())})}};
+    schema.root = container(
+        "body",
+        {viewLeaf("tv", ssg::ViewSurface::TabView, Size::autoSize())});
     ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 
@@ -150,10 +131,9 @@ TEST(surfaceOnNonViewLeafIsRejected) {
     widget.id = "lbl";
     widget.surface = ssg::ViewSurface::GitStatus;
     UiSchema schema;
-    schema.regions = {UiRegion{
-        RegionRole::Top,
-        container("root", {UiNode{UiNodeId{"lbl"}, Size::flex(),
-                                  UiLeaf{std::move(widget)}}})}};
+    schema.root = container(
+        "root",
+        {UiNode{UiNodeId{"lbl"}, Size::flex(), UiLeaf{std::move(widget)}}});
     ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 
@@ -161,11 +141,10 @@ TEST(surfaceOnNonViewLeafIsRejected) {
 
 int main() {
     RUN(wellFormedSchemaValidates);
-    RUN(duplicateNodeIdAcrossRegionsIsRejected);
+    RUN(duplicateNodeIdAcrossSubtreesIsRejected);
     RUN(duplicateNodeIdAmongSiblingsIsRejected);
     RUN(emptyNodeIdIsRejected);
-    RUN(duplicateRegionRoleIsRejected);
-    RUN(emptySchemaValidates);
+    RUN(minimalRootValidates);
     RUN(nodeIsExactlyContainerOrLeaf);
     RUN(wellFormedViewLeafValidates);
     RUN(viewLeafWithoutSurfaceIsRejected);

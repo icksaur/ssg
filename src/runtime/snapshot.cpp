@@ -210,7 +210,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     // keys providers by entry id), so the scan is the natural lookup.
     if (composedUi) {
         request.composedUi =
-            UiSchema{Generation{chromeGeneration}, composedUi->composition().regions};
+            UiSchema{Generation{chromeGeneration}, composedUi->composition().root};
         request.chromeProviderResolver =
             chromeResolverFor(request.headerFields, request.footerFields);
     }
@@ -313,8 +313,8 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
     auto treeSection = treeView();
     UiSchema uiSchema =
         composedUi
-            ? UiSchema{Generation{chromeGeneration}, composedUi->composition().regions}
-            : UiSchema{Generation{chromeGeneration}, {}};
+            ? UiSchema{Generation{chromeGeneration}, composedUi->composition().root}
+            : UiSchema{Generation{chromeGeneration}, emptyUiRoot()};
     UiStateSection uiState = [&] {
         if (!composedUi) return UiStateSection{Generation{chromeGeneration}, {}};
         auto validated = ValidatedSchema::validate(uiSchema);

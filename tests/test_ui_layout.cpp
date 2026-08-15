@@ -871,7 +871,7 @@ TEST(composedChromeReplacesBuiltinHeaderAndFooter) {
     const auto comp = ssgtest::composeHeaderAndFooter(
         {literalField("custom.header", "HELLO", 0)},
         {literalField("custom.footer", "WORLD", 0)});
-    value.composedUi = UiSchema{Generation{1}, comp.regions};
+    value.composedUi = UiSchema{Generation{1}, comp.root};
 
     auto result = computeShellLayout(value, state);
     ASSERT_TRUE(result.accepted());
@@ -905,7 +905,7 @@ TEST(composingOneRegionLeavesTheOtherBuiltin) {
     auto footerOnly = request(100, 24);
     const auto comp = ssgtest::composeFooter(
         {literalField("custom.footer", "WORLD", 0)});
-    footerOnly.composedUi = UiSchema{Generation{1}, comp.regions};
+    footerOnly.composedUi = UiSchema{Generation{1}, comp.root};
 
     auto result = computeShellLayout(footerOnly, state);
     ASSERT_TRUE(result.accepted());
@@ -925,7 +925,7 @@ TEST(composedHeaderResolvesProvidersAndKeepsTheInputLine) {
     value.inputLineActive = true;
     value.inputLineQuery = "abc";
     const auto comp = ssgtest::composeHeader({providerField("live.path", "path", 0)});
-    value.composedUi = UiSchema{Generation{1}, comp.regions};
+    value.composedUi = UiSchema{Generation{1}, comp.root};
     value.chromeProviderResolver =
         [](std::string_view id) -> std::optional<ResolvedProvider> {
         if (id == "path")
@@ -965,7 +965,7 @@ TEST(composedHeaderSpacerPushesTheInputLinePastItsCells) {
     spacer.width = 20;
     const auto comp = ssgtest::composeHeader(
         {literalField("h.field", "X", 0), spacer});
-    value.composedUi = UiSchema{Generation{1}, comp.regions};
+    value.composedUi = UiSchema{Generation{1}, comp.root};
 
     auto result = computeShellLayout(value, state);
     ASSERT_TRUE(result.accepted());

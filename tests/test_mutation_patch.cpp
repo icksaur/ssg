@@ -31,7 +31,6 @@ using ssg::UiContainer;
 using ssg::UiLeaf;
 using ssg::UiNode;
 using ssg::UiNodeId;
-using ssg::UiRegion;
 using ssg::UiSchema;
 using ssg::ValidatedSchema;
 using ssg::WidgetDescriptor;
@@ -53,10 +52,9 @@ UiNode container(std::string id, std::vector<UiNode> children) {
 UiSchema rawSchema(Generation gen = Generation{1}) {
     UiSchema s;
     s.generation = gen;
-    s.regions = {UiRegion{
-        RegionRole::Top,
+    s.root =
         container("group",
-                  {leaf("bar"), container("overlay", {leaf("palette")})})}};
+                  {leaf("bar"), container("overlay", {leaf("palette")})});
     return s;
 }
 

@@ -73,9 +73,7 @@ TEST(gridChromeLoweringRefusesAViewCenter) {
         {UiNode{UiNodeId{"footer.left"}, Size::autoSize(), std::move(left)},
          UiNode{UiNodeId{"footer.middle"}, Size::flex(), std::move(middle)},
          UiNode{UiNodeId{"footer.right"}, Size::autoSize(), std::move(right)}}};
-    ssg::UiRegion region{ssg::RegionRole::Bottom,
-                         UiNode{UiNodeId{"footer"}, Size::flex(),
-                                std::move(root)}};
+    UiNode regionRoot{UiNodeId{"footer"}, Size::flex(), std::move(root)};
 
     std::vector<ssg::AccessibilityNode> out;
     const auto empty =
@@ -83,7 +81,7 @@ TEST(gridChromeLoweringRefusesAViewCenter) {
         return std::nullopt;
     };
     const auto result = ssg::lowerUiChromeRegion(
-        region, {0, 0, 100, 1}, ssg::ShellNodeKind::FooterField,
+        regionRoot, {0, 0, 100, 1}, ssg::ShellNodeKind::FooterField,
         ssg::SemanticRole::Footer, ssg::Style{}, empty, out);
     ASSERT_TRUE(!result.ok());
 }

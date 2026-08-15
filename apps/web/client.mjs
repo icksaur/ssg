@@ -10,7 +10,7 @@ import {
   decodeValue, findSections, num, cssColor, byteToIndex, utf8Bytes,
   applyDocumentDelta, dropSettled, project, parseEnvelope, paletteReportIsFresh,
   paletteSelectedWindowRow, isPalettePromptOpen,
-  interpretChrome, firstUnsupportedPrimitive, REGION, SIZE, AXIS,
+  interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS,
 } from '/reconcile.mjs';
 
 const statusEl = document.getElementById('status');
@@ -189,7 +189,7 @@ function renderChrome(sections) {
   chromeTopEl.textContent = '';
   chromeBottomEl.textContent = '';
   chromeErrorEl.textContent = '';
-  if (!schema || !Array.isArray(schema.regions) || schema.regions.length === 0) return;
+  if (!schema || !schema.root) return;
 
   const unsupported = firstUnsupportedPrimitive(schema);
   if (unsupported) {
@@ -199,13 +199,17 @@ function renderChrome(sections) {
     return;
   }
   const interpreted = interpretChrome(schema, stateSection);
-  if (!interpreted) return;  // schema/state from different frames; wait
+  if (!interpreted || !interpreted.root) return;  // schema/state from different frames; wait
 
-  for (const region of interpreted.regions) {
-    const host = region.role === REGION.TOP ? chromeTopEl
-               : region.role === REGION.BOTTOM ? chromeBottomEl : null;
+  // The root's children are the well-known areas; render each into its host by
+  // its well-known node id. Placement is the tree structure + the id, not a role.
+  const root = interpreted.root;
+  const areas = root.kind === 'container' ? root.children : [];
+  for (const area of areas) {
+    const host = area.id === 'header' ? chromeTopEl
+               : area.id === 'footer' ? chromeBottomEl : null;
     if (!host) continue;
-    const el = renderChromeNode(region.node, sections.theme);
+    const el = renderChromeNode(area, sections.theme);
     if (el) host.appendChild(el);
   }
 }

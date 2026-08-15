@@ -85,16 +85,17 @@ UiNode groupFor(std::string id, const std::vector<WidgetDescriptor>& widgets,
     return UiNode{UiNodeId{std::move(id)}, Size::autoSize(), std::move(container)};
 }
 
-// Assemble a decoded row into the canonical chrome region tree:
+// Assemble a decoded row into a chrome subtree rooted at `base` (a well-known node
+// id such as "header"/"footer"):
 // Row = [ left(Auto), middle(Flex), right(Auto) ]. The Auto end groups size to
 // content and the Flex middle absorbs the slack, so the packing (left flush,
 // right flush) is encoded in the SIZING, not positional convention. The center
 // widget, if any, sits at the start of the flex middle; its own Size carries the
 // width policy (Flex fills; Exact is a fixed center right after the left group).
-UiRegion assembleRegion(const DecodedRow& row, RegionRole role) {
-    const std::string base{regionRoleName(role)};
-    UiNode left = groupFor(base + ".left", row.left, row.separator);
-    UiNode right = groupFor(base + ".right", row.right, 0);
+UiNode assembleRegion(const DecodedRow& row, std::string_view base) {
+    const std::string baseId{base};
+    UiNode left = groupFor(baseId + ".left", row.left, row.separator);
+    UiNode right = groupFor(baseId + ".right", row.right, 0);
 
     UiContainer middleContainer;
     middleContainer.axis = Axis::Row;
@@ -103,9 +104,9 @@ UiRegion assembleRegion(const DecodedRow& row, RegionRole role) {
                                     ? Size::exact(row.centerFixed)
                                     : Size::flex();
         middleContainer.children.push_back(
-            leafFor(*row.center, base + ".middle.0", centerSize));
+            leafFor(*row.center, baseId + ".middle.0", centerSize));
     }
-    UiNode middle{UiNodeId{base + ".middle"}, Size::flex(),
+    UiNode middle{UiNodeId{baseId + ".middle"}, Size::flex(),
                   std::move(middleContainer)};
 
     UiContainer rootContainer;
@@ -114,8 +115,7 @@ UiRegion assembleRegion(const DecodedRow& row, RegionRole role) {
     rootContainer.children.push_back(std::move(middle));
     rootContainer.children.push_back(std::move(right));
 
-    return UiRegion{
-        role, UiNode{UiNodeId{base}, Size::flex(), std::move(rootContainer)}};
+    return UiNode{UiNodeId{baseId}, Size::flex(), std::move(rootContainer)};
 }
 
 // Fail-loud recursive decoder. The first error short-circuits; every message is
@@ -132,19 +132,26 @@ public:
             if (key != "header" && key != "footer")
                 return failC("chrome." + key, "unknown field");
         }
-        UiComposition out;
+        // The composed chrome is two subtrees (header, footer) under one root
+        // Column; placement is their order in the root, not a region enum. Panel
+        // and content join the root in a later sub-step.
+        UiContainer rootContainer;
+        rootContainer.axis = Axis::Column;
         if (const auto* h = root.find("header")) {
             DecodedRow row;
             if (!decodeRegion(*h, "header", /*isHeader=*/true, row))
                 return std::nullopt;
-            out.regions.push_back(assembleRegion(row, RegionRole::Top));
+            rootContainer.children.push_back(assembleRegion(row, kHeaderNodeId));
         }
         if (const auto* f = root.find("footer")) {
             DecodedRow row;
             if (!decodeRegion(*f, "footer", /*isHeader=*/false, row))
                 return std::nullopt;
-            out.regions.push_back(assembleRegion(row, RegionRole::Bottom));
+            rootContainer.children.push_back(assembleRegion(row, kFooterNodeId));
         }
+        UiComposition out;
+        out.root = UiNode{UiNodeId{std::string{kRootNodeId}}, Size::flex(),
+                          std::move(rootContainer)};
         return out;
     }
 

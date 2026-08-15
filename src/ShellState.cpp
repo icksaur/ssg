@@ -16,13 +16,16 @@
 namespace ssg {
 namespace {
 
-// The composed region for a role (Top=header, Bottom=footer) in the published
-// schema, or nullptr when absent -- in which case the built-in projection stands.
-const UiRegion* composedRegion(const std::optional<UiSchema>& schema,
-                               RegionRole role) {
+// The composed well-known area (id "header"/"footer") in the published schema's
+// root, or nullptr when absent -- in which case the built-in projection stands.
+const UiNode* composedArea(const std::optional<UiSchema>& schema,
+                           std::string_view areaId) {
     if (!schema) return nullptr;
-    for (const auto& region : schema->regions)
-        if (region.role == role) return &region;
+    const auto* rootContainer =
+        std::get_if<UiContainer>(&schema->root.content);
+    if (!rootContainer) return nullptr;
+    for (const auto& child : rootContainer->children)
+        if (child.id.value() == areaId) return &child;
     return nullptr;
 }
 
@@ -495,8 +498,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         // widget in the focus phase, where reserve/grow/ghost geometry is
         // designed rather than shoehorned into a stack item).
         int headerX = view.header->x;
-        const UiRegion* headerRegion =
-            composedRegion(request.composedUi, RegionRole::Top);
+        const UiNode* headerRegion =
+            composedArea(request.composedUi, kHeaderNodeId);
         const bool composedHeader = headerRegion != nullptr;
         if (composedHeader) {
             // A composed header REPLACES the built-in status fields, laid out
@@ -584,8 +587,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         const bool hasHint =
             request.footerHint && !request.footerHint->label.empty();
 
-        const UiRegion* footerRegion =
-            composedRegion(request.composedUi, RegionRole::Bottom);
+        const UiNode* footerRegion =
+            composedArea(request.composedUi, kFooterNodeId);
         const bool composedFooter = footerRegion != nullptr;
         if (composedFooter) {
             // A composed footer REPLACES the whole built-in footer row (fields,

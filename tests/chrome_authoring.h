@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ssgtest {
@@ -120,16 +121,20 @@ inline ssg::UiComposition composeFooter(
     return decoded.composition->composition();
 }
 
-// The single region of a footer-only composition.
-inline ssg::UiRegion composeFooterRegion(
+// The footer subtree (id "footer") of a footer-only composition.
+inline ssg::UiNode composeFooterRegion(
     std::vector<ssg::WidgetDescriptor> left,
     std::vector<ssg::WidgetDescriptor> right = {},
     std::optional<ssg::WidgetDescriptor> center = std::nullopt,
     ssg::CenterWidth centerWidth = ssg::CenterWidth::Flex, int centerFixed = 0,
     int separator = 1) {
-    return composeFooter(std::move(left), std::move(right), std::move(center),
-                         centerWidth, centerFixed, separator)
-        .regions.front();
+    const ssg::UiComposition comp =
+        composeFooter(std::move(left), std::move(right), std::move(center),
+                      centerWidth, centerFixed, separator);
+    const auto& rootContainer = std::get<ssg::UiContainer>(comp.root.content);
+    for (const auto& child : rootContainer.children)
+        if (child.id.value() == ssg::kFooterNodeId) return child;
+    std::abort();
 }
 
 // A header composition (header is left-group only) as a UiComposition.
@@ -173,10 +178,10 @@ struct RowView {
     int centerFixed = 0;
 };
 
-inline RowView rowOf(const ssg::UiRegion& region) {
+inline RowView rowOf(const ssg::UiNode& regionRoot) {
     using namespace ssg;
     RowView v;
-    const auto& root = std::get<UiContainer>(region.root.content);
+    const auto& root = std::get<UiContainer>(regionRoot.content);
     const auto& left = std::get<UiContainer>(root.children[0].content);
     v.separator = left.gap.extent();
     for (const auto& c : left.children)
@@ -221,16 +226,22 @@ inline ssg::UiComposition composeHeaderAndFooter(
     return decoded.composition->composition();
 }
 
-inline bool hasRegion(const ssg::UiComposition& comp, ssg::RegionRole role) {
-    for (const auto& r : comp.regions)
-        if (r.role == role) return true;
-    return false;
+// A well-known area subtree (id "header"/"footer") of a composition's root, by id.
+inline const ssg::UiNode* areaById(const ssg::UiComposition& comp,
+                                   std::string_view id) {
+    const auto& rootContainer = std::get<ssg::UiContainer>(comp.root.content);
+    for (const auto& child : rootContainer.children)
+        if (child.id.value() == id) return &child;
+    return nullptr;
 }
 
-inline const ssg::UiRegion& regionByRole(const ssg::UiComposition& comp,
-                                         ssg::RegionRole role) {
-    for (const auto& r : comp.regions)
-        if (r.role == role) return r;
+inline bool hasArea(const ssg::UiComposition& comp, std::string_view id) {
+    return areaById(comp, id) != nullptr;
+}
+
+inline const ssg::UiNode& areaByIdRef(const ssg::UiComposition& comp,
+                                      std::string_view id) {
+    if (const auto* area = areaById(comp, id)) return *area;
     std::abort();
 }
 

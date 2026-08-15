@@ -77,15 +77,14 @@ TEST(reconcileDropsOnlyAbsentCaptures) {
 
     // A schema with both nodes; presence hides only the top (palette).
     ssg::UiSchema rawSchema;
-    rawSchema.regions = {ssg::UiRegion{
-        ssg::RegionRole::Overlay,
+    rawSchema.root =
         ssg::UiNode{UiNodeId{"panelOverlay"}, ssg::Size::flex(),
                     ssg::UiContainer{ssg::Axis::Column,
                                      {},
                                      {},
                                      {ssg::UiNode{UiNodeId{"palette"},
                                                   ssg::Size::flex(),
-                                                  ssg::UiLeaf{}}}}}}};
+                                                  ssg::UiLeaf{}}}}};
     auto vr = ssg::ValidatedSchema::validate(rawSchema);
     const ssg::ValidatedSchema schema = vr.takeSchema();
     const PresenceConfig presence =

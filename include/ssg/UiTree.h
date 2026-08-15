@@ -1,13 +1,14 @@
 #pragma once
 
 // The UI-VM tree schema: the medium-agnostic superset structure the library
-// publishes once per generation. A schema is a set of region roots, each holding
-// a generic node tree. A node is either a CONTAINER (an axis, an inset, and
-// children, laid out by the medium-agnostic constraints in LayoutConstraints.h)
-// or a LEAF (a WidgetDescriptor). Every node carries a UiNodeId unique within the
-// schema's generation; patches, dynamic node state, triggers, and focus entries
-// all address nodes by this id, so uniqueness is a precondition the validator
-// enforces before any consumer walks the tree.
+// publishes once per generation. A schema is ONE root node whose tree spans the
+// screen. A node is either a CONTAINER (an axis, an inset, and children, laid out
+// by the medium-agnostic constraints in LayoutConstraints.h) or a LEAF (a
+// WidgetDescriptor). Every node carries a UiNodeId unique within the schema's
+// generation; patches, dynamic node state, triggers, and focus entries all address
+// nodes by this id, so uniqueness is a precondition the validator enforces before
+// any consumer walks the tree. Placement is a property of tree structure and
+// well-known node ids, never an out-of-band region enum.
 //
 // The schema is immutable within a generation: a structural change is a full-tree
 // replacement stamped with a new Generation. Values the tree DISPLAYS (resolved
@@ -102,29 +103,35 @@ struct UiNode {
     friend bool operator==(const UiNode&, const UiNode&) = default;
 };
 
-// A region root: a placement role and the node tree attached there.
-struct UiRegion {
-    RegionRole role;
-    UiNode root;
+// The well-known node ids the whole-screen tree is built from. Placement is a
+// property of tree structure + these ids, not an out-of-band region enum: a client
+// finds a well-known area by id. Header/footer are the chrome subtrees; the root is
+// their column parent.
+inline constexpr std::string_view kRootNodeId = "root";
+inline constexpr std::string_view kHeaderNodeId = "header";
+inline constexpr std::string_view kFooterNodeId = "footer";
 
-    friend bool operator==(const UiRegion&, const UiRegion&) = default;
-};
-
-// A full schema for one generation: the region roots, each with its tree.
+// A full schema for one generation: one root node whose tree spans the screen.
+// Placement comes from tree structure and well-known node ids, never a region enum.
 struct UiSchema {
     Generation generation{0};
-    std::vector<UiRegion> regions;
+    UiNode root;
 
     friend bool operator==(const UiSchema&, const UiSchema&) = default;
 };
 
-// A generationless set of region trees: what the chrome decoder produces and the
-// runtime OWNS as composed input. It carries no Generation because a generation
-// belongs to one PUBLISHED schema; the runtime stamps the current generation when
-// it publishes a composition as a UiSchema, so authorship (decode) never fixes a
-// generation and the runtime stays the sole generation authority.
+// A well-formed empty root (id "root", an empty Column): the "no composed chrome"
+// schema. A default-constructed UiNode has an empty id, which fails validation, so
+// callers that need an absent-UI schema use this rather than UiSchema{}.
+[[nodiscard]] UiNode emptyUiRoot();
+
+// A generationless root tree: what the chrome decoder produces and the runtime OWNS
+// as composed input. It carries no Generation because a generation belongs to one
+// PUBLISHED schema; the runtime stamps the current generation when it publishes a
+// composition as a UiSchema, so authorship (decode) never fixes a generation and the
+// runtime stays the sole generation authority.
 struct UiComposition {
-    std::vector<UiRegion> regions;
+    UiNode root;
 
     friend bool operator==(const UiComposition&, const UiComposition&) = default;
 };
@@ -138,12 +145,14 @@ struct UiSchemaValidation {
 };
 
 // Validate a schema before any consumer walks it. Enforces: every node id is
-// non-empty and unique across the whole generation, and each region role appears
-// at most once. Fails loud with a path-qualified message. Pure.
+// non-empty and unique across the whole generation, and each leaf's per-kind shape
+// (a View leaf names a valid surface and is Exact/Flex sized and carries no other
+// field; a non-View leaf carries no surface). Fails loud with a path-qualified
+// message. Pure.
 [[nodiscard]] UiSchemaValidation validateUiSchema(const UiSchema& schema);
 
-// The set of every node id in a schema (all regions). Meaningful only for a
-// schema whose ids are unique; used by ValidatedSchema.
+// The set of every node id in a schema. Meaningful only for a schema whose ids are
+// unique; used by ValidatedSchema.
 [[nodiscard]] std::set<UiNodeId> uiSchemaNodeIds(const UiSchema& schema);
 
 class ValidatedSchema;
