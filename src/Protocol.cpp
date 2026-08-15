@@ -15,6 +15,8 @@
 #include <ssg/UiTreeProtocol.h>
 #include <ssg/UiStateProtocol.h>
 #include <ssg/PresenceProtocol.h>
+#include <ssg/PaletteProtocol.h>
+#include <ssg/PaletteSearcher.h>
 
 #include <any>
 #include <array>
@@ -2738,6 +2740,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SearchViewState>& o
     return true;
 }
 
+
 ProtocolValue toValue(SearchDelta const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("base_revision", toValue(value.baseRevision));
@@ -2758,6 +2761,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SearchDelta>& out) 
     out.emplace(std::move(result));
     return true;
 }
+
 
 
 ProtocolValue toValue(ByteRange const& value) {
@@ -4870,6 +4874,7 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back("lsp_features", toValue(value.lspFeatures));
     fields.emplace_back("theme", toValue(value.theme));
     fields.emplace_back("focus", toValue(value.focus));
+    fields.emplace_back("palette", encodePalette(value.palette));
     fields.emplace_back("ui", encodeUiSchema(value.ui));
     fields.emplace_back("ui_state", encodeUiState(value.uiState));
     fields.emplace_back("ui_presence", encodeUiPresence(value.uiPresence));
@@ -4899,6 +4904,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     auto lspFeatures = requireField<LspFeatureViewState>(value.field("lsp_features"));
     auto theme = requireField<ThemeSnapshot>(value.field("theme"));
     auto focus = requireField<FocusTarget>(value.field("focus"));
+    auto palette = value.field("palette")
+        ? decodePalette(*value.field("palette"))
+        : std::optional<PaletteViewState>{};
     std::optional<UiSchema> ui;
     if (const ProtocolValue* uiField = value.field("ui")) {
         ui = decodeUiSchema(*uiField);
@@ -4932,11 +4940,13 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         !lspFeatures || !theme || !focus) {
         return false;
     }
+    if (!palette) return false;
     out.emplace(SessionSnapshotSections{
         *document, *selection, *history, *clipboard, *promptStatus, *search,
         *findReplace, *settings, *keymap, *textEncoding, *tabs, *diff,
         *externalModification, *followEdits, *tree, std::move(*syntax), *lspSync,
         *lspFeatures, *theme, *focus});
+    out->palette = std::move(*palette);
     if (ui) out->ui = std::move(*ui);
     if (uiState) out->uiState = std::move(*uiState);
     if (uiPresence) out->uiPresence = std::move(*uiPresence);

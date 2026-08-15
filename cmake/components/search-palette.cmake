@@ -53,4 +53,16 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_picker PRIVATE ssg)
     add_test(NAME test_picker COMMAND test_picker)
+
+    add_executable(test_fuzzy_corpus
+        ${SSG_SOURCE_DIR}/tests/test_fuzzy_corpus.cpp
+    )
+    target_include_directories(test_fuzzy_corpus PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    target_compile_definitions(test_fuzzy_corpus PRIVATE
+        SSG_FUZZY_CORPUS="${SSG_SOURCE_DIR}/tests/fixtures/fuzzy_corpus.tsv"
+    )
+    target_link_libraries(test_fuzzy_corpus PRIVATE ssg)
+    add_test(NAME test_fuzzy_corpus COMMAND test_fuzzy_corpus)
 endif()

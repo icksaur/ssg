@@ -1,0 +1,14 @@
+C	edit.undo	Undo	
+C	edit.redo	Redo	
+C	file.save	Save File	
+C	file.save_as	Save File As	
+C	view.split	Split View	
+C	panel.toggle	Toggle Panel	
+C	eclair.open	Open Éclair	
+C	cafe.list	Café List	
+Q	undo	edit.undo
+Q	save	file.save,file.save_as
+Q	panel	panel.toggle
+Q	clair	eclair.open
+Q	é	cafe.list
+Q		cafe.list,eclair.open,edit.redo,file.save,file.save_as,view.split,panel.toggle,edit.undo

@@ -1,20 +1,26 @@
 #include <ssg/PaletteSearcher.h>
 
 #include <algorithm>
-#include <cctype>
 #include <limits>
 #include <optional>
 
 namespace ssg {
 namespace {
 
+// ASCII-only case fold: A-Z -> a-z, every other byte (including non-ASCII UTF-8
+// continuation bytes) folds to itself. Deliberately NOT locale std::tolower, so the
+// C++ reference and a client matcher agree byte-for-byte regardless of locale.
 char folded(char value) {
-    return static_cast<char>(
-        std::tolower(static_cast<unsigned char>(value)));
+    unsigned char byte = static_cast<unsigned char>(value);
+    if (byte >= 'A' && byte <= 'Z') return static_cast<char>(byte - 'A' + 'a');
+    return static_cast<char>(byte);
 }
 
-std::optional<int> fuzzyScore(std::string_view candidate,
-                               std::string_view query) {
+// Score `query` as a case-folded subsequence of `candidate`, iterating raw UTF-8
+// bytes; nullopt when `query` is not a subsequence. Weights come from `params` so
+// the score is a pure function of the published parameters.
+std::optional<int> fuzzyScore(std::string_view candidate, std::string_view query,
+                              MatcherParameters const& params) {
     if (query.empty()) return 0;
     int score = 0;
     std::size_t cursor = 0;
@@ -25,27 +31,26 @@ std::optional<int> fuzzyScore(std::string_view candidate,
             ++cursor;
         }
         if (cursor == candidate.size()) return std::nullopt;
-        score += 10;
+        score += params.baseScore;
         if (cursor == 0 || candidate[cursor - 1] == '/' ||
             candidate[cursor - 1] == '_' || candidate[cursor - 1] == '-' ||
             candidate[cursor - 1] == '.') {
-            score += 8;
+            score += params.wordBoundaryBonus;
         }
         if (previous != std::string_view::npos && cursor == previous + 1) {
-            score += 6;
+            score += params.contiguityBonus;
         }
-        if (candidate[cursor] == wanted) ++score;
+        if (candidate[cursor] == wanted) score += params.exactCaseBonus;
         previous = cursor++;
     }
-    score -= static_cast<int>(
-        std::min<std::size_t>(candidate.size(), std::size_t{100}));
+    score -= static_cast<int>(std::min<std::size_t>(
+        candidate.size(), static_cast<std::size_t>(std::max(params.lengthCap, 0))));
     return score;
 }
 
-}  // namespace
-
-std::vector<std::size_t> PaletteSearcher::rank(
-    std::vector<PaletteCandidate> const& candidates, std::string_view query) const {
+std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidates,
+                                  std::string_view query,
+                                  MatcherParameters const& params) {
     struct Ranked {
         std::size_t index;
         int score;
@@ -54,8 +59,8 @@ std::vector<std::size_t> PaletteSearcher::rank(
     ranked.reserve(candidates.size());
     for (std::size_t index = 0; index < candidates.size(); ++index) {
         auto const& candidate = candidates[index];
-        auto const labelScore = fuzzyScore(candidate.label, query);
-        auto const idScore = fuzzyScore(candidate.id, query);
+        auto const labelScore = fuzzyScore(candidate.label, query, params);
+        auto const idScore = fuzzyScore(candidate.id, query, params);
         if (!labelScore && !idScore) continue;
         ranked.push_back(
             {index,
@@ -73,6 +78,18 @@ std::vector<std::size_t> PaletteSearcher::rank(
     order.reserve(ranked.size());
     for (auto const& entry : ranked) order.push_back(entry.index);
     return order;
+}
+
+}  // namespace
+
+std::vector<std::size_t> referenceRank(PaletteViewState const& state,
+                                       std::string_view query) {
+    return rankWith(state.candidates, query, state.parameters);
+}
+
+std::vector<std::size_t> PaletteSearcher::rank(
+    std::vector<PaletteCandidate> const& candidates, std::string_view query) const {
+    return rankWith(candidates, query, MatcherParameters{});
 }
 
 std::string PaletteSearcher::ghost(std::string_view topLabel,

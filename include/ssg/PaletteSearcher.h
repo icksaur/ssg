@@ -20,9 +20,34 @@ struct PaletteCandidate {
     friend bool operator==(const PaletteCandidate&, const PaletteCandidate&) = default;
 };
 
+// The fuzzy-match scoring weights and length cap, published with the candidate
+// universe so a client scores against the SAME parameters the library uses -- the
+// single source of truth for the shared match/order contract. A client hardcodes
+// none of these; it reads them from the PaletteViewState it receives. The defaults
+// here ARE that source; the wire carries them so a client can never match candidates
+// without the parameters that score them.
+struct MatcherParameters {
+    // Per matched byte.
+    int baseScore = 10;
+    // Added when a matched byte begins a word (index 0, or preceded by / _ - .).
+    int wordBoundaryBonus = 8;
+    // Added when a matched byte is adjacent to the previous match.
+    int contiguityBonus = 6;
+    // Added when the raw (unfolded) byte matches the query byte exactly.
+    int exactCaseBonus = 1;
+    // Subtracted: min(candidate byte length, lengthCap) -- shorter candidates win.
+    int lengthCap = 100;
+
+    friend bool operator==(const MatcherParameters&, const MatcherParameters&) =
+        default;
+};
+
 struct PaletteViewState {
     SearchMode mode = SearchMode::Command;
     std::vector<PaletteCandidate> candidates;
+    // The parameters a client must score `candidates` with; travels on the same
+    // channel so candidates and their scoring arrive atomically.
+    MatcherParameters parameters;
 
     friend bool operator==(const PaletteViewState&, const PaletteViewState&) = default;
 };
@@ -64,5 +89,16 @@ public:
         std::vector<PaletteCandidate> const& candidates,
         PaletteWindowState& window) const;
 };
+
+// The shared match-and-order contract, as a pure function of the published state.
+// This is the SPECIFICATION a responsive client executes locally against the same
+// candidate universe and parameters the library published, so the library reference
+// and every client matcher produce identical match sets and orderings. Match: the
+// query is a case-folded (ASCII-only) subsequence of a candidate's label OR id, over
+// raw UTF-8 bytes. Order: descending score (scored with `state.parameters`), ties
+// broken by label then id ascending, stable. Returns candidate indices in order;
+// non-matches are dropped.
+[[nodiscard]] std::vector<std::size_t> referenceRank(PaletteViewState const& state,
+                                                     std::string_view query);
 
 }  // namespace ssg
