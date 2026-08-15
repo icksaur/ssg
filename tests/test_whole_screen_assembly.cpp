@@ -126,12 +126,14 @@ TEST(omittedBuiltinsSynthesizeHeaderAndFooterFromStatusFields) {
     const ssgtest::RowView footerRow = ssgtest::rowOf(footer);
     ASSERT_EQ(footerRow.left.size(), std::size_t{1});
     ASSERT_EQ(footerRow.left[0].value->provider, std::string{"mode"});
-    // The help hint is a right-group Field carrying its click command.
-    ASSERT_EQ(footerRow.right.size(), std::size_t{1});
+    // The right group carries the help hint (a Field with its command) and the stable
+    // status-actions widget (its data rides promptStatus, so it is always present).
+    ASSERT_EQ(footerRow.right.size(), std::size_t{2});
     ASSERT_EQ(footerRow.right[0].value->literal, std::string{"^H help"});
     ASSERT_TRUE(footerRow.right[0].command.has_value());
     if (footerRow.right[0].command)
         ASSERT_EQ(*footerRow.right[0].command, std::string{"help.open"});
+    ASSERT_TRUE(footerRow.right[1].kind == WidgetKind::StatusActions);
 }
 
 TEST(composedHeaderAndFooterOverrideTheBuiltins) {

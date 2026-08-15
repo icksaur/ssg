@@ -18,7 +18,7 @@ constexpr std::array kWidgetKindNames{
     std::string_view{"container"}, std::string_view{"label"},
     std::string_view{"field"},     std::string_view{"checkbox"},
     std::string_view{"text_input"}, std::string_view{"spacer"},
-    std::string_view{"view"},
+    std::string_view{"view"},      std::string_view{"status_actions"},
 };
 static_assert(kWidgetKindNames.size() == kWidgetKindCount);
 

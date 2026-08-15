@@ -136,6 +136,34 @@ TEST(surfaceOnNonViewLeafIsRejected) {
     ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 
+// A StatusActions leaf carries only its id; unlike a View it may be Auto-sized (it
+// has intrinsic content -- a variable action list rendered from promptStatus).
+TEST(wellFormedStatusActionsLeafValidates) {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::StatusActions;
+    widget.id = "sa";
+    UiSchema schema;
+    schema.root = container(
+        "root",
+        {UiNode{UiNodeId{"sa"}, Size::autoSize(), UiLeaf{std::move(widget)}}});
+    ASSERT_TRUE(validateUiSchema(schema).ok());
+}
+
+// A StatusActions leaf carrying any widget-only field (here a command) is malformed:
+// its data rides promptStatus, not the schema, and it dispatches by invocation, not a
+// commandId.
+TEST(statusActionsLeafWithAWidgetFieldIsRejected) {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::StatusActions;
+    widget.id = "sa";
+    widget.command = "some.command";
+    UiSchema schema;
+    schema.root = container(
+        "root",
+        {UiNode{UiNodeId{"sa"}, Size::autoSize(), UiLeaf{std::move(widget)}}});
+    ASSERT_TRUE(!validateUiSchema(schema).ok());
+}
+
 // The whole-screen well-known-area contract (validated at the wire boundary): the
 // canonical root/header/footer shape passes.
 TEST(wellKnownAreasAcceptTheCanonicalShape) {
@@ -181,6 +209,8 @@ int main() {
     RUN(viewLeafWithoutSurfaceIsRejected);
     RUN(autoSizedViewLeafIsRejected);
     RUN(surfaceOnNonViewLeafIsRejected);
+    RUN(wellFormedStatusActionsLeafValidates);
+    RUN(statusActionsLeafWithAWidgetFieldIsRejected);
     RUN(wellKnownAreasAcceptTheCanonicalShape);
     RUN(wellKnownAreasRejectAMisnamedRoot);
     RUN(wellKnownAreasRejectALeafHeader);

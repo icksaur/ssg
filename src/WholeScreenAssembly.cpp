@@ -37,6 +37,17 @@ WidgetDescriptor hintField(const ShellFooterHint& hint) {
     return widget;
 }
 
+// The stable status-actions widget: one node carrying only its id, whose data (the
+// selected status item's actions, its status id, and generation) rides the promptStatus
+// section. It is ALWAYS emitted in the built-in footer so the schema stays generation-
+// stable while the actions vary frame to frame on their own section cadence.
+WidgetDescriptor statusActionsWidget() {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::StatusActions;
+    widget.id = "footer.status_actions";
+    return widget;
+}
+
 // A built-in header/footer region: status fields as the left group, `right` as the
 // right group, no center, in the shared canonical region shape.
 UiNode builtinRegion(std::string_view base, const std::vector<StatusField>& fields,
@@ -98,6 +109,11 @@ UiComposition assembleWholeScreen(
     std::vector<WidgetDescriptor> footerRight;
     if (footerHint && !footerHint->label.empty())
         footerRight.push_back(hintField(*footerHint));
+    // The built-in footer always carries the status-actions affordance (a stable
+    // widget; its data rides promptStatus). A composed ssg.chrome footer replaces the
+    // whole built-in footer, so it naturally omits this -- matching the grid's
+    // whole-footer replacement.
+    footerRight.push_back(statusActionsWidget());
 
     UiNode header = composedHeader
                         ? *composedHeader

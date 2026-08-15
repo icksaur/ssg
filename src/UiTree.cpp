@@ -58,6 +58,18 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
                 error = here + ": a \"view\" leaf carries only an id and a surface";
                 return;
             }
+        } else if (w.kind == WidgetKind::StatusActions) {
+            // A StatusActions widget is opaque and client-rendered from the
+            // promptStatus section (the selected status item's actions); like a
+            // View it carries only its id, but it has intrinsic content (a variable
+            // action list), so unlike a View it may be Auto-sized. Any widget-only
+            // field is semantic state no consumer reads, so it is rejected.
+            if (w.value || w.checked || w.width || w.role || w.command ||
+                w.surface || !w.sigil.empty() || w.rank != 0 || w.keep ||
+                w.overflow != Overflow::None) {
+                error = here + ": a \"status_actions\" leaf carries only an id";
+                return;
+            }
         } else if (w.surface) {
             // A surface belongs to a View leaf alone.
             error = here + ": \"surface\" is only allowed on a \"view\" leaf";

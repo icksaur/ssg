@@ -35,6 +35,7 @@ enum class WidgetKind : std::uint8_t {
     TextInput,   // a one-line editable region: sigil + scrolling tail + caret
     Spacer,      // a flexible gap
     View,        // an opaque client-rendered surface (its ViewSurface names which)
+    StatusActions,  // the selected status item's actions, rendered from promptStatus
 };
 
 // The vocabulary made enumerable, mirroring SemanticRole's discipline: a count,
@@ -42,11 +43,11 @@ enum class WidgetKind : std::uint8_t {
 // (UiProfile.h) is a subset of this set, so both must enumerate the same kinds;
 // keeping the enum, the count, and the array bound at compile time is what makes
 // "the profile says X" and "the vocabulary has X" checkable against one source.
-inline constexpr std::size_t kWidgetKindCount = 7;
+inline constexpr std::size_t kWidgetKindCount = 8;
 inline constexpr std::array kAllWidgetKinds{
     WidgetKind::Container, WidgetKind::Label,     WidgetKind::Field,
     WidgetKind::Checkbox,  WidgetKind::TextInput, WidgetKind::Spacer,
-    WidgetKind::View,
+    WidgetKind::View,      WidgetKind::StatusActions,
 };
 static_assert(kAllWidgetKinds.size() == kWidgetKindCount);
 
