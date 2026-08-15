@@ -327,6 +327,14 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             throw std::logic_error(
                 "resolveUiState: composed schema failed validation");
         }
+        // The published whole-screen schema must also satisfy the well-known-area
+        // contract that the wire decoder enforces, so an in-process schema cannot
+        // publish a placement the wire would reject.
+        if (!validateWellKnownAreas(uiSchema).ok()) {
+            throw std::logic_error(
+                "resolveUiState: composed schema violates the well-known-area "
+                "contract");
+        }
         auto fields = chromeStatusFields(ChromeFieldMode::Semantic);
         return resolveUiState(
             validated.schema(),

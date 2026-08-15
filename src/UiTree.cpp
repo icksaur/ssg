@@ -70,21 +70,27 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
 
 namespace {
 
-// A well-known area, wherever it appears in the tree, must be a container (it holds
-// child widgets or view leaves, never a bare leaf). The root additionally must BE
-// the schema root and carry the root id. This is the typed-identity contract a
-// native client relies on when it keys off an area id: uniqueness alone is not
-// enough. Returns a message on violation.
+// The whole-screen well-known-area contract. Two tiers:
+//   - REQUIRED areas must EXIST, be a container, and sit in their canonical
+//     position. Root is the only required area today (it IS the schema root); the
+//     required set grows as the canonical tree gains body/panel/content.
+//   - OPTIONAL areas (header/footer) need not exist -- an empty, header-only, or
+//     footer-only composition is valid -- but WHERE PRESENT must be a container and
+//     a direct child of the root.
+// This is the typed-identity contract a native client relies on when it keys off an
+// area id: uniqueness alone is not enough. Returns a message on violation.
 std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
-    // The root identity: the schema's root node is the "root" area and a container.
+    // Root: a REQUIRED area. The schema's root node IS the "root" area (existence),
+    // carries the root id (identity), and is a container (kind).
     if (schema.root.id.value() != wellKnownAreaId(WellKnownArea::Root)) {
-        return std::string{"root: the schema root must have the \"root\" id"};
+        return std::string{"root: the required \"root\" area must be the schema "
+                           "root"};
     }
     if (!schema.root.isContainer()) {
         return std::string{"root: the root area must be a container"};
     }
-    // Header/footer, wherever present, must be containers and direct children of the
-    // root (their canonical ancestry in the whole-screen tree).
+    // Header/footer: OPTIONAL areas -- validated for kind + ancestry only when
+    // present (a direct child of the root).
     const auto* rootContainer = std::get_if<UiContainer>(&schema.root.content);
     std::set<std::string> rootChildIds;
     if (rootContainer) {

@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -123,7 +124,7 @@ inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
     case WellKnownArea::Header: return kHeaderNodeId;
     case WellKnownArea::Footer: return kFooterNodeId;
     }
-    return {};
+    throw std::invalid_argument("wellKnownAreaId: unrecognized WellKnownArea");
 }
 
 // A well-formed empty root (id "root", an empty Column): the "no composed chrome"
