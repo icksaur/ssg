@@ -375,7 +375,16 @@ with its own parity oracle — not carried speculatively now.
    `include/ssg/UiNodeState.h` (drop `present`), `src/UiStateProtocol.cpp`,
    `include/ssg/session_snapshot.h` + `src/runtime/snapshot.cpp` (add the section),
    `apps/web/reconcile.mjs` + `apps/web/client.mjs`.
-4. Populate `panel`(filetree⊕gitstatus) and `content`(tabview⊕findresults); back the
+4. Assemble the FULL whole-screen schema and populate its areas. The runtime now
+   builds the complete tree root>[header, body>[panel, content], footer] every
+   frame, filling header/footer from the built-in status projection when `ssg.chrome`
+   omits them (an omitted composition entry is an OVERRIDE of the built-in area, not
+   an absent screen area). Once the runtime assembles built-in areas, header/footer/
+   body/panel/content become REQUIRED well-known areas: validateWellKnownAreas is
+   extended to require their existence (not just kind + ancestry), and the optional
+   tier collapses -- the ssg.chrome composition is validated as optional overrides
+   BEFORE fallback assembly, and existence is required on the assembled schema.
+   Populate `panel`(filetree⊕gitstatus) and `content`(tabview⊕findresults); back the
    view leaves with the existing bespoke renderers; carry the "last-active panel
    provider" hint in the runtime; prove the TUI lays panel/content out where it does
    today. Oracles: TUI↔web view-surface placement parity
