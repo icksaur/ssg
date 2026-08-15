@@ -222,9 +222,10 @@ void syncRuntimeSettings(EditorRuntime::Impl& runtime) {
 
 CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
     if (id == "settings.open") {
-        (void)runtime.interaction.openPrompt(PromptRequest{
+        auto opened = runtime.interaction.openPrompt(PromptRequest{
             PromptKind::Settings, "settings",
             {{"settings.query", "settings query", ""}}, {}, std::nullopt});
+        if (!opened.accepted()) return failure(opened.error->message);
         return success();
     }
     if (id == "settings.export_workspace") {
@@ -328,8 +329,12 @@ void registerAppearanceCommands(EditorSessionBuilder& builder,
                                 if (!result.accepted()) {
                                     return failure(result.error->message);
                                 }
+                                // Migrate the schema over the new dimensions FIRST, then
+                                // adopt the style, so a failure cannot leave layout and the
+                                // interaction schema inconsistent.
+                                runtime.rebuildInteractionSchema(
+                                    result.style.dimensions, runtime.composedUi);
                                 runtime.style = std::move(result.style);
-                                runtime.rebuildInteractionSchema();
                                 return success();
                             });
                         }));

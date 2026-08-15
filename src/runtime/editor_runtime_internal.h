@@ -526,9 +526,12 @@ struct EditorRuntime::Impl final : CommandServices,
         const FollowTarget& target, NavigationClass classification);
     void recordNavigation(ClientId client, NavigationClass classification);
     void refreshTree();
-    // Re-assemble the authority-owned whole-screen schema from current chrome inputs
-    // (catalog + style dimensions + composed override), migrating the interaction.
-    void rebuildInteractionSchema();
+    // Re-assemble the authority-owned whole-screen schema from the given chrome inputs and
+    // migrate the interaction over it. Takes the inputs as parameters (not members) so a
+    // caller can build+migrate BEFORE adopting the new style/composition, keeping chrome
+    // truth and the schema consistent if assembly ever throws.
+    void rebuildInteractionSchema(const StyleDimensions& dimensions,
+                                  const std::optional<ValidatedComposition>& composed);
     // Refresh the file picker's candidates off the authority's picker epoch: a newly
     // (re)opened File picker rebuilds synchronously, any other picker state clears.
     void reconcilePickerCandidates();

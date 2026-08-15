@@ -1124,9 +1124,52 @@ TEST(aRejectedFinderCloseIsReportedAndMutatesNothing) {
     ASSERT_FALSE(snap->presentation()->shell.palette.has_value());
 }
 
+TEST(providerTransitionsPreservePanelVisibilityAndFocusLive) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"long.txt"}})
+                    .accepted());
+
+    // ShowPanelProvider: shows the panel, focuses it, and selects the git backing.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+    auto git = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(git.has_value());
+    if (!git) return;
+    ASSERT_TRUE(git->presentation()->shell.panel.has_value());
+    ASSERT_TRUE(git->sections().focus == ssg::FocusTarget::Panel);
+    ASSERT_FALSE(git->sections().tree.providers.empty());
+    ASSERT_TRUE(git->sections().tree.providers.front().kind ==
+                ssg::TreeProviderKind::Git);
+
+    // SwitchPanelProvider (cycling): changes the backing to symbols while PRESERVING
+    // visibility and focus -- the panel stays shown and focused.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"panel.next_provider", runtime.revision(), {}})
+                    .accepted());
+    auto symbols = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(symbols.has_value());
+    if (!symbols) return;
+    ASSERT_TRUE(symbols->presentation()->shell.panel.has_value());
+    ASSERT_TRUE(symbols->sections().focus == ssg::FocusTarget::Panel);
+    ASSERT_TRUE(symbols->sections().tree.providers.front().kind ==
+                ssg::TreeProviderKind::Symbols);
+}
+
 int main() {
     RUN(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot);
     RUN(aRejectedFinderCloseIsReportedAndMutatesNothing);
+    RUN(providerTransitionsPreservePanelVisibilityAndFocusLive);
     RUN(viewportShellSettingsAndThemeAreLiveSections);
     RUN(lineNumberGutterTogglesAndSizesToTheLineCount);
     RUN(lineNumberGutterWidthTracksTheActiveDocumentNotJustItsRevision);

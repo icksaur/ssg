@@ -297,10 +297,13 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             revealActiveFindMatch(runtime);
             // Open the find prompt so focus moves to it and the reserved rows
             // display the controller query (projected at snapshot time).
-            (void)runtime.interaction.openPrompt(PromptRequest{
-                PromptKind::Find, "find", {{"find.query", "find query", query}},
-                findOptionToggles(runtime),
-                PromptMatchCount{"find.count", "match count", ""}});
+            if (auto opened = runtime.interaction.openPrompt(PromptRequest{
+                    PromptKind::Find, "find", {{"find.query", "find query", query}},
+                    findOptionToggles(runtime),
+                    PromptMatchCount{"find.count", "match count", ""}});
+                !opened.accepted()) {
+                return failure(opened.error->message);
+            }
             return success();
         case FindReplaceCommand::FindWordUnderCursor: {
             if (document == nullptr) return success();
@@ -318,10 +321,13 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
                 snapshot, FindRequest{needle, options, std::nullopt});
             runtime.findDocumentId = runtime.activeDocumentId();
             revealActiveFindMatch(runtime);
-            (void)runtime.interaction.openPrompt(PromptRequest{
-                PromptKind::Find, "find", {{"find.query", "find query", needle}},
-                findOptionToggles(runtime),
-                PromptMatchCount{"find.count", "match count", ""}});
+            if (auto opened = runtime.interaction.openPrompt(PromptRequest{
+                    PromptKind::Find, "find", {{"find.query", "find query", needle}},
+                    findOptionToggles(runtime),
+                    PromptMatchCount{"find.count", "match count", ""}});
+                !opened.accepted()) {
+                return failure(opened.error->message);
+            }
             return success();
         }
         case FindReplaceCommand::ReplaceOpen:
@@ -331,13 +337,16 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             // Three-row replace prompt: query (row 0, display-only, seeded from
             // the current find query), replacement (row 1, editable), and the
             // option/match-count row.  The client edits only the replacement.
-            (void)runtime.interaction.openPrompt(PromptRequest{
-                PromptKind::Replace, "replace",
-                {{"find.query", "find query", query},
-                 {"replace.replacement", "replace with",
-                  runtime.findReplace.viewState().replacement}},
-                findOptionToggles(runtime),
-                PromptMatchCount{"find.count", "match count", ""}});
+            if (auto opened = runtime.interaction.openPrompt(PromptRequest{
+                    PromptKind::Replace, "replace",
+                    {{"find.query", "find query", query},
+                     {"replace.replacement", "replace with",
+                      runtime.findReplace.viewState().replacement}},
+                    findOptionToggles(runtime),
+                    PromptMatchCount{"find.count", "match count", ""}});
+                !opened.accepted()) {
+                return failure(opened.error->message);
+            }
             return success();
         case FindReplaceCommand::ReplaceUpdateReplacement: {
             if (!replacePromptActive(runtime)) return success();

@@ -1728,12 +1728,11 @@ void EditorRuntime::Impl::refreshTree() {
         TreeProviderId{"filesystem"}, root, interaction.allocateTreeRevision()));
 }
 
-void EditorRuntime::Impl::rebuildInteractionSchema() {
-    // Re-assemble the whole-screen schema from current chrome inputs (catalog, style
-    // dimensions, composed override) and hand it to the authority; a structural change
-    // advances the generation and migrates the interaction over the new schema.
-    (void)interaction.updateComposition(assembleWholeScreen(
-        statusFieldCatalog, "help.open", style.dimensions, composedUi));
+void EditorRuntime::Impl::rebuildInteractionSchema(
+    const StyleDimensions& dimensions,
+    const std::optional<ValidatedComposition>& composed) {
+    (void)interaction.updateComposition(
+        assembleWholeScreen(statusFieldCatalog, "help.open", dimensions, composed));
 }
 
 // Opens a picker through the authority: apply(OpenFinder) atomically opens the Palette
@@ -2226,12 +2225,11 @@ void EditorRuntime::setComposedUi(std::optional<ValidatedComposition> compositio
     // pair), so bump on a real CHANGE -- and only then, to avoid a redundant
     // repaint when the host re-pushes an identical composition on every reload.
     if (impl_->composedUi == composition) return;
+    // Migrate the schema over the new composition FIRST; adopt chrome truth only if it
+    // succeeds, so a failure cannot leave composedUi/chromeGeneration ahead of the schema.
+    impl_->rebuildInteractionSchema(impl_->style.dimensions, composition);
     impl_->composedUi = std::move(composition);
     ++impl_->chromeGeneration;
-    // Keep the authority-owned whole-screen schema in step with the composed chrome so
-    // schema generation and the interaction projection track runtime truth (a structural
-    // change advances the generation and migrates the projection).
-    impl_->rebuildInteractionSchema();
     if (impl_->session) impl_->session->advanceRevision();
 }
 
