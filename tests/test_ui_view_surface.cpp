@@ -53,19 +53,20 @@ TEST(theSurfaceBackingMappingIsTheSpecifiedContract) {
 }
 
 // The grid chrome lowering renders only chrome widget kinds; a View reaching it is
-// a loud conformance failure, never silent empty content.
-TEST(gridChromeLoweringRefusesAViewLeaf) {
+// a loud conformance failure, never silent empty content. A left/right leaf must be
+// Auto-sized while a View must be Exact/Flex, so the only View shape reachable
+// through a validated chrome region is the Flex/Exact center -- exercise that.
+TEST(gridChromeLoweringRefusesAViewCenter) {
     WidgetDescriptor view;
     view.kind = WidgetKind::View;
-    view.id = "footer.left.0";
+    view.id = "footer.middle.0";
     view.surface = ViewSurface::FileTree;
 
-    // A canonical chrome region shape: Row[ left(Auto), middle(Flex), right(Auto) ]
-    // with the View in the left group.
-    UiContainer left{Axis::Row, {}, {},
-                     {UiNode{UiNodeId{"footer.left.0"}, Size::autoSize(),
-                             UiLeaf{view}}}};
-    UiContainer middle{Axis::Row, {}, {}, {}};
+    // Row[ left(Auto), middle(Flex) with a Flex View center, right(Auto) ].
+    UiContainer left{Axis::Row, {}, {}, {}};
+    UiContainer middle{Axis::Row, {}, {},
+                       {UiNode{UiNodeId{"footer.middle.0"}, Size::flex(),
+                               UiLeaf{view}}}};
     UiContainer right{Axis::Row, {}, {}, {}};
     UiContainer root{
         Axis::Row, {}, {},
@@ -92,6 +93,6 @@ TEST(gridChromeLoweringRefusesAViewLeaf) {
 int main() {
     RUN(everyViewSurfaceHasANonEmptyBacking);
     RUN(theSurfaceBackingMappingIsTheSpecifiedContract);
-    RUN(gridChromeLoweringRefusesAViewLeaf);
+    RUN(gridChromeLoweringRefusesAViewCenter);
     return failed == 0 ? 0 : 1;
 }

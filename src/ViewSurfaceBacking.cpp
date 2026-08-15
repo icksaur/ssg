@@ -1,6 +1,7 @@
 #include <ssg/ViewSurfaceBacking.h>
 
 #include <array>
+#include <stdexcept>
 
 namespace ssg {
 
@@ -20,8 +21,10 @@ std::span<const SnapshotSection> viewSurfaceBackingSections(ViewSurface surface)
     case ViewSurface::FindResults:
         return kFindResults;
     }
-    // Unreachable for a valid enumerator; a corrupt value has no backing.
-    return {};
+    // A corrupt enumerator has no backing; the contract is never-empty, so this is
+    // a hard error rather than an empty span, matching viewSurfaceName.
+    throw std::invalid_argument(
+        "viewSurfaceBackingSections: unrecognized ViewSurface");
 }
 
 }  // namespace ssg
