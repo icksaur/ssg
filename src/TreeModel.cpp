@@ -500,8 +500,17 @@ bool TreeModel::isExpanded(const TreeProviderId& providerId,
                               provider->expanded.end(), nodeId);
 }
 
-bool TreeModel::activateProvider(const TreeProviderId& providerId) {
-    const auto found = std::find_if(
+std::optional<TreeRevision> TreeModel::providerRevision(
+    const TreeProviderId& providerId) const {
+    for (const auto& state : providers_) {
+        if (state.snapshot.providerId() == providerId) {
+            return state.snapshot.revision();
+        }
+    }
+    return std::nullopt;
+}
+
+bool TreeModel::activateProvider(const TreeProviderId& providerId) {    const auto found = std::find_if(
         providers_.begin(), providers_.end(),
         [&](const ProviderState& state) {
             return state.snapshot.providerId() == providerId;

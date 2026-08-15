@@ -203,6 +203,12 @@ public:
                      const TreeNodeId& nodeId) const;
     bool activateProvider(const TreeProviderId& providerId);
 
+    // The current revision of a present provider, or nullopt when none has that id.
+    // A caller that must replace a provider stamps its replacement above this so the
+    // replacement's revision strictly increases (replaceProvider's requirement).
+    [[nodiscard]] std::optional<TreeRevision> providerRevision(
+        const TreeProviderId& providerId) const;
+
     // Activate the provider named by `binding`. When it does not exist yet and
     // its kind is Git or Symbols, create it empty and activate it -- a panel can
     // be shown before its provider has any content. A Filesystem binding is NEVER

@@ -44,6 +44,10 @@ enum class CycleDirection : std::uint8_t { Next, Previous };
 [[nodiscard]] PanelProvider cyclePanelProvider(PanelProvider provider,
                                                CycleDirection direction);
 
+// The region the active prompt's focus anchors on, derived from the prompt (never stored),
+// or nullopt when no prompt is active. Shared by the transition builder and the authority.
+[[nodiscard]] std::optional<PromptRegion> activePromptRegion(const PromptSurface& prompt);
+
 // --- The transition requests --------------------------------------------------------
 
 struct TogglePanel {};
@@ -107,6 +111,16 @@ public:
     [[nodiscard]] const std::optional<TreeBackingPlan>& tree() const noexcept {
         return tree_;
     }
+
+    // The single consuming install chokepoint: move the prepared replacement into the
+    // authority's owned state in ONE fixed order -- apply the tree plan (replaceProvider a
+    // create, then activateProvider) and advance the revision source past any consumed
+    // create revision, then move in prompt, interaction, and truth. Rvalue-qualified so a
+    // prepared transition installs at most once; nothing external can apply parts or
+    // reorder. Preflight has made every step here infallible.
+    void installInto(WholeScreenTruth& truth, UiInteractionState& interaction,
+                     PromptSurface& prompt, TreeModel& tree,
+                     std::uint64_t& revisionSource) &&;
 
 private:
     PreparedTransition(WholeScreenTruth truth, UiInteractionState interaction,

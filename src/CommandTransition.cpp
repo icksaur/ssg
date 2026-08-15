@@ -64,6 +64,30 @@ PanelProvider cyclePanelProvider(PanelProvider provider, CycleDirection directio
     return kCycle[(index + step) % kCycle.size()];
 }
 
+std::optional<PromptRegion> activePromptRegion(const PromptSurface& prompt) {
+    if (!prompt.active()) return std::nullopt;
+    return promptFocusRegion(prompt.request()->kind);
+}
+
+void PreparedTransition::installInto(WholeScreenTruth& truth,
+                                     UiInteractionState& interaction,
+                                     PromptSurface& prompt, TreeModel& tree,
+                                     std::uint64_t& revisionSource) && {
+    if (tree_) {
+        if (tree_->create) {
+            const std::uint64_t consumed = tree_->create->revision().value();
+            tree.replaceProvider(std::move(*tree_->create));
+            // Advance the single revision source past the consumed create revision;
+            // preflight rejected exhaustion, so consumed + 1 does not overflow.
+            revisionSource = std::max(revisionSource, consumed + 1);
+        }
+        (void)tree.activateProvider(tree_->activate);
+    }
+    prompt = std::move(prompt_);
+    interaction = std::move(interaction_);
+    truth = std::move(truth_);
+}
+
 // The per-variant preflight logic, friended so it is the sole constructor of a
 // PreparedTransition; a caller can only obtain one through prepareTransition.
 struct TransitionBuilder {
@@ -71,10 +95,7 @@ struct TransitionBuilder {
                                    const ValidatedSchema& schema, PromptSurface prompt,
                                    std::optional<TreeBackingPlan> tree) {
         // The prompt-focus region is derived from the result prompt, never stored in truth.
-        const std::optional<PromptRegion> region =
-            prompt.active()
-                ? std::optional<PromptRegion>{promptFocusRegion(prompt.request()->kind)}
-                : std::nullopt;
+        const std::optional<PromptRegion> region = activePromptRegion(prompt);
         UiInteractionState interaction =
             buildWholeScreenInteraction(schema, truth, region);
         return PreparedTransition{std::move(truth), std::move(interaction),

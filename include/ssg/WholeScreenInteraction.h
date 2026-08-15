@@ -43,6 +43,8 @@ struct WholeScreenTruth {
     // The base focus to restore when the panel hides -- retained by the aggregate across
     // a panel show so hiding the panel returns focus where it was, not blindly to Editor.
     BaseFocus panelReturnFocus = BaseFocus::Editor;
+
+    friend bool operator==(const WholeScreenTruth&, const WholeScreenTruth&) = default;
 };
 
 // Build the interaction aggregate for `schema` from `truth` and the active prompt's region.
