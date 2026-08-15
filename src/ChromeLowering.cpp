@@ -337,6 +337,19 @@ UiChromeLowerResult lowerUiChromeRegion(
         }
     }
 
+    // The grid chrome lowering renders only chrome widget kinds; an opaque View
+    // surface is not lowerable to chrome cells, so a View reaching this path is a
+    // loud conformance failure, never silently emitted as empty content.
+    for (const auto* group : {leftWidgets ? &*leftWidgets : nullptr,
+                              rightWidgets ? &*rightWidgets : nullptr}) {
+        if (!group) continue;
+        for (const WidgetDescriptor* w : *group) {
+            if (w->kind == WidgetKind::View) {
+                return {"chrome region cannot render a view leaf"};
+            }
+        }
+    }
+
     const int separator = leftContainer->gap.extent();
 
     // The middle group holds zero or one leaf (the center); its Size carries the
@@ -352,6 +365,9 @@ UiChromeLowerResult lowerUiChromeRegion(
         const auto* leaf = std::get_if<UiLeaf>(&centerNode.content);
         if (!leaf) return {"chrome region center is not a leaf"};
         center = &leaf->widget;
+        if (center->kind == WidgetKind::View) {
+            return {"chrome region cannot render a view leaf"};
+        }
         if (centerNode.size.kind() == SizeKind::Auto) {
             return {"chrome region center leaf must be Flex or Exact sized"};
         }

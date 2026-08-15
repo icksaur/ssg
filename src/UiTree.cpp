@@ -40,8 +40,21 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
                 error = here + ": a \"view\" leaf requires a surface";
                 return;
             }
+            if (static_cast<std::size_t>(*w.surface) >= kViewSurfaceCount) {
+                error = here + ": a \"view\" leaf names an unknown surface";
+                return;
+            }
             if (node.size.kind() == SizeKind::Auto) {
                 error = here + ": a \"view\" leaf must be Exact- or Flex-sized";
+                return;
+            }
+            // A View is opaque: it carries only its id + surface. Any widget-only
+            // field is semantic state no View consumer reads, so it is rejected
+            // rather than silently ignored.
+            if (w.value || w.checked || w.width || w.role || w.command ||
+                !w.sigil.empty() || w.rank != 0 || w.keep ||
+                w.overflow != Overflow::None) {
+                error = here + ": a \"view\" leaf carries only an id and a surface";
                 return;
             }
         } else if (w.surface) {

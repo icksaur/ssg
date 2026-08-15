@@ -2,6 +2,7 @@ target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/Widget.cpp
     ${SSG_SOURCE_DIR}/src/RegionRoot.cpp
     ${SSG_SOURCE_DIR}/src/UiTree.cpp
+    ${SSG_SOURCE_DIR}/src/ViewSurfaceBacking.cpp
     ${SSG_SOURCE_DIR}/src/MutationPatch.cpp
 )
 
@@ -53,4 +54,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_interaction_state PRIVATE ssg)
     add_test(NAME test_interaction_state COMMAND test_interaction_state)
+
+    add_executable(test_ui_view_surface
+        ${SSG_SOURCE_DIR}/tests/test_ui_view_surface.cpp
+    )
+    target_link_libraries(test_ui_view_surface PRIVATE ssg)
+    add_test(NAME test_ui_view_surface COMMAND test_ui_view_surface)
 endif()
