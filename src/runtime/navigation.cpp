@@ -73,7 +73,11 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
         // appears to do nothing until the picker is reopened.
         if (runtime.interaction.openPicker() == PickerKind::File) runtime.rebuildFileCandidates();
     }
-    else if (id == "palette.close") { (void)runtime.interaction.apply(CloseFinder{}); }
+    else if (id == "palette.close") {
+        if (!runtime.interaction.apply(CloseFinder{})) {
+            return failure("no palette to close");
+        }
+    }
     else if (id == "palette.next" || id == "search.results_next") runtime.search.selectNext();
     else if (id == "palette.previous" || id == "search.results_previous") runtime.search.selectPrevious();
     else if (id == "palette.execute") {

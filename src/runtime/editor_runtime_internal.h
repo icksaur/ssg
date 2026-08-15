@@ -526,6 +526,9 @@ struct EditorRuntime::Impl final : CommandServices,
         const FollowTarget& target, NavigationClass classification);
     void recordNavigation(ClientId client, NavigationClass classification);
     void refreshTree();
+    // Re-assemble the authority-owned whole-screen schema from current chrome inputs
+    // (catalog + style dimensions + composed override), migrating the interaction.
+    void rebuildInteractionSchema();
     // Refresh the file picker's candidates off the authority's picker epoch: a newly
     // (re)opened File picker rebuilds synchronously, any other picker state clears.
     void reconcilePickerCandidates();

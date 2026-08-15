@@ -454,7 +454,7 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
       selection{initialSelection()},
       clipboard{4},
-      shell{{"files", "git", "symbols"}},
+      shell{},
       tabs{*this},
       external{recovery, diff},
       syntaxParser{std::move(parser)},
@@ -1728,6 +1728,14 @@ void EditorRuntime::Impl::refreshTree() {
         TreeProviderId{"filesystem"}, root, interaction.allocateTreeRevision()));
 }
 
+void EditorRuntime::Impl::rebuildInteractionSchema() {
+    // Re-assemble the whole-screen schema from current chrome inputs (catalog, style
+    // dimensions, composed override) and hand it to the authority; a structural change
+    // advances the generation and migrates the interaction over the new schema.
+    (void)interaction.updateComposition(assembleWholeScreen(
+        statusFieldCatalog, "help.open", style.dimensions, composedUi));
+}
+
 // Opens a picker through the authority: apply(OpenFinder) atomically opens the Palette
 // prompt, sets the picker identity, and advances the picker epoch. File candidates are
 // refreshed by reconcilePickerCandidates() off that epoch, not here.
@@ -2220,6 +2228,10 @@ void EditorRuntime::setComposedUi(std::optional<ValidatedComposition> compositio
     if (impl_->composedUi == composition) return;
     impl_->composedUi = std::move(composition);
     ++impl_->chromeGeneration;
+    // Keep the authority-owned whole-screen schema in step with the composed chrome so
+    // schema generation and the interaction projection track runtime truth (a structural
+    // change advances the generation and migrates the projection).
+    impl_->rebuildInteractionSchema();
     if (impl_->session) impl_->session->advanceRevision();
 }
 

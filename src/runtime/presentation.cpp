@@ -329,6 +329,7 @@ void registerAppearanceCommands(EditorSessionBuilder& builder,
                                     return failure(result.error->message);
                                 }
                                 runtime.style = std::move(result.style);
+                                runtime.rebuildInteractionSchema();
                                 return success();
                             });
                         }));

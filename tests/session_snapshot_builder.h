@@ -113,7 +113,7 @@ public:
         // ShellState now owns only panes + distraction-free; panel presence and focus are
         // authority-owned in production and come from the request/sections here, both
         // derived from the SAME builder-owned values so the snapshot is coherent.
-        ShellState shell{{"Files"}};
+        ShellState shell;
         const FocusTarget focus = (panel_ && panelFocused_) ? FocusTarget::Panel
                                                             : FocusTarget::Editor;
 

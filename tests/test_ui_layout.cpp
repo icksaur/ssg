@@ -178,7 +178,7 @@ TEST(panelCommandsPreserveProviderStateWhenHidden) {
 
 
 TEST(accessibilityNodesHaveLabelsAndRoles) {
-    ShellState state({"Files"});
+    ShellState state;
     auto input = request(80, 12);
     input.reservedPromptRows = 1;
     input.emptyState = true;

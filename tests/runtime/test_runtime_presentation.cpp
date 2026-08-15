@@ -1048,7 +1048,85 @@ TEST(chromeNodeCaptionLabelsAreLowercase) {
     }
 }
 
+// Against-live proof that panel/finder/focus route through the InteractionAuthority and the
+// snapshot reads its projection: a stale snapshot read or an unrouted command would fail
+// these. (The pure transition/authority oracles cannot catch missing runtime wiring.)
+TEST(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"long.txt"}})
+                    .accepted());
+
+    // Showing the panel: the projection makes it present and focuses it.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"panel.toggle", runtime.revision(), {}})
+                    .accepted());
+    auto shown = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(shown.has_value());
+    if (!shown) return;
+    ASSERT_TRUE(shown->presentation()->shell.panel.has_value());
+    ASSERT_TRUE(shown->sections().focus == ssg::FocusTarget::Panel);
+
+    // Opening the command palette routes focus to the prompt and opens the picker.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"palette.open", runtime.revision(), {}})
+                    .accepted());
+    auto open = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(open.has_value());
+    if (!open) return;
+    ASSERT_TRUE(open->sections().focus == ssg::FocusTarget::Prompt);
+    ASSERT_TRUE(open->presentation()->shell.palette.has_value());
+
+    // Closing it returns focus to the panel underneath and drops the picker.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"palette.close", runtime.revision(), {}})
+                    .accepted());
+    auto closed = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(closed.has_value());
+    if (!closed) return;
+    ASSERT_TRUE(closed->sections().focus == ssg::FocusTarget::Panel);
+    ASSERT_FALSE(closed->presentation()->shell.palette.has_value());
+}
+
+TEST(aRejectedFinderCloseIsReportedAndMutatesNothing) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"long.txt"}})
+                    .accepted());
+
+    // No palette is open, so palette.close (CloseFinder) must be REJECTED and reported --
+    // not silently swallowed -- and the snapshot must be untouched.
+    auto result = runtime.dispatch(ssg::ClientId{1},
+                                   {"palette.close", runtime.revision(), {}});
+    ASSERT_FALSE(result.accepted());
+    auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snap.has_value());
+    if (!snap) return;
+    ASSERT_TRUE(snap->sections().focus == ssg::FocusTarget::Editor);
+    ASSERT_FALSE(snap->presentation()->shell.palette.has_value());
+}
+
 int main() {
+    RUN(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot);
+    RUN(aRejectedFinderCloseIsReportedAndMutatesNothing);
     RUN(viewportShellSettingsAndThemeAreLiveSections);
     RUN(lineNumberGutterTogglesAndSizesToTheLineCount);
     RUN(lineNumberGutterWidthTracksTheActiveDocumentNotJustItsRevision);

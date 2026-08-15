@@ -203,10 +203,7 @@ struct ShellState::Impl {
     bool distractionFree = false;
 };
 
-ShellState::ShellState(std::vector<std::string> panelProviders)
-    : impl_(std::make_unique<Impl>()) {
-    (void)panelProviders;
-}
+ShellState::ShellState() : impl_(std::make_unique<Impl>()) {}
 
 ShellState::~ShellState() = default;
 ShellState::ShellState(ShellState&&) noexcept = default;

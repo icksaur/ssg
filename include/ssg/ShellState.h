@@ -254,7 +254,7 @@ struct ShellLayoutResult {
 
 class ShellState {
 public:
-    explicit ShellState(std::vector<std::string> panelProviders = {});
+    explicit ShellState();
     ~ShellState();
     ShellState(ShellState&&) noexcept;
     ShellState& operator=(ShellState&&) noexcept;
