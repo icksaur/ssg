@@ -1,5 +1,6 @@
 #include <ssg/UiTree.h>
 
+#include <functional>
 #include <set>
 #include <string>
 #include <variant>
@@ -67,11 +68,62 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
 
 }  // namespace
 
+namespace {
+
+// A well-known area, wherever it appears in the tree, must be a container (it holds
+// child widgets or view leaves, never a bare leaf). The root additionally must BE
+// the schema root and carry the root id. This is the typed-identity contract a
+// native client relies on when it keys off an area id: uniqueness alone is not
+// enough. Returns a message on violation.
+std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
+    // The root identity: the schema's root node is the "root" area and a container.
+    if (schema.root.id.value() != wellKnownAreaId(WellKnownArea::Root)) {
+        return std::string{"root: the schema root must have the \"root\" id"};
+    }
+    if (!schema.root.isContainer()) {
+        return std::string{"root: the root area must be a container"};
+    }
+    // Header/footer, wherever present, must be containers and direct children of the
+    // root (their canonical ancestry in the whole-screen tree).
+    const auto* rootContainer = std::get_if<UiContainer>(&schema.root.content);
+    std::set<std::string> rootChildIds;
+    if (rootContainer) {
+        for (const auto& child : rootContainer->children)
+            rootChildIds.insert(child.id.value());
+    }
+    for (const WellKnownArea area : {WellKnownArea::Header, WellKnownArea::Footer}) {
+        const std::string id{wellKnownAreaId(area)};
+        std::optional<std::string> found;
+        // Find the node with this id anywhere in the tree.
+        const std::function<void(const UiNode&)> find = [&](const UiNode& node) {
+            if (node.id.value() == id) {
+                if (!node.isContainer())
+                    found = id + ": a well-known area must be a container";
+                else if (!rootChildIds.contains(id))
+                    found = id + ": a well-known area must be a direct child of "
+                                 "the root";
+            }
+            if (const auto* c = std::get_if<UiContainer>(&node.content))
+                for (const auto& child : c->children) find(child);
+        };
+        find(schema.root);
+        if (found) return found;
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
 UiSchemaValidation validateUiSchema(const UiSchema& schema) {
     std::set<std::string> seenIds;
     std::optional<std::string> error;
     walk(schema.root, std::string{}, seenIds, error);
     if (error) return {error};
+    return {};
+}
+
+UiSchemaValidation validateWellKnownAreas(const UiSchema& schema) {
+    if (auto areaError = checkWellKnownAreas(schema)) return {areaError};
     return {};
 }
 

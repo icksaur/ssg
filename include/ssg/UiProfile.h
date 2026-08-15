@@ -11,11 +11,10 @@
 // profile is host-selected from the client build being served and never widened
 // by a remote-client field belongs on the host/attach seam that will enforce it
 // (a later phase), not on this type, which cannot keep it. A profile covers the
-// widget vocabulary (WidgetKind) and the region-root placement vocabulary
-// (RegionRole); the mutation-operation set joins it in a later phase, when that
-// vocabulary exists.
+// widget vocabulary (WidgetKind) and the opaque view-surface vocabulary
+// (ViewSurface); placement is a property of tree structure + well-known node ids,
+// not a region enum, so no region vocabulary lives here.
 
-#include <ssg/RegionRoot.h>
 #include <ssg/Widget.h>
 
 #include <array>
@@ -27,7 +26,7 @@
 
 namespace ssg {
 
-// The closed sets of widget kinds and region roles a client renders. A value
+// The closed sets of widget kinds and view surfaces a client renders. A value
 // type: declare the primitives the client build implements, then query it.
 // Default is the empty profile (renders nothing) so a client must positively
 // declare support.
@@ -43,7 +42,6 @@ public:
     [[nodiscard]] static ClientUiProfile full() {
         ClientUiProfile profile;
         profile.widgets_.fill(true);
-        profile.regions_.fill(true);
         profile.surfaces_.fill(true);
         return profile;
     }
@@ -52,16 +50,8 @@ public:
         widgets_[index(kind)] = true;
         return *this;
     }
-    ClientUiProfile& allow(RegionRole role) {
-        regions_[index(role)] = true;
-        return *this;
-    }
     ClientUiProfile& allow(ViewSurface surface) {
         surfaces_[index(surface)] = true;
-        return *this;
-    }
-    ClientUiProfile& allowRegions(std::initializer_list<RegionRole> roles) {
-        for (const RegionRole role : roles) allow(role);
         return *this;
     }
     ClientUiProfile& allowSurfaces(std::initializer_list<ViewSurface> surfaces) {
@@ -71,9 +61,6 @@ public:
 
     [[nodiscard]] bool supports(WidgetKind kind) const {
         return widgets_[index(kind)];
-    }
-    [[nodiscard]] bool supports(RegionRole role) const {
-        return regions_[index(role)];
     }
     [[nodiscard]] bool supports(ViewSurface surface) const {
         return surfaces_[index(surface)];
@@ -108,13 +95,6 @@ private:
         }
         return position;
     }
-    static std::size_t index(RegionRole role) {
-        const auto position = static_cast<std::size_t>(role);
-        if (position >= kRegionRoleCount) {
-            throw std::invalid_argument("ClientUiProfile: unrecognized RegionRole");
-        }
-        return position;
-    }
     static std::size_t index(ViewSurface surface) {
         const auto position = static_cast<std::size_t>(surface);
         if (position >= kViewSurfaceCount) {
@@ -125,7 +105,6 @@ private:
     }
 
     std::array<bool, kWidgetKindCount> widgets_{};
-    std::array<bool, kRegionRoleCount> regions_{};
     std::array<bool, kViewSurfaceCount> surfaces_{};
 };
 

@@ -18,7 +18,6 @@
 // keeps it immutable within a generation.
 
 #include <ssg/LayoutConstraints.h>   // Axis, Size, Inset
-#include <ssg/RegionRoot.h>          // RegionRole
 #include <ssg/UiWidget.h>            // WidgetDescriptor, ValueSource
 
 #include <cstdint>
@@ -111,6 +110,22 @@ inline constexpr std::string_view kRootNodeId = "root";
 inline constexpr std::string_view kHeaderNodeId = "header";
 inline constexpr std::string_view kFooterNodeId = "footer";
 
+// The typed well-known areas: a closed set a native client may key off to hand a
+// subtree to its own toolkit. A raw id string is not a placement contract; this
+// typed identity, plus the structural validation validateUiSchema performs for it
+// (required node kind and ancestry), is. Panel/content join this set when the
+// canonical tree gains them.
+enum class WellKnownArea : std::uint8_t { Root, Header, Footer };
+
+inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
+    switch (area) {
+    case WellKnownArea::Root: return kRootNodeId;
+    case WellKnownArea::Header: return kHeaderNodeId;
+    case WellKnownArea::Footer: return kFooterNodeId;
+    }
+    return {};
+}
+
 // A well-formed empty root (id "root", an empty Column): the "no composed chrome"
 // tree. A default-constructed UiNode has an empty id, which fails validation, so
 // this is the default for UiSchema/UiComposition and the absent-UI schema.
@@ -150,6 +165,14 @@ struct UiSchemaValidation {
 // field; a non-View leaf carries no surface). Fails loud with a path-qualified
 // message. Pure.
 [[nodiscard]] UiSchemaValidation validateUiSchema(const UiSchema& schema);
+
+// Validate the whole-screen well-known-area contract: the schema root is the typed
+// "root" area and a container, and each well-known area (header/footer, wherever it
+// appears) is a container in its canonical position (a direct child of the root).
+// Separate from validateUiSchema because the generic validator serves any tree the
+// presence/focus machinery builds, while this contract binds a PUBLISHED
+// whole-screen schema (enforced at the wire boundary). Pure.
+[[nodiscard]] UiSchemaValidation validateWellKnownAreas(const UiSchema& schema);
 
 // The set of every node id in a schema. Meaningful only for a schema whose ids are
 // unique; used by ValidatedSchema.

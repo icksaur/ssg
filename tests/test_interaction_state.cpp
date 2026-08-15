@@ -24,7 +24,6 @@ using ssg::MutationOpKind;
 using ssg::MutationPatch;
 using ssg::PresenceBasis;
 using ssg::PresenceConfig;
-using ssg::RegionRole;
 using ssg::Size;
 using ssg::UiContainer;
 using ssg::UiInteractionState;

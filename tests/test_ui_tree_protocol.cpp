@@ -85,7 +85,7 @@ std::vector<UiSchema> corpus() {
         body.children.push_back(
             ssg::UiNode{ssg::UiNodeId{"content.tabview"}, ssg::Size::flex(),
                         ssg::UiLeaf{view}});
-        ssg::UiNode root{ssg::UiNodeId{"body"}, ssg::Size::flex(),
+        ssg::UiNode root{ssg::UiNodeId{"root"}, ssg::Size::flex(),
                          std::move(body)};
         all.push_back(UiSchema{Generation{3}, std::move(root)});
     }

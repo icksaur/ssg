@@ -174,7 +174,6 @@ export function isPalettePromptOpen(sections) {
 // SemanticRole). The schema's leaves carry `kind`; regions carry `role`; nodes carry
 // `size`; containers carry `axis`.
 export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPUT: 4, SPACER: 5, VIEW: 6 };
-export const REGION = { TOP: 0, BOTTOM: 1, LEADING: 2, TRAILING: 3, OVERLAY: 4 };
 export const AXIS = { ROW: 0, COLUMN: 1 };
 export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.

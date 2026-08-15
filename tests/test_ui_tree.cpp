@@ -15,7 +15,6 @@ namespace {
 
 using ssg::Axis;
 using ssg::Generation;
-using ssg::RegionRole;
 using ssg::Size;
 using ssg::UiContainer;
 using ssg::UiLeaf;
@@ -137,6 +136,38 @@ TEST(surfaceOnNonViewLeafIsRejected) {
     ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 
+// The whole-screen well-known-area contract (validated at the wire boundary): the
+// canonical root/header/footer shape passes.
+TEST(wellKnownAreasAcceptTheCanonicalShape) {
+    UiSchema schema;
+    schema.root = container("root", {container("header", {leaf("path")}),
+                                     container("footer", {leaf("hint")})});
+    ASSERT_TRUE(ssg::validateWellKnownAreas(schema).ok());
+}
+
+// The root node must carry the "root" id.
+TEST(wellKnownAreasRejectAMisnamedRoot) {
+    UiSchema schema;
+    schema.root = container("body", {});
+    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+}
+
+// A well-known area must be a container, not a bare leaf.
+TEST(wellKnownAreasRejectALeafHeader) {
+    UiSchema schema;
+    schema.root = container("root", {leaf("header")});
+    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+}
+
+// A well-known area must sit in its canonical position: header directly under root,
+// not buried in a sub-container.
+TEST(wellKnownAreasRejectAMisplacedHeader) {
+    UiSchema schema;
+    schema.root =
+        container("root", {container("wrap", {container("header", {})})});
+    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+}
+
 }  // namespace
 
 int main() {
@@ -150,5 +181,9 @@ int main() {
     RUN(viewLeafWithoutSurfaceIsRejected);
     RUN(autoSizedViewLeafIsRejected);
     RUN(surfaceOnNonViewLeafIsRejected);
+    RUN(wellKnownAreasAcceptTheCanonicalShape);
+    RUN(wellKnownAreasRejectAMisnamedRoot);
+    RUN(wellKnownAreasRejectALeafHeader);
+    RUN(wellKnownAreasRejectAMisplacedHeader);
     return failed == 0 ? 0 : 1;
 }

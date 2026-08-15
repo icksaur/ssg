@@ -331,9 +331,11 @@ std::optional<UiSchema> decodeUiSchema(const ProtocolValue& value) {
     schema.generation = Generation{*generation};
     schema.root = std::move(*root);
     // A decoded schema must satisfy the same structural rules as one built
-    // in-process (unique non-empty node ids, per-leaf shape); malformed wire can
-    // never enter the semantic channel as a plausible schema.
+    // in-process (unique non-empty node ids, per-leaf shape) AND the whole-screen
+    // well-known-area contract; malformed wire can never enter the semantic channel
+    // as a plausible schema.
     if (!validateUiSchema(schema).ok()) return std::nullopt;
+    if (!validateWellKnownAreas(schema).ok()) return std::nullopt;
     return schema;
 }
 
