@@ -30,6 +30,13 @@ using ssg::ViewSurface;
 using ssg::WidgetDescriptor;
 using ssg::WidgetKind;
 
+// The StatusActions widget's data channel is encoded as a value (not prose), so a
+// client renders its actions from the same section the library owns them on.
+TEST(statusActionsIsBackedByPromptStatus) {
+    ASSERT_TRUE(ssg::statusActionsBackingSection() ==
+                SnapshotSection::PromptStatus);
+}
+
 // CONTRACT witness: every surface in the closed vocabulary maps to at least one
 // authoritative snapshot section -- a surface with no data channel is forbidden.
 TEST(everyViewSurfaceHasANonEmptyBacking) {
@@ -91,6 +98,7 @@ TEST(gridChromeLoweringRefusesAViewCenter) {
 int main() {
     RUN(everyViewSurfaceHasANonEmptyBacking);
     RUN(theSurfaceBackingMappingIsTheSpecifiedContract);
+    RUN(statusActionsIsBackedByPromptStatus);
     RUN(gridChromeLoweringRefusesAViewCenter);
     return failed == 0 ? 0 : 1;
 }

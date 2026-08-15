@@ -27,4 +27,8 @@ std::span<const SnapshotSection> viewSurfaceBackingSections(ViewSurface surface)
         "viewSurfaceBackingSections: unrecognized ViewSurface");
 }
 
+SnapshotSection statusActionsBackingSection() {
+    return SnapshotSection::PromptStatus;
+}
+
 }  // namespace ssg

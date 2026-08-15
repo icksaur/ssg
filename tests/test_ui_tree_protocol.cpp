@@ -89,6 +89,19 @@ std::vector<UiSchema> corpus() {
                          std::move(body)};
         all.push_back(UiSchema{Generation{3}, std::move(root)});
     }
+    {  // a StatusActions widget round-trips its new wire ordinal (id + kind only)
+        WidgetDescriptor actions;
+        actions.kind = WidgetKind::StatusActions;
+        actions.id = "footer.status_actions";
+        ssg::UiContainer body;
+        body.axis = ssg::Axis::Row;
+        body.children.push_back(
+            ssg::UiNode{ssg::UiNodeId{"footer.status_actions"},
+                        ssg::Size::autoSize(), ssg::UiLeaf{actions}});
+        ssg::UiNode root{ssg::UiNodeId{"root"}, ssg::Size::flex(),
+                         std::move(body)};
+        all.push_back(UiSchema{Generation{5}, std::move(root)});
+    }
     return all;
 }
 

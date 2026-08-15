@@ -39,13 +39,13 @@ namespace ssg {
 
 // CONTRACT
 // assembleWholeScreen: the built-in footer's status-actions affordance is a stable
-//   StatusActions widget whose DATA (the selected status item's actions, its status id,
-//   and generation) rides the promptStatus section, never the schema -- the schema is
-//   generation-stable while the actions vary on the promptStatus cadence. A client
-//   renders the actions from promptStatus and dispatches the existing
-//   StatusActionInvocation (by status/action id + generation); it never reinterprets an
-//   action as a commandId click. A composed ssg.chrome footer replaces the whole
-//   built-in footer and so omits the affordance, matching the grid's replacement.
+//   StatusActions widget whose DATA rides the section statusActionsBackingSection()
+//   names (promptStatus: the selected status item's actions, status id, and
+//   generation), never the schema -- the schema is generation-stable while the actions
+//   vary on that section's cadence. A client renders the actions from that section and
+//   dispatches the existing StatusActionInvocation (by status/action id + generation);
+//   it never reinterprets an action as a commandId click. A composed ssg.chrome footer
+//   replaces the whole built-in footer and so omits the affordance, matching the grid.
 [[nodiscard]] UiComposition assembleWholeScreen(
     const std::vector<StatusField>& headerFields,
     const std::vector<StatusField>& footerFields,
