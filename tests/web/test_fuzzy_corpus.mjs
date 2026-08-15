@@ -80,3 +80,16 @@ for (const { query, expected } of queries) {
 }
 
 console.log(`fuzzy corpus oracle: ${queries.length} queries matched the C++ reference`);
+
+// An out-of-domain parameter is refused by the web matcher, mirroring the C++ decoder
+// rejecting the frame -- a malformed frame cannot silently diverge the two clients.
+try {
+  fuzzyRank(candidates, 'save', { ...params, baseScore: 2_000_000 });
+  console.error('  FAIL: expected out-of-domain parameters to be refused');
+  process.exit(1);
+} catch (e) {
+  if (!(e instanceof RangeError)) {
+    console.error('  FAIL: expected RangeError, got ' + e);
+    process.exit(1);
+  }
+}

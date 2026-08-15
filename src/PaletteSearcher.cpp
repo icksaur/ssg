@@ -1,6 +1,7 @@
 #include <ssg/PaletteSearcher.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 #include <optional>
 
@@ -18,11 +19,17 @@ char folded(char value) {
 
 // Score `query` as a case-folded subsequence of `candidate`, iterating raw UTF-8
 // bytes; nullopt when `query` is not a subsequence. Weights come from `params` so
-// the score is a pure function of the published parameters.
-std::optional<int> fuzzyScore(std::string_view candidate, std::string_view query,
-                              MatcherParameters const& params) {
+// the score is a pure function of the published parameters. The accumulator is 64-bit
+// because a matched query runs at most one scoring step per candidate byte (the loop
+// stops when the candidate is exhausted), and a wire-bounded candidate (<= 8 MiB) with
+// in-domain weights (<= kMaxMatcherParameterMagnitude) yields at most ~4 * cap * 8Mi
+// which overflows a 32-bit int but is well within int64 AND under 2^53, so the C++
+// int64 score and the JavaScript double score are bit-identical.
+std::optional<std::int64_t> fuzzyScore(std::string_view candidate,
+                                       std::string_view query,
+                                       MatcherParameters const& params) {
     if (query.empty()) return 0;
-    int score = 0;
+    std::int64_t score = 0;
     std::size_t cursor = 0;
     std::size_t previous = std::string_view::npos;
     for (const char wanted : query) {
@@ -43,7 +50,7 @@ std::optional<int> fuzzyScore(std::string_view candidate, std::string_view query
         if (candidate[cursor] == wanted) score += params.exactCaseBonus;
         previous = cursor++;
     }
-    score -= static_cast<int>(std::min<std::size_t>(
+    score -= static_cast<std::int64_t>(std::min<std::size_t>(
         candidate.size(), static_cast<std::size_t>(std::max(params.lengthCap, 0))));
     return score;
 }
@@ -53,7 +60,7 @@ std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidate
                                   MatcherParameters const& params) {
     struct Ranked {
         std::size_t index;
-        int score;
+        std::int64_t score;
     };
     std::vector<Ranked> ranked;
     ranked.reserve(candidates.size());
@@ -64,8 +71,8 @@ std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidate
         if (!labelScore && !idScore) continue;
         ranked.push_back(
             {index,
-             std::max(labelScore.value_or(std::numeric_limits<int>::min()),
-                      idScore.value_or(std::numeric_limits<int>::min()))});
+             std::max(labelScore.value_or(std::numeric_limits<std::int64_t>::min()),
+                      idScore.value_or(std::numeric_limits<std::int64_t>::min()))});
     }
     std::ranges::stable_sort(ranked, [&](Ranked const& left, Ranked const& right) {
         if (left.score != right.score) return left.score > right.score;

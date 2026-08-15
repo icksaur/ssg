@@ -9,6 +9,30 @@
 
 const enc = new TextEncoder();
 
+// The matcher-parameter magnitude domain, mirrored from the C++
+// kMaxMatcherParameterMagnitude (include/ssg/PaletteSearcher.h). The browser decodes
+// the palette section itself (it does not run the C++ decoder), so it must enforce the
+// SAME domain before scoring: an out-of-domain or imprecise value is refused here just
+// as decodePalette refuses it on the C++ side, so a malformed frame cannot make the
+// two clients diverge.
+const MAX_MATCHER_PARAMETER_MAGNITUDE = 1_000_000;
+
+function inDomain(value, lo, hi) {
+  return Number.isInteger(value) && value >= lo && value <= hi;
+}
+
+// True iff every weight is within +/-MAX and lengthCap is within [0, MAX].
+export function matcherParametersInDomain(p) {
+  const m = MAX_MATCHER_PARAMETER_MAGNITUDE;
+  return (
+    inDomain(p.baseScore, -m, m) &&
+    inDomain(p.wordBoundaryBonus, -m, m) &&
+    inDomain(p.contiguityBonus, -m, m) &&
+    inDomain(p.exactCaseBonus, -m, m) &&
+    inDomain(p.lengthCap, 0, m)
+  );
+}
+
 // ASCII-only fold: A-Z -> a-z, every other byte (including UTF-8 continuation bytes)
 // folds to itself. Deliberately not locale-aware, so this and the C++ reference agree.
 function fold(byte) {
@@ -63,6 +87,11 @@ export function fuzzyRank(candidates, query, params) {
     exactCaseBonus: Number(params.exactCaseBonus),
     lengthCap: Number(params.lengthCap),
   };
+  // Enforce the same domain the C++ decoder enforces; a frame the server would never
+  // publish (or a corrupted one) is refused loudly rather than scored divergently.
+  if (!matcherParametersInDomain(p)) {
+    throw new RangeError('matcher parameters out of domain');
+  }
   const q = enc.encode(query);
   const scored = [];
   for (let i = 0; i < candidates.length; i++) {

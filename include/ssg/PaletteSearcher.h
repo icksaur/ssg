@@ -42,11 +42,12 @@ struct MatcherParameters {
         default;
 };
 
-// The magnitude every published matcher weight and the length cap must stay within,
-// so score accumulation over a query cannot overflow a 32-bit int in C++ and stays
-// exactly representable as a JavaScript double -- the two clients' scores are then
-// bit-identical. A parameter outside this domain is a rejected wire frame, not a
-// silently clamped value.
+// The magnitude every published matcher weight and the length cap must stay within.
+// A matched query runs at most one scoring step per candidate byte, and a candidate is
+// wire-bounded (<= 8 MiB), so the maximum accumulated score is ~4 * this magnitude *
+// 8Mi. That must stay under 2^53 so the C++ int64 score and the JavaScript double
+// score are bit-identical (and it far exceeds any semantically useful weight). A
+// parameter outside this domain is a rejected wire frame, not a silently clamped value.
 inline constexpr int kMaxMatcherParameterMagnitude = 1'000'000;
 
 // True iff every weight is within +/- kMaxMatcherParameterMagnitude and lengthCap is
