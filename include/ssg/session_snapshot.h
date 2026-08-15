@@ -63,9 +63,9 @@ struct SessionSnapshotSections {
     // The medium-agnostic UI-VM tree: the header/footer chrome as a generic node
     // tree a native client renders directly (the grid client lowers the same tree
     // through lowerUiChromeRegion). Published alongside the legacy grid path; a
-    // client that does not consume it simply ignores it. A valid empty root when no
-    // chrome is composed.
-    UiSchema ui{Generation{0}, emptyUiRoot()};
+    // client that does not consume it simply ignores it. Defaults to a valid empty
+    // root (emptyUiRoot) when no chrome is composed.
+    UiSchema ui;
     // The generation-scoped resolved dynamic state for the `ui` schema: one record
     // per node with its presence and, for a renderable leaf, its resolved semantic
     // (value, label, command, checked). A non-grid client needs this because the

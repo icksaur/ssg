@@ -316,12 +316,13 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             ? UiSchema{Generation{chromeGeneration}, composedUi->composition().root}
             : UiSchema{Generation{chromeGeneration}, emptyUiRoot()};
     UiStateSection uiState = [&] {
-        if (!composedUi) return UiStateSection{Generation{chromeGeneration}, {}};
+        // Resolve state for whatever `uiSchema` is -- composed chrome OR the empty
+        // root -- so schema and state node ids stay one-to-one in both cases.
         auto validated = ValidatedSchema::validate(uiSchema);
-        // The schema comes from a decoder-validated ValidatedComposition, so it has
-        // unique node ids; a validation failure here is a broken invariant, not an
-        // expected outcome, and must fail loud rather than publish a plausible empty
-        // section that would violate schema/state correspondence.
+        // The schema comes from a decoder-validated ValidatedComposition (or the
+        // always-valid emptyUiRoot), so it has unique node ids; a validation failure
+        // here is a broken invariant, not an expected outcome, and must fail loud
+        // rather than publish a plausible section that violates correspondence.
         if (!validated.ok()) {
             throw std::logic_error(
                 "resolveUiState: composed schema failed validation");

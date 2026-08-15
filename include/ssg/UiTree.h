@@ -111,19 +111,19 @@ inline constexpr std::string_view kRootNodeId = "root";
 inline constexpr std::string_view kHeaderNodeId = "header";
 inline constexpr std::string_view kFooterNodeId = "footer";
 
+// A well-formed empty root (id "root", an empty Column): the "no composed chrome"
+// tree. A default-constructed UiNode has an empty id, which fails validation, so
+// this is the default for UiSchema/UiComposition and the absent-UI schema.
+[[nodiscard]] UiNode emptyUiRoot();
+
 // A full schema for one generation: one root node whose tree spans the screen.
 // Placement comes from tree structure and well-known node ids, never a region enum.
 struct UiSchema {
     Generation generation{0};
-    UiNode root;
+    UiNode root = emptyUiRoot();
 
     friend bool operator==(const UiSchema&, const UiSchema&) = default;
 };
-
-// A well-formed empty root (id "root", an empty Column): the "no composed chrome"
-// schema. A default-constructed UiNode has an empty id, which fails validation, so
-// callers that need an absent-UI schema use this rather than UiSchema{}.
-[[nodiscard]] UiNode emptyUiRoot();
 
 // A generationless root tree: what the chrome decoder produces and the runtime OWNS
 // as composed input. It carries no Generation because a generation belongs to one
@@ -131,7 +131,7 @@ struct UiSchema {
 // composition as a UiSchema, so authorship (decode) never fixes a generation and the
 // runtime stays the sole generation authority.
 struct UiComposition {
-    UiNode root;
+    UiNode root = emptyUiRoot();
 
     friend bool operator==(const UiComposition&, const UiComposition&) = default;
 };
