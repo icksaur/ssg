@@ -136,9 +136,22 @@ TEST(showProviderRecreatesAnIdPresentUnderTheWrongKind) {
     ASSERT_TRUE(prepared->tree().has_value());
     ASSERT_TRUE(prepared->tree()->create.has_value());
     ASSERT_TRUE(prepared->tree()->create->kind() == TreeProviderKind::Git);
-    // Stamped strictly above the revision it replaces so commit's replaceProvider cannot
-    // throw.
-    ASSERT_EQ(prepared->tree()->create->revision().value(), std::uint64_t{6});
+    // Stamped from the runtime's revision source (nextTreeRevision == 7), which leads the
+    // provider it replaces, so commit's replaceProvider cannot throw.
+    ASSERT_EQ(prepared->tree()->create->revision().value(), std::uint64_t{7});
+}
+
+TEST(showProviderRejectsARecreateWhenTheRevisionSourceHasDesynced) {
+    WholeScreenTruth truth;
+    // The revision source (nextTreeRevision == 7) no longer leads the existing provider
+    // (revision 9): stamping a replacement from it would be rejected by replaceProvider,
+    // so preflight refuses rather than let commit throw.
+    const auto prepared = prepareTransition(
+        ShowPanelProvider{PanelProvider::GitStatus},
+        inputs(truth, {presence(filesystem(), 1),
+                       presence(TreeProviderBinding{TreeProviderId{"git"},
+                                                    TreeProviderKind::Symbols}, 9)}));
+    ASSERT_FALSE(prepared.has_value());
 }
 
 TEST(showAMissingFilesystemProviderIsRejected) {
@@ -235,6 +248,7 @@ int main() {
     RUN(showProviderPreparesACreateSnapshotForAnAbsentGitProvider);
     RUN(showProviderActivatesAMatchingProviderWithoutCreating);
     RUN(showProviderRecreatesAnIdPresentUnderTheWrongKind);
+    RUN(showProviderRejectsARecreateWhenTheRevisionSourceHasDesynced);
     RUN(showAMissingFilesystemProviderIsRejected);
     RUN(reselectingTheShownProviderHidesThePanel);
     RUN(openFinderCarriesPickerIdentityAndOpensThePrompt);

@@ -1,6 +1,7 @@
 #include <ssg/CommandTransition.h>
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -105,9 +106,14 @@ struct TransitionBuilder {
 
         // Fully prepare the tree backing so commit is infallible. Match id AND kind: an
         // id present under the wrong kind is not the provider we want, so it must be
-        // recreated (stamped ABOVE the revision it replaces, or replaceProvider throws),
-        // not activated. A non-matching Filesystem provider is a genuine rejection -- it
-        // is seeded with real nodes, never created or replaced empty here.
+        // recreated, not activated. A non-matching Filesystem provider is a genuine
+        // rejection -- it is seeded with real nodes, never created or replaced empty here.
+        // A new snapshot's revision comes from the runtime's single revision source
+        // (nextTreeRevision), never invented as existing+1 (which could overflow or run
+        // ahead of that source and make a later replacement reject). Preflight rejects a
+        // source that cannot lead the provider it replaces (desync) or has no successor
+        // (exhaustion), so both the replaceProvider and the source's post-install advance
+        // are infallible.
         const TreeProviderBinding binding = panelProviderTreeBinding(request.provider);
         const auto existing = std::find_if(
             inputs.presentProviders.begin(), inputs.presentProviders.end(),
@@ -117,12 +123,14 @@ struct TransitionBuilder {
         TreeBackingPlan plan{binding.id, std::nullopt};
         if (!matching) {
             if (binding.kind == TreeProviderKind::Filesystem) return std::nullopt;
-            const TreeRevision revision =
-                existing == inputs.presentProviders.end()
-                    ? inputs.nextTreeRevision
-                    : TreeRevision{existing->revision.value() + 1};
+            const std::uint64_t next = inputs.nextTreeRevision.value();
+            if (next == std::numeric_limits<std::uint64_t>::max()) return std::nullopt;
+            if (existing != inputs.presentProviders.end() &&
+                next <= existing->revision.value()) {
+                return std::nullopt;
+            }
             plan.create =
-                TreeProviderSnapshot{binding.id, binding.kind, revision, {}};
+                TreeProviderSnapshot{binding.id, binding.kind, inputs.nextTreeRevision, {}};
         }
 
         WholeScreenTruth next = truth;
