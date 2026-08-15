@@ -11,18 +11,19 @@ namespace ssg {
 
 namespace {
 
-// A built-in status field is a provider-backed Field keyed by the field id. It carries
-// only STABLE structure -- the id and the collapse rank; its value, accessible label,
-// and click command all ride uiState (resolved per frame by the ChromeProviderResolver
-// keyed by id), so a field whose value, command, or provider presence changes never
-// alters the schema structure. A field the resolver has no value for resolves to no
-// leaf state (the semantic drop), exactly as the grid drops an empty status field.
-WidgetDescriptor fieldFor(const StatusField& field) {
+// A built-in status field is a provider-backed Field keyed by the catalog entry id. It
+// carries only STABLE structure -- the id and the collapse rank; its value, accessible
+// label, and click command all ride uiState (resolved per frame by the
+// ChromeProviderResolver keyed by id), so a field whose value, command, or provider
+// presence changes never alters the schema structure. A field the resolver has no value
+// for resolves to no leaf state (the semantic drop), exactly as the grid drops an empty
+// status field.
+WidgetDescriptor fieldFor(const StatusFieldCatalogEntry& entry) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::Field;
-    widget.id = field.id;
-    widget.value = ValueSource{/*isProvider=*/true, /*literal=*/"", field.id};
-    widget.rank = field.collapseRank;
+    widget.id = entry.id;
+    widget.value = ValueSource{/*isProvider=*/true, /*literal=*/"", entry.id};
+    widget.rank = entry.collapseRank;
     return widget;
 }
 
@@ -56,13 +57,15 @@ WidgetDescriptor statusActionsWidget() {
     return widget;
 }
 
-// A built-in header/footer region: status fields as the left group, `right` as the
+// A built-in header/footer region: catalog fields as the left group, `right` as the
 // right group, no center, in the shared canonical region shape.
-UiNode builtinRegion(std::string_view base, const std::vector<StatusField>& fields,
+UiNode builtinRegion(std::string_view base,
+                     const std::vector<StatusFieldCatalogEntry>& entries,
                      std::vector<WidgetDescriptor> right) {
     std::vector<WidgetDescriptor> left;
-    left.reserve(fields.size());
-    for (const StatusField& field : fields) left.push_back(fieldFor(field));
+    left.reserve(entries.size());
+    for (const StatusFieldCatalogEntry& entry : entries)
+        left.push_back(fieldFor(entry));
     return chromeRegion(base, left, right, /*center=*/std::nullopt,
                         CenterWidth::Flex, /*centerFixed=*/0, /*separator=*/1);
 }
@@ -106,13 +109,21 @@ UiNode withSize(UiNode node, Size size) {
 }  // namespace
 
 UiComposition assembleWholeScreen(
-    const std::vector<StatusField>& headerFields,
-    const std::vector<StatusField>& footerFields,
+    const std::vector<StatusFieldCatalogEntry>& catalog,
     std::string_view hintCommandId,
     const StyleDimensions& dimensions,
     const std::optional<ValidatedComposition>& composedOverride) {
     const UiNode* composedHeader = composedArea(composedOverride, kHeaderNodeId);
     const UiNode* composedFooter = composedArea(composedOverride, kFooterNodeId);
+
+    // Split the stable catalog superset by region -- the entry's own region, so a
+    // caller cannot mis-split header/footer or smuggle in a projected subset.
+    std::vector<StatusFieldCatalogEntry> headerEntries;
+    std::vector<StatusFieldCatalogEntry> footerEntries;
+    for (const StatusFieldCatalogEntry& entry : catalog) {
+        (entry.region == StatusFieldRegion::Header ? headerEntries : footerEntries)
+            .push_back(entry);
+    }
 
     // The built-in footer right group is STRUCTURALLY STABLE: the hint (provider-
     // backed, label rides uiState) and the status-actions affordance (data rides
@@ -125,10 +136,10 @@ UiComposition assembleWholeScreen(
 
     UiNode header = composedHeader
                         ? *composedHeader
-                        : builtinRegion(kHeaderNodeId, headerFields, {});
+                        : builtinRegion(kHeaderNodeId, headerEntries, {});
     UiNode footer = composedFooter
                         ? *composedFooter
-                        : builtinRegion(kFooterNodeId, footerFields,
+                        : builtinRegion(kFooterNodeId, footerEntries,
                                         std::move(footerRight));
     header = withSize(std::move(header), Size::exact(dimensions.headerHeight));
     footer = withSize(std::move(footer), Size::exact(dimensions.footerHeight));

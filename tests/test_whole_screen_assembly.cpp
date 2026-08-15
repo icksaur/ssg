@@ -34,14 +34,13 @@ const UiNode* childById(const UiNode& node, std::string_view id) {
     return nullptr;
 }
 
-StatusField field(std::string id, std::uint8_t rank = 0,
-                  std::optional<std::string> command = {}, std::string value = "v") {
-    StatusField f;
-    f.id = std::move(id);
-    f.value = std::move(value);
-    f.collapseRank = rank;
-    f.commandId = std::move(command);
-    return f;
+StatusFieldCatalogEntry entry(std::string id, StatusFieldRegion region,
+                              std::uint8_t rank = 0) {
+    StatusFieldCatalogEntry e;
+    e.id = std::move(id);
+    e.region = region;
+    e.collapseRank = rank;
+    return e;
 }
 
 StyleDimensions dims() {
@@ -99,11 +98,12 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
 }
 
 TEST(builtinHeaderFooterAreProviderBackedAndStable) {
-    const std::vector<StatusField> headerFields{field("path", 3), field("branch")};
-    const std::vector<StatusField> footerFields{field("mode")};
+    const std::vector<StatusFieldCatalogEntry> catalog{
+        entry("path", StatusFieldRegion::Header, 3),
+        entry("branch", StatusFieldRegion::Header),
+        entry("mode", StatusFieldRegion::Footer)};
     const UiComposition comp =
-        assembleWholeScreen(headerFields, footerFields, kHintCommand, dims(),
-                            std::nullopt);
+        assembleWholeScreen(catalog, kHintCommand, dims(), std::nullopt);
     assertCanonicalSkeleton(comp, dims());
 
     // Each built-in header field is a provider-backed Field keyed by its id, carrying
@@ -137,19 +137,24 @@ TEST(builtinHeaderFooterAreProviderBackedAndStable) {
     ASSERT_TRUE(footerRow.right[1].kind == WidgetKind::StatusActions);
 }
 
-TEST(structureIsStableUnderValueCommandAndProviderChange) {
-    // Same field IDS, different values/commands/ranks-unchanged: the assembled tree must
-    // be byte-identical, because value/command are uiState, not structure. This is the
-    // generation-stability guarantee: a branch value appearing/changing shapes no tree.
-    const std::vector<StatusField> a{field("path", 3, std::optional<std::string>{"c1"}, "one"),
-                                     field("branch", 0, std::nullopt, "main")};
-    const std::vector<StatusField> b{field("path", 3, std::optional<std::string>{"c2"}, "two"),
-                                     field("branch", 0, std::optional<std::string>{"x"}, "")};
-    const UiComposition ca =
-        assembleWholeScreen(a, {field("mode")}, kHintCommand, dims(), std::nullopt);
-    const UiComposition cb =
-        assembleWholeScreen(b, {field("mode")}, kHintCommand, dims(), std::nullopt);
-    ASSERT_TRUE(ca == cb);
+TEST(theCatalogSplitsByRegionDeterministically) {
+    // The catalog is the ONLY structural input (the signature admits no dynamic value/
+    // command/provider state), and it splits by each entry's own region. Assembling the
+    // same catalog twice yields a byte-identical tree -- the generation-stability
+    // guarantee, now a type fact: there is no per-frame value input to perturb it.
+    const std::vector<StatusFieldCatalogEntry> catalog{
+        entry("path", StatusFieldRegion::Header, 3),
+        entry("mode", StatusFieldRegion::Footer)};
+    const UiComposition a =
+        assembleWholeScreen(catalog, kHintCommand, dims(), std::nullopt);
+    const UiComposition b =
+        assembleWholeScreen(catalog, kHintCommand, dims(), std::nullopt);
+    ASSERT_TRUE(a == b);
+    // A Header entry lands in the header left group; a Footer entry in the footer left.
+    ASSERT_EQ(ssgtest::rowOf(*childById(a.root, kHeaderNodeId)).left.size(),
+              std::size_t{1});
+    ASSERT_EQ(ssgtest::rowOf(*childById(a.root, kFooterNodeId)).left.size(),
+              std::size_t{1});
 }
 
 TEST(composedHeaderAndFooterOverrideTheBuiltins) {
@@ -165,8 +170,8 @@ TEST(composedHeaderAndFooterOverrideTheBuiltins) {
         {composedHeaderField}, {composedFooterField});
 
     const UiComposition comp = assembleWholeScreen(
-        {field("path")}, {field("mode")}, kHintCommand, dims(),
-        std::optional<ValidatedComposition>{override});
+        {entry("path", StatusFieldRegion::Header), entry("mode", StatusFieldRegion::Footer)},
+        kHintCommand, dims(), std::optional<ValidatedComposition>{override});
     assertCanonicalSkeleton(comp, dims());
 
     const ssgtest::RowView headerRow =
@@ -190,8 +195,8 @@ TEST(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted) {
         ssgtest::composeHeaderValidated({composedHeaderField});
 
     const UiComposition comp = assembleWholeScreen(
-        {field("path")}, {field("mode")}, kHintCommand, dims(),
-        std::optional<ValidatedComposition>{override});
+        {entry("path", StatusFieldRegion::Header), entry("mode", StatusFieldRegion::Footer)},
+        kHintCommand, dims(), std::optional<ValidatedComposition>{override});
     assertCanonicalSkeleton(comp, dims());
 
     const ssgtest::RowView headerRow =
@@ -205,15 +210,16 @@ TEST(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted) {
 
 TEST(theAssembledTreeAlwaysValidates) {
     const UiComposition fallback = assembleWholeScreen(
-        {field("path")}, {field("mode")}, kHintCommand, dims(), std::nullopt);
+        {entry("path", StatusFieldRegion::Header), entry("mode", StatusFieldRegion::Footer)},
+        kHintCommand, dims(), std::nullopt);
     const UiComposition empty =
-        assembleWholeScreen({}, {}, kHintCommand, dims(), std::nullopt);
+        assembleWholeScreen({}, kHintCommand, dims(), std::nullopt);
     WidgetDescriptor composed;
     composed.kind = WidgetKind::Label;
     composed.id = "title";
     composed.value = ValueSource{false, "SSG", ""};
     const UiComposition overridden = assembleWholeScreen(
-        {}, {}, kHintCommand, dims(),
+        {}, kHintCommand, dims(),
         std::optional<ValidatedComposition>{
             ssgtest::composeHeaderAndFooterValidated({composed}, {composed})});
     for (const UiComposition* comp : {&fallback, &empty, &overridden}) {
@@ -227,7 +233,7 @@ TEST(theAssembledTreeAlwaysValidates) {
 
 int main() {
     RUN(builtinHeaderFooterAreProviderBackedAndStable);
-    RUN(structureIsStableUnderValueCommandAndProviderChange);
+    RUN(theCatalogSplitsByRegionDeterministically);
     RUN(composedHeaderAndFooterOverrideTheBuiltins);
     RUN(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted);
     RUN(theAssembledTreeAlwaysValidates);

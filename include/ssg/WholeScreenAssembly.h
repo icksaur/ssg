@@ -20,21 +20,23 @@
 //
 // header/footer subtrees use the shared canonical region shape (ChromeRegionShape), so a
 // built-in and a composed region are indistinguishable in shape to a consumer. The tree
-// is STRUCTURALLY STABLE: a built-in field carries only its id and collapse rank, and
-// its value/label/command all ride uiState (resolved per frame by id); the footer hint
-// is likewise a provider-backed Field whose label rides uiState. So a field's value,
-// command, or provider PRESENCE changing (a branch appearing/disappearing) is value-
-// state, never a structure change, and never advances the schema generation. Callers
-// pass the CATALOG SUPERSET of fields (every possible field), not a projected subset.
+// is STRUCTURALLY STABLE: it is built from the stable status-field CATALOG (accepted as
+// StatusFieldCatalogEntry, so a dynamic projected subset is not even representable), a
+// built-in field carries only its id and collapse rank, and its value/label/command all
+// ride uiState (resolved per frame by id); the footer hint is likewise a provider-backed
+// Field whose label rides uiState. So a field's value, command, or provider PRESENCE
+// changing (a branch appearing/disappearing) is value-state, never a structure change,
+// and never advances the schema generation. The catalog is split into header/footer by
+// each entry's own region.
 //
 // The override is a ValidatedComposition (not a raw UiComposition), so only a
 // decoder-validated tree can reach the assembly -- a malformed override is
 // unrepresentable here, not silently copied into the result.
 
-#include <ssg/ChromeDecode.h>  // ValidatedComposition
-#include <ssg/ShellState.h>    // StatusField
-#include <ssg/Style.h>         // StyleDimensions
-#include <ssg/UiTree.h>        // UiComposition
+#include <ssg/ChromeDecode.h>   // ValidatedComposition
+#include <ssg/StatusFields.h>   // StatusFieldCatalogEntry
+#include <ssg/Style.h>          // StyleDimensions
+#include <ssg/UiTree.h>         // UiComposition
 
 #include <optional>
 #include <string_view>
@@ -52,8 +54,7 @@ namespace ssg {
 //   it never reinterprets an action as a commandId click. A composed ssg.chrome footer
 //   replaces the whole built-in footer and so omits the affordance, matching the grid.
 [[nodiscard]] UiComposition assembleWholeScreen(
-    const std::vector<StatusField>& headerFields,
-    const std::vector<StatusField>& footerFields,
+    const std::vector<StatusFieldCatalogEntry>& catalog,
     std::string_view hintCommandId,
     const StyleDimensions& dimensions,
     const std::optional<ValidatedComposition>& composedOverride);
