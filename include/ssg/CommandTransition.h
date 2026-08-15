@@ -112,16 +112,6 @@ public:
         return tree_;
     }
 
-    // The single consuming install chokepoint: move the prepared replacement into the
-    // authority's owned state in ONE fixed order -- apply the tree plan (replaceProvider a
-    // create, then activateProvider) and advance the revision source past any consumed
-    // create revision, then move in prompt, interaction, and truth. Rvalue-qualified so a
-    // prepared transition installs at most once; nothing external can apply parts or
-    // reorder. Preflight has made every step here infallible.
-    void installInto(WholeScreenTruth& truth, UiInteractionState& interaction,
-                     PromptSurface& prompt, TreeModel& tree,
-                     std::uint64_t& revisionSource) &&;
-
 private:
     PreparedTransition(WholeScreenTruth truth, UiInteractionState interaction,
                        PromptSurface prompt, std::optional<TreeBackingPlan> tree)
@@ -130,7 +120,19 @@ private:
           prompt_{std::move(prompt)},
           tree_{std::move(tree)} {}
 
+    // The single consuming install chokepoint: move the prepared replacement into the
+    // authority's owned state in ONE fixed order -- apply the tree plan (replaceProvider a
+    // create, then activateProvider) and advance the revision source past any consumed
+    // create revision, then move in prompt, interaction, and truth. Rvalue-qualified so a
+    // prepared transition installs at most once. PRIVATE to InteractionAuthority so a
+    // bundle can never be installed into unrelated truth/tree/revision objects, which would
+    // invalidate the preflight guarantees. Preflight has made every step here infallible.
+    void installInto(WholeScreenTruth& truth, UiInteractionState& interaction,
+                     PromptSurface& prompt, TreeModel& tree,
+                     std::uint64_t& revisionSource) &&;
+
     friend struct TransitionBuilder;
+    friend class InteractionAuthority;
 
     WholeScreenTruth truth_;
     UiInteractionState interaction_;

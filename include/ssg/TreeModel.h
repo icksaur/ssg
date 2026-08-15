@@ -209,6 +209,15 @@ public:
     [[nodiscard]] std::optional<TreeRevision> providerRevision(
         const TreeProviderId& providerId) const;
 
+    // The id, kind, and revision of every present provider, WITHOUT materializing node
+    // views -- a cheap enumeration for a caller that needs only provider identity and
+    // revision (e.g. preparing a tree-backing transition), not the full viewState().
+    struct ProviderIdentity {
+        TreeProviderBinding binding;
+        TreeRevision revision{0};
+    };
+    [[nodiscard]] std::vector<ProviderIdentity> providerIdentities() const;
+
     // Activate the provider named by `binding`. When it does not exist yet and
     // its kind is Git or Symbols, create it empty and activate it -- a panel can
     // be shown before its provider has any content. A Filesystem binding is NEVER

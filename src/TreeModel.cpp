@@ -510,6 +510,17 @@ std::optional<TreeRevision> TreeModel::providerRevision(
     return std::nullopt;
 }
 
+std::vector<TreeModel::ProviderIdentity> TreeModel::providerIdentities() const {
+    std::vector<ProviderIdentity> identities;
+    identities.reserve(providers_.size());
+    for (const auto& state : providers_) {
+        identities.push_back(ProviderIdentity{
+            TreeProviderBinding{state.snapshot.providerId(), state.snapshot.kind()},
+            state.snapshot.revision()});
+    }
+    return identities;
+}
+
 bool TreeModel::activateProvider(const TreeProviderId& providerId) {    const auto found = std::find_if(
         providers_.begin(), providers_.end(),
         [&](const ProviderState& state) {

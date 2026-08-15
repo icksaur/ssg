@@ -15,6 +15,8 @@
 #include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -138,6 +140,27 @@ TEST(cancelPromptReleasesFocus) {
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
 }
 
+TEST(openPromptRejectsAPalettePromptSoOnlyAFinderMakesAPicker) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    const auto result = authority.openPrompt(PromptRequest{
+        PromptKind::Palette, "cmd", {{"query", "q", ""}}, {}, std::nullopt});
+    ASSERT_FALSE(result.accepted());
+    ASSERT_FALSE(authority.prompt().active());
+    ASSERT_FALSE(authority.openPicker().has_value());
+}
+
+TEST(valueEditKeepsPromptFocusAndUpdatesTheInput) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
+    ASSERT_TRUE(authority.updatePromptValue(0, "src/main.cpp").accepted());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
+    ASSERT_TRUE(authority.prompt().active());
+    ASSERT_EQ(authority.prompt().request()->inputs[0].value,
+              std::string{"src/main.cpp"});
+}
+
 // --- Revision source ----------------------------------------------------------------
 
 TEST(allocateTreeRevisionIsMonotonic) {
@@ -147,6 +170,23 @@ TEST(allocateTreeRevisionIsMonotonic) {
     const auto b = authority.allocateTreeRevision();
     ASSERT_EQ(a.value(), std::uint64_t{10});
     ASSERT_EQ(b.value(), std::uint64_t{11});
+}
+
+TEST(allocateTreeRevisionRejectsExhaustion) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree,
+                                   std::numeric_limits<std::uint64_t>::max()};
+    ASSERT_THROWS(authority.allocateTreeRevision(), std::logic_error);
+}
+
+TEST(constructionRejectsARevisionSourceBehindAProvider) {
+    TreeModel tree;
+    tree.replaceProvider(TreeProviderSnapshot{TreeProviderId{"filesystem"},
+                                              TreeProviderKind::Filesystem,
+                                              TreeRevision{100}, {}});
+    // A source not ahead of every provider would let a replacement fail to increase.
+    ASSERT_THROWS((InteractionAuthority{assemble(StyleDimensions{}), tree, 50}),
+                  std::logic_error);
 }
 
 // --- Live migration -----------------------------------------------------------------
@@ -190,7 +230,11 @@ int main() {
     RUN(genericOpenPromptFocusesFooterWithoutAPicker);
     RUN(genericPromptOverAPickerClearsTheStalePickerIdentity);
     RUN(cancelPromptReleasesFocus);
+    RUN(openPromptRejectsAPalettePromptSoOnlyAFinderMakesAPicker);
+    RUN(valueEditKeepsPromptFocusAndUpdatesTheInput);
     RUN(allocateTreeRevisionIsMonotonic);
+    RUN(allocateTreeRevisionRejectsExhaustion);
+    RUN(constructionRejectsARevisionSourceBehindAProvider);
     RUN(updateCompositionMigratesPreservingPanelAndPromptTruth);
     RUN(updateCompositionWithoutStructuralChangeDoesNotAdvance);
     return failed;
