@@ -31,6 +31,24 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
             walk(child, here, seen, error);
             if (error) return;
         }
+    } else if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
+        const WidgetDescriptor& w = leaf->widget;
+        if (w.kind == WidgetKind::View) {
+            // A View names its client-rendered surface, and has no content to hug,
+            // so its size must be Exact or Flex -- never Auto.
+            if (!w.surface) {
+                error = here + ": a \"view\" leaf requires a surface";
+                return;
+            }
+            if (node.size.kind() == SizeKind::Auto) {
+                error = here + ": a \"view\" leaf must be Exact- or Flex-sized";
+                return;
+            }
+        } else if (w.surface) {
+            // A surface belongs to a View leaf alone.
+            error = here + ": \"surface\" is only allowed on a \"view\" leaf";
+            return;
+        }
     }
 }
 

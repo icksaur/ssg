@@ -18,8 +18,15 @@ constexpr std::array kWidgetKindNames{
     std::string_view{"container"}, std::string_view{"label"},
     std::string_view{"field"},     std::string_view{"checkbox"},
     std::string_view{"text_input"}, std::string_view{"spacer"},
+    std::string_view{"view"},
 };
 static_assert(kWidgetKindNames.size() == kWidgetKindCount);
+
+constexpr std::array kViewSurfaceNames{
+    std::string_view{"tabview"}, std::string_view{"filetree"},
+    std::string_view{"gitstatus"}, std::string_view{"findresults"},
+};
+static_assert(kViewSurfaceNames.size() == kViewSurfaceCount);
 }  // namespace
 
 std::string_view widgetKindName(WidgetKind kind) {
@@ -28,6 +35,14 @@ std::string_view widgetKindName(WidgetKind kind) {
         throw std::invalid_argument("widgetKindName: unrecognized WidgetKind");
     }
     return kWidgetKindNames[index];
+}
+
+std::string_view viewSurfaceName(ViewSurface surface) {
+    const auto index = static_cast<std::size_t>(surface);
+    if (index >= kViewSurfaceCount) {
+        throw std::invalid_argument("viewSurfaceName: unrecognized ViewSurface");
+    }
+    return kViewSurfaceNames[index];
 }
 
 RowFit fitRow(const std::vector<FitItem>& items, int extent, int separator,

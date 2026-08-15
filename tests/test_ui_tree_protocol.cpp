@@ -72,6 +72,21 @@ std::vector<UiSchema> corpus() {
     {  // empty composition -> empty schema
         all.push_back(UiSchema{Generation{1}, {}});
     }
+    {  // a View leaf carries its surface across the wire
+        WidgetDescriptor view;
+        view.kind = WidgetKind::View;
+        view.id = "content.tabview";
+        view.surface = ssg::ViewSurface::TabView;
+        ssg::UiContainer body;
+        body.axis = ssg::Axis::Row;
+        body.children.push_back(
+            ssg::UiNode{ssg::UiNodeId{"content.tabview"}, ssg::Size::flex(),
+                        ssg::UiLeaf{view}});
+        ssg::UiNode root{ssg::UiNodeId{"body"}, ssg::Size::flex(),
+                         std::move(body)};
+        all.push_back(UiSchema{
+            Generation{3}, {ssg::UiRegion{ssg::RegionRole::Overlay, root}}});
+    }
     return all;
 }
 
@@ -132,10 +147,39 @@ TEST(malformedWireDecodesToNullopt) {
     ASSERT_TRUE(!decodeUiSchema(bothSchema).has_value());
 }
 
+// An out-of-range surface ordinal on a leaf decodes to nullopt, never a guess.
+TEST(malformedSurfaceDecodesToNullopt) {
+    const ProtocolValue leafObj = ProtocolValue::makeObject(
+        {{"kind", ProtocolValue::makeUint(6)},  // View
+         {"id", ProtocolValue::makeText("v")},
+         {"value", ProtocolValue::makeNull()},
+         {"checked", ProtocolValue::makeNull()},
+         {"width", ProtocolValue::makeNull()},
+         {"role", ProtocolValue::makeNull()},
+         {"command", ProtocolValue::makeNull()},
+         {"surface", ProtocolValue::makeUint(99)},  // no such surface
+         {"rank", ProtocolValue::makeInt(0)},
+         {"keep", ProtocolValue::makeBool(false)},
+         {"overflow", ProtocolValue::makeUint(0)},
+         {"sigil", ProtocolValue::makeText("")}});
+    const ProtocolValue node = ProtocolValue::makeObject(
+        {{"id", ProtocolValue::makeText("v")},
+         {"size", ProtocolValue::makeObject(
+                      {{"kind", ProtocolValue::makeUint(1)},
+                       {"extent", ProtocolValue::makeUint(0)}})},
+         {"leaf", leafObj}});
+    const ProtocolValue schema = ProtocolValue::makeObject(
+        {{"generation", ProtocolValue::makeUint(1)},
+         {"regions", ProtocolValue::makeArray({ProtocolValue::makeObject(
+             {{"role", ProtocolValue::makeUint(0)}, {"root", node}})})}});
+    ASSERT_TRUE(!decodeUiSchema(schema).has_value());
+}
+
 }  // namespace
 
 int main() {
     RUN(uiSchemaRoundTripsThroughTheWire);
     RUN(malformedWireDecodesToNullopt);
+    RUN(malformedSurfaceDecodesToNullopt);
     return failed == 0 ? 0 : 1;
 }

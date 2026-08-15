@@ -201,7 +201,7 @@ check('palette-prompt detection reads the wire snake_case field names', () => {
 
 // --- UI-VM: profile rejection + schema/state interpretation ---
 import {
-  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, REGION, SIZE,
+  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, REGION, SIZE, SURFACE,
 } from '../../apps/web/reconcile.mjs';
 
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
@@ -241,6 +241,24 @@ check('firstUnsupportedPrimitive rejects an unsupported widget kind (TextInput)'
 check('firstUnsupportedPrimitive rejects an unsupported region role (Overlay)', () => {
   const schema = { generation: 1, regions: [ rowRegion(REGION.OVERLAY, []) ] };
   assert.deepEqual(firstUnsupportedPrimitive(schema), { kind: 'region', ordinal: REGION.OVERLAY });
+});
+
+// Supporting the View KIND does not imply supporting a surface: a View naming a
+// surface the profile lacks is rejected, naming the surface ordinal.
+check('firstUnsupportedPrimitive rejects a View naming an unsupported surface', () => {
+  const schema = { generation: 1, regions: [
+    rowRegion(REGION.TOP, [leafNode('v', WIDGET.VIEW, { surface: SURFACE.GITSTATUS })]),
+  ] };
+  assert.deepEqual(firstUnsupportedPrimitive(schema), { kind: 'surface', ordinal: SURFACE.GITSTATUS });
+});
+
+// A profile that declares the surface accepts the same View leaf.
+check('firstUnsupportedPrimitive accepts a View whose surface the profile declares', () => {
+  const profile = { ...WEB_UI_PROFILE, surfaces: new Set([SURFACE.GITSTATUS]) };
+  const schema = { generation: 1, regions: [
+    rowRegion(REGION.TOP, [leafNode('v', WIDGET.VIEW, { surface: SURFACE.GITSTATUS })]),
+  ] };
+  assert.equal(firstUnsupportedPrimitive(schema, profile), null);
 });
 
 check('interpretChrome applies the per-kind render gate', () => {

@@ -44,6 +44,7 @@ public:
         ClientUiProfile profile;
         profile.widgets_.fill(true);
         profile.regions_.fill(true);
+        profile.surfaces_.fill(true);
         return profile;
     }
 
@@ -55,8 +56,16 @@ public:
         regions_[index(role)] = true;
         return *this;
     }
+    ClientUiProfile& allow(ViewSurface surface) {
+        surfaces_[index(surface)] = true;
+        return *this;
+    }
     ClientUiProfile& allowRegions(std::initializer_list<RegionRole> roles) {
         for (const RegionRole role : roles) allow(role);
+        return *this;
+    }
+    ClientUiProfile& allowSurfaces(std::initializer_list<ViewSurface> surfaces) {
+        for (const ViewSurface surface : surfaces) allow(surface);
         return *this;
     }
 
@@ -65,6 +74,9 @@ public:
     }
     [[nodiscard]] bool supports(RegionRole role) const {
         return regions_[index(role)];
+    }
+    [[nodiscard]] bool supports(ViewSurface surface) const {
+        return surfaces_[index(surface)];
     }
 
     // The rejection seam: the first primitive in `items` this profile does not
@@ -103,9 +115,18 @@ private:
         }
         return position;
     }
+    static std::size_t index(ViewSurface surface) {
+        const auto position = static_cast<std::size_t>(surface);
+        if (position >= kViewSurfaceCount) {
+            throw std::invalid_argument(
+                "ClientUiProfile: unrecognized ViewSurface");
+        }
+        return position;
+    }
 
     std::array<bool, kWidgetKindCount> widgets_{};
     std::array<bool, kRegionRoleCount> regions_{};
+    std::array<bool, kViewSurfaceCount> surfaces_{};
 };
 
 }  // namespace ssg

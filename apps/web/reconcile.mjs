@@ -173,30 +173,42 @@ export function isPalettePromptOpen(sections) {
 // Wire ordinals, pinned by the C++ enums (WidgetKind, RegionRole, Axis, SizeKind,
 // SemanticRole). The schema's leaves carry `kind`; regions carry `role`; nodes carry
 // `size`; containers carry `axis`.
-export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPUT: 4, SPACER: 5 };
+export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPUT: 4, SPACER: 5, VIEW: 6 };
 export const REGION = { TOP: 0, BOTTOM: 1, LEADING: 2, TRAILING: 3, OVERLAY: 4 };
 export const AXIS = { ROW: 0, COLUMN: 1 };
 export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
+// Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
+export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3 };
 
 // The primitives THIS web build's interpreter can draw: header/footer chrome, so
 // Container/Label/Field/Checkbox/Spacer leaves in the Top/Bottom regions. TextInput
 // and the side/overlay regions are not implemented, so a schema using one is a loud,
-// tested rejection -- never a silently dropped element.
+// tested rejection -- never a silently dropped element. The View kind is enumerated,
+// but supporting the kind does not imply supporting a surface: `surfaces` declares
+// which surface ids this build renders (none yet -- the surface renderers land with
+// the whole-screen tree), so a View naming an unrendered surface is rejected too.
 export const WEB_UI_PROFILE = {
-  widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.SPACER]),
+  widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.SPACER, WIDGET.VIEW]),
   regions: new Set([REGION.TOP, REGION.BOTTOM]),
+  surfaces: new Set(),
 };
 
 // The first schema primitive `profile` does not support, as
-// { kind: 'widget'|'region', ordinal }, or null when every region role and leaf
-// widget kind is supported. The interpreter runs only when this returns null.
+// { kind: 'widget'|'region'|'surface', ordinal }, or null when every region role,
+// leaf widget kind, and view surface is supported. The interpreter runs only when
+// this returns null.
 export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
   if (!schema || !Array.isArray(schema.regions)) return null;
+  const surfaces = profile.surfaces || new Set();
   const walk = (node) => {
     if (!node) return null;
     if (node.leaf && typeof node.leaf === 'object') {
       const kind = num(node.leaf.kind);
       if (!profile.widgets.has(kind)) return { kind: 'widget', ordinal: kind };
+      if (kind === WIDGET.VIEW) {
+        const surface = num(node.leaf.surface);
+        if (!surfaces.has(surface)) return { kind: 'surface', ordinal: surface };
+      }
     }
     if (node.container && Array.isArray(node.container.children)) {
       for (const child of node.container.children) {

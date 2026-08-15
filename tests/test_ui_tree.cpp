@@ -39,6 +39,14 @@ UiNode container(std::string id, std::vector<UiNode> children) {
                   UiContainer{Axis::Row, {}, {}, std::move(children)}};
 }
 
+UiNode viewLeaf(std::string id, ssg::ViewSurface surface, Size size) {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::View;
+    widget.id = id;
+    widget.surface = surface;
+    return UiNode{UiNodeId{std::move(id)}, size, UiLeaf{std::move(widget)}};
+}
+
 TEST(wellFormedSchemaValidates) {
     UiSchema schema;
     schema.generation = Generation{1};
@@ -102,6 +110,53 @@ TEST(nodeIsExactlyContainerOrLeaf) {
     ASSERT_TRUE(!l.isContainer());
 }
 
+// A View leaf names a client-rendered surface and is sized Exact or Flex.
+TEST(wellFormedViewLeafValidates) {
+    UiSchema schema;
+    schema.regions = {UiRegion{
+        RegionRole::Overlay,
+        container("body", {viewLeaf("tv", ssg::ViewSurface::TabView,
+                                    Size::flex())})}};
+    ASSERT_TRUE(validateUiSchema(schema).ok());
+}
+
+// A View leaf without a surface is malformed (its surface is required).
+TEST(viewLeafWithoutSurfaceIsRejected) {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::View;
+    widget.id = "tv";
+    UiSchema schema;
+    schema.regions = {UiRegion{
+        RegionRole::Overlay,
+        container("body", {UiNode{UiNodeId{"tv"}, Size::flex(),
+                                  UiLeaf{std::move(widget)}}})}};
+    ASSERT_TRUE(!validateUiSchema(schema).ok());
+}
+
+// An opaque View has no content to hug, so an Auto-sized View leaf is rejected.
+TEST(autoSizedViewLeafIsRejected) {
+    UiSchema schema;
+    schema.regions = {UiRegion{
+        RegionRole::Overlay,
+        container("body", {viewLeaf("tv", ssg::ViewSurface::TabView,
+                                    Size::autoSize())})}};
+    ASSERT_TRUE(!validateUiSchema(schema).ok());
+}
+
+// A surface belongs to a View leaf alone; a Label carrying one is malformed.
+TEST(surfaceOnNonViewLeafIsRejected) {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::Label;
+    widget.id = "lbl";
+    widget.surface = ssg::ViewSurface::GitStatus;
+    UiSchema schema;
+    schema.regions = {UiRegion{
+        RegionRole::Top,
+        container("root", {UiNode{UiNodeId{"lbl"}, Size::flex(),
+                                  UiLeaf{std::move(widget)}}})}};
+    ASSERT_TRUE(!validateUiSchema(schema).ok());
+}
+
 }  // namespace
 
 int main() {
@@ -112,5 +167,9 @@ int main() {
     RUN(duplicateRegionRoleIsRejected);
     RUN(emptySchemaValidates);
     RUN(nodeIsExactlyContainerOrLeaf);
+    RUN(wellFormedViewLeafValidates);
+    RUN(viewLeafWithoutSurfaceIsRejected);
+    RUN(autoSizedViewLeafIsRejected);
+    RUN(surfaceOnNonViewLeafIsRejected);
     return failed == 0 ? 0 : 1;
 }

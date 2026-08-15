@@ -161,6 +161,8 @@ ProtocolValue encodeWidget(const WidgetDescriptor& w) {
          {"width", encodeOptionalInt(w.width)},
          {"role", encodeOptionalText(w.role)},
          {"command", encodeOptionalText(w.command)},
+         {"surface",
+          w.surface ? enumValue(*w.surface) : ProtocolValue::makeNull()},
          {"rank", ProtocolValue::makeInt(w.rank)},
          {"keep", ProtocolValue::makeBool(w.keep)},
          {"overflow", enumValue(w.overflow)},
@@ -218,6 +220,12 @@ std::optional<WidgetDescriptor> decodeWidget(const ProtocolValue& value) {
     if (!isNull(value.field("command"))) {
         if (!value.field("command")->asText()) return std::nullopt;
         w.command = *value.field("command")->asText();
+    }
+    if (!isNull(value.field("surface"))) {
+        const auto surface =
+            decodeEnumIn(uintField(value, "surface"), kAllViewSurfaces);
+        if (!surface) return std::nullopt;
+        w.surface = *surface;
     }
     return w;
 }

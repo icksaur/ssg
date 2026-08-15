@@ -135,6 +135,46 @@ TEST(profileIsAValueBuiltFromTheVocabularyAlone) {
     ASSERT_NE(a, c);
 }
 
+// Supporting the generic View kind does not prove a client renders every surface:
+// surfaces are declared and queried separately.
+TEST(defaultProfileSupportsNoViewSurface) {
+    const ClientUiProfile empty;
+    for (const ssg::ViewSurface surface : ssg::kAllViewSurfaces) {
+        ASSERT_TRUE(!empty.supports(surface));
+    }
+}
+
+TEST(fullProfileSupportsEveryViewSurface) {
+    const ClientUiProfile full = ClientUiProfile::full();
+    for (const ssg::ViewSurface surface : ssg::kAllViewSurfaces) {
+        ASSERT_TRUE(full.supports(surface));
+    }
+}
+
+// The rejection oracle covers surfaces: a schema naming a surface the profile
+// lacks is rejected and NAMES the first unsupported surface.
+TEST(profileRejectsAndNamesTheFirstUnsupportedSurface) {
+    ClientUiProfile profile;
+    profile.allowSurfaces({ssg::ViewSurface::TabView});
+    const std::vector surfaces{ssg::ViewSurface::TabView,
+                               ssg::ViewSurface::GitStatus};
+    const std::optional<ssg::ViewSurface> rejected =
+        profile.firstUnsupported(surfaces);
+    ASSERT_TRUE(rejected.has_value());
+    ASSERT_EQ(*rejected, ssg::ViewSurface::GitStatus);
+    ASSERT_EQ(ssg::viewSurfaceName(*rejected), std::string_view{"gitstatus"});
+}
+
+TEST(everyViewSurfaceHasADistinctName) {
+    ASSERT_EQ(ssg::kAllViewSurfaces.size(), ssg::kViewSurfaceCount);
+    for (std::size_t i = 0; i < ssg::kAllViewSurfaces.size(); ++i) {
+        for (std::size_t j = i + 1; j < ssg::kAllViewSurfaces.size(); ++j) {
+            ASSERT_NE(ssg::viewSurfaceName(ssg::kAllViewSurfaces[i]),
+                      ssg::viewSurfaceName(ssg::kAllViewSurfaces[j]));
+        }
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -148,5 +188,9 @@ int main() {
     RUN(profileRejectsAndNamesTheFirstUnsupportedRegion);
     RUN(profileAcceptsSupportedRegions);
     RUN(profileIsAValueBuiltFromTheVocabularyAlone);
+    RUN(defaultProfileSupportsNoViewSurface);
+    RUN(fullProfileSupportsEveryViewSurface);
+    RUN(profileRejectsAndNamesTheFirstUnsupportedSurface);
+    RUN(everyViewSurfaceHasADistinctName);
     return failed == 0 ? 0 : 1;
 }

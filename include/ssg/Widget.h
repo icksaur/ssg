@@ -34,6 +34,7 @@ enum class WidgetKind : std::uint8_t {
     Checkbox,    // a boolean with checked/unchecked glyphs + a caption
     TextInput,   // a one-line editable region: sigil + scrolling tail + caret
     Spacer,      // a flexible gap
+    View,        // an opaque client-rendered surface (its ViewSurface names which)
 };
 
 // The vocabulary made enumerable, mirroring SemanticRole's discipline: a count,
@@ -41,18 +42,42 @@ enum class WidgetKind : std::uint8_t {
 // (UiProfile.h) is a subset of this set, so both must enumerate the same kinds;
 // keeping the enum, the count, and the array bound at compile time is what makes
 // "the profile says X" and "the vocabulary has X" checkable against one source.
-inline constexpr std::size_t kWidgetKindCount = 6;
+inline constexpr std::size_t kWidgetKindCount = 7;
 inline constexpr std::array kAllWidgetKinds{
     WidgetKind::Container, WidgetKind::Label,     WidgetKind::Field,
     WidgetKind::Checkbox,  WidgetKind::TextInput, WidgetKind::Spacer,
+    WidgetKind::View,
 };
 static_assert(kAllWidgetKinds.size() == kWidgetKindCount);
+
+// The closed set of opaque client-rendered surfaces a View leaf may name. The
+// library owns each surface's placement/size/presence in the tree and its
+// authoritative data channel; a client owns the pixels. A client's UI profile
+// declares which surfaces it implements, so this enum, its count, and its name
+// array are bound like WidgetKind's.
+enum class ViewSurface : std::uint8_t {
+    TabView,      // the tab strip + the active document body
+    FileTree,     // the filesystem tree provider
+    GitStatus,    // the git tree provider
+    FindResults,  // the finder candidate universe (client filters locally)
+};
+
+inline constexpr std::size_t kViewSurfaceCount = 4;
+inline constexpr std::array kAllViewSurfaces{
+    ViewSurface::TabView, ViewSurface::FileTree, ViewSurface::GitStatus,
+    ViewSurface::FindResults,
+};
+static_assert(kAllViewSurfaces.size() == kViewSurfaceCount);
 
 // The stable wire/diagnostic name of a widget kind. Used to name the unsupported
 // kind when a composition exceeds a client's UI profile. Throws
 // std::invalid_argument on a corrupt/out-of-range enumerator, never a silent
 // wrong slot.
 [[nodiscard]] std::string_view widgetKindName(WidgetKind kind);
+
+// The stable wire/diagnostic name of a view surface, mirroring widgetKindName.
+// Throws std::invalid_argument on a corrupt/out-of-range enumerator.
+[[nodiscard]] std::string_view viewSurfaceName(ViewSurface surface);
 
 // Which end of the container the retained items pack toward. Start packs from
 // the container's leading edge (header status fields); End packs flush to its

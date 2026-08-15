@@ -31,6 +31,8 @@ struct ValueSource {
 // is the text/caption source, `checked` the checkbox state source, `width` a
 // left/right `Spacer`'s blank width, `command` the click target (validated at
 // dispatch, not here), `role` a SemanticRole name (validated at lowering).
+// `surface` names the client-rendered surface of a `View` leaf (required for a
+// View, forbidden otherwise), validated at schema validation.
 struct WidgetDescriptor {
     WidgetKind kind = WidgetKind::Label;
     std::string id;
@@ -39,6 +41,7 @@ struct WidgetDescriptor {
     std::optional<int> width;
     std::optional<std::string> role;
     std::optional<std::string> command;
+    std::optional<ViewSurface> surface;
     int rank = 0;
     bool keep = false;
     Overflow overflow = Overflow::None;
