@@ -56,7 +56,8 @@ TEST(decodeRejectsCandidateMissingAField) {
          {"parameters", encodePalette(PaletteViewState{}).field("parameters")
                             ? *encodePalette(PaletteViewState{}).field("parameters")
                             : ProtocolValue::makeNull()},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -70,7 +71,8 @@ TEST(decodeRejectsParametersMissingAField) {
         {{"mode", ProtocolValue::makeUint(4)},
          {"candidates", ProtocolValue::makeArray({})},
          {"parameters", parameters},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -79,7 +81,8 @@ TEST(decodeRejectsOutOfRangeMode) {
         {{"mode", ProtocolValue::makeUint(99)},
          {"candidates", ProtocolValue::makeArray({})},
          {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -88,7 +91,8 @@ TEST(decodeRejectsNonArrayCandidates) {
         {{"mode", ProtocolValue::makeUint(4)},
          {"candidates", ProtocolValue::makeText("not an array")},
          {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -107,7 +111,8 @@ TEST(decodeRejectsOutOfDomainParameter) {
         {{"mode", ProtocolValue::makeUint(4)},
          {"candidates", ProtocolValue::makeArray({})},
          {"parameters", parameters},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -123,7 +128,8 @@ TEST(decodeRejectsParameterOutsideIntRange) {
         {{"mode", ProtocolValue::makeUint(4)},
          {"candidates", ProtocolValue::makeArray({})},
          {"parameters", parameters},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
+         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -145,7 +151,27 @@ TEST(decodeRejectsMismatchedMagnitude) {
          {"candidates", ProtocolValue::makeArray({})},
          {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
          {"max_parameter_magnitude",
-          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude - 1)}});
+          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude - 1)},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
+    ASSERT_FALSE(decodePalette(value).has_value());
+}
+
+TEST(decodeRejectsOversizedCandidate) {
+    // A candidate whose id/label exceeds the published byte bound is refused, never
+    // truncated -- the full-byte subsequence contract requires the whole candidate.
+    ProtocolValue::Array candidates;
+    candidates.push_back(ProtocolValue::makeObject(
+        {{"id", ProtocolValue::makeText(
+                    std::string(static_cast<std::size_t>(kMaxCandidateBytes) + 1, 'a'))},
+         {"label", ProtocolValue::makeText("ok")},
+         {"detail", ProtocolValue::makeText("")}}));
+    ProtocolValue value = ProtocolValue::makeObject(
+        {{"mode", ProtocolValue::makeUint(4)},
+         {"candidates", ProtocolValue::makeArray(std::move(candidates))},
+         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
+         {"max_parameter_magnitude",
+          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -162,5 +188,6 @@ int main() {
     RUN(decodeRejectsParameterOutsideIntRange);
     RUN(decodeRejectsMissingMagnitude);
     RUN(decodeRejectsMismatchedMagnitude);
+    RUN(decodeRejectsOversizedCandidate);
     return failed;
 }

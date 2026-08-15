@@ -25,26 +25,25 @@ char folded(char value) {
 // in-domain weights (<= kMaxMatcherParameterMagnitude) yields at most ~4 * cap * 8Mi
 // which overflows a 32-bit int but is well within int64 AND under 2^53, so the C++
 // int64 score and the JavaScript double score are bit-identical.
+// Score `query` as a case-folded subsequence of `candidate`, iterating raw UTF-8
+// bytes over the WHOLE candidate (a full-byte subsequence, never truncated); nullopt
+// when `query` is not a subsequence. Weights come from `params`. Exactness of the
+// int64 score (and its parity with the JS double score) is guaranteed by the
+// kMaxCandidateBytes/kMaxMatcherParameterMagnitude invariant in the header, enforced
+// at decode -- so a scored candidate is always within the proven-safe domain.
 std::optional<std::int64_t> fuzzyScore(std::string_view candidate,
                                        std::string_view query,
                                        MatcherParameters const& params) {
     if (query.empty()) return 0;
-    // Score at most kMaxMatcherParameterMagnitude candidate bytes, so the score is
-    // bounded by construction regardless of candidate length (the static_assert in the
-    // header pairs this cap with the weight magnitude to keep the score an exact
-    // double). A longer candidate is truncated for scoring -- far beyond any real one.
-    const std::size_t scoredSize = std::min<std::size_t>(
-        candidate.size(),
-        static_cast<std::size_t>(kMaxMatcherParameterMagnitude));
     std::int64_t score = 0;
     std::size_t cursor = 0;
     std::size_t previous = std::string_view::npos;
     for (const char wanted : query) {
         const char needle = folded(wanted);
-        while (cursor < scoredSize && folded(candidate[cursor]) != needle) {
+        while (cursor < candidate.size() && folded(candidate[cursor]) != needle) {
             ++cursor;
         }
-        if (cursor == scoredSize) return std::nullopt;
+        if (cursor == candidate.size()) return std::nullopt;
         score += params.baseScore;
         if (cursor == 0 || candidate[cursor - 1] == '/' ||
             candidate[cursor - 1] == '_' || candidate[cursor - 1] == '-' ||
@@ -58,7 +57,7 @@ std::optional<std::int64_t> fuzzyScore(std::string_view candidate,
         previous = cursor++;
     }
     score -= static_cast<std::int64_t>(std::min<std::size_t>(
-        scoredSize, static_cast<std::size_t>(std::max(params.lengthCap, 0))));
+        candidate.size(), static_cast<std::size_t>(std::max(params.lengthCap, 0))));
     return score;
 }
 

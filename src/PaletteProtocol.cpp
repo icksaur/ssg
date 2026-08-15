@@ -24,6 +24,13 @@ std::optional<PaletteCandidate> decodeCandidate(const ProtocolValue& value) {
     if (!id || !id->asText()) return std::nullopt;
     if (!label || !label->asText()) return std::nullopt;
     if (!detail || !detail->asText()) return std::nullopt;
+    // A candidate scored by the matcher must be within the proven-safe byte length, or
+    // the score's exactness (and cross-client parity) is not guaranteed. An oversized
+    // candidate is rejected, never truncated -- the match contract is a full-byte
+    // subsequence over the whole id/label.
+    const std::size_t cap = static_cast<std::size_t>(kMaxCandidateBytes);
+    if (id->asText()->size() > cap || label->asText()->size() > cap)
+        return std::nullopt;
     return PaletteCandidate{*id->asText(), *label->asText(), *detail->asText()};
 }
 
@@ -84,11 +91,13 @@ ProtocolValue encodePalette(const PaletteViewState& palette) {
                       static_cast<std::uint8_t>(palette.mode))},
          {"candidates", ProtocolValue::makeArray(std::move(candidates))},
          {"parameters", encodeParameters(palette.parameters)},
-         // The parameter magnitude domain, published from the library-owned constant
-         // so a non-C++ client validates parameters against the SAME bound the C++
-         // decoder enforces, rather than hardcoding its own copy.
+         // The parameter magnitude domain AND the candidate byte-length bound,
+         // published from the library-owned constants so a non-C++ client validates
+         // against the SAME bounds the C++ decoder enforces (and can prove the score
+         // stays exact) rather than hardcoding its own copies.
          {"max_parameter_magnitude",
-          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)}});
+          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
 }
 
 std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
@@ -97,14 +106,17 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
     const ProtocolValue* candidatesField = value.field("candidates");
     const ProtocolValue* parametersField = value.field("parameters");
     const ProtocolValue* magnitudeField = value.field("max_parameter_magnitude");
+    const ProtocolValue* candidateBytesField = value.field("max_candidate_bytes");
     if (!modeField || !candidatesField || !candidatesField->asArray() ||
-        !parametersField || !magnitudeField || !magnitudeField->asInt()) {
+        !parametersField || !magnitudeField || !magnitudeField->asInt() ||
+        !candidateBytesField || !candidateBytesField->asInt()) {
         return std::nullopt;
     }
-    // The published bound must equal the library's own -- a frame claiming a different
+    // The published bounds must equal the library's own -- a frame claiming a different
     // domain is a mismatch the C++ authority rejects (the C++ side scores with the
-    // compiled constant, so it must not admit a frame stamped with another bound).
+    // compiled constants, so it must not admit a frame stamped with other bounds).
     if (*magnitudeField->asInt() != kMaxMatcherParameterMagnitude) return std::nullopt;
+    if (*candidateBytesField->asInt() != kMaxCandidateBytes) return std::nullopt;
     auto mode = decodeMode(*modeField);
     auto parameters = decodeParameters(*parametersField);
     if (!mode || !parameters) return std::nullopt;

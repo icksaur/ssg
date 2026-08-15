@@ -42,20 +42,22 @@ struct MatcherParameters {
         default;
 };
 
-// The magnitude every published matcher weight and the length cap must stay within,
-// AND the maximum candidate byte length the matcher will score. A matched query adds
-// at most a fixed number of weights per scored candidate byte, so capping both the
-// weight magnitude and the scored byte count bounds the score by construction --
-// independent of any wire limit or in-process input length. The static_assert below
-// proves that bound stays under the exact-integer range of a double, so the C++ int64
-// score and the JavaScript double score are always bit-identical. A parameter outside
-// the domain is a rejected frame, and this magnitude is published on the palette wire
-// so a client reads it rather than hardcoding its own copy.
+// The magnitude every published matcher weight and the length cap must stay within.
+// A parameter outside this domain is a rejected frame. Published on the palette wire
+// so a client validates against the same bound rather than hardcoding a copy.
 inline constexpr std::int64_t kMaxMatcherParameterMagnitude = 1'000'000;
 
-// At most four weights are added per scored candidate byte (base + word-boundary +
-// contiguity + exact-case); the accumulated score must remain an exact double.
-static_assert(4 * kMaxMatcherParameterMagnitude * kMaxMatcherParameterMagnitude <
+// The maximum byte length of a candidate's id or label the matcher will score. A
+// longer candidate is a rejected frame (never truncated -- the match contract is a
+// full-byte subsequence). Published on the palette wire alongside the magnitude.
+inline constexpr std::int64_t kMaxCandidateBytes = 1'000'000;
+
+// At most four weights are added per matched candidate byte (base + word-boundary +
+// contiguity + exact-case), over at most kMaxCandidateBytes bytes, so the accumulated
+// score must remain an exact double for the C++ int64 score and the JavaScript double
+// score to be bit-identical. This is the matcher-owned safety proof, independent of any
+// wire text limit.
+static_assert(4 * kMaxMatcherParameterMagnitude * kMaxCandidateBytes <
               (std::int64_t{1} << 53));
 
 // True iff every weight is within +/- kMaxMatcherParameterMagnitude and lengthCap is
