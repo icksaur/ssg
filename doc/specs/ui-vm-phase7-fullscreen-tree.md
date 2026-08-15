@@ -284,42 +284,30 @@ generic solver ever resolves a container `Auto` (recursive intrinsic measurement
 is therefore out of scope for phase 7 — the solver may keep rejecting `Auto`, and
 this spec introduces no `Auto` node and adds no intrinsic-measurement requirement.
 
-**Presence is not fit — overflow is client-local, `Exact` unchanged.** Presence (a
-library semantic: is this node shown at all) is distinct from fit (a client-local
-question: does the shown tree fit the actual viewport). This spec does NOT
-redefine `Size::Exact`: it keeps its existing contract (reserve exactly that
-extent). When the shown tree's main-axis total exceeds the viewport, the client
-resolves it **in its native medium, never by changing presence and never by a
-round trip**: a present node that cannot fit is clipped or scrolled the way that
-medium already handles an over-tall document or an over-wide row (a terminal
-truncates, a browser scrolls). Overflow presentation is deliberately NOT a
-cross-client pixel-parity contract — it is presentation, which the project's global
-rules assign to each client — so there is no id-specific "shrink this before that"
-rule in the model and no shrinkable size kind. The only cross-client contract here
-is the invariant that overflow changes nothing the library publishes: presence,
-the tree, and every node's `Size` are identical whether or not the viewport can fit
-them. A parity oracle pins *that* (a narrow viewport yields the same published
-schema + presence as a wide one), not the medium-specific clip/scroll pixels.
+**Presence is not fit — overflow is the medium's own response, `Exact` unchanged.**
+Presence (a library semantic: is this node shown at all) is distinct from fit (does
+the shown tree fit the actual viewport). This spec does NOT redefine `Size::Exact`:
+it keeps its existing contract (reserve exactly that extent) and the grid solver's
+existing behavior (reject a layout whose `Exact` children cannot fit). When the
+shown tree cannot fit, each medium gives its own native response, and that response
+changes NOTHING the library publishes — presence, the tree, and every node's `Size`
+are identical whether or not the viewport can fit them. The web scrolls/clips in the
+DOM. The **TUI's response is the library-owned "terminal too small" placeholder**
+(the existing `renderTooSmall`, M11-L): a centered library-owned message on a blank
+grid, shown when `solveLayout` declines. This is grid presentation the LIBRARY owns
+(a grid client contributes no cells to it), not a per-client invention — it is the
+grid service's defined answer to an unfittable viewport, and it satisfies
+fit-vs-presence because it leaves the published schema and presence untouched.
+Overflow presentation is deliberately NOT a cross-client pixel-parity contract; the
+only cross-client contract is that invariance. A parity oracle pins *that* (a narrow
+viewport yields the same published schema + presence as a wide one), not the
+medium-specific overflow pixels.
 
-**The grid client needs a non-rejecting logical layout to clip.** Today's grid
-solver returns no layout when `Exact` children exceed the bounds — it rejects
-rather than truncating. The fit-vs-presence separation requires that the TUI can
-still show an over-bounds tree, so 7A adds a **logical layout pass** with a defined
-nonnegative allocation rule. Along a container's main axis, computed within the
-container's **post-inset content extent** (the frame minus its inset; if the inset
-exceeds the frame on either axis, that content extent clamps to zero, never
-negative): each `Exact` child gets its full extent; the remainder for `Flex`
-children is `max(0, content extent − sum(Exact))` — clamped at zero, never negative.
-`Size::flex()` carries no weight and the model adds none, so the remainder is split
-**equally among the present `Flex` children** (matching the current grid solver; the
-web must divide equally too, not treat a `Flex` extent as a grow weight). In the
-canonical tree at most one `Flex` sibling is ever present per container, so equal
-division is unambiguous there. Child coordinates are the running cumulative offset of
-preceding children's extents, so a child's start can exceed the viewport; the
-renderer then **clips** the logical layout to the terminal rect. Nothing is scaled
-and no `Exact` extent is reduced — over-bounds coordinates are simply clipped.
-Presence and the schema are untouched. (Placed in build step 2, with the canonical
-tree.)
+Reject-vs-placeholder is correct here and needs no non-rejecting/clip pass: the
+grid shell already shrinks the `Exact` panel toward the editor minimum before it can
+overflow, so the decline path is reached only at a genuinely unusable viewport,
+exactly where the placeholder is the intended screen. No `Size::Exact` renegotiation,
+no second overflow path, no `src/Layout.cpp`/`src/Renderer.cpp` clip change.
 
 Every arrangement this tree needs is expressible with axis + size (`Flex` fills,
 `Exact` for the row heights and the sidebar width) + the existing flex-spacer idiom
@@ -359,16 +347,14 @@ with its own parity oracle — not carried speculatively now.
    composition is valid). The full canonical tree and REQUIRED existence of
    header/footer/body/panel/content land in step 4, once the runtime assembles the
    built-in areas into the schema. Header/footer differential oracle stays
-   byte-identical. Also add the non-rejecting logical layout pass + clip (the
-   fit-vs-presence overflow rule above): `src/Layout.cpp` (nonnegative logical
-   solve, `Flex` remainder clamped at zero), `src/Renderer.cpp` (clip logical layout
-   to the viewport), with an undersized-viewport oracle
-   (`tests/test_layout_overflow.cpp`) proving a viewport smaller than the summed
-   fixed extents lays out logically and clips without dropping a present node.
+   byte-identical. The fit-vs-presence overflow response is the existing
+   library-owned "terminal too small" placeholder (no clip pass, no `Size::Exact`
+   change); a schema-and-presence invariance oracle
+   (`tests/test_viewport_invariance.cpp`) proves a narrow viewport yields the same
+   published schema + presence as a wide one.
    Files: `include/ssg/UiTree.h`
    (UiSchema → root node; UiRegion removed), `include/ssg/RegionRoot.h` (deleted),
    `include/ssg/UiTreeProtocol.h` + `src/UiTreeProtocol.cpp`, `src/ChromeLowering.cpp`,
-   `src/Layout.cpp`, `src/Renderer.cpp`,
    `src/ChromeDecode.cpp`, `apps/web/reconcile.mjs`, `validateUiSchema`
    (in `src/UiTree.cpp` — the `UiSchemaValidation`/`ValidatedSchema` path), and
    `tests/test_ui_tree.cpp` / the chrome-lowering differential oracle.
