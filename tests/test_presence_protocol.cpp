@@ -12,6 +12,7 @@
 #include "test_helpers.h"
 
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -52,6 +53,15 @@ TEST(builtSectionCorrespondsToItsSchema) {
     const auto section =
         buildPresenceSection(schema, PresenceConfig::allPresent(schema));
     ASSERT_TRUE(uiPresenceCorrespondsToSchema(section, schema));
+}
+
+TEST(buildRejectsAConfigFromAnotherGeneration) {
+    const auto schemaA = sampleSchema(Generation{7});
+    const auto schemaB = sampleSchema(Generation{8});
+    // A config stamped for schemaA (generation 7) must not build against schemaB.
+    ASSERT_THROWS(
+        buildPresenceSection(schemaB, PresenceConfig::allPresent(schemaA)),
+        std::invalid_argument);
 }
 
 TEST(correspondenceFailsOnGenerationMismatch) {
@@ -129,6 +139,7 @@ TEST(decodeRejectsDuplicateNodeId) {
 int main() {
     RUN(encodeDecodeRoundTripsExactly);
     RUN(builtSectionCorrespondsToItsSchema);
+    RUN(buildRejectsAConfigFromAnotherGeneration);
     RUN(correspondenceFailsOnGenerationMismatch);
     RUN(correspondenceFailsWhenIdSetDrifts);
     RUN(decodeRejectsMissingGeneration);

@@ -4913,6 +4913,14 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     if (const ProtocolValue* uiPresenceField = value.field("ui_presence")) {
         uiPresence = decodeUiPresence(*uiPresenceField);
         if (!uiPresence) return false;
+        // A presence section is meaningless without the schema it names, and must
+        // correspond to it (generation + node-id set); reject a cross-section frame
+        // rather than admit an inconsistent pair into the semantic channel.
+        if (!ui) return false;
+        auto validated = ValidatedSchema::validate(*ui);
+        if (!validated.ok()) return false;
+        if (!uiPresenceCorrespondsToSchema(*uiPresence, validated.schema()))
+            return false;
     }
     if (!document || !selection || !history || !clipboard || !promptStatus || !search ||
         !findReplace || !settings || !keymap || !textEncoding || !tabs || !diff ||

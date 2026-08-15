@@ -1,5 +1,7 @@
 #include <ssg/session_snapshot.h>
 
+#include <ssg/PresenceProtocol.h>
+
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
@@ -402,6 +404,16 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     auto uiState = delta.uiState_.replacement.value_or(base.sections().uiState);
     auto uiPresence =
         delta.uiPresence_.replacement.value_or(base.sections().uiPresence);
+    // A delta may replace the schema or the presence section independently; the
+    // resulting pair must still correspond (same generation, same node-id set), or a
+    // one-sided replacement would yield an accepted-but-inconsistent snapshot.
+    {
+        auto validated = ValidatedSchema::validate(ui);
+        if (!validated.ok() ||
+            !uiPresenceCorrespondsToSchema(uiPresence, validated.schema())) {
+            return {std::nullopt, "ui presence does not correspond to ui schema"};
+        }
+    }
 
     SessionSnapshotSections sections{
         std::move(*document),

@@ -123,6 +123,11 @@ ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
     };
     result.uiState = ssg::resolveUiState(
         ssg::ValidatedSchema::validate(result.ui).takeSchema(), resolver);
+    // Presence must correspond to the same schema, or the wire round-trip rejects
+    // the frame as an inconsistent schema/presence pair.
+    const auto validated = ssg::ValidatedSchema::validate(result.ui).takeSchema();
+    result.uiPresence = ssg::buildPresenceSection(
+        validated, ssg::PresenceConfig::allPresent(validated));
     return result;
 }
 
@@ -662,6 +667,24 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot->sections().ui == after.sections().ui);
     ASSERT_TRUE(replayed.snapshot->sections().uiState == after.sections().uiState);
+}
+
+// A frame whose presence section does not correspond to its schema (here, a stale
+// generation) is refused at decode -- an inconsistent schema/presence pair never
+// enters the semantic channel.
+TEST(snapshotDecodeRejectsNonCorrespondingPresence) {
+    auto badSections = sectionsWithUi(ssg::Revision{4}, "alpha");
+    badSections.uiPresence.generation =
+        ssg::Generation{badSections.uiPresence.generation.value() + 1};
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
+            {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, clientView(3), std::move(badSections));
+    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    ASSERT_FALSE(decoded.snapshot.has_value());
 }
 
 TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
@@ -1392,6 +1415,7 @@ int main() {
     RUN(styleDefineKeysExactlyMatchTheWireCodecFields);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
     RUN(sessionSnapshotAndDeltaCarryTheUiSection);
+    RUN(snapshotDecodeRejectsNonCorrespondingPresence);
     RUN(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta);
     RUN(diffWordRangesRoundTripThroughSnapshotAndDelta);
     RUN(twoClientCapabilityAndViewportIsolationSurvivesTheWire);

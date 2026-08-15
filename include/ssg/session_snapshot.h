@@ -76,7 +76,7 @@ struct SessionSnapshotSections {
     // client can reconcile an optimistically-predicted mutation (phase 7B). A
     // separate authority from uiState (visibility vs. resolved content); one record
     // per schema node, at the same generation as `ui`.
-    UiPresenceSection uiPresence;
+    UiPresenceSection uiPresence = defaultUiPresence();
 };
 
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,

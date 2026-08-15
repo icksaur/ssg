@@ -48,4 +48,11 @@ struct UiPresenceSection {
 [[nodiscard]] UiPresenceSection buildPresenceSection(
     const ValidatedSchema& schema, const PresenceConfig& presence);
 
+// The presence section that corresponds to the default (empty-root) schema: a
+// single present record for the root node, at generation 0. Keeps the default
+// SessionSnapshotSections consistent -- a default schema (emptyUiRoot) paired with
+// this default presence corresponds, so an all-defaults snapshot round-trips and
+// replays without tripping the schema/presence correspondence checks.
+[[nodiscard]] UiPresenceSection defaultUiPresence();
+
 }  // namespace ssg
