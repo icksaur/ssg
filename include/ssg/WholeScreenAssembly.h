@@ -1,45 +1,47 @@
 #pragma once
 
-// The whole-screen tree assembly: from the built-in status-field projection AND an
-// optional ssg.chrome composition, build the canonical whole-screen UiComposition
+// The whole-screen tree assembly: from the built-in status projection AND an optional
+// ssg.chrome composition, build the canonical whole-screen UiComposition
 //
 //   root
 //   ├─ header            (composed override, else built-in from headerFields)
 //   ├─ body   Row Flex
-//   │  ├─ panel   Col Exact(kPanelWidth)   [ filetree(view), gitstatus(view) ]
-//   │  └─ content Col Flex                 [ tabview(view),  findresults(view) ]
-//   └─ footer            (composed override, else built-in from footerFields)
+//   │  ├─ panel   Col Exact(dimensions.panelTargetWidth) [ filetree, gitstatus ]
+//   │  └─ content Col Flex                               [ tabview,  findresults ]
+//   └─ footer            (composed override, else built-in from footerFields + hint)
 //
-// This function OWNS the fallback/override rule: a ssg.chrome-composed header or
-// footer REPLACES the corresponding built-in area; an omitted one is synthesized from
-// the status fields. body/panel/content and the four view leaves are always built-in.
-// It is a PURE function -- the runtime calls it to produce the schema it publishes,
-// but nothing about geometry or presence is decided here.
+// This function OWNS the fallback/override rule: a ssg.chrome-composed header or footer
+// REPLACES the corresponding built-in area; an omitted one is synthesized from the
+// status projection; body/panel/content and the four view leaves are always built-in.
+// It is a PURE function -- the runtime calls it to produce the schema it publishes;
+// nothing about geometry policy or presence is decided here (geometry EXTENTS come from
+// the caller's StyleDimensions, the single configurable source the grid path also uses).
 //
-// The header/footer subtrees use the shared canonical region shape (ChromeRegionShape),
-// so a built-in and a composed region are indistinguishable in shape to a consumer.
-// A built-in region's leaves are provider-backed Fields keyed by the status field id,
-// resolved by the same ChromeProviderResolver the composed path uses.
+// header/footer subtrees use the shared canonical region shape (ChromeRegionShape), so a
+// built-in and a composed region are indistinguishable in shape to a consumer. A built-in
+// field is a provider-backed Field keyed by the status field id (carrying its collapse
+// rank), resolved by the same ChromeProviderResolver the composed path uses. The footer's
+// help hint becomes a right-group Field carrying its click command.
+//
+// The override is a ValidatedComposition (not a raw UiComposition), so only a
+// decoder-validated tree can reach the assembly -- a malformed override is
+// unrepresentable here, not silently copied into the result.
 
-#include <ssg/ShellState.h>  // StatusField
-#include <ssg/UiTree.h>      // UiComposition
+#include <ssg/ChromeDecode.h>  // ValidatedComposition
+#include <ssg/ShellState.h>    // StatusField, ShellFooterHint
+#include <ssg/Style.h>         // StyleDimensions
+#include <ssg/UiTree.h>        // UiComposition
 
 #include <optional>
 #include <vector>
 
 namespace ssg {
 
-// The abstract-unit extents the whole-screen tree reserves. Named here (not literals
-// in the spec); a grid client maps a unit to a cell, the web to a ch/row. The panel
-// width is the successor to today's sidebar column count; the header/footer are one
-// row tall.
-inline constexpr int kPanelWidth = 24;
-inline constexpr int kHeaderRows = 1;
-inline constexpr int kFooterRows = 1;
-
 [[nodiscard]] UiComposition assembleWholeScreen(
     const std::vector<StatusField>& headerFields,
     const std::vector<StatusField>& footerFields,
-    const std::optional<UiComposition>& composedOverride);
+    const std::optional<ShellFooterHint>& footerHint,
+    const StyleDimensions& dimensions,
+    const std::optional<ValidatedComposition>& composedOverride);
 
 }  // namespace ssg

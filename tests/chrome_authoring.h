@@ -166,6 +166,27 @@ inline ssg::ValidatedComposition composeHeaderValidated(
     return *decoded.composition;
 }
 
+// A validated header+footer composition (both areas) for driving code that requires
+// a decoder-validated override.
+inline ssg::ValidatedComposition composeHeaderAndFooterValidated(
+    std::vector<ssg::WidgetDescriptor> headerLeft,
+    std::vector<ssg::WidgetDescriptor> footerLeft,
+    std::vector<ssg::WidgetDescriptor> footerRight = {}) {
+    using ssg::ChromeValue;
+    std::vector<std::string> providers;
+    collectProviders(headerLeft, providers);
+    collectProviders(footerLeft, providers);
+    collectProviders(footerRight, providers);
+    ChromeValue root = ChromeValue::ofTable(
+        {{"header", rowTable(headerLeft, {}, std::nullopt, ssg::CenterWidth::Flex,
+                             0, 1)},
+         {"footer", rowTable(footerLeft, footerRight, std::nullopt,
+                             ssg::CenterWidth::Flex, 0, 1)}});
+    auto decoded = ssg::decodeChrome(root, providers);
+    if (!decoded.ok()) std::abort();
+    return *decoded.composition;
+}
+
 // The row content reconstructed from a canonical chrome region tree: the inverse
 // of the decoder's assembly, so a test can assert on the widget groups without
 // walking the container tree by hand.

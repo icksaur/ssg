@@ -1,13 +1,14 @@
 // Algorithm oracle for the whole-screen tree assembly. The knowable answers: the
 // assembled tree is the canonical root>[header, body>[panel>[filetree,gitstatus],
-// content>[tabview,findresults]], footer] with the canonical sizes; an omitted
-// ssg.chrome header/footer is synthesized from the status fields (fallback); a
-// composed header/footer REPLACES the built-in (override); and the whole tree passes
-// validateUiSchema.
+// content>[tabview,findresults]], footer] with extents drawn from StyleDimensions; an
+// omitted ssg.chrome header/footer is synthesized from the status projection (fallback,
+// carrying collapse rank + the footer hint); a composed header/footer REPLACES the
+// built-in (override); and the whole tree passes validateUiSchema.
 
 #include "ssg/WholeScreenAssembly.h"
 
 #include "ssg/ChromeRegionShape.h"
+#include "ssg/Style.h"
 #include "ssg/UiTree.h"
 #include "chrome_authoring.h"
 #include "test_helpers.h"
@@ -33,17 +34,24 @@ const UiNode* childById(const UiNode& node, std::string_view id) {
     return nullptr;
 }
 
-StatusField field(std::string id, std::optional<std::string> command = {}) {
+StatusField field(std::string id, std::uint8_t rank = 0,
+                  std::optional<std::string> command = {}) {
     StatusField f;
     f.id = std::move(id);
     f.value = "v";
+    f.collapseRank = rank;
     f.commandId = std::move(command);
     return f;
 }
 
+StyleDimensions dims() {
+    StyleDimensions d;  // defaults: panelTargetWidth 24, headerHeight 1, footerHeight 1
+    return d;
+}
+
 // The canonical skeleton (root/body/panel/content + view leaves + sizes) that must
 // hold regardless of how header/footer were sourced.
-void assertCanonicalSkeleton(const UiComposition& comp) {
+void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d) {
     ASSERT_EQ(comp.root.id.value(), std::string{kRootNodeId});
     ASSERT_TRUE(comp.root.size.kind() == SizeKind::Flex);
     const UiNode* header = childById(comp.root, kHeaderNodeId);
@@ -52,31 +60,22 @@ void assertCanonicalSkeleton(const UiComposition& comp) {
     ASSERT_TRUE(header != nullptr);
     ASSERT_TRUE(body != nullptr);
     ASSERT_TRUE(footer != nullptr);
-    // Order is header, body, footer.
     ASSERT_EQ(child(comp.root, 0).id.value(), std::string{kHeaderNodeId});
     ASSERT_EQ(child(comp.root, 1).id.value(), std::string{kBodyNodeId});
     ASSERT_EQ(child(comp.root, 2).id.value(), std::string{kFooterNodeId});
-    // header/footer occupy fixed rows regardless of source.
     ASSERT_TRUE(header->size.kind() == SizeKind::Exact);
-    ASSERT_EQ(header->size.extent(), kHeaderRows);
+    ASSERT_EQ(header->size.extent(), d.headerHeight);
     ASSERT_TRUE(footer->size.kind() == SizeKind::Exact);
-    ASSERT_EQ(footer->size.extent(), kFooterRows);
-    // body Row Flex.
+    ASSERT_EQ(footer->size.extent(), d.footerHeight);
     ASSERT_TRUE(body->size.kind() == SizeKind::Flex);
     const UiNode* panel = childById(*body, kPanelNodeId);
     const UiNode* content = childById(*body, kContentNodeId);
     ASSERT_TRUE(panel != nullptr);
     ASSERT_TRUE(content != nullptr);
-    // panel Exact(kPanelWidth), content Flex.
     ASSERT_TRUE(panel->size.kind() == SizeKind::Exact);
-    ASSERT_EQ(panel->size.extent(), kPanelWidth);
+    ASSERT_EQ(panel->size.extent(), d.panelTargetWidth);
     ASSERT_TRUE(content->size.kind() == SizeKind::Flex);
-    // The four view leaves, each Flex, naming its surface.
-    struct Leaf {
-        std::string_view id;
-        const UiNode* parent;
-        ViewSurface surface;
-    };
+    struct Leaf { std::string_view id; const UiNode* parent; ViewSurface surface; };
     const Leaf leaves[] = {
         {kFileTreeNodeId, panel, ViewSurface::FileTree},
         {kGitStatusNodeId, panel, ViewSurface::GitStatus},
@@ -98,15 +97,16 @@ void assertCanonicalSkeleton(const UiComposition& comp) {
 }
 
 TEST(omittedBuiltinsSynthesizeHeaderAndFooterFromStatusFields) {
-    const std::vector<StatusField> headerFields{field("path", "panel.show_files"),
-                                                field("branch")};
+    const std::vector<StatusField> headerFields{
+        field("path", 3, std::optional<std::string>{"panel.show_files"}),
+        field("branch")};
     const std::vector<StatusField> footerFields{field("mode")};
-    const UiComposition comp =
-        assembleWholeScreen(headerFields, footerFields, std::nullopt);
-    assertCanonicalSkeleton(comp);
+    const ShellFooterHint hint{"^H help", "help.open"};
+    const UiComposition comp = assembleWholeScreen(
+        headerFields, footerFields, std::optional<ShellFooterHint>{hint}, dims(),
+        std::nullopt);
+    assertCanonicalSkeleton(comp, dims());
 
-    // The built-in header's left group carries one provider-backed Field per header
-    // status field, keyed by the field id, with the inherited command.
     const UiNode& header = *childById(comp.root, kHeaderNodeId);
     const ssgtest::RowView headerRow = ssgtest::rowOf(header);
     ASSERT_EQ(headerRow.left.size(), std::size_t{2});
@@ -116,6 +116,7 @@ TEST(omittedBuiltinsSynthesizeHeaderAndFooterFromStatusFields) {
         ASSERT_TRUE(headerRow.left[0].value->isProvider);
         ASSERT_EQ(headerRow.left[0].value->provider, std::string{"path"});
     }
+    ASSERT_EQ(headerRow.left[0].rank, 3);  // collapse rank carries onto the widget
     ASSERT_TRUE(headerRow.left[0].command.has_value());
     if (headerRow.left[0].command)
         ASSERT_EQ(*headerRow.left[0].command, std::string{"panel.show_files"});
@@ -125,51 +126,58 @@ TEST(omittedBuiltinsSynthesizeHeaderAndFooterFromStatusFields) {
     const ssgtest::RowView footerRow = ssgtest::rowOf(footer);
     ASSERT_EQ(footerRow.left.size(), std::size_t{1});
     ASSERT_EQ(footerRow.left[0].value->provider, std::string{"mode"});
+    // The help hint is a right-group Field carrying its click command.
+    ASSERT_EQ(footerRow.right.size(), std::size_t{1});
+    ASSERT_EQ(footerRow.right[0].value->literal, std::string{"^H help"});
+    ASSERT_TRUE(footerRow.right[0].command.has_value());
+    if (footerRow.right[0].command)
+        ASSERT_EQ(*footerRow.right[0].command, std::string{"help.open"});
 }
 
 TEST(composedHeaderAndFooterOverrideTheBuiltins) {
-    // A ssg.chrome composition of both regions must REPLACE the built-in header and
-    // footer (their composed content survives), not sit beside them.
     WidgetDescriptor composedHeaderField;
     composedHeaderField.kind = WidgetKind::Label;
     composedHeaderField.id = "title";
     composedHeaderField.value = ValueSource{false, "SSG", ""};
     WidgetDescriptor composedFooterField;
     composedFooterField.kind = WidgetKind::Label;
-    composedFooterField.id = "hint";
+    composedFooterField.id = "hintlabel";
     composedFooterField.value = ValueSource{false, "ready", ""};
-    const UiComposition override = ssgtest::composeHeaderAndFooter(
+    const ValidatedComposition override = ssgtest::composeHeaderAndFooterValidated(
         {composedHeaderField}, {composedFooterField});
 
-    // Built-in status fields that must be IGNORED because the composition overrides.
     const std::vector<StatusField> headerFields{field("path")};
     const std::vector<StatusField> footerFields{field("mode")};
-    const UiComposition comp =
-        assembleWholeScreen(headerFields, footerFields, override);
-    assertCanonicalSkeleton(comp);
+    const ShellFooterHint hint{"^H help", "help.open"};
+    const UiComposition comp = assembleWholeScreen(
+        headerFields, footerFields, std::optional<ShellFooterHint>{hint}, dims(),
+        std::optional<ValidatedComposition>{override});
+    assertCanonicalSkeleton(comp, dims());
 
-    const UiNode& header = *childById(comp.root, kHeaderNodeId);
-    const ssgtest::RowView headerRow = ssgtest::rowOf(header);
+    const ssgtest::RowView headerRow =
+        ssgtest::rowOf(*childById(comp.root, kHeaderNodeId));
     ASSERT_EQ(headerRow.left.size(), std::size_t{1});
-    ASSERT_EQ(headerRow.left[0].value->literal, std::string{"SSG"});  // composed, not "path"
-
-    const UiNode& footer = *childById(comp.root, kFooterNodeId);
-    const ssgtest::RowView footerRow = ssgtest::rowOf(footer);
+    ASSERT_EQ(headerRow.left[0].value->literal, std::string{"SSG"});  // composed
+    const ssgtest::RowView footerRow =
+        ssgtest::rowOf(*childById(comp.root, kFooterNodeId));
     ASSERT_EQ(footerRow.left.size(), std::size_t{1});
-    ASSERT_EQ(footerRow.left[0].value->literal, std::string{"ready"});
+    ASSERT_EQ(footerRow.left[0].value->literal, std::string{"ready"});  // composed
+    // The composed footer replaces the whole built-in footer -- no built-in hint.
+    ASSERT_TRUE(footerRow.right.empty());
 }
 
 TEST(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted) {
-    // header-only composition: header overridden, footer falls back to built-in.
     WidgetDescriptor composedHeaderField;
     composedHeaderField.kind = WidgetKind::Label;
     composedHeaderField.id = "title";
     composedHeaderField.value = ValueSource{false, "SSG", ""};
-    const UiComposition override = ssgtest::composeHeader({composedHeaderField});
+    const ValidatedComposition override =
+        ssgtest::composeHeaderValidated({composedHeaderField});
 
-    const UiComposition comp =
-        assembleWholeScreen({field("path")}, {field("mode")}, override);
-    assertCanonicalSkeleton(comp);
+    const UiComposition comp = assembleWholeScreen(
+        {field("path")}, {field("mode")}, std::nullopt, dims(),
+        std::optional<ValidatedComposition>{override});
+    assertCanonicalSkeleton(comp, dims());
 
     const ssgtest::RowView headerRow =
         ssgtest::rowOf(*childById(comp.root, kHeaderNodeId));
@@ -181,21 +189,21 @@ TEST(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted) {
 }
 
 TEST(theAssembledTreeAlwaysValidates) {
-    // Fallback, override, and empty-field cases all produce a schema-valid tree.
-    const UiComposition fallback =
-        assembleWholeScreen({field("path")}, {field("mode")}, std::nullopt);
-    const UiComposition empty = assembleWholeScreen({}, {}, std::nullopt);
+    const UiComposition fallback = assembleWholeScreen(
+        {field("path")}, {field("mode")}, std::nullopt, dims(), std::nullopt);
+    const UiComposition empty =
+        assembleWholeScreen({}, {}, std::nullopt, dims(), std::nullopt);
     WidgetDescriptor composed;
     composed.kind = WidgetKind::Label;
     composed.id = "title";
     composed.value = ValueSource{false, "SSG", ""};
-    const UiComposition override = assembleWholeScreen(
-        {}, {}, ssgtest::composeHeaderAndFooter({composed}, {composed}));
-    for (const UiComposition* comp : {&fallback, &empty, &override}) {
+    const UiComposition overridden = assembleWholeScreen(
+        {}, {}, std::nullopt, dims(),
+        std::optional<ValidatedComposition>{
+            ssgtest::composeHeaderAndFooterValidated({composed}, {composed})});
+    for (const UiComposition* comp : {&fallback, &empty, &overridden}) {
         const UiSchema schema{Generation{1}, comp->root};
         ASSERT_TRUE(validateUiSchema(schema).ok());
-        // And the assembled tree satisfies the well-known-area contract (root +
-        // header/footer as direct-child containers) even before areas are promoted.
         ASSERT_TRUE(validateWellKnownAreas(schema).ok());
     }
 }
