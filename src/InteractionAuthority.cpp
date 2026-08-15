@@ -53,8 +53,7 @@ bool InteractionAuthority::apply(const CommandTransition& transition) {
     return true;
 }
 
-void InteractionAuthority::applyPromptState(PromptSurface prompt) {
-    WholeScreenTruth next = truth_;
+void InteractionAuthority::adopt(WholeScreenTruth next, PromptSurface prompt) {
     // A picker identity is meaningful only while its Palette prompt is active; any other
     // prompt state (a generic prompt, or a closed prompt) clears it.
     const bool activePalette =
@@ -81,21 +80,21 @@ PromptCommandResult InteractionAuthority::openPrompt(PromptRequest request) {
     }
     PromptSurface copy = prompt_;
     PromptCommandResult result = copy.open(std::move(request));
-    if (result.accepted()) applyPromptState(std::move(copy));
+    if (result.accepted()) adopt(truth_, std::move(copy));
     return result;
 }
 
 PromptCommandResult InteractionAuthority::submitPrompt() {
     PromptSurface copy = prompt_;
     PromptCommandResult result = copy.submit();
-    if (result.accepted()) applyPromptState(std::move(copy));
+    if (result.accepted()) adopt(truth_, std::move(copy));
     return result;
 }
 
 PromptCommandResult InteractionAuthority::cancelPrompt() {
     PromptSurface copy = prompt_;
     PromptCommandResult result = copy.cancel();
-    if (result.accepted()) applyPromptState(std::move(copy));
+    if (result.accepted()) adopt(truth_, std::move(copy));
     return result;
 }
 
@@ -110,14 +109,18 @@ PromptCommandResult InteractionAuthority::updatePromptValue(std::size_t index,
 }
 
 void InteractionAuthority::focusEditor() {
-    truth_.baseFocus = BaseFocus::Editor;
-    applyPromptState(prompt_);
+    // Build from a prospective truth, then adopt both together -- truth_ is never mutated
+    // before the projection is rebuilt.
+    WholeScreenTruth next = truth_;
+    next.baseFocus = BaseFocus::Editor;
+    adopt(std::move(next), prompt_);
 }
 
 bool InteractionAuthority::focusPanel() {
     if (!truth_.panelPresent) return false;
-    truth_.baseFocus = BaseFocus::Panel;
-    applyPromptState(prompt_);
+    WholeScreenTruth next = truth_;
+    next.baseFocus = BaseFocus::Panel;
+    adopt(std::move(next), prompt_);
     return true;
 }
 

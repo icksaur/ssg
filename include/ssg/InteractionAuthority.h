@@ -83,11 +83,11 @@ public:
     }
 
 private:
-    // Adopt `prompt` and rebuild truth+projection together from it: derive the prompt-focus
-    // region, reconcile openPicker (valid only while a Palette prompt is active), and build
-    // the interaction over the CURRENT schema -- all computed before the owned state is
-    // assigned, so a rebuild failure cannot leave prompt and focus authority divergent.
-    void applyPromptState(PromptSurface prompt);
+    // Adopt a prospective truth and prompt together: reconcile a stale picker identity
+    // (valid only while a Palette prompt is active), build the projection over the CURRENT
+    // schema, then assign truth, prompt, and projection -- all computed before any owned
+    // state changes, so a rebuild failure cannot leave them divergent.
+    void adopt(WholeScreenTruth next, PromptSurface prompt);
 
     [[nodiscard]] std::vector<TreeProviderPresence> presentProviders() const;
 
