@@ -75,6 +75,11 @@ TEST(panelIsPresentOnlyWhenRequested) {
     hidden.panelPresent = false;
     const auto a = buildWholeScreenInteraction(schemaOf({}), hidden);
     ASSERT_FALSE(present(a, kPanelNodeId));
+    // No provider leaks its presence when the panel is absent (provider choice lives in
+    // the last-active hint, not in presence).
+    ASSERT_FALSE(present(a, kFileTreeNodeId));
+    ASSERT_FALSE(present(a, kGitStatusNodeId));
+    ASSERT_FALSE(present(a, kSymbolsNodeId));
 
     WholeScreenTruth shown;
     shown.panelPresent = true;
@@ -85,7 +90,7 @@ TEST(panelIsPresentOnlyWhenRequested) {
 TEST(exactlyTheSelectedProviderIsPresent) {
     WholeScreenTruth truth;
     truth.panelPresent = true;
-    truth.selectedProvider = ViewSurface::GitStatus;
+    truth.selectedProvider = PanelProvider::GitStatus;
     const auto s = buildWholeScreenInteraction(schemaOf({}), truth);
     ASSERT_TRUE(present(s, kGitStatusNodeId));
     ASSERT_FALSE(present(s, kFileTreeNodeId));
@@ -125,7 +130,7 @@ TEST(baseFocusNeverStrandsOnAnAbsentPanel) {
 TEST(rebuildOverANewGenerationPreservesTruthAndResetsBasis) {
     WholeScreenTruth truth;
     truth.panelPresent = true;
-    truth.selectedProvider = ViewSurface::Symbols;
+    truth.selectedProvider = PanelProvider::Symbols;
     truth.finderOpen = true;
 
     // Generation 0.

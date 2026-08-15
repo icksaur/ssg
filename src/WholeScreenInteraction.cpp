@@ -12,17 +12,14 @@ namespace {
 
 UiNodeId nodeId(std::string_view id) { return UiNodeId{std::string{id}}; }
 
-// The node id of a panel provider surface. Only the three panel providers have panel
-// nodes; any other surface has no panel node (the caller only passes panel providers).
-std::string_view providerNodeId(ViewSurface provider) {
+// The node id of a panel provider. The domain is closed, so every case is a real leaf.
+std::string_view providerNodeId(PanelProvider provider) {
     switch (provider) {
-    case ViewSurface::GitStatus:
+    case PanelProvider::GitStatus:
         return kGitStatusNodeId;
-    case ViewSurface::Symbols:
+    case PanelProvider::Symbols:
         return kSymbolsNodeId;
-    case ViewSurface::FileTree:
-    case ViewSurface::TabView:
-    case ViewSurface::FindResults:
+    case PanelProvider::FileTree:
         break;
     }
     return kFileTreeNodeId;
@@ -32,12 +29,13 @@ std::string_view providerNodeId(ViewSurface provider) {
 
 UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
                                                const WholeScreenTruth& truth) {
-    const std::string_view selected = providerNodeId(truth.selectedProvider);
+    // The provider node is present only when the panel is; provider choice is carried by
+    // the separate last-active hint, never leaked into presence.
+    const std::string_view selected =
+        truth.panelPresent ? providerNodeId(truth.selectedProvider) : std::string_view{};
 
     std::vector<UiNodeId> hidden;
     if (!truth.panelPresent) hidden.push_back(nodeId(kPanelNodeId));
-    // Exactly one panel provider node is locally present -- the selected one; the other
-    // two are hidden. The panel's own presence gates whether the selected one lays out.
     for (const std::string_view provider :
          {kFileTreeNodeId, kGitStatusNodeId, kSymbolsNodeId}) {
         if (provider != selected) hidden.push_back(nodeId(provider));
