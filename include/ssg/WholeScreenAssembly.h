@@ -37,6 +37,16 @@
 
 namespace ssg {
 
+// CONTRACT
+// assembleWholeScreen: the built-in footer synthesis deliberately carries status
+//   FIELDS (with collapse rank) and the help hint, but NOT status actions. A footer
+//   status action dispatches through StatusActionInvocation (by status/action id), a
+//   channel the semantic tree has no widget for; representing it must be a typed
+//   invocation target, never a commandId reinterpretation. This omission is
+//   intentional for the staging step and is NOT a license to activate: the runtime
+//   must not publish this assembled tree until that typed status-action affordance
+//   (and its oracle) exist, or a published built-in footer would silently lose the
+//   actions the grid still shows.
 [[nodiscard]] UiComposition assembleWholeScreen(
     const std::vector<StatusField>& headerFields,
     const std::vector<StatusField>& footerFields,
