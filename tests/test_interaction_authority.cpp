@@ -239,11 +239,16 @@ TEST(pickerEpochAdvancesOnEveryFinderOpenIncludingAReopen) {
     ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
     const std::uint64_t afterOpen = authority.pickerEpoch();
     ASSERT_TRUE(afterOpen > start);
-    // Close then reopen the SAME kind: openPicker returns to File, but the epoch must still
-    // advance so a candidate owner refreshes.
+    // Reopen the SAME kind with NO close in between: openPicker stays File, yet the epoch
+    // must still advance so a candidate owner refreshes.
+    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
+    ASSERT_TRUE(*authority.openPicker() == PickerKind::File);
+    ASSERT_TRUE(authority.pickerEpoch() > afterOpen);
+    // A close-then-reopen also advances.
+    const std::uint64_t afterReopen = authority.pickerEpoch();
     ASSERT_TRUE(authority.apply(CloseFinder{}));
     ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
-    ASSERT_TRUE(authority.pickerEpoch() > afterOpen);
+    ASSERT_TRUE(authority.pickerEpoch() > afterReopen);
 }
 
 TEST(promptOverPanelClosesBackToPanelFocus) {

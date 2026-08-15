@@ -42,6 +42,12 @@ std::vector<TreeProviderPresence> InteractionAuthority::presentProviders() const
 }
 
 bool InteractionAuthority::apply(const CommandTransition& transition) {
+    // Reject picker-epoch exhaustion BEFORE mutating: a wrapped epoch would make a later
+    // reopen indistinguishable from the current one.
+    const bool finder = std::holds_alternative<OpenFinder>(transition);
+    if (finder && pickerEpoch_ == std::numeric_limits<std::uint64_t>::max()) {
+        throw std::logic_error("InteractionAuthority picker epoch is exhausted");
+    }
     // Peek the revision source and prepare in one step: hiding prepare+install behind this
     // method means no allocation can occur between the peek and the consuming install.
     TransitionInputs inputs{truth_, schema_.validated(), prompt_, presentProviders(),
@@ -52,7 +58,7 @@ bool InteractionAuthority::apply(const CommandTransition& transition) {
                                      nextTreeRevision_);
     // A finder (re)establishes picker content; advance the epoch even on a File->File
     // reopen (openPicker unchanged) so a candidate owner always refreshes.
-    if (std::holds_alternative<OpenFinder>(transition)) ++pickerEpoch_;
+    if (finder) ++pickerEpoch_;
     return true;
 }
 

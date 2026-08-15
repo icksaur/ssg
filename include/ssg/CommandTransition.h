@@ -39,8 +39,8 @@ namespace ssg {
 enum class CycleDirection : std::uint8_t { Next, Previous };
 
 // The next provider when cycling the panel selection. Cycling belongs to the provider
-// domain, so next/previous-provider commands resolve to a ShowPanelProvider transition
-// rather than being transition variants of their own.
+// domain, so next/previous-provider commands resolve to a SwitchPanelProvider transition
+// (which preserves panel visibility and focus) rather than being transition variants.
 [[nodiscard]] PanelProvider cyclePanelProvider(PanelProvider provider,
                                                CycleDirection direction);
 
