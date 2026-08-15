@@ -46,8 +46,12 @@ TreeProviderBinding filesystem() {
     return panelProviderTreeBinding(PanelProvider::FileTree);
 }
 
+TreeProviderPresence presence(TreeProviderBinding binding, std::uint64_t revision) {
+    return TreeProviderPresence{std::move(binding), TreeRevision{revision}};
+}
+
 TransitionInputs inputs(WholeScreenTruth truth,
-                        std::vector<TreeProviderBinding> present = {},
+                        std::vector<TreeProviderPresence> present = {},
                         PromptSurface prompt = {}) {
     return TransitionInputs{std::move(truth), schema(), std::move(prompt),
                             std::move(present), TreeRevision{7}};
@@ -94,7 +98,7 @@ TEST(togglePanelFromShownRestoresPanelReturnFocus) {
 TEST(showProviderPreparesACreateSnapshotForAnAbsentGitProvider) {
     WholeScreenTruth truth;  // hidden, files selected
     const auto prepared = prepareTransition(
-        ShowPanelProvider{PanelProvider::GitStatus}, inputs(truth, {filesystem()}));
+        ShowPanelProvider{PanelProvider::GitStatus}, inputs(truth, {presence(filesystem(), 1)}));
     ASSERT_TRUE(prepared.has_value());
     ASSERT_TRUE(prepared->truth().panelPresent);
     ASSERT_TRUE(prepared->truth().selectedProvider == PanelProvider::GitStatus);
@@ -110,9 +114,9 @@ TEST(showProviderActivatesAMatchingProviderWithoutCreating) {
     WholeScreenTruth truth;
     const auto prepared = prepareTransition(
         ShowPanelProvider{PanelProvider::GitStatus},
-        inputs(truth, {filesystem(),
-                       TreeProviderBinding{TreeProviderId{"git"},
-                                           TreeProviderKind::Git}}));
+        inputs(truth, {presence(filesystem(), 1),
+                       presence(TreeProviderBinding{TreeProviderId{"git"},
+                                                    TreeProviderKind::Git}, 2)}));
     ASSERT_TRUE(prepared.has_value());
     ASSERT_TRUE(prepared->tree().has_value());
     ASSERT_FALSE(prepared->tree()->create.has_value());
@@ -125,13 +129,16 @@ TEST(showProviderRecreatesAnIdPresentUnderTheWrongKind) {
     // id alone would show GitStatus over a Symbols tree, so it must be recreated.
     const auto prepared = prepareTransition(
         ShowPanelProvider{PanelProvider::GitStatus},
-        inputs(truth, {filesystem(),
-                       TreeProviderBinding{TreeProviderId{"git"},
-                                           TreeProviderKind::Symbols}}));
+        inputs(truth, {presence(filesystem(), 1),
+                       presence(TreeProviderBinding{TreeProviderId{"git"},
+                                                    TreeProviderKind::Symbols}, 5)}));
     ASSERT_TRUE(prepared.has_value());
     ASSERT_TRUE(prepared->tree().has_value());
     ASSERT_TRUE(prepared->tree()->create.has_value());
     ASSERT_TRUE(prepared->tree()->create->kind() == TreeProviderKind::Git);
+    // Stamped strictly above the revision it replaces so commit's replaceProvider cannot
+    // throw.
+    ASSERT_EQ(prepared->tree()->create->revision().value(), std::uint64_t{6});
 }
 
 TEST(showAMissingFilesystemProviderIsRejected) {
@@ -148,7 +155,7 @@ TEST(reselectingTheShownProviderHidesThePanel) {
     truth.baseFocus = BaseFocus::Panel;
     truth.panelReturnFocus = BaseFocus::Editor;
     const auto prepared = prepareTransition(
-        ShowPanelProvider{PanelProvider::FileTree}, inputs(truth, {filesystem()}));
+        ShowPanelProvider{PanelProvider::FileTree}, inputs(truth, {presence(filesystem(), 1)}));
     ASSERT_TRUE(prepared.has_value());
     ASSERT_FALSE(prepared->truth().panelPresent);
     ASSERT_TRUE(prepared->truth().baseFocus == BaseFocus::Editor);
@@ -215,6 +222,9 @@ TEST(corruptProviderEnumeratorsAreRejected) {
     ASSERT_THROWS(panelProviderLabel(corrupt), std::logic_error);
     ASSERT_THROWS(panelProviderTreeBinding(corrupt), std::logic_error);
     ASSERT_THROWS(cyclePanelProvider(corrupt, CycleDirection::Next), std::logic_error);
+    ASSERT_THROWS(
+        cyclePanelProvider(PanelProvider::FileTree, static_cast<CycleDirection>(200)),
+        std::logic_error);
 }
 
 }  // namespace
@@ -233,5 +243,5 @@ int main() {
     RUN(closeFinderIsRejectedWhenCancelRefuses);
     RUN(cyclePanelProviderWalksTheProviderOrder);
     RUN(corruptProviderEnumeratorsAreRejected);
-    return 0;
+    return failed;
 }

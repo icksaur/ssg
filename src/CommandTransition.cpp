@@ -13,8 +13,8 @@ namespace {
 constexpr std::array<PanelProvider, 3> kCycle{
     PanelProvider::FileTree, PanelProvider::GitStatus, PanelProvider::Symbols};
 
-[[noreturn]] void rejectCorruptProvider() {
-    throw std::logic_error("corrupt PanelProvider enumerator");
+[[noreturn]] void rejectCorrupt(const char* what) {
+    throw std::logic_error(what);
 }
 
 }  // namespace
@@ -28,7 +28,7 @@ std::string_view panelProviderLabel(PanelProvider provider) {
     case PanelProvider::Symbols:
         return "symbols";
     }
-    rejectCorruptProvider();
+    rejectCorrupt("corrupt PanelProvider enumerator");
 }
 
 TreeProviderBinding panelProviderTreeBinding(PanelProvider provider) {
@@ -42,14 +42,24 @@ TreeProviderBinding panelProviderTreeBinding(PanelProvider provider) {
         return TreeProviderBinding{TreeProviderId{"symbols"},
                                    TreeProviderKind::Symbols};
     }
-    rejectCorruptProvider();
+    rejectCorrupt("corrupt PanelProvider enumerator");
 }
 
 PanelProvider cyclePanelProvider(PanelProvider provider, CycleDirection direction) {
     const auto at = std::find(kCycle.begin(), kCycle.end(), provider);
-    if (at == kCycle.end()) rejectCorruptProvider();
+    if (at == kCycle.end()) rejectCorrupt("corrupt PanelProvider enumerator");
+    std::size_t step = 0;
+    switch (direction) {
+    case CycleDirection::Next:
+        step = 1;
+        break;
+    case CycleDirection::Previous:
+        step = kCycle.size() - 1;
+        break;
+    default:
+        rejectCorrupt("corrupt CycleDirection enumerator");
+    }
     const std::size_t index = static_cast<std::size_t>(at - kCycle.begin());
-    const std::size_t step = direction == CycleDirection::Next ? 1 : kCycle.size() - 1;
     return kCycle[(index + step) % kCycle.size()];
 }
 
@@ -95,17 +105,24 @@ struct TransitionBuilder {
 
         // Fully prepare the tree backing so commit is infallible. Match id AND kind: an
         // id present under the wrong kind is not the provider we want, so it must be
-        // replaced by a create snapshot, not activated. A missing Filesystem provider is
-        // a genuine rejection -- it is seeded, never created here.
+        // recreated (stamped ABOVE the revision it replaces, or replaceProvider throws),
+        // not activated. A non-matching Filesystem provider is a genuine rejection -- it
+        // is seeded with real nodes, never created or replaced empty here.
         const TreeProviderBinding binding = panelProviderTreeBinding(request.provider);
-        const bool present =
-            std::find(inputs.presentProviders.begin(), inputs.presentProviders.end(),
-                      binding) != inputs.presentProviders.end();
+        const auto existing = std::find_if(
+            inputs.presentProviders.begin(), inputs.presentProviders.end(),
+            [&](const TreeProviderPresence& p) { return p.binding.id == binding.id; });
+        const bool matching = existing != inputs.presentProviders.end() &&
+                              existing->binding.kind == binding.kind;
         TreeBackingPlan plan{binding.id, std::nullopt};
-        if (!present) {
+        if (!matching) {
             if (binding.kind == TreeProviderKind::Filesystem) return std::nullopt;
-            plan.create = TreeProviderSnapshot{binding.id, binding.kind,
-                                               inputs.nextTreeRevision, {}};
+            const TreeRevision revision =
+                existing == inputs.presentProviders.end()
+                    ? inputs.nextTreeRevision
+                    : TreeRevision{existing->revision.value() + 1};
+            plan.create =
+                TreeProviderSnapshot{binding.id, binding.kind, revision, {}};
         }
 
         WholeScreenTruth next = truth;

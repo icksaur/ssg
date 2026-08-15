@@ -71,14 +71,22 @@ struct TreeBackingPlan {
 
 // --- The inputs preflight reads (all by value; no callbacks) ------------------------
 
+// An existing tree provider, as its binding plus current revision. Preflight needs the
+// revision: replacing a provider requires a strictly greater revision, so a wrong-kind
+// recreate must be stamped above the one it replaces for the commit to be infallible.
+struct TreeProviderPresence {
+    TreeProviderBinding binding;
+    TreeRevision revision{0};
+};
+
 struct TransitionInputs {
     WholeScreenTruth truth;
     ValidatedSchema schema;                    // to rebuild the replacement aggregate
     PromptSurface prompt;                       // copied; preflight opens/cancels on it
-    // The tree providers that already exist, as id+kind bindings: activating by id alone
-    // cannot prove the existing provider has the kind the panel provider expects.
-    std::vector<TreeProviderBinding> presentProviders;
-    TreeRevision nextTreeRevision{0};           // revision stamped on a created provider
+    // The tree providers that already exist. Matching needs id+kind (activating by id
+    // alone cannot prove the kind) and the revision (to stamp a valid recreate).
+    std::vector<TreeProviderPresence> presentProviders;
+    TreeRevision nextTreeRevision{0};           // revision stamped on a fresh provider
 };
 
 // --- The prepared, fully-formed replacement state -----------------------------------
