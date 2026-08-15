@@ -16,6 +16,14 @@ using ssgtest::composeFooterRegion;
 
 Style defaultStyle() { return Style{}; }
 
+// Stage-(i) bridge: computeShellLayout reads panel presence and focus from the request;
+// source them from the ShellState under test, exactly as production does.
+ShellLayoutResult layoutFor(ShellLayoutRequest request, const ShellState& state) {
+    request.panelPresent = state.panelRequested();
+    request.focus = state.focus();
+    return computeShellLayout(request, state);
+}
+
 // A resolver from a fixed id -> (value, label, command) table.
 ChromeProviderResolver resolverFrom(
     std::vector<std::pair<std::string, ResolvedProvider>> table) {
@@ -166,7 +174,7 @@ TEST(composedProviderHeaderMatchesBuiltinSpanForSpan) {
     req.panelProviderLabel = "Files";
 
     ShellState state;
-    const auto result = computeShellLayout(req, state);
+    const auto result = layoutFor(req, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     ASSERT_TRUE(result.view->header.has_value());

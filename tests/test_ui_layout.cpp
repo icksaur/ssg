@@ -51,12 +51,20 @@ ShellLayoutRequest request(int columns, int rows) {
     return value;
 }
 
+// Stage-(i) bridge: computeShellLayout reads panel presence and focus from the request;
+// source them from the ShellState under test, exactly as production does.
+ShellLayoutResult layoutFor(ShellLayoutRequest request, const ShellState& state) {
+    request.panelPresent = state.panelRequested();
+    request.focus = state.focus();
+    return computeShellLayout(request, state);
+}
+
 TEST(handAuthoredGeometryGoldens) {
     ShellState state;
 
     auto minimum = request(20, 4);
     state.togglePanel();
-    auto minimumResult = computeShellLayout(minimum, state);
+    auto minimumResult = layoutFor(minimum, state);
     ASSERT_TRUE(minimumResult.accepted());
     ASSERT_FALSE(minimumResult.view->panel.has_value());
     assertRect(*minimumResult.view->header, {0, 0, 20, 1});
@@ -77,7 +85,7 @@ TEST(handAuthoredGeometryGoldens) {
 
     auto wide = request(80, 12);
     wide.reservedPromptRows = 2;
-    auto wideResult = computeShellLayout(wide, state);
+    auto wideResult = layoutFor(wide, state);
     ASSERT_TRUE(wideResult.accepted());
     assertRect(*wideResult.view->header, {0, 0, 80, 1});
     assertRect(*wideResult.view->panel, {0, 1, 24, 10});
@@ -95,14 +103,14 @@ TEST(handAuthoredGeometryGoldens) {
     // Regression proof: the pane's top does not move between no-prompt and
     // prompt-open layouts -- the footer/prompt only take rows from the bottom.
     auto noPrompt = request(80, 12);
-    auto noPromptResult = computeShellLayout(noPrompt, state);
+    auto noPromptResult = layoutFor(noPrompt, state);
     ASSERT_TRUE(noPromptResult.accepted());
     ASSERT_EQ(noPromptResult.view->panes[0].content.y,
               wideResult.view->panes[0].content.y);
 
     auto focused = request(20, 4);
     state.toggleDistractionFree();
-    auto focusedResult = computeShellLayout(focused, state);
+    auto focusedResult = layoutFor(focused, state);
     ASSERT_TRUE(focusedResult.accepted());
     ASSERT_FALSE(focusedResult.view->header.has_value());
     ASSERT_FALSE(focusedResult.view->footer.has_value());
@@ -113,24 +121,24 @@ TEST(handAuthoredGeometryGoldens) {
 
 TEST(viewportAndPromptErrorsAreTyped) {
     ShellState state;
-    auto narrow = computeShellLayout(request(19, 4), state);
+    auto narrow = layoutFor(request(19, 4), state);
     ASSERT_FALSE(narrow.accepted());
     ASSERT_EQ(narrow.error->code, ShellLayoutErrorCode::ViewportTooSmall);
     ASSERT_FALSE(narrow.view.has_value());
 
-    auto shortView = computeShellLayout(request(20, 3), state);
+    auto shortView = layoutFor(request(20, 3), state);
     ASSERT_FALSE(shortView.accepted());
     ASSERT_EQ(shortView.error->code, ShellLayoutErrorCode::ViewportTooSmall);
 
     auto invalidPrompt = request(80, 12);
     invalidPrompt.reservedPromptRows = 4;
-    auto invalid = computeShellLayout(invalidPrompt, state);
+    auto invalid = layoutFor(invalidPrompt, state);
     ASSERT_FALSE(invalid.accepted());
     ASSERT_EQ(invalid.error->code, ShellLayoutErrorCode::InvalidPromptRows);
 
     auto noRoom = request(20, 4);
     noRoom.reservedPromptRows = 2;
-    auto noRoomResult = computeShellLayout(noRoom, state);
+    auto noRoomResult = layoutFor(noRoom, state);
     ASSERT_FALSE(noRoomResult.accepted());
     ASSERT_EQ(noRoomResult.error->code, ShellLayoutErrorCode::ViewportTooSmall);
 }
@@ -150,7 +158,7 @@ TEST(paneCommandsPreserveTopologyAndOrder) {
     state.nextPane();
     ASSERT_EQ(state.activePane(), second);
 
-    auto view = computeShellLayout(request(80, 20), state);
+    auto view = layoutFor(request(80, 20), state);
     ASSERT_TRUE(view.accepted());
     ASSERT_EQ(view.view->panes.size(), std::size_t{3});
     ASSERT_TRUE(state.focusPane(PaneDirection::Down, *view.view));
@@ -190,7 +198,7 @@ TEST(accessibilityNodesHaveLabelsAndRoles) {
     state.togglePanel();
     input.reservedPromptRows = 1;
     input.emptyState = true;
-    auto result = computeShellLayout(input, state);
+    auto result = layoutFor(input, state);
     ASSERT_TRUE(result.accepted());
 
     const auto& nodes = result.view->accessibilityNodes;
@@ -232,7 +240,7 @@ TEST(nonOverlapAndCardinalityProperties) {
             state.splitActive(SplitAxis::Horizontal);
             state.togglePanel();
             auto input = request(columns, rows);
-            auto result = computeShellLayout(input, state);
+            auto result = layoutFor(input, state);
             ASSERT_TRUE(result.accepted());
             const auto& view = *result.view;
             ASSERT_TRUE(view.panes.size() == 1 || view.panes.size() == 3);
@@ -283,7 +291,7 @@ TEST(statusFieldManifestHasExactOrderAndLabels) {
 TEST(accessibilityLeafNodesCarryDisplayContent) {
     ShellState state;
     state.togglePanel();
-    auto result = computeShellLayout(request(80, 12), state);
+    auto result = layoutFor(request(80, 12), state);
     ASSERT_TRUE(result.accepted());
     const auto find = [&](ShellNodeKind kind,
                           std::string_view id) -> const AccessibilityNode* {
@@ -311,7 +319,7 @@ TEST(dirtyTabContentShowsMarker) {
     auto value = request(80, 12);
     value.tabs = {{"a.cpp", "a.cpp tab", true, true}};
     ShellState state;
-    auto result = computeShellLayout(value, state);
+    auto result = layoutFor(value, state);
     ASSERT_TRUE(result.accepted());
     const AccessibilityNode* tab = nullptr;
     for (const auto& node : result.view->accessibilityNodes) {
@@ -388,7 +396,7 @@ TEST(anOpenPickerHidesTheTabBarAndReclaimsItsRow) {
     auto closed = request(80, 24);
     closed.inputLineActive = false;
     ShellState closedState;
-    auto closedResult = computeShellLayout(closed, closedState);
+    auto closedResult = layoutFor(closed, closedState);
     ASSERT_TRUE(closedResult.accepted());
     if (!closedResult.accepted()) return;
     ASSERT_TRUE(closedResult.view->tabBar.has_value());
@@ -400,7 +408,7 @@ TEST(anOpenPickerHidesTheTabBarAndReclaimsItsRow) {
     auto open = request(80, 24);
     open.inputLineActive = true;
     ShellState openState;
-    auto openResult = computeShellLayout(open, openState);
+    auto openResult = layoutFor(open, openState);
     ASSERT_TRUE(openResult.accepted());
     if (!openResult.accepted()) return;
     ASSERT_FALSE(openResult.view->tabBar.has_value());
@@ -426,7 +434,7 @@ TEST(typingInTheInputLineNeverMovesTheStatusFields) {
         value.inputLineActive = true;
         value.inputLineQuery = query;
         ShellState state;
-        auto result = computeShellLayout(value, state);
+        auto result = layoutFor(value, state);
         ASSERT_TRUE(result.accepted());
         if (!result.accepted()) continue;
 
@@ -458,7 +466,7 @@ TEST(headerFieldWidthIsMeasuredInCellsNotBytes) {
     auto asciiReq = request(120, 12);
     asciiReq.headerFields = {{"current_path", "Current path", "xx", 1}};
     ShellState asciiState;
-    auto asciiResult = computeShellLayout(asciiReq, asciiState);
+    auto asciiResult = layoutFor(asciiReq, asciiState);
     ASSERT_TRUE(asciiResult.accepted());
     if (!asciiResult.accepted()) return;
     const auto* asciiPath = findNode(*asciiResult.view, "current_path");
@@ -470,7 +478,7 @@ TEST(headerFieldWidthIsMeasuredInCellsNotBytes) {
     wideReq.headerFields = {
         {"current_path", "Current path", "\xE4\xB8\xAD", 1}};
     ShellState wideState;
-    auto wideResult = computeShellLayout(wideReq, wideState);
+    auto wideResult = layoutFor(wideReq, wideState);
     ASSERT_TRUE(wideResult.accepted());
     if (!wideResult.accepted()) return;
     const auto* widePath = findNode(*wideResult.view, "current_path");
@@ -496,7 +504,7 @@ TEST(fieldsAreStableEvenWhenTheHeaderIsTight) {
         value.inputLineActive = true;
         value.inputLineQuery = query;
         ShellState state;
-        auto result = computeShellLayout(value, state);
+        auto result = layoutFor(value, state);
         ASSERT_TRUE(result.accepted());
         if (!result.accepted()) continue;
 
@@ -529,7 +537,7 @@ TEST(headerNodesNeverOverlap) {
         value.inputLineQuery = std::string(20, 'q');
         value.inputLineGhost = "ghost";
         ShellState state;
-        auto result = computeShellLayout(value, state);
+        auto result = layoutFor(value, state);
         ASSERT_TRUE(result.accepted());
         if (!result.accepted()) continue;
         std::vector<const AccessibilityNode*> header;
@@ -560,8 +568,8 @@ TEST(anOverlongQueryScrollsItsOwnTextAndLeavesFieldsAlone) {
     longQuery.inputLineQuery = std::string(200, 'x') + "TAIL";
 
     ShellState state;
-    auto shortResult = computeShellLayout(shortQuery, state);
-    auto longResult = computeShellLayout(longQuery, state);
+    auto shortResult = layoutFor(shortQuery, state);
+    auto longResult = layoutFor(longQuery, state);
     ASSERT_TRUE(shortResult.accepted() && longResult.accepted());
     if (!shortResult.accepted() || !longResult.accepted()) return;
 
@@ -593,7 +601,7 @@ TEST(theScrolledQueryIsCutOnCharacterBoundaries) {
     for (int i = 0; i < 60; ++i) query += "\u00e9";
     value.inputLineQuery = query;
     ShellState state;
-    auto result = computeShellLayout(value, state);
+    auto result = layoutFor(value, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     const auto* line = findNode(*result.view, "input_line.query");
@@ -612,7 +620,7 @@ TEST(aNarrowHeaderStillGivesTheInputLineRoom) {
     value.inputLineActive = true;
     value.inputLineQuery = "query";
     ShellState state;
-    auto result = computeShellLayout(value, state);
+    auto result = layoutFor(value, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     const auto* line = findNode(*result.view, "input_line.query");
@@ -633,14 +641,14 @@ TEST(shellLayoutTakesItsDimensionsAndSigilFromStyle) {
 
     auto narrow = request(100, 24);
     narrow.style.dimensions.panelTargetWidth = 24;
-    auto narrowResult = computeShellLayout(narrow, state);
+    auto narrowResult = layoutFor(narrow, state);
     ASSERT_TRUE(narrowResult.accepted());
     ASSERT_TRUE(narrowResult.view->panel.has_value());
     if (!narrowResult.view->panel) return;
 
     auto wide = request(100, 24);
     wide.style.dimensions.panelTargetWidth = 31;
-    auto wideResult = computeShellLayout(wide, state);
+    auto wideResult = layoutFor(wide, state);
     ASSERT_TRUE(wideResult.accepted());
     ASSERT_TRUE(wideResult.view->panel.has_value());
     if (!wideResult.view->panel) return;
@@ -652,14 +660,14 @@ TEST(shellLayoutTakesItsDimensionsAndSigilFromStyle) {
     // previously-accepted viewport too small.
     auto demanding = request(20, 4);
     demanding.style.dimensions.minimumColumns = 40;
-    ASSERT_FALSE(computeShellLayout(demanding, state).accepted());
+    ASSERT_FALSE(layoutFor(demanding, state).accepted());
 
     // The input line renders the configured sigil rather than a literal "> ".
     auto styled = request(100, 24);
     styled.inputLineActive = true;
     styled.inputLineQuery = "abc";
     styled.style.inputLineSigil = ":: ";
-    auto styledResult = computeShellLayout(styled, state);
+    auto styledResult = layoutFor(styled, state);
     ASSERT_TRUE(styledResult.accepted());
     if (!styledResult.accepted()) return;
     bool sawStyledSigil = false;
@@ -682,7 +690,7 @@ TEST(chromeHeightsAndGutterWidthAreHonoured) {
     tall.style.dimensions.headerHeight = 2;
     tall.style.dimensions.footerHeight = 3;
     tall.style.dimensions.tabBarHeight = 2;
-    auto tallResult = computeShellLayout(tall, state);
+    auto tallResult = layoutFor(tall, state);
     ASSERT_TRUE(tallResult.accepted());
     if (!tallResult.accepted()) return;
     assertRect(*tallResult.view->header, {0, 0, 100, 2});
@@ -698,7 +706,7 @@ TEST(chromeHeightsAndGutterWidthAreHonoured) {
 
     auto wideGutter = request(100, 24);
     wideGutter.style.dimensions.scrollbarGutterWidth = 3;
-    auto gutterResult = computeShellLayout(wideGutter, state);
+    auto gutterResult = layoutFor(wideGutter, state);
     ASSERT_TRUE(gutterResult.accepted());
     if (!gutterResult.accepted()) return;
     auto const& pane = gutterResult.view->panes.front();
@@ -715,7 +723,7 @@ TEST(labelWidthsAreMeasuredInCellsNotBytes) {
 
     auto ascii = request(100, 24);
     ascii.tabs = {{"ab", "ab tab", true}};
-    auto asciiResult = computeShellLayout(ascii, state);
+    auto asciiResult = layoutFor(ascii, state);
     ASSERT_TRUE(asciiResult.accepted());
     if (!asciiResult.accepted()) return;
 
@@ -724,7 +732,7 @@ TEST(labelWidthsAreMeasuredInCellsNotBytes) {
     // default (empty edge glyphs, no padding), so the hit rect is the label.
     auto wide = request(100, 24);
     wide.tabs = {{"\xef\xbc\xa1\xef\xbc\xa2", "wide tab", true}};
-    auto wideResult = computeShellLayout(wide, state);
+    auto wideResult = layoutFor(wide, state);
     ASSERT_TRUE(wideResult.accepted());
     if (!wideResult.accepted()) return;
 
@@ -738,7 +746,7 @@ TEST(defaultTabsAreTightWithOneSeparatorCellBetween) {
     ShellState state;
     auto req = request(100, 24);
     req.tabs = {{"aa", "aa tab", true}, {"bb", "bb tab", false}};
-    auto result = computeShellLayout(req, state);
+    auto result = layoutFor(req, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
 
@@ -769,7 +777,7 @@ TEST(configuredTabEdgeAndSeparatorGlyphsChangeGeometry) {
     req.style.tab.rightEdge = "]";
     req.style.tab.separator = " | ";
     req.tabs = {{"aa", "aa tab", false}, {"bb", "bb tab", false}};
-    auto result = computeShellLayout(req, state);
+    auto result = layoutFor(req, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
 
@@ -803,7 +811,7 @@ TEST(activeTabStaysVisibleWhenSeparatorsPushEarlierTabsOff) {
     req.style.tab.separator = " | ";
     req.tabs = {{"one", "one tab", false}, {"two", "two tab", false},
                 {"three", "three tab", false}, {"four", "four tab", true}};
-    auto result = computeShellLayout(req, state);
+    auto result = layoutFor(req, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
 
@@ -825,7 +833,7 @@ TEST(noTabSeparatorDanglesPastTheLastPlacedTab) {
     req.style.tab.separator = " || ";  // 4 cells
     req.tabs = {{"alpha", "alpha tab", true}, {"bravo", "bravo tab", false},
                 {"charlie", "charlie tab", false}};
-    auto result = computeShellLayout(req, state);
+    auto result = layoutFor(req, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
 
@@ -873,7 +881,7 @@ TEST(composedChromeReplacesBuiltinHeaderAndFooter) {
         {literalField("custom.footer", "WORLD", 0)});
     value.composedUi = UiSchema{Generation{1}, comp.root};
 
-    auto result = computeShellLayout(value, state);
+    auto result = layoutFor(value, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
 
@@ -907,7 +915,7 @@ TEST(composingOneRegionLeavesTheOtherBuiltin) {
         {literalField("custom.footer", "WORLD", 0)});
     footerOnly.composedUi = UiSchema{Generation{1}, comp.root};
 
-    auto result = computeShellLayout(footerOnly, state);
+    auto result = layoutFor(footerOnly, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     // Header is untouched built-in; footer is composed.
@@ -934,7 +942,7 @@ TEST(composedHeaderResolvesProvidersAndKeepsTheInputLine) {
         return std::nullopt;
     };
 
-    auto result = computeShellLayout(value, state);
+    auto result = layoutFor(value, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     const auto* live = findNode(*result.view, "live.path");
@@ -967,7 +975,7 @@ TEST(composedHeaderSpacerPushesTheInputLinePastItsCells) {
         {literalField("h.field", "X", 0), spacer});
     value.composedUi = UiSchema{Generation{1}, comp.root};
 
-    auto result = computeShellLayout(value, state);
+    auto result = layoutFor(value, state);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     const auto* field = findNode(*result.view, "h.field");
@@ -1047,7 +1055,7 @@ std::string captureGoldenMatrix() {
         ShellState state;
         if (configure) configure(state);
         out << "=== " << name << " ===\n"
-            << serializeLayout(computeShellLayout(req, state)) << '\n';
+            << serializeLayout(layoutFor(req, state)) << '\n';
     };
     auto panelOn = [](ShellState& s) { s.togglePanel(); };
 

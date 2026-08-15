@@ -434,7 +434,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     // solver places. The content packers and the accessibility-node emission below
     // are unchanged -- they receive the solved rects instead of hand-built ones.
     int panelWidth = 0;
-    if (!distractionFree && state.impl_->panelRequested &&
+    if (!distractionFree && request.panelPresent &&
         request.viewport.columns >=
             request.style.dimensions.editorMinimumWidth +
                 request.style.dimensions.panelMinimumWidth) {
@@ -680,7 +680,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                      *view.panel, SemanticRole::PanelInactive);
             addNode(view, ShellNodeKind::PanelProvider, "panel.provider",
                      request.panelProviderLabel, *view.panel,
-                     state.impl_->focus == FocusTarget::Panel ? SemanticRole::PanelActive :
+                     request.focus == FocusTarget::Panel ? SemanticRole::PanelActive :
                                                   SemanticRole::PanelInactive,
                      request.panelProviderLabel);
             // Reserve the tree's scrollbar gutter: the right column over the tree

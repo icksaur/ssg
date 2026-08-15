@@ -127,6 +127,12 @@ struct ShellLayoutRequest {
     std::optional<ShellNotice> notice;
     bool emptyState = false;
     std::string panelProviderLabel = "Panel";
+    // The panel presence and focus this layout is computed against. Stage-(i) of the
+    // interaction-authority cutover threads these through the request so stage (ii) can
+    // source them from the authority projection instead of ShellState without touching
+    // computeShellLayout. Sourced from ShellState today.
+    bool panelPresent = false;
+    FocusTarget focus = FocusTarget::Editor;
     std::vector<StatusField> headerFields;
     std::vector<StatusField> footerFields;
     std::vector<ShellLabel> footerActions;

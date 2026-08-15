@@ -119,6 +119,11 @@ public:
         request.emptyState = text_.empty();
         request.tabs = tabs_;
         for (auto const& mutate : shellMutators_) mutate(request);
+        // Stage-(i): computeShellLayout reads panel presence and focus from the request;
+        // source them from the configured ShellState, as production does. Set after the
+        // caller's mutators so the shell state is authoritative for these two.
+        request.panelPresent = shell.panelRequested();
+        request.focus = shell.focus();
         auto layout = computeShellLayout(request, shell);
 
         ViewportDimensions const dimensions{

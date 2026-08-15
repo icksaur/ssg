@@ -197,6 +197,8 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     }
     request.emptyState = activeDocument() == nullptr;
     request.panelProviderLabel = std::string{shell.activePanelProvider()};
+    request.panelPresent = shell.panelRequested();
+    request.focus = shell.focus();
     request.headerFields = std::move(statusFields.headerFields);
     request.footerFields = std::move(statusFields.footerFields);
     // A composed region REPLACES that
