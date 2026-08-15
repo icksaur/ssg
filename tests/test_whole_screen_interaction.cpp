@@ -14,6 +14,7 @@
 #include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -85,6 +86,14 @@ TEST(panelIsPresentOnlyWhenRequested) {
     shown.panelPresent = true;
     const auto b = buildWholeScreenInteraction(schemaOf({}), shown);
     ASSERT_TRUE(present(b, kPanelNodeId));
+}
+
+TEST(corruptSelectedProviderIsRejected) {
+    WholeScreenTruth truth;
+    truth.panelPresent = true;
+    truth.selectedProvider = static_cast<PanelProvider>(200);
+    // Invalid truth must not produce plausible presence.
+    ASSERT_THROWS(buildWholeScreenInteraction(schemaOf({}), truth), std::logic_error);
 }
 
 TEST(exactlyTheSelectedProviderIsPresent) {
@@ -164,6 +173,7 @@ int main() {
     RUN(schemaGenerationHoldsWhenStructureIsUnchanged);
     RUN(schemaGenerationAdvancesOnAStructuralChange);
     RUN(panelIsPresentOnlyWhenRequested);
+    RUN(corruptSelectedProviderIsRejected);
     RUN(exactlyTheSelectedProviderIsPresent);
     RUN(contentShowsTabViewXorFindResultsByFinderState);
     RUN(baseFocusNeverStrandsOnAnAbsentPanel);

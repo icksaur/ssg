@@ -2,6 +2,7 @@
 
 #include <ssg/UiTree.h>  // node id constants
 
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,17 +13,18 @@ namespace {
 
 UiNodeId nodeId(std::string_view id) { return UiNodeId{std::string{id}}; }
 
-// The node id of a panel provider. The domain is closed, so every case is a real leaf.
+// The node id of a panel provider. The domain is closed; a corrupt enumerator is rejected
+// rather than coerced to a plausible leaf, so invalid truth cannot produce valid presence.
 std::string_view providerNodeId(PanelProvider provider) {
     switch (provider) {
+    case PanelProvider::FileTree:
+        return kFileTreeNodeId;
     case PanelProvider::GitStatus:
         return kGitStatusNodeId;
     case PanelProvider::Symbols:
         return kSymbolsNodeId;
-    case PanelProvider::FileTree:
-        break;
     }
-    return kFileTreeNodeId;
+    throw std::logic_error("corrupt PanelProvider enumerator");
 }
 
 }  // namespace
