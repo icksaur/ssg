@@ -1200,7 +1200,52 @@ TEST(shellLayoutMatchesTheCommittedGolden) {
     }
 }
 
+// The semantic role of the panel provider node, or Canvas when the panel is absent.
+SemanticRole panelProviderRole(const ShellViewState& view) {
+    for (const auto& node : view.accessibilityNodes) {
+        if (node.kind == ShellNodeKind::PanelProvider) return node.role;
+    }
+    return SemanticRole::Canvas;
+}
+
+// These call computeShellLayout DIRECTLY (not via layoutFor) with a request that disagrees
+// with the ShellState, proving panel presence and the active role come EXCLUSIVELY from the
+// request -- a computeShellLayout that still read ShellState would fail them.
+TEST(panelPresenceComesExclusivelyFromTheRequest) {
+    ShellState hiddenState;  // panel hidden
+    auto shownReq = request(80, 12);
+    shownReq.panelPresent = true;  // request overrides the hidden state
+    auto shown = computeShellLayout(shownReq, hiddenState);
+    ASSERT_TRUE(shown.accepted());
+    ASSERT_TRUE(shown.view->panel.has_value());
+
+    ShellState shownStateOnly;
+    shownStateOnly.togglePanel();  // state shows the panel
+    auto hiddenReq = request(80, 12);
+    hiddenReq.panelPresent = false;  // request overrides the shown state
+    auto hidden = computeShellLayout(hiddenReq, shownStateOnly);
+    ASSERT_TRUE(hidden.accepted());
+    ASSERT_FALSE(hidden.view->panel.has_value());
+}
+
+TEST(panelActiveRoleComesExclusivelyFromTheRequestFocus) {
+    ShellState editorFocusedState;  // focus Editor, panel hidden
+    auto activeReq = request(80, 12);
+    activeReq.panelPresent = true;
+    activeReq.focus = FocusTarget::Panel;  // request says panel-focused
+    auto active = computeShellLayout(activeReq, editorFocusedState);
+    ASSERT_TRUE(active.accepted());
+    ASSERT_TRUE(panelProviderRole(*active.view) == SemanticRole::PanelActive);
+
+    activeReq.focus = FocusTarget::Editor;  // request says editor-focused
+    auto inactive = computeShellLayout(activeReq, editorFocusedState);
+    ASSERT_TRUE(inactive.accepted());
+    ASSERT_TRUE(panelProviderRole(*inactive.view) == SemanticRole::PanelInactive);
+}
+
 int main() {
+    RUN(panelPresenceComesExclusivelyFromTheRequest);
+    RUN(panelActiveRoleComesExclusivelyFromTheRequestFocus);
     RUN(handAuthoredGeometryGoldens);
     RUN(viewportAndPromptErrorsAreTyped);
     RUN(paneCommandsPreserveTopologyAndOrder);
