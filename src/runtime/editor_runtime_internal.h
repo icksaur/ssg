@@ -2,6 +2,7 @@
 
 #include <ssg/ClipboardRegister.h>
 #include <ssg/CommandTransition.h>
+#include <ssg/InteractionAuthority.h>
 #include <ssg/DiffModel.h>
 #include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
@@ -197,6 +198,12 @@ struct EditorRuntime::Impl final : CommandServices,
     TreeModel tree;
     std::shared_ptr<SyntaxParser> syntaxParser;
     std::vector<StatusFieldCatalogEntry> statusFieldCatalog;
+    // The single interaction authority: owner of the whole-screen schema generation, the
+    // prompt surface, panel/focus/provider truth, the interaction projection, and the tree
+    // revision source. ShellState and the snapshot read its projection; every focus,
+    // presence, and prompt change flows through it. Declared after `tree` and
+    // `statusFieldCatalog` so both are constructed before it.
+    InteractionAuthority interaction;
     std::unordered_map<std::string, StatusFieldProvider> statusFieldProviders;
     std::unordered_map<std::string, FileDocumentId> liveDiffDocuments;
     // Read-only, in-memory "output" tabs (help, and any future generated-content
@@ -359,7 +366,6 @@ struct EditorRuntime::Impl final : CommandServices,
     mutable std::optional<FileDocumentId> lineCountDocument;
     mutable std::uint32_t lineCountCache = 1;
     std::uint64_t nextStatusId = 1;
-    std::uint64_t nextTreeRevision = 1;
 
     [[nodiscard]] CommandHandlerResult runTransaction(
         std::function<CommandHandlerResult()> operation) override;

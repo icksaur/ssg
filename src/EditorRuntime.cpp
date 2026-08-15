@@ -4,6 +4,8 @@
 #include <ssg/DraftReopenClassifier.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
+#include <ssg/Style.h>
+#include <ssg/WholeScreenAssembly.h>
 #include <ssg/platform_files.h>
 
 #include <algorithm>
@@ -457,6 +459,9 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
       external{recovery, diff},
       syntaxParser{std::move(parser)},
       statusFieldCatalog{p0StatusFieldCatalog()},
+      interaction{assembleWholeScreen(statusFieldCatalog, "help.open",
+                                      StyleDimensions{}, std::nullopt),
+                  tree, 1},
       search{*this, *this},
       theme{defaultTheme()},
       deferringEnrichment{deferEnrichment} {
@@ -1720,7 +1725,7 @@ void EditorRuntime::Impl::refreshTree() {
     }
     ++treeScanCount;
     tree.replaceProvider(TreeProviderSnapshot::fromFilesystem(
-        TreeProviderId{"filesystem"}, root, TreeRevision{nextTreeRevision++}));
+        TreeProviderId{"filesystem"}, root, interaction.allocateTreeRevision()));
 }
 
 void EditorRuntime::Impl::reconcilePromptFocus() {
@@ -2153,7 +2158,7 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
         }
     }
     tree.replaceProvider(TreeProviderSnapshot::fromGit(
-        TreeProviderId{"git"}, TreeRevision{nextTreeRevision++},
+        TreeProviderId{"git"}, interaction.allocateTreeRevision(),
         gitTreeRecordsFromDiff(mutated ? diff.viewState() : stagedDiff.viewState())));
     lastGitScanRevision = scan.revision;
     if (session) {

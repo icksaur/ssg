@@ -16,7 +16,7 @@ bool syncTreeProviderToPanel(EditorRuntime::Impl& runtime) {
     auto const binding = panelProviderBinding(runtime.shell.activePanelProvider());
     if (!binding) return false;
     return runtime.tree.activateOrCreate(*binding, [&runtime] {
-        return TreeRevision{runtime.nextTreeRevision++};
+        return runtime.interaction.allocateTreeRevision();
     });
 }
 
