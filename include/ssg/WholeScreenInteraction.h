@@ -15,6 +15,7 @@
 #include <ssg/InteractionState.h>  // UiInteractionState
 #include <ssg/KeyboardFocus.h>     // BaseFocus
 #include <ssg/Picker.h>            // PickerKind
+#include <ssg/PromptSurface.h>     // PromptRegion
 
 namespace ssg {
 
@@ -44,13 +45,17 @@ struct WholeScreenTruth {
     BaseFocus panelReturnFocus = BaseFocus::Editor;
 };
 
-// Build the interaction aggregate for `schema` from `truth`: presence hides the panel and
-// ALL its provider children when the panel is absent, else the two non-selected panel
-// providers, and whichever of tabview/findresults
-// the finder state excludes; base focus is Editor unless the panel is present and focused;
-// the finder capture is pushed on the findresults node when a picker is open. Rebuilding
-// with the same truth over a new schema generation IS the migration.
+// Build the interaction aggregate for `schema` from `truth` and the active prompt's region.
+// Presence hides the panel and ALL its provider children when the panel is absent, else the
+// two non-selected panel providers, and whichever of tabview/findresults the open picker
+// excludes; base focus is Editor unless the panel is present and focused. `promptRegion` is
+// DERIVED from the authority-owned PromptSurface at build time (not stored in truth, so it
+// cannot drift): when set, a single prompt-focus capture is anchored on the region's host
+// node -- header for a Palette prompt (command palette, file finder), footer otherwise --
+// so keystrokes route to that input line while findresults stays displayed content.
+// Rebuilding with the same inputs over a new schema generation IS the migration.
 [[nodiscard]] UiInteractionState buildWholeScreenInteraction(
-    ValidatedSchema schema, const WholeScreenTruth& truth);
+    ValidatedSchema schema, const WholeScreenTruth& truth,
+    std::optional<PromptRegion> promptRegion = std::nullopt);
 
 }  // namespace ssg

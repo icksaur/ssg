@@ -115,11 +115,24 @@ TEST(contentShowsTabViewXorFindResultsByFinderState) {
 
     WholeScreenTruth open;
     open.openPicker = PickerKind::File;
-    const auto b = buildWholeScreenInteraction(schemaOf({}), open);
+    // A file finder is a Palette prompt -> header-region prompt focus.
+    const auto b = buildWholeScreenInteraction(schemaOf({}), open, PromptRegion::Header);
     ASSERT_FALSE(present(b, kTabViewNodeId));
     ASSERT_TRUE(present(b, kFindResultsNodeId));
-    // The finder holds a prompt capture -> effective focus routes to the prompt context.
+    // The prompt capture (anchored on the header input line) routes effective focus to the
+    // prompt context; findresults is displayed content, not the focus anchor.
     ASSERT_TRUE(b.effectiveFocus() == FocusTarget::Prompt);
+    ASSERT_TRUE(present(b, kHeaderNodeId));
+}
+
+TEST(promptFocusAnchorsOnTheRegionHost) {
+    WholeScreenTruth truth;
+    // A footer-region prompt (find/replace, save-path) routes focus to the prompt without
+    // opening a picker: tabview stays, findresults stays hidden.
+    const auto s = buildWholeScreenInteraction(schemaOf({}), truth, PromptRegion::Footer);
+    ASSERT_TRUE(s.effectiveFocus() == FocusTarget::Prompt);
+    ASSERT_TRUE(present(s, kTabViewNodeId));
+    ASSERT_FALSE(present(s, kFindResultsNodeId));
 }
 
 TEST(baseFocusNeverStrandsOnAnAbsentPanel) {
@@ -142,14 +155,14 @@ TEST(rebuildOverANewGenerationPreservesTruthAndResetsBasis) {
     truth.selectedProvider = PanelProvider::Symbols;
     truth.openPicker = PickerKind::Command;
 
-    // Generation 0.
-    const auto g0 = buildWholeScreenInteraction(schemaOf({}), truth);
+    // Generation 0. A command palette is a Palette prompt -> header-region focus.
+    const auto g0 = buildWholeScreenInteraction(schemaOf({}), truth, PromptRegion::Header);
     ASSERT_TRUE(present(g0, kSymbolsNodeId));
     ASSERT_TRUE(present(g0, kFindResultsNodeId));
     ASSERT_TRUE(g0.effectiveFocus() == FocusTarget::Prompt);
 
-    // Generation 1 (a structural change: wider panel). Rebuilding from the SAME truth
-    // migrates: presence-from-truth is identical, the finder capture is preserved, and
+    // Generation 1 (a structural change: wider panel). Rebuilding from the SAME inputs
+    // migrates: presence-from-truth is identical, the prompt capture is preserved, and
     // the presence basis is reset to its baseline for the new generation.
     StyleDimensions wider;
     wider.panelTargetWidth = StyleDimensions{}.panelTargetWidth + 10;
@@ -158,7 +171,8 @@ TEST(rebuildOverANewGenerationPreservesTruthAndResetsBasis) {
     ASSERT_EQ(owner.generation().value(), std::uint64_t{1});
 
     ValidatedSchema migrated = owner.validated();
-    const auto g1 = buildWholeScreenInteraction(std::move(migrated), truth);
+    const auto g1 =
+        buildWholeScreenInteraction(std::move(migrated), truth, PromptRegion::Header);
     ASSERT_TRUE(present(g1, kSymbolsNodeId));
     ASSERT_TRUE(present(g1, kFindResultsNodeId));
     ASSERT_FALSE(present(g1, kFileTreeNodeId));
@@ -176,6 +190,7 @@ int main() {
     RUN(corruptSelectedProviderIsRejected);
     RUN(exactlyTheSelectedProviderIsPresent);
     RUN(contentShowsTabViewXorFindResultsByFinderState);
+    RUN(promptFocusAnchorsOnTheRegionHost);
     RUN(baseFocusNeverStrandsOnAnAbsentPanel);
     RUN(rebuildOverANewGenerationPreservesTruthAndResetsBasis);
     return failed;

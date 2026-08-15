@@ -70,7 +70,13 @@ struct TransitionBuilder {
     static PreparedTransition make(WholeScreenTruth truth,
                                    const ValidatedSchema& schema, PromptSurface prompt,
                                    std::optional<TreeBackingPlan> tree) {
-        UiInteractionState interaction = buildWholeScreenInteraction(schema, truth);
+        // The prompt-focus region is derived from the result prompt, never stored in truth.
+        const std::optional<PromptRegion> region =
+            prompt.active()
+                ? std::optional<PromptRegion>{promptFocusRegion(prompt.request()->kind)}
+                : std::nullopt;
+        UiInteractionState interaction =
+            buildWholeScreenInteraction(schema, truth, region);
         return PreparedTransition{std::move(truth), std::move(interaction),
                                   std::move(prompt), std::move(tree)};
     }

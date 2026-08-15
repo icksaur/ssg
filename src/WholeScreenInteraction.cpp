@@ -30,7 +30,8 @@ std::string_view providerNodeId(PanelProvider provider) {
 }  // namespace
 
 UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
-                                               const WholeScreenTruth& truth) {
+                                               const WholeScreenTruth& truth,
+                                               std::optional<PromptRegion> promptRegion) {
     // The provider node is present only when the panel is; provider choice is carried by
     // the separate last-active hint, never leaked into presence.
     const std::string_view selected =
@@ -42,10 +43,10 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
          {kFileTreeNodeId, kGitStatusNodeId, kSymbolsNodeId}) {
         if (provider != selected) hidden.push_back(nodeId(provider));
     }
-    // Content shows exactly one of tabview/findresults: the finder when a picker is
-    // open, else the document tab view.
-    const bool finderOpen = truth.openPicker.has_value();
-    hidden.push_back(nodeId(finderOpen ? kTabViewNodeId : kFindResultsNodeId));
+    // Content shows exactly one of tabview/findresults: findresults when a picker is open,
+    // else the document tab view.
+    const bool pickerOpen = truth.openPicker.has_value();
+    hidden.push_back(nodeId(pickerOpen ? kTabViewNodeId : kFindResultsNodeId));
 
     UiInteractionState state{std::move(schema), std::move(hidden)};
 
@@ -54,11 +55,14 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
         truth.baseFocus == BaseFocus::Panel && truth.panelPresent ? BaseFocus::Panel
                                                                   : BaseFocus::Editor);
 
-    // The finder holds a prompt-backed focus capture on the findresults node while a
-    // picker is open; captureFocus admits it only because findresults is present then.
-    if (finderOpen) {
-        state.captureFocus(
-            FocusCapture{nodeId(kFindResultsNodeId), FocusTarget::Prompt});
+    // A prompt anchors its focus capture on the region's host node -- the header input line
+    // for a Palette prompt, the footer otherwise -- so keystrokes route there. Both hosts
+    // are always present, so captureFocus admits the capture.
+    if (promptRegion) {
+        const std::string_view host = *promptRegion == PromptRegion::Header
+                                          ? kHeaderNodeId
+                                          : kFooterNodeId;
+        state.captureFocus(FocusCapture{nodeId(host), FocusTarget::Prompt});
     }
     return state;
 }
