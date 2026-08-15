@@ -1,9 +1,9 @@
 // Algorithm oracle for the whole-screen tree assembly. The knowable answers: the
 // assembled tree is the canonical root>[header, body>[panel>[filetree,gitstatus],
-// content>[tabview,findresults]], footer] with extents drawn from StyleDimensions; an
-// omitted ssg.chrome header/footer is synthesized from the status projection (fallback,
-// carrying collapse rank + the footer hint); a composed header/footer REPLACES the
-// built-in (override); and the whole tree passes validateUiSchema.
+// content>[tabview,findresults]], footer] with extents drawn from StyleDimensions; the
+// STRUCTURE is stable under value/command/provider-presence change (only the STABLE
+// catalog superset shapes it); a composed ssg.chrome header/footer REPLACES the built-in
+// (override); and the whole tree passes validateUiSchema.
 
 #include "ssg/WholeScreenAssembly.h"
 
@@ -35,10 +35,10 @@ const UiNode* childById(const UiNode& node, std::string_view id) {
 }
 
 StatusField field(std::string id, std::uint8_t rank = 0,
-                  std::optional<std::string> command = {}) {
+                  std::optional<std::string> command = {}, std::string value = "v") {
     StatusField f;
     f.id = std::move(id);
-    f.value = "v";
+    f.value = std::move(value);
     f.collapseRank = rank;
     f.commandId = std::move(command);
     return f;
@@ -48,6 +48,8 @@ StyleDimensions dims() {
     StyleDimensions d;  // defaults: panelTargetWidth 24, headerHeight 1, footerHeight 1
     return d;
 }
+
+constexpr std::string_view kHintCommand = "help.open";
 
 // The canonical skeleton (root/body/panel/content + view leaves + sizes) that must
 // hold regardless of how header/footer were sourced.
@@ -96,19 +98,19 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     }
 }
 
-TEST(omittedBuiltinsSynthesizeHeaderAndFooterFromStatusFields) {
-    const std::vector<StatusField> headerFields{
-        field("path", 3, std::optional<std::string>{"panel.show_files"}),
-        field("branch")};
+TEST(builtinHeaderFooterAreProviderBackedAndStable) {
+    const std::vector<StatusField> headerFields{field("path", 3), field("branch")};
     const std::vector<StatusField> footerFields{field("mode")};
-    const ShellFooterHint hint{"^H help", "help.open"};
-    const UiComposition comp = assembleWholeScreen(
-        headerFields, footerFields, std::optional<ShellFooterHint>{hint}, dims(),
-        std::nullopt);
+    const UiComposition comp =
+        assembleWholeScreen(headerFields, footerFields, kHintCommand, dims(),
+                            std::nullopt);
     assertCanonicalSkeleton(comp, dims());
 
-    const UiNode& header = *childById(comp.root, kHeaderNodeId);
-    const ssgtest::RowView headerRow = ssgtest::rowOf(header);
+    // Each built-in header field is a provider-backed Field keyed by its id, carrying
+    // ONLY id + rank; value/label/command ride uiState (resolved per frame), never the
+    // structure.
+    const ssgtest::RowView headerRow =
+        ssgtest::rowOf(*childById(comp.root, kHeaderNodeId));
     ASSERT_EQ(headerRow.left.size(), std::size_t{2});
     ASSERT_TRUE(headerRow.left[0].kind == WidgetKind::Field);
     ASSERT_TRUE(headerRow.left[0].value.has_value());
@@ -116,24 +118,38 @@ TEST(omittedBuiltinsSynthesizeHeaderAndFooterFromStatusFields) {
         ASSERT_TRUE(headerRow.left[0].value->isProvider);
         ASSERT_EQ(headerRow.left[0].value->provider, std::string{"path"});
     }
-    ASSERT_EQ(headerRow.left[0].rank, 3);  // collapse rank carries onto the widget
-    ASSERT_TRUE(headerRow.left[0].command.has_value());
-    if (headerRow.left[0].command)
-        ASSERT_EQ(*headerRow.left[0].command, std::string{"panel.show_files"});
-    ASSERT_TRUE(headerRow.right.empty());
+    ASSERT_EQ(headerRow.left[0].rank, 3);
+    ASSERT_TRUE(!headerRow.left[0].command.has_value());  // command rides uiState
 
-    const UiNode& footer = *childById(comp.root, kFooterNodeId);
-    const ssgtest::RowView footerRow = ssgtest::rowOf(footer);
-    ASSERT_EQ(footerRow.left.size(), std::size_t{1});
-    ASSERT_EQ(footerRow.left[0].value->provider, std::string{"mode"});
-    // The right group carries the help hint (a Field with its command) and the stable
-    // status-actions widget (its data rides promptStatus, so it is always present).
+    // The footer right group carries the provider-backed hint (label rides uiState,
+    // command stable) and the stable status-actions widget.
+    const ssgtest::RowView footerRow =
+        ssgtest::rowOf(*childById(comp.root, kFooterNodeId));
     ASSERT_EQ(footerRow.right.size(), std::size_t{2});
-    ASSERT_EQ(footerRow.right[0].value->literal, std::string{"^H help"});
+    ASSERT_TRUE(footerRow.right[0].value.has_value());
+    if (footerRow.right[0].value) {
+        ASSERT_TRUE(footerRow.right[0].value->isProvider);
+        ASSERT_EQ(footerRow.right[0].value->provider, std::string{"footer.hint"});
+    }
     ASSERT_TRUE(footerRow.right[0].command.has_value());
     if (footerRow.right[0].command)
-        ASSERT_EQ(*footerRow.right[0].command, std::string{"help.open"});
+        ASSERT_EQ(*footerRow.right[0].command, std::string{kHintCommand});
     ASSERT_TRUE(footerRow.right[1].kind == WidgetKind::StatusActions);
+}
+
+TEST(structureIsStableUnderValueCommandAndProviderChange) {
+    // Same field IDS, different values/commands/ranks-unchanged: the assembled tree must
+    // be byte-identical, because value/command are uiState, not structure. This is the
+    // generation-stability guarantee: a branch value appearing/changing shapes no tree.
+    const std::vector<StatusField> a{field("path", 3, std::optional<std::string>{"c1"}, "one"),
+                                     field("branch", 0, std::nullopt, "main")};
+    const std::vector<StatusField> b{field("path", 3, std::optional<std::string>{"c2"}, "two"),
+                                     field("branch", 0, std::optional<std::string>{"x"}, "")};
+    const UiComposition ca =
+        assembleWholeScreen(a, {field("mode")}, kHintCommand, dims(), std::nullopt);
+    const UiComposition cb =
+        assembleWholeScreen(b, {field("mode")}, kHintCommand, dims(), std::nullopt);
+    ASSERT_TRUE(ca == cb);
 }
 
 TEST(composedHeaderAndFooterOverrideTheBuiltins) {
@@ -148,11 +164,8 @@ TEST(composedHeaderAndFooterOverrideTheBuiltins) {
     const ValidatedComposition override = ssgtest::composeHeaderAndFooterValidated(
         {composedHeaderField}, {composedFooterField});
 
-    const std::vector<StatusField> headerFields{field("path")};
-    const std::vector<StatusField> footerFields{field("mode")};
-    const ShellFooterHint hint{"^H help", "help.open"};
     const UiComposition comp = assembleWholeScreen(
-        headerFields, footerFields, std::optional<ShellFooterHint>{hint}, dims(),
+        {field("path")}, {field("mode")}, kHintCommand, dims(),
         std::optional<ValidatedComposition>{override});
     assertCanonicalSkeleton(comp, dims());
 
@@ -164,7 +177,7 @@ TEST(composedHeaderAndFooterOverrideTheBuiltins) {
         ssgtest::rowOf(*childById(comp.root, kFooterNodeId));
     ASSERT_EQ(footerRow.left.size(), std::size_t{1});
     ASSERT_EQ(footerRow.left[0].value->literal, std::string{"ready"});  // composed
-    // The composed footer replaces the whole built-in footer -- no built-in hint.
+    // The composed footer replaces the whole built-in footer -- no hint, no actions.
     ASSERT_TRUE(footerRow.right.empty());
 }
 
@@ -177,7 +190,7 @@ TEST(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted) {
         ssgtest::composeHeaderValidated({composedHeaderField});
 
     const UiComposition comp = assembleWholeScreen(
-        {field("path")}, {field("mode")}, std::nullopt, dims(),
+        {field("path")}, {field("mode")}, kHintCommand, dims(),
         std::optional<ValidatedComposition>{override});
     assertCanonicalSkeleton(comp, dims());
 
@@ -192,15 +205,15 @@ TEST(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted) {
 
 TEST(theAssembledTreeAlwaysValidates) {
     const UiComposition fallback = assembleWholeScreen(
-        {field("path")}, {field("mode")}, std::nullopt, dims(), std::nullopt);
+        {field("path")}, {field("mode")}, kHintCommand, dims(), std::nullopt);
     const UiComposition empty =
-        assembleWholeScreen({}, {}, std::nullopt, dims(), std::nullopt);
+        assembleWholeScreen({}, {}, kHintCommand, dims(), std::nullopt);
     WidgetDescriptor composed;
     composed.kind = WidgetKind::Label;
     composed.id = "title";
     composed.value = ValueSource{false, "SSG", ""};
     const UiComposition overridden = assembleWholeScreen(
-        {}, {}, std::nullopt, dims(),
+        {}, {}, kHintCommand, dims(),
         std::optional<ValidatedComposition>{
             ssgtest::composeHeaderAndFooterValidated({composed}, {composed})});
     for (const UiComposition* comp : {&fallback, &empty, &overridden}) {
@@ -213,7 +226,8 @@ TEST(theAssembledTreeAlwaysValidates) {
 }  // namespace
 
 int main() {
-    RUN(omittedBuiltinsSynthesizeHeaderAndFooterFromStatusFields);
+    RUN(builtinHeaderFooterAreProviderBackedAndStable);
+    RUN(structureIsStableUnderValueCommandAndProviderChange);
     RUN(composedHeaderAndFooterOverrideTheBuiltins);
     RUN(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted);
     RUN(theAssembledTreeAlwaysValidates);

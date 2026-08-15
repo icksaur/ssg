@@ -12,27 +12,32 @@
 //
 // This function OWNS the fallback/override rule: a ssg.chrome-composed header or footer
 // REPLACES the corresponding built-in area; an omitted one is synthesized from the
-// status projection; body/panel/content and the four view leaves are always built-in.
-// It is a PURE function -- the runtime calls it to produce the schema it publishes;
-// nothing about geometry policy or presence is decided here (geometry EXTENTS come from
-// the caller's StyleDimensions, the single configurable source the grid path also uses).
+// STABLE status-field catalog superset; body/panel/content and the four view leaves are
+// always built-in. It is a PURE function -- the runtime calls it to produce the schema
+// it publishes; nothing about geometry policy or presence is decided here (geometry
+// EXTENTS come from the caller's StyleDimensions, the single configurable source the
+// grid path also uses).
 //
 // header/footer subtrees use the shared canonical region shape (ChromeRegionShape), so a
-// built-in and a composed region are indistinguishable in shape to a consumer. A built-in
-// field is a provider-backed Field keyed by the status field id (carrying its collapse
-// rank), resolved by the same ChromeProviderResolver the composed path uses. The footer's
-// help hint becomes a right-group Field carrying its click command.
+// built-in and a composed region are indistinguishable in shape to a consumer. The tree
+// is STRUCTURALLY STABLE: a built-in field carries only its id and collapse rank, and
+// its value/label/command all ride uiState (resolved per frame by id); the footer hint
+// is likewise a provider-backed Field whose label rides uiState. So a field's value,
+// command, or provider PRESENCE changing (a branch appearing/disappearing) is value-
+// state, never a structure change, and never advances the schema generation. Callers
+// pass the CATALOG SUPERSET of fields (every possible field), not a projected subset.
 //
 // The override is a ValidatedComposition (not a raw UiComposition), so only a
 // decoder-validated tree can reach the assembly -- a malformed override is
 // unrepresentable here, not silently copied into the result.
 
 #include <ssg/ChromeDecode.h>  // ValidatedComposition
-#include <ssg/ShellState.h>    // StatusField, ShellFooterHint
+#include <ssg/ShellState.h>    // StatusField
 #include <ssg/Style.h>         // StyleDimensions
 #include <ssg/UiTree.h>        // UiComposition
 
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace ssg {
@@ -49,7 +54,7 @@ namespace ssg {
 [[nodiscard]] UiComposition assembleWholeScreen(
     const std::vector<StatusField>& headerFields,
     const std::vector<StatusField>& footerFields,
-    const std::optional<ShellFooterHint>& footerHint,
+    std::string_view hintCommandId,
     const StyleDimensions& dimensions,
     const std::optional<ValidatedComposition>& composedOverride);
 
