@@ -403,7 +403,6 @@ void collectNodeStates(const UiNode& node,
                        std::vector<UiNodeState>& out) {
     UiNodeState state;
     state.id = node.id;
-    state.present = true;
     if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
         state.leaf =
             semanticLeafState(leaf->widget, resolveProvider, defaultRole);
@@ -425,7 +424,7 @@ UiStateSection resolveUiState(const ValidatedSchema& schema,
     const UiNode& root = schema.schema().root;
     // The root carries the well-known areas as children; each area's widgets take
     // that area's default role. The root node itself has no leaf.
-    section.nodes.push_back(UiNodeState{root.id, true, std::nullopt});
+    section.nodes.push_back(UiNodeState{root.id, std::nullopt});
     if (const auto* container = std::get_if<UiContainer>(&root.content)) {
         for (const auto& area : container->children) {
             collectNodeStates(area, resolveProvider,

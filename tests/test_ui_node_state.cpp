@@ -103,7 +103,6 @@ TEST(labelFieldStateMatchesTuiNodeOrDrop) {
         const UiNodeState* state = stateFor(section, nodeId);
         ASSERT_TRUE(state != nullptr);
         if (!state) continue;
-        ASSERT_TRUE(state->present);
         const AccessibilityNode* tui = nodeFor(nodes, widget->id);
         if (tui == nullptr) {
             // The TUI dropped it (empty value/label): no semantic leaf either.
@@ -224,7 +223,6 @@ TEST(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord) {
         const UiNodeState* state = stateFor(section, nodeId);
         ASSERT_TRUE(state != nullptr);
         if (state && widget->kind == WidgetKind::Spacer) {
-            ASSERT_TRUE(state->present);
             ASSERT_FALSE(state->leaf.has_value());
         }
     }

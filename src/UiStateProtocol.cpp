@@ -34,7 +34,6 @@ ProtocolValue encodeLeaf(const UiLeafState& leaf) {
 ProtocolValue encodeNode(const UiNodeState& node) {
     return ProtocolValue::makeObject(
         {{"id", ProtocolValue::makeText(node.id.value())},
-         {"present", ProtocolValue::makeBool(node.present)},
          {"leaf",
           node.leaf ? encodeLeaf(*node.leaf) : ProtocolValue::makeNull()}});
 }
@@ -75,11 +74,8 @@ std::optional<UiNodeState> decodeNode(const ProtocolValue& value) {
     if (!value.asObject()) return std::nullopt;
     const auto id = textField(value, "id");
     if (!id || id->empty()) return std::nullopt;
-    const ProtocolValue* present = value.field("present");
-    if (!present || !present->asBool()) return std::nullopt;
     UiNodeState node;
     node.id = UiNodeId{*id};
-    node.present = *present->asBool();
     if (const ProtocolValue* leaf = value.field("leaf"); leaf && !isNull(leaf)) {
         auto decoded = decodeLeaf(*leaf);
         if (!decoded) return std::nullopt;

@@ -19,17 +19,17 @@ using namespace ssg;
 UiStateSection sample() {
     UiStateSection section;
     section.generation = Generation{9};
-    section.nodes.push_back(UiNodeState{UiNodeId{"root"}, true, std::nullopt});
+    section.nodes.push_back(UiNodeState{UiNodeId{"root"}, std::nullopt});
     section.nodes.push_back(UiNodeState{
-        UiNodeId{"f"}, true,
+        UiNodeId{"f"},
         UiLeafState{"~/proj", "Current path",
                     std::optional<std::string>{"panel.show_files"},
                     std::nullopt}});
     section.nodes.push_back(UiNodeState{
-        UiNodeId{"c"}, true,
+        UiNodeId{"c"},
         UiLeafState{"case", "case", std::nullopt, std::optional<bool>{true},
                     SemanticRole::StatusWarning}});
-    section.nodes.push_back(UiNodeState{UiNodeId{"sp"}, true, std::nullopt});
+    section.nodes.push_back(UiNodeState{UiNodeId{"sp"}, std::nullopt});
     return section;
 }
 
@@ -61,7 +61,6 @@ TEST(duplicateNodeIdDecodesToNullopt) {
     const auto node = [] {
         return ProtocolValue::makeObject(
             {{"id", ProtocolValue::makeText("dup")},
-             {"present", ProtocolValue::makeBool(true)},
              {"leaf", ProtocolValue::makeNull()}});
     };
     const ProtocolValue value = ProtocolValue::makeObject(
@@ -77,7 +76,6 @@ TEST(malformedLeafFieldTypeDecodesToNullopt) {
             {{"generation", ProtocolValue::makeUint(1)},
              {"nodes", ProtocolValue::makeArray({ProtocolValue::makeObject(
                  {{"id", ProtocolValue::makeText("n")},
-                  {"present", ProtocolValue::makeBool(true)},
                   {"leaf", std::move(leaf)}})})}});
     };
     // checked is a string, not a bool.

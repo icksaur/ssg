@@ -210,8 +210,22 @@ const leafNode = (id, kind, extra) => ({ id, size: {}, leaf: { kind, ...(extra |
 const rowNode = (id, children) => ({ id, size: {}, container: { axis: 0, gap: 0, children } });
 // A schema is a single root node; placement is tree structure + well-known ids.
 const schemaOf = (generation, root) => ({ generation, root });
-// The dynamic-state record for a node.
-const st = (id, leaf) => ({ id, present: 1, leaf: leaf || null });
+// The dynamic-state record for a node (presence is a separate section now).
+const st = (id, leaf) => ({ id, leaf: leaf || null });
+// The presence section corresponding to a schema: one record per node in the tree,
+// all present except ids in `hidden`. Built from the schema so it always
+// corresponds; the tests that check state mismatch fail on state, not presence.
+const presenceForSchema = (generation, root, hidden = []) => {
+  const nodes = [];
+  const walk = (node) => {
+    if (!node) return;
+    nodes.push({ id: node.id, present: hidden.includes(node.id) ? 0 : 1 });
+    if (node.container && Array.isArray(node.container.children))
+      for (const c of node.container.children) walk(c);
+  };
+  walk(root);
+  return { generation, basis: 0, nodes };
+};
 
 // Flatten a render tree to its drawn leaves in order (the DOM builder mirrors this).
 function drawnLeaves(node, out = []) {
@@ -262,7 +276,7 @@ check('interpretChrome applies the per-kind render gate', () => {
     st('sp', null),
     st('box', { value: 'case', label: 'case', checked: 1 }),
   ] };
-  const out = interpretChrome(schemaOf(4, root), state);
+  const out = interpretChrome(schemaOf(4, root), state, presenceForSchema(4, root));
   assert.ok(out);
   // The render tree preserves the container; flatten to drawn leaves.
   assert.equal(out.root.kind, 'container');
@@ -289,7 +303,7 @@ check('interpretChrome preserves the left/middle/right grouping and its sizing',
     st('mid'), st('c0', { value: 'C', label: 'C', role: 11 }),
     st('right'), st('r0', { value: 'R', label: 'R', command: 'do.it', role: 11 }),
   ] };
-  const out = interpretChrome(schemaOf(2, root), state);
+  const out = interpretChrome(schemaOf(2, root), state, presenceForSchema(2, root));
   assert.ok(out);
   const rootOut = out.root;
   assert.equal(rootOut.kind, 'container');
@@ -308,9 +322,9 @@ check('interpretChrome preserves the left/middle/right grouping and its sizing',
 check('interpretChrome returns null on a generation or node-id mismatch', () => {
   const schema = schemaOf(4, rowNode('root', [leafNode('a', WIDGET.FIELD)]));
   // Generation mismatch.
-  assert.equal(interpretChrome(schema, { generation: 3, nodes: [st('root'), st('a', { value: 'x', label: 'x' })] }), null);
+  assert.equal(interpretChrome(schema, { generation: 3, nodes: [st('root'), st('a', { value: 'x', label: 'x' })] }, presenceForSchema(4, schema.root)), null);
   // Node-id set mismatch (missing 'a').
-  assert.equal(interpretChrome(schema, { generation: 4, nodes: [st('root')] }), null);
+  assert.equal(interpretChrome(schema, { generation: 4, nodes: [st('root')] }, presenceForSchema(4, schema.root)), null);
 });
 
 check('interpretChrome returns null on a state/schema SHAPE disagreement', () => {
@@ -320,26 +334,44 @@ check('interpretChrome returns null on a state/schema SHAPE disagreement', () =>
   // Checkbox missing its leaf state -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
     st('root'), st('box', null), st('sp', null),
-  ] }), null);
+  ] }, presenceForSchema(5, schema.root)), null);
   // Spacer carrying leaf state -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
     st('root'), st('box', { value: '', label: '', checked: 0 }), st('sp', { value: 'x', label: 'x' }),
-  ] }), null);
+  ] }, presenceForSchema(5, schema.root)), null);
   // Container carrying leaf state -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
     st('root', { value: 'x', label: 'x' }), st('box', { value: '', label: '', checked: 0 }), st('sp', null),
-  ] }), null);
+  ] }, presenceForSchema(5, schema.root)), null);
   // Checkbox WITH leaf state but MISSING its `checked` -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
     st('root'), st('box', { value: 'c', label: 'c' }), st('sp', null),
-  ] }), null);
+  ] }, presenceForSchema(5, schema.root)), null);
 });
 
 check('interpretChrome returns null when a Label/Field leaf state carries checked', () => {
   const schema = schemaOf(6, rowNode('root', [leafNode('f', WIDGET.FIELD)]));
   assert.equal(interpretChrome(schema, { generation: 6, nodes: [
     st('root'), st('f', { value: 'x', label: 'x', checked: 1 }),
-  ] }), null);
+  ] }, presenceForSchema(6, schema.root)), null);
+});
+
+check('interpretChrome Never draws a node the presence section marks absent', () => {
+  const root = rowNode('root', [
+    leafNode('a', WIDGET.FIELD),
+    rowNode('grp', [leafNode('b', WIDGET.FIELD)]),
+  ]);
+  const state = { generation: 7, nodes: [
+    st('root'), st('a', { value: 'A', label: 'A' }),
+    st('grp'), st('b', { value: 'B', label: 'B' }),
+  ] };
+  // Hiding the container 'grp' drops it AND its child 'b'; 'a' still draws.
+  const out = interpretChrome(schemaOf(7, root), state, presenceForSchema(7, root, ['grp']));
+  assert.ok(out);
+  assert.deepEqual(drawnLeaves(out.root).map((i) => i.id), ['a']);
+  // Hiding just the leaf 'a' drops only it.
+  const out2 = interpretChrome(schemaOf(7, root), state, presenceForSchema(7, root, ['a']));
+  assert.deepEqual(drawnLeaves(out2.root).map((i) => i.id), ['b']);
 });
 
 console.log('reconcile oracle: ' + checks + ' checks passed');

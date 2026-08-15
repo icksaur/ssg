@@ -242,15 +242,20 @@ export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
 // checkbox missing leaf state or missing its `checked`, or a Label/Field leaf state that
 // carries `checked`) -- a malformed frame is never partially drawn. `root` is the
 // interpreted render root; its children are the well-known areas (id "header"/"footer").
-export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
-  if (!schema || !schema.root || !state) return null;
+export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFILE) {
+  if (!schema || !schema.root || !state || !presence) return null;
   if (firstUnsupportedPrimitive(schema, profile)) return null;
   if (num(schema.generation) !== num(state.generation)) return null;
+  // Presence is a separate basis-stamped section; it must name the same generation.
+  if (num(schema.generation) !== num(presence.generation)) return null;
 
   const stateById = new Map();
   for (const n of (state.nodes || [])) stateById.set(n.id, n);
+  const presentById = new Map();
+  for (const p of (presence.nodes || [])) presentById.set(p.id, !!num(p.present));
 
-  // Node-id correspondence: exactly the schema's ids, one-to-one with the state.
+  // Node-id correspondence: exactly the schema's ids, one-to-one with BOTH the
+  // state and the presence section.
   const schemaIds = [];
   const collect = (node) => {
     if (!node) return;
@@ -260,7 +265,8 @@ export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
   };
   collect(schema.root);
   if ((state.nodes || []).length !== schemaIds.length) return null;
-  for (const id of schemaIds) if (!stateById.has(id)) return null;
+  if ((presence.nodes || []).length !== schemaIds.length) return null;
+  for (const id of schemaIds) { if (!stateById.has(id) || !presentById.has(id)) return null; }
 
   let shapeOk = true;
   // The published sizing, carried verbatim so the DOM builder honors every constraint:
@@ -286,7 +292,7 @@ export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
         const built = build(c);
         if (built) children.push(built);
       }
-      if (!num(st.present)) return null;  // hidden subtree not drawn
+      if (!presentById.get(node.id)) return null;  // hidden subtree not drawn
       return { id: node.id, kind: 'container', axis: num(node.container.axis),
                gap: num(node.container.gap) || 0, size: sizeOf(node),
                inset: insetOf(node.container), children };
@@ -301,7 +307,7 @@ export function interpretChrome(schema, state, profile = WEB_UI_PROFILE) {
       // A Label/Field must NOT carry `checked` -- that field is a checkbox's alone.
       if (hasLeafState && st.leaf.checked != null) { shapeOk = false; return null; }
     }
-    if (!num(st.present)) return null;  // hidden leaf not drawn
+    if (!presentById.get(node.id)) return null;  // hidden leaf not drawn
     if (wk === WIDGET.SPACER) {
       const w = node.leaf.width != null ? num(node.leaf.width) : null;
       return { id: node.id, kind: 'leaf', widget: wk, spacer: true, width: w, size: sizeOf(node) };

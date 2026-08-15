@@ -3,6 +3,7 @@ target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/UiTree.cpp
     ${SSG_SOURCE_DIR}/src/ViewSurfaceBacking.cpp
     ${SSG_SOURCE_DIR}/src/MutationPatch.cpp
+    ${SSG_SOURCE_DIR}/src/UiPresence.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

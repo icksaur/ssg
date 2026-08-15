@@ -95,7 +95,8 @@ bool operator==(SessionSnapshotSections const& left,
            left.theme == right.theme &&
            left.focus == right.focus &&
            left.palette == right.palette &&
-           left.ui == right.ui && left.uiState == right.uiState;
+           left.ui == right.ui && left.uiState == right.uiState &&
+           left.uiPresence == right.uiPresence;
 }
 
 bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
@@ -139,7 +140,8 @@ SessionDelta::SessionDelta(
     ShellSectionDelta shell, ViewportDelta viewport,
     std::optional<FocusTarget> focus, SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows,
-    UiSectionDelta ui, UiStateSectionDelta uiState)
+    UiSectionDelta ui, UiStateSectionDelta uiState,
+    UiPresenceSectionDelta uiPresence)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -174,7 +176,8 @@ SessionDelta::SessionDelta(
       promptProjection_{std::move(promptProjection)},
       treeWindows_{std::move(treeWindows)},
       ui_{std::move(ui)},
-      uiState_{std::move(uiState)} {}
+      uiState_{std::move(uiState)},
+      uiPresence_{std::move(uiPresence)} {}
 
 SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
@@ -301,6 +304,9 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         UiStateSectionDelta{old.uiState == next.uiState
                                 ? std::nullopt
                                 : std::optional{next.uiState}},
+        UiPresenceSectionDelta{old.uiPresence == next.uiPresence
+                                   ? std::nullopt
+                                   : std::optional{next.uiPresence}},
     };
 }
 
@@ -394,6 +400,8 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     auto palette = base.sections().palette;
     auto ui = delta.ui_.replacement.value_or(base.sections().ui);
     auto uiState = delta.uiState_.replacement.value_or(base.sections().uiState);
+    auto uiPresence =
+        delta.uiPresence_.replacement.value_or(base.sections().uiPresence);
 
     SessionSnapshotSections sections{
         std::move(*document),
@@ -419,6 +427,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(palette),
         std::move(ui),
         std::move(uiState),
+        std::move(uiPresence),
     };
     ClientSnapshotState client = base.client();
     std::optional<PresentationSnapshot> presentation;
@@ -472,7 +481,7 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection,
     TreeWindowsDelta treeWindows, UiSectionDelta ui,
-    UiStateSectionDelta uiState) const {
+    UiStateSectionDelta uiState, UiPresenceSectionDelta uiPresence) const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,
@@ -507,7 +516,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(promptProjection),
                         std::move(treeWindows),
                         std::move(ui),
-                        std::move(uiState)};
+                        std::move(uiState),
+                        std::move(uiPresence)};
 }
 
 }  // namespace ssg

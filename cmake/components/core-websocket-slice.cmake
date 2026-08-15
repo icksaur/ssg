@@ -3,6 +3,7 @@ target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/Protocol.cpp
     ${SSG_SOURCE_DIR}/src/UiTreeProtocol.cpp
     ${SSG_SOURCE_DIR}/src/UiStateProtocol.cpp
+    ${SSG_SOURCE_DIR}/src/PresenceProtocol.cpp
 )
 
 if(NOT TARGET http)
@@ -40,4 +41,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_ui_state_protocol PRIVATE ssg)
     add_test(NAME test_ui_state_protocol COMMAND test_ui_state_protocol)
+
+    add_executable(test_presence_protocol
+        ${SSG_SOURCE_DIR}/tests/test_presence_protocol.cpp
+    )
+    target_link_libraries(test_presence_protocol PRIVATE ssg)
+    add_test(NAME test_presence_protocol COMMAND test_presence_protocol)
 endif()

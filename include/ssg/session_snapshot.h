@@ -24,6 +24,7 @@
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
 #include <ssg/UiNodeState.h>
+#include <ssg/UiPresence.h>
 #include <ssg/ShellState.h>
 #include <ssg/Viewport.h>
 
@@ -67,11 +68,15 @@ struct SessionSnapshotSections {
     // root (emptyUiRoot) when no chrome is composed.
     UiSchema ui;
     // The generation-scoped resolved dynamic state for the `ui` schema: one record
-    // per node with its presence and, for a renderable leaf, its resolved semantic
-    // (value, label, command, checked). A non-grid client needs this because the
-    // schema carries value SOURCES it cannot resolve. Empty when no chrome is
-    // composed; stamped with the same generation as `ui`.
+    // per node with, for a renderable leaf, its resolved semantic (value, label,
+    // command, checked). A non-grid client needs this because the schema carries
+    // value SOURCES it cannot resolve. Stamped with the same generation as `ui`.
     UiStateSection uiState;
+    // The authoritative per-node presence for the `ui` schema, basis-stamped so a
+    // client can reconcile an optimistically-predicted mutation (phase 7B). A
+    // separate authority from uiState (visibility vs. resolved content); one record
+    // per schema node, at the same generation as `ui`.
+    UiPresenceSection uiPresence;
 };
 
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,
@@ -177,6 +182,13 @@ struct UiSectionDelta {
 // nullopt means unchanged.
 struct UiStateSectionDelta {
     std::optional<UiStateSection> replacement;
+};
+
+// Whole-value delta of the presence section: presence advances atomically through a
+// mutation patch, so a change replaces the section wholesale; nullopt means
+// unchanged.
+struct UiPresenceSectionDelta {
+    std::optional<UiPresenceSection> replacement;
 };
 
 struct StyleSectionDelta {
@@ -287,6 +299,9 @@ public:
     [[nodiscard]] UiStateSectionDelta const& uiState() const noexcept {
         return uiState_;
     }
+    [[nodiscard]] UiPresenceSectionDelta const& uiPresence() const noexcept {
+        return uiPresence_;
+    }
     [[nodiscard]] StyleSectionDelta const& style() const noexcept {
         return style_;
     }
@@ -327,7 +342,8 @@ private:
         SelectionNavigationDelta selectionNav = {},
         PromptProjectionDelta promptProjection = {},
         TreeWindowsDelta treeWindows = {}, UiSectionDelta ui = {},
-        UiStateSectionDelta uiState = {});
+        UiStateSectionDelta uiState = {},
+        UiPresenceSectionDelta uiPresence = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -364,6 +380,7 @@ private:
     TreeWindowsDelta treeWindows_;
     UiSectionDelta ui_;
     UiStateSectionDelta uiState_;
+    UiPresenceSectionDelta uiPresence_;
 };
 
 struct SessionReplayResult {
@@ -414,7 +431,8 @@ public:
         SelectionNavigationDelta selectionNav = {},
         PromptProjectionDelta promptProjection = {},
         TreeWindowsDelta treeWindows = {}, UiSectionDelta ui = {},
-        UiStateSectionDelta uiState = {}) const;
+        UiStateSectionDelta uiState = {},
+        UiPresenceSectionDelta uiPresence = {}) const;
 };
 
 }  // namespace ssg

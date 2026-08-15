@@ -186,6 +186,7 @@ function applyInset(el, inset, size, parentAxis) {
 function renderChrome(sections) {
   const schema = sections.ui;
   const stateSection = sections.ui_state;
+  const presenceSection = sections.ui_presence;
   chromeTopEl.textContent = '';
   chromeBottomEl.textContent = '';
   chromeErrorEl.textContent = '';
@@ -198,7 +199,7 @@ function renderChrome(sections) {
       ' -- this client build cannot render the composed chrome';
     return;
   }
-  const interpreted = interpretChrome(schema, stateSection);
+  const interpreted = interpretChrome(schema, stateSection, presenceSection);
   if (!interpreted || !interpreted.root) return;  // schema/state from different frames; wait
 
   // The root's children are the well-known areas; render each into its host by

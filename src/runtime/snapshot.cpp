@@ -315,32 +315,34 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
         composedUi
             ? UiSchema{Generation{chromeGeneration}, composedUi->composition().root}
             : UiSchema{Generation{chromeGeneration}, emptyUiRoot()};
+    // Validate the schema once; the resolved state AND the presence section both
+    // derive from the same ValidatedSchema, so they correspond node-for-node.
+    auto validatedUi = ValidatedSchema::validate(uiSchema);
+    // The schema comes from a decoder-validated ValidatedComposition (or the
+    // always-valid emptyUiRoot), so it has unique node ids; a validation failure
+    // here is a broken invariant, not an expected outcome, and must fail loud rather
+    // than publish a plausible section that violates correspondence.
+    if (!validatedUi.ok()) {
+        throw std::logic_error("resolveUiState: composed schema failed validation");
+    }
+    // The published whole-screen schema must also satisfy the well-known-area
+    // contract that the wire decoder enforces, so an in-process schema cannot
+    // publish a placement the wire would reject.
+    if (!validateWellKnownAreas(uiSchema).ok()) {
+        throw std::logic_error(
+            "resolveUiState: composed schema violates the well-known-area contract");
+    }
+    const ValidatedSchema& validatedSchema = validatedUi.schema();
     UiStateSection uiState = [&] {
-        // Resolve state for whatever `uiSchema` is -- composed chrome OR the empty
-        // root -- so schema and state node ids stay one-to-one in both cases.
-        auto validated = ValidatedSchema::validate(uiSchema);
-        // The schema comes from a decoder-validated ValidatedComposition (or the
-        // always-valid emptyUiRoot), so it has unique node ids; a validation failure
-        // here is a broken invariant, not an expected outcome, and must fail loud
-        // rather than publish a plausible section that violates correspondence.
-        if (!validated.ok()) {
-            throw std::logic_error(
-                "resolveUiState: composed schema failed validation");
-        }
-        // The published whole-screen schema must also satisfy the well-known-area
-        // contract that the wire decoder enforces, so an in-process schema cannot
-        // publish a placement the wire would reject.
-        if (!validateWellKnownAreas(uiSchema).ok()) {
-            throw std::logic_error(
-                "resolveUiState: composed schema violates the well-known-area "
-                "contract");
-        }
         auto fields = chromeStatusFields(ChromeFieldMode::Semantic);
         return resolveUiState(
-            validated.schema(),
-            chromeResolverFor(std::move(fields.headerFields),
-                              std::move(fields.footerFields)));
+            validatedSchema, chromeResolverFor(std::move(fields.headerFields),
+                                               std::move(fields.footerFields)));
     }();
+    // Presence: every node present (nothing hides until the panel/content areas join
+    // the tree). The basis stays 0 until a mutation patch advances it (phase 7B).
+    UiPresenceSection uiPresence =
+        buildPresenceSection(validatedSchema, PresenceConfig::allPresent(validatedSchema));
     return {documentView(),
             selection.selections,
             currentHistory,
@@ -363,7 +365,8 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             shell.focus(),
             paletteView(),
             std::move(uiSchema),
-            std::move(uiState)};
+            std::move(uiState),
+            std::move(uiPresence)};
 }
 
 TreeViewState EditorRuntime::Impl::treeView() const {

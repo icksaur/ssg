@@ -14,6 +14,7 @@
 #include <ssg/TextInputCommands.h>
 #include <ssg/UiTreeProtocol.h>
 #include <ssg/UiStateProtocol.h>
+#include <ssg/PresenceProtocol.h>
 
 #include <any>
 #include <array>
@@ -4871,6 +4872,7 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back("focus", toValue(value.focus));
     fields.emplace_back("ui", encodeUiSchema(value.ui));
     fields.emplace_back("ui_state", encodeUiState(value.uiState));
+    fields.emplace_back("ui_presence", encodeUiPresence(value.uiPresence));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
@@ -4907,6 +4909,11 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         uiState = decodeUiState(*uiStateField);
         if (!uiState) return false;
     }
+    std::optional<UiPresenceSection> uiPresence;
+    if (const ProtocolValue* uiPresenceField = value.field("ui_presence")) {
+        uiPresence = decodeUiPresence(*uiPresenceField);
+        if (!uiPresence) return false;
+    }
     if (!document || !selection || !history || !clipboard || !promptStatus || !search ||
         !findReplace || !settings || !keymap || !textEncoding || !tabs || !diff ||
         !externalModification || !followEdits || !tree || !syntax || !lspSync ||
@@ -4920,6 +4927,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         *lspFeatures, *theme, *focus});
     if (ui) out->ui = std::move(*ui);
     if (uiState) out->uiState = std::move(*uiState);
+    if (uiPresence) out->uiPresence = std::move(*uiPresence);
     return true;
 }
 
@@ -5563,6 +5571,10 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
                         delta.uiState().replacement
                             ? encodeUiState(*delta.uiState().replacement)
                             : ProtocolValue::makeNull());
+    fields.emplace_back("ui_presence",
+                        delta.uiPresence().replacement
+                            ? encodeUiPresence(*delta.uiPresence().replacement)
+                            : ProtocolValue::makeNull());
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5650,6 +5662,17 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
             uiStateDelta.replacement = std::move(*uiState);
         }
     }
+    UiPresenceSectionDelta uiPresenceDelta;
+    if (const ProtocolValue* uiPresenceField = payload.field("ui_presence")) {
+        if (uiPresenceField->kind() != ProtocolValue::Kind::NullValue) {
+            auto uiPresence = decodeUiPresence(*uiPresenceField);
+            if (!uiPresence) {
+                return {ProtocolError::MalformedMessage, std::nullopt,
+                        "session delta payload is malformed"};
+            }
+            uiPresenceDelta.replacement = std::move(*uiPresence);
+        }
+    }
 
     if (!optionalOk || !baseRevision || !revision || !clientId || !viewId ||
         !capabilities || !selection || !history || !clipboard ||
@@ -5678,7 +5701,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*shell), std::move(*viewport), std::move(focus),
                 std::move(*selectionNav), std::move(*promptProjection),
                 std::move(*treeWindows), std::move(uiDelta),
-                std::move(uiStateDelta)),
+                std::move(uiStateDelta), std::move(uiPresenceDelta)),
             {}};
 }
 

@@ -8,12 +8,14 @@
 // result, in exact correspondence with the schema it names: one record per schema
 // node, keyed by the node's UiNodeId, at the schema's generation.
 //
-// Presence and renderability are distinct. Every node carries an authoritative
-// `present` flag; a leaf additionally carries optional semantic leaf state. A
-// Label/Field whose resolution is empty is a still-present node with no leaf state
-// (the semantic form of the built-in/TUI drop); a checkbox always carries leaf
-// state; a spacer and a container carry none. The content is SEMANTIC -- a
-// checkbox's `checked` bool and bare caption, never the TUI's composed glyph.
+// Presence and renderability are distinct AND separately published. This section
+// carries only a leaf's resolved semantic state; a node's authoritative presence is
+// the basis-stamped UiPresenceSection (UiPresence.h), so this section regenerates as
+// providers change while presence advances only through a mutation patch. A
+// Label/Field whose resolution is empty is a node with no leaf state (the semantic
+// form of the built-in/TUI drop); a checkbox always carries leaf state; a spacer and
+// a container carry none. The content is SEMANTIC -- a checkbox's `checked` bool and
+// bare caption, never the TUI's composed glyph.
 
 #include <ssg/Theme.h>   // SemanticRole
 #include <ssg/UiTree.h>  // UiNodeId, Generation
@@ -40,12 +42,11 @@ struct UiLeafState {
     friend bool operator==(const UiLeafState&, const UiLeafState&) = default;
 };
 
-// One schema node's dynamic state: its presence and, for a renderable leaf, its
-// resolved leaf state. A container, a spacer, and an empty-resolved Label/Field
-// carry no leaf state.
+// One schema node's dynamic state: for a renderable leaf, its resolved leaf state.
+// A container, a spacer, and an empty-resolved Label/Field carry no leaf state.
+// Presence is NOT here -- it is the separate basis-stamped UiPresenceSection.
 struct UiNodeState {
     UiNodeId id;
-    bool present = true;
     std::optional<UiLeafState> leaf;
 
     friend bool operator==(const UiNodeState&, const UiNodeState&) = default;
