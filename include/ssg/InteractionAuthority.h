@@ -54,6 +54,13 @@ public:
     PromptCommandResult cancelPrompt();
     PromptCommandResult updatePromptValue(std::size_t index, std::string value);
 
+    // Simple base-focus changes -- editor/panel focus that touch only the aggregate, not a
+    // transition. focusPanel is honored only while the panel is present (returns whether it
+    // took). While a prompt is open its capture still routes effective focus to the prompt;
+    // the base change surfaces when the prompt closes.
+    void focusEditor();
+    bool focusPanel();
+
     // Re-assemble the whole-screen schema; when its generation advances, rebuild the
     // interaction projection from the SAME truth and prompt over the new schema (the
     // migration). Returns whether the generation advanced.

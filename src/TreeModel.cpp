@@ -500,16 +500,6 @@ bool TreeModel::isExpanded(const TreeProviderId& providerId,
                               provider->expanded.end(), nodeId);
 }
 
-std::optional<TreeRevision> TreeModel::providerRevision(
-    const TreeProviderId& providerId) const {
-    for (const auto& state : providers_) {
-        if (state.snapshot.providerId() == providerId) {
-            return state.snapshot.revision();
-        }
-    }
-    return std::nullopt;
-}
-
 std::vector<TreeModel::ProviderIdentity> TreeModel::providerIdentities() const {
     std::vector<ProviderIdentity> identities;
     identities.reserve(providers_.size());

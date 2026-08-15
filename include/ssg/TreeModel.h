@@ -203,15 +203,10 @@ public:
                      const TreeNodeId& nodeId) const;
     bool activateProvider(const TreeProviderId& providerId);
 
-    // The current revision of a present provider, or nullopt when none has that id.
-    // A caller that must replace a provider stamps its replacement above this so the
-    // replacement's revision strictly increases (replaceProvider's requirement).
-    [[nodiscard]] std::optional<TreeRevision> providerRevision(
-        const TreeProviderId& providerId) const;
-
     // The id, kind, and revision of every present provider, WITHOUT materializing node
     // views -- a cheap enumeration for a caller that needs only provider identity and
-    // revision (e.g. preparing a tree-backing transition), not the full viewState().
+    // revision (e.g. preparing a tree-backing transition, or stamping a replacement above
+    // the provider it replaces), not the full viewState().
     struct ProviderIdentity {
         TreeProviderBinding binding;
         TreeRevision revision{0};

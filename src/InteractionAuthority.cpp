@@ -109,8 +109,19 @@ PromptCommandResult InteractionAuthority::updatePromptValue(std::size_t index,
     return result;
 }
 
-bool InteractionAuthority::updateComposition(UiComposition assembly) {
-    // Prepare both replacements before swapping either: update a COPY of the schema, build
+void InteractionAuthority::focusEditor() {
+    truth_.baseFocus = BaseFocus::Editor;
+    applyPromptState(prompt_);
+}
+
+bool InteractionAuthority::focusPanel() {
+    if (!truth_.panelPresent) return false;
+    truth_.baseFocus = BaseFocus::Panel;
+    applyPromptState(prompt_);
+    return true;
+}
+
+bool InteractionAuthority::updateComposition(UiComposition assembly) {    // Prepare both replacements before swapping either: update a COPY of the schema, build
     // the projection over it, then adopt both together, so a rebuild failure cannot leave a
     // new schema paired with the old interaction.
     WholeScreenSchema candidate = schema_;

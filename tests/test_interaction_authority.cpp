@@ -55,6 +55,16 @@ PromptRequest footerPrompt() {
                          {{"path", "path", ""}}, {}, std::nullopt};
 }
 
+// The revision of a present provider by id, via the node-free identity enumeration.
+std::optional<TreeRevision> revisionOf(const TreeModel& tree, std::string_view id) {
+    for (const auto& identity : tree.providerIdentities()) {
+        if (identity.binding.id == TreeProviderId{std::string{id}}) {
+            return identity.revision;
+        }
+    }
+    return std::nullopt;
+}
+
 // --- Initial state ------------------------------------------------------------------
 
 TEST(initiallyNoPanelNoPromptTabViewShown) {
@@ -83,12 +93,12 @@ TEST(applyOpenFinderRoutesThroughOneAtomicInstall) {
 TEST(applyShowProviderCreatesTreeBackingFromTheOwnedSource) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree, 5};
-    ASSERT_FALSE(tree.providerRevision(TreeProviderId{"git"}).has_value());
+    ASSERT_FALSE(revisionOf(tree, "git").has_value());
     ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::GitStatus}));
     ASSERT_TRUE(authority.truth().panelPresent);
     ASSERT_TRUE(authority.truth().selectedProvider == PanelProvider::GitStatus);
     // The git provider was created and stamped from the authority's revision source (5).
-    const auto gitRevision = tree.providerRevision(TreeProviderId{"git"});
+    const auto gitRevision = revisionOf(tree, "git");
     ASSERT_TRUE(gitRevision.has_value());
     ASSERT_EQ(gitRevision->value(), std::uint64_t{5});
     // The source advanced past the consumed revision.
@@ -220,6 +230,36 @@ TEST(updateCompositionWithoutStructuralChangeDoesNotAdvance) {
     ASSERT_FALSE(authority.updateComposition(assemble(StyleDimensions{})));
 }
 
+// --- Editor/panel focus -------------------------------------------------------------
+
+TEST(focusPanelRequiresThePanelThenFocusEditorReturns) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    // No panel yet -> focusPanel is refused and focus stays Editor.
+    ASSERT_FALSE(authority.focusPanel());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Panel);
+    authority.focusEditor();
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+    ASSERT_TRUE(authority.focusPanel());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Panel);
+}
+
+TEST(focusChangeUnderAnOpenPromptSurfacesWhenThePromptCloses) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
+    // The prompt capture routes effective focus regardless of the base change.
+    authority.focusEditor();
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
+    // Closing the prompt surfaces the base focus set underneath it.
+    ASSERT_TRUE(authority.cancelPrompt().accepted());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+}
+
 }  // namespace
 
 int main() {
@@ -237,5 +277,7 @@ int main() {
     RUN(constructionRejectsARevisionSourceBehindAProvider);
     RUN(updateCompositionMigratesPreservingPanelAndPromptTruth);
     RUN(updateCompositionWithoutStructuralChangeDoesNotAdvance);
+    RUN(focusPanelRequiresThePanelThenFocusEditorReturns);
+    RUN(focusChangeUnderAnOpenPromptSurfacesWhenThePromptCloses);
     return failed;
 }
