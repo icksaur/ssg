@@ -11,6 +11,7 @@ std::span<const SnapshotSection> viewSurfaceBackingSections(ViewSurface surface)
     static constexpr std::array kFileTree{SnapshotSection::Tree};
     static constexpr std::array kGitStatus{SnapshotSection::Tree};
     static constexpr std::array kFindResults{SnapshotSection::Palette};
+    static constexpr std::array kSymbols{SnapshotSection::Tree};
     switch (surface) {
     case ViewSurface::TabView:
         return kTabView;
@@ -20,6 +21,8 @@ std::span<const SnapshotSection> viewSurfaceBackingSections(ViewSurface surface)
         return kGitStatus;
     case ViewSurface::FindResults:
         return kFindResults;
+    case ViewSurface::Symbols:
+        return kSymbols;
     }
     // A corrupt enumerator has no backing; the contract is never-empty, so this is
     // a hard error rather than an empty span, matching viewSurfaceName.

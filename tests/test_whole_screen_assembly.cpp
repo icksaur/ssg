@@ -80,6 +80,7 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     const Leaf leaves[] = {
         {kFileTreeNodeId, panel, ViewSurface::FileTree},
         {kGitStatusNodeId, panel, ViewSurface::GitStatus},
+        {kSymbolsNodeId, panel, ViewSurface::Symbols},
         {kTabViewNodeId, content, ViewSurface::TabView},
         {kFindResultsNodeId, content, ViewSurface::FindResults},
     };

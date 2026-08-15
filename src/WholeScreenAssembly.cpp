@@ -147,7 +147,8 @@ UiComposition assembleWholeScreen(
     UiNode panel = container(
         kPanelNodeId, Axis::Column, Size::exact(dimensions.panelTargetWidth),
         {viewLeaf(kFileTreeNodeId, ViewSurface::FileTree, Size::flex()),
-         viewLeaf(kGitStatusNodeId, ViewSurface::GitStatus, Size::flex())});
+         viewLeaf(kGitStatusNodeId, ViewSurface::GitStatus, Size::flex()),
+         viewLeaf(kSymbolsNodeId, ViewSurface::Symbols, Size::flex())});
     UiNode content = container(
         kContentNodeId, Axis::Column, Size::flex(),
         {viewLeaf(kTabViewNodeId, ViewSurface::TabView, Size::flex()),
