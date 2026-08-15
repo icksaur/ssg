@@ -60,10 +60,10 @@ using CommandTransition =
 
 // --- The tree-provider backing a commit installs ------------------------------------
 
-// How the tree provider is made active on commit. `create`, when set, is a fully-formed
-// snapshot the commit installs before activating (a Git/Symbols provider that was absent);
-// otherwise the provider is already present and is merely activated. Preflight rejects a
-// missing Filesystem provider outright, so a create snapshot is never a Filesystem one.
+// The fully-formed tree-provider state a commit installs. `create`, when set, is a
+// complete snapshot the commit installs (a Git/Symbols provider that was absent, or one
+// present under the wrong kind); `activate` names the provider that becomes active.
+// Preflight rejects a missing Filesystem provider, so a create snapshot is never one.
 struct TreeBackingPlan {
     TreeProviderId activate;
     std::optional<TreeProviderSnapshot> create;
@@ -75,20 +75,45 @@ struct TransitionInputs {
     WholeScreenTruth truth;
     ValidatedSchema schema;                    // to rebuild the replacement aggregate
     PromptSurface prompt;                       // copied; preflight opens/cancels on it
-    std::vector<TreeProviderId> presentProviders;  // which tree providers already exist
+    // The tree providers that already exist, as id+kind bindings: activating by id alone
+    // cannot prove the existing provider has the kind the panel provider expects.
+    std::vector<TreeProviderBinding> presentProviders;
     TreeRevision nextTreeRevision{0};           // revision stamped on a created provider
 };
 
 // --- The prepared, fully-formed replacement state -----------------------------------
 
-// A data-only bundle. The runtime installs it as one atomic owner swap; it computes
-// nothing and calls nothing fallible.
-struct PreparedTransition {
-    WholeScreenTruth truth;
-    UiInteractionState interaction;
-    PromptSurface prompt;
-    std::optional<TreeBackingPlan> tree;
-    bool rebuildFileCandidates = false;
+// An opaque bundle of fully-formed replacement values, constructed ONLY by
+// prepareTransition so a caller cannot assemble an inconsistent (truth, interaction,
+// prompt, tree) combination. The runtime installs it as one atomic owner swap; it
+// computes nothing and calls nothing fallible. File-finder candidate content is NOT here:
+// the candidate list is picker content on its own data channel, refreshed by the runtime
+// when the open picker becomes File, not part of the interaction aggregate's truth.
+class PreparedTransition {
+public:
+    [[nodiscard]] const WholeScreenTruth& truth() const noexcept { return truth_; }
+    [[nodiscard]] const UiInteractionState& interaction() const noexcept {
+        return interaction_;
+    }
+    [[nodiscard]] const PromptSurface& prompt() const noexcept { return prompt_; }
+    [[nodiscard]] const std::optional<TreeBackingPlan>& tree() const noexcept {
+        return tree_;
+    }
+
+private:
+    PreparedTransition(WholeScreenTruth truth, UiInteractionState interaction,
+                       PromptSurface prompt, std::optional<TreeBackingPlan> tree)
+        : truth_{std::move(truth)},
+          interaction_{std::move(interaction)},
+          prompt_{std::move(prompt)},
+          tree_{std::move(tree)} {}
+
+    friend struct TransitionBuilder;
+
+    WholeScreenTruth truth_;
+    UiInteractionState interaction_;
+    PromptSurface prompt_;
+    std::optional<TreeBackingPlan> tree_;
 };
 
 // Preflight a transition against `inputs`. Returns nullopt on rejection (an out-of-domain
