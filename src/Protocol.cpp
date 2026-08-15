@@ -1555,10 +1555,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptControlKind>&
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<SearchMode>& out) {
-    static constexpr std::array values{SearchMode::File, SearchMode::Line,
-                                       SearchMode::Symbol, SearchMode::Text,
-                                       SearchMode::Command};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, kAllSearchModes);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<FindReplaceError>& out) {
@@ -5597,6 +5594,10 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
                         delta.uiPresence().replacement
                             ? encodeUiPresence(*delta.uiPresence().replacement)
                             : ProtocolValue::makeNull());
+    fields.emplace_back("palette",
+                        delta.palette().replacement
+                            ? encodePalette(*delta.palette().replacement)
+                            : ProtocolValue::makeNull());
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5695,6 +5696,17 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
             uiPresenceDelta.replacement = std::move(*uiPresence);
         }
     }
+    PaletteSectionDelta paletteDelta;
+    if (const ProtocolValue* paletteField = payload.field("palette")) {
+        if (paletteField->kind() != ProtocolValue::Kind::NullValue) {
+            auto palette = decodePalette(*paletteField);
+            if (!palette) {
+                return {ProtocolError::MalformedMessage, std::nullopt,
+                        "session delta payload is malformed"};
+            }
+            paletteDelta.replacement = std::move(*palette);
+        }
+    }
 
     if (!optionalOk || !baseRevision || !revision || !clientId || !viewId ||
         !capabilities || !selection || !history || !clipboard ||
@@ -5723,7 +5735,8 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*shell), std::move(*viewport), std::move(focus),
                 std::move(*selectionNav), std::move(*promptProjection),
                 std::move(*treeWindows), std::move(uiDelta),
-                std::move(uiStateDelta), std::move(uiPresenceDelta)),
+                std::move(uiStateDelta), std::move(uiPresenceDelta),
+                std::move(paletteDelta)),
             {}};
 }
 

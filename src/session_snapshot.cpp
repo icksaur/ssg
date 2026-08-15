@@ -143,7 +143,7 @@ SessionDelta::SessionDelta(
     std::optional<FocusTarget> focus, SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows,
     UiSectionDelta ui, UiStateSectionDelta uiState,
-    UiPresenceSectionDelta uiPresence)
+    UiPresenceSectionDelta uiPresence, PaletteSectionDelta palette)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -179,7 +179,8 @@ SessionDelta::SessionDelta(
       treeWindows_{std::move(treeWindows)},
       ui_{std::move(ui)},
       uiState_{std::move(uiState)},
-      uiPresence_{std::move(uiPresence)} {}
+      uiPresence_{std::move(uiPresence)},
+      palette_{std::move(palette)} {}
 
 SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
@@ -309,6 +310,9 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         UiPresenceSectionDelta{old.uiPresence == next.uiPresence
                                    ? std::nullopt
                                    : std::optional{next.uiPresence}},
+        PaletteSectionDelta{old.palette == next.palette
+                                ? std::nullopt
+                                : std::optional{next.palette}},
     };
 }
 
@@ -394,12 +398,10 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     auto theme = delta.theme_.replacement.value_or(base.sections().theme);
     auto viewport = delta.viewport_.replacement;
     auto focus = delta.focus_.value_or(base.sections().focus);
-    // The published palette candidate list is authoritative server state that the
-    // delta does not carry (the P0 command catalog is static within a session), so
-    // preserve it from the base rather than dropping it -- otherwise a
-    // delta-replaying client loses its command catalog and diverges from a fresh
-    // snapshot.
-    auto palette = base.sections().palette;
+    // The palette section (candidate universe + matcher parameters) changes as
+    // pickers open/close and the command catalog changes; the delta carries a whole-
+    // value replacement when it does, else the base value is preserved.
+    auto palette = delta.palette_.replacement.value_or(base.sections().palette);
     auto ui = delta.ui_.replacement.value_or(base.sections().ui);
     auto uiState = delta.uiState_.replacement.value_or(base.sections().uiState);
     auto uiPresence =
@@ -493,7 +495,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection,
     TreeWindowsDelta treeWindows, UiSectionDelta ui,
-    UiStateSectionDelta uiState, UiPresenceSectionDelta uiPresence) const {
+    UiStateSectionDelta uiState, UiPresenceSectionDelta uiPresence,
+    PaletteSectionDelta palette) const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,
@@ -529,7 +532,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(treeWindows),
                         std::move(ui),
                         std::move(uiState),
-                        std::move(uiPresence)};
+                        std::move(uiPresence),
+                        std::move(palette)};
 }
 
 }  // namespace ssg

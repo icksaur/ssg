@@ -52,8 +52,17 @@ function compareBytes(a, b) {
 
 // Rank candidates ({ id, label, detail }) for `query` using parameters `p`; returns
 // the matching candidate indices in contract order (descending score; ties by label
-// then id ascending, stable). Non-matches are dropped.
-export function fuzzyRank(candidates, query, p) {
+// then id ascending, stable). Non-matches are dropped. Parameter fields may arrive as
+// BigInt off the wire (the web decoder yields BigInt for signed integers), so they are
+// normalized to Number here -- mixing BigInt with the numeric scores would throw.
+export function fuzzyRank(candidates, query, params) {
+  const p = {
+    baseScore: Number(params.baseScore),
+    wordBoundaryBonus: Number(params.wordBoundaryBonus),
+    contiguityBonus: Number(params.contiguityBonus),
+    exactCaseBonus: Number(params.exactCaseBonus),
+    lengthCap: Number(params.lengthCap),
+  };
   const q = enc.encode(query);
   const scored = [];
   for (let i = 0; i < candidates.length; i++) {

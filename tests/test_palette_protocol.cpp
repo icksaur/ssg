@@ -88,6 +88,39 @@ TEST(decodeRejectsNonArrayCandidates) {
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
+TEST(decodeRejectsOutOfDomainParameter) {
+    // A weight beyond the published magnitude domain is refused, not silently
+    // accepted -- large weights would overflow the C++ int score and diverge from
+    // the JS double score.
+    ProtocolValue parameters = ProtocolValue::makeObject(
+        {{"base_score",
+          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude + 1)},
+         {"word_boundary_bonus", ProtocolValue::makeInt(8)},
+         {"contiguity_bonus", ProtocolValue::makeInt(6)},
+         {"exact_case_bonus", ProtocolValue::makeInt(1)},
+         {"length_cap", ProtocolValue::makeInt(100)}});
+    ProtocolValue value = ProtocolValue::makeObject(
+        {{"mode", ProtocolValue::makeUint(4)},
+         {"candidates", ProtocolValue::makeArray({})},
+         {"parameters", parameters}});
+    ASSERT_FALSE(decodePalette(value).has_value());
+}
+
+TEST(decodeRejectsParameterOutsideIntRange) {
+    // A value beyond 32-bit int is malformed, never silently narrowed.
+    ProtocolValue parameters = ProtocolValue::makeObject(
+        {{"base_score", ProtocolValue::makeInt(5'000'000'000LL)},
+         {"word_boundary_bonus", ProtocolValue::makeInt(8)},
+         {"contiguity_bonus", ProtocolValue::makeInt(6)},
+         {"exact_case_bonus", ProtocolValue::makeInt(1)},
+         {"length_cap", ProtocolValue::makeInt(100)}});
+    ProtocolValue value = ProtocolValue::makeObject(
+        {{"mode", ProtocolValue::makeUint(4)},
+         {"candidates", ProtocolValue::makeArray({})},
+         {"parameters", parameters}});
+    ASSERT_FALSE(decodePalette(value).has_value());
+}
+
 }  // namespace
 
 int main() {
@@ -97,5 +130,7 @@ int main() {
     RUN(decodeRejectsParametersMissingAField);
     RUN(decodeRejectsOutOfRangeMode);
     RUN(decodeRejectsNonArrayCandidates);
+    RUN(decodeRejectsOutOfDomainParameter);
+    RUN(decodeRejectsParameterOutsideIntRange);
     return failed;
 }

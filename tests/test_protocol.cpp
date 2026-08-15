@@ -669,6 +669,37 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
     ASSERT_TRUE(replayed.snapshot->sections().uiState == after.sections().uiState);
 }
 
+// The palette section (candidate universe + matcher parameters) survives a snapshot
+// round-trip, and a delta changing it carries and replays the replacement -- so a
+// delta-replaying client does not retain a stale candidate universe.
+TEST(sessionDeltaCarriesThePaletteSection) {
+    auto beforeSections = sections(ssg::Revision{4}, "alpha");
+    auto afterSections = sections(ssg::Revision{5}, "alpha");
+    afterSections.palette.mode = ssg::SearchMode::Command;
+    afterSections.palette.candidates = {
+        {"edit.undo", "Undo", ""}, {"file.save", "Save File", ""}};
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), beforeSections);
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), afterSections);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    ASSERT_TRUE(delta.palette().replacement.has_value());
+
+    auto const decodedDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        ssg::ProtocolCodec{}.encodeSessionDelta(delta));
+    ASSERT_TRUE(decodedDelta.delta.has_value());
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_TRUE(replayed.snapshot->sections().palette == after.sections().palette);
+}
+
 // A frame whose presence section does not correspond to its schema (here, a stale
 // generation) is refused at decode -- an inconsistent schema/presence pair never
 // enters the semantic channel.
@@ -1444,6 +1475,7 @@ int main() {
     RUN(styleDefineKeysExactlyMatchTheWireCodecFields);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
     RUN(sessionSnapshotAndDeltaCarryTheUiSection);
+    RUN(sessionDeltaCarriesThePaletteSection);
     RUN(snapshotDecodeRejectsNonCorrespondingPresence);
     RUN(replayRejectsADeltaThatReplacesOnlyTheSchema);
     RUN(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta);

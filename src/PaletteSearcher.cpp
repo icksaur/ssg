@@ -87,6 +87,14 @@ std::vector<std::size_t> referenceRank(PaletteViewState const& state,
     return rankWith(state.candidates, query, state.parameters);
 }
 
+bool matcherParametersInDomain(const MatcherParameters& params) {
+    constexpr int m = kMaxMatcherParameterMagnitude;
+    auto ok = [](int value, int lo, int hi) { return value >= lo && value <= hi; };
+    return ok(params.baseScore, -m, m) && ok(params.wordBoundaryBonus, -m, m) &&
+           ok(params.contiguityBonus, -m, m) && ok(params.exactCaseBonus, -m, m) &&
+           ok(params.lengthCap, 0, m);
+}
+
 std::vector<std::size_t> PaletteSearcher::rank(
     std::vector<PaletteCandidate> const& candidates, std::string_view query) const {
     return rankWith(candidates, query, MatcherParameters{});

@@ -64,4 +64,19 @@ if (failures > 0) {
   console.error(`fuzzy corpus oracle: ${failures} failure(s)`);
   process.exit(1);
 }
+
+// The published parameters arrive off the wire as BigInt (the web decoder yields
+// BigInt for signed integers); the matcher must accept them and produce the same
+// orderings as with Number params. This guards the wire-shape mismatch.
+const bigParams = Object.fromEntries(
+  Object.entries(params).map(([k, v]) => [k, BigInt(v)]),
+);
+for (const { query, expected } of queries) {
+  const ids = fuzzyRank(candidates, query, bigParams).map((i) => candidates[i].id);
+  if (ids.join(',') !== expected.join(',')) {
+    console.error(`  FAIL: BigInt params query "${query}" -> [${ids.join(',')}]`);
+    process.exit(1);
+  }
+}
+
 console.log(`fuzzy corpus oracle: ${queries.length} queries matched the C++ reference`);

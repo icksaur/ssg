@@ -15,6 +15,14 @@
 namespace ssg {
 
 enum class SearchMode : std::uint8_t { File, Line, Symbol, Text, Command };
+
+// The closed set of SearchMode values, in wire order. The single domain every codec
+// validates against, so adding a mode cannot leave one decoder accepting it and
+// another rejecting it.
+inline constexpr std::array kAllSearchModes{SearchMode::File, SearchMode::Line,
+                                            SearchMode::Symbol, SearchMode::Text,
+                                            SearchMode::Command};
+
 enum class SearchQueryError : std::uint8_t { None, InvalidLine };
 
 struct ParsedSearchQuery {

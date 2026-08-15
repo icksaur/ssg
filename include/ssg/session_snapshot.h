@@ -191,6 +191,14 @@ struct UiPresenceSectionDelta {
     std::optional<UiPresenceSection> replacement;
 };
 
+// Whole-value delta of the palette section: the candidate universe and matcher
+// parameters change together (a picker opens/closes, a mode switches, the command
+// catalog changes), so a change replaces the section wholesale; nullopt means
+// unchanged. Without this a delta-replaying client keeps a stale candidate universe.
+struct PaletteSectionDelta {
+    std::optional<PaletteViewState> replacement;
+};
+
 struct StyleSectionDelta {
     std::optional<Style> replacement;
 };
@@ -302,6 +310,9 @@ public:
     [[nodiscard]] UiPresenceSectionDelta const& uiPresence() const noexcept {
         return uiPresence_;
     }
+    [[nodiscard]] PaletteSectionDelta const& palette() const noexcept {
+        return palette_;
+    }
     [[nodiscard]] StyleSectionDelta const& style() const noexcept {
         return style_;
     }
@@ -343,7 +354,8 @@ private:
         PromptProjectionDelta promptProjection = {},
         TreeWindowsDelta treeWindows = {}, UiSectionDelta ui = {},
         UiStateSectionDelta uiState = {},
-        UiPresenceSectionDelta uiPresence = {});
+        UiPresenceSectionDelta uiPresence = {},
+        PaletteSectionDelta palette = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -381,6 +393,7 @@ private:
     UiSectionDelta ui_;
     UiStateSectionDelta uiState_;
     UiPresenceSectionDelta uiPresence_;
+    PaletteSectionDelta palette_;
 };
 
 struct SessionReplayResult {
@@ -432,7 +445,8 @@ public:
         PromptProjectionDelta promptProjection = {},
         TreeWindowsDelta treeWindows = {}, UiSectionDelta ui = {},
         UiStateSectionDelta uiState = {},
-        UiPresenceSectionDelta uiPresence = {}) const;
+        UiPresenceSectionDelta uiPresence = {},
+        PaletteSectionDelta palette = {}) const;
 };
 
 }  // namespace ssg

@@ -1,6 +1,7 @@
 #include <ssg/PaletteProtocol.h>
 
 #include <array>
+#include <limits>
 #include <set>
 #include <string>
 
@@ -38,7 +39,12 @@ ProtocolValue encodeParameters(const MatcherParameters& params) {
 std::optional<int> intField(const ProtocolValue& object, const char* key) {
     const ProtocolValue* field = object.field(key);
     if (!field || !field->asInt()) return std::nullopt;
-    return static_cast<int>(*field->asInt());
+    std::int64_t raw = *field->asInt();
+    if (raw < std::numeric_limits<int>::min() ||
+        raw > std::numeric_limits<int>::max()) {
+        return std::nullopt;  // out of int range is malformed, not silently narrowed
+    }
+    return static_cast<int>(raw);
 }
 
 std::optional<MatcherParameters> decodeParameters(const ProtocolValue& value) {
@@ -49,18 +55,17 @@ std::optional<MatcherParameters> decodeParameters(const ProtocolValue& value) {
     auto exact = intField(value, "exact_case_bonus");
     auto cap = intField(value, "length_cap");
     if (!base || !word || !contiguity || !exact || !cap) return std::nullopt;
-    return MatcherParameters{*base, *word, *contiguity, *exact, *cap};
+    MatcherParameters params{*base, *word, *contiguity, *exact, *cap};
+    if (!matcherParametersInDomain(params)) return std::nullopt;
+    return params;
 }
 
 std::optional<SearchMode> decodeMode(const ProtocolValue& value) {
-    // Wire form mirrors the shared enum codec: the SearchMode underlying value. The
-    // valid set is Search.h's enum -- the single source, not a copy of the ordering.
-    static constexpr std::array modes{SearchMode::File, SearchMode::Line,
-                                      SearchMode::Symbol, SearchMode::Text,
-                                      SearchMode::Command};
+    // Wire form mirrors the shared enum codec: the SearchMode underlying value,
+    // validated against Search.h's single closed domain (kAllSearchModes).
     auto raw = value.asUint();
     if (!raw) return std::nullopt;
-    for (SearchMode mode : modes) {
+    for (SearchMode mode : kAllSearchModes) {
         if (static_cast<std::uint64_t>(static_cast<std::uint8_t>(mode)) == *raw)
             return mode;
     }
