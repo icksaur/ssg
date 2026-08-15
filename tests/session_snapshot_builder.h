@@ -110,20 +110,21 @@ public:
     [[nodiscard]] SessionSnapshot build() const {
         auto const caret = caret_ > text_.size() ? text_.size() : caret_;
 
+        // ShellState now owns only panes + distraction-free; panel presence and focus are
+        // authority-owned in production and come from the request/sections here, both
+        // derived from the SAME builder-owned values so the snapshot is coherent.
         ShellState shell{{"Files"}};
-        if (panel_) shell.togglePanel();
-        if (panel_ && !panelFocused_) shell.focusEditor();
+        const FocusTarget focus = (panel_ && panelFocused_) ? FocusTarget::Panel
+                                                            : FocusTarget::Editor;
 
         ShellLayoutRequest request;
         request.viewport = {columns_, rows_};
         request.emptyState = text_.empty();
         request.tabs = tabs_;
+        request.panelPresent = panel_;
+        request.focus = focus;
+        // Caller mutators run LAST so a test can override any request field.
         for (auto const& mutate : shellMutators_) mutate(request);
-        // Stage-(i): computeShellLayout reads panel presence and focus from the request;
-        // source them from the configured ShellState, as production does. Set after the
-        // caller's mutators so the shell state is authoritative for these two.
-        request.panelPresent = shell.panelRequested();
-        request.focus = shell.focus();
         auto layout = computeShellLayout(request, shell);
 
         ViewportDimensions const dimensions{
@@ -154,7 +155,7 @@ public:
             LspSyncViewState{},
             LspFeatureViewState{},
             defaultTheme(),
-            shell.focus(),
+            focus,
             PaletteViewState{}};
 
         for (auto const& mutate : mutators_) mutate(sections);

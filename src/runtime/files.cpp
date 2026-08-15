@@ -104,9 +104,8 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return failure(*refusal);
         }
         auto opened =
-            runtime.prompt.open(fileCommandsCommandSet().pathPrompt(command));
+            runtime.interaction.openPrompt(fileCommandsCommandSet().pathPrompt(command));
         if (!opened.accepted()) return failure(opened.error->message);
-        runtime.reconcilePromptFocus();
         return success();
     }
 
@@ -132,7 +131,7 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
         case FileCommand::Open: {
             auto path = stringPayload(payload);
             if (!path) {
-                (void)runtime.prompt.open(
+                (void)runtime.interaction.openPrompt(
                     fileCommandsCommandSet().pathPrompt(command));
                 return success();
             }
@@ -169,10 +168,9 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             auto const state = runtime.workspace.state(*id);
             if (state &&
                 state->key.kind() != JournalDocumentKeyKind::Saved) {
-                auto opened = runtime.prompt.open(
+                auto opened = runtime.interaction.openPrompt(
                     fileCommandsCommandSet().pathPrompt(FileCommand::SaveAs));
                 if (!opened.accepted()) return failure(opened.error->message);
-                runtime.reconcilePromptFocus();
                 return success();
             }
             result = runtime.workspace.save(*id);
@@ -281,7 +279,7 @@ CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
     // palette/lua "Tab Activate") acts on the editor, so move keyboard focus there.
     // Keyboard tab switching uses tab.next/tab.previous, which do not reach here.
     if (command == TabCommand::Activate) {
-        runtime.shell.focusEditor();
+        runtime.interaction.focusEditor();
     }
     if (runtime.tabs.viewState().active != activeTabBefore &&
         (command == TabCommand::Activate || command == TabCommand::Next ||

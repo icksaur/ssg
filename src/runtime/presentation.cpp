@@ -8,18 +8,6 @@
 namespace ssg {
 namespace {
 
-// Activate the tree provider matching the active panel, creating a git/symbols
-// provider on demand.  The label->provider mapping and the create-on-miss logic
-// now live in the runtime seam (panelProviderBinding) and on TreeModel
-// (activateOrCreate); this only wires the active panel to them.
-bool syncTreeProviderToPanel(EditorRuntime::Impl& runtime) {
-    auto const binding = panelProviderBinding(runtime.shell.activePanelProvider());
-    if (!binding) return false;
-    return runtime.tree.activateOrCreate(*binding, [&runtime] {
-        return runtime.interaction.allocateTreeRevision();
-    });
-}
-
 bool userNavigationShellCommand(std::string_view id) {
     return id == "pane.next" || id == "pane.previous" ||
            id == "pane.focus_left" || id == "pane.focus_right" ||
@@ -108,35 +96,31 @@ CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, std::string_view
     else if (id == "pane.close") (void)runtime.shell.closeActivePane();
     else if (id == "pane.next") runtime.shell.nextPane();
     else if (id == "pane.previous") runtime.shell.previousPane();
-    else if (id == "pane.focus_left") (void)runtime.shell.focusPane(PaneDirection::Left, runtime.shellView(ViewportDimensions{80, 24}));
-    else if (id == "pane.focus_right") (void)runtime.shell.focusPane(PaneDirection::Right, runtime.shellView(ViewportDimensions{80, 24}));
-    else if (id == "pane.focus_up") (void)runtime.shell.focusPane(PaneDirection::Up, runtime.shellView(ViewportDimensions{80, 24}));
-    else if (id == "pane.focus_down") (void)runtime.shell.focusPane(PaneDirection::Down, runtime.shellView(ViewportDimensions{80, 24}));
-    else if (id == "panel.toggle") runtime.shell.togglePanel();
-    else if (id == "panel.focus") (void)runtime.shell.focusPanel();
+    else if (id == "pane.focus_left") { if (runtime.shell.focusPane(PaneDirection::Left, runtime.shellView(ViewportDimensions{80, 24}))) runtime.interaction.focusEditor(); }
+    else if (id == "pane.focus_right") { if (runtime.shell.focusPane(PaneDirection::Right, runtime.shellView(ViewportDimensions{80, 24}))) runtime.interaction.focusEditor(); }
+    else if (id == "pane.focus_up") { if (runtime.shell.focusPane(PaneDirection::Up, runtime.shellView(ViewportDimensions{80, 24}))) runtime.interaction.focusEditor(); }
+    else if (id == "pane.focus_down") { if (runtime.shell.focusPane(PaneDirection::Down, runtime.shellView(ViewportDimensions{80, 24}))) runtime.interaction.focusEditor(); }
+    else if (id == "panel.toggle") (void)runtime.interaction.apply(TogglePanel{});
+    else if (id == "panel.focus") (void)runtime.interaction.focusPanel();
     else if (id == "panel.show_files") {
-        if (!runtime.shell.showPanelProvider("files")) {
-            return failure("files panel provider is unavailable");
-        }
-        if (!syncTreeProviderToPanel(runtime)) {
+        if (!runtime.interaction.apply(ShowPanelProvider{PanelProvider::FileTree})) {
             return failure("files tree provider is unavailable");
         }
     } else if (id == "panel.show_git_status") {
-        if (!runtime.shell.showPanelProvider("git")) {
-            return failure("git panel provider is unavailable");
-        }
-        if (!syncTreeProviderToPanel(runtime)) {
+        if (!runtime.interaction.apply(ShowPanelProvider{PanelProvider::GitStatus})) {
             return failure("git tree provider is unavailable");
         }
     }
     else if (id == "panel.next_provider") {
-        runtime.shell.nextPanelProvider();
-        if (!syncTreeProviderToPanel(runtime)) {
+        const PanelProvider target = cyclePanelProvider(
+            runtime.interaction.truth().selectedProvider, CycleDirection::Next);
+        if (!runtime.interaction.apply(SwitchPanelProvider{target})) {
             return failure("next tree provider is unavailable");
         }
     } else if (id == "panel.previous_provider") {
-        runtime.shell.previousPanelProvider();
-        if (!syncTreeProviderToPanel(runtime)) {
+        const PanelProvider target = cyclePanelProvider(
+            runtime.interaction.truth().selectedProvider, CycleDirection::Previous);
+        if (!runtime.interaction.apply(SwitchPanelProvider{target})) {
             return failure("previous tree provider is unavailable");
         }
     }
@@ -152,7 +136,7 @@ CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
     if (id == "prompt.submit" || id == "prompt.cancel" ||
         id == "prompt.next" || id == "prompt.previous" ||
         id == "prompt.update_value") {
-        auto const& request = runtime.prompt.request();
+        auto const& request = runtime.interaction.prompt().request();
         if (!request) {
             return failure("no active prompt");
         }
@@ -177,7 +161,7 @@ CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
                 runtime, revision, FindReplaceCommand::FindPrevious, payload);
         }
         if (id == "prompt.submit") {
-            auto result = runtime.prompt.submit();
+            auto result = runtime.interaction.submitPrompt();
             if (!result.accepted()) return failure(result.error->message);
             // A prompt that names a command exists to collect that command's
             // argument, so submitting it runs the command. Deferred to the
@@ -204,11 +188,11 @@ CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
                 return failure("prompt.update_value requires a value payload");
             }
             auto result =
-                runtime.prompt.updateValue(arguments->index, arguments->value);
+                runtime.interaction.updatePromptValue(arguments->index, arguments->value);
             return result.accepted() ? success() : failure(result.error->message);
         }
         if (id == "prompt.cancel") {
-            auto result = runtime.prompt.cancel();
+            auto result = runtime.interaction.cancelPrompt();
             return result.accepted() ? success() : failure(result.error->message);
         }
         return success();
@@ -238,7 +222,7 @@ void syncRuntimeSettings(EditorRuntime::Impl& runtime) {
 
 CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
     if (id == "settings.open") {
-        (void)runtime.prompt.open(PromptRequest{
+        (void)runtime.interaction.openPrompt(PromptRequest{
             PromptKind::Settings, "settings",
             {{"settings.query", "settings query", ""}}, {}, std::nullopt});
         return success();

@@ -71,21 +71,6 @@ inline std::uint32_t uint32Setting(SettingsModel const& settings, SettingKey key
     return fallback;
 }
 
-// The correspondence between a shell panel-provider label and its tree provider.
-// The PanelProvider domain owns the canonical table (panelProviderTreeBinding); this
-// string-keyed adapter exists only until callers speak PanelProvider directly. Returns
-// nullopt for a label naming no panel provider.
-[[nodiscard]] inline std::optional<TreeProviderBinding> panelProviderBinding(
-    std::string_view panelLabel) {
-    for (const PanelProvider provider :
-         {PanelProvider::FileTree, PanelProvider::GitStatus, PanelProvider::Symbols}) {
-        if (panelProviderLabel(provider) == panelLabel) {
-            return panelProviderTreeBinding(provider);
-        }
-    }
-    return std::nullopt;
-}
-
 struct GitDiffRefreshWorkerState;
 
 // The reopen outcome of a document's recovered draft (single-file draft
@@ -186,7 +171,6 @@ struct EditorRuntime::Impl final : CommandServices,
     // document identity or revision drifts from this, the controller is stale and
     // must be dismissed (see reconcile_find_document).
     std::optional<FileDocumentId> findDocumentId;
-    PromptSurface prompt;
     StatusQueue status;
     ShellState shell;
     TabManager tabs;
@@ -318,17 +302,14 @@ struct EditorRuntime::Impl final : CommandServices,
     // unrelated dispatch drained it) and enforces the bound.  Returns false if
     // either fails.
     [[nodiscard]] bool defer(std::optional<ClientId> as, ClientCommand command);
-    // Which picker the active PromptKind::Palette prompt belongs to, and the
-    // sole source of the published palette mode and candidate set.  Maintained
-    // as an invariant (set iff such a prompt is active) by
-    // reconcileOpenPicker() rather than cleared at each close path, so a stale
-    // kind cannot leak into the next open.
-    std::optional<PickerKind> openPicker;
     // The open file picker's candidate set, built when the picker opens and
     // discarded when it closes: the walk stays off the per-keystroke and
     // per-frame paths, at the cost of not reflecting files created while the
     // picker is open (reopening picks them up).
     std::vector<PaletteCandidate> fileCandidates;
+    // The picker epoch the file candidates were last built for, so the candidate refresh
+    // rebuilds only when a finder (re)opens, not every frame the File picker stays open.
+    std::uint64_t lastPickerEpoch = 0;
     // Command-mode palette candidates are the whole catalog with each command's
     // key hint resolved -- O(bindings x commands) -- so they are cached and
     // rebuilt only when the catalog or keymap changes, keeping the palette off
@@ -545,12 +526,11 @@ struct EditorRuntime::Impl final : CommandServices,
         const FollowTarget& target, NavigationClass classification);
     void recordNavigation(ClientId client, NavigationClass classification);
     void refreshTree();
-    void reconcilePromptFocus();
-    void reconcileOpenPicker();
-    // The only way to open a picker.  Setting the kind and opening its prompt
-    // together is what makes the "openPicker is set whenever a Palette prompt is
-    // active" half of the invariant true by construction, leaving
-    // reconcileOpenPicker() responsible only for the clearing half.
+    // Refresh the file picker's candidates off the authority's picker epoch: a newly
+    // (re)opened File picker rebuilds synchronously, any other picker state clears.
+    void reconcilePickerCandidates();
+    // Opens a picker through the authority (apply(OpenFinder)); the epoch it advances is
+    // what reconcilePickerCandidates keys the candidate refresh off.
     [[nodiscard]] bool openPickerPrompt(PickerKind kind);
     // Walks the workspace into `fileCandidates`, honoring the gitignore setting.
     void rebuildFileCandidates();

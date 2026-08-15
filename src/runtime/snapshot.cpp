@@ -95,7 +95,7 @@ PromptStatusViewState EditorRuntime::Impl::promptStatusView() const {
     // a header-hosted prompt with no footer view) and the status queue. No
     // dimensions needed, so a semantic snapshot is obtainable without geometry.
     PromptStatusViewState view;
-    if (prompt.request()) view.activeKind = prompt.request()->kind;
+    if (interaction.prompt().request()) view.activeKind = interaction.prompt().request()->kind;
     view.status = status.viewState();
     return view;
 }
@@ -103,18 +103,18 @@ PromptStatusViewState EditorRuntime::Impl::promptStatusView() const {
 std::optional<PromptViewState> EditorRuntime::Impl::promptProjection(
     ViewportDimensions dimensions,
     std::optional<Rect> promptReservation) const {
-    // Grid projection of the footer-anchored prompt. Single-source prompt rect:
+    // Grid projection of the footer-anchored interaction.prompt(). Single-source prompt rect:
     // when the shell laid out a footer-anchored prompt it passes that rect here,
     // so the controls are laid out into the SAME reservation the shell reserved
     // (identical a11y node, hit region, and render). The fallback -- a full-width
     // bottom strip derived from the viewport -- covers the palette (zero prompt
     // rows, its input lives in the header) and the no-active-prompt default.
-    auto rows = promptRowCount(prompt.request() ? prompt.request()->kind : PromptKind::CommandArgument);
+    auto rows = promptRowCount(interaction.prompt().request() ? interaction.prompt().request()->kind : PromptKind::CommandArgument);
     Rect reservation =
         promptReservation.value_or(
             Rect{0, static_cast<int>(dimensions.rows > rows ? dimensions.rows - rows : 0),
                  static_cast<int>(dimensions.columns), static_cast<int>(rows)});
-    auto promptLayout = computePromptLayout(prompt, reservation);
+    auto promptLayout = computePromptLayout(interaction.prompt(), reservation);
     if (!promptLayout.accepted()) return std::nullopt;
     auto view = promptLayout.view;
     projectFindReplacePrompt(*view);
@@ -179,7 +179,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     auto statusProjection = status.footerProjection();
     auto statusFields = chromeStatusFields(ChromeFieldMode::Grid);
     ShellLayoutRequest request;    request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
-    request.reservedPromptRows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
+    request.reservedPromptRows = interaction.prompt().active() ? promptRowCount(interaction.prompt().request()->kind) : 0;
     request.lineNumberGutterWidth = lineNumberGutterWidth();
     // Surface the draft-conflict notice for the active document (M15). Only the
     // Conflict outcome raises the yellow bar; a Restored draft is a quieter
@@ -196,9 +196,9 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
         }
     }
     request.emptyState = activeDocument() == nullptr;
-    request.panelProviderLabel = std::string{shell.activePanelProvider()};
-    request.panelPresent = shell.panelRequested();
-    request.focus = shell.focus();
+    request.panelProviderLabel = std::string{panelProviderLabel(interaction.truth().selectedProvider)};
+    request.panelPresent = interaction.truth().panelPresent;
+    request.focus = interaction.effectiveFocus();
     request.headerFields = std::move(statusFields.headerFields);
     request.footerFields = std::move(statusFields.footerFields);
     // A composed region REPLACES that
@@ -236,14 +236,14 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     // Anchoring decision: a HEADER-anchored prompt hosts its query in the header
     // input line. The query/ghost
     // text come from the picker report, which today only the palette populates.
-    bool const headerPrompt = prompt.active() && prompt.request() &&
-                              promptFocusRegion(prompt.request()->kind) ==
+    bool const headerPrompt = interaction.prompt().active() && interaction.prompt().request() &&
+                              promptFocusRegion(interaction.prompt().request()->kind) ==
                                   PromptRegion::Header;
     // Picker identity: the palette picker specifically (drives candidate ranking
     // below). Distinct from the anchoring decision so a future non-palette header
     // prompt does not inherit palette-picker plumbing.
-    bool const paletteOpen = prompt.active() && prompt.request() &&
-                              prompt.request()->kind == PromptKind::Palette;
+    bool const paletteOpen = interaction.prompt().active() && interaction.prompt().request() &&
+                              interaction.prompt().request()->kind == PromptKind::Palette;
     if (headerPrompt) {
         request.inputLineActive = true;
         request.inputLineQuery = paletteReport.query;
@@ -364,7 +364,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             lspSync,
             lspFeatures,
             theme,
-            shell.focus(),
+            interaction.effectiveFocus(),
             paletteView(),
             std::move(uiSchema),
             std::move(uiState),
@@ -464,11 +464,11 @@ void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
 // case here rather than a second hardcoded view.
 PaletteViewState EditorRuntime::Impl::paletteView() const {
     PaletteViewState view;
-    if (!openPicker) return view;
-    auto const* picker = pickerCatalog().find(*openPicker);
+    if (!interaction.openPicker()) return view;
+    auto const* picker = pickerCatalog().find(*interaction.openPicker());
     if (picker == nullptr) return view;
     view.mode = picker->wireMode;
-    switch (*openPicker) {
+    switch (*interaction.openPicker()) {
     case PickerKind::Command:
         // Every registered command is a palette candidate, read from the live
         // catalog rather than a static list: a command registered by a plugin

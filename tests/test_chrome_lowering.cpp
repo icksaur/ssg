@@ -16,11 +16,11 @@ using ssgtest::composeFooterRegion;
 
 Style defaultStyle() { return Style{}; }
 
-// Stage-(i) bridge: computeShellLayout reads panel presence and focus from the request;
-// source them from the ShellState under test, exactly as production does.
+// Stage-(ii) bridge: panel presence and focus come from the request; this test's shell has
+// no panel shown, so both stay at their hidden/editor defaults.
 ShellLayoutResult layoutFor(ShellLayoutRequest request, const ShellState& state) {
-    request.panelPresent = state.panelRequested();
-    request.focus = state.focus();
+    request.panelPresent = false;
+    request.focus = FocusTarget::Editor;
     return computeShellLayout(request, state);
 }
 

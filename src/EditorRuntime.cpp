@@ -1294,7 +1294,7 @@ CommandHandlerResult EditorRuntime::Impl::openOrFocusLiveDiffTab(
     if (userClient.has_value()) {
         recordNavigation(*userClient, classification);
     }
-    shell.focusEditor();
+    interaction.focusEditor();
     return success();
 }
 
@@ -1326,7 +1326,7 @@ CommandHandlerResult EditorRuntime::Impl::openReadOnlyTab(
     if (!opened.accepted()) {
         return failure(tabMessage(opened));
     }
-    shell.focusEditor();
+    interaction.focusEditor();
     // Untitled documents get no language from a path, so highlight the override
     // language (e.g. Markdown) now that this tab is active.
     refreshSyntax();
@@ -1728,28 +1728,11 @@ void EditorRuntime::Impl::refreshTree() {
         TreeProviderId{"filesystem"}, root, interaction.allocateTreeRevision()));
 }
 
-void EditorRuntime::Impl::reconcilePromptFocus() {
-    if (prompt.active() && shell.focus() != FocusTarget::Prompt) {
-        shell.enterPromptFocus();
-    } else if (!prompt.active() && shell.focus() == FocusTarget::Prompt) {
-        shell.exitPromptFocus();
-    }
-}
-
-// Opens a picker's prompt and records its kind in one step.  Neither half is
-// meaningful alone: a Palette prompt with no kind publishes an empty candidate
-// list, and a kind with no prompt is a leak.  Pairing them here is why
-// reconcileOpenPicker() below only has to handle closing.
+// Opens a picker through the authority: apply(OpenFinder) atomically opens the Palette
+// prompt, sets the picker identity, and advances the picker epoch. File candidates are
+// refreshed by reconcilePickerCandidates() off that epoch, not here.
 bool EditorRuntime::Impl::openPickerPrompt(PickerKind kind) {
-    auto const* picker = pickerCatalog().find(kind);
-    if (picker == nullptr) return false;
-    auto opened = prompt.open(PromptRequest{
-        PromptKind::Palette, std::string{picker->promptTitle},
-        {{"query", "command palette query", ""}}, {}, std::nullopt});
-    if (!opened.accepted()) return false;
-    openPicker = kind;
-    if (kind == PickerKind::File) rebuildFileCandidates();
-    return true;
+    return interaction.apply(OpenFinder{kind});
 }
 
 // The index opens its OWN repository handle rather than sharing the git-diff
@@ -1764,22 +1747,19 @@ void EditorRuntime::Impl::rebuildFileCandidates() {
         std::move(WorkspaceFileIndex{}.build(root, *matcher, options).candidates);
 }
 
-// Re-derives `openPicker` from the prompt after every dispatch.  A picker can be
-// closed by palette.close, by prompt.cancel, by a successful palette.execute, or
-// by the find-document reconcile dismissing the prompt; deriving the field here
-// covers all of them at once, so adding a fifth close path cannot leave the next
-// open publishing the previous picker's candidates.  The converse (a Palette
-// prompt without a kind) is not reconcilable here -- nothing in the prompt says
-// WHICH picker it is -- and is instead made unrepresentable by openPickerPrompt()
-// being the only opener.
-void EditorRuntime::Impl::reconcileOpenPicker() {
-    bool const inputLineActive = prompt.active() && prompt.request() &&
-                               prompt.request()->kind == PromptKind::Palette;
-    if (!inputLineActive) {
-        openPicker.reset();
-        // Discard the walk's results with the picker that owned them.
+// The file picker's candidate lifecycle, keyed off the authority's picker epoch (which
+// advances on every finder open, INCLUDING a File->File reopen). A newly (re)opened File
+// picker rebuilds its candidates synchronously before the next snapshot; any other picker
+// state clears them, so a closed or replaced picker never publishes a stale walk. Replaces
+// the old reconcileOpenPicker, which derived openPicker from the prompt.
+void EditorRuntime::Impl::reconcilePickerCandidates() {
+    const auto epoch = interaction.pickerEpoch();
+    if (interaction.openPicker() == PickerKind::File) {
+        if (epoch != lastPickerEpoch) rebuildFileCandidates();
+    } else {
         fileCandidates.clear();
     }
+    lastPickerEpoch = epoch;
 }
 
 void EditorRuntime::Impl::reconcileFindDocument() {
@@ -1796,10 +1776,10 @@ void EditorRuntime::Impl::reconcileFindDocument() {
     // The document the find evaluated against is gone, changed, or was edited:
     // close the controller and dismiss its prompt so no stale match is navigable.
     findReplace.close();
-    if (auto const& request = prompt.request();
+    if (auto const& request = interaction.prompt().request();
         request && (request->kind == PromptKind::Find ||
                     request->kind == PromptKind::Replace)) {
-        (void)prompt.cancel();
+        (void)interaction.cancelPrompt();
     }
     findDocumentId.reset();
 }
@@ -2191,7 +2171,7 @@ bool EditorRuntime::Impl::revealCurrentDiffTarget(
     for (const auto& client : follow.viewState().clients) {
         recordNavigation(client.client, classification);
     }
-    shell.focusEditor();
+    interaction.focusEditor();
     return true;
 }
 
@@ -2228,7 +2208,7 @@ void EditorRuntime::resetKeymapToDefault() {
     impl_->keymap = defaultTerminalKeymap();
 }
 
-void EditorRuntime::focusEditor() { impl_->shell.focusEditor(); }
+void EditorRuntime::focusEditor() { impl_->interaction.focusEditor(); }
 
 void EditorRuntime::setComposedUi(std::optional<ValidatedComposition> composition) {
     // A composition-only reload (a script that just calls ssg.chrome, or one
@@ -2360,8 +2340,7 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
         const auto revisionsBefore = documentRevisions(impl_->workspace);
         auto result = impl_->session->dispatch(as, dispatched);
         impl_->reconcileFindDocument();
-        impl_->reconcilePromptFocus();
-        impl_->reconcileOpenPicker();
+        impl_->reconcilePickerCandidates();
         if (result.accepted() && shouldPauseForLocalEdit &&
             existingDocumentMutated(revisionsBefore, impl_->workspace)) {
             (void)impl_->follow.notifyLocalEdit();
@@ -2416,11 +2395,10 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
     // client keeps close-on-success semantics identical for keyboard and
     // pointer submits: a rejected open -- the file was removed between the walk
     // and the submit -- leaves the picker open with its query intact.
-    if (result.accepted() && impl_->openPicker == PickerKind::File &&
+    if (result.accepted() && impl_->interaction.openPicker() == PickerKind::File &&
         command.id == "file.open") {
-        (void)impl_->prompt.cancel();
-        impl_->reconcilePromptFocus();
-        impl_->reconcileOpenPicker();
+        (void)impl_->interaction.cancelPrompt();
+        impl_->reconcilePickerCandidates();
     }
     return result;
 }

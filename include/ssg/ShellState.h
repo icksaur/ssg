@@ -270,19 +270,6 @@ public:
     [[nodiscard]] bool focusPane(PaneDirection direction,
                                   const ShellViewState& view) noexcept;
 
-    void togglePanel() noexcept;
-    [[nodiscard]] bool focusPanel() noexcept;
-    [[nodiscard]] bool showPanelProvider(std::string_view provider) noexcept;
-    void focusEditor() noexcept;
-    void enterPromptFocus() noexcept;
-    void exitPromptFocus() noexcept;
-    [[nodiscard]] FocusTarget focus() const noexcept;
-    void nextPanelProvider() noexcept;
-    void previousPanelProvider() noexcept;
-    [[nodiscard]] bool panelRequested() const noexcept;
-    [[nodiscard]] bool panelFocused() const noexcept;
-    [[nodiscard]] std::string_view activePanelProvider() const noexcept;
-
     void toggleDistractionFree() noexcept;
     [[nodiscard]] bool distractionFree() const noexcept;
 

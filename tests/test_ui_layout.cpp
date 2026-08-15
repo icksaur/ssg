@@ -51,11 +51,13 @@ ShellLayoutRequest request(int columns, int rows) {
     return value;
 }
 
-// Stage-(i) bridge: computeShellLayout reads panel presence and focus from the request;
-// source them from the ShellState under test, exactly as production does.
-ShellLayoutResult layoutFor(ShellLayoutRequest request, const ShellState& state) {
-    request.panelPresent = state.panelRequested();
-    request.focus = state.focus();
+// Stage-(ii) bridge: computeShellLayout reads panel presence and focus from the request;
+// tests set them explicitly (ShellState no longer stores panel/focus -- the authority does).
+ShellLayoutResult layoutFor(ShellLayoutRequest request, const ShellState& state,
+                            bool panelPresent = false,
+                            FocusTarget focus = FocusTarget::Editor) {
+    request.panelPresent = panelPresent;
+    request.focus = focus;
     return computeShellLayout(request, state);
 }
 
@@ -63,8 +65,7 @@ TEST(handAuthoredGeometryGoldens) {
     ShellState state;
 
     auto minimum = request(20, 4);
-    state.togglePanel();
-    auto minimumResult = layoutFor(minimum, state);
+    auto minimumResult = layoutFor(minimum, state, true, FocusTarget::Panel);
     ASSERT_TRUE(minimumResult.accepted());
     ASSERT_FALSE(minimumResult.view->panel.has_value());
     assertRect(*minimumResult.view->header, {0, 0, 20, 1});
@@ -85,7 +86,7 @@ TEST(handAuthoredGeometryGoldens) {
 
     auto wide = request(80, 12);
     wide.reservedPromptRows = 2;
-    auto wideResult = layoutFor(wide, state);
+    auto wideResult = layoutFor(wide, state, true, FocusTarget::Panel);
     ASSERT_TRUE(wideResult.accepted());
     assertRect(*wideResult.view->header, {0, 0, 80, 1});
     assertRect(*wideResult.view->panel, {0, 1, 24, 10});
@@ -103,14 +104,14 @@ TEST(handAuthoredGeometryGoldens) {
     // Regression proof: the pane's top does not move between no-prompt and
     // prompt-open layouts -- the footer/prompt only take rows from the bottom.
     auto noPrompt = request(80, 12);
-    auto noPromptResult = layoutFor(noPrompt, state);
+    auto noPromptResult = layoutFor(noPrompt, state, true, FocusTarget::Panel);
     ASSERT_TRUE(noPromptResult.accepted());
     ASSERT_EQ(noPromptResult.view->panes[0].content.y,
               wideResult.view->panes[0].content.y);
 
     auto focused = request(20, 4);
     state.toggleDistractionFree();
-    auto focusedResult = layoutFor(focused, state);
+    auto focusedResult = layoutFor(focused, state, true, FocusTarget::Panel);
     ASSERT_TRUE(focusedResult.accepted());
     ASSERT_FALSE(focusedResult.view->header.has_value());
     ASSERT_FALSE(focusedResult.view->footer.has_value());
@@ -170,35 +171,18 @@ TEST(paneCommandsPreserveTopologyAndOrder) {
 }
 
 TEST(panelCommandsPreserveProviderStateWhenHidden) {
-    ShellState state({"Files", "Git", "Symbols"});
-    ASSERT_FALSE(state.panelRequested());
-    state.togglePanel();
-    ASSERT_TRUE(state.panelRequested());
-    ASSERT_TRUE(state.focusPanel());
-    ASSERT_EQ(state.activePanelProvider(), std::string_view{"Files"});
-    state.nextPanelProvider();
-    ASSERT_EQ(state.activePanelProvider(), std::string_view{"Git"});
-    state.previousPanelProvider();
-    ASSERT_EQ(state.activePanelProvider(), std::string_view{"Files"});
-    state.togglePanel();
-    ASSERT_FALSE(state.panelRequested());
-    ASSERT_FALSE(state.panelFocused());
-    ASSERT_EQ(state.activePanelProvider(), std::string_view{"Files"});
-    state.togglePanel();
-    ASSERT_TRUE(state.focusPanel());
-    state.toggleDistractionFree();
-    state.toggleDistractionFree();
-    ASSERT_TRUE(state.panelFocused());
+    // Deleted body: panel presence, provider selection, and cycling moved to the
+    // InteractionAuthority. SwitchPanelProvider preserving hidden state + cyclePanelProvider
+    // order are pinned by test_command_transition and test_interaction_authority.
 }
 
 
 TEST(accessibilityNodesHaveLabelsAndRoles) {
     ShellState state({"Files"});
     auto input = request(80, 12);
-    state.togglePanel();
     input.reservedPromptRows = 1;
     input.emptyState = true;
-    auto result = layoutFor(input, state);
+    auto result = layoutFor(input, state, true, FocusTarget::Panel);
     ASSERT_TRUE(result.accepted());
 
     const auto& nodes = result.view->accessibilityNodes;
@@ -238,9 +222,8 @@ TEST(nonOverlapAndCardinalityProperties) {
             ShellState state;
             state.splitActive(SplitAxis::Vertical);
             state.splitActive(SplitAxis::Horizontal);
-            state.togglePanel();
             auto input = request(columns, rows);
-            auto result = layoutFor(input, state);
+            auto result = layoutFor(input, state, true, FocusTarget::Panel);
             ASSERT_TRUE(result.accepted());
             const auto& view = *result.view;
             ASSERT_TRUE(view.panes.size() == 1 || view.panes.size() == 3);
@@ -290,8 +273,7 @@ TEST(statusFieldManifestHasExactOrderAndLabels) {
 
 TEST(accessibilityLeafNodesCarryDisplayContent) {
     ShellState state;
-    state.togglePanel();
-    auto result = layoutFor(request(80, 12), state);
+    auto result = layoutFor(request(80, 12), state, true, FocusTarget::Panel);
     ASSERT_TRUE(result.accepted());
     const auto find = [&](ShellNodeKind kind,
                           std::string_view id) -> const AccessibilityNode* {
@@ -330,48 +312,14 @@ TEST(dirtyTabContentShowsMarker) {
 }
 
 TEST(focusTransitionsFollowTheNavigationTable) {
-    ShellState state{{"filesystem"}};
-    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
-    // The panel cannot be focused while hidden.
-    ASSERT_FALSE(state.focusPanel());
-    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
-    // Showing the panel focuses it (no explicit focus_panel needed).
-    state.togglePanel();  // show
-    ASSERT_TRUE(state.focus() == FocusTarget::Panel);
-    ASSERT_TRUE(state.panelFocused());
-    // A prompt pushes the current focus and restores it on close.
-    state.enterPromptFocus();
-    ASSERT_TRUE(state.focus() == FocusTarget::Prompt);
-    state.exitPromptFocus();
-    ASSERT_TRUE(state.focus() == FocusTarget::Panel);
-    // Hiding the focused panel restores the focus present when it was shown (the
-    // editor here).
-    state.togglePanel();  // hide
-    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
-    // A prompt over a panel that is hidden before close restores to editor.
-    state.togglePanel();  // show (focuses the panel)
-    ASSERT_TRUE(state.focus() == FocusTarget::Panel);
-    state.enterPromptFocus();
-    state.togglePanel();  // hide the panel while the prompt is focused
-    state.exitPromptFocus();
-    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
+    // Deleted body: ShellState no longer owns panel/prompt focus. The transition table is
+    // the authority's, pinned by test_interaction_authority's focus-parity matrix and
+    // test_command_transition.
 }
 
 TEST(hidingAnUnfocusedPanelLeavesFocusUntouched) {
-    ShellState state{{"filesystem"}};
-    // Show (focuses the panel), then move focus to the editor while the panel is
-    // still shown; hiding it must NOT yank focus (it isn't the focused surface).
-    state.togglePanel();  // show -> panel focused
-    ASSERT_TRUE(state.focus() == FocusTarget::Panel);
-    state.focusEditor();
-    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
-    state.togglePanel();  // hide while editor-focused
-    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
-    // Re-showing focuses the panel again; hiding restores the editor.
-    state.togglePanel();  // show
-    ASSERT_TRUE(state.focus() == FocusTarget::Panel);
-    state.togglePanel();  // hide
-    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
+    // Deleted body: editorFocusWithThePanelVisibleKeepsThePanelPresent and the panel-hide
+    // focus oracles in test_interaction_authority cover this.
 }
 
 
@@ -637,18 +585,17 @@ TEST(aNarrowHeaderStillGivesTheInputLineRoom) {
 // live in ShellState.cpp.
 TEST(shellLayoutTakesItsDimensionsAndSigilFromStyle) {
     ShellState state;
-    state.togglePanel();
 
     auto narrow = request(100, 24);
     narrow.style.dimensions.panelTargetWidth = 24;
-    auto narrowResult = layoutFor(narrow, state);
+    auto narrowResult = layoutFor(narrow, state, true, FocusTarget::Panel);
     ASSERT_TRUE(narrowResult.accepted());
     ASSERT_TRUE(narrowResult.view->panel.has_value());
     if (!narrowResult.view->panel) return;
 
     auto wide = request(100, 24);
     wide.style.dimensions.panelTargetWidth = 31;
-    auto wideResult = layoutFor(wide, state);
+    auto wideResult = layoutFor(wide, state, true, FocusTarget::Panel);
     ASSERT_TRUE(wideResult.accepted());
     ASSERT_TRUE(wideResult.view->panel.has_value());
     if (!wideResult.view->panel) return;
@@ -660,14 +607,14 @@ TEST(shellLayoutTakesItsDimensionsAndSigilFromStyle) {
     // previously-accepted viewport too small.
     auto demanding = request(20, 4);
     demanding.style.dimensions.minimumColumns = 40;
-    ASSERT_FALSE(layoutFor(demanding, state).accepted());
+    ASSERT_FALSE(layoutFor(demanding, state, true, FocusTarget::Panel).accepted());
 
     // The input line renders the configured sigil rather than a literal "> ".
     auto styled = request(100, 24);
     styled.inputLineActive = true;
     styled.inputLineQuery = "abc";
     styled.style.inputLineSigil = ":: ";
-    auto styledResult = layoutFor(styled, state);
+    auto styledResult = layoutFor(styled, state, true, FocusTarget::Panel);
     ASSERT_TRUE(styledResult.accepted());
     if (!styledResult.accepted()) return;
     bool sawStyledSigil = false;
@@ -684,13 +631,12 @@ TEST(shellLayoutTakesItsDimensionsAndSigilFromStyle) {
 // geometry so the struct cannot drift back into advertising fields it drops.
 TEST(chromeHeightsAndGutterWidthAreHonoured) {
     ShellState state;
-    state.togglePanel();
 
     auto tall = request(100, 24);
     tall.style.dimensions.headerHeight = 2;
     tall.style.dimensions.footerHeight = 3;
     tall.style.dimensions.tabBarHeight = 2;
-    auto tallResult = layoutFor(tall, state);
+    auto tallResult = layoutFor(tall, state, true, FocusTarget::Panel);
     ASSERT_TRUE(tallResult.accepted());
     if (!tallResult.accepted()) return;
     assertRect(*tallResult.view->header, {0, 0, 100, 2});
@@ -706,7 +652,7 @@ TEST(chromeHeightsAndGutterWidthAreHonoured) {
 
     auto wideGutter = request(100, 24);
     wideGutter.style.dimensions.scrollbarGutterWidth = 3;
-    auto gutterResult = layoutFor(wideGutter, state);
+    auto gutterResult = layoutFor(wideGutter, state, true, FocusTarget::Panel);
     ASSERT_TRUE(gutterResult.accepted());
     if (!gutterResult.accepted()) return;
     auto const& pane = gutterResult.view->panes.front();
@@ -1051,27 +997,28 @@ std::string serializeLayout(const ShellLayoutResult& result) {
 std::string captureGoldenMatrix() {
     std::ostringstream out;
     auto emitCase = [&](const std::string& name, ShellLayoutRequest req,
-                        const std::function<void(ShellState&)>& configure) {
+                        const std::function<void(ShellState&)>& configure,
+                        bool panelPresent = false,
+                        FocusTarget focus = FocusTarget::Editor) {
         ShellState state;
         if (configure) configure(state);
         out << "=== " << name << " ===\n"
-            << serializeLayout(layoutFor(req, state)) << '\n';
+            << serializeLayout(layoutFor(req, state, panelPresent, focus)) << '\n';
     };
-    auto panelOn = [](ShellState& s) { s.togglePanel(); };
 
     // Viewport sizes, panel off/on.
     emitCase("min-20x4", request(20, 4), nullptr);
-    emitCase("min-20x4-panel", request(20, 4), panelOn);
+    emitCase("min-20x4-panel", request(20, 4), nullptr, true);
     emitCase("below-min-19x4", request(19, 4), nullptr);
     emitCase("std-80x24", request(80, 24), nullptr);
-    emitCase("std-80x24-panel", request(80, 24), panelOn);
-    emitCase("tall-100x40-panel", request(100, 40), panelOn);
-    emitCase("odd-33x11-panel", request(33, 11), panelOn);
+    emitCase("std-80x24-panel", request(80, 24), nullptr, true);
+    emitCase("tall-100x40-panel", request(100, 40), nullptr, true);
+    emitCase("odd-33x11-panel", request(33, 11), nullptr, true);
 
     // Panel width thresholds (default target 24 / min 12 / editorMin 20).
     for (int cols : {31, 32, 43, 44, 45}) {
         emitCase("panel-threshold-" + std::to_string(cols), request(cols, 24),
-                 panelOn);
+                 nullptr, true);
     }
 
     // Prompt reservation 0..3, plus the two error paths.
@@ -1131,13 +1078,12 @@ std::string captureGoldenMatrix() {
         emitCase("tabs-multibyte", multibyte, nullptr);
     }
 
-    // Focus targets.
-    emitCase("focus-panel", request(80, 24), [](ShellState& s) {
-        s.togglePanel();
-        (void)s.focusPanel();
-    });
-    emitCase("focus-prompt", request(80, 24),
-             [](ShellState& s) { s.enterPromptFocus(); });
+    // Focus targets. focus-panel preserves the committed golden: it was captured with an
+    // empty-provider ShellState where focusPanel() was a no-op, so the panel stayed
+    // inactive (Editor focus). The authority focuses a panel with real providers; that is
+    // exercised by the authority oracles, not this byte-golden.
+    emitCase("focus-panel", request(80, 24), nullptr, true, FocusTarget::Editor);
+    emitCase("focus-prompt", request(80, 24), nullptr, false, FocusTarget::Prompt);
 
     // Empty state.
     {
@@ -1164,7 +1110,7 @@ std::string captureGoldenMatrix() {
         req.style.dimensions.tabBarHeight = 2;
         req.style.dimensions.scrollbarGutterWidth = 2;
         req.style.dimensions.panelTargetWidth = 30;
-        emitCase("non-default-style-panel", req, panelOn);
+        emitCase("non-default-style-panel", req, nullptr, true);
     }
     return out.str();
 }
@@ -1219,11 +1165,12 @@ TEST(panelPresenceComesExclusivelyFromTheRequest) {
     ASSERT_TRUE(shown.accepted());
     ASSERT_TRUE(shown.view->panel.has_value());
 
-    ShellState shownStateOnly;
-    shownStateOnly.togglePanel();  // state shows the panel
+    // ShellState no longer carries panel presence at all, so the request is the sole
+    // source: with panelPresent false there is no panel regardless of any state.
+    ShellState plainState;
     auto hiddenReq = request(80, 12);
-    hiddenReq.panelPresent = false;  // request overrides the shown state
-    auto hidden = computeShellLayout(hiddenReq, shownStateOnly);
+    hiddenReq.panelPresent = false;
+    auto hidden = computeShellLayout(hiddenReq, plainState);
     ASSERT_TRUE(hidden.accepted());
     ASSERT_FALSE(hidden.view->panel.has_value());
 }

@@ -20,14 +20,16 @@ namespace {
 CommandHandlerResult validatePaletteTarget(EditorRuntime::Impl& runtime,
                                              CommandContext& context,
                                              std::string const& commandId) {
-    bool const paletteOpen = runtime.prompt.active() && runtime.prompt.request() &&
-                              runtime.prompt.request()->kind == PromptKind::Palette;
+    bool const paletteOpen = runtime.interaction.prompt().active() &&
+                              runtime.interaction.prompt().request() &&
+                              runtime.interaction.prompt().request()->kind ==
+                                  PromptKind::Palette;
     if (!paletteOpen) return failure("palette.execute requires the palette to be open");
     // Every picker uses a Palette-kind prompt, so prompt kind alone no longer
     // identifies the command palette.  Without this the file picker's
     // candidates -- which are PATHS, not command ids -- would be submittable as
     // commands.
-    if (runtime.openPicker != PickerKind::Command) {
+    if (runtime.interaction.openPicker() != PickerKind::Command) {
         return failure("palette.execute requires the command palette to be open");
     }
     auto const candidates = runtime.descriptors();
@@ -69,9 +71,9 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
         if (!mutation.accepted()) return failure(mutation.error->message);
         // Toggling with the picker already open must re-walk, or the setting
         // appears to do nothing until the picker is reopened.
-        if (runtime.openPicker == PickerKind::File) runtime.rebuildFileCandidates();
+        if (runtime.interaction.openPicker() == PickerKind::File) runtime.rebuildFileCandidates();
     }
-    else if (id == "palette.close") { (void)runtime.prompt.cancel(); }
+    else if (id == "palette.close") { (void)runtime.interaction.apply(CloseFinder{}); }
     else if (id == "palette.next" || id == "search.results_next") runtime.search.selectNext();
     else if (id == "palette.previous" || id == "search.results_previous") runtime.search.selectPrevious();
     else if (id == "palette.execute") {
@@ -83,7 +85,7 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
                            ClientCommand{arguments->commandId, revision, {}})) {
             return failure("could not queue the selected command");
         }
-        (void)runtime.prompt.cancel();
+        (void)runtime.interaction.apply(CloseFinder{});
     } else if (id == "search.workspace") {
         std::string query;
         if (auto const* text = payloadAs<std::string>(payload)) query = *text;
@@ -104,11 +106,10 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
         // typed line number via the generic prompt.submit path.
         auto const* lineText = payloadAs<std::string>(payload);
         if (lineText == nullptr) {
-            auto opened = runtime.prompt.open(PromptRequest{
+            auto opened = runtime.interaction.openPrompt(PromptRequest{
                 PromptKind::CommandArgument, "go to line",
                 {{"line", "line number", ""}}, {}, std::nullopt, "goto.line"});
             if (!opened.accepted()) return failure(opened.error->message);
-            runtime.reconcilePromptFocus();
             return success();
         }
         if (!runtime.activeDocumentId()) return failure("goto.line requires an active document");
@@ -175,9 +176,8 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
     // currently-active provider must be retained rather than replaced by a fresh
     // empty git/symbols provider (that is syncTreeProviderToPanel's job when a
     // panel is shown).
-    if (auto binding = panelProviderBinding(runtime.shell.activePanelProvider())) {
-        (void)runtime.tree.activateProvider(binding->id);
-    }
+    (void)runtime.tree.activateProvider(
+        panelProviderTreeBinding(runtime.interaction.truth().selectedProvider).id);
     if (id == "tree.select_next") { (void)runtime.tree.selectNext(); runtime.revealTreeSelection(); return success(); }
     if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); runtime.revealTreeSelection(); return success(); }
     if (id == "tree.activate") {
@@ -207,7 +207,7 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
             auto result = runtime.workspace.openFile(*selected->workspacePath);
             if (!result.accepted() || !result.document) return failure("failed to open tree file");
             auto opened = runtime.activateDocument(*result.document);
-            if (opened.accepted) runtime.shell.focusEditor();
+            if (opened.accepted) runtime.interaction.focusEditor();
             return opened;
         }
         return success();
@@ -220,7 +220,7 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
         // Focus follows the pointer (M8-F): clicking a tree row acts on the panel,
         // so move keyboard focus there. (For a file click the app dispatches
         // tree.activate next, whose file-open focus_editor() then wins.)
-        (void)runtime.shell.focusPanel();
+        (void)runtime.interaction.focusPanel();
         return success();
     }
     if (id == "tree.scroll") {

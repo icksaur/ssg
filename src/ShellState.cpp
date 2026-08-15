@@ -200,21 +200,12 @@ struct ShellState::Impl {
         std::make_unique<PaneNode>(PaneNode{PaneId{1}});
     PaneId active{1};
     std::uint32_t nextId = 2;
-    std::vector<std::string> providers;
-    std::size_t providerIndex = 0;
-    bool panelRequested = false;
-    FocusTarget focus = FocusTarget::Editor;
-    std::vector<FocusTarget> focusStack;
-    // The focus present when the panel was last shown, so hiding a focused panel
-    // restores it (a dedicated slot rather than the prompt focus_stack, so it
-    // never orphans an entry when the panel is hidden while a prompt holds focus).
-    std::optional<FocusTarget> focusBeforePanel;
     bool distractionFree = false;
 };
 
 ShellState::ShellState(std::vector<std::string> panelProviders)
     : impl_(std::make_unique<Impl>()) {
-    impl_->providers = std::move(panelProviders);
+    (void)panelProviders;
 }
 
 ShellState::~ShellState() = default;
@@ -292,105 +283,7 @@ bool ShellState::focusPane(PaneDirection direction,
     }
     if (!best) return false;
     impl_->active = best->id;
-    impl_->focus = FocusTarget::Editor;
     return true;
-}
-
-void ShellState::togglePanel() noexcept {
-    const bool showing = !impl_->panelRequested;
-    impl_->panelRequested = showing;
-    if (showing) {
-        // Showing the panel moves focus to it (remembering the prior focus so
-        // hiding can restore it), when the panel can actually take focus.
-        if (!impl_->providers.empty()) {
-            impl_->focusBeforePanel = impl_->focus;
-            impl_->focus = FocusTarget::Panel;
-        }
-    } else if (impl_->focus == FocusTarget::Panel) {
-        // Hiding the focused panel restores the focus that was present when it
-        // was shown; never restore to the panel itself or a transient prompt.
-        FocusTarget restored =
-            impl_->focusBeforePanel.value_or(FocusTarget::Editor);
-        if (restored == FocusTarget::Panel || restored == FocusTarget::Prompt) {
-            restored = FocusTarget::Editor;
-        }
-        impl_->focus = restored;
-        impl_->focusBeforePanel.reset();
-    }
-}
-
-bool ShellState::focusPanel() noexcept {
-    if (!impl_->panelRequested || impl_->providers.empty()) return false;
-    impl_->focus = FocusTarget::Panel;
-    return true;
-}
-
-bool ShellState::showPanelProvider(std::string_view provider) noexcept {
-    auto found = std::find(impl_->providers.begin(), impl_->providers.end(),
-                           provider);
-    if (found == impl_->providers.end()) return false;
-    auto index = static_cast<std::size_t>(
-        std::distance(impl_->providers.begin(), found));
-    if (impl_->panelRequested && impl_->providerIndex == index) {
-        togglePanel();
-        return true;
-    }
-    impl_->providerIndex = index;
-    if (!impl_->panelRequested) {
-        togglePanel();
-    }
-    return true;
-}
-
-void ShellState::focusEditor() noexcept {
-    impl_->focus = FocusTarget::Editor;
-    impl_->focusStack.clear();
-}
-
-void ShellState::enterPromptFocus() noexcept {
-    impl_->focusStack.push_back(impl_->focus);
-    impl_->focus = FocusTarget::Prompt;
-}
-
-void ShellState::exitPromptFocus() noexcept {
-    FocusTarget restored = FocusTarget::Editor;
-    if (!impl_->focusStack.empty()) {
-        restored = impl_->focusStack.back();
-        impl_->focusStack.pop_back();
-    }
-    if (restored == FocusTarget::Panel && !impl_->panelRequested) {
-        restored = FocusTarget::Editor;
-    }
-    impl_->focus = restored;
-}
-
-FocusTarget ShellState::focus() const noexcept { return impl_->focus; }
-
-void ShellState::nextPanelProvider() noexcept {
-    if (!impl_->providers.empty()) {
-        impl_->providerIndex = (impl_->providerIndex + 1) % impl_->providers.size();
-    }
-}
-
-void ShellState::previousPanelProvider() noexcept {
-    if (!impl_->providers.empty()) {
-        impl_->providerIndex =
-            (impl_->providerIndex + impl_->providers.size() - 1) %
-            impl_->providers.size();
-    }
-}
-
-bool ShellState::panelRequested() const noexcept {
-    return impl_->panelRequested;
-}
-
-bool ShellState::panelFocused() const noexcept {
-    return impl_->focus == FocusTarget::Panel;
-}
-
-std::string_view ShellState::activePanelProvider() const noexcept {
-    return impl_->providers.empty() ? std::string_view{} :
-                                     impl_->providers[impl_->providerIndex];
 }
 
 void ShellState::toggleDistractionFree() noexcept {
