@@ -279,11 +279,23 @@ struct HttpEditorRoute::Impl {
                 connection->snapshot.emplace(std::move(current));
                 continue;
             }
-            auto delta = SessionSnapshotCodec{}.deriveDelta(*connection->snapshot, current);
-            auto encoded = ProtocolCodec{}.encodeSessionDelta(delta);
-            auto& history = replay[replayKey(*connection->binding)];
-            history.push_back({delta.baseRevision(), delta.revision(), encoded});
-            while (history.size() > config.replayDeltas) history.pop_front();
+            // The delta is only an optimization. When a transition cannot be
+            // expressed as one (a document appearing where the previous snapshot
+            // had none, a presentation-mode change), re-sync this connection with a
+            // full snapshot rather than letting the exception escape and terminate
+            // the host. Recording no replay record leaves a revision gap the
+            // reconnect path already covers by sending a full snapshot.
+            std::string encoded;
+            try {
+                auto delta =
+                    SessionSnapshotCodec{}.deriveDelta(*connection->snapshot, current);
+                encoded = ProtocolCodec{}.encodeSessionDelta(delta);
+                auto& history = replay[replayKey(*connection->binding)];
+                history.push_back({delta.baseRevision(), delta.revision(), encoded});
+                while (history.size() > config.replayDeltas) history.pop_front();
+            } catch (std::exception const&) {
+                encoded = ProtocolCodec{}.encodeSessionSnapshot(current);
+            }
             connection->snapshot.emplace(std::move(current));
             enqueue(handle, connection, {std::move(encoded), true});
         }

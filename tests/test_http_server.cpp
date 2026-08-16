@@ -260,10 +260,16 @@ public:
                                   ssg::ClientId clientId) override {
         auto attached = session.attachedClient(clientId);
         if (!attached) throw std::logic_error{"snapshot for detached client"};
+        auto secs = sections(session.revision(), document);
+        // A host may hold the document revision fixed while text still changes --
+        // exactly the empty->first-open transition, which is inexpressible as a
+        // document delta and forces the server's full-snapshot fallback.
+        if (pinnedDocumentRevision) {
+            secs.document.revision = *pinnedDocumentRevision;
+        }
         return ssg::SessionSnapshotCodec{}.assemble(
             session.revision(), session.topology(), attached->principal,
-            attached->viewId, viewport(),
-            sections(session.revision(), document));
+            attached->viewId, viewport(), std::move(secs));
     }
 
     void statusAction(ssg::SessionId const&, ssg::ClientId,
@@ -277,6 +283,7 @@ public:
 
     ssg::EditorSession& session;
     std::string document;
+    std::optional<ssg::Revision> pinnedDocumentRevision;
     bool remote{false};
     // A host binds a Websocket-origin principal onto a socket; the origin is a
     // property of the deployment, exposed here so a seam test can drive a
@@ -442,6 +449,61 @@ TEST(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot) {
         ASSERT_EQ(snapshot.snapshot->revision(), ssg::Revision{3});
         ASSERT_EQ(snapshot.snapshot->sections().document.text,
                   std::string{"ab"});
+    }
+    server.stop();
+}
+
+TEST(anInexpressibleDocumentTransitionResyncsWithAFullSnapshot) {
+    // When a document's text changes without its document revision advancing (the
+    // empty->first-open transition), deriveDelta cannot express it and throws. The
+    // server must recover by sending a full, decodable snapshot to the attached
+    // client rather than letting the exception terminate the host.
+    Fixture fixture;
+    fixture.host->pinnedDocumentRevision = ssg::Revision{1};
+    constexpr std::uint16_t port = 18790;
+    ssg::HttpEditorServer server{
+        *fixture.session,
+        *fixture.host, {port, "/session", 8, 1, 250ms}};
+    server.start();
+    std::this_thread::sleep_for(20ms);
+    {
+        auto socket = connectWebsocket(port);
+        FrameReader reader{socket.socket};
+        attach(socket.socket);
+        auto initial =
+            ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload);
+        ASSERT_TRUE(initial.accepted());
+
+        auto const registry =
+            ssg::CommandArgumentCodecRegistry{fixture.session->catalog()};
+        auto command = ssg::ProtocolCodec{}.encodeCommandRequest(
+            {"text.insert", ssg::Revision{1}, ssg::TextInputArguments{"a"}},
+            registry);
+        sendAll(socket.socket, maskedFrame(0x2, command));
+
+        // The change is inexpressible as a delta, so the server re-syncs with a
+        // full snapshot -- decodable, carrying the advanced revision and new text.
+        auto resync =
+            ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload);
+        ASSERT_TRUE(resync.accepted());
+        ASSERT_EQ(resync.snapshot->revision(), ssg::Revision{2});
+        ASSERT_EQ(resync.snapshot->sections().document.text, std::string{"a"});
+    }
+    std::this_thread::sleep_for(20ms);
+
+    // The fallback recorded no replay delta for the 1->2 transition, leaving a gap
+    // in the replay chain. A client reconnecting from the pre-gap revision cannot
+    // replay across it, so the server must send a full snapshot (never an
+    // incomplete delta chain that would replay wrong).
+    {
+        auto reconnect = connectWebsocket(port);
+        FrameReader reconnectReader{reconnect.socket};
+        attach(reconnect.socket, ssg::Revision{1});
+        auto gapped = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+            reconnectReader.next().payload);
+        ASSERT_TRUE(gapped.accepted());
+        ASSERT_EQ(gapped.snapshot->revision(), ssg::Revision{2});
+        ASSERT_EQ(gapped.snapshot->sections().document.text, std::string{"a"});
     }
     server.stop();
 }
@@ -681,6 +743,7 @@ int main() {
     RUN(externallyOwnedRouteSharesOneServerLifecycle);
     RUN(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess);
     RUN(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot);
+    RUN(anInexpressibleDocumentTransitionResyncsWithAFullSnapshot);
     RUN(statusAndBinaryIngressShareTheAttachedConnection);
     RUN(replayLargerThanTheOutboundQueueFallsBackToSnapshot);
     RUN(attachRequestNeverCarriesAClientGrantedCapability);

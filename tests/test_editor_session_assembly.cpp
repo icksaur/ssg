@@ -201,6 +201,35 @@ TEST(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay) {
     ASSERT_EQ(*replayed.snapshot, after);
 }
 
+// A document's text changing WITHOUT its document revision advancing is not
+// expressible as a session delta: DocumentSnapshotCodec keys a document delta on
+// the revision (and diff identity), so an equal-revision text change yields no
+// document delta, and the session codec rejects the inconsistency loudly rather
+// than shipping a delta that would replay wrong. This is exactly the transition a
+// host hits when the FIRST document opens over an empty placeholder that shares
+// the placeholder's document revision; a delta-streaming host must therefore fall
+// back to a full snapshot on this rejection rather than letting it escape (which
+// previously terminated the standalone --http host).
+TEST(aDocumentTextChangeWithoutARevisionAdvanceIsInexpressibleAsADelta) {
+    auto oldSections = sections(ssg::Revision{4}, "same");
+    auto newSections = oldSections;
+    newSections.document.text = "opened contents";  // text changes, revision does not
+
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(oldSections));
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(newSections));
+
+    ASSERT_THROWS(ssg::SessionSnapshotCodec{}.deriveDelta(before, after),
+                  std::invalid_argument);
+}
+
 TEST(perClientCapabilitiesAndViewportsAreIsolated) {
     auto shared = sections(ssg::Revision{8}, "shared");
     auto first = ssg::SessionSnapshotCodec{}.assemble(
@@ -289,6 +318,7 @@ int main() {
     RUN(fullSnapshotMatchesReplayedAggregateDelta);
     RUN(nonDocumentTransitionReplaysAndRejectsADifferentClient);
     RUN(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay);
+    RUN(aDocumentTextChangeWithoutARevisionAdvanceIsInexpressibleAsADelta);
     RUN(perClientCapabilitiesAndViewportsAreIsolated);
     RUN(shellDeltaDetectsAPanelScrollbarOnlyChange);
     RUN(shellDeltaDetectsATabHitOnlyChange);

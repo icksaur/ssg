@@ -291,16 +291,29 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                              settledId](Http::WebSocketHandle handle) {
         auto current = runtime.snapshot(client);
         if (!current) return;
-        std::vector<EnvelopeSection> sections;
         if (prevSnapshot->has_value() &&
             (*prevSnapshot)->revision() != current->revision()) {
-            auto delta =
-                SessionSnapshotCodec{}.deriveDelta(**prevSnapshot, *current);
-            sections.push_back(
-                {kSectionLibraryBody, ProtocolCodec{}.encodeSessionDelta(delta)});
+            std::string body;
+            try {
+                auto delta =
+                    SessionSnapshotCodec{}.deriveDelta(**prevSnapshot, *current);
+                body = ProtocolCodec{}.encodeSessionDelta(delta);
+            } catch (std::exception const&) {
+                // Some authoritative transitions cannot be expressed as a delta
+                // (a presentation-mode change, or a document appearing where the
+                // previous snapshot had none). The delta is only an optimization:
+                // re-sync the client with a full snapshot -- which every client
+                // already accepts as a fresh base -- rather than dropping the
+                // update or letting the exception escape and terminate the host.
+                body = ProtocolCodec{}.encodeSessionSnapshot(*current);
+            }
             *prevSnapshot = std::move(current);
+            (void)server.send(
+                handle, makeEnvelope(settledId->load(),
+                                     {{kSectionLibraryBody, std::move(body)}}));
+            return;
         }
-        (void)server.send(handle, makeEnvelope(settledId->load(), sections));
+        (void)server.send(handle, makeEnvelope(settledId->load(), {}));
     };
 
     for (auto const& asset : kWebAssets) {
@@ -319,6 +332,12 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                  compiledKeymap, settledId,
                  runtimeMutex, attachedHandle](Http::WebSocketHandle handle,
                             Http::WebSocketMessage message) {
+                    // A single connection's malformed or unexpected message must
+                    // never terminate the server process: an exception escaping this
+                    // callback would propagate out of the http library's connection
+                    // thread and std::terminate the host. Contain it here, log it,
+                    // and keep serving.
+                    try {
                     std::string_view const payload{message.data};
                     if (payload.rfind("KEY:", 0) == 0) {
                         auto const frame = parseKeyFrame(payload.substr(4));
@@ -411,6 +430,11 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     }
                     *attachedHandle = handle;
                     sendSnapshotLocked(handle);
+                    } catch (std::exception const& error) {
+                        std::fprintf(stderr,
+                                     "ssg: --http message handler error: %s\n",
+                                     error.what());
+                    }
                 },
             .onClose =
                 [runtimeMutex, attachedHandle](Http::WebSocketHandle handle) {
