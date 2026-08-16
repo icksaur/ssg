@@ -103,7 +103,7 @@ function roleColor(ordinal, theme) {
 // children); a leaf becomes a span. `parentAxis` is the axis the node's own Size
 // measures along (a child sizes along its parent's main axis). Returns null for an
 // omitted node.
-function renderChromeNode(node, theme, parentAxis = AXIS.ROW) {
+function renderChromeNode(node, theme, parentAxis = AXIS.ROW, topLevel = false) {
   if (!node) return null;
   if (node.kind === 'container') {
     const div = document.createElement('div');
@@ -114,8 +114,18 @@ function renderChromeNode(node, theme, parentAxis = AXIS.ROW) {
     // rather than shrinking to its content on the cross axis.
     div.style.alignItems = 'stretch';
     div.style.boxSizing = 'border-box';  // inset stays inside the published extent
-    applySize(div, node.size, parentAxis);
-    applyInset(div, node.inset, node.size, parentAxis);
+    // A top-level well-known area is a native region: the browser owns its outer
+    // geometry. The grid's Exact cell heights (header/footer) are a grid contract,
+    // not a web one, so its own published Size is NOT imported as a CSS extent --
+    // applying it would clip the bar (an Exact cell height mis-axised to width:1ch
+    // once collapsed the whole header to "~"). The region fills its host width and
+    // sizes to content; the inner tree's sizes below stay authoritative.
+    if (topLevel) {
+      div.style.width = '100%';
+    } else {
+      applySize(div, node.size, parentAxis);
+      applyInset(div, node.inset, node.size, parentAxis);
+    }
     if (node.gap) div.style.gap = node.gap + 'ch';
     for (const child of node.children) {
       const el = renderChromeNode(child, theme, node.axis);
@@ -374,8 +384,12 @@ function renderChrome(sections) {
       renderedBody = true;
       tabsEl.textContent = '';
     }
-    const el = renderChromeNode(area, sections.theme);
-    if (el) host.appendChild(el);
+    const el = renderChromeNode(area, sections.theme, AXIS.COLUMN, true);
+    if (el) {
+      // The body is the flexible region; header/footer size to their content.
+      if (area.id === 'body') el.style.flex = '1 1 auto';
+      host.appendChild(el);
+    }
   }
   return renderedBody;
 }
