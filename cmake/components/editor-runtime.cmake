@@ -49,6 +49,15 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(test_runtime_presentation PRIVATE ssg)
     add_test(NAME test_runtime_presentation COMMAND test_runtime_presentation)
 
+    add_executable(test_runtime_grid_parity
+        ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_grid_parity.cpp
+    )
+    target_link_libraries(test_runtime_grid_parity PRIVATE ssg)
+    target_compile_definitions(test_runtime_grid_parity PRIVATE
+        SSG_SOURCE_DIR="${SSG_SOURCE_DIR}"
+    )
+    add_test(NAME test_runtime_grid_parity COMMAND test_runtime_grid_parity)
+
     add_executable(test_runtime_navigation
         ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_navigation.cpp
     )
