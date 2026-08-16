@@ -582,9 +582,29 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
                 (void)::write(worker->wakeWriteFd, &byte, 1);
             }
         };
+        // The branch is published independently of the diff: a refresh whose diff is
+        // rejected (a file over the work budget) still records the branch, so a large
+        // working tree never hides the branch indicator.
+        const auto queueBranchScan = [&]() {
+            auto scan = worker->source.takeBranchOnlyScanIfChanged();
+            if (!scan) {
+                return;
+            }
+            bool signal = false;
+            {
+                std::lock_guard lock(worker->mutex);
+                signal = worker->pendingScans.empty();
+                worker->pendingScans.push_back(std::move(*scan));
+            }
+            if (signal) {
+                const char byte = 'g';
+                (void)::write(worker->wakeWriteFd, &byte, 1);
+            }
+        };
 
         std::function<void(const GitDiffRefreshResult&, bool)> handleResult;
         handleResult = [&](const GitDiffRefreshResult& refreshed, bool fullRefresh) {
+            queueBranchScan();
             if (refreshed.applied) {
                 queueLatestScan();
                 clearRetry();

@@ -298,12 +298,76 @@ TEST(incompleteScanKeepsPublishedDiffSet) {
     ASSERT_EQ(model.viewState(), published);
 }
 
+// A rejected diff (a file the DiffModel cannot apply, e.g. over the work budget)
+// must NOT suppress the branch: the source still yields a revision-0 branch-only
+// scan so the header branch stays live over a large or unmodelable working tree.
+TEST(branchPublishesIndependentlyWhenDiffScanIsRejected) {
+    DiffModel model;
+    GitDiffSource source{model};
+    FakeRepository repository;
+    repository.branch = std::string{"main"};
+
+    // A scan whose file escapes the tree is rejected by applyFullScan.
+    GitDiffScan invalid{
+        .baselineIdentity = "base-1",
+        .currentBranch = std::string{"main"},
+        .files = {
+            {.id = DiffFileId{"bad.cpp"},
+             .path = "../bad.cpp",
+             .baselineContent = "b\n",
+             .workingContent = "bb\n"},
+        },
+        .complete = true,
+    };
+    repository.fullScans.push_back(invalid);
+    auto rejected = source.refresh(repository);
+    ASSERT_FALSE(rejected.applied);
+
+    auto branchScan = source.takeBranchOnlyScanIfChanged();
+    ASSERT_TRUE(branchScan.has_value());
+    if (branchScan) {
+        ASSERT_EQ(branchScan->revision.value(), std::uint64_t{0});
+        ASSERT_TRUE(branchScan->currentBranch.has_value());
+        ASSERT_EQ(*branchScan->currentBranch, std::string{"main"});
+    }
+    // Published once: an unchanged branch does not re-emit.
+    ASSERT_FALSE(source.takeBranchOnlyScanIfChanged().has_value());
+}
+
+// An applied full scan already carries the branch (revision >= 1 sets it), so the
+// source must not additionally emit a redundant branch-only scan.
+TEST(appliedScanCarriesBranchSoNoRedundantBranchOnlyScan) {
+    DiffModel model;
+    GitDiffSource source{model};
+    FakeRepository repository;
+    repository.branch = std::string{"main"};
+
+    GitDiffScan applied{
+        .baselineIdentity = "base-1",
+        .currentBranch = std::string{"main"},
+        .files = {
+            {.id = DiffFileId{"a.cpp"},
+             .path = "a.cpp",
+             .baselineContent = "a\n",
+             .workingContent = "aa\n"},
+        },
+        .complete = true,
+    };
+    repository.fullScans.push_back(applied);
+    auto refreshed = source.refresh(repository);
+    ASSERT_TRUE(refreshed.applied);
+    ASSERT_TRUE(source.latestAppliedScan().has_value());
+    ASSERT_FALSE(source.takeBranchOnlyScanIfChanged().has_value());
+}
+
 }  // namespace
 
 int main() {
     RUN(referenceReconcileMatchesScriptedScans);
     RUN(fullScanRejectsAtomicallyWithoutPartialPublication);
     RUN(incompleteScanKeepsPublishedDiffSet);
+    RUN(branchPublishesIndependentlyWhenDiffScanIsRejected);
+    RUN(appliedScanCarriesBranchSoNoRedundantBranchOnlyScan);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

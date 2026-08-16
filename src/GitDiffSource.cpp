@@ -132,6 +132,7 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
     publishedRevision_ = Revision{publishedRevision_.value() + 1};
     latestAppliedScan_ = buildPublishedScan(currentFiles_, baselineIdentity_,
                                             currentBranch_, publishedRevision);
+    publishedBranch_ = currentBranch_;
     return {.applied = true, .requestedRescan = false, .accepted = true};
 }
 
@@ -223,7 +224,16 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
     publishedRevision_ = Revision{publishedRevision_.value() + 1};
     latestAppliedScan_ = buildPublishedScan(currentFiles_, baselineIdentity_,
                                             currentBranch_, publishedRevision);
+    publishedBranch_ = currentBranch_;
     return {.applied = true, .requestedRescan = false, .accepted = true};
+}
+
+std::optional<GitDiffScan> GitDiffSource::takeBranchOnlyScanIfChanged() {
+    if (currentBranch_ == publishedBranch_) {
+        return std::nullopt;
+    }
+    publishedBranch_ = currentBranch_;
+    return GitDiffScan{.revision = Revision{0}, .currentBranch = currentBranch_};
 }
 
 std::optional<GitDiffScan> GitDiffSource::latestAppliedScan() const {
