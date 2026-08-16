@@ -22,17 +22,22 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <charconv>
 #include <chrono>
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <vector>
+
+#include <poll.h>
+#include <unistd.h>
 
 namespace ssg::app {
 
@@ -241,11 +246,6 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
 
     Http::Server server{port, Http::BindAddress::loopback};
 
-    // M1 serves exactly one browser, sharing the single attached ClientId; a
-    // second concurrent attach is refused explicitly rather than silently
-    // mutating the first client's state. Multi-client is a later milestone.
-    auto attached = std::make_shared<std::atomic<bool>>(false);
-
     // Compile the runtime's keymap once for keystroke resolution. The --http
     // path runs no init script, so the bindings are the defaults; rebuilding on
     // a keymap change is deferred until the web path can load one.
@@ -260,12 +260,18 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     // The host serves one client, so a single cell suffices.
     auto prevSnapshot = std::make_shared<std::optional<SessionSnapshot>>();
     auto settledId = std::make_shared<std::atomic<std::uint64_t>>(kNoSettlement);
+    auto runtimeMutex = std::make_shared<std::mutex>();
+    // M1 serves exactly one browser, sharing the single attached ClientId; a
+    // second concurrent attach is refused explicitly rather than silently
+    // mutating the first client's state. Multi-client is a later milestone.
+    // Guarded by runtimeMutex; 0 means no attached connection.
+    auto attachedHandle = std::make_shared<Http::WebSocketHandle>(0);
 
     // Send the whole semantic snapshot as the envelope body -- the first frame
     // after attach, and the base every later delta re-bases onto. The browser
     // lays out natively, so it consumes the dimensionless snapshot (no grid).
-    auto sendSnapshot = [&runtime, &server, client, prevSnapshot,
-                         settledId](Http::WebSocketHandle handle) {
+    auto sendSnapshotLocked = [&runtime, &server, client, prevSnapshot,
+                               settledId](Http::WebSocketHandle handle) {
         auto snapshot = runtime.snapshot(client);
         if (!snapshot) {
             (void)server.send(handle, std::string{"no snapshot for client"});
@@ -281,8 +287,8 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     // After a dispatched command, ship what changed: a delta from the previous
     // snapshot when the revision advanced, or a header-only settlement when it
     // did not, always stamping the highest settled client edit id.
-    auto sendUpdate = [&runtime, &server, client, prevSnapshot,
-                       settledId](Http::WebSocketHandle handle) {
+    auto sendUpdateLocked = [&runtime, &server, client, prevSnapshot,
+                             settledId](Http::WebSocketHandle handle) {
         auto current = runtime.snapshot(client);
         if (!current) return;
         std::vector<EnvelopeSection> sections;
@@ -309,18 +315,19 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
         Http::WebSocketHandler{
             .onOpen = {},
             .onMessage =
-                [&runtime, &server, client, sendSnapshot, sendUpdate, attached,
-                 compiledKeymap, settledId](Http::WebSocketHandle handle,
+                [&runtime, &server, client, sendSnapshotLocked, sendUpdateLocked,
+                 compiledKeymap, settledId,
+                 runtimeMutex, attachedHandle](Http::WebSocketHandle handle,
                             Http::WebSocketMessage message) {
                     std::string_view const payload{message.data};
                     if (payload.rfind("KEY:", 0) == 0) {
-                        // Only an attached connection may drive the runtime; a
-                        // key before a valid attach is ignored, never dispatched.
-                        if (!attached->load()) return;
                         auto const frame = parseKeyFrame(payload.substr(4));
+                        std::lock_guard lock{*runtimeMutex};
+                        if (*attachedHandle != handle) return;
                         if (frame && compiledKeymap) {
-                            bool const dispatched =
-                                handleKey(runtime, client, *compiledKeymap, *frame);
+                            bool dispatched = false;
+                            dispatched = handleKey(
+                                runtime, client, *compiledKeymap, *frame);
                             // Settle the predicted edit only once it is actually
                             // resolved (applied or rejected) by a real dispatch;
                             // a malformed or no-op frame must not falsely
@@ -330,7 +337,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                                 settledId->store(*frame->editId);
                             }
                         }
-                        sendUpdate(handle);
+                        sendUpdateLocked(handle);
                         return;
                     }
                     // A chrome widget was clicked: dispatch its library-resolved
@@ -338,29 +345,32 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     // dynamic node state; an unknown id is rejected by dispatch with
                     // no side effect, so no separate validation is needed.
                     if (payload.rfind("CMD:", 0) == 0) {
-                        if (!attached->load()) return;
                         std::string const command{payload.substr(4)};
+                        std::lock_guard lock{*runtimeMutex};
+                        if (*attachedHandle != handle) return;
                         if (!command.empty()) {
                             (void)runtime.dispatch(
                                 client, {command, runtime.revision(), {}});
                         }
-                        sendUpdate(handle);
+                        sendUpdateLocked(handle);
                         return;
                     }
                     auto const status = ProtocolCodec{}.decodeStatusActionInvocation(
                         message.data);
                     if (status.accepted()) {
-                        if (!attached->load()) return;
+                        std::lock_guard lock{*runtimeMutex};
+                        if (*attachedHandle != handle) return;
                         (void)runtime.dispatch(
                             client, {"status.invoke_action", runtime.revision(),
                                      *status.invocation});
-                        sendUpdate(handle);
+                        sendUpdateLocked(handle);
                         return;
                     }
                     // Submit the selected candidate by authoritative candidate id.
                     if (payload.rfind("PSUB:", 0) == 0) {
-                        if (!attached->load()) return;
                         std::string const id{payload.substr(5)};
+                        std::lock_guard lock{*runtimeMutex};
+                        if (*attachedHandle != handle) return;
                         auto snapshot = runtime.snapshot(client);
                         if (snapshot && !id.empty()) {
                             auto const& palette = snapshot->sections().palette;
@@ -379,35 +389,41 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                                 }
                             }
                         }
-                        sendUpdate(handle);
+                        sendUpdateLocked(handle);
                         return;
                     }
                     if (payload == "SNAP") {
-                        if (!attached->load()) return;
-                        sendSnapshot(handle);
+                        std::lock_guard lock{*runtimeMutex};
+                        if (*attachedHandle != handle) return;
+                        sendSnapshotLocked(handle);
                         return;
                     }
                     auto const attach = decodeSessionAttachRequest(message.data);
                     if (!attach.accepted()) {
                         return;
                     }
-                    bool expected = false;
-                    if (!attached->compare_exchange_strong(expected, true)) {
+                    std::lock_guard lock{*runtimeMutex};
+                    if (*attachedHandle != 0) {
                         (void)server.send(
                             handle,
                             std::string{"a client is already attached"});
                         return;
                     }
-                    sendSnapshot(handle);
+                    *attachedHandle = handle;
+                    sendSnapshotLocked(handle);
                 },
             .onClose =
-                [attached](Http::WebSocketHandle) {
-                    attached->store(false);
+                [runtimeMutex, attachedHandle](Http::WebSocketHandle handle) {
+                    // Only the attached connection closing detaches the client; an
+                    // unattached or attach-refused socket closing must not.
+                    std::lock_guard lock{*runtimeMutex};
+                    if (*attachedHandle == handle) *attachedHandle = 0;
                 },
         });
 
     std::signal(SIGINT, onSignal);
     std::signal(SIGTERM, onSignal);
+    runtime.primeDeferred();
     try {
         server.start();
     } catch (std::exception const& error) {
@@ -417,8 +433,59 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     std::fprintf(stderr,
                  "ssg: serving http://127.0.0.1:%u/  (Ctrl-C to stop)\n",
                  static_cast<unsigned>(port));
+    auto gitWakeDescriptor = [&runtime, runtimeMutex]() {
+        std::lock_guard lock{*runtimeMutex};
+        return runtime.gitDiffWakeDescriptor();
+    };
+    auto consumeGitWake = [&runtime, runtimeMutex]() {
+        std::lock_guard lock{*runtimeMutex};
+        int const fd = runtime.gitDiffWakeDescriptor();
+        if (fd == -1) return;
+        char scratch[64];
+        while (true) {
+            auto const count = ::read(fd, scratch, sizeof scratch);
+            if (count <= 0) {
+                if (count == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                    break;
+                }
+                break;
+            }
+        }
+    };
+    auto broadcastGitUpdate = [&runtime, &server, client, prevSnapshot,
+                               runtimeMutex, settledId, attachedHandle]() {
+        std::lock_guard lock{*runtimeMutex};
+        auto current = runtime.snapshot(client);
+        if (!current) return;
+        // Send under the lock so delta derivation, prevSnapshot advance, and the
+        // write are one ordered step: a concurrent per-connection update cannot
+        // interleave and deliver a later delta before an earlier one on the
+        // ordered connection. Target only the attached connection -- an
+        // authoritative delta must never reach an unattached or attach-refused
+        // socket.
+        const Http::WebSocketHandle target = *attachedHandle;
+        if (target != 0 && prevSnapshot->has_value() &&
+            (*prevSnapshot)->revision() != current->revision()) {
+            auto delta =
+                SessionSnapshotCodec{}.deriveDelta(**prevSnapshot, *current);
+            auto frame = makeEnvelope(
+                settledId->load(),
+                {{kSectionLibraryBody,
+                  ProtocolCodec{}.encodeSessionDelta(delta)}});
+            (void)server.send(target, frame);
+        }
+        *prevSnapshot = std::move(current);
+    };
     while (!g_stop.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        int const fd = gitWakeDescriptor();
+        if (fd == -1) {
+            std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        } else {
+            pollfd gitWake{fd, POLLIN, 0};
+            (void)::poll(&gitWake, 1, 100);
+            consumeGitWake();
+        }
+        broadcastGitUpdate();
     }
     server.stop();
     return 0;
