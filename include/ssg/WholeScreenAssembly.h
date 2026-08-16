@@ -4,11 +4,11 @@
 // ssg.chrome composition, build the canonical whole-screen UiComposition
 //
 //   root
-//   ├─ header            (composed override, else built-in from headerFields)
+//   ├─ header            (composed override, else built-in from header)
 //   ├─ body   Row Flex
 //   │  ├─ panel   Col Exact(dimensions.panelTargetWidth) [ filetree, gitstatus ]
 //   │  └─ content Col Flex                               [ tabview,  findresults ]
-//   └─ footer            (composed override, else built-in from footerFields + hint)
+//   └─ footer            (composed override, else built-in from footer + hint)
 //
 // This function OWNS the fallback/override rule: a ssg.chrome-composed header or footer
 // REPLACES the corresponding built-in area; an omitted one is synthesized from the

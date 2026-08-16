@@ -38,10 +38,11 @@ struct UiChromeLowerResult {
 // canonical chrome shape (a root container of exactly three group containers); a
 // malformed tree returns a named error and emits nothing.
 [[nodiscard]] UiChromeLowerResult lowerUiChromeRegion(
-    const UiNode& regionRoot, const Rect& rect, ShellNodeKind nodeKind,
+    const UiNode& regionRoot, const Rect& rect, ShellNodeKind regionNodeKind,
     SemanticRole defaultRole, const Style& style,
     const ChromeProviderResolver& resolveProvider,
-    std::vector<AccessibilityNode>& out);
+    std::vector<AccessibilityNode>& out,
+    const StatusViewState* statusView = nullptr);
 
 // Resolve the dynamic node state for a VALIDATED composed schema: one UiNodeState
 // per node (every node present), each leaf resolved to its semantic

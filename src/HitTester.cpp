@@ -125,6 +125,13 @@ RegionHit HitTester::at(int column, int row) const {
             hit.commandId = node.commandId;
             return hit;
         }
+        if (node.kind == ShellNodeKind::FooterAction) {
+            RegionHit hit;
+            hit.region = HitRegion::StatusAction;
+            hit.fieldId = node.id;
+            hit.statusInvocation = node.statusInvocation;
+            return hit;
+        }
         if (node.kind == ShellNodeKind::FooterHint) {
             // The persistent help hint dispatches its command id directly. It is
             // NOT a status-queue action, so it deliberately does not go through

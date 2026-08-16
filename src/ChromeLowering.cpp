@@ -1,6 +1,7 @@
 #include <ssg/ChromeLowering.h>
 
 #include <ssg/GraphemeLayout.h>
+#include <ssg/StatusQueue.h>
 #include <ssg/Theme.h>  // semanticRoleFromName
 #include <ssg/Widget.h>
 
@@ -19,10 +20,13 @@ namespace {
 struct Packed {
     std::string stackId;
     const WidgetDescriptor* descriptor;
+    std::string nodeId;
     std::string content;
     std::string label;
     std::optional<std::string> command;
     SemanticRole role;
+    ShellNodeKind kind = ShellNodeKind::FooterField;
+    std::optional<StatusActionInvocation> statusInvocation;
 };
 
 struct Resolved {
@@ -147,8 +151,18 @@ std::optional<UiLeafState> semanticLeafState(
     }
 }
 
-int widgetDesired(const WidgetDescriptor& w, const Resolved& resolved) {
+int displayCells(std::string_view text) {
+    return static_cast<int>(GraphemeLayout{}.computeRun(text).totalCells);
+}
+
+int widgetDesired(const WidgetDescriptor& w, const Resolved& resolved,
+                  const Style& style) {
     if (w.kind == WidgetKind::Spacer) return w.width.value_or(0);
+    if (w.kind == WidgetKind::StatusActions ||
+        (w.kind == WidgetKind::Field && w.id == "footer.hint")) {
+        return std::max(1, displayCells(resolved.content) +
+                               style.dimensions.labelPadding);
+    }
     return measureFieldCells(resolved.content);
 }
 
@@ -160,11 +174,11 @@ SemanticRole widgetRole(const WidgetDescriptor& w, SemanticRole defaultRole) {
 }
 
 StackItem stackItemFor(const WidgetDescriptor& w, std::string stackId,
-                       const Resolved& resolved) {
+                       const Resolved& resolved, const Style& style) {
     StackItem item;
     item.id = std::move(stackId);
     item.content = resolved.content;
-    item.desired = widgetDesired(w, resolved);
+    item.desired = widgetDesired(w, resolved, style);
     item.rank = w.rank;
     item.keep = w.keep;
     item.overflow = w.overflow;
@@ -182,18 +196,46 @@ static int lowerChromeGroups(
     const std::vector<const WidgetDescriptor*>& left,
     const std::vector<const WidgetDescriptor*>& right,
     const WidgetDescriptor* center, int separator, CenterWidth centerWidth,
-    int centerFixed, const Rect& rect, ShellNodeKind nodeKind,
+    int centerFixed, const Rect& rect, ShellNodeKind regionNodeKind,
     SemanticRole defaultRole, const Style& style,
     const ChromeProviderResolver& resolveProvider,
-    std::vector<AccessibilityNode>& out) {
+    std::vector<AccessibilityNode>& out, const StatusViewState* statusView) {
     WidgetStack stack{separator};
     std::vector<Packed> packed;
 
     const auto pack = [&](const WidgetDescriptor& w, const std::string& stackId,
                           bool isLeft, bool isCenter) {
+        if (w.kind == WidgetKind::StatusActions) {
+            if (!statusView || statusView->items.empty()) return;
+            const std::size_t selected = std::min(statusView->selected, statusView->items.size() - 1);
+            const auto& itemView = statusView->items[selected];
+            for (std::size_t actionIndex = 0; actionIndex < itemView.actions.size(); ++actionIndex) {
+                const auto& action = itemView.actions[actionIndex];
+                if (action.accessibleLabel.empty()) continue;
+                Resolved resolved;
+                resolved.content = action.accessibleLabel;
+                resolved.label = action.accessibleLabel;
+                const std::string actionStackId = stackId + ".A" + std::to_string(actionIndex);
+                StackItem stackItem = stackItemFor(w, actionStackId, resolved, style);
+                stackItem.rank = w.rank;
+                stackItem.overflow = Overflow::Truncate;
+                if (isCenter) {
+                    stack.center(std::move(stackItem), centerWidth, centerFixed);
+                } else if (isLeft) {
+                    stack.packLeft(std::move(stackItem));
+                } else {
+                    stack.packRight(std::move(stackItem));
+                }
+                packed.push_back({actionStackId, &w, action.id, resolved.content, resolved.label,
+                                  std::nullopt, SemanticRole::StatusInfo,
+                                  ShellNodeKind::FooterAction,
+                                  StatusActionInvocation{itemView.id, action.id, itemView.generation}});
+            }
+            return;
+        }
         const Resolved resolved = resolveWidget(w, style, resolveProvider);
         if (resolved.drop) return;
-        StackItem item = stackItemFor(w, stackId, resolved);
+        StackItem item = stackItemFor(w, stackId, resolved, style);
         if (isCenter) {
             stack.center(std::move(item), centerWidth, centerFixed);
         } else if (isLeft) {
@@ -201,8 +243,16 @@ static int lowerChromeGroups(
         } else {
             stack.packRight(std::move(item));
         }
-        packed.push_back({stackId, &w, resolved.content, resolved.label,
-                          resolved.command, widgetRole(w, defaultRole)});
+        const ShellNodeKind kind =
+            (w.kind == WidgetKind::Field && w.id == "footer.hint")
+                ? ShellNodeKind::FooterHint
+                : regionNodeKind;
+        const SemanticRole role =
+            (kind == ShellNodeKind::FooterHint) ? SemanticRole::Footer
+            : (kind == ShellNodeKind::FooterAction) ? SemanticRole::StatusInfo
+                                                : widgetRole(w, defaultRole);
+        packed.push_back({stackId, &w, w.id, resolved.content, resolved.label,
+                          resolved.command, role, kind, std::nullopt});
     };
 
     for (std::size_t i = 0; i < left.size(); ++i)
@@ -220,7 +270,7 @@ static int lowerChromeGroups(
     for (const auto& p : solved->placed)
         consumedRight = std::max(consumedRight, rect.x + p.offset + p.size);
 
-    const auto emit = [&](std::string_view stackId) {
+    const auto emitOne = [&](std::string_view stackId) {
         const StackPlacement* placement = nullptr;
         for (const auto& p : solved->placed)
             if (p.id == stackId) placement = &p;
@@ -232,9 +282,18 @@ static int lowerChromeGroups(
         // A Spacer occupies stack space but emits no node -- it is a blank gap,
         // not an interactive element.
         if (item->descriptor->kind == WidgetKind::Spacer) return;
-        out.push_back({nodeKind, item->descriptor->id, item->label,
+        out.push_back({item->kind, item->nodeId, item->label,
                        {rect.x + placement->offset, rect.y, placement->size, 1},
-                       item->role, item->content, item->command});
+                       item->role, item->content, item->command,
+                       item->statusInvocation});
+    };
+
+    const auto emit = [&](std::string_view stackId) {
+        emitOne(stackId);
+        const std::string prefix = std::string{stackId} + ".A";
+        for (const auto& p : packed) {
+            if (p.stackId.rfind(prefix, 0) == 0) emitOne(p.stackId);
+        }
     };
 
     // Emit left → center → right, so hit-test order is deterministic.
@@ -266,10 +325,10 @@ std::optional<std::vector<const WidgetDescriptor*>> groupLeaves(
 }  // namespace
 
 UiChromeLowerResult lowerUiChromeRegion(
-    const UiNode& regionRoot, const Rect& rect, ShellNodeKind nodeKind,
+    const UiNode& regionRoot, const Rect& rect, ShellNodeKind regionNodeKind,
     SemanticRole defaultRole, const Style& style,
     const ChromeProviderResolver& resolveProvider,
-    std::vector<AccessibilityNode>& out) {
+    std::vector<AccessibilityNode>& out, const StatusViewState* statusView) {
     // The canonical chrome shape: a Row root of exactly three groups --
     // left(Auto, Row), middle(Flex, Row), right(Auto, Row) -- so the packing is
     // encoded in the sizing. Every field the shape depends on is CHECKED here (no
@@ -379,7 +438,7 @@ UiChromeLowerResult lowerUiChromeRegion(
 
     const int rightEdge = lowerChromeGroups(
         *leftWidgets, *rightWidgets, center, separator, centerWidth, centerFixed,
-        rect, nodeKind, defaultRole, style, resolveProvider, out);
+        rect, regionNodeKind, defaultRole, style, resolveProvider, out, statusView);
     return {std::nullopt, rightEdge};
 }
 

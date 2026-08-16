@@ -65,7 +65,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -74,6 +73,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
@@ -98,7 +98,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -107,6 +106,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=7 role=9 rect=0,1,24,22 id=panel label=Side panel content= cmd=
   kind=8 role=9 rect=0,1,24,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=23,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
@@ -134,7 +134,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=79,39,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,39,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,39,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,39,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -144,6 +143,7 @@ a11y:
   kind=3 role=11 rect=47,39,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,39,5,1 id=file_type label=File type content=C++ cmd=
   kind=3 role=11 rect=59,39,7,1 id=file_size label=File size content=1 KiB cmd=
+  kind=4 role=12 rect=79,39,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=7 role=9 rect=0,1,24,38 id=panel label=Side panel content= cmd=
   kind=8 role=9 rect=0,1,24,38 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=23,2,1,37 id=panel.scrollbar label=Panel scrollbar content= cmd=
@@ -171,8 +171,8 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=12,10,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,10,7,1 id=actionable_status label=Status message content=Saved cmd=
+  kind=4 role=12 rect=12,10,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=7 role=9 rect=0,1,13,9 id=panel label=Side panel content= cmd=
   kind=8 role=9 rect=0,1,13,9 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=12,2,1,8 id=panel.scrollbar label=Panel scrollbar content= cmd=
@@ -200,8 +200,8 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=10,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
+  kind=4 role=12 rect=10,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,31,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,31,21 id=pane.1 label=Editor pane 1 content= cmd=
@@ -226,8 +226,8 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=11,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
+  kind=4 role=12 rect=11,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=7 role=9 rect=0,1,12,22 id=panel label=Side panel content= cmd=
   kind=8 role=9 rect=0,1,12,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=11,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
@@ -255,9 +255,9 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=22,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
+  kind=4 role=12 rect=22,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=7 role=9 rect=0,1,23,22 id=panel label=Side panel content= cmd=
   kind=8 role=9 rect=0,1,23,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=22,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
@@ -285,9 +285,9 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=23,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
+  kind=4 role=12 rect=23,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=7 role=9 rect=0,1,24,22 id=panel label=Side panel content= cmd=
   kind=8 role=9 rect=0,1,24,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=23,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
@@ -315,9 +315,9 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=24,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
+  kind=4 role=12 rect=24,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=7 role=9 rect=0,1,24,22 id=panel label=Side panel content= cmd=
   kind=8 role=9 rect=0,1,24,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=23,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
@@ -345,7 +345,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -354,6 +353,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
@@ -378,7 +378,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -387,6 +386,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=11 role=16 rect=0,23,80,1 id=prompt label=Prompt surface content= cmd=
@@ -412,7 +412,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -421,6 +420,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=11 role=16 rect=0,22,80,2 id=prompt label=Prompt surface content= cmd=
@@ -446,7 +446,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -455,6 +454,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=11 role=16 rect=0,21,80,3 id=prompt label=Prompt surface content= cmd=
@@ -487,7 +487,6 @@ a11y:
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
   kind=1 role=16 rect=31,0,6,1 id=input_line.query label=Input line content=> find cmd=
   kind=1 role=14 rect=37,0,2,1 id=input_line.ghost label=Input line completion content=er cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -496,6 +495,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=9 role=1 rect=0,1,80,22 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,1,1,22 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -518,12 +518,12 @@ a11y:
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
   kind=1 role=16 rect=31,0,28,1 id=input_line.query label=Input line content=> scroll-under-the-sigil-xyz cmd=
-  kind=4 role=12 rect=39,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
   kind=3 role=11 rect=27,23,7,1 id=encoding label=Text encoding content=UTF-8 cmd=
   kind=3 role=11 rect=35,23,4,1 id=line_ending label=Line ending content=LF cmd=
+  kind=4 role=12 rect=39,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=9 role=1 rect=0,1,60,22 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=59,1,1,22 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -547,7 +547,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -556,6 +555,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,10 id=pane.1 label=Editor pane 1 content= cmd=
@@ -583,7 +583,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -592,6 +591,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,40,21 id=pane.1 label=Editor pane 1 content= cmd=
@@ -620,7 +620,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -629,6 +628,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,10 id=pane.1 label=Editor pane 1 content= cmd=
@@ -656,7 +656,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -665,6 +664,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
@@ -690,8 +690,8 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=9,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
+  kind=4 role=12 rect=9,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,30,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=7 rect=0,1,9,1 id=tab.5 label=file5 tab content=file5.cpp cmd=
   kind=16 role=7 rect=9,1,1,1 id=tabsep.6 label= content=  cmd=
@@ -720,9 +720,9 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=19,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
+  kind=4 role=12 rect=19,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,40,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=cjk tab content=一二.txt cmd=
   kind=9 role=1 rect=0,2,40,21 id=pane.1 label=Editor pane 1 content= cmd=
@@ -747,7 +747,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -756,6 +755,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=7 role=9 rect=0,1,24,22 id=panel label=Side panel content= cmd=
   kind=8 role=9 rect=0,1,24,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=23,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
@@ -783,7 +783,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -792,6 +791,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
@@ -816,7 +816,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -825,6 +824,7 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
@@ -882,7 +882,6 @@ a11y:
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=1 role=10 rect=9,0,14,1 id=current_path label=Current path content=src/main.cpp cmd=
   kind=1 role=10 rect=24,0,6,1 id=mode label=Editor mode content=edit cmd=
-  kind=4 role=12 rect=59,22,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,22,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,22,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=3 role=11 rect=20,22,6,1 id=background_activity label=Background activity content=idle cmd=
@@ -891,6 +890,7 @@ a11y:
   kind=3 role=11 rect=40,22,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,22,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,22,5,1 id=file_type label=File type content=C++ cmd=
+  kind=4 role=12 rect=59,22,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=7 role=9 rect=0,2,30,20 id=panel label=Side panel content= cmd=
   kind=8 role=9 rect=0,2,30,20 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=28,3,2,19 id=panel.scrollbar label=Panel scrollbar content= cmd=

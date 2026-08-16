@@ -737,6 +737,54 @@ TEST(snapshotDecodeRejectsNonCorrespondingPresence) {
     ASSERT_FALSE(decoded.snapshot.has_value());
 }
 
+TEST(accessibilityNodeStatusInvocationRoundTripsWhenPresent) {
+    ssg::StatusActionInvocation invocation{ssg::StatusId{8}, "dismiss", 6};
+    ssg::ShellViewState shell;
+    shell.viewport = {20, 8};
+    shell.accessibilityNodes.push_back(
+        {ssg::ShellNodeKind::FooterAction, "dismiss", "Dismiss", {1, 7, 7, 1},
+         ssg::SemanticRole::StatusInfo, "Dismiss", std::nullopt, invocation});
+    ssg::SessionSnapshot snapshot{
+        ssg::Revision{4}, ssg::SessionTopology{},
+        ssg::ClientSnapshotState{ssg::ClientId{7}, ssg::ViewId{9}, {}},
+        sections(ssg::Revision{4}, "alpha"),
+        ssg::PresentationSnapshot{clientView(0), ssg::Style{}, std::nullopt,
+                                  std::move(shell),
+                                  ssg::SelectionNavigation{}}};
+    auto decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_TRUE(decoded.snapshot.has_value());
+    auto const& nodes =
+        decoded.snapshot->presentation()->shell.accessibilityNodes;
+    ASSERT_EQ(nodes.size(), std::size_t{1});
+    ASSERT_EQ(nodes[0].statusInvocation, invocation);
+}
+
+TEST(accessibilityNodeWithoutStatusInvocationRoundTripsAsAbsent) {
+    ssg::ShellViewState shell;
+    shell.viewport = {20, 8};
+    shell.accessibilityNodes.push_back(
+        {ssg::ShellNodeKind::FooterField, "field", "Field", {1, 7, 7, 1},
+         ssg::SemanticRole::Footer, "Field", std::string{"field.command"}});
+    ssg::SessionSnapshot snapshot{
+        ssg::Revision{4}, ssg::SessionTopology{},
+        ssg::ClientSnapshotState{ssg::ClientId{7}, ssg::ViewId{9}, {}},
+        sections(ssg::Revision{4}, "alpha"),
+        ssg::PresentationSnapshot{clientView(0), ssg::Style{}, std::nullopt,
+                                  std::move(shell),
+                                  ssg::SelectionNavigation{}}};
+    auto decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_TRUE(decoded.snapshot.has_value());
+    auto const& nodes =
+        decoded.snapshot->presentation()->shell.accessibilityNodes;
+    ASSERT_EQ(nodes.size(), std::size_t{1});
+    ASSERT_FALSE(nodes[0].statusInvocation.has_value());
+}
+
+
 // Replay refuses a delta that advances the schema but not its presence section
 // (a one-sided replacement): the resulting pair would not correspond. deriveDelta
 // naturally produces such a delta when only the schema generation changes.
@@ -1496,6 +1544,8 @@ int main() {
     RUN(sessionSnapshotAndDeltaCarryTheUiSection);
     RUN(sessionDeltaCarriesThePaletteSection);
     RUN(snapshotDecodeRejectsNonCorrespondingPresence);
+    RUN(accessibilityNodeStatusInvocationRoundTripsWhenPresent);
+    RUN(accessibilityNodeWithoutStatusInvocationRoundTripsAsAbsent);
     RUN(replayRejectsADeltaThatReplacesOnlyTheSchema);
     RUN(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta);
     RUN(diffWordRangesRoundTripThroughSnapshotAndDelta);

@@ -30,6 +30,8 @@ inline ssg::ChromeValue widgetValue(const ssg::WidgetDescriptor& w) {
     case ssg::WidgetKind::TextInput: kindName = "text_input"; break;
     case ssg::WidgetKind::Spacer: kindName = "spacer"; break;
     case ssg::WidgetKind::Container: kindName = "container"; break;
+    case ssg::WidgetKind::StatusActions: kindName = "status_actions"; break;
+    case ssg::WidgetKind::View: kindName = "view"; break;
     }
     t.emplace_back("kind", ChromeValue::ofString(kindName));
     if (!w.id.empty()) t.emplace_back("id", ChromeValue::ofString(w.id));

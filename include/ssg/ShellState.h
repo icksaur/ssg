@@ -5,6 +5,7 @@
 #include "ssg/focus.h"
 #include "ssg/Geometry.h"
 #include "ssg/Style.h"
+#include "ssg/StatusActionInvocation.h"
 #include "ssg/Theme.h"
 #include "ssg/Viewport.h"
 
@@ -18,6 +19,8 @@
 #include <vector>
 
 namespace ssg {
+
+struct StatusViewState;
 
 class PaneId {
 public:
@@ -67,6 +70,7 @@ struct AccessibilityNode {
     SemanticRole role = SemanticRole::Canvas;
     std::string content;  // Display text for leaves; empty for containers/panes.
     std::optional<std::string> commandId;
+    std::optional<StatusActionInvocation> statusInvocation;
 
     friend bool operator==(const AccessibilityNode&, const AccessibilityNode&) = default;
 };
@@ -79,10 +83,6 @@ struct StatusField {
     std::optional<std::string> commandId;
 };
 
-struct ShellLabel {
-    std::string id;
-    std::string accessibleLabel;
-};
 
 // One clickable action in the draft-conflict notice (M15): a bracketed label
 // hit-tested to dispatch `commandId`.
@@ -106,13 +106,6 @@ struct TabLabel {
     bool dirty = false;
 };
 
-// A persistent footer hint: a right-aligned label whose click dispatches
-// `commandId`. Lowest-priority footer content -- it yields space to status
-// actions and fields when the footer is crowded.
-struct ShellFooterHint {
-    std::string label;
-    std::string commandId;
-};
 
 struct ShellLayoutRequest {
     GridSize viewport;
@@ -133,13 +126,6 @@ struct ShellLayoutRequest {
     // computeShellLayout. Sourced from ShellState today.
     bool panelPresent = false;
     FocusTarget focus = FocusTarget::Editor;
-    std::vector<StatusField> headerFields;
-    std::vector<StatusField> footerFields;
-    std::vector<ShellLabel> footerActions;
-    // The bottom-right help hint, placed after (to the left of) the status
-    // actions so status actions take precedence, and dropped first when the
-    // footer lacks room.
-    std::optional<ShellFooterHint> footerHint;
     std::vector<TabLabel> tabs;
     // The header's single-line text input, shared by every picker (command
     // palette, file finder, ...).  Named for the surface
@@ -150,15 +136,6 @@ struct ShellLayoutRequest {
     // Dimensions and chrome glyphs this layout is computed against.  Defaults
     // reproduce the shipped appearance.
     Style style;
-    // The init.lua-composed chrome as the published medium-agnostic UI schema.
-    // A region present here (by role: Top=header, Bottom=footer) REPLACES that
-    // region's built-in status-field projection by lowering the region tree; an
-    // absent region (the default) keeps the built-in path byte-identical. This is
-    // the SAME schema published on the semantic channel, so the TUI and any other
-    // client lower one source. `chromeProviderResolver` supplies live
-    // (value,label,command) for a composed widget's `provider` references; when
-    // unset, provider widgets resolve to nothing and drop.
-    std::optional<UiSchema> composedUi;
     ChromeProviderResolver chromeProviderResolver;
 };
 
@@ -278,10 +255,13 @@ private:
     std::unique_ptr<Impl> impl_;
 
     friend ShellLayoutResult computeShellLayout(const ShellLayoutRequest&,
-                                                  const ShellState&);
+                                                const ShellState&,
+                                                const ValidatedSchema&,
+                                                const StatusViewState&);
 };
 
 [[nodiscard]] ShellLayoutResult computeShellLayout(
-    const ShellLayoutRequest& request, const ShellState& state);
+    const ShellLayoutRequest& request, const ShellState& state,
+    const ValidatedSchema& schema, const StatusViewState& statusView);
 
 } // namespace ssg

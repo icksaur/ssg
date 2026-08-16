@@ -1,6 +1,7 @@
 #include "ssg/ShellState.h"
 
 #include "ssg/ChromeLowering.h"
+#include "ssg/ChromeRegionShape.h"
 #include "ssg/GraphemeLayout.h"
 #include "ssg/Layout.h"
 #include "ssg/Widget.h"
@@ -16,13 +17,9 @@
 namespace ssg {
 namespace {
 
-// The composed well-known area (id "header"/"footer") in the published schema's
-// root, or nullptr when absent -- in which case the built-in projection stands.
-const UiNode* composedArea(const std::optional<UiSchema>& schema,
-                           std::string_view areaId) {
-    if (!schema) return nullptr;
+const UiNode* schemaArea(const UiSchema& schema, std::string_view areaId) {
     const auto* rootContainer =
-        std::get_if<UiContainer>(&schema->root.content);
+        std::get_if<UiContainer>(&schema.root.content);
     if (!rootContainer) return nullptr;
     for (const auto& child : rootContainer->children)
         if (child.id.value() == areaId) return &child;
@@ -292,7 +289,9 @@ bool ShellState::distractionFree() const noexcept {
 }
 
 ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
-                                       const ShellState& state) {
+                                       const ShellState& state,
+                                       const ValidatedSchema& schema,
+                                       const StatusViewState& statusView) {
     if (request.viewport.columns < request.style.dimensions.minimumColumns ||
         request.viewport.rows < request.style.dimensions.minimumRows) {
         return {ShellLayoutError{ShellLayoutErrorCode::ViewportTooSmall,
@@ -388,10 +387,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         // widget in the focus phase, where reserve/grow/ghost geometry is
         // designed rather than shoehorned into a stack item).
         int headerX = view.header->x;
-        const UiNode* headerRegion =
-            composedArea(request.composedUi, kHeaderNodeId);
-        const bool composedHeader = headerRegion != nullptr;
-        if (composedHeader) {
+        const UiNode* headerRegion = schemaArea(schema.schema(), kHeaderNodeId);
+        if (headerRegion) {
             // A composed header REPLACES the built-in status fields, laid out
             // over the SAME fieldWidth the built-in uses so the input-line
             // reservation floor is honored (header is left-group only). headerX
@@ -406,37 +403,6 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 chromeResolver, view.accessibilityNodes);
             if (!lowered.ok()) throw std::invalid_argument(*lowered.error);
             headerX = std::max(headerX, lowered.rightEdge);
-        } else {
-        WidgetStack headerStack{1};
-        std::vector<const StatusField*> headerFieldSource;
-        for (const auto& field : request.headerFields) {
-            if (field.accessibleLabel.empty() || field.value.empty()) continue;
-            StackItem item;
-            item.id = "F" + std::to_string(headerFieldSource.size());
-            item.content = field.value;
-            item.desired = measureFieldCells(field.value);
-            item.rank = field.collapseRank;
-            headerStack.packLeft(std::move(item));
-            headerFieldSource.push_back(&field);
-        }
-        if (const auto resolved = headerStack.resolve(fieldWidth)) {
-            const auto find = [&](std::string_view id) -> const StackPlacement* {
-                for (const auto& p : resolved->placed)
-                    if (p.id == id) return &p;
-                return nullptr;
-            };
-            for (std::size_t i = 0; i < headerFieldSource.size(); ++i) {
-                const auto* p = find("F" + std::to_string(i));
-                if (!p) continue;
-                const StatusField& field = *headerFieldSource[i];
-                addNode(view, ShellNodeKind::HeaderField, field.id,
-                         field.accessibleLabel,
-                         {view.header->x + p->offset, view.header->y, p->size, 1},
-                         SemanticRole::Header, field.value, field.commandId);
-                headerX = std::max(headerX,
-                                   view.header->x + p->offset + p->size);
-            }
-        }
         }
         // A space between the fields and whatever follows them.
         if (headerX > view.header->x) ++headerX;
@@ -463,24 +429,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 headerX += line.ghostWidth;
             }
         }
-        // The whole footer row is ONE WidgetStack:
-        // status fields are the LEFT collapse group, the help hint + status
-        // actions are the RIGHT group (hint leftmost, actions after it, the last
-        // action flush right -- the packEnd rule). The left fields resolve over
-        // the space to the LEFT of the right group automatically (the stack's
-        // rightStart), so no explicit fieldsWidth arithmetic. Synthetic per-item
-        // ids ("F"/"H"/"A") key the placement lookup, so no field/action id
-        // uniqueness is assumed. Nodes are emitted in the SAME order as before
-        // (actions reverse, hint, then fields) so the golden node sequence and
-        // hit-test order are unchanged.
-        const int labelPadding = request.style.dimensions.labelPadding;
-        const bool hasHint =
-            request.footerHint && !request.footerHint->label.empty();
-
-        const UiNode* footerRegion =
-            composedArea(request.composedUi, kFooterNodeId);
-        const bool composedFooter = footerRegion != nullptr;
-        if (composedFooter) {
+        const UiNode* footerRegion = schemaArea(schema.schema(), kFooterNodeId);
+        if (footerRegion) {
             // A composed footer REPLACES the whole built-in footer row (fields,
             // hint, actions). Unlike the header it supports full left/right/
             // center, so it lowers over the entire footer rect; every widget
@@ -489,79 +439,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 *footerRegion,
                 {view.footer->x, view.footer->y, view.footer->width, 1},
                 ShellNodeKind::FooterField, SemanticRole::Footer, request.style,
-                chromeResolver, view.accessibilityNodes);
+                chromeResolver, view.accessibilityNodes, &statusView);
             if (!lowered.ok()) throw std::invalid_argument(*lowered.error);
-        } else {
-        WidgetStack footer{1};
-        std::vector<const StatusField*> fieldSource;
-        for (const auto& field : request.footerFields) {
-            if (field.accessibleLabel.empty() || field.value.empty()) continue;
-            StackItem item;
-            item.id = "F" + std::to_string(fieldSource.size());
-            item.content = field.value;
-            item.desired = measureFieldCells(field.value);
-            item.rank = field.collapseRank;
-            footer.packLeft(std::move(item));
-            fieldSource.push_back(&field);
-        }
-        if (hasHint) {
-            StackItem item;
-            item.id = "H";
-            item.content = request.footerHint->label;
-            item.desired = displayCells(request.footerHint->label) + labelPadding;
-            item.overflow = Overflow::Truncate;
-            footer.packRight(std::move(item));
-        }
-        std::vector<const ShellLabel*> actionSource;
-        for (const auto& action : request.footerActions) {
-            if (action.accessibleLabel.empty()) continue;
-            StackItem item;
-            item.id = "A" + std::to_string(actionSource.size());
-            item.content = action.accessibleLabel;
-            item.desired = displayCells(action.accessibleLabel) + labelPadding;
-            item.overflow = Overflow::Truncate;
-            footer.packRight(std::move(item));
-            actionSource.push_back(&action);
-        }
-
-        const auto resolved = footer.resolve(view.footer->width);
-        if (resolved) {
-            const auto find = [&](std::string_view id) -> const StackPlacement* {
-                for (const auto& p : resolved->placed)
-                    if (p.id == id) return &p;
-                return nullptr;
-            };
-            const auto rectOf = [&](const StackPlacement& p) {
-                return Rect{view.footer->x + p.offset, view.footer->y, p.size, 1};
-            };
-
-            // Actions in reverse original order, then the hint (unchanged node
-            // order).
-            for (std::size_t i = actionSource.size(); i-- > 0;) {
-                const auto* p = find("A" + std::to_string(i));
-                if (!p) continue;
-                addNode(view, ShellNodeKind::FooterAction, actionSource[i]->id,
-                         actionSource[i]->accessibleLabel, rectOf(*p),
-                         SemanticRole::StatusInfo, actionSource[i]->accessibleLabel);
-            }
-            if (hasHint) {
-                if (const auto* p = find("H")) {
-                    addNode(view, ShellNodeKind::FooterHint, "footer.hint",
-                             request.footerHint->label, rectOf(*p),
-                             SemanticRole::Footer, request.footerHint->label,
-                             request.footerHint->commandId);
-                }
-            }
-            // Status fields left-to-right.
-            for (std::size_t i = 0; i < fieldSource.size(); ++i) {
-                const auto* p = find("F" + std::to_string(i));
-                if (!p) continue;
-                const StatusField& field = *fieldSource[i];
-                addNode(view, ShellNodeKind::FooterField, field.id,
-                         field.accessibleLabel, rectOf(*p), SemanticRole::Footer,
-                         field.value, field.commandId);
-            }
-        }
         }
 
         if (panelWidth > 0) {

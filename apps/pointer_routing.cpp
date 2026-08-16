@@ -185,6 +185,12 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                 }
                 return dispatch;
             }
+            if (hit.region == ssg::HitRegion::StatusAction &&
+                targets.status_invocation) {
+                dispatch.commands.push_back({"status.invoke_action",
+                                             *targets.status_invocation});
+                return dispatch;
+            }
             if ((hit.region == ssg::HitRegion::HeaderField ||
                  hit.region == ssg::HitRegion::FooterField) &&
                 targets.field_command_id) {

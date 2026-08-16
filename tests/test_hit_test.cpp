@@ -2,6 +2,7 @@
 
 #include <ssg/EditorRuntime.h>
 #include <ssg/Selection.h>
+#include <ssg/SyntaxModel.h>
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"
@@ -41,6 +42,37 @@ const ssg::AccessibilityNode* findNode(
         if (node.kind == kind && node.id == id) return &node;
     }
     return nullptr;
+}
+
+ssg::SessionSnapshotSections minimalSections() {
+    ssg::DocumentPosition p{ssg::ByteOffset{0}, ssg::LineIndex{0},
+                            ssg::CellIndex{0}};
+    ssg::SessionSnapshotSections sections{
+        ssg::DocumentViewState{ssg::Revision{1}, "", ssg::ByteOffset{0},
+                               std::nullopt},
+        ssg::SelectionSet{{ssg::Selection{p, p}}},
+        ssg::HistoryViewState{},
+        ssg::ClipboardViewState{},
+        ssg::PromptStatusViewState{},
+        ssg::SearchViewState{},
+        ssg::FindReplaceViewState{},
+        ssg::SettingsViewState{},
+        ssg::KeymapViewState{},
+        ssg::TextEncodingViewState{},
+        ssg::TabViewState{},
+        ssg::DiffViewState{},
+        ssg::ExternalModificationViewState{},
+        ssg::FollowEditsViewState{0, ssg::FollowMode::Following, ssg::PaneId{0},
+                                  std::nullopt, {}, {}},
+        ssg::TreeViewState{},
+        ssg::SyntaxViewState::plainText(ssg::Revision{1},
+                                        ssg::LanguageId{"plain"}, "", 4),
+        ssg::LspSyncViewState{},
+        ssg::LspFeatureViewState{},
+        ssg::ThemeSnapshot{},
+        ssg::FocusTarget::Editor,
+        ssg::PaletteViewState{}};
+    return sections;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +118,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
         }
         if (target.logicalLine > 0) sawSecondLine = true;
     }
+
     // The document has three lines, so the targets must reach past line 0 (the
     // property above is only meaningful if we actually exercised later lines).
     ASSERT_TRUE(sawSecondLine);
@@ -97,6 +130,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
             lineOneStart = &target;
             break;
         }
+
     }
     ASSERT_TRUE(lineOneStart != nullptr);
     if (lineOneStart) {
@@ -116,6 +150,26 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
         ASSERT_TRUE(position.has_value());
         if (position) ASSERT_EQ(position->line.value(), std::uint64_t{0});
     }
+}
+
+TEST(footerActionHitCarriesExactStatusActionInvocation) {
+    ssg::StatusActionInvocation invocation{ssg::StatusId{77}, "retry", 9};
+    ssg::ShellViewState shell;
+    shell.viewport = {20, 5};
+    shell.accessibilityNodes.push_back(
+        {ssg::ShellNodeKind::FooterAction, "retry", "Retry", {2, 4, 5, 1},
+         ssg::SemanticRole::StatusInfo, "Retry", std::nullopt, invocation});
+    ssg::SessionSnapshot snapshot{
+        ssg::Revision{1}, ssg::SessionTopology{},
+        ssg::ClientSnapshotState{ssg::ClientId{1}, ssg::ViewId{1}, {}},
+        minimalSections(),
+        ssg::PresentationSnapshot{ssg::ViewportViewState{ssg::ViewportDimensions{20, 5}},
+                                  ssg::Style{},
+                                  std::nullopt, std::move(shell),
+                                  ssg::SelectionNavigation{}}};
+    auto hit = ssg::HitTester{snapshot}.at(3, 4);
+    ASSERT_EQ(hit.region, ssg::HitRegion::StatusAction);
+    ASSERT_EQ(hit.statusInvocation, invocation);
 }
 
 TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
@@ -793,6 +847,7 @@ int main() {
     RUN(aGutterHitFollowsTheRowWhereverTheColumnWent);
     RUN(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen);
     RUN(tabBarCellMapsToItsTabIndex);
+    RUN(footerActionHitCarriesExactStatusActionInvocation);
     RUN(statusFieldHitCoordinatesResolvePublishedFieldCommands);
     RUN(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath);
     RUN(outOfBoundsAndChromeReturnNoTarget);

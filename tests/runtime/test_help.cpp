@@ -80,7 +80,7 @@ std::string activeTabNodeContent(const ssg::EditorRuntime& runtime) {
     return content;
 }
 
-std::optional<ssg::AccessibilityNode> footerHintNode(
+std::optional<ssg::AccessibilityNode> footerHelpNode(
     const ssg::EditorRuntime& runtime) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, {120, 24});
     if (!snapshot) return std::nullopt;
@@ -309,13 +309,13 @@ TEST(helpTabTitleCarriesTheReadOnlyMarker) {
     ASSERT_TRUE(contains(activeTabNodeContent(runtime), "(readonly)"));
 }
 
-TEST(footerHintShowsTheHelpKeyAndYieldsWhenUnbound) {
+TEST(footerHelpShowsTheHelpKeyAndYieldsWhenUnbound) {
     Harness harness{"hint"};
     ASSERT_TRUE(harness.runtime != nullptr);
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    auto hint = footerHintNode(runtime);
+    auto hint = footerHelpNode(runtime);
     ASSERT_TRUE(hint.has_value());
     if (hint) {
         ASSERT_TRUE(contains(hint->content, "Alt+h"));
@@ -329,7 +329,7 @@ TEST(footerHintShowsTheHelpKeyAndYieldsWhenUnbound) {
                               {"keymap.unbind", runtime.revision(),
                                ssg::KeymapUnbindArguments{"Alt+KeyH", "*"}})
                     .accepted());
-    auto unbound = footerHintNode(runtime);
+    auto unbound = footerHelpNode(runtime);
     ASSERT_TRUE(unbound.has_value());
     if (unbound) {
         ASSERT_FALSE(contains(unbound->content, "Alt+h"));
@@ -398,7 +398,7 @@ int main() {
     RUN(savingAHelpTabFailsGracefullyWithoutAPrompt);
     RUN(helpTabNeverPersistsADraft);
     RUN(helpTabTitleCarriesTheReadOnlyMarker);
-    RUN(footerHintShowsTheHelpKeyAndYieldsWhenUnbound);
+    RUN(footerHelpShowsTheHelpKeyAndYieldsWhenUnbound);
     RUN(closingAHelpTabSucceedsAndReopenIsSkipped);
     RUN(helpTabIsHighlightedAsMarkdown);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

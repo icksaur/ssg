@@ -24,12 +24,15 @@
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Renderer.h>
 #include <ssg/ShellState.h>
+#include <ssg/StatusQueue.h>
+#include <ssg/WholeScreenAssembly.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/Theme.h>
 #include <ssg/Viewport.h>
 #include <ssg/session_snapshot.h>
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -107,6 +110,16 @@ public:
         return *this;
     }
 
+    SessionSnapshotBuilder& schema(ValidatedSchema schema) {
+        schema_ = std::move(schema);
+        return *this;
+    }
+
+    SessionSnapshotBuilder& status(StatusViewState status) {
+        status_ = std::move(status);
+        return *this;
+    }
+
     [[nodiscard]] SessionSnapshot build() const {
         auto const caret = caret_ > text_.size() ? text_.size() : caret_;
 
@@ -125,7 +138,15 @@ public:
         request.focus = focus;
         // Caller mutators run LAST so a test can override any request field.
         for (auto const& mutate : shellMutators_) mutate(request);
-        auto layout = computeShellLayout(request, shell);
+        std::optional<ValidatedSchema> defaultSchema;
+        if (!schema_) {
+            UiSchema schema;
+            schema.root = assembleWholeScreen({}, "help.open", style_.dimensions,
+                                              std::nullopt).root;
+            defaultSchema = ValidatedSchema::validate(std::move(schema)).takeSchema();
+        }
+        const ValidatedSchema& schema = schema_ ? *schema_ : *defaultSchema;
+        auto layout = computeShellLayout(request, shell, schema, status_);
 
         ViewportDimensions const dimensions{
             static_cast<std::uint32_t>(columns_),
@@ -203,6 +224,8 @@ private:
     std::vector<std::function<void(SessionSnapshotSections&)>> mutators_;
     std::vector<std::function<void(ShellLayoutRequest&)>> shellMutators_;
     Style style_{};
+    std::optional<ValidatedSchema> schema_;
+    StatusViewState status_;
 };
 
 }  // namespace ssg::test

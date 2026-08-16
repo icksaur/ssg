@@ -45,8 +45,8 @@ struct StatusFieldProviderBinding {
 };
 
 struct StatusFieldProjection {
-    std::vector<StatusField> headerFields;
-    std::vector<StatusField> footerFields;
+    std::vector<StatusField> header;
+    std::vector<StatusField> footer;
 };
 
 [[nodiscard]] std::vector<StatusFieldCatalogEntry> p0StatusFieldCatalog();

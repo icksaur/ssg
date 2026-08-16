@@ -2261,22 +2261,6 @@ bool decodePresent(ProtocolValue const& value, std::optional<GridSize>& out) {
     return true;
 }
 
-ProtocolValue toValue(ShellLabel const& value) {
-    std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("id", toValue(value.id));
-    fields.emplace_back("accessible_label", toValue(value.accessibleLabel));
-    return ProtocolValue::makeObject(std::move(fields));
-}
-bool decodePresent(ProtocolValue const& value, std::optional<ShellLabel>& out) {
-    auto const* object = value.asObject();
-    if (!object) return false;
-    auto id = requireField<std::string>(value.field("id"));
-    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
-    if (!id || !accessibleLabel) return false;
-    out.emplace(ShellLabel{*id, *accessibleLabel});
-    return true;
-}
-
 ProtocolValue toValue(AccessibilityNode const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("kind", toValue(value.kind));
@@ -2286,6 +2270,9 @@ ProtocolValue toValue(AccessibilityNode const& value) {
     fields.emplace_back("role", toValue(value.role));
     fields.emplace_back("content", toValue(value.content));
     fields.emplace_back("command_id", toValue(value.commandId));
+    if (value.statusInvocation) {
+        fields.emplace_back("status_invocation", toValue(*value.statusInvocation));
+    }
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<AccessibilityNode>& out) {
@@ -2299,9 +2286,11 @@ bool decodePresent(ProtocolValue const& value, std::optional<AccessibilityNode>&
     auto content = requireField<std::string>(value.field("content"));
     std::optional<std::string> commandId;
     if (!decodeOptionalField(value.field("command_id"), commandId)) return false;
+    std::optional<StatusActionInvocation> statusInvocation;
+    if (!decodeOptionalField(value.field("status_invocation"), statusInvocation)) return false;
     if (!kind || !id || !label || !rect || !role || !content) return false;
-    out.emplace(
-        AccessibilityNode{*kind, *id, *label, *rect, *role, *content, commandId});
+    out.emplace(AccessibilityNode{*kind, *id, *label, *rect, *role, *content,
+                                  commandId, statusInvocation});
     return true;
 }
 

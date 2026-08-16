@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ssg/PromptSurface.h"
+#include "ssg/StatusActionInvocation.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -10,19 +11,6 @@
 #include <vector>
 
 namespace ssg {
-
-class StatusId {
-public:
-    explicit constexpr StatusId(std::uint64_t value = 0) noexcept
-        : value_(value) {}
-    [[nodiscard]] constexpr std::uint64_t value() const noexcept {
-        return value_;
-    }
-    constexpr auto operator<=>(const StatusId&) const = default;
-
-private:
-    std::uint64_t value_;
-};
 
 enum class StatusPriority : std::uint8_t {
     Error,
@@ -69,12 +57,6 @@ struct StatusEnqueueResult {
     std::optional<StatusId> evicted;
 };
 
-struct StatusActionInvocation {
-    StatusId statusId;
-    std::string actionId;
-    std::uint64_t generation = 0;
-};
-
 enum class StatusActionError : std::uint8_t {
     None,
     Stale,
@@ -91,7 +73,7 @@ struct StatusActionResult {
 
 struct StatusFooterProjection {
     std::string value;
-    std::vector<ShellLabel> actions;
+    std::vector<StatusAction> actions;
     friend bool operator==(const StatusFooterProjection&,
                            const StatusFooterProjection&) = default;
 };

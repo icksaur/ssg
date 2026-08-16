@@ -158,9 +158,9 @@ StatusFieldProjection projectStatusFields(
             .collapseRank = entry.collapseRank,
         };
         if (entry.region == StatusFieldRegion::Header) {
-            projection.headerFields.push_back(std::move(field));
+            projection.header.push_back(std::move(field));
         } else {
-            projection.footerFields.push_back(std::move(field));
+            projection.footer.push_back(std::move(field));
         }
     }
     return projection;

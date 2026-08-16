@@ -1,4 +1,7 @@
 #include "ssg/ShellState.h"
+#include "ssg/StatusFields.h"
+#include "ssg/StatusQueue.h"
+#include "ssg/WholeScreenAssembly.h"
 #include "chrome_authoring.h"
 #include "test_helpers.h"
 
@@ -17,9 +20,74 @@ namespace {
 
 using namespace ssg;
 
+std::optional<ValidatedSchema> gSchema;
+StatusViewState gStatusView;
+
 bool overlaps(const Rect& a, const Rect& b) {
     return a.x < b.x + b.width && b.x < a.x + a.width &&
            a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+void installChrome(ShellLayoutRequest& value,
+                   std::vector<StatusField> header,
+                   std::vector<StatusField> footer,
+                   bool statusAction = true) {
+    std::vector<StatusFieldCatalogEntry> catalog;
+    for (const auto& field : header) {
+        catalog.push_back({field.id, field.accessibleLabel,
+                           StatusFieldRegion::Header, field.collapseRank});
+    }
+    for (const auto& field : footer) {
+        catalog.push_back({field.id, field.accessibleLabel,
+                           StatusFieldRegion::Footer, field.collapseRank});
+    }
+    UiSchema schema;
+    schema.root = assembleWholeScreen(catalog, "help.open",
+                                      value.style.dimensions, std::nullopt).root;
+    auto validated = ValidatedSchema::validate(std::move(schema));
+    ASSERT_TRUE(validated.ok());
+    gSchema = validated.takeSchema();
+    value.chromeProviderResolver =
+        [header = std::move(header),
+         footer = std::move(footer)](
+            std::string_view id) -> std::optional<ResolvedProvider> {
+        if (id == "footer.hint") return std::nullopt;
+        for (const auto* group : {&header, &footer}) {
+            for (const auto& field : *group) {
+                if (field.id == id) {
+                    return ResolvedProvider{field.value, field.accessibleLabel,
+                                            field.commandId};
+                }
+            }
+        }
+        return std::nullopt;
+    };
+    if (statusAction) {
+        gStatusView = StatusViewState{{StatusItemView{
+            StatusId{1}, StatusPriority::Information, 1,
+            "Status message",
+            {StatusAction{"status.retry", "Retry status action",
+                          "status.retry"}}}}, 0};
+    }
+}
+
+void installSchema(ShellLayoutRequest& value, const UiComposition& comp) {
+    UiSchema schema = gSchema ? gSchema->schema() : UiSchema{};
+    auto* root = std::get_if<UiContainer>(&schema.root.content);
+    const auto* composedRoot = std::get_if<UiContainer>(&comp.root.content);
+    ASSERT_TRUE(root != nullptr);
+    ASSERT_TRUE(composedRoot != nullptr);
+    for (const auto& composedChild : composedRoot->children) {
+        for (auto& child : root->children) {
+            if (child.id == composedChild.id) {
+                child = composedChild;
+                break;
+            }
+        }
+    }
+    auto validated = ValidatedSchema::validate(std::move(schema));
+    ASSERT_TRUE(validated.ok());
+    gSchema = validated.takeSchema();
 }
 
 void assertRect(Rect actual, Rect expected) {
@@ -29,24 +97,21 @@ void assertRect(Rect actual, Rect expected) {
 ShellLayoutRequest request(int columns, int rows) {
     ShellLayoutRequest value;
     value.viewport = {columns, rows};
-    value.headerFields = {
-        {"active_command", "Active command", "INSERT", 0},
-        {"current_path", "Current path", "src/main.cpp", 1},
-        {"mode", "Editor mode", "edit", 2},
-    };
-    value.footerFields = {
-        {"actionable_status", "Status message", "Saved", 0},
-        {"follow_state", "Follow edits state and resume binding", "following", 1},
-        {"background_activity", "Background activity", "idle", 2},
-        {"encoding", "Text encoding", "UTF-8", 3},
-        {"line_ending", "Line ending", "LF", 4},
-        {"git_branch", "Git branch", "main", 5},
-        {"git_repository", "Git repository", "ssg", 6},
-        {"file_type", "File type", "C++", 7},
-        {"file_size", "File size", "1 KiB", 8},
-    };
+    installChrome(value,
+                  {{"active_command", "Active command", "INSERT", 0},
+                   {"current_path", "Current path", "src/main.cpp", 1},
+                   {"mode", "Editor mode", "edit", 2}},
+                  {{"actionable_status", "Status message", "Saved", 0},
+                   {"follow_state", "Follow edits state and resume binding",
+                    "following", 1},
+                   {"background_activity", "Background activity", "idle", 2},
+                   {"encoding", "Text encoding", "UTF-8", 3},
+                   {"line_ending", "Line ending", "LF", 4},
+                   {"git_branch", "Git branch", "main", 5},
+                   {"git_repository", "Git repository", "ssg", 6},
+                   {"file_type", "File type", "C++", 7},
+                   {"file_size", "File size", "1 KiB", 8}});
     value.tabs = {{"main.cpp", "main.cpp tab", true}};
-    value.footerActions = {{"status.retry", "Retry status action"}};
     value.panelProviderLabel = "Files";
     return value;
 }
@@ -58,7 +123,7 @@ ShellLayoutResult layoutFor(ShellLayoutRequest request, const ShellState& state,
                             FocusTarget focus = FocusTarget::Editor) {
     request.panelPresent = panelPresent;
     request.focus = focus;
-    return computeShellLayout(request, state);
+    return computeShellLayout(request, state, *gSchema, gStatusView);
 }
 
 TEST(handAuthoredGeometryGoldens) {
@@ -412,7 +477,7 @@ TEST(typingInTheInputLineNeverMovesTheStatusFields) {
 // click region) and drop later fields too early.
 TEST(headerFieldWidthIsMeasuredInCellsNotBytes) {
     auto asciiReq = request(120, 12);
-    asciiReq.headerFields = {{"current_path", "Current path", "xx", 1}};
+    installChrome(asciiReq, {{"current_path", "Current path", "xx", 1}}, {}, false);
     ShellState asciiState;
     auto asciiResult = layoutFor(asciiReq, asciiState);
     ASSERT_TRUE(asciiResult.accepted());
@@ -423,8 +488,9 @@ TEST(headerFieldWidthIsMeasuredInCellsNotBytes) {
     // "\xE4\xB8\xAD" (U+4E2D) is a fullwidth CJK glyph: 3 bytes, 2 cells -- the
     // same visible width as "xx" but a different byte count.
     auto wideReq = request(120, 12);
-    wideReq.headerFields = {
-        {"current_path", "Current path", "\xE4\xB8\xAD", 1}};
+    installChrome(wideReq,
+                  {{"current_path", "Current path", "\xE4\xB8\xAD", 1}},
+                  {}, false);
     ShellState wideState;
     auto wideResult = layoutFor(wideReq, wideState);
     ASSERT_TRUE(wideResult.accepted());
@@ -825,7 +891,7 @@ TEST(composedChromeReplacesBuiltinHeaderAndFooter) {
     const auto comp = ssgtest::composeHeaderAndFooter(
         {literalField("custom.header", "HELLO", 0)},
         {literalField("custom.footer", "WORLD", 0)});
-    value.composedUi = UiSchema{Generation{1}, comp.root};
+    installSchema(value, comp);
 
     auto result = layoutFor(value, state);
     ASSERT_TRUE(result.accepted());
@@ -859,7 +925,7 @@ TEST(composingOneRegionLeavesTheOtherBuiltin) {
     auto footerOnly = request(100, 24);
     const auto comp = ssgtest::composeFooter(
         {literalField("custom.footer", "WORLD", 0)});
-    footerOnly.composedUi = UiSchema{Generation{1}, comp.root};
+    installSchema(footerOnly, comp);
 
     auto result = layoutFor(footerOnly, state);
     ASSERT_TRUE(result.accepted());
@@ -879,7 +945,7 @@ TEST(composedHeaderResolvesProvidersAndKeepsTheInputLine) {
     value.inputLineActive = true;
     value.inputLineQuery = "abc";
     const auto comp = ssgtest::composeHeader({providerField("live.path", "path", 0)});
-    value.composedUi = UiSchema{Generation{1}, comp.root};
+    installSchema(value, comp);
     value.chromeProviderResolver =
         [](std::string_view id) -> std::optional<ResolvedProvider> {
         if (id == "path")
@@ -919,7 +985,7 @@ TEST(composedHeaderSpacerPushesTheInputLinePastItsCells) {
     spacer.width = 20;
     const auto comp = ssgtest::composeHeader(
         {literalField("h.field", "X", 0), spacer});
-    value.composedUi = UiSchema{Generation{1}, comp.root};
+    installSchema(value, comp);
 
     auto result = layoutFor(value, state);
     ASSERT_TRUE(result.accepted());
@@ -1161,7 +1227,7 @@ TEST(panelPresenceComesExclusivelyFromTheRequest) {
     ShellState hiddenState;  // panel hidden
     auto shownReq = request(80, 12);
     shownReq.panelPresent = true;  // request overrides the hidden state
-    auto shown = computeShellLayout(shownReq, hiddenState);
+    auto shown = computeShellLayout(shownReq, hiddenState, *gSchema, gStatusView);
     ASSERT_TRUE(shown.accepted());
     ASSERT_TRUE(shown.view->panel.has_value());
 
@@ -1170,7 +1236,7 @@ TEST(panelPresenceComesExclusivelyFromTheRequest) {
     ShellState plainState;
     auto hiddenReq = request(80, 12);
     hiddenReq.panelPresent = false;
-    auto hidden = computeShellLayout(hiddenReq, plainState);
+    auto hidden = computeShellLayout(hiddenReq, plainState, *gSchema, gStatusView);
     ASSERT_TRUE(hidden.accepted());
     ASSERT_FALSE(hidden.view->panel.has_value());
 }
@@ -1180,12 +1246,12 @@ TEST(panelActiveRoleComesExclusivelyFromTheRequestFocus) {
     auto activeReq = request(80, 12);
     activeReq.panelPresent = true;
     activeReq.focus = FocusTarget::Panel;  // request says panel-focused
-    auto active = computeShellLayout(activeReq, editorFocusedState);
+    auto active = computeShellLayout(activeReq, editorFocusedState, *gSchema, gStatusView);
     ASSERT_TRUE(active.accepted());
     ASSERT_TRUE(panelProviderRole(*active.view) == SemanticRole::PanelActive);
 
     activeReq.focus = FocusTarget::Editor;  // request says editor-focused
-    auto inactive = computeShellLayout(activeReq, editorFocusedState);
+    auto inactive = computeShellLayout(activeReq, editorFocusedState, *gSchema, gStatusView);
     ASSERT_TRUE(inactive.accepted());
     ASSERT_TRUE(panelProviderRole(*inactive.view) == SemanticRole::PanelInactive);
 }

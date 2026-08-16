@@ -12,8 +12,11 @@
 #include <filesystem>
 #include <fstream>
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -27,6 +30,37 @@ std::filesystem::path uniqueRoot() {
     std::ofstream out{root / "workspace" / "long.txt"};
     for (int line = 0; line < 80; ++line) out << "line " << line << "\n";
     return root;
+}
+
+std::filesystem::path uniqueGitRoot() {
+    auto root = std::filesystem::current_path() / "runtime_presentation_git_worker";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    return root;
+}
+
+void runGit(const std::filesystem::path& workspace, std::string_view arguments) {
+    auto command = std::string{"git -C \""} + workspace.string() + "\" " +
+                   std::string{arguments} +
+#ifdef _WIN32
+                   " >NUL 2>&1";
+#else
+                   " >/dev/null 2>&1";
+#endif
+    ASSERT_EQ(std::system(command.c_str()), 0);
+}
+
+const ssg::AccessibilityNode* findBranchField(
+    const ssg::SessionSnapshot& snapshot) {
+    for (const auto& node : snapshot.presentation()->shell.accessibilityNodes) {
+        if (node.kind == ssg::ShellNodeKind::HeaderField &&
+            node.id == "branch") {
+            return &node;
+        }
+    }
+    return nullptr;
 }
 
 void openLiveDiffTabForLongTxt(ssg::EditorRuntime& runtime) {
@@ -660,22 +694,22 @@ TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {    auto root = uni
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
-    std::vector<const ssg::AccessibilityNode*> headerFields;
-    std::vector<const ssg::AccessibilityNode*> footerFields;
+    std::vector<const ssg::AccessibilityNode*> header;
+    std::vector<const ssg::AccessibilityNode*> footer;
     for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
         if (node.kind == ssg::ShellNodeKind::HeaderField &&
             (node.id == "path" || node.id == "branch")) {
-            headerFields.push_back(&node);
+            header.push_back(&node);
         }
         if (node.kind == ssg::ShellNodeKind::FooterField &&
             (node.id == "status" || node.id == "follow")) {
-            footerFields.push_back(&node);
+            footer.push_back(&node);
         }
     }
 
-    ASSERT_EQ(headerFields.size(), std::size_t{1});
-    ASSERT_EQ(headerFields[0]->id, std::string{"path"});
-    ASSERT_EQ(headerFields[0]->label, std::string{"path"});
+    ASSERT_EQ(header.size(), std::size_t{1});
+    ASSERT_EQ(header[0]->id, std::string{"path"});
+    ASSERT_EQ(header[0]->label, std::string{"path"});
     // The path field shows the workspace root with a leading home directory
     // abbreviated to "~" (so a home-rooted path leaves room for the branch).
     // Mirror the runtime's home resolution: HOME, then USERPROFILE, trailing
@@ -695,18 +729,18 @@ TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {    auto root = uni
         if (full[h.size()] == '/') return "~" + full.substr(h.size());
         return full;
     }();
-    ASSERT_EQ(headerFields[0]->content, expectedPath);
+    ASSERT_EQ(header[0]->content, expectedPath);
 
     ASSERT_EQ(snapshot->sections().tabs.tabs.size(), std::size_t{1});
     ASSERT_EQ(snapshot->sections().tabs.tabs.front().label, std::string{"long.txt"});
 
-    ASSERT_EQ(footerFields.size(), std::size_t{2});
-    ASSERT_EQ(footerFields[0]->id, std::string{"status"});
-    ASSERT_EQ(footerFields[0]->label, std::string{"status"});
-    ASSERT_TRUE(footerFields[0]->content.starts_with("schema=1\n"));
-    ASSERT_EQ(footerFields[1]->id, std::string{"follow"});
-    ASSERT_EQ(footerFields[1]->label, std::string{"follow edits"});
-    ASSERT_EQ(footerFields[1]->content, std::string{"following"});
+    ASSERT_EQ(footer.size(), std::size_t{2});
+    ASSERT_EQ(footer[0]->id, std::string{"status"});
+    ASSERT_EQ(footer[0]->label, std::string{"status"});
+    ASSERT_TRUE(footer[0]->content.starts_with("schema=1\n"));
+    ASSERT_EQ(footer[1]->id, std::string{"follow"});
+    ASSERT_EQ(footer[1]->label, std::string{"follow edits"});
+    ASSERT_EQ(footer[1]->content, std::string{"following"});
 }
 
 TEST(shellStatusFieldsRenderBranchWhenGitBranchIsApplied) {
@@ -738,6 +772,52 @@ TEST(shellStatusFieldsRenderBranchWhenGitBranchIsApplied) {
         return nullptr;
     }();
     ASSERT_TRUE(branchField != nullptr);
+    if (branchField) {
+        ASSERT_EQ(branchField->label, std::string{"branch"});
+        ASSERT_EQ(branchField->content, std::string{"\xE2\x8E\x87 main"});
+    }
+}
+
+TEST(workerBranchSeamPublishesGitBranchIntoHeaderField) {
+    auto root = uniqueGitRoot();
+    auto const workspace = root / "workspace";
+    runGit(workspace, "init");
+    runGit(workspace, "config user.email ssg@example.invalid");
+    runGit(workspace, "config user.name ssg");
+    {
+        std::ofstream out{workspace / "committed.txt"};
+        out << "committed\n";
+    }
+    runGit(workspace, "add committed.txt");
+    runGit(workspace, "commit -m initial");
+    runGit(workspace, "branch -M main");
+
+    auto created = ssg::EditorRuntime::create(
+        {workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+
+    runtime.primeDeferred();
+    ASSERT_TRUE(runtime.gitDiffWakeDescriptor() >= 0);
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+    std::optional<ssg::AccessibilityNode> branchField;
+    do {
+        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+        auto snapshot =
+            runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return;
+        if (const auto* found = findBranchField(*snapshot)) {
+            branchField = *found;
+            break;
+        }
+    } while (std::chrono::steady_clock::now() < deadline);
+
+    ASSERT_TRUE(branchField.has_value());
     if (branchField) {
         ASSERT_EQ(branchField->label, std::string{"branch"});
         ASSERT_EQ(branchField->content, std::string{"\xE2\x8E\x87 main"});
@@ -1184,6 +1264,7 @@ int main() {
     RUN(composedChromeReplacesBuiltinChromeAndTracksRevision);
     RUN(shellStatusFieldsPreserveDefaultContentOrderAndLabels);
     RUN(shellStatusFieldsRenderBranchWhenGitBranchIsApplied);
+    RUN(workerBranchSeamPublishesGitBranchIntoHeaderField);
     RUN(liveDiffTabTitlePrefixesGlyphWithoutChangingDocumentTabs);
     RUN(liveDiffTabGlyphColorTracksThemePalette);
     RUN(panelShowCommandsToggleAndSwitchProviders);

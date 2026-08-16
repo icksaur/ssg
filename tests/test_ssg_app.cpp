@@ -103,6 +103,23 @@ TEST(encodeAnsiFrameAdaptsToColorDepth) {
     ASSERT_TRUE(ansi.find(";2;") == std::string::npos);
 }
 
+TEST(statusActionPointerClickRoutesToInvokeActionWithGeneration) {
+    ssg::StatusActionInvocation invocation{ssg::StatusId{11}, "apply", 13};
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::StatusAction;
+    hit.statusInvocation = invocation;
+    ssg::app::PointerTargets targets;
+    targets.status_invocation = invocation;
+    auto plan = ssg::app::route_pointer(
+        hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+        false, false, std::nullopt, targets, {});
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    ASSERT_EQ(plan.commands[0].command_id, std::string{"status.invoke_action"});
+    ASSERT_EQ(std::any_cast<ssg::StatusActionInvocation>(plan.commands[0].payload),
+              invocation);
+}
+
+
 TEST(encodeAnsiFrameEmitsOrthogonalTintBackgrounds) {
     ssg::CellGrid screen;
     screen.size = {2, 1};
@@ -3106,6 +3123,7 @@ int main() {
     RUN(unicodeEndToEndGridAndEncoding);
     RUN(classifySignalTagsMapsSignalNumbers);
     RUN(encodeAnsiFrameAdaptsToColorDepth);
+    RUN(statusActionPointerClickRoutesToInvokeActionWithGeneration);
     RUN(encodeAnsiFrameEmitsOrthogonalTintBackgrounds);
     RUN(detectColorDepthReadsEnvironment);
     RUN(encodeAnsiFrameAddressesRowsAndEmitsPaletteColors);
@@ -3186,5 +3204,3 @@ int main() {
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }
-
-

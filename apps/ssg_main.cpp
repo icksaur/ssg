@@ -1495,8 +1495,10 @@ int main(int argc, char** argv) {
                             targets.picker_mode = pickerMode;
                         }
                     } else if (hit.region == ssg::HitRegion::HeaderField ||
-                               hit.region == ssg::HitRegion::FooterField) {
+                               hit.region == ssg::HitRegion::FooterField ||
+                               hit.region == ssg::HitRegion::StatusAction) {
                         targets.field_command_id = hit.commandId;
+                        targets.status_invocation = hit.statusInvocation;
                     }
                     // A second left click on the same editor cell within the
                     // window selects the word there instead of just placing the

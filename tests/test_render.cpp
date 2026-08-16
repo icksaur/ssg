@@ -3,6 +3,9 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/FindReplace.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/StatusFields.h>
+#include <ssg/StatusQueue.h>
+#include <ssg/WholeScreenAssembly.h>
 #include <ssg/Selection.h>
 #include <ssg/TreeModel.h>
 #include <ssg/session_snapshot.h>
@@ -1463,17 +1466,45 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     }
 
     auto makeSnapshot = [&](bool pickerOpen) {
+        std::vector<ssg::StatusFieldCatalogEntry> catalog{
+            {"cwd", "Working directory", ssg::StatusFieldRegion::Header, 0},
+            {"encoding", "Encoding", ssg::StatusFieldRegion::Footer, 0},
+        };
+        ssg::UiSchema schema;
+        schema.root = ssg::assembleWholeScreen(
+                          catalog, "help.open", ssg::StyleDimensions{},
+                          std::nullopt)
+                          .root;
+        auto validated = ssg::ValidatedSchema::validate(std::move(schema));
+        ASSERT_TRUE(validated.ok());
         return ssg::test::SessionSnapshotBuilder{}
             .document(document)
             .viewport(120, 40)
             .panel(true)
             .panelFocused(false)
+            .schema(validated.takeSchema())
+            .status(ssg::StatusViewState{{ssg::StatusItemView{
+                ssg::StatusId{1}, ssg::StatusPriority::Information, 1,
+                "Status message",
+                {ssg::StatusAction{"footer.act", "Save", "footer.act"}}}}, 0})
             .shellRequest([pickerOpen](ssg::ShellLayoutRequest& request) {
-                request.headerFields = {
-                    {"cwd", "Working directory", "~/project", 0, std::nullopt}};
-                request.footerFields = {
-                    {"encoding", "Encoding", "UTF-8", 0, std::nullopt}};
-                request.footerActions = {{"footer.act", "Save"}};
+                request.chromeProviderResolver =
+                    [](std::string_view id) -> std::optional<ssg::ResolvedProvider> {
+                    if (id == "cwd") {
+                        return ssg::ResolvedProvider{"~/project",
+                                                     "Working directory",
+                                                     std::nullopt};
+                    }
+                    if (id == "encoding") {
+                        return ssg::ResolvedProvider{"UTF-8", "Encoding",
+                                                     std::nullopt};
+                    }
+                    if (id == "footer.hint") {
+                        return ssg::ResolvedProvider{"help", "help",
+                                                     std::string{"help.open"}};
+                    }
+                    return std::nullopt;
+                };
                 request.tabs = {{"a.txt", "Tab a.txt", true, false},
                                 {"b.txt", "Tab b.txt", false, false}};
                 request.notice =

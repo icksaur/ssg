@@ -36,8 +36,8 @@ TEST(pathFieldAbbreviatesTheHomeDirectory) {
     context.currentBranch = std::string{"main"};
 
     auto projection = ssg::projectStatusFields(catalog, providers, context);
-    const auto* path = find(projection.headerFields, "path");
-    const auto* branch = find(projection.headerFields, "branch");
+    const auto* path = find(projection.header, "path");
+    const auto* branch = find(projection.header, "branch");
     ASSERT_TRUE(path != nullptr);
     ASSERT_TRUE(branch != nullptr);
     if (path) {
@@ -54,7 +54,7 @@ TEST(pathFieldKeepsAPathOutsideHomeVerbatim) {
     context.homeDirectory = "/home/user";
 
     auto projection = ssg::projectStatusFields(catalog, providers, context);
-    const auto* path = find(projection.headerFields, "path");
+    const auto* path = find(projection.header, "path");
     ASSERT_TRUE(path != nullptr);
     if (path) ASSERT_EQ(path->value, std::string{"/srv/work/project"});
 }
@@ -67,7 +67,7 @@ TEST(pathFieldUnknownHomeIsNotAbbreviated) {
     context.homeDirectory = "";  // home unknown -> no abbreviation
 
     auto projection = ssg::projectStatusFields(catalog, providers, context);
-    const auto* path = find(projection.headerFields, "path");
+    const auto* path = find(projection.header, "path");
     ASSERT_TRUE(path != nullptr);
     if (path) ASSERT_EQ(path->value, std::string{"/home/user/project"});
 }
@@ -80,7 +80,7 @@ TEST(pathEqualToHomeBecomesTilde) {
     context.homeDirectory = "/home/user";
 
     auto projection = ssg::projectStatusFields(catalog, providers, context);
-    const auto* path = find(projection.headerFields, "path");
+    const auto* path = find(projection.header, "path");
     ASSERT_TRUE(path != nullptr);
     if (path) ASSERT_EQ(path->value, std::string{"~"});
 }
@@ -95,7 +95,7 @@ TEST(pathFieldRespectsComponentBoundary) {
     context.homeDirectory = "/home/user";
 
     auto projection = ssg::projectStatusFields(catalog, providers, context);
-    const auto* path = find(projection.headerFields, "path");
+    const auto* path = find(projection.header, "path");
     ASSERT_TRUE(path != nullptr);
     if (path) ASSERT_EQ(path->value, std::string{"/home/username2/project"});
 }
@@ -112,7 +112,7 @@ TEST(pathFieldPrependsTheConfiguredCwdPrefix) {
     context.cwdPrefix = "\xF0\x9F\x93\x81 ";  // folder + space
 
     auto projection = ssg::projectStatusFields(catalog, providers, context);
-    const auto* path = find(projection.headerFields, "path");
+    const auto* path = find(projection.header, "path");
     ASSERT_TRUE(path != nullptr);
     if (path) {
         ASSERT_EQ(path->value, std::string{"\xF0\x9F\x93\x81 ~/project"});

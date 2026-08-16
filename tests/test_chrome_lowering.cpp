@@ -1,7 +1,10 @@
 #include "ssg/ChromeLowering.h"
 
 #include "chrome_authoring.h"
+#include "ssg/ChromeRegionShape.h"
 #include "ssg/ShellState.h"
+#include "ssg/StatusQueue.h"
+#include "ssg/WholeScreenAssembly.h"
 #include "ssg/Widget.h"
 #include "test_helpers.h"
 
@@ -13,16 +16,33 @@ namespace {
 
 using namespace ssg;
 using ssgtest::composeFooterRegion;
+using ssgtest::composeHeaderValidated;
+
+std::vector<AccessibilityNode> lowerHeaderFieldsFromAssembly(
+    const std::vector<StatusFieldCatalogEntry>& catalog,
+    const ChromeProviderResolver& resolver, const Style& style,
+    const std::optional<ValidatedComposition>& override = std::nullopt) {
+    UiSchema uiSchema;
+    uiSchema.root = assembleWholeScreen(catalog, "help.open", style.dimensions,
+                                      override).root;
+    auto validated = ValidatedSchema::validate(std::move(uiSchema));
+    ASSERT_TRUE(validated.ok());
+    const auto validatedSchema = validated.takeSchema();
+    const auto* root = std::get_if<UiContainer>(&validatedSchema.schema().root.content);
+    ASSERT_TRUE(root != nullptr);
+    const UiNode* headerRegion = nullptr;
+    for (const auto& child : root->children)
+        if (child.id.value() == kHeaderNodeId) headerRegion = &child;
+    ASSERT_TRUE(headerRegion != nullptr);
+    std::vector<AccessibilityNode> header;
+    const auto lowered = lowerUiChromeRegion(
+        *headerRegion, {0, 0, 80, 1}, ShellNodeKind::HeaderField,
+        SemanticRole::Header, style, resolver, header);
+    ASSERT_TRUE(lowered.ok());
+    return header;
+}
 
 Style defaultStyle() { return Style{}; }
-
-// Stage-(ii) bridge: panel presence and focus come from the request; this test's shell has
-// no panel shown, so both stay at their hidden/editor defaults.
-ShellLayoutResult layoutFor(ShellLayoutRequest request, const ShellState& state) {
-    request.panelPresent = false;
-    request.focus = FocusTarget::Editor;
-    return computeShellLayout(request, state);
-}
 
 // A resolver from a fixed id -> (value, label, command) table.
 ChromeProviderResolver resolverFrom(
@@ -51,6 +71,21 @@ WidgetDescriptor providerField(std::string id, std::string providerId,
     w.value = ValueSource{true, "", std::move(providerId)};
     w.rank = rank;
     return w;
+}
+
+WidgetDescriptor statusActions() {
+    WidgetDescriptor w;
+    w.kind = WidgetKind::StatusActions;
+    w.id = "footer.status_actions";
+    w.rank = 1;
+    return w;
+}
+
+StatusViewState twoActionStatus() {
+    return StatusViewState{{StatusItemView{
+        StatusId{42}, StatusPriority::Information, 7, "status",
+        {StatusAction{"first", "First", "ignored.first"},
+         StatusAction{"second", "Second", "ignored.second"}}}}, 0};
 }
 
 // A literal Label labels itself with its text; a literal Field with a command
@@ -150,61 +185,6 @@ TEST(spacerCreatesGapWithoutANode) {
     ASSERT_EQ(out[1].rect, (Rect{10, 0, 3, 1}));  // 3 + 1(sep) + 5 + 1(sep)
 }
 
-// PARITY: a provider-only composed header projects the SAME full nodes
-// (id/label/rect/role/content/commandId) as the built-in header path
-// (computeShellLayout), proving replace is transparent for providers.
-TEST(composedProviderHeaderMatchesBuiltinSpanForSpan) {
-    // Drive the real built-in header emission with two status fields (value +
-    // accessible label + collapse rank + command all set as the runtime would).
-    ShellLayoutRequest req;
-    req.viewport = {80, 24};
-    req.headerFields = {
-        StatusField{.id = "path",
-                    .accessibleLabel = "Current path",
-                    .value = "~/proj",
-                    .collapseRank = 1,
-                    .commandId = std::optional<std::string>{"panel.show_files"}},
-        StatusField{.id = "git_branch",
-                    .accessibleLabel = "Git branch",
-                    .value = "main",
-                    .collapseRank = 5,
-                    .commandId =
-                        std::optional<std::string>{"panel.show_git_status"}}};
-    req.tabs = {{"main.cpp", "main.cpp tab", true}};
-    req.panelProviderLabel = "Files";
-
-    ShellState state;
-    const auto result = layoutFor(req, state);
-    ASSERT_TRUE(result.accepted());
-    if (!result.accepted()) return;
-    ASSERT_TRUE(result.view->header.has_value());
-
-    std::vector<AccessibilityNode> builtin;
-    for (const auto& node : result.view->accessibilityNodes)
-        if (node.kind == ShellNodeKind::HeaderField) builtin.push_back(node);
-    ASSERT_EQ(builtin.size(), std::size_t{2});
-
-    // Compose a mirroring header: provider Field widgets with matching ids +
-    // ranks; the resolver returns exactly each field's (value,label,command).
-    const auto region = composeFooterRegion(
-        {providerField("path", "path", 1), providerField("git_branch", "git_branch", 5)});
-    const auto resolver = resolverFrom(
-        {{"path", {"~/proj", "Current path",
-                   std::optional<std::string>{"panel.show_files"}}},
-         {"git_branch", {"main", "Git branch",
-                         std::optional<std::string>{"panel.show_git_status"}}}});
-
-    const Rect header = *result.view->header;
-    std::vector<AccessibilityNode> composed;
-    const auto lowered = lowerUiChromeRegion(
-        region, {header.x, header.y, header.width, 1},
-        ShellNodeKind::HeaderField, SemanticRole::Header, req.style, resolver,
-        composed);
-    ASSERT_TRUE(lowered.ok());
-
-    ASSERT_TRUE(composed == builtin);
-}
-
 // A provider with a non-empty value but an EMPTY accessible label is dropped,
 // matching the built-in skip on `accessibleLabel.empty() || value.empty()`.
 TEST(dropsProviderWithEmptyLabel) {
@@ -223,6 +203,93 @@ TEST(dropsProviderWithEmptyLabel) {
     ASSERT_EQ(out[0].id, std::string{"b"});
 }
 
+TEST(composedProviderHeaderMatchesBuiltinSpanForSpan) {
+    const Style style = defaultStyle();
+    const std::vector<StatusFieldCatalogEntry> catalog{
+        {"path", "Current path", StatusFieldRegion::Header, 1},
+        {"git_branch", "Git branch", StatusFieldRegion::Header, 5}};
+    const auto resolver = resolverFrom(
+        {{"path", {"~/proj", "Current path",
+                   std::optional<std::string>{"panel.show_files"}}},
+         {"git_branch", {"main", "Git branch",
+                         std::optional<std::string>{"panel.show_git_status"}}}});
+
+    const auto builtin = lowerHeaderFieldsFromAssembly(catalog, resolver, style);
+    ASSERT_EQ(builtin.size(), std::size_t{2});
+
+    const auto composed = composeHeaderValidated(
+        {providerField("path", "path", 1),
+         providerField("git_branch", "git_branch", 5)});
+    const auto composedNodes =
+        lowerHeaderFieldsFromAssembly(catalog, resolver, style, composed);
+
+    ASSERT_TRUE(composedNodes == builtin);
+}
+
+TEST(statusActionItemsKeepTypedInvocationAndPlainFooterWidgetsKeepRegionKind) {
+    auto hint = providerField("footer.hint", "footer.hint", 0);
+    hint.overflow = Overflow::Truncate;
+    auto region = chromeRegion(kFooterNodeId,
+        {literal(WidgetKind::Label, "plain_label", "LBL"),
+         providerField("plain_field", "field", 0)},
+        {hint, statusActions()}, std::nullopt, CenterWidth::Flex, 0, 1);
+    Style style = defaultStyle();
+    style.dimensions.labelPadding = 5;
+    auto status = twoActionStatus();
+    std::vector<AccessibilityNode> out;
+    auto lowered = lowerUiChromeRegion(
+        region, {0, 0, 80, 1}, ShellNodeKind::FooterField,
+        SemanticRole::Footer, style,
+        resolverFrom({{"footer.hint", {"Help", "Help", std::string{"help.open"}}},
+                      {"field", {"FIELD", "Plain field", std::nullopt}}}),
+        out, &status);
+    ASSERT_TRUE(lowered.ok());
+    ASSERT_EQ(out.size(), std::size_t{5});
+    ASSERT_EQ(out[0].kind, ShellNodeKind::FooterField);
+    ASSERT_EQ(out[0].id, std::string{"plain_label"});
+    ASSERT_EQ(out[1].kind, ShellNodeKind::FooterField);
+    ASSERT_EQ(out[1].id, std::string{"plain_field"});
+    ASSERT_EQ(out[2].kind, ShellNodeKind::FooterHint);
+    ASSERT_EQ(out[2].id, std::string{"footer.hint"});
+    ASSERT_EQ(out[2].rect.width, 4 + style.dimensions.labelPadding);
+    ASSERT_EQ(out[3].kind, ShellNodeKind::FooterAction);
+    ASSERT_EQ(out[3].id, std::string{"first"});
+    ASSERT_TRUE(out[3].role == SemanticRole::StatusInfo);
+    ASSERT_EQ(out[3].statusInvocation,
+              (StatusActionInvocation{StatusId{42}, "first", 7}));
+    ASSERT_FALSE(out[3].commandId.has_value());
+    ASSERT_EQ(out[4].kind, ShellNodeKind::FooterAction);
+    ASSERT_EQ(out[4].id, std::string{"second"});
+    ASSERT_EQ(out[4].statusInvocation,
+              (StatusActionInvocation{StatusId{42}, "second", 7}));
+    ASSERT_EQ(out[3].rect.width, 5 + style.dimensions.labelPadding);
+}
+
+TEST(statusActionItemsCollapseBeforeHintAndFieldsAtNarrowWidth) {
+    auto hint = providerField("footer.hint", "footer.hint", 0);
+    hint.overflow = Overflow::Truncate;
+    auto region = chromeRegion(kFooterNodeId,
+        {literal(WidgetKind::Label, "plain_label", "LBL"),
+         providerField("plain_field", "field", 0)},
+        {hint, statusActions()}, std::nullopt, CenterWidth::Flex, 0, 1);
+    Style style = defaultStyle();
+    style.dimensions.labelPadding = 3;
+    auto status = twoActionStatus();
+    std::vector<AccessibilityNode> out;
+    auto lowered = lowerUiChromeRegion(
+        region, {0, 0, 12, 1}, ShellNodeKind::FooterField,
+        SemanticRole::Footer, style,
+        resolverFrom({{"footer.hint", {"Help", "Help", std::string{"help.open"}}},
+                      {"field", {"FIELD", "Plain field", std::nullopt}}}),
+        out, &status);
+    ASSERT_TRUE(lowered.ok());
+    ASSERT_EQ(out.size(), std::size_t{2});
+    ASSERT_EQ(out[0].kind, ShellNodeKind::FooterAction);
+    ASSERT_EQ(out[0].id, std::string{"first"});
+    ASSERT_EQ(out[1].kind, ShellNodeKind::FooterAction);
+    ASSERT_EQ(out[1].id, std::string{"second"});
+}
+
 }  // namespace
 
 int main() {
@@ -232,5 +299,7 @@ int main() {
     RUN(dropsProviderWithEmptyLabel);
     RUN(spacerCreatesGapWithoutANode);
     RUN(composedProviderHeaderMatchesBuiltinSpanForSpan);
+    RUN(statusActionItemsKeepTypedInvocationAndPlainFooterWidgetsKeepRegionKind);
+    RUN(statusActionItemsCollapseBeforeHintAndFieldsAtNarrowWidth);
     return 0;
 }

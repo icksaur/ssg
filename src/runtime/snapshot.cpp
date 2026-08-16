@@ -20,9 +20,14 @@ namespace {
 // the grid lowering and the semantic dynamic-state resolution so a composed
 // provider widget resolves to the same values on either path.
 ChromeProviderResolver chromeResolverFor(std::vector<StatusField> header,
-                                         std::vector<StatusField> footer) {
-    return [header = std::move(header), footer = std::move(footer)](
+                                         std::vector<StatusField> footer,
+                                         std::string helpLabel) {
+    return [header = std::move(header), footer = std::move(footer),
+            helpLabel = std::move(helpLabel)](
                std::string_view id) -> std::optional<ResolvedProvider> {
+        if (id == "footer.hint") {
+            return ResolvedProvider{helpLabel, helpLabel, std::string{"help.open"}};
+        }
         for (const auto* group : {&header, &footer}) {
             for (const auto& field : *group) {
                 if (field.id == id) {
@@ -33,6 +38,14 @@ ChromeProviderResolver chromeResolverFor(std::vector<StatusField> header,
         }
         return std::nullopt;
     };
+}
+
+std::string helpHintLabel(const KeymapViewState& keymap) {
+    std::string keys;
+    if (auto sequence = KeymapMatcher{keymap}.preferredBinding("help.open")) {
+        keys = KeyCodec{}.formatSequence(*sequence);
+    }
+    return keys.empty() ? std::string{"help"} : keys + "  help";
 }
 
 std::string composedTabTitle(const TabState& tab, const Style& style) {
@@ -164,8 +177,8 @@ StatusFieldProjection EditorRuntime::Impl::chromeStatusFields(
          .followMode = followProjection.mode,
          .cwdPrefix = mode == ChromeFieldMode::Grid ? style.cwdPrefix
                                                     : std::string{}});
-    bindStatusFieldCommands(fields.headerFields, followProjection);
-    bindStatusFieldCommands(fields.footerFields, followProjection);
+    bindStatusFieldCommands(fields.header, followProjection);
+    bindStatusFieldCommands(fields.footer, followProjection);
     return fields;
 }
 
@@ -176,7 +189,6 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
         labels.push_back({composedTabTitle(tab, style), tab.label,
                           tabs.viewState().active == tab.id, tab.dirty});
     }
-    auto statusProjection = status.footerProjection();
     auto statusFields = chromeStatusFields(ChromeFieldMode::Grid);
     ShellLayoutRequest request;    request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = interaction.prompt().active() ? promptRowCount(interaction.prompt().request()->kind) : 0;
@@ -199,38 +211,10 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     request.panelProviderLabel = std::string{panelProviderLabel(interaction.truth().selectedProvider)};
     request.panelPresent = interaction.truth().panelPresent;
     request.focus = interaction.effectiveFocus();
-    request.headerFields = std::move(statusFields.headerFields);
-    request.footerFields = std::move(statusFields.footerFields);
-    // A composed region REPLACES that
-    // region's built-in status fields; an uncomposed region keeps request.header
-    // Fields/footerFields above. A composed `provider` widget resolves through
-    // the SAME projected+bound values the built-in fields carry, so an inherited
-    // click command (e.g. path/branch/follow) survives by construction. The
-    // fields are captured BY VALUE (computeShellLayout runs synchronously below,
-    // but by-value keeps the resolver independent of the moved-from request
-    // vectors) -- field.id equals the provider/catalog id (projectStatusFields
-    // keys providers by entry id), so the scan is the natural lookup.
-    if (composedUi) {
-        request.composedUi =
-            UiSchema{Generation{chromeGeneration}, composedUi->composition().root};
-        request.chromeProviderResolver =
-            chromeResolverFor(request.headerFields, request.footerFields);
-    }
-    request.footerActions = statusProjection.actions;
-    // The persistent bottom-right help hint. Its key label tracks the live
-    // binding for help.open (label-only when unbound); it is never a hardcoded
-    // key string.
-    {
-        ShellFooterHint hint;
-        hint.commandId = "help.open";
-        std::string keys;
-        if (auto sequence =
-                KeymapMatcher{keymap}.preferredBinding("help.open")) {
-            keys = KeyCodec{}.formatSequence(*sequence);
-        }
-        hint.label = keys.empty() ? std::string{"help"} : keys + "  help";
-        request.footerHint = std::move(hint);
-    }
+    auto promptStatus = promptStatusView();
+    request.chromeProviderResolver = chromeResolverFor(
+        std::move(statusFields.header), std::move(statusFields.footer),
+        helpHintLabel(keymap));
     request.tabs = std::move(labels);
     request.style = style;
     // Anchoring decision: a HEADER-anchored prompt hosts its query in the header
@@ -249,7 +233,8 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
         request.inputLineQuery = paletteReport.query;
         request.inputLineGhost = paletteReport.ghost;
     }
-    auto result = computeShellLayout(request, shell);
+    auto result = computeShellLayout(request, shell, interaction.interaction().schema(),
+                                     promptStatus.status);
     if (!result.accepted()) return {};
     auto view = *result.view;
 
@@ -326,8 +311,9 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
     UiStateSection uiState = [&] {
         auto fields = chromeStatusFields(ChromeFieldMode::Semantic);
         return resolveUiState(
-            validatedSchema, chromeResolverFor(std::move(fields.headerFields),
-                                               std::move(fields.footerFields)));
+            validatedSchema, chromeResolverFor(std::move(fields.header),
+                                               std::move(fields.footer),
+                                               helpHintLabel(keymap)));
     }();
     UiPresenceSection uiPresence =
         buildPresenceSection(validatedSchema, interactionState.presence());

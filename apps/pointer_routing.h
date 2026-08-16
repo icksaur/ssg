@@ -12,6 +12,7 @@
 
 #include <ssg/HitTester.h>
 #include <ssg/Selection.h>
+#include <ssg/StatusActionInvocation.h>
 #include <ssg/TabManager.h>
 #include <ssg/ShellState.h>
 
@@ -137,6 +138,7 @@ struct PointerTargets {
     std::optional<std::string> picker_candidate_id;
     ssg::SearchMode picker_mode = ssg::SearchMode::Command;
     std::optional<std::string> field_command_id;    // a header/footer field command
+    std::optional<ssg::StatusActionInvocation> status_invocation;
 };
 
 // The index into `baseline` of the selection the click position `P` lands on, or
