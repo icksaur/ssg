@@ -188,15 +188,63 @@ export function encodePaletteSubmit(candidateId) {
   return 'PSUB:' + String(candidateId);
 }
 
-// A resync is needed only when the tree delta advances state (revision moved past
-// its base) or explicitly demands a full snapshot. Every SessionDelta carries a
-// tree object -- including no-op deltas whose revision equals its base -- so a bare
-// presence check would force a full snapshot after every command.
-export function sessionDeltaRequiresTreeResync(delta) {
-  const tree = delta && delta.tree;
+// Apply a tree section delta to the retained tree, mirroring the C++
+// TreeDeltaCodec::replay (src/TreeModel.cpp): a per-provider splice (erase
+// erase_count nodes at start, insert the new views) plus provider add/remove and
+// the selected id. Returns true when the tree is now current (applied, or a no-op
+// delta), and false ONLY when the client cannot express the transition and must
+// re-sync from a full snapshot: an explicit snapshot_required, a base revision that
+// does not match the retained tree (a missed delta), a duplicate or malformed
+// provider change. Replay is transactional -- it validates against a working copy
+// and commits to `tree` only on full success, so a rejected delta never leaves the
+// panel half-applied. Keeping the panel retained here is what stops every
+// expand/open/select from forcing a resync.
+export function applyTreeDelta(tree, treeDelta) {
+  if (!treeDelta) return true;
+  if (treeDelta.snapshot_required) return false;
   if (!tree) return false;
-  if (tree.snapshot_required) return true;
-  return num(tree.revision) !== num(tree.base_revision);
+  const big = (v) => (typeof v === 'bigint' ? v : BigInt(v == null ? 0 : v));
+  if (big(treeDelta.base_revision) !== big(tree.revision)) return false;
+  const key = (v) => (typeof v === 'bigint' ? v.toString() : String(v));
+  // Work on a copy (providers cloned, each provider's nodes copied) so a later
+  // malformed change cannot leave the retained tree partially mutated.
+  const base = Array.isArray(tree.providers) ? tree.providers : [];
+  const providers = base.map((p) => ({ ...p, nodes: Array.isArray(p.nodes) ? p.nodes.slice() : [] }));
+  const seen = new Set();
+  for (const change of (treeDelta.providers || [])) {
+    const pid = key(change.provider_id);
+    if (seen.has(pid)) return false;  // C++ rejects two changes for one provider
+    seen.add(pid);
+    const idx = providers.findIndex((p) => key(p.provider_id) === pid);
+    const start = Number(big(change.start));
+    const erase = Number(big(change.erase_count));
+    const insert = Array.isArray(change.insert) ? change.insert : [];
+    if (change.remove_provider) {
+      // A removal carries no splice payload; a nonzero one is malformed.
+      if (idx < 0 || start !== 0 || erase !== 0 || insert.length !== 0) return false;
+      providers.splice(idx, 1);
+      continue;
+    }
+    if (idx < 0) {
+      // A new provider inserts at its sorted position (the C++ keeps providers
+      // ordered by id) and carries only inserts, never an erase.
+      if (start !== 0 || erase !== 0) return false;
+      let at = providers.findIndex((p) => key(p.provider_id) > pid);
+      if (at < 0) at = providers.length;
+      providers.splice(at, 0, { provider_id: change.provider_id, kind: change.kind,
+        nodes: insert.slice(), selected: change.selected == null ? null : change.selected });
+      continue;
+    }
+    const prov = providers[idx];
+    if (start > prov.nodes.length || erase > prov.nodes.length - start) return false;
+    prov.nodes.splice(start, erase, ...insert);
+    prov.kind = change.kind;
+    prov.selected = change.selected == null ? null : change.selected;
+  }
+  // Commit.
+  tree.providers = providers;
+  tree.revision = treeDelta.revision;
+  return true;
 }
 
 export function clampPaletteSelection(selected, rowCount) {

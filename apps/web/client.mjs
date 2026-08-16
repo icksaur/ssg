@@ -10,7 +10,7 @@ import {
   decodeValue, findSections, num, cssColor, byteToIndex, utf8Bytes,
   dropSettled, project, parseEnvelope,
   isPalettePromptOpen, matcherBoundsFromPalette, clampPaletteSelection,
-  encodePaletteSubmit, applySessionDeltaSections, sessionDeltaRequiresTreeResync,
+  encodePaletteSubmit, applySessionDeltaSections, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE,
   encodeStatusActionInvocation, shouldResetLocalQuery, pickerEpochFromPalette,
 } from '/reconcile.mjs';
@@ -256,10 +256,21 @@ function renderTreeSurface(parent, surface, tree) {
     for (const row of (provider && Array.isArray(provider.nodes) ? provider.nodes : [])) {
       const n = row.node || {};
       const div = document.createElement('div');
-      div.className = 'tree-row' + (idKey(n.id) === selected ? ' sel' : '');
+      div.className = 'tree-row clickable' + (idKey(n.id) === selected ? ' sel' : '');
       div.style.paddingLeft = (num(row.depth) || 0) * 2 + 'ch';
       if (surface === SURFACE.GITSTATUS && n.git_status != null) div.classList.add('git-' + num(n.git_status));
-      div.textContent = (n.icon ? n.icon + ' ' : '') + (n.label || '');
+      // The twisty marks an expandable node's state; a leaf keeps the same column
+      // blank so labels align. A closed directory shows the collapsed glyph.
+      const twisty = document.createElement('span');
+      twisty.className = 'twisty';
+      twisty.textContent = n.expandable ? (row.expanded ? '\u25be ' : '\u25b8 ') : '  ';
+      div.appendChild(twisty);
+      div.appendChild(document.createTextNode((n.icon ? n.icon + ' ' : '') + (n.label || '')));
+      // A click selects then activates the node -- opening a file or toggling a
+      // directory -- the same library commands a TUI pointer press dispatches.
+      if (typeof n.id === 'string') {
+        div.addEventListener('click', () => ws.send('TSEL:' + n.id));
+      }
       parent.appendChild(div);
     }
 }
@@ -418,13 +429,16 @@ function refreshFinder() {
 }
 
 function applyDelta(d) {
-  if (sessionDeltaRequiresTreeResync(d)) {
-    console.error('tree delta received; requesting full snapshot');
+  applySessionDeltaSections(state.sections, d);
+  // The tree is retained and spliced in place; only a genuinely inexpressible
+  // tree transition (snapshot_required, a missed base revision, or a malformed
+  // splice) falls back to a full snapshot, so ordinary expand/open/select no
+  // longer churns the panel through a resync.
+  if (d.tree && !applyTreeDelta(state.sections.tree, d.tree)) {
     statusEl.textContent = 'tree update requires full snapshot; resyncing';
     if (ws.readyState === WebSocket.OPEN) ws.send('SNAP');
     return false;
   }
-  applySessionDeltaSections(state.sections, d);
   return true;
 }
 

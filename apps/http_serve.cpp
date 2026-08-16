@@ -13,6 +13,7 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
 #include <ssg/StatusQueue.h>
+#include <ssg/TreeModel.h>
 #include <ssg/Viewport.h>
 #include <ssg/focus.h>
 #include <ssg/session_snapshot.h>
@@ -406,6 +407,33 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                                                  runtime.revision(),
                                                  submit->payload});
                                 }
+                            }
+                        }
+                        sendUpdateLocked(handle);
+                        return;
+                    }
+                    // Select and activate a tree node by its authoritative id, the
+                    // same command pair a TUI pointer press on a tree row dispatches
+                    // (see route_pointer's Panel branch): tree.select carries the
+                    // node id, tree.activate then opens a file or toggles a
+                    // directory. One behavior path -- a click and a keyboard
+                    // select-then-Enter mean the same thing.
+                    if (payload.rfind("TSEL:", 0) == 0) {
+                        std::string const id{payload.substr(5)};
+                        std::lock_guard lock{*runtimeMutex};
+                        if (*attachedHandle != handle) return;
+                        if (!id.empty()) {
+                            // Activate only when the selection was accepted: an
+                            // arbitrary/unknown client id must be a no-op, never
+                            // activate whatever node was previously selected.
+                            auto const selected = runtime.dispatch(
+                                client,
+                                {"tree.select", runtime.revision(),
+                                 TreeSelectArguments{TreeNodeId{id}}});
+                            if (selected.accepted()) {
+                                (void)runtime.dispatch(
+                                    client,
+                                    {"tree.activate", runtime.revision(), {}});
                             }
                         }
                         sendUpdateLocked(handle);

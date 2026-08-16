@@ -13,7 +13,7 @@ import {
   applyDocumentDelta, dropSettled, project, byteToIndex, utf8Bytes,
   parseEnvelope,
   isPalettePromptOpen, matcherParametersFromWire, matcherBoundsFromPalette,
-  clampPaletteSelection, encodePaletteSubmit, sessionDeltaRequiresTreeResync,
+  clampPaletteSelection, encodePaletteSubmit, applyTreeDelta,
   applySessionDeltaSections,
   encodeStatusActionInvocation,
 } from '../../apps/web/reconcile.mjs';
@@ -222,44 +222,55 @@ check('encodePaletteSubmit sends the candidate id, not a selected index and quer
   assert.equal(encodePaletteSubmit(''), null);
 });
 
-check('sessionDeltaRequiresTreeResync only resyncs on a real advance or snapshot flag', () => {
-  // A no-op tree delta (revision equals base) must NOT force a resync -- every
-  // SessionDelta carries a tree object, so this is the common case per command.
-  assert.equal(sessionDeltaRequiresTreeResync(
-    { tree: { base_revision: 5, revision: 5, snapshot_required: false } }), false);
-  // A genuine state advance resyncs.
-  assert.equal(sessionDeltaRequiresTreeResync(
-    { tree: { base_revision: 5, revision: 6, snapshot_required: false } }), true);
-  // An explicit snapshot demand resyncs even without a revision change.
-  assert.equal(sessionDeltaRequiresTreeResync(
-    { tree: { base_revision: 5, revision: 5, snapshot_required: true } }), true);
-  // No tree object at all: nothing to resync.
-  assert.equal(sessionDeltaRequiresTreeResync({ palette: {} }), false);
-});
-
-check('applySessionDeltaSections replays retained UI and palette replacements but never tree deltas', () => {
-  const sections = {
-    document: { text: 'a', caret: 1 }, selection: {}, tabs: {}, syntax: {}, theme: {},
-    focus: 0, prompt_status: {}, find_replace: {}, ui: { old: true },
-    ui_state: { old: true }, ui_presence: { old: true }, palette: { old: true },
-    tree: { revision: 1, providers: [{ provider_id: 7, kind: 0, nodes: [{ node: { id: 'a' }, depth: 0 }, { node: { id: 'x' }, depth: 0 }], selected: 'a' }] },
-  };
-  applySessionDeltaSections(sections, {
-    ui: { root: 'new-ui' },
-    ui_state: { generation: 2 },
-    ui_presence: { generation: 2 },
-    palette: { candidates: [] },
-    tree: { base_revision: 1, revision: 2, snapshot_required: false, providers: [
-      { provider_id: 7, kind: 0, start: 1, erase_count: 1, insert: [{ node: { id: 'b' }, depth: 0 }], selected: 'b' },
-    ] },
-  });
-  assert.deepEqual(sections.ui, { root: 'new-ui' });
-  assert.deepEqual(sections.ui_state, { generation: 2 });
-  assert.deepEqual(sections.ui_presence, { generation: 2 });
-  assert.deepEqual(sections.palette, { candidates: [] });
-  assert.equal(sections.tree.revision, 1);
-  assert.deepEqual(sections.tree.providers[0].nodes.map((r) => r.node.id), ['a', 'x']);
-  assert.equal(sections.tree.providers[0].selected, 'a');
+check('applyTreeDelta splices the retained tree and resyncs only when inexpressible', () => {
+  const tree = () => ({ revision: 1, providers: [
+    { provider_id: 'fs', kind: 0, nodes: [
+      { node: { id: 'a' }, depth: 0 }, { node: { id: 'x' }, depth: 0 }], selected: 'a' }] });
+  // A splice erases node x and inserts b, advancing the retained revision.
+  let t = tree();
+  assert.equal(applyTreeDelta(t, { base_revision: 1, revision: 2, snapshot_required: false,
+    providers: [{ provider_id: 'fs', kind: 0, start: 1, erase_count: 1,
+      insert: [{ node: { id: 'b' }, depth: 0 }], selected: 'b' }] }), true);
+  assert.equal(t.revision, 2);
+  assert.deepEqual(t.providers[0].nodes.map((r) => r.node.id), ['a', 'b']);
+  assert.equal(t.providers[0].selected, 'b');
+  // A no-op delta (revision equals base) applies cleanly and stays current.
+  t = tree();
+  assert.equal(applyTreeDelta(t, { base_revision: 1, revision: 1, snapshot_required: false, providers: [] }), true);
+  assert.equal(t.revision, 1);
+  // A base revision that does not match the retained tree means a missed delta:
+  // the client cannot splice and must resync from a snapshot.
+  assert.equal(applyTreeDelta(tree(), { base_revision: 9, revision: 10, snapshot_required: false, providers: [] }), false);
+  // An explicit snapshot demand resyncs.
+  assert.equal(applyTreeDelta(tree(), { base_revision: 1, revision: 2, snapshot_required: true, providers: [] }), false);
+  // A malformed splice (erase past the end) resyncs rather than corrupt the tree.
+  assert.equal(applyTreeDelta(tree(), { base_revision: 1, revision: 2, snapshot_required: false,
+    providers: [{ provider_id: 'fs', kind: 0, start: 0, erase_count: 9, insert: [], selected: null }] }), false);
+  // A brand-new provider inserts at its sorted position, carrying only inserts.
+  t = tree();
+  assert.equal(applyTreeDelta(t, { base_revision: 1, revision: 2, snapshot_required: false,
+    providers: [{ provider_id: 'git', kind: 1, start: 0, erase_count: 0,
+      insert: [{ node: { id: 'g' }, depth: 0 }], selected: null }] }), true);
+  assert.deepEqual(t.providers.map((p) => p.provider_id), ['fs', 'git']);
+  // No tree object at all: nothing to do, stays current.
+  assert.equal(applyTreeDelta(tree(), undefined), true);
+  // Two changes for one provider are malformed (matches C++ replay's reject).
+  assert.equal(applyTreeDelta(tree(), { base_revision: 1, revision: 2, snapshot_required: false,
+    providers: [
+      { provider_id: 'fs', kind: 0, start: 0, erase_count: 0, insert: [], selected: 'a' },
+      { provider_id: 'fs', kind: 0, start: 0, erase_count: 0, insert: [], selected: 'a' }] }), false);
+  // A removal carrying a nonzero splice payload is malformed.
+  assert.equal(applyTreeDelta(tree(), { base_revision: 1, revision: 2, snapshot_required: false,
+    providers: [{ provider_id: 'fs', kind: 0, remove_provider: true, start: 1, erase_count: 0, insert: [], selected: null }] }), false);
+  // Transactional: a later malformed change leaves the retained tree UNCHANGED.
+  t = tree();
+  assert.equal(applyTreeDelta(t, { base_revision: 1, revision: 2, snapshot_required: false,
+    providers: [
+      { provider_id: 'git', kind: 1, start: 0, erase_count: 0, insert: [{ node: { id: 'g' }, depth: 0 }], selected: null },
+      { provider_id: 'fs', kind: 0, start: 0, erase_count: 9, insert: [], selected: null }] }), false);
+  assert.equal(t.revision, 1);
+  assert.deepEqual(t.providers.map((p) => p.provider_id), ['fs']);
+  assert.deepEqual(t.providers[0].nodes.map((r) => r.node.id), ['a', 'x']);
 });
 
 check('palette-prompt detection reads the wire snake_case field names', () => {
