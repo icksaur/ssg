@@ -110,10 +110,9 @@ struct UiNode {
 inline constexpr std::string_view kRootNodeId = "root";
 inline constexpr std::string_view kHeaderNodeId = "header";
 inline constexpr std::string_view kFooterNodeId = "footer";
-// The whole-screen body and its two columns, and the four view-leaf surfaces they
+// The whole-screen body and its two columns, and the view-leaf surfaces they
 // hold. Placement is these ids plus tree structure; a client keys off an id. These
-// name nodes the whole-screen assembly builds; the WellKnownArea contract promotes
-// them to required only when the runtime actually publishes the assembled tree.
+// name nodes the whole-screen assembly builds.
 inline constexpr std::string_view kBodyNodeId = "body";
 inline constexpr std::string_view kPanelNodeId = "panel";
 inline constexpr std::string_view kContentNodeId = "content";
@@ -126,14 +125,16 @@ inline constexpr std::string_view kFindResultsNodeId = "findresults";
 // The typed well-known areas: a closed set a native client may key off to hand a
 // subtree to its own toolkit. A raw id string is not a placement contract; this
 // typed identity, plus the structural validation validateUiSchema performs for it
-// (required node kind and ancestry), is. Panel/content join this set when the
-// canonical tree gains them.
-enum class WellKnownArea : std::uint8_t { Root, Header, Footer };
+// (required node kind and ancestry), is.
+enum class WellKnownArea : std::uint8_t { Root, Header, Body, Panel, Content, Footer };
 
 inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
     switch (area) {
     case WellKnownArea::Root: return kRootNodeId;
     case WellKnownArea::Header: return kHeaderNodeId;
+    case WellKnownArea::Body: return kBodyNodeId;
+    case WellKnownArea::Panel: return kPanelNodeId;
+    case WellKnownArea::Content: return kContentNodeId;
     case WellKnownArea::Footer: return kFooterNodeId;
     }
     throw std::invalid_argument("wellKnownAreaId: unrecognized WellKnownArea");
@@ -180,11 +181,11 @@ struct UiSchemaValidation {
 [[nodiscard]] UiSchemaValidation validateUiSchema(const UiSchema& schema);
 
 // Validate the whole-screen well-known-area contract: the schema root is the typed
-// "root" area and a container, and each well-known area (header/footer, wherever it
-// appears) is a container in its canonical position (a direct child of the root).
-// Separate from validateUiSchema because the generic validator serves any tree the
-// presence/focus machinery builds, while this contract binds a PUBLISHED
-// whole-screen schema (enforced at the wire boundary). Pure.
+// "root" area and the complete canonical topology is present with its required
+// containers, View leaves, surfaces, parentage, and sibling order. Separate from
+// validateUiSchema because the generic validator serves any tree the presence/focus
+// machinery builds, while this contract binds a PUBLISHED whole-screen schema
+// (enforced at the wire boundary). Pure.
 [[nodiscard]] UiSchemaValidation validateWellKnownAreas(const UiSchema& schema);
 
 // The set of every node id in a schema. Meaningful only for a schema whose ids are

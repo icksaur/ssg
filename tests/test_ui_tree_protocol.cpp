@@ -7,6 +7,7 @@
 #include "chrome_authoring.h"
 #include "ssg/UiTree.h"
 #include "ssg/UiTreeProtocol.h"
+#include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
 #include <optional>
@@ -64,43 +65,19 @@ std::vector<UiSchema> corpus() {
         msg.value = ValueSource{false, "scrolling status", ""};
         msg.overflow = ssg::Overflow::ScrollTail;
         msg.sigil = ">";
-        const auto comp = ssgtest::composeHeaderAndFooter(
-            {path, dirty, sp}, {msg}, {label("enc", "utf-8")}, label("title", "SSG"),
-            ssg::CenterWidth::Fixed, 8, /*headerSeparator=*/2);
-        all.push_back(UiSchema{Generation{7}, comp.root});
+        const auto comp = ssgtest::composeHeaderAndFooterValidated(
+            {path, dirty, sp}, {msg}, {label("enc", "utf-8")});
+        all.push_back(UiSchema{
+            Generation{7},
+            ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{}, comp)
+                .root});
     }
-    {  // empty composition -> empty schema (a valid empty root)
+    {  // the built-in whole-screen tree without a composed chrome override
         all.push_back(UiSchema{
             Generation{1},
-            ssg::UiNode{ssg::UiNodeId{"root"}, ssg::Size::flex(),
-                        ssg::UiContainer{ssg::Axis::Column, {}, {}, {}}}});
-    }
-    {  // a View leaf carries its surface across the wire
-        WidgetDescriptor view;
-        view.kind = WidgetKind::View;
-        view.id = "content.tabview";
-        view.surface = ssg::ViewSurface::TabView;
-        ssg::UiContainer body;
-        body.axis = ssg::Axis::Row;
-        body.children.push_back(
-            ssg::UiNode{ssg::UiNodeId{"content.tabview"}, ssg::Size::flex(),
-                        ssg::UiLeaf{view}});
-        ssg::UiNode root{ssg::UiNodeId{"root"}, ssg::Size::flex(),
-                         std::move(body)};
-        all.push_back(UiSchema{Generation{3}, std::move(root)});
-    }
-    {  // a StatusActions widget round-trips its new wire ordinal (id + kind only)
-        WidgetDescriptor actions;
-        actions.kind = WidgetKind::StatusActions;
-        actions.id = "footer.status_actions";
-        ssg::UiContainer body;
-        body.axis = ssg::Axis::Row;
-        body.children.push_back(
-            ssg::UiNode{ssg::UiNodeId{"footer.status_actions"},
-                        ssg::Size::autoSize(), ssg::UiLeaf{actions}});
-        ssg::UiNode root{ssg::UiNodeId{"root"}, ssg::Size::flex(),
-                         std::move(body)};
-        all.push_back(UiSchema{Generation{5}, std::move(root)});
+            ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                     std::nullopt)
+                .root});
     }
     return all;
 }

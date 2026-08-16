@@ -8,6 +8,7 @@
 
 #include "all_command_ids.h"
 #include <ssg/EditorRuntime.h>
+#include <ssg/WholeScreenAssembly.h>
 
 #include <unistd.h>
 
@@ -60,7 +61,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
     theme.roleColors[0].red = static_cast<std::uint8_t>(marker.size());
     theme.syntaxColors[0].green = static_cast<std::uint8_t>(marker.size());
 
-    return {
+    ssg::SessionSnapshotSections result{
         {revision, marker, ssg::ByteOffset{marker.size()}},
         selection(marker.size(), static_cast<std::uint32_t>(marker.size())),
         {true, false, marker.size()},
@@ -92,6 +93,18 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         theme,
         ssg::FocusTarget::Editor,
     };
+    result.ui =
+        ssg::UiSchema{ssg::Generation{marker.size()},
+                      ssg::assembleWholeScreen({}, "help.open",
+                                               ssg::StyleDimensions{}, std::nullopt)
+                          .root};
+    const auto validated = ssg::ValidatedSchema::validate(result.ui).takeSchema();
+    result.uiState = ssg::resolveUiState(validated, [](std::string_view) {
+        return std::optional<ssg::ResolvedProvider>{};
+    });
+    result.uiPresence = ssg::buildPresenceSection(
+        validated, ssg::PresenceConfig::allPresent(validated));
+    return result;
 }
 
 // A sections fixture whose medium-agnostic ui section is non-empty, so the wire
@@ -110,9 +123,15 @@ ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
     title.value = ssg::ValueSource{false, "SSG", ""};
     // Footer (not header) so the center widget is allowed; this fixture only needs
     // a non-empty schema to exercise the wire tree encoding.
-    const auto comp = ssgtest::composeFooter({path}, {}, title,
-                                             ssg::CenterWidth::Fixed, 6, 2);
-    result.ui = ssg::UiSchema{ssg::Generation{marker.size()}, comp.root};
+    (void)title;
+    auto validatedComposition =
+        ssgtest::composeHeaderAndFooterValidated({}, {path}, {});
+    result.ui =
+        ssg::UiSchema{ssg::Generation{marker.size()},
+                      ssg::assembleWholeScreen({}, "help.open",
+                                               ssg::StyleDimensions{},
+                                               validatedComposition)
+                          .root};
     // Resolve the dynamic state for the same schema (a resolver mapping the one
     // provider used above), so the round-trip exercises the ui_state section too.
     const auto resolver =

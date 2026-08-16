@@ -1,5 +1,5 @@
 # Embeds the `ssg --http` web client (apps/web/{index.html,client.mjs,
-# reconcile.mjs}) into the binary at build so a node test can exercise the real
+# reconcile.mjs,fuzzy.mjs}) into the binary at build so a node test can exercise the real
 # reconcile.mjs and the markup/JS stay readable files rather than a C++ string.
 #
 # This manifest is named to sort BEFORE ssg-app.cmake and startup-benchmark.cmake
@@ -12,11 +12,13 @@ set(_SSG_WEB_ASSETS
     "index.html=${SSG_SOURCE_DIR}/apps/web/index.html"
     "client.mjs=${SSG_SOURCE_DIR}/apps/web/client.mjs"
     "reconcile.mjs=${SSG_SOURCE_DIR}/apps/web/reconcile.mjs"
+    "fuzzy.mjs=${SSG_SOURCE_DIR}/apps/web/fuzzy.mjs"
 )
 set(_SSG_WEB_ASSET_FILES
     ${SSG_SOURCE_DIR}/apps/web/index.html
     ${SSG_SOURCE_DIR}/apps/web/client.mjs
     ${SSG_SOURCE_DIR}/apps/web/reconcile.mjs
+    ${SSG_SOURCE_DIR}/apps/web/fuzzy.mjs
 )
 set(SSG_WEB_ASSET_TU ${CMAKE_BINARY_DIR}/generated/web_assets.cpp)
 set(_SSG_WEB_ASSET_SPEC ${CMAKE_BINARY_DIR}/generated/web_assets.spec)

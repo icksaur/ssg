@@ -313,38 +313,24 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
     // The shell layout is computed by the caller (EditorRuntime::snapshot) before
     // this, warming the panel-height cache that treeView() and viewport() read.
     auto treeSection = treeView();
-    UiSchema uiSchema =
-        composedUi
-            ? UiSchema{Generation{chromeGeneration}, composedUi->composition().root}
-            : UiSchema{Generation{chromeGeneration}, emptyUiRoot()};
-    // Validate the schema once; the resolved state AND the presence section both
-    // derive from the same ValidatedSchema, so they correspond node-for-node.
-    auto validatedUi = ValidatedSchema::validate(uiSchema);
-    // The schema comes from a decoder-validated ValidatedComposition (or the
-    // always-valid emptyUiRoot), so it has unique node ids; a validation failure
-    // here is a broken invariant, not an expected outcome, and must fail loud rather
-    // than publish a plausible section that violates correspondence.
-    if (!validatedUi.ok()) {
-        throw std::logic_error("resolveUiState: composed schema failed validation");
-    }
-    // The published whole-screen schema must also satisfy the well-known-area
-    // contract that the wire decoder enforces, so an in-process schema cannot
-    // publish a placement the wire would reject.
+    const UiInteractionState& interactionState = interaction.interaction();
+    const ValidatedSchema& validatedSchema = interactionState.schema();
+    UiSchema uiSchema = validatedSchema.schema();
+    // Schema, resolved state, and presence all derive from the interaction
+    // authority's single ValidatedSchema, so they correspond node-for-node and
+    // share one generation.
     if (!validateWellKnownAreas(uiSchema).ok()) {
         throw std::logic_error(
             "resolveUiState: composed schema violates the well-known-area contract");
     }
-    const ValidatedSchema& validatedSchema = validatedUi.schema();
     UiStateSection uiState = [&] {
         auto fields = chromeStatusFields(ChromeFieldMode::Semantic);
         return resolveUiState(
             validatedSchema, chromeResolverFor(std::move(fields.headerFields),
                                                std::move(fields.footerFields)));
     }();
-    // Presence: every node present (nothing hides until the panel/content areas join
-    // the tree). The basis stays 0 until a mutation patch advances it (phase 7B).
     UiPresenceSection uiPresence =
-        buildPresenceSection(validatedSchema, PresenceConfig::allPresent(validatedSchema));
+        buildPresenceSection(validatedSchema, interactionState.presence());
     return {documentView(),
             selection.selections,
             currentHistory,

@@ -2,9 +2,11 @@
 #include <ssg/EditorSessionBuilder.h>
 
 #include "all_command_ids.h"
+#include <ssg/ChromeLowering.h>
 #include <ssg/HttpEditorServer.h>
 #include <ssg/Protocol.h>
 #include <ssg/TextInputCommands.h>
+#include <ssg/WholeScreenAssembly.h>
 
 #include <http.h>
 
@@ -183,7 +185,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
                                       std::string const& marker) {
     ssg::SettingsViewState settings;
     ssg::ThemeSnapshot theme;
-    return {
+    ssg::SessionSnapshotSections result{
         {revision, marker, ssg::ByteOffset{marker.size()}},
         selection(marker.size()),
         {true, false, marker.size()},
@@ -208,6 +210,18 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
         theme,
         ssg::FocusTarget::Editor,
     };
+    result.ui = ssg::UiSchema{
+        ssg::Generation{revision.value()},
+        ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                 std::nullopt)
+            .root};
+    const auto validated = ssg::ValidatedSchema::validate(result.ui).takeSchema();
+    result.uiState = ssg::resolveUiState(validated, [](std::string_view) {
+        return std::optional<ssg::ResolvedProvider>{};
+    });
+    result.uiPresence = ssg::buildPresenceSection(
+        validated, ssg::PresenceConfig::allPresent(validated));
+    return result;
 }
 
 ssg::ViewportViewState viewport() {

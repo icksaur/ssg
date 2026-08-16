@@ -5,9 +5,12 @@
 // the rules, not the implementation.
 
 #include "ssg/UiTree.h"
+#include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
 #include <string>
+#include <optional>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -24,6 +27,14 @@ using ssg::UiSchema;
 using ssg::validateUiSchema;
 using ssg::WidgetDescriptor;
 using ssg::WidgetKind;
+
+UiSchema canonicalWholeScreenSchema() {
+    ssg::StyleDimensions dimensions;
+    UiSchema schema;
+    schema.root =
+        ssg::assembleWholeScreen({}, "help.open", dimensions, std::nullopt).root;
+    return schema;
+}
 
 UiNode leaf(std::string id, WidgetKind kind = WidgetKind::Label) {
     WidgetDescriptor widget;
@@ -165,11 +176,9 @@ TEST(statusActionsLeafWithAWidgetFieldIsRejected) {
 }
 
 // The whole-screen well-known-area contract (validated at the wire boundary): the
-// canonical root/header/footer shape passes.
+// canonical whole-screen shape passes.
 TEST(wellKnownAreasAcceptTheCanonicalShape) {
-    UiSchema schema;
-    schema.root = container("root", {container("header", {leaf("path")}),
-                                     container("footer", {leaf("hint")})});
+    UiSchema schema = canonicalWholeScreenSchema();
     ASSERT_TRUE(ssg::validateWellKnownAreas(schema).ok());
 }
 
@@ -182,17 +191,44 @@ TEST(wellKnownAreasRejectAMisnamedRoot) {
 
 // A well-known area must be a container, not a bare leaf.
 TEST(wellKnownAreasRejectALeafHeader) {
-    UiSchema schema;
-    schema.root = container("root", {leaf("header")});
+    UiSchema schema = canonicalWholeScreenSchema();
+    auto& root = std::get<UiContainer>(schema.root.content);
+    root.children[0] = leaf("header");
     ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
 }
 
 // A well-known area must sit in its canonical position: header directly under root,
 // not buried in a sub-container.
 TEST(wellKnownAreasRejectAMisplacedHeader) {
-    UiSchema schema;
-    schema.root =
-        container("root", {container("wrap", {container("header", {})})});
+    UiSchema schema = canonicalWholeScreenSchema();
+    auto& root = std::get<UiContainer>(schema.root.content);
+    root.children[0] = std::move(root.children[1]);
+    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+}
+
+TEST(wellKnownAreasRejectAMissingBody) {
+    UiSchema schema = canonicalWholeScreenSchema();
+    auto& root = std::get<UiContainer>(schema.root.content);
+    root.children.erase(root.children.begin() + 1);
+    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+}
+
+TEST(wellKnownAreasRejectAPanelViewWithTheWrongSurface) {
+    UiSchema schema = canonicalWholeScreenSchema();
+    auto& root = std::get<UiContainer>(schema.root.content);
+    auto& body = std::get<UiContainer>(root.children[1].content);
+    auto& panel = std::get<UiContainer>(body.children[0].content);
+    auto& filetree = std::get<UiLeaf>(panel.children[0].content);
+    filetree.widget.surface = ssg::ViewSurface::GitStatus;
+    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+}
+
+TEST(wellKnownAreasRejectPanelChildrenInTheWrongOrder) {
+    UiSchema schema = canonicalWholeScreenSchema();
+    auto& root = std::get<UiContainer>(schema.root.content);
+    auto& body = std::get<UiContainer>(root.children[1].content);
+    auto& panel = std::get<UiContainer>(body.children[0].content);
+    std::swap(panel.children[0], panel.children[1]);
     ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
 }
 
@@ -215,5 +251,8 @@ int main() {
     RUN(wellKnownAreasRejectAMisnamedRoot);
     RUN(wellKnownAreasRejectALeafHeader);
     RUN(wellKnownAreasRejectAMisplacedHeader);
+    RUN(wellKnownAreasRejectAMissingBody);
+    RUN(wellKnownAreasRejectAPanelViewWithTheWrongSurface);
+    RUN(wellKnownAreasRejectPanelChildrenInTheWrongOrder);
     return failed == 0 ? 0 : 1;
 }

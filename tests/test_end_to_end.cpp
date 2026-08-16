@@ -5,11 +5,13 @@
 #include <ssg/EditorSessionBuilder.h>
 
 #include "all_command_ids.h"
+#include <ssg/ChromeLowering.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/HttpEditorServer.h>
 #include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/SyntaxModel.h>
+#include <ssg/WholeScreenAssembly.h>
 
 #include <http.h>
 
@@ -162,6 +164,20 @@ void wsAttach(TestSocket s, std::optional<ssg::Revision> base = std::nullopt) {
 
 using EndToEndCanonicalState = e2e::CanonicalState;
 
+void addCanonicalUi(ssg::SessionSnapshotSections& sections, ssg::Revision revision) {
+    sections.ui = ssg::UiSchema{
+        ssg::Generation{revision.value()},
+        ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                 std::nullopt)
+            .root};
+    const auto validated = ssg::ValidatedSchema::validate(sections.ui).takeSchema();
+    sections.uiState = ssg::resolveUiState(validated, [](std::string_view) {
+        return std::optional<ssg::ResolvedProvider>{};
+    });
+    sections.uiPresence = ssg::buildPresenceSection(
+        validated, ssg::PresenceConfig::allPresent(validated));
+}
+
 // ─── Fixture model shared by direct/WebSocket/TUI scenarios ─────────────────
 
 class EndToEndFixtureModel {
@@ -267,7 +283,7 @@ public:
              ssg::SemanticRole::Footer});
         lastShell_ = shell;
 
-        return {
+        ssg::SessionSnapshotSections result{
             {revision, state_.text, ssg::ByteOffset{state_.text.size()}},
             ssg::SelectionSet{std::move(sels)},
             {!state_.undo_text.empty(), !state_.redo_text.empty(),
@@ -295,6 +311,8 @@ public:
             std::move(theme),
             ssg::FocusTarget::Editor,
         };
+        addCanonicalUi(result, revision);
+        return result;
     }
 
     ssg::ShellViewState shellView() const {
@@ -547,7 +565,7 @@ public:
             ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
         ssg::SettingsViewState settings;
         ssg::ThemeSnapshot theme{};
-        return {
+        ssg::SessionSnapshotSections result{
             {revision, "concurrent", ssg::ByteOffset{0}},
             ssg::SelectionSet{{ssg::Selection{pos, pos}}},
             {false, false, 0},
@@ -572,6 +590,8 @@ public:
             std::move(theme),
             ssg::FocusTarget::Editor,
         };
+        addCanonicalUi(result, revision);
+        return result;
     }
 
     ssg::ViewportViewState viewport(ssg::ClientId client) const {

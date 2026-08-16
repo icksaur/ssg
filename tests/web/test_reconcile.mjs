@@ -11,8 +11,11 @@
 import assert from 'node:assert/strict';
 import {
   applyDocumentDelta, dropSettled, project, byteToIndex, utf8Bytes,
-  parseEnvelope, paletteReportIsFresh, paletteSelectedWindowRow,
-  isPalettePromptOpen,
+  parseEnvelope,
+  isPalettePromptOpen, matcherParametersFromWire, matcherBoundsFromPalette,
+  clampPaletteSelection, encodePaletteSubmit, sessionDeltaRequiresTreeResync,
+  applySessionDeltaSections,
+  encodeStatusActionInvocation,
 } from '../../apps/web/reconcile.mjs';
 
 let checks = 0;
@@ -160,26 +163,103 @@ check('parseEnvelope splits settledId and tagged sections', () => {
   assert.equal(s1, '{}');
 });
 
-check('a stale palette report (older requestId) is rejected', () => {
-  // Client has sent up to request 5; a report for 3 must not be applied.
-  assert.equal(paletteReportIsFresh({ requestId: 5 }, 5), true);
-  assert.equal(paletteReportIsFresh({ requestId: 6 }, 5), true);
-  assert.equal(paletteReportIsFresh({ requestId: 3 }, 5), false);
+check('encodeStatusActionInvocation emits the exact StatusActionInvocation wire frame', () => {
+  const actual = encodeStatusActionInvocation({ statusId: 7, actionId: 'dismiss', generation: 3 });
+  const expected = new Uint8Array([
+    1, 5,
+    7, 3, 0, 0, 0,
+    9, 0, 0, 0, 115, 116, 97, 116, 117, 115, 95, 105, 100,
+    3, 7, 0, 0, 0, 0, 0, 0, 0,
+    9, 0, 0, 0, 97, 99, 116, 105, 111, 110, 95, 105, 100,
+    4, 7, 0, 0, 0, 100, 105, 115, 109, 105, 115, 115,
+    10, 0, 0, 0, 103, 101, 110, 101, 114, 97, 116, 105, 111, 110,
+    3, 3, 0, 0, 0, 0, 0, 0, 0,
+  ]);
+  assert.deepEqual(actual, expected);
 });
 
-check('palette selection highlight uses the absolute index minus the window start', () => {
-  // rows is the visible window; selected is an ABSOLUTE ranked index.
-  const rows = [{}, {}, {}]; // a 3-row window
-  // Window starts at 10, selection 12 -> visible row 2.
-  assert.equal(paletteSelectedWindowRow({ selected: 12, firstVisible: 10, rows }), 2);
-  // Window starts at 10, selection 10 -> visible row 0.
-  assert.equal(paletteSelectedWindowRow({ selected: 10, firstVisible: 10, rows }), 0);
-  // Selection above the window -> not highlighted.
-  assert.equal(paletteSelectedWindowRow({ selected: 4, firstVisible: 10, rows }), -1);
-  // Selection below the window -> not highlighted.
-  assert.equal(paletteSelectedWindowRow({ selected: 13, firstVisible: 10, rows }), -1);
-  // No selection.
-  assert.equal(paletteSelectedWindowRow({ selected: -1, firstVisible: 0, rows }), -1);
+check('matcherParametersFromWire maps decoded snake_case matcher fields', () => {
+  assert.deepEqual(matcherParametersFromWire({
+    base_score: 1n, word_boundary_bonus: 2n, contiguity_bonus: 3n,
+    exact_case_bonus: 4n, length_cap: 5n,
+  }), {
+    baseScore: 1, wordBoundaryBonus: 2, contiguityBonus: 3,
+    exactCaseBonus: 4, lengthCap: 5,
+  });
+});
+
+check('matcherBoundsFromPalette requires published wire bounds', () => {
+  assert.deepEqual(matcherBoundsFromPalette({
+    parameters: {
+      base_score: 1n, word_boundary_bonus: 2n, contiguity_bonus: 3n,
+      exact_case_bonus: 4n, length_cap: 5n,
+    },
+    max_parameter_magnitude: 10n,
+    max_candidate_bytes: 20n,
+  }), {
+    params: {
+      baseScore: 1, wordBoundaryBonus: 2, contiguityBonus: 3,
+      exactCaseBonus: 4, lengthCap: 5,
+    },
+    maxMagnitude: 10,
+    maxCandidateBytes: 20,
+  });
+  assert.throws(() => matcherBoundsFromPalette({ parameters: {} }), /max_parameter_magnitude/);
+  assert.throws(() => matcherBoundsFromPalette({
+    parameters: { base_score: 1, word_boundary_bonus: 1, contiguity_bonus: 1, exact_case_bonus: 1, length_cap: 1 },
+    max_parameter_magnitude: 10,
+  }), /max_candidate_bytes/);
+});
+
+check('clampPaletteSelection keeps the persisted selection inside local rows', () => {
+  assert.equal(clampPaletteSelection(7, 3), 2);
+  assert.equal(clampPaletteSelection(-1, 3), 0);
+  assert.equal(clampPaletteSelection(2, 0), 0);
+});
+
+check('encodePaletteSubmit sends the candidate id, not a selected index and query', () => {
+  assert.equal(encodePaletteSubmit('command.open'), 'PSUB:command.open');
+  assert.equal(encodePaletteSubmit(''), null);
+});
+
+check('sessionDeltaRequiresTreeResync only resyncs on a real advance or snapshot flag', () => {
+  // A no-op tree delta (revision equals base) must NOT force a resync -- every
+  // SessionDelta carries a tree object, so this is the common case per command.
+  assert.equal(sessionDeltaRequiresTreeResync(
+    { tree: { base_revision: 5, revision: 5, snapshot_required: false } }), false);
+  // A genuine state advance resyncs.
+  assert.equal(sessionDeltaRequiresTreeResync(
+    { tree: { base_revision: 5, revision: 6, snapshot_required: false } }), true);
+  // An explicit snapshot demand resyncs even without a revision change.
+  assert.equal(sessionDeltaRequiresTreeResync(
+    { tree: { base_revision: 5, revision: 5, snapshot_required: true } }), true);
+  // No tree object at all: nothing to resync.
+  assert.equal(sessionDeltaRequiresTreeResync({ palette: {} }), false);
+});
+
+check('applySessionDeltaSections replays retained UI and palette replacements but never tree deltas', () => {
+  const sections = {
+    document: { text: 'a', caret: 1 }, selection: {}, tabs: {}, syntax: {}, theme: {},
+    focus: 0, prompt_status: {}, find_replace: {}, ui: { old: true },
+    ui_state: { old: true }, ui_presence: { old: true }, palette: { old: true },
+    tree: { revision: 1, providers: [{ provider_id: 7, kind: 0, nodes: [{ node: { id: 'a' }, depth: 0 }, { node: { id: 'x' }, depth: 0 }], selected: 'a' }] },
+  };
+  applySessionDeltaSections(sections, {
+    ui: { root: 'new-ui' },
+    ui_state: { generation: 2 },
+    ui_presence: { generation: 2 },
+    palette: { candidates: [] },
+    tree: { base_revision: 1, revision: 2, snapshot_required: false, providers: [
+      { provider_id: 7, kind: 0, start: 1, erase_count: 1, insert: [{ node: { id: 'b' }, depth: 0 }], selected: 'b' },
+    ] },
+  });
+  assert.deepEqual(sections.ui, { root: 'new-ui' });
+  assert.deepEqual(sections.ui_state, { generation: 2 });
+  assert.deepEqual(sections.ui_presence, { generation: 2 });
+  assert.deepEqual(sections.palette, { candidates: [] });
+  assert.equal(sections.tree.revision, 1);
+  assert.deepEqual(sections.tree.providers[0].nodes.map((r) => r.node.id), ['a', 'x']);
+  assert.equal(sections.tree.providers[0].selected, 'a');
 });
 
 check('palette-prompt detection reads the wire snake_case field names', () => {
@@ -248,18 +328,29 @@ check('firstUnsupportedPrimitive rejects an unsupported widget kind (TextInput)'
   assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root)), { kind: 'widget', ordinal: WIDGET.TEXT_INPUT });
 });
 
-// Supporting the View KIND does not imply supporting a surface: a View naming a
-// surface the profile lacks is rejected, naming the surface ordinal.
-check('firstUnsupportedPrimitive rejects a View naming an unsupported surface', () => {
+check('firstUnsupportedPrimitive rejects a View naming a surface unsupported by a narrowed profile', () => {
+  const profile = { ...WEB_UI_PROFILE, surfaces: new Set() };
   const root = rowNode('root', [leafNode('v', WIDGET.VIEW, { surface: SURFACE.GITSTATUS })]);
-  assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root)), { kind: 'surface', ordinal: SURFACE.GITSTATUS });
+  assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root), profile), { kind: 'surface', ordinal: SURFACE.GITSTATUS });
 });
 
-// A profile that declares the surface accepts the same View leaf.
-check('firstUnsupportedPrimitive accepts a View whose surface the profile declares', () => {
-  const profile = { ...WEB_UI_PROFILE, surfaces: new Set([SURFACE.GITSTATUS]) };
+check('firstUnsupportedPrimitive accepts a View whose surface the default profile declares', () => {
   const root = rowNode('root', [leafNode('v', WIDGET.VIEW, { surface: SURFACE.GITSTATUS })]);
-  assert.equal(firstUnsupportedPrimitive(schemaOf(1, root), profile), null);
+  assert.equal(firstUnsupportedPrimitive(schemaOf(1, root)), null);
+});
+
+check('firstUnsupportedPrimitive accepts Symbols under the default profile', () => {
+  const root = rowNode('root', [leafNode('symbols', WIDGET.VIEW, { surface: SURFACE.SYMBOLS })]);
+  assert.equal(firstUnsupportedPrimitive(schemaOf(1, root)), null);
+});
+
+check('firstUnsupportedPrimitive accepts StatusActions by default and rejects it when narrowed', () => {
+  const root = rowNode('root', [leafNode('actions', WIDGET.STATUS_ACTIONS)]);
+  assert.equal(firstUnsupportedPrimitive(schemaOf(1, root)), null);
+  const profile = { ...WEB_UI_PROFILE, widgets: new Set([...WEB_UI_PROFILE.widgets].filter((w) => w !== WIDGET.STATUS_ACTIONS)) };
+  assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root), profile), {
+    kind: 'widget', ordinal: WIDGET.STATUS_ACTIONS,
+  });
 });
 
 check('interpretChrome applies the per-kind render gate', () => {
@@ -288,6 +379,46 @@ check('interpretChrome applies the per-kind render gate', () => {
   assert.equal(items[1].spacer, true);
   assert.equal(items[2].checked, true);
   assert.equal(items[2].text, 'case');
+});
+
+check('interpretChrome produces View leaves for every widened surface', () => {
+  const surfaces = [SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS];
+  const root = rowNode('root', surfaces.map((surface) => leafNode('surface-' + surface, WIDGET.VIEW, { surface })));
+  const state = { generation: 8, nodes: [st('root'), ...surfaces.map((surface) => st('surface-' + surface))] };
+  const out = interpretChrome(schemaOf(8, root), state, presenceForSchema(8, root));
+  assert.ok(out);
+  const items = drawnLeaves(out.root);
+  assert.deepEqual(items.map((i) => i.surface), surfaces);
+  assert.deepEqual(items.map((i) => i.widget), surfaces.map(() => WIDGET.VIEW));
+});
+
+check('interpretChrome produces a StatusActions leaf under the default profile', () => {
+  const root = rowNode('root', [leafNode('actions', WIDGET.STATUS_ACTIONS)]);
+  const state = { generation: 9, nodes: [st('root'), st('actions')] };
+  const out = interpretChrome(schemaOf(9, root), state, presenceForSchema(9, root));
+  assert.ok(out);
+  const item = drawnLeaves(out.root)[0];
+  assert.equal(item.id, 'actions');
+  assert.equal(item.widget, WIDGET.STATUS_ACTIONS);
+  assert.deepEqual(item.actions, []);
+});
+
+check('interpretChrome rejects View or StatusActions leaves with leaf state', () => {
+  const root = rowNode('root', [
+    leafNode('view', WIDGET.VIEW, { surface: SURFACE.TABVIEW }),
+    leafNode('actions', WIDGET.STATUS_ACTIONS),
+  ]);
+  const profile = {
+    ...WEB_UI_PROFILE,
+    widgets: new Set([...WEB_UI_PROFILE.widgets, WIDGET.STATUS_ACTIONS]),
+    surfaces: new Set([SURFACE.TABVIEW]),
+  };
+  assert.equal(interpretChrome(schemaOf(10, root), { generation: 10, nodes: [
+    st('root'), st('view', { value: 'x' }), st('actions'),
+  ] }, presenceForSchema(10, root), profile), null);
+  assert.equal(interpretChrome(schemaOf(10, root), { generation: 10, nodes: [
+    st('root'), st('view'), st('actions', { value: 'x' }),
+  ] }, presenceForSchema(10, root), profile), null);
 });
 
 check('interpretChrome preserves the left/middle/right grouping and its sizing', () => {

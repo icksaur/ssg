@@ -75,6 +75,24 @@ export function byteToIndex(text, offsets) {
 
 export const utf8Bytes = (s) => new TextEncoder().encode(s).length;
 
+export function encodeStatusActionInvocation({ statusId, actionId, generation }) {
+  const enc = new TextEncoder();
+  const chunks = [new Uint8Array([1, 5])];
+  const u32 = (n) => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n, true); return b; };
+  const u64 = (n) => { const b = new Uint8Array(8); new DataView(b.buffer).setBigUint64(0, BigInt(n), true); return b; };
+  const text = (s) => { const b = enc.encode(s); return [new Uint8Array([4]), u32(b.length), b]; };
+  const uint = (n) => [new Uint8Array([3]), u64(n)];
+  const field = (k, parts) => { const kb = enc.encode(k); chunks.push(u32(kb.length), kb, ...parts); };
+  chunks.push(new Uint8Array([7]), u32(3));
+  field('status_id', uint(statusId));
+  field('action_id', text(actionId));
+  field('generation', uint(generation));
+  const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let p = 0;
+  for (const c of chunks) { out.set(c, p); p += c.length; }
+  return out;
+}
+
 // --- M3 local-echo reconciliation (pure; the browser and the node test share
 // this exact code so the client behavior is what the test pins) ---
 
@@ -138,20 +156,82 @@ export function parseEnvelope(buffer) {
   return { settledId, sections };
 }
 
-// A palette report is applied only when it is not stale -- its requestId is at
-// least the latest request the client has sent -- so an out-of-order or slow
-// response can never overwrite newer query/selection state.
-export const paletteReportIsFresh = (report, latestRequestId) =>
-  report.requestId >= latestRequestId;
 
-// Which window row (index into report.rows) is the selected one, or -1 when the
-// selection is outside the window. report.selected is an ABSOLUTE index into the
-// full ranked order; report.rows is the visible slice starting at firstVisible.
-export function paletteSelectedWindowRow(report) {
-  if (!report || report.selected == null || report.selected < 0) return -1;
-  const row = report.selected - (report.firstVisible || 0);
-  const rows = report.rows ? report.rows.length : 0;
-  return row >= 0 && row < rows ? row : -1;
+function wireNumber(value, name) {
+  const n = num(value);
+  if (!Number.isInteger(n)) throw new TypeError('malformed palette matcher parameter ' + name);
+  return n;
+}
+
+export function matcherParametersFromWire(params) {
+  if (!params || typeof params !== 'object') {
+    throw new TypeError('missing palette matcher parameters');
+  }
+  return {
+    baseScore: wireNumber(params.base_score, 'base_score'),
+    wordBoundaryBonus: wireNumber(params.word_boundary_bonus, 'word_boundary_bonus'),
+    contiguityBonus: wireNumber(params.contiguity_bonus, 'contiguity_bonus'),
+    exactCaseBonus: wireNumber(params.exact_case_bonus, 'exact_case_bonus'),
+    lengthCap: wireNumber(params.length_cap, 'length_cap'),
+  };
+}
+
+export function matcherBoundsFromPalette(palette) {
+  if (!palette || typeof palette !== 'object') throw new TypeError('missing palette section');
+  const maxMagnitude = wireNumber(palette.max_parameter_magnitude, 'max_parameter_magnitude');
+  const maxCandidateBytes = wireNumber(palette.max_candidate_bytes, 'max_candidate_bytes');
+  return { params: matcherParametersFromWire(palette.parameters), maxMagnitude, maxCandidateBytes };
+}
+
+export function encodePaletteSubmit(candidateId) {
+  if (candidateId == null || candidateId === '') return null;
+  return 'PSUB:' + String(candidateId);
+}
+
+// A resync is needed only when the tree delta advances state (revision moved past
+// its base) or explicitly demands a full snapshot. Every SessionDelta carries a
+// tree object -- including no-op deltas whose revision equals its base -- so a bare
+// presence check would force a full snapshot after every command.
+export function sessionDeltaRequiresTreeResync(delta) {
+  const tree = delta && delta.tree;
+  if (!tree) return false;
+  if (tree.snapshot_required) return true;
+  return num(tree.revision) !== num(tree.base_revision);
+}
+
+export function clampPaletteSelection(selected, rowCount) {
+  const count = Math.max(0, Number(rowCount) || 0);
+  if (count === 0) return 0;
+  const index = Math.max(0, Number(selected) || 0);
+  return Math.min(index, count - 1);
+}
+
+
+export function applySessionDeltaSections(sections, delta) {
+  if (!sections || !delta) return sections;
+  if (delta.document) {
+    sections.document.text = applyDocumentDelta(sections.document.text, delta.document);
+    if (delta.document_caret != null) sections.document.caret = num(delta.document_caret);
+  } else if (delta.document_caret != null) {
+    sections.document.caret = num(delta.document_caret);
+  }
+  if (delta.selection && delta.selection.replacement != null) sections.selection = delta.selection.replacement;
+  if (delta.tabs && delta.tabs.state != null) sections.tabs = delta.tabs.state;
+  if (delta.syntax && delta.syntax.spans != null) {
+    if (!sections.syntax) sections.syntax = {};
+    sections.syntax.spans = delta.syntax.spans;
+  }
+  if (delta.theme && delta.theme.replacement != null) sections.theme = delta.theme.replacement;
+  if (delta.focus != null) sections.focus = num(delta.focus);
+  const replaceWrapped = (name) => { if (delta[name] && delta[name].replacement != null) sections[name] = delta[name].replacement; };
+  replaceWrapped('prompt_status');
+  replaceWrapped('find_replace');
+  const replaceDirect = (name) => { if (delta[name] != null) sections[name] = delta[name]; };
+  replaceDirect('ui');
+  replaceDirect('ui_state');
+  replaceDirect('ui_presence');
+  replaceDirect('palette');
+  return sections;
 }
 
 // FocusTarget::Prompt and PromptKind::Palette ordinals, and the wire field names
@@ -173,23 +253,19 @@ export function isPalettePromptOpen(sections) {
 // Wire ordinals, pinned by the C++ enums (WidgetKind, RegionRole, Axis, SizeKind,
 // SemanticRole). The schema's leaves carry `kind`; regions carry `role`; nodes carry
 // `size`; containers carry `axis`.
-export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPUT: 4, SPACER: 5, VIEW: 6 };
+export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPUT: 4, SPACER: 5, VIEW: 6, STATUS_ACTIONS: 7 };
 export const AXIS = { ROW: 0, COLUMN: 1 };
 export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
-export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3 };
+export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4 };
 
-// The primitives THIS web build's interpreter can draw: header/footer chrome, so
-// Container/Label/Field/Checkbox/Spacer leaves. TextInput is not implemented, so a
-// schema using one is a loud, tested rejection -- never a silently dropped element.
-// The View kind is enumerated, but supporting the kind does not imply supporting a
-// surface: `surfaces` declares which surface ids this build renders (none yet -- the
-// surface renderers land with the whole-screen tree), so a View naming an unrendered
-// surface is rejected too. Placement is tree structure + well-known node ids, so
+// The primitives THIS web build's interpreter can draw. TextInput is not
+// implemented, so a schema using one is a loud, tested rejection -- never a
+// silently dropped element. Placement is tree structure + well-known node ids, so
 // there is no region-role set.
 export const WEB_UI_PROFILE = {
-  widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.SPACER, WIDGET.VIEW]),
-  surfaces: new Set(),
+  widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
+  surfaces: new Set([SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS]),
 };
 
 // The first schema primitive `profile` does not support, as
@@ -228,7 +304,8 @@ export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
 // Inset), so packing follows the published tree rather than a flattened, flex-only item
 // list. Each node:
 //   container: { id, kind:'container', axis, gap, size, inset, children:[...] }
-//   leaf:      { id, kind:'leaf', widget, size, text, checked?, command?, role, spacer? }
+//   leaf:      { id, kind:'leaf', widget, size, text, checked?, command?, role,
+//                spacer?, surface?, actions? }
 // A non-present node (and its subtree) is omitted; a Label/Field with no resolved leaf
 // state is the resolved drop and is omitted; a Checkbox always renders; a Spacer renders
 // a gap. `role` is the effective SemanticRole ordinal the SERVER resolved (the widget's
@@ -299,7 +376,9 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     }
     if (!node.leaf || typeof node.leaf !== 'object') { shapeOk = false; return null; }
     const wk = num(node.leaf.kind);
-    if (wk === WIDGET.SPACER && hasLeafState) { shapeOk = false; return null; }
+    if ((wk === WIDGET.SPACER || wk === WIDGET.VIEW || wk === WIDGET.STATUS_ACTIONS) && hasLeafState) {
+      shapeOk = false; return null;
+    }
     if (wk === WIDGET.CHECKBOX) {
       // A checkbox must carry leaf state AND a resolved `checked`.
       if (!hasLeafState || st.leaf.checked == null) { shapeOk = false; return null; }
@@ -311,6 +390,13 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     if (wk === WIDGET.SPACER) {
       const w = node.leaf.width != null ? num(node.leaf.width) : null;
       return { id: node.id, kind: 'leaf', widget: wk, spacer: true, width: w, size: sizeOf(node) };
+    }
+    if (wk === WIDGET.VIEW) {
+      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+               surface: num(node.leaf.surface) };
+    }
+    if (wk === WIDGET.STATUS_ACTIONS) {
+      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node), actions: [] };
     }
     if (wk === WIDGET.CHECKBOX) {
       return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node), role: num(st.leaf.role),
@@ -328,4 +414,3 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
   if (!shapeOk) return null;
   return { root: rootNode };
 }
-

@@ -8,10 +8,13 @@
 
 import {
   decodeValue, findSections, num, cssColor, byteToIndex, utf8Bytes,
-  applyDocumentDelta, dropSettled, project, parseEnvelope, paletteReportIsFresh,
-  paletteSelectedWindowRow, isPalettePromptOpen,
-  interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS,
+  dropSettled, project, parseEnvelope,
+  isPalettePromptOpen, matcherBoundsFromPalette, clampPaletteSelection,
+  encodePaletteSubmit, applySessionDeltaSections, sessionDeltaRequiresTreeResync,
+  interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE,
+  encodeStatusActionInvocation,
 } from '/reconcile.mjs';
+import { fuzzyRank } from '/fuzzy.mjs';
 
 const statusEl = document.getElementById('status');
 const tabsEl = document.getElementById('tabs');
@@ -36,22 +39,14 @@ const state = {
   pending: [],
   nextEditId: 1,
   // The palette/finder is a client-owned derived view: the browser owns the
-  // query text and selection index and the host ranks them (PaletteSearcher).
-  palette: { query: '', selected: 0, requestId: 0, report: null },
+  // query text and selection index, and ranks the published candidate universe locally.
+  palette: { query: '', selected: 0 },
 };
 
 // Is a picker (command palette or file finder) the active prompt? The wire
 // field-name coupling lives in isPalettePromptOpen (reconcile.mjs).
 function paletteOpen() {
   return isPalettePromptOpen(state.sections);
-}
-
-// Send the current query+selection and ask the host to rank. The monotonic
-// requestId lets a stale report be dropped when responses arrive out of order.
-function requestPalette() {
-  state.palette.requestId += 1;
-  ws.send('PICK:' + state.palette.requestId + ':' + state.palette.selected +
-          ':' + state.palette.query);
 }
 
 function applyTheme(theme) {
@@ -78,6 +73,21 @@ function renderTabs(tabs) {
     el.textContent = (t.dirty ? '\u25CF ' : '') + (t.label || '');
     tabsEl.appendChild(el);
   }
+}
+
+function appendTabs(parent, tabs) {
+  const host = document.createElement('div');
+  host.className = 'tabs';
+  if (tabs && Array.isArray(tabs.tabs)) {
+    const activeId = idKey(tabs.active);
+    for (const t of tabs.tabs) {
+      const el = document.createElement('span');
+      el.className = 'tab' + (idKey(t.id) === activeId ? ' active' : '');
+      el.textContent = (t.dirty ? '\u25CF ' : '') + (t.label || '');
+      host.appendChild(el);
+    }
+  }
+  parent.appendChild(host);
 }
 
 // The color for a SemanticRole ordinal, from the live theme's role_colors table, or
@@ -124,6 +134,16 @@ function renderChromeNode(node, theme, parentAxis = AXIS.ROW) {
     } else applySize(gap, node.size, parentAxis);
     return gap;
   }
+  if (node.widget === WIDGET.VIEW) {
+    const el = renderSurfaceNode(node);
+    applySize(el, node.size, parentAxis);
+    return el;
+  }
+  if (node.widget === WIDGET.STATUS_ACTIONS) {
+    const el = renderStatusActionsNode(node);
+    applySize(el, node.size, parentAxis);
+    return el;
+  }
   const el = document.createElement('span');
   el.className = 'w' + (node.command ? ' clickable' : '');
   el.textContent = (node.checked != null ? (node.checked ? '\u2611 ' : '\u2610 ') : '') + (node.text || '');
@@ -133,6 +153,143 @@ function renderChromeNode(node, theme, parentAxis = AXIS.ROW) {
   if (node.command) {
     el.title = node.command;
     el.addEventListener('click', () => ws.send('CMD:' + node.command));
+  }
+  return el;
+}
+
+function renderDocumentInto(host) {
+    const s = state.sections;
+    const syntaxColors = applyTheme(s.theme);
+    const authText = s.document.text;
+    const authCaret = num(s.document.caret);
+    const proj = project(authText, authCaret, state.pending);
+    const text = proj.text;
+    const predBytes = proj.predEnd - proj.predStart;
+    const shiftBegin = (o) => o >= proj.predStart ? o + predBytes : o;
+    const shiftEnd = (o) => o > proj.predStart ? o + predBytes : o;
+    const rawSpans = (s.syntax && Array.isArray(s.syntax.spans)) ? s.syntax.spans : [];
+    const spans = rawSpans.map((sp) => ({ begin: shiftBegin(num(sp.begin)), end: shiftEnd(num(sp.end)), scope: num(sp.scope) }));
+    const sels = (s.selection && Array.isArray(s.selection.selections)) ? s.selection.selections : [];
+    const ranges = [];
+    for (const sel of sels) {
+      const a = shiftEnd(num(sel.anchor.byte_offset)), b = shiftEnd(num(sel.active.byte_offset));
+      if (a !== b) ranges.push([Math.min(a, b), Math.max(a, b)]);
+    }
+    const caret = proj.caret;
+    const total = utf8Bytes(text);
+    const bounds = new Set([0, total, caret]);
+    for (const sp of spans) { bounds.add(sp.begin); bounds.add(sp.end); }
+    for (const r of ranges) { bounds.add(r[0]); bounds.add(r[1]); }
+    const cuts = [...bounds].filter((b) => b >= 0 && b <= total).sort((a, b) => a - b);
+    const map = byteToIndex(text, cuts);
+    const scopeAt = (byte) => { for (const sp of spans) { if (byte >= sp.begin && byte < sp.end) return sp.scope; } return -1; };
+    const selectedAt = (byte) => ranges.some((r) => byte >= r[0] && byte < r[1]);
+    let html = '';
+    for (let i = 0; i + 1 < cuts.length; i++) {
+      const a = cuts[i], b = cuts[i + 1];
+      if (a === caret) html += '<span class="caret"></span>';
+      const ia = map.get(a), ib = map.get(b);
+      if (ia === undefined || ib === undefined || ib <= ia) continue;
+      const scope = scopeAt(a);
+      const color = (scope >= 0 && scope < syntaxColors.length) ? cssColor(syntaxColors[scope]) : '';
+      const cls = selectedAt(a) ? ' class="sel"' : '';
+      const style = color ? ' style="color:' + color + '"' : '';
+      html += '<span' + cls + style + '>' + esc(text.substring(ia, ib)) + '</span>';
+    }
+    if (caret >= total) html += '<span class="caret"></span>';
+    host.innerHTML = html;
+}
+
+function renderSurfaceNode(node) {
+    const el = document.createElement('div');
+    el.className = 'surface surface-' + node.surface;
+    const s = state.sections || {};
+    if (node.surface === SURFACE.TABVIEW) {
+      appendTabs(el, s.tabs);
+      const pre = document.createElement('pre');
+      pre.className = 'doc-surface';
+      pre.tabIndex = 0;
+      renderDocumentInto(pre);
+      el.appendChild(pre);
+    } else if (node.surface === SURFACE.FILETREE || node.surface === SURFACE.GITSTATUS || node.surface === SURFACE.SYMBOLS) {
+      renderTreeSurface(el, node.surface, s.tree);
+    } else if (node.surface === SURFACE.FINDRESULTS) {
+      renderFindResultsSurface(el, s.palette);
+    }
+    return el;
+}
+
+const TREE_KIND = { FILESYSTEM: 0, GIT: 1, SYMBOLS: 2 };
+function renderTreeSurface(parent, surface, tree) {
+    const want = surface === SURFACE.FILETREE ? TREE_KIND.FILESYSTEM
+               : surface === SURFACE.GITSTATUS ? TREE_KIND.GIT : TREE_KIND.SYMBOLS;
+    const providers = tree && Array.isArray(tree.providers) ? tree.providers : [];
+    const provider = providers.find((p) => num(p.kind) === want);
+    const selected = provider ? idKey(provider.selected) : '';
+    for (const row of (provider && Array.isArray(provider.nodes) ? provider.nodes : [])) {
+      const n = row.node || {};
+      const div = document.createElement('div');
+      div.className = 'tree-row' + (idKey(n.id) === selected ? ' sel' : '');
+      div.style.paddingLeft = (num(row.depth) || 0) * 2 + 'ch';
+      if (surface === SURFACE.GITSTATUS && n.git_status != null) div.classList.add('git-' + num(n.git_status));
+      div.textContent = (n.icon ? n.icon + ' ' : '') + (n.label || '');
+      parent.appendChild(div);
+    }
+}
+
+function locallyRankedPaletteRows(palette) {
+    const candidates = palette && Array.isArray(palette.candidates) ? palette.candidates : [];
+    const { params, maxMagnitude, maxCandidateBytes } = matcherBoundsFromPalette(palette);
+    const order = fuzzyRank(candidates, state.palette.query || '', params, maxMagnitude, maxCandidateBytes);
+    return order.map((i) => candidates[i]);
+}
+
+function renderFindResultsSurface(parent, palette) {
+    let rows = [];
+    try {
+      rows = locallyRankedPaletteRows(palette);
+    } catch (err) {
+      console.error('palette matcher wire error:', err);
+      const notice = document.createElement('div');
+      notice.className = 'row';
+      notice.textContent = 'palette matcher parameters are invalid';
+      parent.appendChild(notice);
+      return;
+    }
+    state.palette.selected = clampPaletteSelection(state.palette.selected, rows.length);
+    const query = document.createElement('div');
+    query.className = 'row query';
+    query.textContent = state.palette.query || '';
+    const color = roleColor(ROLE.text, state.sections && state.sections.theme);
+    if (color) query.style.color = color;
+    parent.appendChild(query);
+    for (let i = 0; i < rows.length; i++) {
+      const div = document.createElement('div');
+      div.className = 'row' + (i === state.palette.selected ? ' sel' : '');
+      div.innerHTML = '<span class="label">' + esc(rows[i].label || '') +
+        '</span><span class="detail">' + esc(rows[i].detail || '') + '</span>';
+      parent.appendChild(div);
+    }
+}
+
+function renderStatusActionsNode(node) {
+    const el = document.createElement('span');
+    el.className = 'status-actions';
+    const status = state.sections && state.sections.prompt_status && state.sections.prompt_status.status;
+    const items = status && Array.isArray(status.items) ? status.items : [];
+    const item = items[status ? (num(status.selected) || 0) : 0];
+    for (const action of (item && Array.isArray(item.actions) ? item.actions : [])) {
+      const button = document.createElement('button');
+      button.textContent = action.accessible_label || action.accessibleLabel || action.id || '';
+      const bg = roleColor(ROLE.canvas, state.sections && state.sections.theme);
+      const fg = roleColor(ROLE.text, state.sections && state.sections.theme);
+      if (bg) button.style.backgroundColor = bg;
+      if (fg) button.style.color = fg;
+      button.style.borderColor = fg || 'currentColor';
+      button.addEventListener('click', () => ws.send(encodeStatusActionInvocation({
+        statusId: item.id, actionId: action.id, generation: item.generation,
+      })));
+      el.appendChild(button);
   }
   return el;
 }
@@ -190,85 +347,60 @@ function renderChrome(sections) {
   chromeTopEl.textContent = '';
   chromeBottomEl.textContent = '';
   chromeErrorEl.textContent = '';
-  if (!schema || !schema.root) return;
+  if (!schema || !schema.root) return false;
 
   const unsupported = firstUnsupportedPrimitive(schema);
   if (unsupported) {
     chromeErrorEl.textContent =
       'unsupported UI ' + unsupported.kind + ' ' + unsupported.ordinal +
       ' -- this client build cannot render the composed chrome';
-    return;
+    return false;
   }
   const interpreted = interpretChrome(schema, stateSection, presenceSection);
-  if (!interpreted || !interpreted.root) return;  // schema/state from different frames; wait
+  if (!interpreted || !interpreted.root) return false;  // schema/state from different frames; wait
 
   // The root's children are the well-known areas; render each into its host by
   // its well-known node id. Placement is the tree structure + the id, not a role.
   const root = interpreted.root;
   const areas = root.kind === 'container' ? root.children : [];
+  let renderedBody = false;
   for (const area of areas) {
     const host = area.id === 'header' ? chromeTopEl
-               : area.id === 'footer' ? chromeBottomEl : null;
+               : area.id === 'footer' ? chromeBottomEl
+               : area.id === 'body' ? docEl : null;
     if (!host) continue;
+    if (area.id === 'body') {
+      host.textContent = '';
+      renderedBody = true;
+      tabsEl.textContent = '';
+    }
     const el = renderChromeNode(area, sections.theme);
     if (el) host.appendChild(el);
   }
+  return renderedBody;
 }
 
-// Render the palette/finder overlay from the host's ranked report: a query line
-// and the candidate rows the library ranker returned, the selected row
-// highlighted. The browser never ranks -- it only shows what the host ranked.
+// The legacy overlay host is kept only as a closed shell; the active picker is the
+// retained FindResults surface inside the interpreted whole-screen tree.
 function renderPalette() {
   const open = paletteOpen();
-  paletteEl.classList.toggle('open', open);
-  if (!open) { paletteEl.textContent = ''; return; }
-  const report = state.palette.report;
-  let html = '<div class="query">' + esc(state.palette.query || '') +
-             '<span style="opacity:.4">' + esc(report ? (report.ghost || '') : '') +
-             '</span></div>';
-  const rows = report && Array.isArray(report.rows) ? report.rows : [];
-  const selectedRow = paletteSelectedWindowRow(report);
-  for (let i = 0; i < rows.length; i++) {
-    const cls = 'row' + (i === selectedRow ? ' sel' : '');
-    html += '<div class="' + cls + '"><span class="label">' + esc(rows[i].label || '') +
-            '</span><span class="detail">' + esc(rows[i].detail || '') + '</span></div>';
-  }
-  paletteEl.innerHTML = html;
+  paletteEl.classList.toggle('open', false);
+  if (!open) paletteEl.textContent = '';
 }
 
-// Adopt a host palette report unless it is stale (an older requestId than the
-// latest the client sent), so an out-of-order response never overwrites newer
-// query/selection state.
-function applyPaletteReport(report) {
-  if (!paletteReportIsFresh(report, state.palette.requestId)) return;
-  state.palette.report = report;
-  if (report.selected != null && report.selected >= 0) {
-    state.palette.selected = report.selected;
-  }
-  renderPalette();
+function refreshFinder() {
+  render();
 }
+
 function applyDelta(d) {
-  const s = state.sections;
-  if (!s) return;
-  if (d.document) {
-    s.document.text = applyDocumentDelta(s.document.text, d.document);
-    if (d.document_caret != null) s.document.caret = num(d.document_caret);
-  } else if (d.document_caret != null) {
-    s.document.caret = num(d.document_caret);
+  if (sessionDeltaRequiresTreeResync(d)) {
+    console.error('tree delta received; requesting full snapshot');
+    statusEl.textContent = 'tree update requires full snapshot; resyncing';
+    if (ws.readyState === WebSocket.OPEN) ws.send('SNAP');
+    return false;
   }
-  if (d.selection && d.selection.replacement != null) s.selection = d.selection.replacement;
-  if (d.tabs && d.tabs.state != null) s.tabs = d.tabs.state;
-  if (d.syntax && d.syntax.spans != null) {
-    if (!s.syntax) s.syntax = {};
-    s.syntax.spans = d.syntax.spans;
-  }
-  if (d.theme && d.theme.replacement != null) s.theme = d.theme.replacement;
-  // Focus and prompt state gate local prediction and prompt rendering. A null
-  // optional means unchanged, so keep the last value; the field names match the
-  // wire's snake_case (the sections object is the decoded ProtocolValue tree).
-  if (d.focus != null) s.focus = num(d.focus);
-  if (d.prompt_status && d.prompt_status.replacement != null) s.prompt_status = d.prompt_status.replacement;
-  if (d.find_replace && d.find_replace.replacement != null) s.find_replace = d.find_replace.replacement;
+  applySessionDeltaSections(state.sections, d);
+  return true;
 }
 
 // Segment the projected text at every syntax-span edge, selection edge, and the
@@ -278,57 +410,12 @@ function applyDelta(d) {
 function render() {
   const s = state.sections;
   if (!s) return;
-  const syntaxColors = applyTheme(s.theme);
-  renderTabs(s.tabs);
-  renderChrome(s);
-
-  const authText = s.document.text;
-  const authCaret = num(s.document.caret);
-  const proj = project(authText, authCaret, state.pending);
-  const text = proj.text;
-  const predBytes = proj.predEnd - proj.predStart;
-  // A span begins after the predicted text (>=), but a span ending at the caret
-  // stops before it (>), so predicted text never inherits the preceding scope.
-  const shiftBegin = (o) => o >= proj.predStart ? o + predBytes : o;
-  const shiftEnd = (o) => o > proj.predStart ? o + predBytes : o;
-
-  const rawSpans = (s.syntax && Array.isArray(s.syntax.spans)) ? s.syntax.spans : [];
-  const spans = rawSpans.map((sp) => ({ begin: shiftBegin(num(sp.begin)), end: shiftEnd(num(sp.end)), scope: num(sp.scope) }));
-
-  const sels = (s.selection && Array.isArray(s.selection.selections)) ? s.selection.selections : [];
-  const ranges = [];
-  for (const sel of sels) {
-    const a = shiftEnd(num(sel.anchor.byte_offset)), b = shiftEnd(num(sel.active.byte_offset));
-    if (a !== b) ranges.push([Math.min(a, b), Math.max(a, b)]);
+  applyTheme(s.theme);
+  const bodyRendered = renderChrome(s);
+  if (!bodyRendered) {
+    renderTabs(s.tabs);
+    renderDocumentInto(docEl);
   }
-
-  const caret = proj.caret;
-  const total = utf8Bytes(text);
-  const bounds = new Set([0, total, caret]);
-  for (const sp of spans) { bounds.add(sp.begin); bounds.add(sp.end); }
-  for (const r of ranges) { bounds.add(r[0]); bounds.add(r[1]); }
-  const cuts = [...bounds].filter((b) => b >= 0 && b <= total).sort((a, b) => a - b);
-  const map = byteToIndex(text, cuts);
-
-  const scopeAt = (byte) => { for (const sp of spans) { if (byte >= sp.begin && byte < sp.end) return sp.scope; } return -1; };
-  const selectedAt = (byte) => ranges.some((r) => byte >= r[0] && byte < r[1]);
-
-  let html = '';
-  for (let i = 0; i + 1 < cuts.length; i++) {
-    const a = cuts[i], b = cuts[i + 1];
-    if (a === caret) html += '<span class="caret"></span>';
-    const ia = map.get(a), ib = map.get(b);
-    if (ia === undefined || ib === undefined || ib <= ia) continue;
-    const scope = scopeAt(a);
-    // Span scope and syntax_colors are produced together by one snapshot, so the
-    // index is self-consistent; the bounds check only guards a truncated palette.
-    const color = (scope >= 0 && scope < syntaxColors.length) ? cssColor(syntaxColors[scope]) : '';
-    const cls = selectedAt(a) ? ' class="sel"' : '';
-    const style = color ? ' style="color:' + color + '"' : '';
-    html += '<span' + cls + style + '>' + esc(text.substring(ia, ib)) + '</span>';
-  }
-  if (caret >= total) html += '<span class="caret"></span>';
-  docEl.innerHTML = html;
   renderPalette();
 }
 
@@ -342,35 +429,34 @@ ws.onmessage = (e) => {
   if (typeof e.data === 'string') { statusEl.textContent = e.data; return; }
   try {
     const { settledId, sections } = parseEnvelope(e.data);
-    state.pending = dropSettled(state.pending, settledId);
+    let resyncRequested = false;
+    let snapshotApplied = false;
     for (const sec of sections) {
       if (sec.tag === 0) {                 // library body: version@0, kind@1, value@2
         const kind = sec.dv.getUint8(1);
         const [payload] = decodeValue(sec.dv, 2);
-        if (kind === 1) state.sections = findSections(payload);
-        else if (kind === 2) applyDelta(payload);
-      } else if (sec.tag === 1) {          // host palette report (JSON)
-        const bytes = new Uint8Array(sec.dv.buffer, sec.dv.byteOffset, sec.length);
-        applyPaletteReport(JSON.parse(new TextDecoder().decode(bytes)));
+        if (kind === 1) { state.sections = findSections(payload); snapshotApplied = true; }
+        else if (kind === 2) resyncRequested = !applyDelta(payload) || resyncRequested;
       }
+    }
+    // Settle predictions only against an accepted delta or a replacement snapshot.
+    // A resync-rejected delta leaves the authoritative document stale until the
+    // requested snapshot arrives, so predicted text must survive until then.
+    if (snapshotApplied || !resyncRequested) {
+      state.pending = dropSettled(state.pending, settledId);
     }
     if (!state.sections) { statusEl.textContent = 'no sections yet'; return; }
 
-    // On the transition into an open picker, reset the browser-owned query and
-    // ask the host for the first ranking; on close, clear it.
+    // On the transition into an open picker, reset the browser-owned query.
     const nowOpen = paletteOpen();
     if (nowOpen && !wasPaletteOpen) {
       state.palette.query = '';
       state.palette.selected = 0;
-      state.palette.report = null;
-      requestPalette();
-    } else if (!nowOpen && wasPaletteOpen) {
-      state.palette.report = null;
     }
     wasPaletteOpen = nowOpen;
 
     render();
-    statusEl.textContent = 'live (' + e.data.byteLength + ' bytes)';
+    if (!resyncRequested) statusEl.textContent = 'live (' + e.data.byteLength + ' bytes)';
     docEl.focus();
   } catch (err) { statusEl.textContent = 'render error: ' + err.message; }
 };
@@ -388,39 +474,39 @@ docEl.addEventListener('keydown', (ev) => {
 
   // When a picker is open, the browser owns its query and selection (a
   // client-owned derived view). Query edits and selection moves re-request a
-  // host ranking; Enter submits the selected candidate; Escape closes via the
+  // local ranking; Enter submits the selected candidate id; Escape closes via the
   // library keymap (prompt.cancel). Nothing here touches the document.
   if (paletteOpen()) {
     const p = state.palette;
     if (ev.key === 'Enter') {
       ev.preventDefault();
-      ws.send('PSUB:' + p.selected + ':' + p.query);
+      p.selected = clampPaletteSelection(p.selected, locallyRankedPaletteRows(state.sections && state.sections.palette).length);
+      const rows = locallyRankedPaletteRows(state.sections && state.sections.palette);
+      const candidate = rows[p.selected];
+      const message = candidate && encodePaletteSubmit(candidate.id);
+      if (message) ws.send(message);
       return;
     }
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       ev.preventDefault();
-      // selected is an absolute ranked index; move it optimistically and let the
-      // host clamp to the candidate count and window it in the returned report.
-      p.selected = ev.key === 'ArrowDown'
-        ? p.selected + 1
-        : Math.max(p.selected - 1, 0);
-      requestPalette();
+      // selected is an absolute ranked index over the locally-ranked rows.
+      const rows = locallyRankedPaletteRows(state.sections && state.sections.palette);
+      p.selected = clampPaletteSelection(ev.key === 'ArrowDown' ? p.selected + 1 : p.selected - 1, rows.length);
+      render();
       return;
     }
     if (ev.key === 'Backspace') {
       ev.preventDefault();
       p.query = Array.from(p.query).slice(0, -1).join('');
       p.selected = 0;
-      requestPalette();
-      renderPalette();
+      refreshFinder();
       return;
     }
     if (Array.from(ev.key).length === 1 && !ev.altKey) {
       ev.preventDefault();
       p.query += ev.key;
       p.selected = 0;
-      requestPalette();
-      renderPalette();
+      refreshFinder();
       return;
     }
     // Escape and other keys fall through to the keymap (Escape -> prompt.cancel).

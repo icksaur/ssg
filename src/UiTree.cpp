@@ -1,7 +1,8 @@
 #include <ssg/UiTree.h>
 
-#include <functional>
+#include <array>
 #include <set>
+#include <span>
 #include <string>
 #include <variant>
 
@@ -82,51 +83,89 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
 
 namespace {
 
-// The whole-screen well-known-area contract. Two tiers:
-//   - REQUIRED areas must EXIST, be a container, and sit in their canonical
-//     position. Root is the only required area today (it IS the schema root); the
-//     required set grows as the canonical tree gains body/panel/content.
-//   - OPTIONAL areas (header/footer) need not exist -- an empty, header-only, or
-//     footer-only composition is valid -- but WHERE PRESENT must be a container and
-//     a direct child of the root.
-// This is the typed-identity contract a native client relies on when it keys off an
-// area id: uniqueness alone is not enough. Returns a message on violation.
+std::optional<std::string> requireChildren(const UiNode& node,
+                                           std::string_view label,
+                                           std::span<const std::string_view> ids,
+                                           const UiContainer*& container) {
+    container = std::get_if<UiContainer>(&node.content);
+    if (!container) return std::string{label} + ": must be a container";
+    if (container->children.size() != ids.size()) {
+        return std::string{label} + ": must have the canonical children";
+    }
+    for (std::size_t i = 0; i < ids.size(); ++i) {
+        if (container->children[i].id.value() != ids[i]) {
+            return std::string{label} + ": child order must be canonical";
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> requireViewLeaf(const UiNode& node, std::string_view id,
+                                           ViewSurface surface) {
+    if (node.id.value() != id) return std::string{id} + ": child order must be canonical";
+    const auto* leaf = std::get_if<UiLeaf>(&node.content);
+    if (!leaf) return std::string{id} + ": must be a View leaf";
+    if (leaf->widget.kind != WidgetKind::View) {
+        return std::string{id} + ": must be a View leaf";
+    }
+    if (!leaf->widget.surface || *leaf->widget.surface != surface) {
+        return std::string{id} + ": must name its canonical View surface";
+    }
+    return std::nullopt;
+}
+
+// The whole-screen well-known-area contract: the complete canonical topology the
+// assembler publishes, including required containers, View leaves, surfaces,
+// parentage, and sibling order.
 std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
-    // Root: a REQUIRED area. The schema's root node IS the "root" area (existence),
-    // carries the root id (identity), and is a container (kind).
     if (schema.root.id.value() != wellKnownAreaId(WellKnownArea::Root)) {
         return std::string{"root: the required \"root\" area must be the schema "
                            "root"};
     }
-    if (!schema.root.isContainer()) {
-        return std::string{"root: the root area must be a container"};
+    const UiContainer* root = nullptr;
+    constexpr std::array rootIds{kHeaderNodeId, kBodyNodeId, kFooterNodeId};
+    if (auto err = requireChildren(schema.root, "root", rootIds, root)) return err;
+    const UiNode& header = root->children[0];
+    if (header.id.value() != wellKnownAreaId(WellKnownArea::Header) ||
+        !header.isContainer()) {
+        return std::string{"header: must be a direct child container of root"};
     }
-    // Header/footer: OPTIONAL areas -- validated for kind + ancestry only when
-    // present (a direct child of the root).
-    const auto* rootContainer = std::get_if<UiContainer>(&schema.root.content);
-    std::set<std::string> rootChildIds;
-    if (rootContainer) {
-        for (const auto& child : rootContainer->children)
-            rootChildIds.insert(child.id.value());
+    const UiNode& body = root->children[1];
+    const UiNode& footer = root->children[2];
+    if (footer.id.value() != wellKnownAreaId(WellKnownArea::Footer) ||
+        !footer.isContainer()) {
+        return std::string{"footer: must be a direct child container of root"};
     }
-    for (const WellKnownArea area : {WellKnownArea::Header, WellKnownArea::Footer}) {
-        const std::string id{wellKnownAreaId(area)};
-        std::optional<std::string> found;
-        // Find the node with this id anywhere in the tree.
-        const std::function<void(const UiNode&)> find = [&](const UiNode& node) {
-            if (node.id.value() == id) {
-                if (!node.isContainer())
-                    found = id + ": a well-known area must be a container";
-                else if (!rootChildIds.contains(id))
-                    found = id + ": a well-known area must be a direct child of "
-                                 "the root";
-            }
-            if (const auto* c = std::get_if<UiContainer>(&node.content))
-                for (const auto& child : c->children) find(child);
-        };
-        find(schema.root);
-        if (found) return found;
-    }
+
+    const UiContainer* bodyContainer = nullptr;
+    constexpr std::array bodyIds{kPanelNodeId, kContentNodeId};
+    if (auto err = requireChildren(body, "body", bodyIds, bodyContainer)) return err;
+
+    const UiContainer* panel = nullptr;
+    constexpr std::array panelIds{kFileTreeNodeId, kGitStatusNodeId, kSymbolsNodeId};
+    if (auto err = requireChildren(bodyContainer->children[0], "panel", panelIds, panel))
+        return err;
+    if (auto err = requireViewLeaf(panel->children[0], kFileTreeNodeId,
+                                   ViewSurface::FileTree))
+        return err;
+    if (auto err = requireViewLeaf(panel->children[1], kGitStatusNodeId,
+                                   ViewSurface::GitStatus))
+        return err;
+    if (auto err = requireViewLeaf(panel->children[2], kSymbolsNodeId,
+                                   ViewSurface::Symbols))
+        return err;
+
+    const UiContainer* content = nullptr;
+    constexpr std::array contentIds{kTabViewNodeId, kFindResultsNodeId};
+    if (auto err =
+            requireChildren(bodyContainer->children[1], "content", contentIds, content))
+        return err;
+    if (auto err = requireViewLeaf(content->children[0], kTabViewNodeId,
+                                   ViewSurface::TabView))
+        return err;
+    if (auto err = requireViewLeaf(content->children[1], kFindResultsNodeId,
+                                   ViewSurface::FindResults))
+        return err;
     return std::nullopt;
 }
 

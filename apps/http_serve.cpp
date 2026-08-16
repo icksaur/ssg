@@ -7,7 +7,6 @@
 #include <ssg/HttpEditorServer.h>
 #include <ssg/KeyCode.h>
 #include <ssg/Keymap.h>
-#include <ssg/PaletteSearcher.h>
 #include <ssg/PaletteSubmit.h>
 #include <ssg/Protocol.h>
 #include <ssg/PromptRouting.h>
@@ -37,7 +36,7 @@
 
 namespace ssg::app {
 
-// The served web client lives in apps/web/{index.html,client.mjs,reconcile.mjs}
+// The served web client lives in apps/web/{index.html,client.mjs,reconcile.mjs,fuzzy.mjs}
 // and is embedded into the binary at build (see cmake embed_text). Keeping it as
 // real files rather than a C++ string constant lets a node test exercise the
 // pure client logic in reconcile.mjs, and keeps the markup/JS readable.
@@ -56,10 +55,11 @@ struct WebAsset {
 };
 
 // One table drives both the embed keys and the served routes.
-constexpr std::array<WebAsset, 3> kWebAssets{{
+constexpr std::array<WebAsset, 4> kWebAssets{{
     {"/", "index.html", "text/html"},
     {"/client.mjs", "client.mjs", "text/javascript"},
     {"/reconcile.mjs", "reconcile.mjs", "text/javascript"},
+    {"/fuzzy.mjs", "fuzzy.mjs", "text/javascript"},
 }};
 
 // Map the runtime's live focus and active prompt onto the shared routing seam,
@@ -188,11 +188,8 @@ bool handleKey(EditorRuntime& runtime, ClientId client,
 constexpr std::uint64_t kNoSettlement = 0;
 
 // Envelope section tags. tag 0 is the optional library message (a snapshot or a
-// delta, version+kind+value); tag 1 is a host-defined palette report the browser
-// renders for its client-owned query. Each tag has its own decoder, so the two
-// encodings never collide.
+// delta, version+kind+value).
 constexpr std::uint8_t kSectionLibraryBody = 0;
-constexpr std::uint8_t kSectionPaletteReport = 1;
 
 struct EnvelopeSection {
     std::uint8_t tag;
@@ -203,16 +200,6 @@ void pushU32LE(std::vector<std::uint8_t>& out, std::uint32_t value) {
     for (int shift = 0; shift < 32; shift += 8) {
         out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFFU));
     }
-}
-
-// Parse a whole numeric field, rejecting a partial or malformed one so a bad
-// frame never silently becomes zero (which could execute the first ranked
-// command or scroll host state).
-bool parseWholeU64(std::string_view text, std::uint64_t& out) {
-    auto const result =
-        std::from_chars(text.data(), text.data() + text.size(), out);
-    return result.ec == std::errc{} &&
-           result.ptr == text.data() + text.size();
 }
 
 // Frame the browser reads: an 8-byte little-endian settledClientEditId, a section
@@ -231,56 +218,6 @@ std::vector<std::uint8_t> makeEnvelope(std::uint64_t settledId,
         frame.insert(frame.end(), section.bytes.begin(), section.bytes.end());
     }
     return frame;
-}
-
-void jsonEscape(std::string& out, std::string_view text) {
-    for (char const raw : text) {
-        auto const c = static_cast<unsigned char>(raw);
-        switch (c) {
-        case '"': out += "\\\""; break;
-        case '\\': out += "\\\\"; break;
-        case '\n': out += "\\n"; break;
-        case '\r': out += "\\r"; break;
-        case '\t': out += "\\t"; break;
-        default:
-            if (c < 0x20) {
-                char buf[8];
-                std::snprintf(buf, sizeof buf, "\\u%04x", c);
-                out += buf;
-            } else {
-                out += raw;
-            }
-        }
-    }
-}
-
-// The palette report as JSON: host presentation data for the browser's
-// client-owned query, echoing the paletteRequestId so a stale report can be
-// dropped. The library ranker (PaletteSearcher) produced the rows and order.
-std::string paletteReportJson(std::uint64_t requestId, PaletteReport const& report) {
-    std::string out = "{\"requestId\":";
-    out += std::to_string(requestId);
-    out += ",\"query\":\"";
-    jsonEscape(out, report.query);
-    out += "\",\"ghost\":\"";
-    jsonEscape(out, report.ghost);
-    out += "\",\"selected\":";
-    out += report.selected ? std::to_string(*report.selected) : "-1";
-    out += ",\"firstVisible\":";
-    out += std::to_string(report.firstVisible);
-    out += ",\"rows\":[";
-    for (std::size_t i = 0; i < report.rows.size(); ++i) {
-        if (i != 0) out += ',';
-        out += "{\"id\":\"";
-        jsonEscape(out, report.rows[i].id);
-        out += "\",\"label\":\"";
-        jsonEscape(out, report.rows[i].label);
-        out += "\",\"detail\":\"";
-        jsonEscape(out, report.rows[i].detail);
-        out += "\"}";
-    }
-    out += "]}";
-    return out;
 }
 
 }  // namespace
@@ -360,45 +297,6 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
         (void)server.send(handle, makeEnvelope(settledId->load(), sections));
     };
 
-    // The connection's palette window: the browser owns the query and selection
-    // (a client-owned derived view), the host runs the library ranker on them.
-    // firstVisible persists so a wheel scroll survives a re-rank; paneRows is a
-    // fixed presentation budget for the overlay's visible rows (the browser does
-    // not report its viewport height -- coupling layout to the protocol is not
-    // worth it for a bounded candidate list).
-    auto paletteWindow = std::make_shared<PaletteWindowState>();
-    paletteWindow->paneRows = 12;
-
-    // Rank the current candidates for the browser's query+selection and send the
-    // resulting report, echoing requestId so the client can drop a stale one.
-    auto sendPaletteReport = [&runtime, &server, client, settledId,
-                              paletteWindow](Http::WebSocketHandle handle,
-                                             std::uint64_t requestId) {
-        auto snapshot = runtime.snapshot(client);
-        if (!snapshot) return;
-        auto const& candidates = snapshot->sections().palette.candidates;
-        // Keep the selection visible: an arrow-key move must scroll the window to
-        // it, the way the TUI's revealPaletteSelection does. report() decouples
-        // scroll from selection (it reveals only on a clamp), because a wheel
-        // scroll -- Phase B -- must not snap back; Phase A only moves selection,
-        // so revealing here is correct.
-        auto const order = PaletteSearcher{}.rank(candidates, paletteWindow->query);
-        if (!order.empty()) {
-            auto const sel = std::min<std::size_t>(paletteWindow->selected,
-                                                   order.size() - 1);
-            ScrollOffset offset{paletteWindow->firstVisible};
-            offset.revealSelection(static_cast<std::uint32_t>(sel),
-                                   static_cast<std::uint32_t>(order.size()),
-                                   paletteWindow->paneRows);
-            paletteWindow->firstVisible = offset.firstVisible();
-        }
-        auto report = PaletteSearcher{}.report(candidates, *paletteWindow);
-        (void)server.send(
-            handle, makeEnvelope(settledId->load(),
-                                 {{kSectionPaletteReport,
-                                   paletteReportJson(requestId, report)}}));
-    };
-
     for (auto const& asset : kWebAssets) {
         server.get(std::string{asset.route},
                    [asset](Http::Context&) {
@@ -411,9 +309,8 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
         Http::WebSocketHandler{
             .onOpen = {},
             .onMessage =
-                [&runtime, &server, client, sendSnapshot, sendUpdate,
-                 sendPaletteReport, paletteWindow, attached, compiledKeymap,
-                 settledId](Http::WebSocketHandle handle,
+                [&runtime, &server, client, sendSnapshot, sendUpdate, attached,
+                 compiledKeymap, settledId](Http::WebSocketHandle handle,
                             Http::WebSocketMessage message) {
                     std::string_view const payload{message.data};
                     if (payload.rfind("KEY:", 0) == 0) {
@@ -450,53 +347,29 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                         sendUpdate(handle);
                         return;
                     }
-                    // The browser's palette query/selection changed: rank and
-                    // report. PICK:<requestId>:<selected>:<query> (query last so
-                    // it may contain ':').
-                    if (payload.rfind("PICK:", 0) == 0) {
+                    auto const status = ProtocolCodec{}.decodeStatusActionInvocation(
+                        message.data);
+                    if (status.accepted()) {
                         if (!attached->load()) return;
-                        auto const body = payload.substr(5);
-                        auto const c1 = body.find(':');
-                        auto const c2 = body.find(':', c1 + 1);
-                        if (c1 == std::string_view::npos ||
-                            c2 == std::string_view::npos) {
-                            return;
-                        }
-                        std::uint64_t requestId = 0;
-                        std::uint64_t selected = 0;
-                        if (!parseWholeU64(body.substr(0, c1), requestId) ||
-                            !parseWholeU64(body.substr(c1 + 1, c2 - c1 - 1),
-                                           selected)) {
-                            return;
-                        }
-                        std::string newQuery{body.substr(c2 + 1)};
-                        // A changed query re-ranks from the top, so the retained
-                        // scroll window must not leave the new selection above it.
-                        if (newQuery != paletteWindow->query) {
-                            paletteWindow->firstVisible = 0;
-                        }
-                        paletteWindow->query = std::move(newQuery);
-                        paletteWindow->selected = selected;
-                        sendPaletteReport(handle, requestId);
+                        (void)runtime.dispatch(
+                            client, {"status.invoke_action", runtime.revision(),
+                                     *status.invocation});
+                        sendUpdate(handle);
                         return;
                     }
-                    // Submit the selected candidate. PSUB:<selected>:<query>.
+                    // Submit the selected candidate by authoritative candidate id.
                     if (payload.rfind("PSUB:", 0) == 0) {
                         if (!attached->load()) return;
-                        auto const body = payload.substr(5);
-                        auto const c1 = body.find(':');
-                        if (c1 == std::string_view::npos) return;
-                        std::uint64_t selected = 0;
-                        if (!parseWholeU64(body.substr(0, c1), selected)) return;
-                        std::string const query{body.substr(c1 + 1)};
+                        std::string const id{payload.substr(5)};
                         auto snapshot = runtime.snapshot(client);
-                        if (snapshot) {
+                        if (snapshot && !id.empty()) {
                             auto const& palette = snapshot->sections().palette;
-                            auto const order = PaletteSearcher{}.rank(
-                                palette.candidates, query);
-                            if (selected < order.size()) {
-                                auto const& id =
-                                    palette.candidates[order[selected]].id;
+                            auto const found = std::find_if(
+                                palette.candidates.begin(), palette.candidates.end(),
+                                [&id](auto const& candidate) {
+                                    return candidate.id == id;
+                                });
+                            if (found != palette.candidates.end()) {
                                 if (auto const submit = paletteSubmitCommand(
                                         palette.mode, id)) {
                                     (void)runtime.dispatch(
@@ -507,6 +380,11 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                             }
                         }
                         sendUpdate(handle);
+                        return;
+                    }
+                    if (payload == "SNAP") {
+                        if (!attached->load()) return;
+                        sendSnapshot(handle);
                         return;
                     }
                     auto const attach = decodeSessionAttachRequest(message.data);
