@@ -248,6 +248,31 @@ export function isPalettePromptOpen(sections) {
   return !!ps && ps.active_kind != null && num(ps.active_kind) === PROMPT_PALETTE;
 }
 
+// The browser owns the palette query locally; it must clear that local text on a
+// FRESH open. A fresh open is either a closed->open transition OR a reopen at the
+// same open state signalled by a changed picker epoch (the server bumps the epoch
+// each time the picker is opened). Keeping this pure and separate makes the
+// reset-on-reopen rule testable without the DOM or a live socket.
+export function shouldResetLocalQuery(nowOpen, wasOpen, epoch, lastEpoch) {
+  if (!nowOpen) return false;
+  if (!wasOpen) return true;
+  return pickerEpochValue(epoch) !== pickerEpochValue(lastEpoch);
+}
+
+function pickerEpochValue(raw) {
+  if (typeof raw === 'bigint' && raw >= 0n) return raw;
+  if (typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0) return BigInt(raw);
+  throw new TypeError('malformed palette picker_epoch');
+}
+
+export function pickerEpochFromPalette(palette) {
+  if (!palette || !Object.prototype.hasOwnProperty.call(palette, 'picker_epoch') ||
+      palette.picker_epoch == null) {
+    return 0n;
+  }
+  return pickerEpochValue(palette.picker_epoch);
+}
+
 // --- UI-VM: the web interpreter over the published schema + dynamic node state ---
 //
 // Wire ordinals, pinned by the C++ enums (WidgetKind, RegionRole, Axis, SizeKind,
@@ -258,13 +283,16 @@ export const AXIS = { ROW: 0, COLUMN: 1 };
 export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
 export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4 };
+const STRUCTURAL_ROLE = { prompt: 16 };
+const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL_ROLE, name)
+  ? STRUCTURAL_ROLE[name] : null;
 
-// The primitives THIS web build's interpreter can draw. TextInput is not
-// implemented, so a schema using one is a loud, tested rejection -- never a
-// silently dropped element. Placement is tree structure + well-known node ids, so
-// there is no region-role set.
+// The primitives THIS web build's interpreter can draw. The built-in prompt
+// TextInput (the header query anchor) carries no server leaf state -- the browser
+// owns the query text locally -- so it renders as a bare anchor node. Placement is
+// tree structure + well-known node ids, so there is no region-role set.
 export const WEB_UI_PROFILE = {
-  widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
+  widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.TEXT_INPUT, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
   surfaces: new Set([SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS]),
 };
 
@@ -376,7 +404,8 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     }
     if (!node.leaf || typeof node.leaf !== 'object') { shapeOk = false; return null; }
     const wk = num(node.leaf.kind);
-    if ((wk === WIDGET.SPACER || wk === WIDGET.VIEW || wk === WIDGET.STATUS_ACTIONS) && hasLeafState) {
+    if ((wk === WIDGET.SPACER || wk === WIDGET.VIEW || wk === WIDGET.STATUS_ACTIONS ||
+         wk === WIDGET.TEXT_INPUT) && hasLeafState) {
       shapeOk = false; return null;
     }
     if (wk === WIDGET.CHECKBOX) {
@@ -397,6 +426,12 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     }
     if (wk === WIDGET.STATUS_ACTIONS) {
       return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node), actions: [] };
+    }
+    if (wk === WIDGET.TEXT_INPUT) {
+      // The prompt query anchor: no server text (the browser owns the query
+      // locally), so no per-keystroke tree delta is ever produced.
+      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+               role: structuralRole(node.leaf.role), sigil: node.leaf.sigil || '' };
     }
     if (wk === WIDGET.CHECKBOX) {
       return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node), role: num(st.leaf.role),

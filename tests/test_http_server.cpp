@@ -213,6 +213,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
     result.ui = ssg::UiSchema{
         ssg::Generation{revision.value()},
         ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                 ssg::Style{}.inputLineSigil,
                                  std::nullopt)
             .root};
     const auto validated = ssg::ValidatedSchema::validate(result.ui).takeSchema();

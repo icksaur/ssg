@@ -69,13 +69,15 @@ std::vector<UiSchema> corpus() {
             {path, dirty, sp}, {msg}, {label("enc", "utf-8")});
         all.push_back(UiSchema{
             Generation{7},
-            ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{}, comp)
+            ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                     ssg::Style{}.inputLineSigil, comp)
                 .root});
     }
     {  // the built-in whole-screen tree without a composed chrome override
         all.push_back(UiSchema{
             Generation{1},
             ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                     ssg::Style{}.inputLineSigil,
                                      std::nullopt)
                 .root});
     }

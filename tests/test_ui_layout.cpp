@@ -1,4 +1,5 @@
 #include "ssg/ShellState.h"
+#include "ssg/InteractionState.h"
 #include "ssg/StatusFields.h"
 #include "ssg/StatusQueue.h"
 #include "ssg/WholeScreenAssembly.h"
@@ -43,7 +44,9 @@ void installChrome(ShellLayoutRequest& value,
     }
     UiSchema schema;
     schema.root = assembleWholeScreen(catalog, "help.open",
-                                      value.style.dimensions, std::nullopt).root;
+                                      value.style.dimensions,
+                                      value.style.inputLineSigil, std::nullopt)
+                      .root;
     auto validated = ValidatedSchema::validate(std::move(schema));
     ASSERT_TRUE(validated.ok());
     gSchema = validated.takeSchema();
@@ -71,6 +74,22 @@ void installChrome(ShellLayoutRequest& value,
     }
 }
 
+void installDefaultChrome(ShellLayoutRequest& value) {
+    installChrome(value, {{"active_command", "Active command", "INSERT", 0},
+                          {"current_path", "Current path", "src/main.cpp", 1},
+                          {"mode", "Editor mode", "edit", 2}},
+                  {{"actionable_status", "Status message", "Saved", 0},
+                   {"follow_state", "Follow edits state and resume binding",
+                    "following", 1},
+                   {"background_activity", "Background activity", "idle", 2},
+                   {"encoding", "Text encoding", "UTF-8", 3},
+                   {"line_ending", "Line ending", "LF", 4},
+                   {"git_branch", "Git branch", "main", 5},
+                   {"git_repository", "Git repository", "ssg", 6},
+                   {"file_type", "File type", "C++", 7},
+                   {"file_size", "File size", "1 KiB", 8}});
+}
+
 void installSchema(ShellLayoutRequest& value, const UiComposition& comp) {
     UiSchema schema = gSchema ? gSchema->schema() : UiSchema{};
     auto* root = std::get_if<UiContainer>(&schema.root.content);
@@ -82,6 +101,27 @@ void installSchema(ShellLayoutRequest& value, const UiComposition& comp) {
             if (child.id == composedChild.id) {
                 child = composedChild;
                 break;
+            }
+        }
+    }
+    // A composed header replaces the built-in one and so drops the assembled prompt
+    // input; re-append it, mirroring assembleWholeScreen, so presence and lowering
+    // still find the input_line node under the composed header.
+    for (auto& child : root->children) {
+        if (child.id.value() == kHeaderNodeId) {
+            if (auto* headerRoot = std::get_if<UiContainer>(&child.content)) {
+                bool hasInput = false;
+                for (const auto& c : headerRoot->children)
+                    if (c.id.value() == kHeaderPromptInputNodeId) hasInput = true;
+                if (!hasInput) {
+                    WidgetDescriptor widget;
+                    widget.kind = WidgetKind::TextInput;
+                    widget.id = std::string{kHeaderPromptInputNodeId};
+                    widget.role = "prompt";
+                    headerRoot->children.push_back(
+                        UiNode{UiNodeId{std::string{kHeaderPromptInputNodeId}},
+                               Size::autoSize(), UiLeaf{widget}});
+                }
             }
         }
     }
@@ -97,20 +137,7 @@ void assertRect(Rect actual, Rect expected) {
 ShellLayoutRequest request(int columns, int rows) {
     ShellLayoutRequest value;
     value.viewport = {columns, rows};
-    installChrome(value,
-                  {{"active_command", "Active command", "INSERT", 0},
-                   {"current_path", "Current path", "src/main.cpp", 1},
-                   {"mode", "Editor mode", "edit", 2}},
-                  {{"actionable_status", "Status message", "Saved", 0},
-                   {"follow_state", "Follow edits state and resume binding",
-                    "following", 1},
-                   {"background_activity", "Background activity", "idle", 2},
-                   {"encoding", "Text encoding", "UTF-8", 3},
-                   {"line_ending", "Line ending", "LF", 4},
-                   {"git_branch", "Git branch", "main", 5},
-                   {"git_repository", "Git repository", "ssg", 6},
-                   {"file_type", "File type", "C++", 7},
-                   {"file_size", "File size", "1 KiB", 8}});
+    installDefaultChrome(value);
     value.tabs = {{"main.cpp", "main.cpp tab", true}};
     value.panelProviderLabel = "Files";
     return value;
@@ -118,12 +145,29 @@ ShellLayoutRequest request(int columns, int rows) {
 
 // Stage-(ii) bridge: computeShellLayout reads panel presence and focus from the request;
 // tests set them explicitly (ShellState no longer stores panel/focus -- the authority does).
+// The prompt fixture drives the input_line node's presence (visible iff active) and
+// supplies the grid-only query/ghost sidecar, mirroring the runtime.
+struct PromptFixture {
+    bool active = false;
+    std::string query;
+    std::string ghost;
+};
+
+UiInteractionState interactionFor(const PromptFixture& prompt) {
+    std::vector<UiNodeId> hidden;
+    const UiNodeId inputId{std::string{kHeaderPromptInputNodeId}};
+    if (!prompt.active && gSchema->contains(inputId)) hidden.push_back(inputId);
+    return UiInteractionState{*gSchema, std::move(hidden)};
+}
+
 ShellLayoutResult layoutFor(ShellLayoutRequest request, const ShellState& state,
                             bool panelPresent = false,
-                            FocusTarget focus = FocusTarget::Editor) {
+                            FocusTarget focus = FocusTarget::Editor,
+                            PromptFixture prompt = {}) {
     request.panelPresent = panelPresent;
     request.focus = focus;
-    return computeShellLayout(request, state, *gSchema, gStatusView);
+    return computeShellLayout(request, state, interactionFor(prompt), gStatusView,
+                              PromptInputReport{prompt.query, prompt.ghost});
 }
 
 TEST(handAuthoredGeometryGoldens) {
@@ -407,7 +451,6 @@ const AccessibilityNode* findNode(const ShellViewState& view, std::string_view i
 // the one-row gap between the input line and the results).
 TEST(anOpenPickerHidesTheTabBarAndReclaimsItsRow) {
     auto closed = request(80, 24);
-    closed.inputLineActive = false;
     ShellState closedState;
     auto closedResult = layoutFor(closed, closedState);
     ASSERT_TRUE(closedResult.accepted());
@@ -419,9 +462,8 @@ TEST(anOpenPickerHidesTheTabBarAndReclaimsItsRow) {
     int const contentTopWithTabs = closedResult.view->panes.front().content.y;
 
     auto open = request(80, 24);
-    open.inputLineActive = true;
     ShellState openState;
-    auto openResult = layoutFor(open, openState);
+    auto openResult = layoutFor(open, openState, false, FocusTarget::Editor, {true});
     ASSERT_TRUE(openResult.accepted());
     if (!openResult.accepted()) return;
     ASSERT_FALSE(openResult.view->tabBar.has_value());
@@ -444,10 +486,8 @@ TEST(typingInTheInputLineNeverMovesTheStatusFields) {
                               std::string{"abcdefgh"},
                               std::string(40, 'x')}) {
         auto value = request(120, 12);
-        value.inputLineActive = true;
-        value.inputLineQuery = query;
         ShellState state;
-        auto result = layoutFor(value, state);
+        auto result = layoutFor(value, state, false, FocusTarget::Editor, {true, query});
         ASSERT_TRUE(result.accepted());
         if (!result.accepted()) continue;
 
@@ -515,10 +555,8 @@ TEST(fieldsAreStableEvenWhenTheHeaderIsTight) {
                               std::string{"abcdefghij"},
                               std::string(30, 'z')}) {
         auto value = request(48, 12);
-        value.inputLineActive = true;
-        value.inputLineQuery = query;
         ShellState state;
-        auto result = layoutFor(value, state);
+        auto result = layoutFor(value, state, false, FocusTarget::Editor, {true, query});
         ASSERT_TRUE(result.accepted());
         if (!result.accepted()) continue;
 
@@ -547,11 +585,9 @@ TEST(fieldsAreStableEvenWhenTheHeaderIsTight) {
 TEST(headerNodesNeverOverlap) {
     for (int columns : {30, 48, 80, 120}) {
         auto value = request(columns, 12);
-        value.inputLineActive = true;
-        value.inputLineQuery = std::string(20, 'q');
-        value.inputLineGhost = "ghost";
         ShellState state;
-        auto result = layoutFor(value, state);
+        auto result = layoutFor(value, state, false, FocusTarget::Editor,
+                                {true, std::string(20, 'q'), "ghost"});
         ASSERT_TRUE(result.accepted());
         if (!result.accepted()) continue;
         std::vector<const AccessibilityNode*> header;
@@ -574,16 +610,15 @@ TEST(headerNodesNeverOverlap) {
 // must NOT take space back from the fields to do so.
 TEST(anOverlongQueryScrollsItsOwnTextAndLeavesFieldsAlone) {
     auto shortQuery = request(60, 12);
-    shortQuery.inputLineActive = true;
-    shortQuery.inputLineQuery = "ab";
     auto longQuery = request(60, 12);
-    longQuery.inputLineActive = true;
     // Distinct tail so the visible window is identifiable.
-    longQuery.inputLineQuery = std::string(200, 'x') + "TAIL";
+    const std::string longText = std::string(200, 'x') + "TAIL";
 
     ShellState state;
-    auto shortResult = layoutFor(shortQuery, state);
-    auto longResult = layoutFor(longQuery, state);
+    auto shortResult = layoutFor(shortQuery, state, false, FocusTarget::Editor,
+                                 {true, "ab"});
+    auto longResult = layoutFor(longQuery, state, false, FocusTarget::Editor,
+                                {true, longText});
     ASSERT_TRUE(shortResult.accepted() && longResult.accepted());
     if (!shortResult.accepted() || !longResult.accepted()) return;
 
@@ -609,13 +644,11 @@ TEST(anOverlongQueryScrollsItsOwnTextAndLeavesFieldsAlone) {
 // multi-byte character.
 TEST(theScrolledQueryIsCutOnCharacterBoundaries) {
     auto value = request(40, 12);
-    value.inputLineActive = true;
     // 60 two-byte characters; any byte-wise slice lands mid-character.
     std::string query;
     for (int i = 0; i < 60; ++i) query += "\u00e9";
-    value.inputLineQuery = query;
     ShellState state;
-    auto result = layoutFor(value, state);
+    auto result = layoutFor(value, state, false, FocusTarget::Editor, {true, query});
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     const auto* line = findNode(*result.view, "input_line.query");
@@ -631,10 +664,8 @@ TEST(theScrolledQueryIsCutOnCharacterBoundaries) {
 
 TEST(aNarrowHeaderStillGivesTheInputLineRoom) {
     auto value = request(30, 12);
-    value.inputLineActive = true;
-    value.inputLineQuery = "query";
     ShellState state;
-    auto result = layoutFor(value, state);
+    auto result = layoutFor(value, state, false, FocusTarget::Editor, {true, "query"});
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     const auto* line = findNode(*result.view, "input_line.query");
@@ -677,10 +708,10 @@ TEST(shellLayoutTakesItsDimensionsAndSigilFromStyle) {
 
     // The input line renders the configured sigil rather than a literal "> ".
     auto styled = request(100, 24);
-    styled.inputLineActive = true;
-    styled.inputLineQuery = "abc";
     styled.style.inputLineSigil = ":: ";
-    auto styledResult = layoutFor(styled, state, true, FocusTarget::Panel);
+    installDefaultChrome(styled);
+    auto styledResult = layoutFor(styled, state, true, FocusTarget::Panel,
+                                  {true, "abc"});
     ASSERT_TRUE(styledResult.accepted());
     if (!styledResult.accepted()) return;
     bool sawStyledSigil = false;
@@ -942,8 +973,6 @@ TEST(composingOneRegionLeavesTheOtherBuiltin) {
 TEST(composedHeaderResolvesProvidersAndKeepsTheInputLine) {
     ShellState state;
     auto value = request(100, 24);
-    value.inputLineActive = true;
-    value.inputLineQuery = "abc";
     const auto comp = ssgtest::composeHeader({providerField("live.path", "path", 0)});
     installSchema(value, comp);
     value.chromeProviderResolver =
@@ -954,7 +983,7 @@ TEST(composedHeaderResolvesProvidersAndKeepsTheInputLine) {
         return std::nullopt;
     };
 
-    auto result = layoutFor(value, state);
+    auto result = layoutFor(value, state, false, FocusTarget::Editor, {true, "abc"});
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     const auto* live = findNode(*result.view, "live.path");
@@ -977,8 +1006,6 @@ TEST(composedHeaderResolvesProvidersAndKeepsTheInputLine) {
 TEST(composedHeaderSpacerPushesTheInputLinePastItsCells) {
     ShellState state;
     auto value = request(100, 24);
-    value.inputLineActive = true;
-    value.inputLineQuery = "abc";
     WidgetDescriptor spacer;
     spacer.kind = WidgetKind::Spacer;
     spacer.id = "h.spacer";
@@ -987,7 +1014,7 @@ TEST(composedHeaderSpacerPushesTheInputLinePastItsCells) {
         {literalField("h.field", "X", 0), spacer});
     installSchema(value, comp);
 
-    auto result = layoutFor(value, state);
+    auto result = layoutFor(value, state, false, FocusTarget::Editor, {true, "abc"});
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     const auto* field = findNode(*result.view, "h.field");
@@ -1065,11 +1092,13 @@ std::string captureGoldenMatrix() {
     auto emitCase = [&](const std::string& name, ShellLayoutRequest req,
                         const std::function<void(ShellState&)>& configure,
                         bool panelPresent = false,
-                        FocusTarget focus = FocusTarget::Editor) {
+                        FocusTarget focus = FocusTarget::Editor,
+                        PromptFixture prompt = {}) {
         ShellState state;
         if (configure) configure(state);
         out << "=== " << name << " ===\n"
-            << serializeLayout(layoutFor(req, state, panelPresent, focus)) << '\n';
+            << serializeLayout(layoutFor(req, state, panelPresent, focus, prompt))
+            << '\n';
     };
 
     // Viewport sizes, panel off/on.
@@ -1105,15 +1134,12 @@ std::string captureGoldenMatrix() {
     // Input line (the palette's influence on this function).
     {
         auto req = request(80, 24);
-        req.inputLineActive = true;
-        req.inputLineQuery = "find";
-        req.inputLineGhost = "er";
-        emitCase("inputline-query-ghost", req, nullptr);
+        emitCase("inputline-query-ghost", req, nullptr, false,
+                 FocusTarget::Editor, {true, "find", "er"});
         auto longQ = request(60, 24);
-        longQ.inputLineActive = true;
-        longQ.inputLineQuery =
-            "a-very-long-query-that-must-scroll-under-the-sigil-xyz";
-        emitCase("inputline-long-query", longQ, nullptr);
+        emitCase("inputline-long-query", longQ, nullptr, false,
+                 FocusTarget::Editor,
+                 {true, "a-very-long-query-that-must-scroll-under-the-sigil-xyz"});
     }
 
     // Pane topologies.
@@ -1227,7 +1253,8 @@ TEST(panelPresenceComesExclusivelyFromTheRequest) {
     ShellState hiddenState;  // panel hidden
     auto shownReq = request(80, 12);
     shownReq.panelPresent = true;  // request overrides the hidden state
-    auto shown = computeShellLayout(shownReq, hiddenState, *gSchema, gStatusView);
+    auto shown = computeShellLayout(shownReq, hiddenState, interactionFor({}),
+                                    gStatusView, PromptInputReport{});
     ASSERT_TRUE(shown.accepted());
     ASSERT_TRUE(shown.view->panel.has_value());
 
@@ -1236,7 +1263,8 @@ TEST(panelPresenceComesExclusivelyFromTheRequest) {
     ShellState plainState;
     auto hiddenReq = request(80, 12);
     hiddenReq.panelPresent = false;
-    auto hidden = computeShellLayout(hiddenReq, plainState, *gSchema, gStatusView);
+    auto hidden = computeShellLayout(hiddenReq, plainState, interactionFor({}),
+                                     gStatusView, PromptInputReport{});
     ASSERT_TRUE(hidden.accepted());
     ASSERT_FALSE(hidden.view->panel.has_value());
 }
@@ -1246,12 +1274,16 @@ TEST(panelActiveRoleComesExclusivelyFromTheRequestFocus) {
     auto activeReq = request(80, 12);
     activeReq.panelPresent = true;
     activeReq.focus = FocusTarget::Panel;  // request says panel-focused
-    auto active = computeShellLayout(activeReq, editorFocusedState, *gSchema, gStatusView);
+    auto active = computeShellLayout(activeReq, editorFocusedState,
+                                     interactionFor({}), gStatusView,
+                                     PromptInputReport{});
     ASSERT_TRUE(active.accepted());
     ASSERT_TRUE(panelProviderRole(*active.view) == SemanticRole::PanelActive);
 
     activeReq.focus = FocusTarget::Editor;  // request says editor-focused
-    auto inactive = computeShellLayout(activeReq, editorFocusedState, *gSchema, gStatusView);
+    auto inactive = computeShellLayout(activeReq, editorFocusedState,
+                                       interactionFor({}), gStatusView,
+                                       PromptInputReport{});
     ASSERT_TRUE(inactive.accepted());
     ASSERT_TRUE(panelProviderRole(*inactive.view) == SemanticRole::PanelInactive);
 }

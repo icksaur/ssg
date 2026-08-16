@@ -82,6 +82,11 @@ struct PaletteViewState {
     // The parameters a client must score `candidates` with; travels on the same
     // channel so candidates and their scoring arrive atomically.
     MatcherParameters parameters;
+    // Monotonic reopen identity: advances each time a picker (re)opens, including a
+    // same-kind reopen where presence never toggles. A client resets its local query
+    // when the received epoch differs from the last it observed. Sourced from
+    // InteractionAuthority::pickerEpoch; never derived from ApplicationId.
+    std::uint64_t pickerEpoch = 0;
 
     friend bool operator==(const PaletteViewState&, const PaletteViewState&) = default;
 };

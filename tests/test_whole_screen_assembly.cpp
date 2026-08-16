@@ -49,6 +49,7 @@ StyleDimensions dims() {
 }
 
 constexpr std::string_view kHintCommand = "help.open";
+constexpr std::string_view kPromptSigil = "> ";
 
 // The canonical skeleton (root/body/panel/content + view leaves + sizes) that must
 // hold regardless of how header/footer were sourced.
@@ -104,7 +105,8 @@ TEST(builtinHeaderFooterAreProviderBackedAndStable) {
         entry("branch", StatusFieldRegion::Header),
         entry("mode", StatusFieldRegion::Footer)};
     const UiComposition comp =
-        assembleWholeScreen(catalog, kHintCommand, dims(), std::nullopt);
+        assembleWholeScreen(catalog, kHintCommand, dims(), kPromptSigil,
+                            std::nullopt);
     assertCanonicalSkeleton(comp, dims());
 
     // Each built-in header field is a provider-backed Field keyed by its id, carrying
@@ -147,9 +149,11 @@ TEST(theCatalogSplitsByRegionDeterministically) {
         entry("path", StatusFieldRegion::Header, 3),
         entry("mode", StatusFieldRegion::Footer)};
     const UiComposition a =
-        assembleWholeScreen(catalog, kHintCommand, dims(), std::nullopt);
+        assembleWholeScreen(catalog, kHintCommand, dims(), kPromptSigil,
+                            std::nullopt);
     const UiComposition b =
-        assembleWholeScreen(catalog, kHintCommand, dims(), std::nullopt);
+        assembleWholeScreen(catalog, kHintCommand, dims(), kPromptSigil,
+                            std::nullopt);
     ASSERT_TRUE(a == b);
     // A Header entry lands in the header left group; a Footer entry in the footer left.
     ASSERT_EQ(ssgtest::rowOf(*childById(a.root, kHeaderNodeId)).left.size(),
@@ -172,7 +176,8 @@ TEST(composedHeaderAndFooterOverrideTheBuiltins) {
 
     const UiComposition comp = assembleWholeScreen(
         {entry("path", StatusFieldRegion::Header), entry("mode", StatusFieldRegion::Footer)},
-        kHintCommand, dims(), std::optional<ValidatedComposition>{override});
+        kHintCommand, dims(), kPromptSigil,
+        std::optional<ValidatedComposition>{override});
     assertCanonicalSkeleton(comp, dims());
 
     const ssgtest::RowView headerRow =
@@ -197,7 +202,8 @@ TEST(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted) {
 
     const UiComposition comp = assembleWholeScreen(
         {entry("path", StatusFieldRegion::Header), entry("mode", StatusFieldRegion::Footer)},
-        kHintCommand, dims(), std::optional<ValidatedComposition>{override});
+        kHintCommand, dims(), kPromptSigil,
+        std::optional<ValidatedComposition>{override});
     assertCanonicalSkeleton(comp, dims());
 
     const ssgtest::RowView headerRow =
@@ -212,15 +218,16 @@ TEST(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted) {
 TEST(theAssembledTreeAlwaysValidates) {
     const UiComposition fallback = assembleWholeScreen(
         {entry("path", StatusFieldRegion::Header), entry("mode", StatusFieldRegion::Footer)},
-        kHintCommand, dims(), std::nullopt);
+        kHintCommand, dims(), kPromptSigil, std::nullopt);
     const UiComposition empty =
-        assembleWholeScreen({}, kHintCommand, dims(), std::nullopt);
+        assembleWholeScreen({}, kHintCommand, dims(), kPromptSigil,
+                            std::nullopt);
     WidgetDescriptor composed;
     composed.kind = WidgetKind::Label;
     composed.id = "title";
     composed.value = ValueSource{false, "SSG", ""};
     const UiComposition overridden = assembleWholeScreen(
-        {}, kHintCommand, dims(),
+        {}, kHintCommand, dims(), kPromptSigil,
         std::optional<ValidatedComposition>{
             ssgtest::composeHeaderAndFooterValidated({composed}, {composed})});
     for (const UiComposition* comp : {&fallback, &empty, &overridden}) {
@@ -228,6 +235,61 @@ TEST(theAssembledTreeAlwaysValidates) {
         ASSERT_TRUE(validateUiSchema(schema).ok());
         ASSERT_TRUE(validateWellKnownAreas(schema).ok());
     }
+}
+
+TEST(theHeaderCarriesThePromptInputRightAfterTheLeftGroup) {
+    // The prompt input is a stable TextInput leaf placed right after the header's
+    // left (status-fields) group, present whether the header is built-in or
+    // composed, so presence gating and chrome lowering always find input_line under
+    // the header AND tree order matches the visual order (a tree-order client
+    // renders it after the fields, not past the flex middle). It is never added to
+    // the footer.
+    const auto assertPromptInput = [](const UiComposition& comp) {
+        const UiNode* header = childById(comp.root, kHeaderNodeId);
+        ASSERT_TRUE(header != nullptr);
+        if (!header) return;
+        const UiNode* input = childById(*header, kHeaderPromptInputNodeId);
+        ASSERT_TRUE(input != nullptr);
+        if (!input) return;
+        // It is the SECOND child -- immediately after the left group and before the
+        // flex middle -- so a tree-order client renders it right after the fields.
+        const auto& children = std::get<UiContainer>(header->content).children;
+        ASSERT_EQ(children.at(1).id.value(),
+                  std::string{kHeaderPromptInputNodeId});
+        const auto* leaf = std::get_if<UiLeaf>(&input->content);
+        ASSERT_TRUE(leaf != nullptr);
+        if (leaf) {
+            ASSERT_TRUE(leaf->widget.kind == WidgetKind::TextInput);
+            ASSERT_EQ(leaf->widget.sigil, std::string{kPromptSigil});
+        }
+        // The footer never carries it.
+        const UiNode* footer = childById(comp.root, kFooterNodeId);
+        ASSERT_TRUE(footer != nullptr);
+        if (footer)
+            ASSERT_TRUE(childById(*footer, kHeaderPromptInputNodeId) == nullptr);
+    };
+
+    const UiComposition builtin = assembleWholeScreen(
+        {entry("path", StatusFieldRegion::Header),
+         entry("mode", StatusFieldRegion::Footer)},
+        kHintCommand, dims(), kPromptSigil, std::nullopt);
+    assertPromptInput(builtin);
+
+    WidgetDescriptor composed;
+    composed.kind = WidgetKind::Label;
+    composed.id = "title";
+    composed.value = ValueSource{false, "SSG", ""};
+    const UiComposition composedHeader = assembleWholeScreen(
+        {entry("mode", StatusFieldRegion::Footer)}, kHintCommand, dims(),
+        kPromptSigil,
+        std::optional<ValidatedComposition>{
+            ssgtest::composeHeaderValidated({composed})});
+    assertPromptInput(composedHeader);
+
+    // The whole tree with the trailing input still validates.
+    const UiSchema schema{Generation{1}, builtin.root};
+    ASSERT_TRUE(validateUiSchema(schema).ok());
+    ASSERT_TRUE(validateWellKnownAreas(schema).ok());
 }
 
 }  // namespace
@@ -238,5 +300,6 @@ int main() {
     RUN(composedHeaderAndFooterOverrideTheBuiltins);
     RUN(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted);
     RUN(theAssembledTreeAlwaysValidates);
+    RUN(theHeaderCarriesThePromptInputRightAfterTheLeftGroup);
     return failed;
 }

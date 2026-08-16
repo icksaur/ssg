@@ -19,6 +19,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <variant>
 
 namespace fs = std::filesystem;
 
@@ -1149,6 +1150,33 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
     }
 }
 
+TEST(inputLineCaretUsesTheLoweredPromptInputGeometry) {
+    const auto assertCaret = [](int width, std::string query) {
+        auto snapshot = ssg::test::SessionSnapshotBuilder{}
+                            .viewport(width, 8)
+                            .promptInput(true, std::move(query))
+                            .sections([](ssg::SessionSnapshotSections& sections) {
+                                sections.focus = ssg::FocusTarget::Prompt;
+                            })
+                            .build();
+        const auto& shell = snapshot.presentation()->shell;
+        const ssg::AccessibilityNode* input = nullptr;
+        for (const auto& node : shell.accessibilityNodes) {
+            if (node.id == "input_line.query") input = &node;
+        }
+        ASSERT_TRUE(input != nullptr);
+
+        auto grid = ssg::Renderer{}.render(snapshot);
+        ASSERT_TRUE(grid.caret.has_value());
+        if (!input || !grid.caret) return;
+        ASSERT_EQ(grid.caret->row, input->rect.y);
+        ASSERT_EQ(grid.caret->column, input->rect.x + input->rect.width);
+    };
+
+    assertCaret(80, "save");
+    assertCaret(30, std::string(200, 'x'));
+}
+
 // Proves the renderer READS the snapshot's published Style section rather than
 // holding its own.  The existing suite passing only shows the refactor changed
 // nothing; it cannot show the routing is live, because the defaults reproduce
@@ -1249,7 +1277,8 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
                    {"scrollbar_body", "@"},
                    {"scrollbar_bottom", "@"},
                    {"tree_collapsed", "+ "},
-                   {"tree_expanded", "- "}};
+                   {"tree_expanded", "- "},
+                   {"input_line_sigil", "! "}};
     auto const applied =
         runtime->dispatch(ssg::ClientId{1}, {"style.define", runtime->revision(), args});
     ASSERT_TRUE(applied.accepted());
@@ -1260,6 +1289,28 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
     // The published section carries the new glyphs.
     ASSERT_EQ(snapshot->presentation()->style.scrollbar.track, std::string{":"});
     ASSERT_EQ(snapshot->presentation()->style.tree.expanded, std::string{"- "});
+    ASSERT_EQ(snapshot->presentation()->style.inputLineSigil, std::string{"! "});
+    const ssg::UiNode* inputLine = nullptr;
+    if (const auto* root = std::get_if<ssg::UiContainer>(
+            &snapshot->sections().ui.root.content)) {
+        for (const auto& area : root->children) {
+            if (area.id.value() != ssg::kHeaderNodeId) continue;
+            if (const auto* header =
+                    std::get_if<ssg::UiContainer>(&area.content)) {
+                for (const auto& child : header->children) {
+                    if (child.id.value() == ssg::kHeaderPromptInputNodeId) {
+                        inputLine = &child;
+                    }
+                }
+            }
+        }
+    }
+    ASSERT_TRUE(inputLine != nullptr);
+    if (inputLine) {
+        const auto* leaf = std::get_if<ssg::UiLeaf>(&inputLine->content);
+        ASSERT_TRUE(leaf != nullptr);
+        if (leaf) ASSERT_EQ(leaf->widget.sigil, std::string{"! "});
+    }
 
     // And the rendered screen shows them, with the shipped glyphs gone.
     auto const grid = ssg::Renderer{}.render(*snapshot);
@@ -1473,6 +1524,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
         ssg::UiSchema schema;
         schema.root = ssg::assembleWholeScreen(
                           catalog, "help.open", ssg::StyleDimensions{},
+                          ssg::Style{}.inputLineSigil,
                           std::nullopt)
                           .root;
         auto validated = ssg::ValidatedSchema::validate(std::move(schema));
@@ -1510,13 +1562,11 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
                 request.notice =
                     ssg::ShellNotice{"Draft conflict",
                                      {{"diff", "Diff", "draft.diff"}}};
-                request.inputLineActive = pickerOpen;
-                request.inputLineQuery = "needle";
-                request.inputLineGhost = "ghost";
                 // A line-number gutter so the LineNumber and current-line roles
                 // are exercised (the caret line uses the current-line roles).
                 request.lineNumberGutterWidth = 3;
             })
+            .promptInput(pickerOpen, "needle", "ghost")
             .sections([&](ssg::SessionSnapshotSections& sections) {
                 sections.theme = theme;
                 // A tree with a directory node (PanelActive color) and a
@@ -1666,6 +1716,7 @@ int main() {
     RUN(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery);
     RUN(theInputLineCaretIsPlacedByDisplayWidthNotByteCount);
     RUN(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText);
+    RUN(inputLineCaretUsesTheLoweredPromptInputGeometry);
     RUN(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals);
     RUN(theDocumentReplacementGlyphComesFromStyle);
     RUN(styleDefineRestylesTheLiveSessionChrome);

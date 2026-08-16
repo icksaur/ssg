@@ -12,7 +12,7 @@ import {
   isPalettePromptOpen, matcherBoundsFromPalette, clampPaletteSelection,
   encodePaletteSubmit, applySessionDeltaSections, sessionDeltaRequiresTreeResync,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE,
-  encodeStatusActionInvocation,
+  encodeStatusActionInvocation, shouldResetLocalQuery, pickerEpochFromPalette,
 } from '/reconcile.mjs';
 import { fuzzyRank } from '/fuzzy.mjs';
 
@@ -154,6 +154,23 @@ function renderChromeNode(node, theme, parentAxis = AXIS.ROW, topLevel = false) 
     applySize(el, node.size, parentAxis);
     return el;
   }
+  if (node.widget === WIDGET.TEXT_INPUT) {
+    // The header prompt anchor: the render node carries no server text, so the
+    // browser-owned local query fills it here (no per-keystroke wire delta).
+    const el = document.createElement('span');
+    el.className = 'w input-line';
+    const sigil = document.createElement('span');
+    sigil.textContent = node.sigil || '';
+    el.appendChild(sigil);
+    el.appendChild(document.createTextNode(state.palette.query || ''));
+    const caret = document.createElement('span');
+    caret.className = 'caret';
+    el.appendChild(caret);
+    const color = roleColor(node.role, theme);
+    if (color) el.style.color = color;
+    applySize(el, node.size, parentAxis);
+    return el;
+  }
   const el = document.createElement('span');
   el.className = 'w' + (node.command ? ' clickable' : '');
   el.textContent = (node.checked != null ? (node.checked ? '\u2611 ' : '\u2610 ') : '') + (node.text || '');
@@ -267,12 +284,6 @@ function renderFindResultsSurface(parent, palette) {
       return;
     }
     state.palette.selected = clampPaletteSelection(state.palette.selected, rows.length);
-    const query = document.createElement('div');
-    query.className = 'row query';
-    query.textContent = state.palette.query || '';
-    const color = roleColor(ROLE.text, state.sections && state.sections.theme);
-    if (color) query.style.color = color;
-    parent.appendChild(query);
     for (let i = 0; i < rows.length; i++) {
       const div = document.createElement('div');
       div.className = 'row' + (i === state.palette.selected ? ' sel' : '');
@@ -434,6 +445,7 @@ function render() {
 }
 
 let wasPaletteOpen = false;
+let lastPickerEpoch = 0n;
 
 const ws = new WebSocket('ws://' + location.host + '/session');
 ws.binaryType = 'arraybuffer';
@@ -461,13 +473,16 @@ ws.onmessage = (e) => {
     }
     if (!state.sections) { statusEl.textContent = 'no sections yet'; return; }
 
-    // On the transition into an open picker, reset the browser-owned query.
+    // Reset the browser-owned query on a fresh open: a closed->open transition, or
+    // a reopen at the same open state signalled by a bumped picker epoch.
     const nowOpen = paletteOpen();
-    if (nowOpen && !wasPaletteOpen) {
+    const epoch = pickerEpochFromPalette(state.sections.palette);
+    if (shouldResetLocalQuery(nowOpen, wasPaletteOpen, epoch, lastPickerEpoch)) {
       state.palette.query = '';
       state.palette.selected = 0;
     }
     wasPaletteOpen = nowOpen;
+    lastPickerEpoch = epoch;
 
     render();
     if (!resyncRequested) statusEl.textContent = 'live (' + e.data.byteLength + ' bytes)';

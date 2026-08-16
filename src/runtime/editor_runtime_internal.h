@@ -531,6 +531,7 @@ struct EditorRuntime::Impl final : CommandServices,
     // caller can build+migrate BEFORE adopting the new style/composition, keeping chrome
     // truth and the schema consistent if assembly ever throws.
     void rebuildInteractionSchema(const StyleDimensions& dimensions,
+                                  std::string_view promptSigil,
                                   const std::optional<ValidatedComposition>& composed);
     // Refresh the file picker's candidates off the authority's picker epoch: a newly
     // (re)opened File picker rebuilds synchronously, any other picker state clears.

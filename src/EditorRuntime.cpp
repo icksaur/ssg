@@ -460,7 +460,8 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
       syntaxParser{std::move(parser)},
       statusFieldCatalog{p0StatusFieldCatalog()},
       interaction{assembleWholeScreen(statusFieldCatalog, "help.open",
-                                      StyleDimensions{}, std::nullopt),
+                                     StyleDimensions{}, Style{}.inputLineSigil,
+                                     std::nullopt),
                   tree, 1},
       search{*this, *this},
       theme{defaultTheme()},
@@ -1750,9 +1751,11 @@ void EditorRuntime::Impl::refreshTree() {
 
 void EditorRuntime::Impl::rebuildInteractionSchema(
     const StyleDimensions& dimensions,
+    std::string_view promptSigil,
     const std::optional<ValidatedComposition>& composed) {
     (void)interaction.updateComposition(
-        assembleWholeScreen(statusFieldCatalog, "help.open", dimensions, composed));
+        assembleWholeScreen(statusFieldCatalog, "help.open", dimensions,
+                            promptSigil, composed));
 }
 
 // Opens a picker through the authority: apply(OpenFinder) atomically opens the Palette
@@ -2247,7 +2250,8 @@ void EditorRuntime::setComposedUi(std::optional<ValidatedComposition> compositio
     if (impl_->composedUi == composition) return;
     // Migrate the schema over the new composition FIRST; adopt chrome truth only if it
     // succeeds, so a failure cannot leave composedUi/chromeGeneration ahead of the schema.
-    impl_->rebuildInteractionSchema(impl_->style.dimensions, composition);
+    impl_->rebuildInteractionSchema(impl_->style.dimensions,
+                                    impl_->style.inputLineSigil, composition);
     impl_->composedUi = std::move(composition);
     ++impl_->chromeGeneration;
     if (impl_->session) impl_->session->advanceRevision();

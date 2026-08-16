@@ -48,6 +48,19 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     const bool pickerOpen = truth.openPicker.has_value();
     hidden.push_back(nodeId(pickerOpen ? kTabViewNodeId : kFindResultsNodeId));
 
+    // The header prompt input is present only while a header-region prompt is open,
+    // so a client draws its query line exactly when the picker is up. The
+    // whole-screen schema always assembles the node; its absence under a header
+    // prompt means the schema contract broke and must not be masked by focusing the
+    // header container.
+    const UiNodeId inputLine = nodeId(kHeaderPromptInputNodeId);
+    const bool headerPrompt = promptRegion && *promptRegion == PromptRegion::Header;
+    const bool hasInputLine = schema.contains(inputLine);
+    if (headerPrompt && !hasInputLine) {
+        throw std::logic_error("header prompt requires the input_line node");
+    }
+    if (hasInputLine && !headerPrompt) hidden.push_back(inputLine);
+
     UiInteractionState state{std::move(schema), std::move(hidden)};
 
     // Base focus never strands on an absent panel: Panel is honored only when present.
@@ -55,14 +68,13 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
         truth.baseFocus == BaseFocus::Panel && truth.panelPresent ? BaseFocus::Panel
                                                                   : BaseFocus::Editor);
 
-    // A prompt anchors its focus capture on the region's host node -- the header input line
-    // for a Palette prompt, the footer otherwise -- so keystrokes route there. Both hosts
-    // are always present, so captureFocus admits the capture.
+    // A prompt anchors its focus capture on the node keystrokes route to: the header
+    // input line itself for a Palette prompt (so the capture addresses the query
+    // node, not merely its container), the footer otherwise. Both hosts are present
+    // when addressed, so captureFocus admits the capture.
     if (promptRegion) {
-        const std::string_view host = *promptRegion == PromptRegion::Header
-                                          ? kHeaderNodeId
-                                          : kFooterNodeId;
-        state.captureFocus(FocusCapture{nodeId(host), FocusTarget::Prompt});
+        const UiNodeId host = headerPrompt ? inputLine : nodeId(kFooterNodeId);
+        state.captureFocus(FocusCapture{host, FocusTarget::Prompt});
     }
     return state;
 }

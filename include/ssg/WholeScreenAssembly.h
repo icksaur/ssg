@@ -53,10 +53,19 @@ namespace ssg {
 //   dispatches the existing StatusActionInvocation (by status/action id + generation);
 //   it never reinterprets an action as a commandId click. A composed ssg.chrome footer
 //   replaces the whole built-in footer and so omits the affordance, matching the grid.
+// assembleWholeScreen: the prompt query line is a built-in TextInput leaf the library
+//   always places right after the header's left (status-fields) group, so tree order
+//   matches the visual order (a tree-order client renders it after the fields, not
+//   past the flex middle); it is presence-gated (visible only for a header-region
+//   prompt) rather than added or removed, so the schema stays generation-stable. This
+//   is deliberately the ONLY TextInput the tree carries: an ssg.chrome author cannot
+//   contribute one (the decoder refuses text_input), so the query anchor is
+//   library-owned, never client-authored.
 [[nodiscard]] UiComposition assembleWholeScreen(
     const std::vector<StatusFieldCatalogEntry>& catalog,
     std::string_view hintCommandId,
     const StyleDimensions& dimensions,
+    std::string_view promptSigil,
     const std::optional<ValidatedComposition>& composedOverride);
 
 }  // namespace ssg

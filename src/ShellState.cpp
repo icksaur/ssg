@@ -3,6 +3,7 @@
 #include "ssg/ChromeLowering.h"
 #include "ssg/ChromeRegionShape.h"
 #include "ssg/GraphemeLayout.h"
+#include "ssg/InteractionState.h"
 #include "ssg/Layout.h"
 #include "ssg/Widget.h"
 
@@ -290,8 +291,10 @@ bool ShellState::distractionFree() const noexcept {
 
 ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                                        const ShellState& state,
-                                       const ValidatedSchema& schema,
-                                       const StatusViewState& statusView) {
+                                       const UiInteractionState& interaction,
+                                       const StatusViewState& statusView,
+                                       const PromptInputReport& promptInput) {
+    const ValidatedSchema& schema = interaction.schema();
     if (request.viewport.columns < request.style.dimensions.minimumColumns ||
         request.viewport.rows < request.style.dimensions.minimumRows) {
         return {ShellLayoutError{ShellLayoutErrorCode::ViewportTooSmall,
@@ -311,10 +314,12 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     const int headerHeight = request.style.dimensions.headerHeight;
     const int footerHeight = request.style.dimensions.footerHeight;
     const int tabBarHeight = request.style.dimensions.tabBarHeight;
-    // A picker (palette / file find) is not a document view, so it covers the
-    // tab bar rather than sitting below it (removing the confusing visible tabs
-    // and the one-row gap between the input line and the results).
-    const bool showTabBar = !request.inputLineActive;
+    // The header prompt input is visible exactly when presence marks it present --
+    // the single authority for whether a picker is open on this client. A picker is
+    // not a document view, so it covers the tab bar rather than sitting below it.
+    const bool inputVisible = interaction.presence().isPresent(
+        UiNodeId{std::string{kHeaderPromptInputNodeId}});
+    const bool showTabBar = !inputVisible;
 
     // Region geometry comes from the box-tree solver.
     // Sizing POLICY stays here: the panel width is decided with the same rule as
@@ -357,77 +362,24 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             request.chromeProviderResolver
                 ? request.chromeProviderResolver
                 : [](std::string_view) { return std::optional<ResolvedProvider>{}; };
-        // Status fields FIRST, anchored at the header's left edge, so their
-        // position does not depend on the input line's contents: typing into a
-        // picker must not slide the working directory and branch rightward or
-        // collapse them out.
-        //
-        // The input line's needs are subtracted from the fields' width BEFORE
-        // they are laid out, never after. Emitting fields first and then pulling
-        // the input line back over them would overlap two nodes on the same
-        // cells, and hit-testing takes the FIRST node containing a cell, so a
-        // click on visible query cells would dispatch the field's command.
-        // Reserving up front keeps the fields' own collapse-rank logic the one
-        // mechanism that decides what fits.
-        const int headerRight = view.header->right();
-        int fieldWidth = view.header->width;
-        if (request.inputLineActive) {
-            const int reserved = std::min(
-                request.style.inputLineReservation(), view.header->width);
-            fieldWidth = std::max(0, view.header->width - reserved);
-        }
-
-        // Header status fields are a WidgetStack LEFT collapse group over the
-        // field width. The input line's fixed
-        // reservation is already subtracted from `fieldWidth`, so the fields
-        // collapse independently of the query -- the reservation is the floor
-        // that protects the input's room, and the fields never reflow as the
-        // user types. The input line + ghost keep the
-        // `layoutTextInput` seam below (they become a prompt-mode TextInput
-        // widget in the focus phase, where reserve/grow/ghost geometry is
-        // designed rather than shoehorned into a stack item).
-        int headerX = view.header->x;
+        // The header lowers its status groups AND the prompt input in one pass: the
+        // input's fixed reservation is a floor subtracted from the groups' width
+        // before they collapse (so typing never reflows the working directory and
+        // branch), then the input grows across the header's remaining width after
+        // them. A composed header REPLACES the built-in status fields but keeps this
+        // same input placement, so the query line follows whichever left group is
+        // present.
         const UiNode* headerRegion = schemaArea(schema.schema(), kHeaderNodeId);
         if (headerRegion) {
-            // A composed header REPLACES the built-in status fields, laid out
-            // over the SAME fieldWidth the built-in uses so the input-line
-            // reservation floor is honored (header is left-group only). headerX
-            // advances
-            // to the group's consumed right edge -- which INCLUDES node-less
-            // Spacers -- so the input line follows the whole group, never over a
-            // spacer's cells.
+            const PromptInputProjection promptProjection{inputVisible,
+                                                         promptInput.query,
+                                                         promptInput.ghost};
             const auto lowered = lowerUiChromeRegion(
                 *headerRegion,
-                {view.header->x, view.header->y, fieldWidth, 1},
+                {view.header->x, view.header->y, view.header->width, 1},
                 ShellNodeKind::HeaderField, SemanticRole::Header, request.style,
-                chromeResolver, view.accessibilityNodes);
+                chromeResolver, view.accessibilityNodes, nullptr, &promptProjection);
             if (!lowered.ok()) throw std::invalid_argument(*lowered.error);
-            headerX = std::max(headerX, lowered.rightEdge);
-        }
-        // A space between the fields and whatever follows them.
-        if (headerX > view.header->x) ++headerX;
-
-        // The input line occupies this slot when a picker is open. The query and
-        // its completion ghost are one widget computation (layoutInputLine owns
-        // the caret reservation, tail scroll, and ghost clamp); ShellState only
-        // stamps the resulting text/widths into nodes and the renderer derives
-        // the caret from the published geometry.
-        if (request.inputLineActive) {
-            const int available = std::max(0, headerRight - headerX);
-            const auto line = layoutInputLine(request.style.inputLineSigil,
-                                              request.inputLineQuery,
-                                              request.inputLineGhost, available);
-            addNode(view, ShellNodeKind::HeaderField, "input_line.query",
-                     "Input line", {headerX, view.header->y, line.width, 1},
-                     SemanticRole::Prompt, line.text);
-            headerX += line.width;
-            if (line.ghostWidth > 0) {
-                addNode(view, ShellNodeKind::HeaderField, "input_line.ghost",
-                         "Input line completion",
-                         {headerX, view.header->y, line.ghostWidth, 1},
-                         SemanticRole::LineNumber, line.ghostText);
-                headerX += line.ghostWidth;
-            }
         }
         const UiNode* footerRegion = schemaArea(schema.schema(), kFooterNodeId);
         if (footerRegion) {

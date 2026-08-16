@@ -121,6 +121,11 @@ inline constexpr std::string_view kGitStatusNodeId = "gitstatus";
 inline constexpr std::string_view kSymbolsNodeId = "symbols";
 inline constexpr std::string_view kTabViewNodeId = "tabview";
 inline constexpr std::string_view kFindResultsNodeId = "findresults";
+// The header's single-line prompt input (command palette, file finder, ...). An
+// always-assembled TextInput leaf, trailing the header's status groups, hidden by
+// presence unless a header-region prompt is open. The grid host derives the caret
+// from its emitted geometry; a client owns the query prediction locally.
+inline constexpr std::string_view kHeaderPromptInputNodeId = "input_line";
 
 // The typed well-known areas: a closed set a native client may key off to hand a
 // subtree to its own toolkit. A raw id string is not a placement contract; this

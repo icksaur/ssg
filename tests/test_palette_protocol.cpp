@@ -22,6 +22,7 @@ using namespace ssg;
 PaletteViewState sample() {
     PaletteViewState state;
     state.mode = SearchMode::Command;
+    state.pickerEpoch = 7;
     state.candidates = {
         {"edit.undo", "Undo", "Ctrl+Z"},
         {"file.save", "Save File", ""},
@@ -35,6 +36,40 @@ TEST(encodeDecodeRoundTripsExactly) {
     const auto decoded = decodePalette(encodePalette(state));
     ASSERT_TRUE(decoded.has_value());
     if (decoded) ASSERT_TRUE(*decoded == state);
+}
+
+TEST(pickerEpochRoundTripsAndDistinguishesReopens) {
+    // The reopen identity survives the wire so a client can reset its local query
+    // when a same-kind picker reopens (the epoch advances while presence never
+    // toggles). Two states differing ONLY in epoch decode as distinct.
+    PaletteViewState first = sample();
+    first.pickerEpoch = 41;
+    PaletteViewState second = sample();
+    second.pickerEpoch = 42;
+    const auto a = decodePalette(encodePalette(first));
+    const auto b = decodePalette(encodePalette(second));
+    ASSERT_TRUE(a.has_value() && b.has_value());
+    if (a && b) {
+        ASSERT_EQ(a->pickerEpoch, 41u);
+        ASSERT_EQ(b->pickerEpoch, 42u);
+        ASSERT_FALSE(*a == *b);
+    }
+}
+
+TEST(decodeMissingPickerEpochAsZero) {
+    // picker_epoch is additive for version-1 compatibility: old frames without it
+    // decode as the initial epoch while new frames still round-trip a real reopen
+    // identity.
+    ProtocolValue value = ProtocolValue::makeObject(
+        {{"mode", ProtocolValue::makeUint(4)},
+         {"candidates", ProtocolValue::makeArray({})},
+         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
+         {"max_parameter_magnitude",
+          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
+    const auto decoded = decodePalette(value);
+    ASSERT_TRUE(decoded.has_value());
+    if (decoded) ASSERT_EQ(decoded->pickerEpoch, std::uint64_t{0});
 }
 
 TEST(publishedParametersAreTheLibraryDefaults) {
@@ -179,6 +214,8 @@ TEST(decodeRejectsOversizedCandidate) {
 
 int main() {
     RUN(encodeDecodeRoundTripsExactly);
+    RUN(pickerEpochRoundTripsAndDistinguishesReopens);
+    RUN(decodeMissingPickerEpochAsZero);
     RUN(publishedParametersAreTheLibraryDefaults);
     RUN(decodeRejectsCandidateMissingAField);
     RUN(decodeRejectsParametersMissingAField);

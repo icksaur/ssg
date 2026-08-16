@@ -94,9 +94,11 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         ssg::FocusTarget::Editor,
     };
     result.ui =
-        ssg::UiSchema{ssg::Generation{marker.size()},
+        ssg::UiSchema{                      ssg::Generation{marker.size()},
                       ssg::assembleWholeScreen({}, "help.open",
-                                               ssg::StyleDimensions{}, std::nullopt)
+                                               ssg::StyleDimensions{},
+                                               ssg::Style{}.inputLineSigil,
+                                               std::nullopt)
                           .root};
     const auto validated = ssg::ValidatedSchema::validate(result.ui).takeSchema();
     result.uiState = ssg::resolveUiState(validated, [](std::string_view) {
@@ -130,6 +132,7 @@ ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
         ssg::UiSchema{ssg::Generation{marker.size()},
                       ssg::assembleWholeScreen({}, "help.open",
                                                ssg::StyleDimensions{},
+                                               ssg::Style{}.inputLineSigil,
                                                validatedComposition)
                           .root};
     // Resolve the dynamic state for the same schema (a resolver mapping the one

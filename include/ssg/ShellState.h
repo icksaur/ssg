@@ -21,6 +21,16 @@
 namespace ssg {
 
 struct StatusViewState;
+class UiInteractionState;
+
+// The header prompt input's grid-only text sidecar: the query and ghost that
+// `computeShellLayout` lowers into the input_line nodes when the header prompt is
+// present. Threaded alongside the interaction state rather than carried on the
+// schema, because the query is a client-local prediction, not semantic state.
+struct PromptInputReport {
+    std::string query;
+    std::string ghost;
+};
 
 class PaneId {
 public:
@@ -127,12 +137,6 @@ struct ShellLayoutRequest {
     bool panelPresent = false;
     FocusTarget focus = FocusTarget::Editor;
     std::vector<TabLabel> tabs;
-    // The header's single-line text input, shared by every picker (command
-    // palette, file finder, ...).  Named for the surface
-    // rather than one of its callers.
-    bool inputLineActive = false;  // A picker is open on this client.
-    std::string inputLineQuery;    // The client's current query text.
-    std::string inputLineGhost;    // Fish-style completion of the top candidate.
     // Dimensions and chrome glyphs this layout is computed against.  Defaults
     // reproduce the shipped appearance.
     Style style;
@@ -256,12 +260,14 @@ private:
 
     friend ShellLayoutResult computeShellLayout(const ShellLayoutRequest&,
                                                 const ShellState&,
-                                                const ValidatedSchema&,
-                                                const StatusViewState&);
+                                                const UiInteractionState&,
+                                                const StatusViewState&,
+                                                const PromptInputReport&);
 };
 
 [[nodiscard]] ShellLayoutResult computeShellLayout(
     const ShellLayoutRequest& request, const ShellState& state,
-    const ValidatedSchema& schema, const StatusViewState& statusView);
+    const UiInteractionState& interaction, const StatusViewState& statusView,
+    const PromptInputReport& promptInput);
 
 } // namespace ssg

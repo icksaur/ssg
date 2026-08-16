@@ -35,12 +35,19 @@ std::vector<StatusFieldCatalogEntry> catalog() {
 }
 
 UiComposition assemble(const StyleDimensions& dims) {
-    return assembleWholeScreen(catalog(), "help.open", dims, std::nullopt);
+    return assembleWholeScreen(catalog(), "help.open", dims,
+                               Style{}.inputLineSigil, std::nullopt);
 }
 
 ValidatedSchema schemaOf(const StyleDimensions& dims) {
     auto result = ValidatedSchema::validate(
         UiSchema{Generation{0}, assemble(dims).root});
+    ASSERT_TRUE(result.ok());
+    return result.takeSchema();
+}
+
+ValidatedSchema schemaWithoutPromptInput() {
+    auto result = ValidatedSchema::validate(UiSchema{Generation{0}, emptyUiRoot()});
     ASSERT_TRUE(result.ok());
     return result.takeSchema();
 }
@@ -135,6 +142,13 @@ TEST(promptFocusAnchorsOnTheRegionHost) {
     ASSERT_FALSE(present(s, kFindResultsNodeId));
 }
 
+TEST(headerPromptRequiresTheInputLineSchemaNode) {
+    WholeScreenTruth truth;
+    ASSERT_THROWS(buildWholeScreenInteraction(schemaWithoutPromptInput(), truth,
+                                              PromptRegion::Header),
+                  std::logic_error);
+}
+
 TEST(baseFocusNeverStrandsOnAnAbsentPanel) {
     WholeScreenTruth truth;
     truth.panelPresent = false;
@@ -181,6 +195,39 @@ TEST(rebuildOverANewGenerationPreservesTruthAndResetsBasis) {
     ASSERT_EQ(g1.presence().basis().value(), std::uint64_t{0});
 }
 
+// --- The header prompt input line: presence gating + focus anchoring ----------------
+
+TEST(theInputLineIsVisibleOnlyForAHeaderPromptAndCapturesTheInputNode) {
+    // Closed: the prompt input is hidden (no picker on this client).
+    WholeScreenTruth closed;
+    const auto a = buildWholeScreenInteraction(schemaOf({}), closed);
+    ASSERT_FALSE(present(a, kHeaderPromptInputNodeId));
+
+    // A footer-region prompt does NOT reveal the header input line: only a
+    // header-region prompt hosts its query there.
+    const auto f =
+        buildWholeScreenInteraction(schemaOf({}), closed, PromptRegion::Footer);
+    ASSERT_FALSE(present(f, kHeaderPromptInputNodeId));
+    // The footer prompt captures the footer host, not the input line.
+    ASSERT_TRUE(f.focus().top() != nullptr);
+    if (f.focus().top())
+        ASSERT_EQ(f.focus().top()->node.value(), std::string{kFooterNodeId});
+
+    // A header-region prompt reveals the input line AND anchors the capture on the
+    // input_line NODE itself, so keystrokes route to the query node, not merely to
+    // the header container.
+    WholeScreenTruth open;
+    open.openPicker = PickerKind::Command;
+    const auto h =
+        buildWholeScreenInteraction(schemaOf({}), open, PromptRegion::Header);
+    ASSERT_TRUE(present(h, kHeaderPromptInputNodeId));
+    ASSERT_TRUE(h.effectiveFocus() == FocusTarget::Prompt);
+    ASSERT_TRUE(h.focus().top() != nullptr);
+    if (h.focus().top())
+        ASSERT_EQ(h.focus().top()->node.value(),
+                  std::string{kHeaderPromptInputNodeId});
+}
+
 }  // namespace
 
 int main() {
@@ -191,6 +238,8 @@ int main() {
     RUN(exactlyTheSelectedProviderIsPresent);
     RUN(contentShowsTabViewXorFindResultsByFinderState);
     RUN(promptFocusAnchorsOnTheRegionHost);
+    RUN(headerPromptRequiresTheInputLineSchemaNode);
+    RUN(theInputLineIsVisibleOnlyForAHeaderPromptAndCapturesTheInputNode);
     RUN(baseFocusNeverStrandsOnAnAbsentPanel);
     RUN(rebuildOverANewGenerationPreservesTruthAndResetsBasis);
     return failed;

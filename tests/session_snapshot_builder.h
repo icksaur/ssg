@@ -22,6 +22,7 @@
 // enlarge the public library surface.
 
 #include <ssg/GraphemeLayout.h>
+#include <ssg/InteractionState.h>
 #include <ssg/Renderer.h>
 #include <ssg/ShellState.h>
 #include <ssg/StatusQueue.h>
@@ -110,6 +111,16 @@ public:
         return *this;
     }
 
+    // Drive the header prompt input (palette query line): when `visible`, make it
+    // present and set the grid-only query/ghost sidecar, as the runtime does when a
+    // picker is open. When not visible, the input stays hidden.
+    SessionSnapshotBuilder& promptInput(bool visible, std::string query,
+                                        std::string ghost = {}) {
+        if (visible)
+            promptInput_ = PromptInputReport{std::move(query), std::move(ghost)};
+        return *this;
+    }
+
     SessionSnapshotBuilder& schema(ValidatedSchema schema) {
         schema_ = std::move(schema);
         return *this;
@@ -142,11 +153,19 @@ public:
         if (!schema_) {
             UiSchema schema;
             schema.root = assembleWholeScreen({}, "help.open", style_.dimensions,
-                                              std::nullopt).root;
+                                              style_.inputLineSigil, std::nullopt)
+                              .root;
             defaultSchema = ValidatedSchema::validate(std::move(schema)).takeSchema();
         }
         const ValidatedSchema& schema = schema_ ? *schema_ : *defaultSchema;
-        auto layout = computeShellLayout(request, shell, schema, status_);
+        std::vector<UiNodeId> hidden;
+        const UiNodeId inputId{std::string{kHeaderPromptInputNodeId}};
+        // The prompt input is present iff a picker is open (a query was supplied);
+        // otherwise it is hidden, matching the runtime's presence gating.
+        if (schema.contains(inputId) && !promptInput_) hidden.push_back(inputId);
+        UiInteractionState interaction{schema, std::move(hidden)};
+        auto layout = computeShellLayout(request, shell, interaction, status_,
+                                         promptInput_.value_or(PromptInputReport{}));
 
         ViewportDimensions const dimensions{
             static_cast<std::uint32_t>(columns_),
@@ -225,6 +244,7 @@ private:
     std::vector<std::function<void(ShellLayoutRequest&)>> shellMutators_;
     Style style_{};
     std::optional<ValidatedSchema> schema_;
+    std::optional<PromptInputReport> promptInput_;
     StatusViewState status_;
 };
 

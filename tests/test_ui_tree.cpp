@@ -32,7 +32,9 @@ UiSchema canonicalWholeScreenSchema() {
     ssg::StyleDimensions dimensions;
     UiSchema schema;
     schema.root =
-        ssg::assembleWholeScreen({}, "help.open", dimensions, std::nullopt).root;
+        ssg::assembleWholeScreen({}, "help.open", dimensions,
+                                 ssg::Style{}.inputLineSigil, std::nullopt)
+            .root;
     return schema;
 }
 

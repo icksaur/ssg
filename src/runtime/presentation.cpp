@@ -333,7 +333,9 @@ void registerAppearanceCommands(EditorSessionBuilder& builder,
                                 // adopt the style, so a failure cannot leave layout and the
                                 // interaction schema inconsistent.
                                 runtime.rebuildInteractionSchema(
-                                    result.style.dimensions, runtime.composedUi);
+                                    result.style.dimensions,
+                                    result.style.inputLineSigil,
+                                    runtime.composedUi);
                                 runtime.style = std::move(result.style);
                                 return success();
                             });

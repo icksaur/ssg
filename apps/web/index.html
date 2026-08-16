@@ -20,14 +20,15 @@
   #chrome-error { padding:2px 8px; color:var(--ssg-status-warning); font-weight:bold; }
   #doc { margin:0; padding:8px; white-space:pre-wrap; outline:none; min-height:80vh; }
   #doc .sel { background:var(--ssg-selection); }
-  #doc .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
+  #doc .caret, #chrome-top .input-line .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
+  #chrome-top .input-line { margin-left:1ch; }
   #palette { display:none; position:fixed; top:0; left:0; right:0; border-bottom:2px solid;
              background:var(--ssg-canvas); color:var(--ssg-text); max-height:60vh; overflow:auto; }
   #palette.open { display:block; }
   #palette .query { padding:4px 8px; border-bottom:1px solid; }
   #palette .row { padding:2px 8px; display:flex; gap:8px; }
   #palette .row.sel { background:var(--ssg-selection); }
-  #palette .row .detail { opacity:.55; }
+  #palette .row .detail { opacity:.55; margin-left:auto; }
 </style>
 <div id="status">connecting...</div>
 <div id="chrome-error"></div>

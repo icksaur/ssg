@@ -205,11 +205,20 @@ inline RowView rowOf(const ssg::UiNode& regionRoot) {
     using namespace ssg;
     RowView v;
     const auto& root = std::get<UiContainer>(regionRoot.content);
-    const auto& left = std::get<UiContainer>(root.children[0].content);
+    // The header may carry the prompt-input TextInput as a non-group sibling; skip
+    // it so the three collapse groups are reconstructed regardless of its position
+    // (mirroring the production lowering's extract-by-id).
+    std::vector<const ssg::UiNode*> groups;
+    for (const auto& child : root.children) {
+        const auto* leaf = std::get_if<UiLeaf>(&child.content);
+        if (leaf && leaf->widget.kind == WidgetKind::TextInput) continue;
+        groups.push_back(&child);
+    }
+    const auto& left = std::get<UiContainer>(groups[0]->content);
     v.separator = left.gap.extent();
     for (const auto& c : left.children)
         v.left.push_back(std::get<UiLeaf>(c.content).widget);
-    const auto& middle = std::get<UiContainer>(root.children[1].content);
+    const auto& middle = std::get<UiContainer>(groups[1]->content);
     if (!middle.children.empty()) {
         v.center = std::get<UiLeaf>(middle.children[0].content).widget;
         const auto size = middle.children[0].size;
@@ -218,7 +227,7 @@ inline RowView rowOf(const ssg::UiNode& regionRoot) {
             v.centerFixed = size.extent();
         }
     }
-    const auto& right = std::get<UiContainer>(root.children[2].content);
+    const auto& right = std::get<UiContainer>(groups[2]->content);
     for (const auto& c : right.children)
         v.right.push_back(std::get<UiLeaf>(c.content).widget);
     return v;

@@ -228,13 +228,15 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     // prompt does not inherit palette-picker plumbing.
     bool const paletteOpen = interaction.prompt().active() && interaction.prompt().request() &&
                               interaction.prompt().request()->kind == PromptKind::Palette;
+    // The prompt input's visibility is owned by presence (set when a header prompt
+    // is open); its query/ghost text is a grid-only sidecar, ignored when hidden.
+    PromptInputReport promptInput;
     if (headerPrompt) {
-        request.inputLineActive = true;
-        request.inputLineQuery = paletteReport.query;
-        request.inputLineGhost = paletteReport.ghost;
+        promptInput.query = paletteReport.query;
+        promptInput.ghost = paletteReport.ghost;
     }
-    auto result = computeShellLayout(request, shell, interaction.interaction().schema(),
-                                     promptStatus.status);
+    auto result = computeShellLayout(request, shell, interaction.interaction(),
+                                     promptStatus.status, promptInput);
     if (!result.accepted()) return {};
     auto view = *result.view;
 
@@ -440,6 +442,7 @@ PaletteViewState EditorRuntime::Impl::paletteView() const {
     auto const* picker = pickerCatalog().find(*interaction.openPicker());
     if (picker == nullptr) return view;
     view.mode = picker->wireMode;
+    view.pickerEpoch = interaction.pickerEpoch();
     switch (*interaction.openPicker()) {
     case PickerKind::Command:
         // Every registered command is a palette candidate, read from the live

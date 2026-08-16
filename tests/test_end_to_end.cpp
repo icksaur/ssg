@@ -168,6 +168,7 @@ void addCanonicalUi(ssg::SessionSnapshotSections& sections, ssg::Revision revisi
     sections.ui = ssg::UiSchema{
         ssg::Generation{revision.value()},
         ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                 ssg::Style{}.inputLineSigil,
                                  std::nullopt)
             .root};
     const auto validated = ssg::ValidatedSchema::validate(sections.ui).takeSchema();

@@ -31,18 +31,35 @@ struct UiChromeLowerResult {
     [[nodiscard]] bool ok() const { return !error.has_value(); }
 };
 
+// The header prompt input's grid-only projection: whether a picker is open on this
+// client and, when it is, the query text and its ghost completion. The strings
+// never enter the node tree (query prediction stays client-local); they are lowered
+// to the input_line.query/.ghost nodes only when `visible`. A footer region passes
+// no projection.
+struct PromptInputProjection {
+    bool visible = false;
+    std::string query;
+    std::string ghost;
+};
+
 // Lower a medium-agnostic chrome region (the canonical tree the chrome decoder
 // produces) DIRECTLY into accessibility nodes over `rect`, reading the
 // left/center/right groups, the separator (the left group's gap), and the center
 // width policy (the center leaf's Size) from the tree itself. The tree must be the
-// canonical chrome shape (a root container of exactly three group containers); a
-// malformed tree returns a named error and emits nothing.
+// canonical chrome shape (a root container of exactly three group containers, plus
+// the header prompt-input TextInput as a non-group sibling at any position); a
+// malformed tree returns a named error and emits nothing. The prompt input is
+// extracted by its well-known id (not by position), and when `input` is visible it
+// is placed by the reserve/expand rule: its fixed reservation is subtracted from the
+// groups' width first, then the input grows across the header's remaining width
+// after them.
 [[nodiscard]] UiChromeLowerResult lowerUiChromeRegion(
     const UiNode& regionRoot, const Rect& rect, ShellNodeKind regionNodeKind,
     SemanticRole defaultRole, const Style& style,
     const ChromeProviderResolver& resolveProvider,
     std::vector<AccessibilityNode>& out,
-    const StatusViewState* statusView = nullptr);
+    const StatusViewState* statusView = nullptr,
+    const PromptInputProjection* input = nullptr);
 
 // Resolve the dynamic node state for a VALIDATED composed schema: one UiNodeState
 // per node (every node present), each leaf resolved to its semantic

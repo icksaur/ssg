@@ -10,6 +10,7 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -24,7 +25,7 @@ std::vector<AccessibilityNode> lowerHeaderFieldsFromAssembly(
     const std::optional<ValidatedComposition>& override = std::nullopt) {
     UiSchema uiSchema;
     uiSchema.root = assembleWholeScreen(catalog, "help.open", style.dimensions,
-                                      override).root;
+                                       style.inputLineSigil, override).root;
     auto validated = ValidatedSchema::validate(std::move(uiSchema));
     ASSERT_TRUE(validated.ok());
     const auto validatedSchema = validated.takeSchema();
@@ -290,6 +291,151 @@ TEST(statusActionItemsCollapseBeforeHintAndFieldsAtNarrowWidth) {
     ASSERT_EQ(out[1].id, std::string{"second"});
 }
 
+// Lower a real assembled header at `width` with a prompt-input projection, returning
+// the emitted nodes. The header carries the always-present trailing TextInput leaf.
+std::vector<AccessibilityNode> lowerHeaderWithPromptInput(int width, std::string query,
+                                                          std::string ghost,
+                                                          bool visible,
+                                                          const Style& style) {
+    UiSchema uiSchema;
+    uiSchema.root = assembleWholeScreen(
+                        {{"active_command", "Active command", StatusFieldRegion::Header, 0},
+                         {"current_path", "Current path", StatusFieldRegion::Header, 1}},
+                        "help.open", style.dimensions, style.inputLineSigil,
+                        std::nullopt)
+                        .root;
+    auto validated = ValidatedSchema::validate(std::move(uiSchema));
+    ASSERT_TRUE(validated.ok());
+    const auto schema = validated.takeSchema();
+    const auto* root = std::get_if<UiContainer>(&schema.schema().root.content);
+    ASSERT_TRUE(root != nullptr);
+    const UiNode* headerRegion = nullptr;
+    for (const auto& child : root->children)
+        if (child.id.value() == kHeaderNodeId) headerRegion = &child;
+    ASSERT_TRUE(headerRegion != nullptr);
+    const auto resolver = resolverFrom(
+        {{"active_command", {"INSERT", "Active command", std::nullopt}},
+         {"current_path", {"src/main.cpp", "Current path", std::nullopt}}});
+    const PromptInputProjection input{visible, std::move(query), std::move(ghost)};
+    std::vector<AccessibilityNode> out;
+    const auto lowered = lowerUiChromeRegion(
+        *headerRegion, {0, 0, width, 1}, ShellNodeKind::HeaderField,
+        SemanticRole::Header, style, resolver, out, nullptr, &input);
+    ASSERT_TRUE(lowered.ok());
+    return out;
+}
+
+const AccessibilityNode* nodeById(const std::vector<AccessibilityNode>& nodes,
+                                  std::string_view id) {
+    for (const auto& n : nodes)
+        if (n.id == id) return &n;
+    return nullptr;
+}
+
+std::vector<AccessibilityNode> groupNodesOnly(std::vector<AccessibilityNode> v) {
+    std::erase_if(v, [](const AccessibilityNode& n) {
+        return n.id.rfind("input_line", 0) == 0;
+    });
+    return v;
+}
+
+// Kind: seam. The prompt input lowers by the reserve/expand rule: its fixed
+// reservation is a floor subtracted before the groups pack, so the status fields
+// never reflow as the query grows; the input then expands across the header's
+// remaining width, scrolls a long query's tail under the pinned sigil, and clamps
+// its ghost to the leftover cells. When hidden it emits nothing and the groups fill
+// the whole width. Verified at a wide and a narrow width.
+TEST(thePromptInputFloorsTheFieldsGrowsAndScrollsItsTailAtEveryWidth) {
+    const Style style = defaultStyle();
+    const std::string longQuery = std::string(300, 'x') + "TAIL";
+
+    for (const int width : {80, 40}) {
+        const auto shortQ = lowerHeaderWithPromptInput(width, "ab", "", true, style);
+        const auto longQ = lowerHeaderWithPromptInput(width, longQuery, "", true, style);
+
+        // Field stability: the fields lower identically regardless of the query,
+        // because the reservation floor is subtracted before they pack.
+        ASSERT_TRUE(groupNodesOnly(shortQ) == groupNodesOnly(longQ));
+
+        // The query node stays inside the header and pins the sigil.
+        const auto* shortNode = nodeById(shortQ, "input_line.query");
+        ASSERT_TRUE(shortNode != nullptr);
+        if (shortNode) {
+            ASSERT_TRUE(shortNode->role == SemanticRole::Prompt);
+            ASSERT_TRUE(shortNode->rect.right() <= width);
+            ASSERT_TRUE(shortNode->content.rfind(style.inputLineSigil, 0) == 0);
+        }
+
+        // Long-tail scroll: the visible query shows its END (ends with the tail)
+        // and is far shorter than the whole query, proving the head scrolled off.
+        const auto* longNode = nodeById(longQ, "input_line.query");
+        ASSERT_TRUE(longNode != nullptr);
+        if (longNode) {
+            ASSERT_TRUE(longNode->content.size() >= 4);
+            ASSERT_TRUE(longNode->content.compare(longNode->content.size() - 4, 4,
+                                                  "TAIL") == 0);
+            ASSERT_TRUE(longNode->content.size() < longQuery.size());
+            ASSERT_TRUE(longNode->rect.right() <= width);
+        }
+    }
+
+    // Ghost clamp + exact adjacency: the ghost sits immediately after the query,
+    // clamped to its own display cells, and carries the LineNumber role.
+    const auto withGhost = lowerHeaderWithPromptInput(80, "ab", "cdef", true, style);
+    const auto* query = nodeById(withGhost, "input_line.query");
+    const auto* ghost = nodeById(withGhost, "input_line.ghost");
+    ASSERT_TRUE(query != nullptr && ghost != nullptr);
+    if (query && ghost) {
+        ASSERT_TRUE(ghost->role == SemanticRole::LineNumber);
+        ASSERT_EQ(ghost->rect.width, 4);
+        ASSERT_EQ(ghost->rect.x, query->rect.right());
+        ASSERT_TRUE(ghost->rect.right() <= 80);
+    }
+
+    // A query filling the row leaves only the held-back caret column, so the ghost
+    // clamps to that single cell -- far under its own display width.
+    const auto filled =
+        lowerHeaderWithPromptInput(40, std::string(300, 'x'), "ghost", true, style);
+    const auto* filledGhost = nodeById(filled, "input_line.ghost");
+    ASSERT_TRUE(filledGhost != nullptr);
+    if (filledGhost) ASSERT_EQ(filledGhost->rect.width, 1);
+
+    // Hidden: no input nodes at all, and the groups fill the width unreserved.
+    const auto hidden = lowerHeaderWithPromptInput(80, "ab", "cd", false, style);
+    ASSERT_TRUE(nodeById(hidden, "input_line.query") == nullptr);
+    ASSERT_TRUE(nodeById(hidden, "input_line.ghost") == nullptr);
+}
+
+TEST(aVisiblePromptProjectionWithoutTheCanonicalNodeEmitsNoInputNodes) {
+    const auto region = composeFooterRegion({literal(WidgetKind::Field, "a", "A")});
+    const PromptInputProjection input{true, "query", "ghost"};
+    std::vector<AccessibilityNode> out;
+    const auto lowered =
+        lowerUiChromeRegion(region, {0, 0, 80, 1}, ShellNodeKind::HeaderField,
+                            SemanticRole::Header, defaultStyle(), resolverFrom({}),
+                            out, nullptr, &input);
+    ASSERT_TRUE(lowered.ok());
+    ASSERT_TRUE(nodeById(out, "input_line.query") == nullptr);
+    ASSERT_TRUE(nodeById(out, "input_line.ghost") == nullptr);
+}
+
+TEST(aTrailingTextInputWithTheWrongIdIsRejected) {
+    auto region = composeFooterRegion({literal(WidgetKind::Field, "a", "A")});
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::TextInput;
+    widget.id = "not_input_line";
+    UiNode input{UiNodeId{"not_input_line"}, Size::autoSize(), UiLeaf{widget}};
+    std::get<UiContainer>(region.content).children.push_back(std::move(input));
+
+    const PromptInputProjection projection{true, "query", ""};
+    std::vector<AccessibilityNode> out;
+    const auto lowered =
+        lowerUiChromeRegion(region, {0, 0, 80, 1}, ShellNodeKind::HeaderField,
+                            SemanticRole::Header, defaultStyle(), resolverFrom({}),
+                            out, nullptr, &projection);
+    ASSERT_FALSE(lowered.ok());
+}
+
 }  // namespace
 
 int main() {
@@ -301,5 +447,8 @@ int main() {
     RUN(composedProviderHeaderMatchesBuiltinSpanForSpan);
     RUN(statusActionItemsKeepTypedInvocationAndPlainFooterWidgetsKeepRegionKind);
     RUN(statusActionItemsCollapseBeforeHintAndFieldsAtNarrowWidth);
+    RUN(thePromptInputFloorsTheFieldsGrowsAndScrollsItsTailAtEveryWidth);
+    RUN(aVisiblePromptProjectionWithoutTheCanonicalNodeEmitsNoInputNodes);
+    RUN(aTrailingTextInputWithTheWrongIdIsRejected);
     return 0;
 }

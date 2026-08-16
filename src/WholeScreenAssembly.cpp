@@ -106,12 +106,42 @@ UiNode withSize(UiNode node, Size size) {
     return node;
 }
 
+// The always-assembled header prompt input: a TextInput leaf carrying only its
+// stable identity and role. Its query/ghost never ride the schema (a client owns
+// the prediction locally); the grid lowers it to input_line.query/.ghost nodes
+// only when a header prompt is open, gated by presence.
+UiNode promptInputLeaf(std::string_view promptSigil) {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::TextInput;
+    widget.id = std::string{kHeaderPromptInputNodeId};
+    widget.role = "prompt";
+    widget.sigil = std::string{promptSigil};
+    return UiNode{UiNodeId{std::string{kHeaderPromptInputNodeId}}, Size::autoSize(),
+                  UiLeaf{widget}};
+}
+
+// Insert the prompt input right after the header's left group (the status
+// fields), so tree order matches the visual order the query line occupies: a
+// client that lays out in tree order renders it immediately after the fields and
+// before the flex middle, rather than pushed to the far right past the middle.
+// The grid extracts it by id (position-independent) and places it by the
+// reserve/expand rule. Applies to both the built-in and a composed header, each
+// the canonical [left, middle, right].
+void insertPromptInput(UiNode& header, std::string_view promptSigil) {
+    if (auto* root = std::get_if<UiContainer>(&header.content)) {
+        const auto afterLeftGroup =
+            root->children.begin() + (root->children.empty() ? 0 : 1);
+        root->children.insert(afterLeftGroup, promptInputLeaf(promptSigil));
+    }
+}
+
 }  // namespace
 
 UiComposition assembleWholeScreen(
     const std::vector<StatusFieldCatalogEntry>& catalog,
     std::string_view hintCommandId,
     const StyleDimensions& dimensions,
+    std::string_view promptSigil,
     const std::optional<ValidatedComposition>& composedOverride) {
     const UiNode* composedHeader = composedArea(composedOverride, kHeaderNodeId);
     const UiNode* composedFooter = composedArea(composedOverride, kFooterNodeId);
@@ -143,7 +173,7 @@ UiComposition assembleWholeScreen(
                                         std::move(footerRight));
     header = withSize(std::move(header), Size::exact(dimensions.headerHeight));
     footer = withSize(std::move(footer), Size::exact(dimensions.footerHeight));
-
+    insertPromptInput(header, promptSigil);
     UiNode panel = container(
         kPanelNodeId, Axis::Column, Size::exact(dimensions.panelTargetWidth),
         {viewLeaf(kFileTreeNodeId, ViewSurface::FileTree, Size::flex()),

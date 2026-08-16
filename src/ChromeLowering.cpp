@@ -328,7 +328,8 @@ UiChromeLowerResult lowerUiChromeRegion(
     const UiNode& regionRoot, const Rect& rect, ShellNodeKind regionNodeKind,
     SemanticRole defaultRole, const Style& style,
     const ChromeProviderResolver& resolveProvider,
-    std::vector<AccessibilityNode>& out, const StatusViewState* statusView) {
+    std::vector<AccessibilityNode>& out, const StatusViewState* statusView,
+    const PromptInputProjection* input) {
     // The canonical chrome shape: a Row root of exactly three groups --
     // left(Auto, Row), middle(Flex, Row), right(Auto, Row) -- so the packing is
     // encoded in the sizing. Every field the shape depends on is CHECKED here (no
@@ -338,14 +339,38 @@ UiChromeLowerResult lowerUiChromeRegion(
     if (!root || root->axis != Axis::Row) {
         return {"chrome region root must be a Row container"};
     }
-    if (root->children.size() != 3) {
+    // The header's canonical prompt-input TextInput is not one of the three
+    // collapse groups: it is extracted by its well-known id (wherever it sits in
+    // tree order) and lowered separately by the reserve/expand rule below. A region
+    // without it (the footer, or a broken caller projection) leaves the three
+    // groups unchanged.
+    const WidgetDescriptor* promptInput = nullptr;
+    std::vector<const UiNode*> groups;
+    groups.reserve(root->children.size());
+    for (const UiNode& child : root->children) {
+        if (const auto* leaf = std::get_if<UiLeaf>(&child.content);
+            leaf && leaf->widget.kind == WidgetKind::TextInput) {
+            if (child.id.value() != kHeaderPromptInputNodeId ||
+                leaf->widget.id != kHeaderPromptInputNodeId) {
+                return {"chrome region prompt input must be the canonical "
+                        "input_line node"};
+            }
+            if (promptInput) {
+                return {"chrome region must have at most one prompt input"};
+            }
+            promptInput = &leaf->widget;
+            continue;
+        }
+        groups.push_back(&child);
+    }
+    if (groups.size() != 3) {
         return {"chrome region root must have exactly three groups "
                 "(left, middle, right)"};
     }
 
-    const UiNode& leftGroup = root->children[0];
-    const UiNode& middleGroup = root->children[1];
-    const UiNode& rightGroup = root->children[2];
+    const UiNode& leftGroup = *groups[0];
+    const UiNode& middleGroup = *groups[1];
+    const UiNode& rightGroup = *groups[2];
 
     const auto* leftContainer = std::get_if<UiContainer>(&leftGroup.content);
     const auto* middleContainer = std::get_if<UiContainer>(&middleGroup.content);
@@ -436,9 +461,46 @@ UiChromeLowerResult lowerUiChromeRegion(
         }
     }
 
+    // The prompt input's fixed reservation is subtracted from the groups' width
+    // BEFORE they collapse, never after -- so the status fields never reflow as the
+    // user types (the reservation is the floor protecting the input's room) and the
+    // input never overlaps their cells (hit-testing takes the first node containing a
+    // cell). When no input is visible, the groups fill the whole rect exactly as
+    // before.
+    const bool showInput = promptInput && input && input->visible;
+    Rect groupsRect = rect;
+    if (showInput) {
+        const int reserved = std::min(style.inputLineReservation(), rect.width);
+        groupsRect.width = std::max(0, rect.width - reserved);
+    }
+
     const int rightEdge = lowerChromeGroups(
         *leftWidgets, *rightWidgets, center, separator, centerWidth, centerFixed,
-        rect, regionNodeKind, defaultRole, style, resolveProvider, out, statusView);
+        groupsRect, regionNodeKind, defaultRole, style, resolveProvider, out,
+        statusView);
+
+    // The input line grows across the header's remaining width after the groups'
+    // consumed right edge (which includes node-less spacers), then scrolls its own
+    // tail and clamps its ghost inside `layoutInputLine`. The grid host derives the
+    // caret from the emitted query geometry; ShellState only stamps the text/widths.
+    if (showInput) {
+        int inputX = rightEdge;
+        if (inputX > rect.x) ++inputX;  // a space between the fields and the input
+        const int available = std::max(0, rect.x + rect.width - inputX);
+        const auto line =
+            layoutInputLine(promptInput->sigil, input->query, input->ghost, available);
+        out.push_back({regionNodeKind, "input_line.query", "Input line",
+                       {inputX, rect.y, line.width, 1}, SemanticRole::Prompt,
+                       line.text, std::nullopt, std::nullopt});
+        inputX += line.width;
+        if (line.ghostWidth > 0) {
+            out.push_back({regionNodeKind, "input_line.ghost",
+                           "Input line completion",
+                           {inputX, rect.y, line.ghostWidth, 1},
+                           SemanticRole::LineNumber, line.ghostText, std::nullopt,
+                           std::nullopt});
+        }
+    }
     return {std::nullopt, rightEdge};
 }
 

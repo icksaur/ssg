@@ -35,7 +35,7 @@ ValidatedSchema schema() {
     auto composition = assembleWholeScreen(
         {entry("path", StatusFieldRegion::Header),
          entry("mode", StatusFieldRegion::Footer)},
-        "help.open", StyleDimensions{}, std::nullopt);
+        "help.open", StyleDimensions{}, Style{}.inputLineSigil, std::nullopt);
     auto result =
         ValidatedSchema::validate(UiSchema{Generation{0}, composition.root});
     ASSERT_TRUE(result.ok());

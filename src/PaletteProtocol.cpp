@@ -91,6 +91,7 @@ ProtocolValue encodePalette(const PaletteViewState& palette) {
                       static_cast<std::uint8_t>(palette.mode))},
          {"candidates", ProtocolValue::makeArray(std::move(candidates))},
          {"parameters", encodeParameters(palette.parameters)},
+         {"picker_epoch", ProtocolValue::makeUint(palette.pickerEpoch)},
          // The parameter magnitude domain AND the candidate byte-length bound,
          // published from the library-owned constants so a non-C++ client validates
          // against the SAME bounds the C++ decoder enforces (and can prove the score
@@ -107,9 +108,11 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
     const ProtocolValue* parametersField = value.field("parameters");
     const ProtocolValue* magnitudeField = value.field("max_parameter_magnitude");
     const ProtocolValue* candidateBytesField = value.field("max_candidate_bytes");
+    const ProtocolValue* pickerEpochField = value.field("picker_epoch");
     if (!modeField || !candidatesField || !candidatesField->asArray() ||
         !parametersField || !magnitudeField || !magnitudeField->asInt() ||
-        !candidateBytesField || !candidateBytesField->asInt()) {
+        !candidateBytesField || !candidateBytesField->asInt() ||
+        (pickerEpochField && !pickerEpochField->asUint())) {
         return std::nullopt;
     }
     // The published bounds must equal the library's own -- a frame claiming a different
@@ -124,6 +127,8 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
     PaletteViewState palette;
     palette.mode = *mode;
     palette.parameters = *parameters;
+    palette.pickerEpoch =
+        pickerEpochField ? *pickerEpochField->asUint() : std::uint64_t{0};
     for (const auto& candidateValue : *candidatesField->asArray()) {
         auto candidate = decodeCandidate(candidateValue);
         if (!candidate) return std::nullopt;

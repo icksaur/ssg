@@ -34,7 +34,8 @@ StatusFieldCatalogEntry entry(std::string id, StatusFieldRegion region) {
 UiComposition assemble(const StyleDimensions& dims) {
     return assembleWholeScreen({entry("path", StatusFieldRegion::Header),
                                 entry("mode", StatusFieldRegion::Footer)},
-                               "help.open", dims, std::nullopt);
+                               "help.open", dims, Style{}.inputLineSigil,
+                               std::nullopt);
 }
 
 // A TreeModel seeded with the always-present filesystem provider (empty nodes suffice).

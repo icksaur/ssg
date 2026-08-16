@@ -282,6 +282,7 @@ check('palette-prompt detection reads the wire snake_case field names', () => {
 // --- UI-VM: profile rejection + schema/state interpretation ---
 import {
   firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, SIZE, SURFACE,
+  shouldResetLocalQuery, pickerEpochFromPalette,
 } from '../../apps/web/reconcile.mjs';
 
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
@@ -323,9 +324,11 @@ check('firstUnsupportedPrimitive accepts a supported header/footer schema', () =
   assert.equal(firstUnsupportedPrimitive(schemaOf(1, root)), null);
 });
 
-check('firstUnsupportedPrimitive rejects an unsupported widget kind (TextInput)', () => {
-  const root = rowNode('root', [leafNode('a', WIDGET.TEXT_INPUT)]);
-  assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root)), { kind: 'widget', ordinal: WIDGET.TEXT_INPUT });
+check('firstUnsupportedPrimitive accepts the prompt TextInput by default and rejects it when narrowed', () => {
+  const root = rowNode('root', [leafNode('input_line', WIDGET.TEXT_INPUT)]);
+  assert.equal(firstUnsupportedPrimitive(schemaOf(1, root)), null);
+  const profile = { ...WEB_UI_PROFILE, widgets: new Set([...WEB_UI_PROFILE.widgets].filter((w) => w !== WIDGET.TEXT_INPUT)) };
+  assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root), profile), { kind: 'widget', ordinal: WIDGET.TEXT_INPUT });
 });
 
 check('firstUnsupportedPrimitive rejects a View naming a surface unsupported by a narrowed profile', () => {
@@ -503,6 +506,59 @@ check('interpretChrome Never draws a node the presence section marks absent', ()
   // Hiding just the leaf 'a' drops only it.
   const out2 = interpretChrome(schemaOf(7, root), state, presenceForSchema(7, root, ['a']));
   assert.deepEqual(drawnLeaves(out2.root).map((i) => i.id), ['b']);
+});
+
+check('interpretChrome renders the prompt TextInput as a bare anchor carrying no server query text', () => {
+  const root = rowNode('root', [
+    leafNode('active_command', WIDGET.FIELD),
+    leafNode('input_line', WIDGET.TEXT_INPUT, { role: 'prompt', sigil: '> ' }),
+  ]);
+  // The input_line node carries NO leaf state -- the browser owns the query, so a
+  // keystroke never produces a tree delta.
+  const state = { generation: 11, nodes: [
+    st('root'), st('active_command', { value: 'INSERT', label: 'INSERT' }), st('input_line', null),
+  ] };
+  const out = interpretChrome(schemaOf(11, root), state, presenceForSchema(11, root));
+  assert.ok(out);
+  const items = drawnLeaves(out.root);
+  const anchor = items.find((i) => i.id === 'input_line');
+  assert.ok(anchor, 'the anchor is drawn');
+  assert.equal(anchor.widget, WIDGET.TEXT_INPUT);
+  assert.equal(anchor.role, 16);
+  assert.equal(anchor.sigil, '> ');
+  assert.equal(anchor.text, undefined);  // no server-published query text
+});
+
+check('interpretChrome Never draws a prompt TextInput that carries server leaf state', () => {
+  const root = rowNode('root', [leafNode('input_line', WIDGET.TEXT_INPUT)]);
+  // A TextInput must NOT carry leaf state (the query is browser-owned) -- a frame
+  // that publishes one is malformed and never partially drawn.
+  const state = { generation: 12, nodes: [st('root'), st('input_line', { value: 'leaked' })] };
+  assert.equal(interpretChrome(schemaOf(12, root), state, presenceForSchema(12, root)), null);
+});
+
+check('shouldResetLocalQuery clears the query on a fresh open and a same-state reopen, not while staying open', () => {
+  // Closed -> open: reset.
+  assert.equal(shouldResetLocalQuery(true, false, 1n, 0n), true);
+  // Open -> still open, same epoch: keep the local query.
+  assert.equal(shouldResetLocalQuery(true, true, 1n, 1n), false);
+  // Open -> still open, bumped epoch (reopen without a closed frame): reset.
+  assert.equal(shouldResetLocalQuery(true, true, 2n, 1n), true);
+  // Distinct uint64 epochs above Number.MAX_SAFE_INTEGER must not collapse.
+  const high = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
+  assert.equal(shouldResetLocalQuery(true, true, high + 1n, high), true);
+  // Not open: never reset.
+  assert.equal(shouldResetLocalQuery(false, true, 5n, 1n), false);
+});
+
+check('pickerEpochFromPalette treats absent as zero and rejects malformed present values', () => {
+  assert.equal(pickerEpochFromPalette(null), 0n);
+  assert.equal(pickerEpochFromPalette({}), 0n);
+  assert.equal(pickerEpochFromPalette({ picker_epoch: 0n }), 0n);
+  assert.equal(pickerEpochFromPalette({ picker_epoch: 9 }), 9n);
+  assert.throws(() => pickerEpochFromPalette({ picker_epoch: '9' }), /picker_epoch/);
+  assert.throws(() => pickerEpochFromPalette({ picker_epoch: -1 }), /picker_epoch/);
+  assert.throws(() => pickerEpochFromPalette({ picker_epoch: Number.MAX_SAFE_INTEGER + 1 }), /picker_epoch/);
 });
 
 console.log('reconcile oracle: ' + checks + ' checks passed');
