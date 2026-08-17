@@ -117,6 +117,23 @@ PromptCommandResult InteractionAuthority::updatePromptValue(std::size_t index,
     return result;
 }
 
+PromptCommandResult InteractionAuthority::focusPromptControl(std::size_t index) {
+    // Which input owns the keyboard changes the semantic prompt view but not the
+    // tree topology, presence, or the footer.prompt focus-capture anchor -- swap
+    // only the prompt, no rebuild.
+    PromptSurface copy = prompt_;
+    PromptCommandResult result = copy.focusInput(index);
+    if (result.accepted()) prompt_ = std::move(copy);
+    return result;
+}
+
+PromptCommandResult InteractionAuthority::focusNextPromptControl() {
+    PromptSurface copy = prompt_;
+    PromptCommandResult result = copy.focusNextInput();
+    if (result.accepted()) prompt_ = std::move(copy);
+    return result;
+}
+
 void InteractionAuthority::focusEditor() {
     // Build from a prospective truth, then adopt both together -- truth_ is never mutated
     // before the projection is rebuilt.

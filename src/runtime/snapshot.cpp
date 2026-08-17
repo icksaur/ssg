@@ -16,6 +16,40 @@ namespace ssg {
 
 namespace {
 
+// Overlay the live find/replace state onto resolved prompt controls. Templated
+// over the control type so the grid PromptControlView and the geometry-free
+// PromptControl share ONE value/checked resolution -- the only difference between
+// the two renderings is geometry, never content.
+template <typename Control>
+void applyFindReplaceValues(std::vector<Control>& controls, PromptKind kind,
+                            FindReplaceViewState const& findState) {
+    if (kind != PromptKind::Find && kind != PromptKind::Replace) return;
+    for (auto& control : controls) {
+        switch (control.kind) {
+        case PromptControlKind::Input:
+            if (control.id == "find.query") control.value = findState.query;
+            else if (control.id == "replace.replacement")
+                control.value = findState.replacement;
+            break;
+        case PromptControlKind::Count: {
+            auto position =
+                findState.activeMatch ? *findState.activeMatch + 1 : 0;
+            control.value = std::to_string(position) + "/" +
+                            std::to_string(findState.matches.size());
+            break;
+        }
+        case PromptControlKind::Toggle:
+            if (control.id == "find.toggle_case")
+                control.checked = findState.options.caseSensitive;
+            else if (control.id == "find.toggle_whole_word")
+                control.checked = findState.options.wholeWord;
+            else if (control.id == "find.toggle_regex")
+                control.checked = findState.options.regex;
+            break;
+        }
+    }
+}
+
 // A resolver from projected status fields: id -> (value, label, command). Shared by
 // the grid lowering and the semantic dynamic-state resolution so a composed
 // provider widget resolves to the same values on either path.
@@ -135,33 +169,25 @@ std::optional<PromptViewState> EditorRuntime::Impl::promptProjection(
 }
 
 void EditorRuntime::Impl::projectFindReplacePrompt(PromptViewState& promptView) const {
-    if (promptView.kind != PromptKind::Find && promptView.kind != PromptKind::Replace) {
-        return;
+    applyFindReplaceValues(promptView.controls, promptView.kind,
+                           findReplace.viewState());
+}
+
+std::optional<PromptView> EditorRuntime::Impl::promptView() const {
+    auto const& request = interaction.prompt().request();
+    if (!request) return std::nullopt;
+    // Only a footer-region prompt is published here; the header-hosted palette
+    // finder lives on its own semantic channel (PaletteViewState).
+    if (promptFocusRegion(request->kind) != PromptRegion::Footer) {
+        return std::nullopt;
     }
-    auto const& findState = findReplace.viewState();
-    for (auto& control : promptView.controls) {
-        switch (control.kind) {
-            case PromptControlKind::Input:
-                if (control.id == "find.query") control.value = findState.query;
-                else if (control.id == "replace.replacement")
-                    control.value = findState.replacement;
-                break;
-            case PromptControlKind::Count: {
-                auto position = findState.activeMatch ? *findState.activeMatch + 1 : 0;
-                control.value = std::to_string(position) + "/" +
-                                std::to_string(findState.matches.size());
-                break;
-            }
-            case PromptControlKind::Toggle:
-                if (control.id == "find.toggle_case")
-                    control.checked = findState.options.caseSensitive;
-                else if (control.id == "find.toggle_whole_word")
-                    control.checked = findState.options.wholeWord;
-                else if (control.id == "find.toggle_regex")
-                    control.checked = findState.options.regex;
-                break;
-        }
-    }
+    PromptView view;
+    view.kind = request->kind;
+    view.accessibleLabel = request->accessibleLabel;
+    view.controls = resolvePromptControls(*request);
+    applyFindReplaceValues(view.controls, request->kind, findReplace.viewState());
+    view.activeInput = interaction.prompt().activeInput();
+    return view;
 }
 
 StatusFieldProjection EditorRuntime::Impl::chromeStatusFields(
@@ -342,7 +368,8 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             paletteView(),
             std::move(uiSchema),
             std::move(uiState),
-            std::move(uiPresence)};
+            std::move(uiPresence),
+            promptView()};
 }
 
 TreeViewState EditorRuntime::Impl::treeView() const {

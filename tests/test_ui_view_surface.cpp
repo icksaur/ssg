@@ -58,6 +58,7 @@ TEST(theSurfaceBackingMappingIsTheSpecifiedContract) {
     ASSERT_TRUE(has(ViewSurface::GitStatus, SnapshotSection::Tree));
     ASSERT_TRUE(has(ViewSurface::FindResults, SnapshotSection::Palette));
     ASSERT_TRUE(has(ViewSurface::Symbols, SnapshotSection::Tree));
+    ASSERT_TRUE(has(ViewSurface::FooterPrompt, SnapshotSection::PromptView));
 }
 
 // The grid chrome lowering renders only chrome widget kinds; a View reaching it is

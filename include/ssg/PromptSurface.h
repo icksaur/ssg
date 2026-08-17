@@ -97,6 +97,15 @@ struct PromptValueArguments {
                            const PromptValueArguments&) = default;
 };
 
+// Payload for `prompt.focus_control`: which input of the active prompt takes the
+// keyboard. Indexes the prompt's inputs; a value not addressing an input is
+// rejected, so a toggle or the match count can never receive focus.
+struct PromptFocusArguments {
+    std::size_t index = 0;
+    friend bool operator==(const PromptFocusArguments&,
+                           const PromptFocusArguments&) = default;
+};
+
 enum class PromptErrorCode : std::uint8_t {
     InvalidRequest,
     InvalidReservation,
@@ -115,6 +124,33 @@ struct PromptCommandResult {
     std::optional<PromptSubmission> submission;
 
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
+};
+
+// A geometry-free prompt control: the semantic PromptView's element. The grid
+// PromptControlView is this same content plus a Rect; both are resolved by the one
+// resolvePromptControls authority, so a client renders inputs/toggles/count without
+// a rect. `command` is the library command that OPERATES the control (an input's
+// update-value command, a toggle's toggle command), so a client dispatches it
+// generically without knowing find-vs-replace ids; empty for a Count.
+struct PromptControl {
+    PromptControlKind kind = PromptControlKind::Input;
+    std::string id;
+    std::string accessibleLabel;
+    std::string value;
+    bool checked = false;
+    std::string command;
+    friend bool operator==(const PromptControl&, const PromptControl&) = default;
+};
+
+// The geometry-free semantic projection of the active footer-region prompt: its
+// kind, accessible label, ordered controls, and the index (into the prompt's
+// INPUTS specifically -- never a toggle or the count) of the active input.
+struct PromptView {
+    PromptKind kind = PromptKind::CommandArgument;
+    std::string accessibleLabel;
+    std::vector<PromptControl> controls;
+    std::size_t activeInput = 0;
+    friend bool operator==(const PromptView&, const PromptView&) = default;
 };
 
 struct PromptControlView {
@@ -151,16 +187,37 @@ public:
     [[nodiscard]] PromptCommandResult open(PromptRequest request);
     [[nodiscard]] PromptCommandResult updateValue(std::size_t index,
                                                   std::string value);
+    // Focus the input at `index` (indexing the prompt's inputs only). Rejected
+    // with UnknownInput when the index does not address an input, so a toggle or
+    // the match count can never own the keyboard.
+    [[nodiscard]] PromptCommandResult focusInput(std::size_t index);
+    // Advance the active input to the next input, wrapping. A single-input prompt
+    // stays on its one input.
+    [[nodiscard]] PromptCommandResult focusNextInput();
     [[nodiscard]] PromptCommandResult submit();
     [[nodiscard]] PromptCommandResult cancel();
     [[nodiscard]] bool active() const noexcept { return request_.has_value(); }
     [[nodiscard]] const std::optional<PromptRequest>& request() const noexcept {
         return request_;
     }
+    // Which input owns the keyboard. Deterministically reset on every open/kind
+    // transition: Replace focuses its replacement input, Find and the single-input
+    // prompts focus their sole input. Always a valid index into request_->inputs
+    // while a prompt is active; 0 when none.
+    [[nodiscard]] std::size_t activeInput() const noexcept { return activeInput_; }
 
 private:
     std::optional<PromptRequest> request_;
+    std::size_t activeInput_ = 0;
 };
+
+// The one geometry-free control resolver: the active prompt's ordered controls,
+// each with the request's seeded value/checked and its operating command, WITHOUT
+// any geometry. The semantic PromptView publishes these directly; computePromptLayout
+// attaches a Rect per control to produce the grid PromptViewState. One resolver, two
+// renderings -- the grid is these controls plus geometry, never a second resolution.
+[[nodiscard]] std::vector<PromptControl> resolvePromptControls(
+    const PromptRequest& request);
 
 [[nodiscard]] std::uint8_t promptRowCount(PromptKind kind) noexcept;
 [[nodiscard]] PromptLayoutResult computePromptLayout(

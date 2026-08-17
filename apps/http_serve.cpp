@@ -68,44 +68,63 @@ constexpr std::array<WebAsset, 4> kWebAssets{{
     {"/fuzzy.mjs", "fuzzy.mjs", "text/javascript"},
 }};
 
-// Map the runtime's live focus and active prompt onto the shared routing seam,
-// so the web host makes the exact text-routing decision the TUI does. The
-// palette query is the one client-owned derived view: the browser edits it
-// locally, so an AppendPaletteQuery result dispatches nothing here. Returns true
-// when a library command was actually dispatched, so the caller settles a
-// predicted edit only once it has genuinely been resolved by the runtime.
-bool routeText(EditorRuntime& runtime, ClientId client, std::string const& text) {
-    auto snapshot = runtime.snapshot(client);
-    if (!snapshot) return false;
-    auto const& sections = snapshot->sections();
+// Reconstruct the shared routing state from the runtime's live focus, active
+// prompt, and the published semantic PromptView -- its active input and that
+// input's current value -- so append and deletion edit exactly the input the
+// library considers active, for every footer prompt kind (find, replace, and the
+// generic goto/save/settings prompts alike). The palette is the one client-owned
+// prompt: its query lives only in the browser, so it stays a bare Palette with no
+// server-held value and the seam appends client-side.
+PromptRoutingState buildPromptRouting(SessionSnapshot const& snapshot) {
+    auto const& sections = snapshot.sections();
     PromptRoutingState state;
     state.focus = sections.focus;
-    if (sections.promptStatus.activeKind) {
-        switch (*sections.promptStatus.activeKind) {
-        case PromptKind::Palette:
-            state.prompt = ActivePrompt::Palette;
-            break;
-        case PromptKind::Find:
-            state.prompt = ActivePrompt::Find;
-            state.currentValue = sections.findReplace.query;
-            break;
-        case PromptKind::Replace:
-            state.prompt = ActivePrompt::Replace;
-            state.currentValue = sections.findReplace.replacement;
-            break;
-        case PromptKind::Path:
-        case PromptKind::Settings:
-        case PromptKind::CommandArgument:
-            // The generic text prompts do not publish their current value in the
-            // semantic snapshot, so routing prompt.update_value here with only
-            // the new text would OVERWRITE the existing value, not append. Leave
-            // the prompt unset (the seam then ignores the text) until that value
-            // is in the snapshot and the DOM renderer shows these prompts; the
-            // TUI, which holds the value app-side, is unaffected.
+    if (sections.promptStatus.activeKind &&
+        *sections.promptStatus.activeKind == PromptKind::Palette) {
+        state.prompt = ActivePrompt::Palette;
+        return state;
+    }
+    if (!sections.promptView) return state;
+    auto const& view = *sections.promptView;
+    switch (view.kind) {
+    case PromptKind::Find:
+        state.prompt = ActivePrompt::Find;
+        break;
+    case PromptKind::Replace:
+        state.prompt = ActivePrompt::Replace;
+        break;
+    case PromptKind::Path:
+    case PromptKind::Settings:
+    case PromptKind::CommandArgument:
+        state.prompt = ActivePrompt::TextPrompt;
+        break;
+    case PromptKind::Palette:
+        return state;
+    }
+    state.activeInput = view.activeInput;
+    std::size_t inputIndex = 0;
+    for (auto const& control : view.controls) {
+        if (control.kind != PromptControlKind::Input) continue;
+        if (inputIndex == view.activeInput) {
+            state.currentValue = control.value;
             break;
         }
+        ++inputIndex;
     }
-    auto const route = PromptTextRouter{}.route(state, text);
+    return state;
+}
+
+// Apply one edit (append or backward delete) to the active prompt input through
+// the shared seam, so the web host makes the exact routing and delete decision
+// the TUI does. The palette query is the one client-owned derived view: the
+// browser edits it locally, so an AppendPaletteQuery/Ignore result dispatches
+// nothing here. Returns true when a library command was actually dispatched, so
+// the caller settles a predicted edit only once it has genuinely been resolved.
+bool routeEdit(EditorRuntime& runtime, ClientId client,
+               PromptTextEdit const& change) {
+    auto snapshot = runtime.snapshot(client);
+    if (!snapshot) return false;
+    auto const route = PromptTextRouter{}.edit(buildPromptRouting(*snapshot), change);
     switch (route.kind) {
     case PromptTextRoute::Kind::Dispatch:
         (void)runtime.dispatch(
@@ -116,6 +135,11 @@ bool routeText(EditorRuntime& runtime, ClientId client, std::string const& text)
         break;
     }
     return false;
+}
+
+bool routeText(EditorRuntime& runtime, ClientId client, std::string const& text) {
+    return routeEdit(runtime, client,
+                     PromptTextEdit{PromptTextEdit::Kind::Append, text});
 }
 
 // A parsed KEY:<event.code>:<mods>:<editId>:<text> frame. editId is present when
@@ -184,6 +208,18 @@ bool handleKey(EditorRuntime& runtime, ClientId client,
         (void)runtime.dispatch(client,
                                {resolution.command, runtime.revision(), {}});
         return true;
+    }
+    // Backspace / Alt+Backspace reach a footer prompt as keycodes, not text; the
+    // editor binds them in its own keymap context (resolved above), so an
+    // unresolved Backspace here means a prompt owns the keyboard. Route it through
+    // the same deletion seam the append path uses so grapheme/word semantics are
+    // identical across hosts.
+    if (stroke.code == KeyCode::Backspace) {
+        return routeEdit(runtime, client,
+                         PromptTextEdit{stroke.alt
+                                            ? PromptTextEdit::Kind::DeleteWordBack
+                                            : PromptTextEdit::Kind::DeleteGraphemeBack,
+                                        {}});
     }
     if (!frame.text.empty()) return routeText(runtime, client, frame.text);
     return false;
@@ -371,6 +407,27 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                         if (!command.empty()) {
                             (void)runtime.dispatch(
                                 client, {command, runtime.revision(), {}});
+                        }
+                        sendUpdateLocked(handle);
+                        return;
+                    }
+                    // A footer-prompt input was clicked: focus it so the next
+                    // keystroke edits it. PFOC:<inputIndex>. An index not
+                    // addressing an input is rejected by the command with no side
+                    // effect, so no separate validation is needed.
+                    if (payload.rfind("PFOC:", 0) == 0) {
+                        auto const indexText = payload.substr(5);
+                        std::lock_guard lock{*runtimeMutex};
+                        if (*attachedHandle != handle) return;
+                        std::size_t index = 0;
+                        auto const parsed = std::from_chars(
+                            indexText.data(), indexText.data() + indexText.size(),
+                            index);
+                        if (parsed.ec == std::errc{} &&
+                            parsed.ptr == indexText.data() + indexText.size()) {
+                            (void)runtime.dispatch(
+                                client, {"prompt.focus_control", runtime.revision(),
+                                         PromptFocusArguments{index}});
                         }
                         sendUpdateLocked(handle);
                         return;

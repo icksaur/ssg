@@ -98,7 +98,8 @@ bool operator==(SessionSnapshotSections const& left,
            left.focus == right.focus &&
            left.palette == right.palette &&
            left.ui == right.ui && left.uiState == right.uiState &&
-           left.uiPresence == right.uiPresence;
+           left.uiPresence == right.uiPresence &&
+           left.promptView == right.promptView;
 }
 
 bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
@@ -143,7 +144,8 @@ SessionDelta::SessionDelta(
     std::optional<FocusTarget> focus, SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows,
     UiSectionDelta ui, UiStateSectionDelta uiState,
-    UiPresenceSectionDelta uiPresence, PaletteSectionDelta palette)
+    UiPresenceSectionDelta uiPresence, PaletteSectionDelta palette,
+    PromptViewSectionDelta promptView)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -180,7 +182,8 @@ SessionDelta::SessionDelta(
       ui_{std::move(ui)},
       uiState_{std::move(uiState)},
       uiPresence_{std::move(uiPresence)},
-      palette_{std::move(palette)} {}
+      palette_{std::move(palette)},
+      promptView_{std::move(promptView)} {}
 
 SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
@@ -313,6 +316,8 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         PaletteSectionDelta{old.palette == next.palette
                                 ? std::nullopt
                                 : std::optional{next.palette}},
+        PromptViewSectionDelta{old.promptView != next.promptView,
+                               next.promptView},
     };
 }
 
@@ -406,6 +411,11 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     auto uiState = delta.uiState_.replacement.value_or(base.sections().uiState);
     auto uiPresence =
         delta.uiPresence_.replacement.value_or(base.sections().uiPresence);
+    // The semantic footer-prompt section is optional; the delta's `changed`
+    // distinguishes "closed" (replacement nullopt) from "unchanged".
+    auto promptView = delta.promptView_.changed
+                          ? delta.promptView_.replacement
+                          : base.sections().promptView;
     // A delta may replace the schema or the presence section independently; the
     // resulting pair must still correspond (same generation, same node-id set), or a
     // one-sided replacement would yield an accepted-but-inconsistent snapshot.
@@ -442,6 +452,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(ui),
         std::move(uiState),
         std::move(uiPresence),
+        std::move(promptView),
     };
     ClientSnapshotState client = base.client();
     std::optional<PresentationSnapshot> presentation;
@@ -496,7 +507,7 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     PromptProjectionDelta promptProjection,
     TreeWindowsDelta treeWindows, UiSectionDelta ui,
     UiStateSectionDelta uiState, UiPresenceSectionDelta uiPresence,
-    PaletteSectionDelta palette) const {
+    PaletteSectionDelta palette, PromptViewSectionDelta promptView) const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,
@@ -533,7 +544,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(ui),
                         std::move(uiState),
                         std::move(uiPresence),
-                        std::move(palette)};
+                        std::move(palette),
+                        std::move(promptView)};
 }
 
 }  // namespace ssg

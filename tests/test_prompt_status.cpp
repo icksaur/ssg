@@ -168,6 +168,91 @@ TEST(promptSubmitAndCancelAreNonModal) {
     ASSERT_FALSE(surface.active());
 }
 
+TEST(promptOpenResetsTheActiveInputPerKindAndOnTransition) {
+    PromptSurface surface;
+    // Replace opens focused on its replacement input (index 1), not its query.
+    ASSERT_TRUE(surface.open(request(PromptKind::Replace)).accepted());
+    ASSERT_EQ(surface.activeInput(), std::size_t{1});
+    // A kind transition re-opens and RESETS: Find focuses its sole input (0).
+    ASSERT_TRUE(surface.open(request(PromptKind::Find)).accepted());
+    ASSERT_EQ(surface.activeInput(), std::size_t{0});
+    // The single-input generic path prompt also resets to 0.
+    ASSERT_TRUE(surface.open(request(PromptKind::Path)).accepted());
+    ASSERT_EQ(surface.activeInput(), std::size_t{0});
+}
+
+TEST(promptFocusOnlyAddressesAnInputNeverAToggleOrCount) {
+    PromptSurface surface;
+    ASSERT_TRUE(surface.open(request(PromptKind::Replace)).accepted());
+    // Two inputs (query 0, replacement 1); focusing either is accepted.
+    ASSERT_TRUE(surface.focusInput(0).accepted());
+    ASSERT_EQ(surface.activeInput(), std::size_t{0});
+    ASSERT_TRUE(surface.focusInput(1).accepted());
+    ASSERT_EQ(surface.activeInput(), std::size_t{1});
+    // An index past the inputs (a toggle or the match count can never take
+    // focus) is rejected as UnknownInput and leaves the active input unchanged.
+    const auto rejected = surface.focusInput(2);
+    ASSERT_FALSE(rejected.accepted());
+    ASSERT_EQ(rejected.error->code, PromptErrorCode::UnknownInput);
+    ASSERT_EQ(surface.activeInput(), std::size_t{1});
+    // focusNextInput wraps across the inputs only.
+    ASSERT_TRUE(surface.focusNextInput().accepted());
+    ASSERT_EQ(surface.activeInput(), std::size_t{0});
+    ASSERT_TRUE(surface.focusNextInput().accepted());
+    ASSERT_EQ(surface.activeInput(), std::size_t{1});
+}
+
+TEST(theSemanticAndGridControlsComeFromTheOneResolver) {
+    // The grid PromptViewState must be the resolver's controls plus a Rect --
+    // never a second resolution. Prove it by resolving the semantic controls
+    // directly and matching each field against the grid layout's controls.
+    for (const auto kind :
+         {PromptKind::Find, PromptKind::Replace, PromptKind::Path}) {
+        const auto req = request(kind);
+        const auto semantic = resolvePromptControls(req);
+        PromptSurface surface;
+        ASSERT_TRUE(surface.open(req).accepted());
+        const auto layout = computePromptLayout(
+            surface, Rect{0, 4, 20, promptRowCount(kind)});
+        ASSERT_TRUE(layout.accepted());
+        ASSERT_EQ(semantic.size(), layout.view->controls.size());
+        for (std::size_t i = 0; i < semantic.size(); ++i) {
+            const auto& s = semantic[i];
+            const auto& g = layout.view->controls[i];
+            ASSERT_EQ(s.kind, g.kind);
+            ASSERT_EQ(s.id, g.id);
+            ASSERT_EQ(s.accessibleLabel, g.accessibleLabel);
+            ASSERT_EQ(s.value, g.value);
+            ASSERT_EQ(s.checked, g.checked);
+        }
+    }
+    // The input control carries the command that operates it -- a client never
+    // hardcodes a per-field id. With the production input ids, Find's input drives
+    // find.update_query and Replace's replacement input drives
+    // replace.update_replacement; every other input falls back to prompt.update_value.
+    PromptRequest findReq;
+    findReq.kind = PromptKind::Find;
+    findReq.accessibleLabel = "Find";
+    findReq.inputs.push_back({"find.query", "Find text", "needle"});
+    ASSERT_EQ(resolvePromptControls(findReq).front().command,
+              std::string{"find.update_query"});
+    PromptRequest replaceReq;
+    replaceReq.kind = PromptKind::Replace;
+    replaceReq.accessibleLabel = "Replace";
+    replaceReq.inputs.push_back({"find.query", "Find text", "needle"});
+    replaceReq.inputs.push_back({"replace.replacement", "Replacement text", "value"});
+    const auto replaceControls = resolvePromptControls(replaceReq);
+    ASSERT_EQ(replaceControls.at(0).command, std::string{"find.update_query"});
+    ASSERT_EQ(replaceControls.at(1).command,
+              std::string{"replace.update_replacement"});
+    PromptRequest pathReq;
+    pathReq.kind = PromptKind::Path;
+    pathReq.accessibleLabel = "Path";
+    pathReq.inputs.push_back({"path", "Path", "/tmp"});
+    ASSERT_EQ(resolvePromptControls(pathReq).front().command,
+              std::string{"prompt.update_value"});
+}
+
 StatusItem status(std::uint64_t id, StatusPriority priority,
                   std::string text, std::vector<StatusAction> actions = {}) {
     return StatusItem{StatusId{id}, priority, std::move(text),
@@ -288,6 +373,9 @@ int main() {
     RUN(eachPromptKindComposesItsControlsWithinTheReservation);
     RUN(promptRowsAndInvalidReservationAreTyped);
     RUN(promptSubmitAndCancelAreNonModal);
+    RUN(promptOpenResetsTheActiveInputPerKindAndOnTransition);
+    RUN(promptFocusOnlyAddressesAnInputNeverAToggleOrCount);
+    RUN(theSemanticAndGridControlsComeFromTheOneResolver);
     RUN(statusPriorityAndNavigationTransitionTable);
     RUN(statusCapacityAdmissionAndEvictionTable);
     RUN(statusStaleActionsAreRejectedWithoutMutation);

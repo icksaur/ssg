@@ -13,6 +13,7 @@ import {
   encodePaletteSubmit, applySessionDeltaSections, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE,
   encodeStatusActionInvocation, shouldResetLocalQuery, pickerEpochFromPalette,
+  promptViewFromSections, PROMPT_CONTROL, promptFocusPlan, promptFocusControlMessage,
 } from '/reconcile.mjs';
 import { fuzzyRank } from '/fuzzy.mjs';
 
@@ -23,6 +24,7 @@ const paletteEl = document.getElementById('palette');
 const chromeTopEl = document.getElementById('chrome-top');
 const chromeBottomEl = document.getElementById('chrome-bottom');
 const chromeErrorEl = document.getElementById('chrome-error');
+const promptEl = document.getElementById('prompt');
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString() : x);
@@ -441,6 +443,102 @@ function renderChrome(sections) {
   return renderedBody;
 }
 
+// The footer prompt (find, replace, goto-line/command-argument, save-path,
+// settings) renders into #prompt, a PERSISTENT container the chrome rebuild never
+// touches -- so the focused container survives every re-render and focus is moved
+// only on open and on active-input change, never per message. The container holds
+// keyboard focus (tabindex=0, aria-activedescendant naming the active input); its
+// child inputs are role=textbox but non-focusable, so a screen reader tracks the
+// active input without the browser moving focus into it. The container is a
+// role=group so it can own aria-activedescendant across every prompt kind.
+const promptInputElementId = (index) => 'prompt-input-' + index;
+
+let footerPromptOpen = false;
+let footerPromptActiveInput = -1;
+let savedFocusEl = null;
+
+function buildPromptControls(pv) {
+  promptEl.textContent = '';
+  let inputIndex = 0;
+  for (const control of pv.controls) {
+    if (control.kind === PROMPT_CONTROL.INPUT) {
+      const index = inputIndex++;
+      const active = index === pv.activeInput;
+      const el = document.createElement('span');
+      el.className = 'prompt-control prompt-input' + (active ? ' active' : '');
+      el.id = promptInputElementId(index);
+      el.setAttribute('role', 'textbox');
+      el.setAttribute('aria-label', control.label);
+      el.textContent = control.value;
+      if (active) {
+        // Server edits append-only, so the caret sits at the input's end; the
+        // client draws it rather than round-tripping a caret offset.
+        el.appendChild(document.createElement('span')).className = 'caret';
+      }
+      // A pointer press focuses this input via the library command; preventDefault
+      // keeps focus on the container (the input is non-focusable) so the next
+      // keystroke still routes through the shared seam.
+      el.addEventListener('mousedown', (ev) => {
+        ev.preventDefault();
+        promptEl.focus({ preventScroll: true });
+        ws.send(promptFocusControlMessage(index));
+      });
+      promptEl.appendChild(el);
+    } else if (control.kind === PROMPT_CONTROL.TOGGLE) {
+      const el = document.createElement('span');
+      el.className = 'prompt-control prompt-toggle' + (control.checked ? ' checked' : '');
+      el.setAttribute('role', 'checkbox');
+      el.setAttribute('aria-checked', control.checked ? 'true' : 'false');
+      el.setAttribute('aria-label', control.label);
+      el.textContent = control.label;
+      if (control.command) {
+        el.addEventListener('mousedown', (ev) => {
+          ev.preventDefault();
+          ws.send('CMD:' + control.command);
+        });
+      }
+      promptEl.appendChild(el);
+    } else {
+      const el = document.createElement('span');
+      el.className = 'prompt-control prompt-count';
+      el.setAttribute('aria-label', control.label);
+      el.textContent = control.value;
+      promptEl.appendChild(el);
+    }
+  }
+}
+
+// Reconcile #prompt against the published semantic PromptView (null when no
+// footer-region prompt is open). Focus moves only on open and on active-input
+// change; closing restores the focus the prompt captured.
+function renderFooterPrompt(sections) {
+  const pv = promptViewFromSections(sections);
+  const plan = promptFocusPlan(
+    { open: footerPromptOpen, activeInput: footerPromptActiveInput }, pv);
+  if (!pv) {
+    if (plan.restoreFocus) {
+      promptEl.textContent = '';
+      promptEl.classList.remove('open');
+      promptEl.removeAttribute('aria-activedescendant');
+      const restore = (savedFocusEl && document.contains(savedFocusEl)) ? savedFocusEl : docEl;
+      restore.focus({ preventScroll: true });
+      savedFocusEl = null;
+    }
+    footerPromptOpen = plan.open;
+    footerPromptActiveInput = plan.activeInput;
+    return;
+  }
+  if (!footerPromptOpen) savedFocusEl = document.activeElement;
+  promptEl.classList.add('open');
+  promptEl.setAttribute('role', 'group');
+  promptEl.setAttribute('aria-label', pv.label || 'prompt');
+  buildPromptControls(pv);
+  promptEl.setAttribute('aria-activedescendant', promptInputElementId(plan.activeDescendant));
+  if (plan.focusContainer) promptEl.focus({ preventScroll: true });
+  footerPromptOpen = plan.open;
+  footerPromptActiveInput = plan.activeInput;
+}
+
 // The legacy overlay host is kept only as a closed shell; the active picker is the
 // retained FindResults surface inside the interpreted whole-screen tree.
 function renderPalette() {
@@ -481,6 +579,7 @@ function render() {
     renderDocumentInto(docEl);
   }
   renderPalette();
+  renderFooterPrompt(s);
 }
 
 let wasPaletteOpen = false;
@@ -525,13 +624,23 @@ ws.onmessage = (e) => {
 
     render();
     if (!resyncRequested) statusEl.textContent = 'live (' + e.data.byteLength + ' bytes)';
-    docEl.focus();
+    // Keep the document focused for the common editor case, but never steal focus
+    // from an open footer prompt: it owns the keyboard while it is up, and
+    // renderFooterPrompt has already placed focus on its container.
+    if (!footerPromptOpen) docEl.focus();
   } catch (err) { statusEl.textContent = 'render error: ' + err.message; }
 };
 ws.onclose = () => { statusEl.textContent += ' [closed]'; };
 ws.onerror = () => { statusEl.textContent = 'ws error'; };
 
-docEl.addEventListener('keydown', (ev) => {
+docEl.addEventListener('keydown', handleKeydown);
+// The footer prompt owns keyboard focus while open, so its container needs the
+// same handler: keystrokes and Backspace round-trip as KEY frames the shared seam
+// edits, and Tab resolves server-side to prompt.focus_next_control. Attaching to
+// the container (not document) keeps the two focus owners' handlers symmetric.
+promptEl.addEventListener('keydown', handleKeydown);
+
+function handleKeydown(ev) {
   // Ctrl/Meta chords belong to the browser: ssg's keymap uses Alt as its chord
   // modifier, so the web client never claims a Ctrl/Meta combo. Letting them
   // through keeps native zoom, copy/paste, and find working -- the browser is a
@@ -601,4 +710,4 @@ docEl.addEventListener('keydown', (ev) => {
     render();
   }
   ws.send('KEY:' + ev.code + ':' + mods + ':' + editId + ':' + text);
-});
+}

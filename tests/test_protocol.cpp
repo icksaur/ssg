@@ -722,6 +722,80 @@ TEST(sessionDeltaCarriesThePaletteSection) {
     ASSERT_TRUE(replayed.snapshot->sections().palette == after.sections().palette);
 }
 
+// The additive PromptView section: it survives a snapshot round-trip when present,
+// an absent section decodes to none (an older frame lacking it is a valid frame
+// with no footer prompt), and a changed-flagged delta both opens and CLOSES it on
+// replay -- so a native/web client can render and drive the footer prompt without
+// the grid PresentationSnapshot.
+TEST(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone) {
+    ssg::PromptView view{
+        ssg::PromptKind::Find, "Find",
+        {{ssg::PromptControlKind::Input, "find.query", "Find text", "ab", false,
+          "find.update_query"},
+         {ssg::PromptControlKind::Toggle, "case", "Case sensitive", "", true,
+          "find.toggle_case"},
+         {ssg::PromptControlKind::Count, "matches", "Match count", "1/3", false,
+          ""}},
+        0};
+
+    auto openSections = sections(ssg::Revision{5}, "alpha");
+    openSections.promptView = view;
+    auto closedLowSections = sections(ssg::Revision{4}, "alpha");
+    auto closedHighSections = sections(ssg::Revision{6}, "alpha");
+    ASSERT_FALSE(closedLowSections.promptView.has_value());
+
+    auto open = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), openSections);
+    auto closedLow = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), closedLowSections);
+    auto closedHigh = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{6}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), closedHighSections);
+
+    // Present round-trips whole; absent decodes to none.
+    auto const decodedOpen = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(open));
+    ASSERT_TRUE(decodedOpen.snapshot.has_value());
+    ASSERT_TRUE(decodedOpen.snapshot->sections().promptView == view);
+    auto const decodedClosed = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(closedLow));
+    ASSERT_TRUE(decodedClosed.snapshot.has_value());
+    ASSERT_FALSE(decodedClosed.snapshot->sections().promptView.has_value());
+
+    // A delta opening the prompt carries it and replays to the open view.
+    auto openDelta = ssg::SessionSnapshotCodec{}.deriveDelta(closedLow, open);
+    ASSERT_TRUE(openDelta.promptView().changed);
+    ASSERT_TRUE(openDelta.promptView().replacement.has_value());
+    auto const decodedOpenDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        ssg::ProtocolCodec{}.encodeSessionDelta(openDelta));
+    ASSERT_TRUE(decodedOpenDelta.delta.has_value());
+    auto openReplay =
+        ssg::SessionSnapshotCodec{}.replay(closedLow, *decodedOpenDelta.delta);
+    ASSERT_TRUE(openReplay.accepted());
+    ASSERT_TRUE(openReplay.snapshot->sections().promptView == view);
+
+    // A delta closing the prompt is changed with NO replacement and replays to
+    // none -- a null replacement means closed, never "unchanged".
+    auto closeDelta = ssg::SessionSnapshotCodec{}.deriveDelta(open, closedHigh);
+    ASSERT_TRUE(closeDelta.promptView().changed);
+    ASSERT_FALSE(closeDelta.promptView().replacement.has_value());
+    auto const decodedCloseDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        ssg::ProtocolCodec{}.encodeSessionDelta(closeDelta));
+    ASSERT_TRUE(decodedCloseDelta.delta.has_value());
+    auto closeReplay =
+        ssg::SessionSnapshotCodec{}.replay(open, *decodedCloseDelta.delta);
+    ASSERT_TRUE(closeReplay.accepted());
+    ASSERT_FALSE(closeReplay.snapshot->sections().promptView.has_value());
+}
+
 // A frame whose presence section does not correspond to its schema (here, a stale
 // generation) is refused at decode -- an inconsistent schema/presence pair never
 // enters the semantic channel.
@@ -1546,6 +1620,7 @@ int main() {
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
     RUN(sessionSnapshotAndDeltaCarryTheUiSection);
     RUN(sessionDeltaCarriesThePaletteSection);
+    RUN(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone);
     RUN(snapshotDecodeRejectsNonCorrespondingPresence);
     RUN(accessibilityNodeStatusInvocationRoundTripsWhenPresent);
     RUN(accessibilityNodeWithoutStatusInvocationRoundTripsAsAbsent);

@@ -1083,13 +1083,18 @@ int main(int argc, char** argv) {
             revealPaletteSelection();
         }
     };
-    auto routeText = [&](std::string const& text) {
+    auto promptEdit = [&](ssg::PromptTextEdit const& change) {
         ssg::PromptRoutingState state;
         state.focus = focus;
         if (pickerOpen) {
             state.prompt = ssg::ActivePrompt::Palette;
         } else if (replaceOpen) {
             state.prompt = ssg::ActivePrompt::Replace;
+            // The TUI's Replace prompt edits the replacement input; its query was
+            // fixed during the Find phase. Input 1 is the replacement, matching
+            // the library's reset-on-open, so the seam routes to
+            // replace.update_replacement.
+            state.activeInput = 1;
             state.currentValue = replaceReplacement;
         } else if (findOpen) {
             state.prompt = ssg::ActivePrompt::Find;
@@ -1098,7 +1103,7 @@ int main(int argc, char** argv) {
             state.prompt = ssg::ActivePrompt::TextPrompt;
             state.currentValue = textPromptValue;
         }
-        auto const route = ssg::PromptTextRouter{}.route(state, text);
+        auto const route = ssg::PromptTextRouter{}.edit(state, change);
         switch (route.kind) {
         case ssg::PromptTextRoute::Kind::Dispatch:
             dispatch(route.command.name(), route.payload);
@@ -1111,6 +1116,9 @@ int main(int argc, char** argv) {
         case ssg::PromptTextRoute::Kind::Ignore:
             break;
         }
+    };
+    auto routeText = [&](std::string const& text) {
+        promptEdit(ssg::PromptTextEdit{ssg::PromptTextEdit::Kind::Append, text});
     };
 
     auto buildReport = [&] {
@@ -1667,21 +1675,16 @@ int main(int argc, char** argv) {
                     popCodePoint(picker.query);
                     picker.selected = 0;
                     revealPaletteSelection();
-                } else if (findOpen && focus == ssg::FocusTarget::Prompt &&
+                } else if ((findOpen || replaceOpen || textPromptOpen) &&
+                           focus == ssg::FocusTarget::Prompt &&
                            stroke.code == ssg::KeyCode::Backspace) {
-                    auto next = findQuery;
-                    popCodePoint(next);
-                    dispatch("find.update_query", ssg::FindQueryArguments{next});
-                } else if (replaceOpen && focus == ssg::FocusTarget::Prompt &&
-                           stroke.code == ssg::KeyCode::Backspace) {
-                    auto next = replaceReplacement;
-                    popCodePoint(next);
-                    dispatch("replace.update_replacement", ssg::FindQueryArguments{next});
-                } else if (textPromptOpen && focus == ssg::FocusTarget::Prompt &&
-                           stroke.code == ssg::KeyCode::Backspace) {
-                    auto next = textPromptValue;
-                    popCodePoint(next);
-                    dispatch("prompt.update_value", ssg::PromptValueArguments{0, next});
+                    // The shared seam owns grapheme/word-aware deletion of the
+                    // active input, so a prompt backspace deletes identically in
+                    // every host. Alt selects word deletion, matching the editor.
+                    promptEdit(ssg::PromptTextEdit{
+                        stroke.alt ? ssg::PromptTextEdit::Kind::DeleteWordBack
+                                   : ssg::PromptTextEdit::Kind::DeleteGraphemeBack,
+                        {}});
                 } else if (!decoded.text.empty()) {
                     routeText(decoded.text);
                 }

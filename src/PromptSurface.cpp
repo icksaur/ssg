@@ -89,7 +89,38 @@ PromptCommandResult PromptSurface::open(PromptRequest request) {
         return failure(PromptErrorCode::InvalidRequest,
                        "prompt request does not match its kind");
     }
+    // Deterministic active-input reset on every open/kind transition: Replace
+    // focuses its replacement (the second input, preserving today's routing of
+    // Replace text to the replacement); Find and the single-input prompts focus
+    // their sole input.
+    activeInput_ = request.kind == PromptKind::Replace ? 1U : 0U;
     request_ = std::move(request);
+    return {};
+}
+
+PromptCommandResult PromptSurface::focusInput(std::size_t index) {
+    if (!request_) {
+        return failure(PromptErrorCode::NoActivePrompt,
+                       "no active prompt to focus");
+    }
+    if (index >= request_->inputs.size()) {
+        return failure(PromptErrorCode::UnknownInput,
+                       "focus index does not address an input");
+    }
+    activeInput_ = index;
+    return {};
+}
+
+PromptCommandResult PromptSurface::focusNextInput() {
+    if (!request_) {
+        return failure(PromptErrorCode::NoActivePrompt,
+                       "no active prompt to focus");
+    }
+    const std::size_t count = request_->inputs.size();
+    if (count == 0) {
+        return failure(PromptErrorCode::UnknownInput, "prompt has no inputs");
+    }
+    activeInput_ = (activeInput_ + 1) % count;
     return {};
 }
 
@@ -122,6 +153,7 @@ PromptCommandResult PromptSurface::submit() {
         submission.toggles.push_back(toggle.value);
     }
     request_.reset();
+    activeInput_ = 0;
     return {std::nullopt, std::move(submission)};
 }
 
@@ -131,7 +163,38 @@ PromptCommandResult PromptSurface::cancel() {
                        "no active prompt to cancel");
     }
     request_.reset();
+    activeInput_ = 0;
     return {};
+}
+
+std::vector<PromptControl> resolvePromptControls(const PromptRequest& request) {
+    // The command that OPERATES an input: find/replace inputs have dedicated
+    // update commands; every generic prompt input takes the shared
+    // prompt.update_value. A toggle's operating command is its own id (the
+    // registered find.toggle_* command); the match count is not operable.
+    const auto inputCommand = [](std::string_view id) -> std::string {
+        if (id == "find.query") return "find.update_query";
+        if (id == "replace.replacement") return "replace.update_replacement";
+        return "prompt.update_value";
+    };
+    std::vector<PromptControl> controls;
+    controls.reserve(request.inputs.size() + request.toggles.size() + 1);
+    for (const auto& input : request.inputs) {
+        controls.push_back({PromptControlKind::Input, input.id,
+                            input.accessibleLabel, input.value, false,
+                            inputCommand(input.id)});
+    }
+    if (request.matchCount) {
+        for (const auto& toggle : request.toggles) {
+            controls.push_back({PromptControlKind::Toggle, toggle.id,
+                                toggle.accessibleLabel, {}, toggle.value,
+                                toggle.id});
+        }
+        controls.push_back({PromptControlKind::Count, request.matchCount->id,
+                            request.matchCount->accessibleLabel,
+                            request.matchCount->value, false, {}});
+    }
+    return controls;
 }
 
 PromptLayoutResult computePromptLayout(const PromptSurface& surface,
@@ -186,27 +249,18 @@ PromptLayoutResult computePromptLayout(const PromptSurface& surface,
                 std::nullopt};
     }
 
-    for (const auto& input : request.inputs) {
-        view.controls.push_back({PromptControlKind::Input, input.id,
-                                 input.accessibleLabel, input.value, false,
-                                 solved->find(input.id)->rect});
-    }
-    if (request.matchCount) {
-        for (const auto& toggle : request.toggles) {
-            view.controls.push_back({PromptControlKind::Toggle, toggle.id,
-                                     toggle.accessibleLabel, {}, toggle.value,
-                                     solved->find(toggle.id)->rect});
-        }
-        const Rect countRect = solved->find(request.matchCount->id)->rect;
-        if (countRect.width <= 0) {
+    // The grid controls are the ONE resolver's controls plus a Rect each, in the
+    // same order -- never a second content resolution.
+    for (const auto& control : resolvePromptControls(request)) {
+        const Rect rect = solved->find(control.id)->rect;
+        if (control.kind == PromptControlKind::Count && rect.width <= 0) {
             return {PromptError{PromptErrorCode::InvalidReservation,
                                 "prompt count has no visible width"},
                     std::nullopt};
         }
-        view.controls.push_back({PromptControlKind::Count,
-                                 request.matchCount->id,
-                                 request.matchCount->accessibleLabel,
-                                 request.matchCount->value, false, countRect});
+        view.controls.push_back({control.kind, control.id,
+                                 control.accessibleLabel, control.value,
+                                 control.checked, rect});
     }
     return {std::nullopt, std::move(view)};
 }

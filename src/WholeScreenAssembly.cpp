@@ -185,10 +185,17 @@ UiComposition assembleWholeScreen(
          viewLeaf(kFindResultsNodeId, ViewSurface::FindResults, Size::flex())});
     UiNode body = container(kBodyNodeId, Axis::Row, Size::flex(),
                             {std::move(panel), std::move(content)});
+    // The footer-region prompt's semantic surface, always assembled and hidden by
+    // presence (WholeScreenInteraction). Auto-sized so its footprint is the
+    // runtime's reservation, intrinsic and not varied here by prompt kind; the
+    // grid host ignores it and renders PresentationSnapshot::prompt with rects.
+    UiNode footerPrompt =
+        viewLeaf(kFooterPromptNodeId, ViewSurface::FooterPrompt, Size::autoSize());
 
     UiComposition out;
     out.root = container(kRootNodeId, Axis::Column, Size::flex(),
-                         {std::move(header), std::move(body), std::move(footer)});
+                         {std::move(header), std::move(body),
+                          std::move(footerPrompt), std::move(footer)});
     return out;
 }
 

@@ -126,12 +126,27 @@ inline constexpr std::string_view kFindResultsNodeId = "findresults";
 // presence unless a header-region prompt is open. The grid host derives the caret
 // from its emitted geometry; a client owns the query prediction locally.
 inline constexpr std::string_view kHeaderPromptInputNodeId = "input_line";
+// The footer-region prompt's semantic surface: a View leaf naming
+// ViewSurface::FooterPrompt, placed between the body and the footer, hidden by
+// presence unless a footer-region prompt (find/replace/goto/save-path/settings)
+// is open. A native client renders and drives the prompt from the semantic
+// PromptView section; the grid host ignores it and renders the parallel
+// PresentationSnapshot::prompt with rects.
+inline constexpr std::string_view kFooterPromptNodeId = "footer.prompt";
 
 // The typed well-known areas: a closed set a native client may key off to hand a
 // subtree to its own toolkit. A raw id string is not a placement contract; this
 // typed identity, plus the structural validation validateUiSchema performs for it
 // (required node kind and ancestry), is.
-enum class WellKnownArea : std::uint8_t { Root, Header, Body, Panel, Content, Footer };
+enum class WellKnownArea : std::uint8_t {
+    Root,
+    Header,
+    Body,
+    Panel,
+    Content,
+    Footer,
+    FooterPrompt,
+};
 
 inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
     switch (area) {
@@ -141,6 +156,7 @@ inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
     case WellKnownArea::Panel: return kPanelNodeId;
     case WellKnownArea::Content: return kContentNodeId;
     case WellKnownArea::Footer: return kFooterNodeId;
+    case WellKnownArea::FooterPrompt: return kFooterPromptNodeId;
     }
     throw std::invalid_argument("wellKnownAreaId: unrecognized WellKnownArea");
 }

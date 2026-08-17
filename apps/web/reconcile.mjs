@@ -274,6 +274,13 @@ export function applySessionDeltaSections(sections, delta) {
   const replaceWrapped = (name) => { if (delta[name] && delta[name].replacement != null) sections[name] = delta[name].replacement; };
   replaceWrapped('prompt_status');
   replaceWrapped('find_replace');
+  // The footer prompt's semantic projection travels as a changed-flagged delta
+  // (like a snapshot section replacement, but a null replacement means the prompt
+  // CLOSED, which replaceWrapped's non-null guard would wrongly ignore). A frame
+  // with changed=false carries no replacement and leaves the prior view intact.
+  if (delta.prompt_view && num(delta.prompt_view.changed)) {
+    sections.prompt_view = delta.prompt_view.replacement != null ? delta.prompt_view.replacement : null;
+  }
   const replaceDirect = (name) => { if (delta[name] != null) sections[name] = delta[name]; };
   replaceDirect('ui');
   replaceDirect('ui_state');
@@ -289,6 +296,59 @@ export function applySessionDeltaSections(sections, delta) {
 // mis-spelling cannot silently hide the palette overlay again.
 export const FOCUS_PROMPT = 2;
 export const PROMPT_PALETTE = 5;
+
+// PromptControlKind ordinals (C++ PromptControlKind).
+export const PROMPT_CONTROL = { INPUT: 0, TOGGLE: 1, COUNT: 2 };
+
+// Decide how the persistent footer-prompt container moves keyboard focus as the
+// published PromptView changes, without a DOM so the rule is testable: focus the
+// container ONLY on open and on active-input change (never per message, so an
+// unrelated frame cannot steal deliberate focus and a re-render preserves focus +
+// aria-activedescendant), and restore the captured focus on close. `prev` is
+// { open, activeInput }; `pv` is the promptViewFromSections result (null when
+// closed). Returns { open, activeInput, focusContainer, restoreFocus,
+// activeDescendant }.
+export function promptFocusPlan(prev, pv) {
+  const was = prev || { open: false, activeInput: -1 };
+  if (!pv) {
+    return { open: false, activeInput: -1, focusContainer: false,
+             restoreFocus: !!was.open, activeDescendant: null };
+  }
+  const focusContainer = !was.open || was.activeInput !== pv.activeInput;
+  return { open: true, activeInput: pv.activeInput, focusContainer,
+           restoreFocus: false, activeDescendant: pv.activeInput };
+}
+
+// The host ingress that focuses a clicked footer-prompt input by its input index,
+// dispatched to prompt.focus_control server-side. One place owns the wire string.
+export function promptFocusControlMessage(index) {
+  return 'PFOC:' + index;
+}
+
+
+// The active footer prompt's geometry-free semantic projection normalized for the
+// renderer, or null when no footer-region prompt is open. Owns the snake_case wire
+// coupling (accessible_label, active_input) so the client draws controls without
+// re-deriving field names. `activeInput` indexes the INPUT controls only.
+export function promptViewFromSections(sections) {
+  if (!sections) return null;
+  const pv = sections.prompt_view;
+  if (pv == null) return null;
+  const controls = (pv.controls || []).map((c) => ({
+    kind: num(c.kind),
+    id: String(c.id == null ? '' : c.id),
+    label: String(c.accessible_label == null ? '' : c.accessible_label),
+    value: String(c.value == null ? '' : c.value),
+    checked: !!c.checked,
+    command: String(c.command == null ? '' : c.command),
+  }));
+  return {
+    kind: num(pv.kind),
+    label: String(pv.accessible_label == null ? '' : pv.accessible_label),
+    controls,
+    activeInput: num(pv.active_input),
+  };
+}
 export function isPalettePromptOpen(sections) {
   if (!sections) return false;
   if (num(sections.focus) !== FOCUS_PROMPT) return false;
@@ -330,7 +390,7 @@ export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPU
 export const AXIS = { ROW: 0, COLUMN: 1 };
 export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
-export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4 };
+export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5 };
 const STRUCTURAL_ROLE = { prompt: 16 };
 const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL_ROLE, name)
   ? STRUCTURAL_ROLE[name] : null;
@@ -341,7 +401,7 @@ const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL
 // tree structure + well-known node ids, so there is no region-role set.
 export const WEB_UI_PROFILE = {
   widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.TEXT_INPUT, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
-  surfaces: new Set([SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS]),
+  surfaces: new Set([SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT]),
 };
 
 // The first schema primitive `profile` does not support, as

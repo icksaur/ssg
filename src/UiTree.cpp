@@ -46,7 +46,13 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
                 error = here + ": a \"view\" leaf names an unknown surface";
                 return;
             }
-            if (node.size.kind() == SizeKind::Auto) {
+            if (node.size.kind() == SizeKind::Auto &&
+                *w.surface != ViewSurface::FooterPrompt) {
+                // A View names its client-rendered surface and has no content to
+                // hug, so it is Exact- or Flex-sized -- EXCEPT the footer prompt,
+                // whose intrinsic (reservation-sized) footprint the runtime sizes
+                // by prompt kind, so it alone may be Auto. validateWellKnownAreas
+                // pins that allowance to the canonical footer.prompt node.
                 error = here + ": a \"view\" leaf must be Exact- or Flex-sized";
                 return;
             }
@@ -117,13 +123,33 @@ std::optional<std::string> requireViewLeaf(const UiNode& node, std::string_view 
 // The whole-screen well-known-area contract: the complete canonical topology the
 // assembler publishes, including required containers, View leaves, surfaces,
 // parentage, and sibling order.
+std::optional<std::string> rejectStrayFooterPrompt(const UiNode& node) {
+    if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
+        if (leaf->widget.kind == WidgetKind::View && leaf->widget.surface &&
+            *leaf->widget.surface == ViewSurface::FooterPrompt &&
+            node.id.value() != kFooterPromptNodeId) {
+            return std::string{node.id.value()} +
+                   ": the FooterPrompt surface belongs only to the \"" +
+                   std::string{kFooterPromptNodeId} + "\" node";
+        }
+        return std::nullopt;
+    }
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            if (auto err = rejectStrayFooterPrompt(child)) return err;
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
     if (schema.root.id.value() != wellKnownAreaId(WellKnownArea::Root)) {
         return std::string{"root: the required \"root\" area must be the schema "
                            "root"};
     }
     const UiContainer* root = nullptr;
-    constexpr std::array rootIds{kHeaderNodeId, kBodyNodeId, kFooterNodeId};
+    constexpr std::array rootIds{kHeaderNodeId, kBodyNodeId, kFooterPromptNodeId,
+                                 kFooterNodeId};
     if (auto err = requireChildren(schema.root, "root", rootIds, root)) return err;
     const UiNode& header = root->children[0];
     if (header.id.value() != wellKnownAreaId(WellKnownArea::Header) ||
@@ -131,7 +157,14 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
         return std::string{"header: must be a direct child container of root"};
     }
     const UiNode& body = root->children[1];
-    const UiNode& footer = root->children[2];
+    // The footer prompt sits between the body and the footer: a View leaf naming
+    // ViewSurface::FooterPrompt, always assembled and hidden by presence. It is
+    // the sole node permitted to carry an Auto-sized FooterPrompt View; a stray
+    // FooterPrompt View anywhere else is rejected below.
+    if (auto err = requireViewLeaf(root->children[2], kFooterPromptNodeId,
+                                   ViewSurface::FooterPrompt))
+        return err;
+    const UiNode& footer = root->children[3];
     if (footer.id.value() != wellKnownAreaId(WellKnownArea::Footer) ||
         !footer.isContainer()) {
         return std::string{"footer: must be a direct child container of root"};
@@ -166,6 +199,10 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
     if (auto err = requireViewLeaf(content->children[1], kFindResultsNodeId,
                                    ViewSurface::FindResults))
         return err;
+    // The FooterPrompt surface is bound to the canonical footer.prompt node; a
+    // View naming it anywhere else (the only other place an Auto-sized View can
+    // pass validateUiSchema) is a misplacement, so reject it.
+    if (auto err = rejectStrayFooterPrompt(schema.root)) return err;
     return std::nullopt;
 }
 

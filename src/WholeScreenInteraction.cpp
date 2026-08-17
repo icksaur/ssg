@@ -61,6 +61,19 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     }
     if (hasInputLine && !headerPrompt) hidden.push_back(inputLine);
 
+    // The footer prompt surface mirrors the header input line: always assembled,
+    // present only while a footer-region prompt is open, so a native client draws
+    // and drives the prompt exactly then. Its absence under a footer prompt means
+    // the schema contract broke and must not be masked by focusing the footer.
+    const UiNodeId footerPrompt = nodeId(kFooterPromptNodeId);
+    const bool footerPromptOpen =
+        promptRegion && *promptRegion == PromptRegion::Footer;
+    const bool hasFooterPrompt = schema.contains(footerPrompt);
+    if (footerPromptOpen && !hasFooterPrompt) {
+        throw std::logic_error("footer prompt requires the footer.prompt node");
+    }
+    if (hasFooterPrompt && !footerPromptOpen) hidden.push_back(footerPrompt);
+
     UiInteractionState state{std::move(schema), std::move(hidden)};
 
     // Base focus never strands on an absent panel: Panel is honored only when present.
@@ -70,10 +83,11 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
 
     // A prompt anchors its focus capture on the node keystrokes route to: the header
     // input line itself for a Palette prompt (so the capture addresses the query
-    // node, not merely its container), the footer otherwise. Both hosts are present
-    // when addressed, so captureFocus admits the capture.
+    // node, not merely its container), the footer prompt surface for a footer-region
+    // prompt. Both hosts are present when addressed, so captureFocus admits the
+    // capture.
     if (promptRegion) {
-        const UiNodeId host = headerPrompt ? inputLine : nodeId(kFooterNodeId);
+        const UiNodeId host = headerPrompt ? inputLine : footerPrompt;
         state.captureFocus(FocusCapture{host, FocusTarget::Prompt});
     }
     return state;

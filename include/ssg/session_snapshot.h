@@ -10,6 +10,7 @@
 #include <ssg/LspFeatureController.h>
 #include <ssg/lsp_sync_client.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
 #include <ssg/Selection.h>
 #include <ssg/EditorSession.h>
@@ -77,6 +78,13 @@ struct SessionSnapshotSections {
     // separate authority from uiState (visibility vs. resolved content); one record
     // per schema node, at the same generation as `ui`.
     UiPresenceSection uiPresence = defaultUiPresence();
+    // The geometry-free semantic projection of the active footer-region prompt
+    // (find/replace/goto/save-path/settings): its controls, per-control commands,
+    // and active input. Absent unless a footer-region prompt is open. A native
+    // client renders and drives the prompt from this; the grid client instead
+    // lowers the parallel PresentationSnapshot::prompt with rects. Both derive
+    // from the one resolvePromptControls authority.
+    std::optional<PromptView> promptView;
 };
 
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,
@@ -222,6 +230,15 @@ struct TreeWindowsDelta {
     std::optional<std::vector<TreeWindow>> replacement;
 };
 
+// Delta of the optional semantic PromptView section. `changed` is explicit
+// because the section is itself optional: {true, nullopt} means the footer prompt
+// closed, {true, value} a new/changed prompt, {false, _} unchanged. Read
+// `changed` first. Mirrors PromptProjectionDelta for the geometry-free channel.
+struct PromptViewSectionDelta {
+    bool changed = false;
+    std::optional<PromptView> replacement;
+};
+
 struct SessionReplayResult;
 
 class SessionDelta {
@@ -313,6 +330,9 @@ public:
     [[nodiscard]] PaletteSectionDelta const& palette() const noexcept {
         return palette_;
     }
+    [[nodiscard]] PromptViewSectionDelta const& promptView() const noexcept {
+        return promptView_;
+    }
     [[nodiscard]] StyleSectionDelta const& style() const noexcept {
         return style_;
     }
@@ -355,7 +375,8 @@ private:
         TreeWindowsDelta treeWindows = {}, UiSectionDelta ui = {},
         UiStateSectionDelta uiState = {},
         UiPresenceSectionDelta uiPresence = {},
-        PaletteSectionDelta palette = {});
+        PaletteSectionDelta palette = {},
+        PromptViewSectionDelta promptView = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -394,6 +415,7 @@ private:
     UiStateSectionDelta uiState_;
     UiPresenceSectionDelta uiPresence_;
     PaletteSectionDelta palette_;
+    PromptViewSectionDelta promptView_;
 };
 
 struct SessionReplayResult {
@@ -446,7 +468,8 @@ public:
         TreeWindowsDelta treeWindows = {}, UiSectionDelta ui = {},
         UiStateSectionDelta uiState = {},
         UiPresenceSectionDelta uiPresence = {},
-        PaletteSectionDelta palette = {}) const;
+        PaletteSectionDelta palette = {},
+        PromptViewSectionDelta promptView = {}) const;
 };
 
 }  // namespace ssg

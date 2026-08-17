@@ -64,7 +64,23 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     ASSERT_TRUE(footer != nullptr);
     ASSERT_EQ(child(comp.root, 0).id.value(), std::string{kHeaderNodeId});
     ASSERT_EQ(child(comp.root, 1).id.value(), std::string{kBodyNodeId});
-    ASSERT_EQ(child(comp.root, 2).id.value(), std::string{kFooterNodeId});
+    ASSERT_EQ(child(comp.root, 2).id.value(), std::string{kFooterPromptNodeId});
+    ASSERT_EQ(child(comp.root, 3).id.value(), std::string{kFooterNodeId});
+    // The footer prompt is an always-assembled Auto-sized View naming FooterPrompt,
+    // between the body and the footer; presence (not assembly) hides it.
+    const UiNode* footerPrompt = childById(comp.root, kFooterPromptNodeId);
+    ASSERT_TRUE(footerPrompt != nullptr);
+    if (footerPrompt) {
+        ASSERT_TRUE(footerPrompt->size.kind() == SizeKind::Auto);
+        const auto* fpLeaf = std::get_if<UiLeaf>(&footerPrompt->content);
+        ASSERT_TRUE(fpLeaf != nullptr);
+        if (fpLeaf) {
+            ASSERT_TRUE(fpLeaf->widget.kind == WidgetKind::View);
+            ASSERT_TRUE(fpLeaf->widget.surface.has_value());
+            if (fpLeaf->widget.surface)
+                ASSERT_TRUE(*fpLeaf->widget.surface == ViewSurface::FooterPrompt);
+        }
+    }
     ASSERT_TRUE(header->size.kind() == SizeKind::Exact);
     ASSERT_EQ(header->size.extent(), d.headerHeight);
     ASSERT_TRUE(footer->size.kind() == SizeKind::Exact);

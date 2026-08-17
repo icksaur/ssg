@@ -2,7 +2,12 @@
 <meta charset="utf-8">
 <title>ssg</title>
 <style>
-  body { margin:0; font:13px/1.4 monospace; color:var(--ssg-text); background:var(--ssg-canvas); }
+  html, body { height:100%; }
+  body { margin:0; font:13px/1.4 monospace; color:var(--ssg-text); background:var(--ssg-canvas);
+         display:flex; flex-direction:column; overflow:hidden; }
+  /* The document/panel body is the only scroll region; chrome, tabs, and the
+     prompt keep their intrinsic height so the footer is always on screen. */
+  body > *:not(#doc):not(#palette) { flex:0 0 auto; }
   #status { padding:2px 8px; border-bottom:1px solid; opacity:.6; }
   #tabs { display:flex; gap:1px; padding:2px 4px; border-bottom:1px solid; }
   #tabs .tab { padding:2px 8px; opacity:.55; }
@@ -13,12 +18,21 @@
   .chrome { display:flex; align-items:center; gap:0; padding:2px 8px; min-height:1.4em; }
   #chrome-top { border-bottom:1px solid; }
   #chrome-bottom { border-top:1px solid; }
+  #prompt { display:none; align-items:center; gap:1ch; padding:2px 8px; border-top:1px solid; outline:none; }
+  #prompt.open { display:flex; }
+  #prompt .prompt-control { white-space:pre; }
+  #prompt .prompt-input { padding:0 2px; }
+  #prompt .prompt-input.active { background:var(--ssg-selection); }
+  #prompt .prompt-toggle { opacity:.6; cursor:pointer; text-decoration:underline dotted; }
+  #prompt .prompt-toggle.checked { opacity:1; font-weight:bold; }
+  #prompt .prompt-count { opacity:.55; margin-left:auto; }
+  #prompt .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
   .chrome .w { white-space:pre; }
   .chrome .w.clickable { cursor:pointer; text-decoration:underline dotted; }
   .chrome .w.spacer { flex:1 1 auto; }
   .chrome .w + .w { margin-left:1ch; }
   #chrome-error { padding:2px 8px; color:var(--ssg-status-warning); font-weight:bold; }
-  #doc { margin:0; padding:8px; white-space:pre-wrap; outline:none; min-height:80vh; }
+  #doc { margin:0; padding:8px; white-space:pre-wrap; outline:none; flex:1 1 auto; min-height:0; overflow:auto; }
   #doc .sel { background:var(--ssg-selection); }
   #doc .caret, #chrome-top .input-line .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
   #chrome-top .input-line { margin-left:1ch; }
@@ -39,6 +53,7 @@
 <div id="chrome-top" class="chrome"></div>
 <div id="tabs"></div>
 <pre id="doc" tabindex="0"></pre>
+<div id="prompt" tabindex="0" role="group"></div>
 <div id="chrome-bottom" class="chrome"></div>
 <div id="palette"></div>
 <script type="module" src="/client.mjs"></script>

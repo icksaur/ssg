@@ -22,8 +22,9 @@ PromptRoutingState atEditor() {
     return {FocusTarget::Editor, ActivePrompt::None, {}};
 }
 
-PromptRoutingState atPrompt(ActivePrompt prompt, std::string value = {}) {
-    return {FocusTarget::Prompt, prompt, std::move(value)};
+PromptRoutingState atPrompt(ActivePrompt prompt, std::string value = {},
+                            std::size_t activeInput = 0) {
+    return {FocusTarget::Prompt, prompt, std::move(value), activeInput};
 }
 
 TEST(editorFocusRoutesPrintableTextToInsert) {
@@ -53,13 +54,55 @@ TEST(findPromptRoutesTheWholeNewQueryValue) {
 }
 
 TEST(replacePromptRoutesTheWholeNewReplacementValue) {
-    auto const route =
-        PromptTextRouter{}.route(atPrompt(ActivePrompt::Replace, "ba"), "r");
+    auto const route = PromptTextRouter{}.route(
+        atPrompt(ActivePrompt::Replace, "ba", 1), "r");
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
     ASSERT_TRUE(route.command == CommandName{"replace.update_replacement"});
     auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
     ASSERT_TRUE(args != nullptr);
     ASSERT_EQ(args->query, std::string{"bar"});
+}
+
+TEST(replaceQueryInputRoutesToFindUpdateQuery) {
+    // Replace's query input (active index 0) edits the SAME query as Find, so it
+    // must route to find.update_query, not replace.update_replacement.
+    auto const route =
+        PromptTextRouter{}.route(atPrompt(ActivePrompt::Replace, "fo", 0), "o");
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
+    ASSERT_TRUE(route.command == CommandName{"find.update_query"});
+    auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
+    ASSERT_TRUE(args != nullptr);
+    ASSERT_EQ(args->query, std::string{"foo"});
+}
+
+TEST(promptEditDeletesOneGraphemeBackFromTheActiveInput) {
+    PromptTextEdit back{PromptTextEdit::Kind::DeleteGraphemeBack, {}};
+    auto const route =
+        PromptTextRouter{}.edit(atPrompt(ActivePrompt::Find, "café", 0), back);
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
+    ASSERT_TRUE(route.command == CommandName{"find.update_query"});
+    auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
+    ASSERT_TRUE(args != nullptr);
+    // The multi-byte 'é' is one grapheme, so one backspace removes it whole.
+    ASSERT_EQ(args->query, std::string{"caf"});
+}
+
+TEST(promptEditDeletesOneWordBackFromTheActiveReplacement) {
+    PromptTextEdit back{PromptTextEdit::Kind::DeleteWordBack, {}};
+    auto const route = PromptTextRouter{}.edit(
+        atPrompt(ActivePrompt::Replace, "one two ", 1), back);
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
+    ASSERT_TRUE(route.command == CommandName{"replace.update_replacement"});
+    auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
+    ASSERT_TRUE(args != nullptr);
+    ASSERT_EQ(args->query, std::string{"one "});
+}
+
+TEST(paletteDeletionIsNotRoutedThroughTheSeam) {
+    PromptTextEdit back{PromptTextEdit::Kind::DeleteGraphemeBack, {}};
+    auto const route =
+        PromptTextRouter{}.edit(atPrompt(ActivePrompt::Palette, "ab"), back);
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Ignore);
 }
 
 TEST(textPromptRoutesTheWholeNewValueAtIndexZero) {
@@ -71,6 +114,18 @@ TEST(textPromptRoutesTheWholeNewValueAtIndexZero) {
     ASSERT_TRUE(args != nullptr);
     ASSERT_EQ(args->index, static_cast<std::size_t>(0));
     ASSERT_EQ(args->value, std::string{"name"});
+}
+
+TEST(genericTextPromptDeletionRoutesToPromptUpdateValueNotAHardcodedField) {
+    PromptTextEdit back{PromptTextEdit::Kind::DeleteGraphemeBack, {}};
+    auto const route =
+        PromptTextRouter{}.edit(atPrompt(ActivePrompt::TextPrompt, "name", 0), back);
+    ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
+    ASSERT_TRUE(route.command == CommandName{"prompt.update_value"});
+    auto const* args = std::any_cast<PromptValueArguments>(&route.payload);
+    ASSERT_TRUE(args != nullptr);
+    ASSERT_EQ(args->index, static_cast<std::size_t>(0));
+    ASSERT_EQ(args->value, std::string{"nam"});
 }
 
 TEST(promptFocusWithNoActivePromptIgnoresText) {
@@ -91,7 +146,12 @@ int main() {
     RUN(paletteFocusAppendsToTheClientOwnedQueryOnly);
     RUN(findPromptRoutesTheWholeNewQueryValue);
     RUN(replacePromptRoutesTheWholeNewReplacementValue);
+    RUN(replaceQueryInputRoutesToFindUpdateQuery);
+    RUN(promptEditDeletesOneGraphemeBackFromTheActiveInput);
+    RUN(promptEditDeletesOneWordBackFromTheActiveReplacement);
+    RUN(paletteDeletionIsNotRoutedThroughTheSeam);
     RUN(textPromptRoutesTheWholeNewValueAtIndexZero);
+    RUN(genericTextPromptDeletionRoutesToPromptUpdateValueNotAHardcodedField);
     RUN(promptFocusWithNoActivePromptIgnoresText);
     RUN(panelFocusIgnoresPrintableText);
     return 0;

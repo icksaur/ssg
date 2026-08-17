@@ -1125,6 +1125,8 @@ ProtocolValue toValue(SelectionSetDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionSetDelta>& out);
 ProtocolValue toValue(PromptProjectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptProjectionDelta>& out);
+ProtocolValue toValue(PromptViewSectionDelta const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptViewSectionDelta>& out);
 ProtocolValue toValue(TreeWindowsDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeWindowsDelta>& out);
 ProtocolValue toValue(HistoryViewState const& value);
@@ -1151,6 +1153,10 @@ ProtocolValue toValue(PromptControlView const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptControlView>& out);
 ProtocolValue toValue(PromptViewState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptViewState>& out);
+ProtocolValue toValue(PromptControl const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptControl>& out);
+ProtocolValue toValue(PromptView const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptView>& out);
 ProtocolValue toValue(PromptStatusViewState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptStatusViewState>& out);
 ProtocolValue toValue(PromptStatusDelta const& value);
@@ -1352,6 +1358,8 @@ ProtocolValue toValue(FindQueryArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<FindQueryArguments>& out);
 ProtocolValue toValue(PromptValueArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptValueArguments>& out);
+ProtocolValue toValue(PromptFocusArguments const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptFocusArguments>& out);
 ProtocolValue toValue(SelectionCommandArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out);
 ProtocolValue toValue(ScrollLinesArguments const& value);
@@ -2172,6 +2180,23 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptProjectionDel
     return true;
 }
 
+ProtocolValue toValue(PromptViewSectionDelta const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("changed", toValue(value.changed));
+    fields.emplace_back("replacement", toValue(value.replacement));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<PromptViewSectionDelta>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto changed = requireField<bool>(value.field("changed"));
+    if (!changed) return false;
+    std::optional<PromptView> replacement;
+    if (!decodeOptionalField(value.field("replacement"), replacement)) return false;
+    out.emplace(PromptViewSectionDelta{*changed, std::move(replacement)});
+    return true;
+}
+
 ProtocolValue toValue(TreeWindowsDelta const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("changed", toValue(value.changed));
@@ -2471,6 +2496,62 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptViewState>& o
     auto controls = requireField<std::vector<PromptControlView>>(value.field("controls"));
     if (!kind || !accessibleLabel || !rect || !controls) return false;
     out.emplace(PromptViewState{*kind, *accessibleLabel, *rect, *controls});
+    return true;
+}
+
+ProtocolValue toValue(PromptControl const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("kind", toValue(value.kind));
+    fields.emplace_back("id", toValue(value.id));
+    fields.emplace_back("accessible_label", toValue(value.accessibleLabel));
+    fields.emplace_back("value", toValue(value.value));
+    fields.emplace_back("checked", toValue(value.checked));
+    fields.emplace_back("command", toValue(value.command));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<PromptControl>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto kind = requireField<PromptControlKind>(value.field("kind"));
+    auto id = requireField<std::string>(value.field("id"));
+    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
+    auto textValue = requireField<std::string>(value.field("value"));
+    auto checked = requireField<bool>(value.field("checked"));
+    auto command = requireField<std::string>(value.field("command"));
+    if (!kind || !id || !accessibleLabel || !textValue || !checked || !command) {
+        return false;
+    }
+    out.emplace(PromptControl{*kind, *id, *accessibleLabel, *textValue, *checked,
+                              *command});
+    return true;
+}
+
+ProtocolValue toValue(PromptView const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("kind", toValue(value.kind));
+    fields.emplace_back("accessible_label", toValue(value.accessibleLabel));
+    fields.emplace_back("controls", toValue(value.controls));
+    fields.emplace_back("active_input",
+                        toValue(static_cast<std::uint64_t>(value.activeInput)));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<PromptView>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto kind = requireField<PromptKind>(value.field("kind"));
+    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
+    auto controls = requireField<std::vector<PromptControl>>(value.field("controls"));
+    auto activeInput = requireField<std::uint64_t>(value.field("active_input"));
+    if (!kind || !accessibleLabel || !controls || !activeInput) return false;
+    std::size_t inputCount = 0;
+    for (auto const& control : *controls) {
+        if (control.kind == PromptControlKind::Input) ++inputCount;
+    }
+    if (inputCount == 0 ? *activeInput != 0 : *activeInput >= inputCount) {
+        return false;
+    }
+    out.emplace(PromptView{*kind, *accessibleLabel, std::move(*controls),
+                           static_cast<std::size_t>(*activeInput)});
     return true;
 }
 
@@ -4864,6 +4945,12 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back("ui", encodeUiSchema(value.ui));
     fields.emplace_back("ui_state", encodeUiState(value.uiState));
     fields.emplace_back("ui_presence", encodeUiPresence(value.uiPresence));
+    // Additive: the semantic footer-prompt section. Null when no footer-region
+    // prompt is open; a decoder that predates this field simply ignores it, and a
+    // frame that omits it decodes to no footer prompt.
+    fields.emplace_back("prompt_view", value.promptView
+                                           ? toValue(*value.promptView)
+                                           : ProtocolValue::makeNull());
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
@@ -4908,6 +4995,14 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         uiPresence = decodeUiPresence(*uiPresenceField);
         if (!uiPresence) return false;
     }
+    // Additive: absent OR null decodes to no footer prompt; present-but-malformed
+    // fails loud.
+    std::optional<PromptView> promptView;
+    if (const ProtocolValue* promptViewField = value.field("prompt_view")) {
+        if (promptViewField->kind() != ProtocolValue::Kind::NullValue) {
+            if (!decodePresent(*promptViewField, promptView)) return false;
+        }
+    }
     // The schema and its presence section travel together and must correspond
     // (generation + node-id set). Neither alone is a valid frame -- a lone schema
     // would fall back to the root-only default presence, which need not correspond;
@@ -4936,6 +5031,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     if (ui) out->ui = std::move(*ui);
     if (uiState) out->uiState = std::move(*uiState);
     if (uiPresence) out->uiPresence = std::move(*uiPresence);
+    out->promptView = std::move(promptView);
     return true;
 }
 
@@ -5008,6 +5104,20 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptValueArgument
     auto text = requireField<std::string>(value.field("value"));
     if (!index || !text) return false;
     out.emplace(PromptValueArguments{static_cast<std::size_t>(*index), *text});
+    return true;
+}
+
+ProtocolValue toValue(PromptFocusArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("index", toValue(static_cast<std::uint64_t>(value.index)));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<PromptFocusArguments>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto index = requireField<std::uint64_t>(value.field("index"));
+    if (!index) return false;
+    out.emplace(PromptFocusArguments{static_cast<std::size_t>(*index)});
     return true;
 }
 
@@ -5340,6 +5450,7 @@ argumentCodecsByType() {
         table.emplace(typeid(TreeSelectArguments), makeTypedCodec<TreeSelectArguments>());
         table.emplace(typeid(FindQueryArguments), makeTypedCodec<FindQueryArguments>());
         table.emplace(typeid(PromptValueArguments), makeTypedCodec<PromptValueArguments>());
+        table.emplace(typeid(PromptFocusArguments), makeTypedCodec<PromptFocusArguments>());
         return table;
     }();
     return codecs;
@@ -5587,6 +5698,7 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
                         delta.palette().replacement
                             ? encodePalette(*delta.palette().replacement)
                             : ProtocolValue::makeNull());
+    fields.emplace_back("prompt_view", toValue(delta.promptView()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5696,6 +5808,18 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
             paletteDelta.replacement = std::move(*palette);
         }
     }
+    // Additive: an absent prompt_view field means "unchanged" (changed=false), so
+    // a delta from a peer that predates the field never spuriously closes the
+    // prompt; a present-but-malformed field fails loud.
+    PromptViewSectionDelta promptViewDelta;
+    if (const ProtocolValue* promptViewField = payload.field("prompt_view")) {
+        std::optional<PromptViewSectionDelta> decoded;
+        if (!decodePresent(*promptViewField, decoded)) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "session delta payload is malformed"};
+        }
+        promptViewDelta = std::move(*decoded);
+    }
 
     if (!optionalOk || !baseRevision || !revision || !clientId || !viewId ||
         !capabilities || !selection || !history || !clipboard ||
@@ -5725,7 +5849,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*selectionNav), std::move(*promptProjection),
                 std::move(*treeWindows), std::move(uiDelta),
                 std::move(uiStateDelta), std::move(uiPresenceDelta),
-                std::move(paletteDelta)),
+                std::move(paletteDelta), std::move(promptViewDelta)),
             {}};
 }
 

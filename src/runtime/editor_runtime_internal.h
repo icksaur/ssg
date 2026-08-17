@@ -439,6 +439,10 @@ struct EditorRuntime::Impl final : CommandServices,
         ViewportDimensions dimensions,
         std::optional<Rect> promptReservation = std::nullopt) const;
     void projectFindReplacePrompt(PromptViewState& promptView) const;
+    // The geometry-free semantic projection of the active footer-region prompt,
+    // or nullopt unless a footer-region prompt is open. Shares the one
+    // resolvePromptControls authority with the grid promptProjection.
+    [[nodiscard]] std::optional<PromptView> promptView() const;
     // Dismiss the find/replace controller (and its prompt) when the active
     // document identity or revision no longer matches what it evaluated against,
     // so stale matches are never navigable or projected.

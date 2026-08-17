@@ -149,6 +149,13 @@ TEST(headerPromptRequiresTheInputLineSchemaNode) {
                   std::logic_error);
 }
 
+TEST(footerPromptRequiresTheFooterPromptSchemaNode) {
+    WholeScreenTruth truth;
+    ASSERT_THROWS(buildWholeScreenInteraction(schemaWithoutPromptInput(), truth,
+                                              PromptRegion::Footer),
+                  std::logic_error);
+}
+
 TEST(baseFocusNeverStrandsOnAnAbsentPanel) {
     WholeScreenTruth truth;
     truth.panelPresent = false;
@@ -208,10 +215,15 @@ TEST(theInputLineIsVisibleOnlyForAHeaderPromptAndCapturesTheInputNode) {
     const auto f =
         buildWholeScreenInteraction(schemaOf({}), closed, PromptRegion::Footer);
     ASSERT_FALSE(present(f, kHeaderPromptInputNodeId));
-    // The footer prompt captures the footer host, not the input line.
+    // It reveals the footer prompt surface and captures that node, not the footer
+    // container.
+    ASSERT_TRUE(present(f, kFooterPromptNodeId));
     ASSERT_TRUE(f.focus().top() != nullptr);
     if (f.focus().top())
-        ASSERT_EQ(f.focus().top()->node.value(), std::string{kFooterNodeId});
+        ASSERT_EQ(f.focus().top()->node.value(),
+                  std::string{kFooterPromptNodeId});
+    // With no footer prompt open, the footer prompt surface is hidden.
+    ASSERT_FALSE(present(a, kFooterPromptNodeId));
 
     // A header-region prompt reveals the input line AND anchors the capture on the
     // input_line NODE itself, so keystrokes route to the query node, not merely to
@@ -239,6 +251,7 @@ int main() {
     RUN(contentShowsTabViewXorFindResultsByFinderState);
     RUN(promptFocusAnchorsOnTheRegionHost);
     RUN(headerPromptRequiresTheInputLineSchemaNode);
+    RUN(footerPromptRequiresTheFooterPromptSchemaNode);
     RUN(theInputLineIsVisibleOnlyForAHeaderPromptAndCapturesTheInputNode);
     RUN(baseFocusNeverStrandsOnAnAbsentPanel);
     RUN(rebuildOverANewGenerationPreservesTruthAndResetsBasis);

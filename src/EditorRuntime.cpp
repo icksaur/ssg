@@ -241,6 +241,9 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Escape"}), "prompt.cancel", "prompt");
     bind(seq({"ArrowDown"}), "prompt.next", "prompt");
     bind(seq({"ArrowUp"}), "prompt.previous", "prompt");
+    // Tab advances the keyboard among a multi-input prompt's inputs (replace's
+    // query and replacement); a single-input prompt stays put.
+    bind(seq({"Tab"}), "prompt.focus_next_control", "prompt");
     // The find/replace option toggles (find.toggle_case/whole_word/regex,
     // replace.all) are reachable through the command palette; they do not earn a
     // dedicated key and are left unbound.

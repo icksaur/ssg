@@ -157,8 +157,11 @@ CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
                 return executeFindReplaceCommand(
                     runtime, revision, FindReplaceCommand::FindNext, payload);
             }
-            return executeFindReplaceCommand(
-                runtime, revision, FindReplaceCommand::FindPrevious, payload);
+            if (id == "prompt.previous") {
+                return executeFindReplaceCommand(
+                    runtime, revision, FindReplaceCommand::FindPrevious, payload);
+            }
+            return failure("command is not valid for a find/replace prompt");
         }
         if (id == "prompt.submit") {
             auto result = runtime.interaction.submitPrompt();
@@ -196,6 +199,18 @@ CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
             return result.accepted() ? success() : failure(result.error->message);
         }
         return success();
+    }
+    if (id == "prompt.focus_control") {
+        auto const* arguments = payloadAs<PromptFocusArguments>(payload);
+        if (arguments == nullptr) {
+            return failure("prompt.focus_control requires a focus payload");
+        }
+        auto result = runtime.interaction.focusPromptControl(arguments->index);
+        return result.accepted() ? success() : failure(result.error->message);
+    }
+    if (id == "prompt.focus_next_control") {
+        auto result = runtime.interaction.focusNextPromptControl();
+        return result.accepted() ? success() : failure(result.error->message);
     }
     if (id == "status.next") runtime.status.next();
     else if (id == "status.previous") runtime.status.previous();
@@ -535,6 +550,7 @@ void registerPromptStatusCommands(EditorSessionBuilder& builder,
     bare("prompt.cancel", "Cancel", "");
     bare("prompt.next", "Next", "");
     bare("prompt.previous", "Previous", "");
+    bare("prompt.focus_next_control", "Focus Next Field", "");
     bare("status.next", "Next", "");
     bare("status.previous", "Previous", "");
     bare("status.dismiss", "Dismiss", "");
@@ -560,6 +576,16 @@ void registerPromptStatusCommands(EditorSessionBuilder& builder,
                                 return promptStatusCommand(
                                     runtime, context.revision(),
                                     "prompt.update_value", std::any{arguments});
+                            });
+                        }));
+    builder.add(spec("prompt.focus_control", "Focus Field")
+                    .handler<PromptFocusArguments>(
+                        [&runtime](CommandContext& context,
+                                   PromptFocusArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                return promptStatusCommand(
+                                    runtime, context.revision(),
+                                    "prompt.focus_control", std::any{arguments});
                             });
                         }));
 }

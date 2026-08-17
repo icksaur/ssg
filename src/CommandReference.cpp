@@ -49,6 +49,7 @@ std::unordered_map<std::type_index, std::string_view> const& argumentNames() {
         {typeid(TreeSelectArguments), "tree node"},
         {typeid(FindQueryArguments), "query"},
         {typeid(PromptValueArguments), "prompt value"},
+        {typeid(PromptFocusArguments), "prompt focus"},
     };
     return names;
 }

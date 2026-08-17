@@ -53,6 +53,11 @@ public:
     PromptCommandResult submitPrompt();
     PromptCommandResult cancelPrompt();
     PromptCommandResult updatePromptValue(std::size_t index, std::string value);
+    // Move keyboard authority among the active prompt's inputs. focusPromptControl
+    // rejects an index that does not address an input (UnknownInput); both leave
+    // prompt + projection consistent.
+    PromptCommandResult focusPromptControl(std::size_t index);
+    PromptCommandResult focusNextPromptControl();
 
     // Simple base-focus changes -- editor/panel focus that touch only the aggregate, not a
     // transition. focusPanel is honored only while the panel is present (returns whether it

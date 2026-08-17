@@ -572,4 +572,78 @@ check('pickerEpochFromPalette treats absent as zero and rejects malformed presen
   assert.throws(() => pickerEpochFromPalette({ picker_epoch: Number.MAX_SAFE_INTEGER + 1 }), /picker_epoch/);
 });
 
+// --- Footer prompt: semantic PromptView projection, delta, focus plan, ingress ---
+import {
+  promptViewFromSections, promptFocusPlan, promptFocusControlMessage,
+  PROMPT_CONTROL,
+} from '../../apps/web/reconcile.mjs';
+
+// A decoded semantic PromptView section, using the encoder's snake_case names.
+const findSection = (activeInput = 0) => ({
+  prompt_view: {
+    kind: 1, accessible_label: 'Find', active_input: activeInput, controls: [
+      { kind: PROMPT_CONTROL.INPUT, id: 'find.query', accessible_label: 'Find', value: 'ab', checked: false, command: 'find.update_query' },
+      { kind: PROMPT_CONTROL.TOGGLE, id: 'find.case', accessible_label: 'Case', value: '', checked: true, command: 'find.toggle_case' },
+      { kind: PROMPT_CONTROL.COUNT, id: 'find.count', accessible_label: 'Matches', value: '3', checked: false, command: '' },
+    ],
+  },
+});
+
+check('promptViewFromSections renders controls from the section, null when closed', () => {
+  assert.equal(promptViewFromSections(null), null);
+  assert.equal(promptViewFromSections({}), null);
+  assert.equal(promptViewFromSections({ prompt_view: null }), null);
+  const pv = promptViewFromSections(findSection(0));
+  assert.equal(pv.kind, 1);
+  assert.equal(pv.label, 'Find');
+  assert.equal(pv.activeInput, 0);
+  assert.deepEqual(pv.controls.map((c) => c.kind), [PROMPT_CONTROL.INPUT, PROMPT_CONTROL.TOGGLE, PROMPT_CONTROL.COUNT]);
+  assert.equal(pv.controls[0].value, 'ab');
+  assert.equal(pv.controls[0].command, 'find.update_query');   // per-control command, not hardcoded
+  assert.equal(pv.controls[1].checked, true);
+  assert.equal(pv.controls[2].value, '3');
+});
+
+check('applySessionDeltaSections opens, changes, and CLOSES the footer prompt view', () => {
+  const sections = { document: { text: '' }, prompt_view: null };
+  // changed=true with a replacement opens/updates it.
+  applySessionDeltaSections(sections, { prompt_view: { changed: 1, replacement: findSection(0).prompt_view } });
+  assert.ok(sections.prompt_view);
+  assert.equal(promptViewFromSections(sections).activeInput, 0);
+  // changed=false leaves the prior view intact (no spurious close).
+  applySessionDeltaSections(sections, { prompt_view: { changed: 0 } });
+  assert.ok(sections.prompt_view);
+  // changed=true with a null replacement CLOSES it (replaceWrapped's non-null
+  // guard would wrongly keep it -- this is why the delta is changed-flagged).
+  applySessionDeltaSections(sections, { prompt_view: { changed: 1, replacement: null } });
+  assert.equal(sections.prompt_view, null);
+  assert.equal(promptViewFromSections(sections), null);
+});
+
+check('promptFocusPlan focuses only on open and active-input change, never per message', () => {
+  const closed = { open: false, activeInput: -1 };
+  const pv0 = promptViewFromSections(findSection(0));
+  const pv1 = promptViewFromSections(findSection(1));
+  // Open: capture and focus the container.
+  const opened = promptFocusPlan(closed, pv0);
+  assert.deepEqual(opened, { open: true, activeInput: 0, focusContainer: true, restoreFocus: false, activeDescendant: 0 });
+  // Re-render at the same active input: NO focus move (survives re-render; an
+  // unrelated server frame cannot steal deliberate external focus).
+  assert.equal(promptFocusPlan({ open: true, activeInput: 0 }, pv0).focusContainer, false);
+  // Active-input change: focus the container and point aria at the new input.
+  const moved = promptFocusPlan({ open: true, activeInput: 0 }, pv1);
+  assert.equal(moved.focusContainer, true);
+  assert.equal(moved.activeDescendant, 1);
+  // Close: restore the captured focus, drop the container.
+  const closedPlan = promptFocusPlan({ open: true, activeInput: 1 }, null);
+  assert.deepEqual(closedPlan, { open: false, activeInput: -1, focusContainer: false, restoreFocus: true, activeDescendant: null });
+  // Already closed: nothing to restore.
+  assert.equal(promptFocusPlan(closed, null).restoreFocus, false);
+});
+
+check('promptFocusControlMessage carries the clicked input index to prompt.focus_control', () => {
+  assert.equal(promptFocusControlMessage(0), 'PFOC:0');
+  assert.equal(promptFocusControlMessage(2), 'PFOC:2');
+});
+
 console.log('reconcile oracle: ' + checks + ' checks passed');
