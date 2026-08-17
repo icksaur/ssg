@@ -29,8 +29,22 @@ const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toStr
 
 // Role ordinals the renderer maps to CSS custom properties; pinned by
 // test_theme's role-ordinal contract so a reorder cannot silently mis-color.
-const ROLE = { text: 0, canvas: 1, caret: 2, selection: 3, statusWarning: 13 };
+const ROLE = { text: 0, canvas: 1, caret: 2, selection: 3, statusWarning: 13,
+               diffAdded: 19, diffRemoved: 20, diffModified: 21 };
 const FOCUS_EDITOR = 0;   // FocusTarget::Editor ordinal.
+
+// GitTreeStatus ordinals (Added, Modified, Deleted, Renamed, Untracked) surfaced
+// as a native web affordance: a short status letter and the matching Diff* theme
+// role color. Only existing theme roles are used -- the client invents no color --
+// and this is presentation the library carries as git_status, not new product
+// state. Untracked reuses the "added" role by the usual convention (new content).
+const GIT_STATUS = [
+  { letter: 'A', role: ROLE.diffAdded },
+  { letter: 'M', role: ROLE.diffModified },
+  { letter: 'D', role: ROLE.diffRemoved },
+  { letter: 'R', role: ROLE.diffModified },
+  { letter: 'U', role: ROLE.diffAdded },
+];
 
 // Persistent client model: the authoritative sections plus the still-unsettled
 // local predictions. Snapshots replace `sections`; deltas mutate it in place.
@@ -258,13 +272,24 @@ function renderTreeSurface(parent, surface, tree) {
       const div = document.createElement('div');
       div.className = 'tree-row clickable' + (idKey(n.id) === selected ? ' sel' : '');
       div.style.paddingLeft = (num(row.depth) || 0) * 2 + 'ch';
-      if (surface === SURFACE.GITSTATUS && n.git_status != null) div.classList.add('git-' + num(n.git_status));
       // The twisty marks an expandable node's state; a leaf keeps the same column
       // blank so labels align. A closed directory shows the collapsed glyph.
       const twisty = document.createElement('span');
       twisty.className = 'twisty';
       twisty.textContent = n.expandable ? (row.expanded ? '\u25be ' : '\u25b8 ') : '  ';
       div.appendChild(twisty);
+      // A git entry carries a status: show its short letter and color the row with
+      // the matching Diff* theme role (a native affordance over existing roles).
+      const git = (surface === SURFACE.GITSTATUS && n.git_status != null)
+        ? GIT_STATUS[num(n.git_status)] : null;
+      if (git) {
+        const marker = document.createElement('span');
+        marker.className = 'git-status';
+        marker.textContent = git.letter + ' ';
+        div.appendChild(marker);
+        const color = roleColor(git.role, state.sections && state.sections.theme);
+        if (color) div.style.color = color;
+      }
       div.appendChild(document.createTextNode((n.icon ? n.icon + ' ' : '') + (n.label || '')));
       // A click selects then activates the node -- opening a file or toggling a
       // directory -- the same library commands a TUI pointer press dispatches.
