@@ -25,6 +25,7 @@ enum class SnapshotSection : std::uint8_t {
     Palette,
     PromptStatus,
     PromptView,
+    NoticeView,
 };
 
 // The section(s) backing a surface, never empty. Total over ViewSurface: the

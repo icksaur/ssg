@@ -2378,6 +2378,12 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
         auto result = impl_->session->dispatch(as, dispatched);
         impl_->reconcileFindDocument();
         impl_->reconcilePickerCandidates();
+        // The draft-conflict notice's presence lives in per-document runtime state,
+        // outside the prompt/panel transitions, so reconcile it into the interaction
+        // authority here where every state change (open, reopen, tab switch, discard,
+        // dismiss) has settled -- the notice region then shows/hides in the presence
+        // section this dispatch publishes.
+        impl_->interaction.refreshNoticePresence(impl_->noticePresent());
         if (result.accepted() && shouldPauseForLocalEdit &&
             existingDocumentMutated(revisionsBefore, impl_->workspace)) {
             (void)impl_->follow.notifyLocalEdit();

@@ -443,6 +443,18 @@ struct EditorRuntime::Impl final : CommandServices,
     // or nullopt unless a footer-region prompt is open. Shares the one
     // resolvePromptControls authority with the grid promptProjection.
     [[nodiscard]] std::optional<PromptView> promptView() const;
+    // The one draft-conflict notice resolver: the geometry-free NoticeView for the
+    // active document, or nullopt unless its reopen outcome is Conflict. Both the
+    // grid ShellNotice (shellView) and the semantic section (noticeView) derive from
+    // this single literal.
+    [[nodiscard]] std::optional<NoticeView> draftNotice() const;
+    // The geometry-free semantic draft-conflict notice for the snapshot section;
+    // exactly draftNotice(), named to sit beside promptView() in sections().
+    [[nodiscard]] std::optional<NoticeView> noticeView() const;
+    // Whether the active document currently raises a draft-conflict notice. The
+    // notice's tree-node presence lives outside the prompt/panel transitions, so the
+    // runtime reconciles this into the interaction authority after each dispatch.
+    [[nodiscard]] bool noticePresent() const;
     // Dismiss the find/replace controller (and its prompt) when the active
     // document identity or revision no longer matches what it evaluated against,
     // so stale matches are never navigable or projected.

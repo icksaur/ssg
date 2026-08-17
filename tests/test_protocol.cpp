@@ -796,7 +796,97 @@ TEST(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone) {
     ASSERT_FALSE(closeReplay.snapshot->sections().promptView.has_value());
 }
 
-// A frame whose presence section does not correspond to its schema (here, a stale
+// The additive NoticeView section mirrors PromptView: it survives a snapshot
+// round-trip when present, an ABSENT section decodes to none (an older frame
+// lacking it is a valid frame with no draft-conflict notice), and a changed-flagged
+// delta both raises and CLEARS it on replay.
+TEST(noticeViewSectionIsAdditiveAndDecodesAbsentAsNone) {
+    ssg::NoticeView view{
+        "Unsaved draft: file changed on disk externally.",
+        {{"draft.notice.diff", "diff", "draft.diff"},
+         {"draft.notice.use_disk", "use disk", "draft.discard"},
+         {"draft.notice.dismiss", "dismiss", "draft.dismiss"}}};
+
+    auto raisedSections = sections(ssg::Revision{5}, "alpha");
+    raisedSections.noticeView = view;
+    auto quietLowSections = sections(ssg::Revision{4}, "alpha");
+    auto quietHighSections = sections(ssg::Revision{6}, "alpha");
+    ASSERT_FALSE(quietLowSections.noticeView.has_value());
+
+    auto raised = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), raisedSections);
+    auto quietLow = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), quietLowSections);
+    auto quietHigh = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{6}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), quietHighSections);
+
+    // Present round-trips whole; absent decodes to none.
+    auto const decodedRaised = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(raised));
+    ASSERT_TRUE(decodedRaised.snapshot.has_value());
+    ASSERT_TRUE(decodedRaised.snapshot->sections().noticeView == view);
+    auto const decodedQuiet = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(quietLow));
+    ASSERT_TRUE(decodedQuiet.snapshot.has_value());
+    ASSERT_FALSE(decodedQuiet.snapshot->sections().noticeView.has_value());
+
+    // A delta raising the notice carries it and replays to the raised view.
+    auto raiseDelta = ssg::SessionSnapshotCodec{}.deriveDelta(quietLow, raised);
+    ASSERT_TRUE(raiseDelta.noticeView().changed);
+    ASSERT_TRUE(raiseDelta.noticeView().replacement.has_value());
+    auto const decodedRaiseDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        ssg::ProtocolCodec{}.encodeSessionDelta(raiseDelta));
+    ASSERT_TRUE(decodedRaiseDelta.delta.has_value());
+    auto raiseReplay =
+        ssg::SessionSnapshotCodec{}.replay(quietLow, *decodedRaiseDelta.delta);
+    ASSERT_TRUE(raiseReplay.accepted());
+    ASSERT_TRUE(raiseReplay.snapshot->sections().noticeView == view);
+
+    // A delta clearing the notice is changed with NO replacement and replays to
+    // none -- a null replacement means cleared, never "unchanged".
+    auto clearDelta = ssg::SessionSnapshotCodec{}.deriveDelta(raised, quietHigh);
+    ASSERT_TRUE(clearDelta.noticeView().changed);
+    ASSERT_FALSE(clearDelta.noticeView().replacement.has_value());
+    auto const decodedClearDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        ssg::ProtocolCodec{}.encodeSessionDelta(clearDelta));
+    ASSERT_TRUE(decodedClearDelta.delta.has_value());
+    auto clearReplay =
+        ssg::SessionSnapshotCodec{}.replay(raised, *decodedClearDelta.delta);
+    ASSERT_TRUE(clearReplay.accepted());
+    ASSERT_FALSE(clearReplay.snapshot->sections().noticeView.has_value());
+}
+
+// A present notice_view is a real notice, never a degenerate blank bar: empty
+// text, empty actions, or an action missing its command are refused at decode
+// rather than admitted as a present-but-meaningless notice.
+TEST(presentNoticeViewRejectsDegenerateContentAtDecode) {
+    auto const decodeSnapshotWith = [](ssg::NoticeView view) {
+        auto sect = sections(ssg::Revision{5}, "alpha");
+        sect.noticeView = std::move(view);
+        auto snap = ssg::SessionSnapshotCodec{}.assemble(
+            ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+            ssg::InvocationPrincipal{ssg::ClientId{7},
+                                     ssg::InvocationOrigin::InProcess},
+            ssg::ViewId{9}, clientView(3), std::move(sect));
+        return ssg::ProtocolCodec{}.decodeSessionSnapshot(
+            ssg::ProtocolCodec{}.encodeSessionSnapshot(snap));
+    };
+    ASSERT_FALSE(decodeSnapshotWith(
+                     ssg::NoticeView{"", {{"a", "b", "c"}}}).snapshot.has_value());
+    ASSERT_FALSE(decodeSnapshotWith(
+                     ssg::NoticeView{"msg", {}}).snapshot.has_value());
+    ASSERT_FALSE(decodeSnapshotWith(
+                     ssg::NoticeView{"msg", {{"a", "b", ""}}}).snapshot.has_value());
+}
 // generation) is refused at decode -- an inconsistent schema/presence pair never
 // enters the semantic channel.
 TEST(snapshotDecodeRejectsNonCorrespondingPresence) {
@@ -1621,6 +1711,7 @@ int main() {
     RUN(sessionSnapshotAndDeltaCarryTheUiSection);
     RUN(sessionDeltaCarriesThePaletteSection);
     RUN(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone);
+    RUN(noticeViewSectionIsAdditiveAndDecodesAbsentAsNone);
     RUN(snapshotDecodeRejectsNonCorrespondingPresence);
     RUN(accessibilityNodeStatusInvocationRoundTripsWhenPresent);
     RUN(accessibilityNodeWithoutStatusInvocationRoundTripsAsAbsent);

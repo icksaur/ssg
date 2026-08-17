@@ -14,6 +14,7 @@ import {
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE,
   encodeStatusActionInvocation, shouldResetLocalQuery, pickerEpochFromPalette,
   promptViewFromSections, PROMPT_CONTROL, promptFocusPlan, promptFocusControlMessage,
+  noticeViewFromSections,
 } from '/reconcile.mjs';
 import { fuzzyRank } from '/fuzzy.mjs';
 
@@ -25,6 +26,7 @@ const chromeTopEl = document.getElementById('chrome-top');
 const chromeBottomEl = document.getElementById('chrome-bottom');
 const chromeErrorEl = document.getElementById('chrome-error');
 const promptEl = document.getElementById('prompt');
+const noticeEl = document.getElementById('notice');
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString() : x);
@@ -539,6 +541,38 @@ function renderFooterPrompt(sections) {
   footerPromptActiveInput = plan.activeInput;
 }
 
+// Reconcile #notice against the published semantic NoticeView (null when the
+// active document raises no draft-conflict notice). The bar shows the message and
+// clickable bracketed action labels; each action dispatches its command id through
+// the shared command ingress. The notice captures no keyboard focus -- it is
+// intrinsic-height chrome above the document, not an input surface.
+function renderNotice(sections) {
+  const nv = noticeViewFromSections(sections);
+  if (!nv) {
+    noticeEl.textContent = '';
+    noticeEl.classList.remove('open');
+    noticeEl.removeAttribute('role');
+    noticeEl.removeAttribute('aria-label');
+    return;
+  }
+  noticeEl.textContent = '';
+  noticeEl.classList.add('open');
+  noticeEl.setAttribute('role', 'status');
+  noticeEl.setAttribute('aria-label', nv.text);
+  const text = document.createElement('span');
+  text.className = 'notice-text';
+  text.textContent = nv.text;
+  noticeEl.appendChild(text);
+  for (const action of nv.actions) {
+    const el = document.createElement('button');
+    el.className = 'notice-action';
+    el.setAttribute('aria-label', action.label);
+    el.textContent = '[' + action.label + ']';
+    el.addEventListener('click', () => ws.send('CMD:' + action.command));
+    noticeEl.appendChild(el);
+  }
+}
+
 // The legacy overlay host is kept only as a closed shell; the active picker is the
 // retained FindResults surface inside the interpreted whole-screen tree.
 function renderPalette() {
@@ -579,6 +613,7 @@ function render() {
     renderDocumentInto(docEl);
   }
   renderPalette();
+  renderNotice(s);
   renderFooterPrompt(s);
 }
 

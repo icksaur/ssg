@@ -63,9 +63,25 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     ASSERT_TRUE(body != nullptr);
     ASSERT_TRUE(footer != nullptr);
     ASSERT_EQ(child(comp.root, 0).id.value(), std::string{kHeaderNodeId});
-    ASSERT_EQ(child(comp.root, 1).id.value(), std::string{kBodyNodeId});
-    ASSERT_EQ(child(comp.root, 2).id.value(), std::string{kFooterPromptNodeId});
-    ASSERT_EQ(child(comp.root, 3).id.value(), std::string{kFooterNodeId});
+    ASSERT_EQ(child(comp.root, 1).id.value(), std::string{kNoticeNodeId});
+    ASSERT_EQ(child(comp.root, 2).id.value(), std::string{kBodyNodeId});
+    ASSERT_EQ(child(comp.root, 3).id.value(), std::string{kFooterPromptNodeId});
+    ASSERT_EQ(child(comp.root, 4).id.value(), std::string{kFooterNodeId});
+    // The draft-conflict notice is an always-assembled Auto-sized View naming Notice,
+    // between the header and the body; presence (not assembly) hides it.
+    const UiNode* notice = childById(comp.root, kNoticeNodeId);
+    ASSERT_TRUE(notice != nullptr);
+    if (notice) {
+        ASSERT_TRUE(notice->size.kind() == SizeKind::Auto);
+        const auto* nLeaf = std::get_if<UiLeaf>(&notice->content);
+        ASSERT_TRUE(nLeaf != nullptr);
+        if (nLeaf) {
+            ASSERT_TRUE(nLeaf->widget.kind == WidgetKind::View);
+            ASSERT_TRUE(nLeaf->widget.surface.has_value());
+            if (nLeaf->widget.surface)
+                ASSERT_TRUE(*nLeaf->widget.surface == ViewSurface::Notice);
+        }
+    }
     // The footer prompt is an always-assembled Auto-sized View naming FooterPrompt,
     // between the body and the footer; presence (not assembly) hides it.
     const UiNode* footerPrompt = childById(comp.root, kFooterPromptNodeId);

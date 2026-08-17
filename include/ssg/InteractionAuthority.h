@@ -66,6 +66,12 @@ public:
     void focusEditor();
     bool focusPanel();
 
+    // Reconcile the draft-conflict notice presence into truth. The notice's source is
+    // per-document runtime state outside the prompt/panel transitions, so the runtime
+    // calls this after each dispatch; a change rebuilds the projection so the notice
+    // region shows/hides. Returns whether presence changed (no rebuild when unchanged).
+    bool refreshNoticePresence(bool present);
+
     // Re-assemble the whole-screen schema; when its generation advances, rebuild the
     // interaction projection from the SAME truth and prompt over the new schema (the
     // migration). Returns whether the generation advanced.

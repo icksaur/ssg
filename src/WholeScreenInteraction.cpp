@@ -74,6 +74,19 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     }
     if (hasFooterPrompt && !footerPromptOpen) hidden.push_back(footerPrompt);
 
+    // The notice region mirrors the header input line and footer prompt: always
+    // assembled, present only while the active document raises a draft-conflict
+    // notice, so a client draws the notice bar exactly then. Its absence under a
+    // raised notice means the schema contract broke and must not be masked. Unlike
+    // the prompt, the notice captures no focus -- its actions are click/command
+    // triggers routed like any other command.
+    const UiNodeId notice = nodeId(kNoticeNodeId);
+    const bool hasNotice = schema.contains(notice);
+    if (truth.noticePresent && !hasNotice) {
+        throw std::logic_error("draft notice requires the notice node");
+    }
+    if (hasNotice && !truth.noticePresent) hidden.push_back(notice);
+
     UiInteractionState state{std::move(schema), std::move(hidden)};
 
     // Base focus never strands on an absent panel: Panel is honored only when present.

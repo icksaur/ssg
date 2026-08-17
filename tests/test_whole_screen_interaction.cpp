@@ -156,6 +156,28 @@ TEST(footerPromptRequiresTheFooterPromptSchemaNode) {
                   std::logic_error);
 }
 
+// The notice region is presence-gated like the prompt: it must exist in the schema
+// whenever truth raises a notice, and it is hidden exactly when no notice is raised.
+TEST(noticeRegionRequiresTheNoticeSchemaNode) {
+    WholeScreenTruth raised;
+    raised.noticePresent = true;
+    ASSERT_THROWS(buildWholeScreenInteraction(schemaWithoutPromptInput(), raised),
+                  std::logic_error);
+}
+
+TEST(theNoticeRegionIsVisibleOnlyWhenTruthRaisesANotice) {
+    WholeScreenTruth quiet;
+    const auto a = buildWholeScreenInteraction(schemaOf({}), quiet);
+    ASSERT_FALSE(present(a, kNoticeNodeId));
+
+    WholeScreenTruth raised;
+    raised.noticePresent = true;
+    const auto b = buildWholeScreenInteraction(schemaOf({}), raised);
+    ASSERT_TRUE(present(b, kNoticeNodeId));
+    // Unlike the prompt, the notice captures no keyboard focus.
+    ASSERT_TRUE(b.effectiveFocus() == FocusTarget::Editor);
+}
+
 TEST(baseFocusNeverStrandsOnAnAbsentPanel) {
     WholeScreenTruth truth;
     truth.panelPresent = false;
@@ -252,6 +274,8 @@ int main() {
     RUN(promptFocusAnchorsOnTheRegionHost);
     RUN(headerPromptRequiresTheInputLineSchemaNode);
     RUN(footerPromptRequiresTheFooterPromptSchemaNode);
+    RUN(noticeRegionRequiresTheNoticeSchemaNode);
+    RUN(theNoticeRegionIsVisibleOnlyWhenTruthRaisesANotice);
     RUN(theInputLineIsVisibleOnlyForAHeaderPromptAndCapturesTheInputNode);
     RUN(baseFocusNeverStrandsOnAnAbsentPanel);
     RUN(rebuildOverANewGenerationPreservesTruthAndResetsBasis);

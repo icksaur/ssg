@@ -185,6 +185,12 @@ UiComposition assembleWholeScreen(
          viewLeaf(kFindResultsNodeId, ViewSurface::FindResults, Size::flex())});
     UiNode body = container(kBodyNodeId, Axis::Row, Size::flex(),
                             {std::move(panel), std::move(content)});
+    // The draft-conflict notice's semantic surface, always assembled and hidden by
+    // presence (WholeScreenInteraction). Auto-sized so its footprint is the runtime's
+    // reserved chrome row above the document; the grid host ignores it and renders
+    // ShellNotice with rects.
+    UiNode notice =
+        viewLeaf(kNoticeNodeId, ViewSurface::Notice, Size::autoSize());
     // The footer-region prompt's semantic surface, always assembled and hidden by
     // presence (WholeScreenInteraction). Auto-sized so its footprint is the
     // runtime's reservation, intrinsic and not varied here by prompt kind; the
@@ -194,7 +200,7 @@ UiComposition assembleWholeScreen(
 
     UiComposition out;
     out.root = container(kRootNodeId, Axis::Column, Size::flex(),
-                         {std::move(header), std::move(body),
+                         {std::move(header), std::move(notice), std::move(body),
                           std::move(footerPrompt), std::move(footer)});
     return out;
 }

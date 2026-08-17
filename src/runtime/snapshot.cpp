@@ -190,6 +190,32 @@ std::optional<PromptView> EditorRuntime::Impl::promptView() const {
     return view;
 }
 
+std::optional<NoticeView> EditorRuntime::Impl::draftNotice() const {
+    // Only the Conflict outcome raises the notice; a Restored draft is a quieter
+    // state with no external change to resolve. The action command ids are already
+    // registered; the host only dispatches them.
+    const auto id = activeDocumentId();
+    if (!id) return std::nullopt;
+    const auto found = documentRuntimeStates.find(id->value());
+    if (found == documentRuntimeStates.end() ||
+        found->second.reopen != DraftReopenOutcome::Conflict) {
+        return std::nullopt;
+    }
+    return NoticeView{
+        "Unsaved draft: file changed on disk externally.",
+        {{"draft.notice.diff", "diff", "draft.diff"},
+         {"draft.notice.use_disk", "use disk", "draft.discard"},
+         {"draft.notice.dismiss", "dismiss", "draft.dismiss"}}};
+}
+
+std::optional<NoticeView> EditorRuntime::Impl::noticeView() const {
+    return draftNotice();
+}
+
+bool EditorRuntime::Impl::noticePresent() const {
+    return draftNotice().has_value();
+}
+
 StatusFieldProjection EditorRuntime::Impl::chromeStatusFields(
     ChromeFieldMode mode) const {
     auto statusProjection = status.footerProjection();
@@ -219,19 +245,17 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     ShellLayoutRequest request;    request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = interaction.prompt().active() ? promptRowCount(interaction.prompt().request()->kind) : 0;
     request.lineNumberGutterWidth = lineNumberGutterWidth();
-    // Surface the draft-conflict notice for the active document (M15). Only the
-    // Conflict outcome raises the yellow bar; a Restored draft is a quieter
-    // state with no external change to resolve.
-    if (auto const id = activeDocumentId()) {
-        auto const found = documentRuntimeStates.find(id->value());
-        if (found != documentRuntimeStates.end() &&
-            found->second.reopen == DraftReopenOutcome::Conflict) {
-            request.notice = ShellNotice{
-                "Unsaved draft: file changed on disk externally.",
-                {{"draft.notice.diff", "diff", "draft.diff"},
-                 {"draft.notice.use_disk", "use disk", "draft.discard"},
-                 {"draft.notice.dismiss", "dismiss", "draft.dismiss"}}};
+    // Surface the draft-conflict notice for the active document (M15) from the one
+    // resolver; the grid ShellNotice is that geometry-free notice plus rects, added
+    // by the shell layout. Reserving a chrome row (rather than stealing document
+    // row 0) keeps the document's own coordinate space intact.
+    if (auto notice = draftNotice()) {
+        std::vector<ShellNoticeAction> actions;
+        actions.reserve(notice->actions.size());
+        for (auto const& action : notice->actions) {
+            actions.push_back({action.id, action.label, action.command});
         }
+        request.notice = ShellNotice{std::move(notice->text), std::move(actions)};
     }
     request.emptyState = activeDocument() == nullptr;
     request.panelProviderLabel = std::string{panelProviderLabel(interaction.truth().selectedProvider)};
@@ -369,7 +393,8 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             std::move(uiSchema),
             std::move(uiState),
             std::move(uiPresence),
-            promptView()};
+            promptView(),
+            noticeView()};
 }
 
 TreeViewState EditorRuntime::Impl::treeView() const {

@@ -585,6 +585,10 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
         }
         *prevSnapshot = std::move(current);
     };
+    auto flushDueDrafts = [&runtime, runtimeMutex]() {
+        std::lock_guard lock{*runtimeMutex};
+        return runtime.flushDueAutosaveDrafts();
+    };
     while (!g_stop.load()) {
         int const fd = gitWakeDescriptor();
         if (fd == -1) {
@@ -594,7 +598,17 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
             (void)::poll(&gitWake, 1, 100);
             consumeGitWake();
         }
+        // Persist due autosave drafts so single-file draft recovery (M15) works in
+        // a web session exactly as in the terminal: a draft written now is what a
+        // later reopen against changed disk classifies as a conflict.
+        (void)flushDueDrafts();
         broadcastGitUpdate();
+    }
+    {
+        // A clean shutdown flushes every dirty draft, capturing edits newer than
+        // the last periodic flush, so no in-flight recovery draft is lost.
+        std::lock_guard lock{*runtimeMutex};
+        (void)runtime.flushAllAutosaveDrafts();
     }
     server.stop();
     return 0;

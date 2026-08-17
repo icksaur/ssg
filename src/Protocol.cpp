@@ -1127,6 +1127,8 @@ ProtocolValue toValue(PromptProjectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptProjectionDelta>& out);
 ProtocolValue toValue(PromptViewSectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptViewSectionDelta>& out);
+ProtocolValue toValue(NoticeViewSectionDelta const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<NoticeViewSectionDelta>& out);
 ProtocolValue toValue(TreeWindowsDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeWindowsDelta>& out);
 ProtocolValue toValue(HistoryViewState const& value);
@@ -1157,6 +1159,10 @@ ProtocolValue toValue(PromptControl const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptControl>& out);
 ProtocolValue toValue(PromptView const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptView>& out);
+ProtocolValue toValue(NoticeAction const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<NoticeAction>& out);
+ProtocolValue toValue(NoticeView const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<NoticeView>& out);
 ProtocolValue toValue(PromptStatusViewState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptStatusViewState>& out);
 ProtocolValue toValue(PromptStatusDelta const& value);
@@ -2197,6 +2203,23 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptViewSectionDe
     return true;
 }
 
+ProtocolValue toValue(NoticeViewSectionDelta const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("changed", toValue(value.changed));
+    fields.emplace_back("replacement", toValue(value.replacement));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<NoticeViewSectionDelta>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto changed = requireField<bool>(value.field("changed"));
+    if (!changed) return false;
+    std::optional<NoticeView> replacement;
+    if (!decodeOptionalField(value.field("replacement"), replacement)) return false;
+    out.emplace(NoticeViewSectionDelta{*changed, std::move(replacement)});
+    return true;
+}
+
 ProtocolValue toValue(TreeWindowsDelta const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("changed", toValue(value.changed));
@@ -2552,6 +2575,42 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptView>& out) {
     }
     out.emplace(PromptView{*kind, *accessibleLabel, std::move(*controls),
                            static_cast<std::size_t>(*activeInput)});
+    return true;
+}
+
+ProtocolValue toValue(NoticeAction const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("id", toValue(value.id));
+    fields.emplace_back("label", toValue(value.label));
+    fields.emplace_back("command", toValue(value.command));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<NoticeAction>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto id = requireField<std::string>(value.field("id"));
+    auto label = requireField<std::string>(value.field("label"));
+    auto command = requireField<std::string>(value.field("command"));
+    if (!id || !label || !command) return false;
+    if (id->empty() || label->empty() || command->empty()) return false;
+    out.emplace(NoticeAction{*id, *label, *command});
+    return true;
+}
+
+ProtocolValue toValue(NoticeView const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("text", toValue(value.text));
+    fields.emplace_back("actions", toValue(value.actions));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<NoticeView>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto text = requireField<std::string>(value.field("text"));
+    auto actions = requireField<std::vector<NoticeAction>>(value.field("actions"));
+    if (!text || !actions) return false;
+    if (text->empty() || actions->empty()) return false;
+    out.emplace(NoticeView{*text, std::move(*actions)});
     return true;
 }
 
@@ -4951,6 +5010,12 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back("prompt_view", value.promptView
                                            ? toValue(*value.promptView)
                                            : ProtocolValue::makeNull());
+    // Additive: the semantic draft-conflict notice section. Null when the active
+    // document has no unresolved conflict; a decoder that predates this field simply
+    // ignores it, and a frame that omits it decodes to no notice.
+    fields.emplace_back("notice_view", value.noticeView
+                                           ? toValue(*value.noticeView)
+                                           : ProtocolValue::makeNull());
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
@@ -5003,6 +5068,13 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
             if (!decodePresent(*promptViewField, promptView)) return false;
         }
     }
+    // Additive: absent OR null decodes to no notice; present-but-malformed fails loud.
+    std::optional<NoticeView> noticeView;
+    if (const ProtocolValue* noticeViewField = value.field("notice_view")) {
+        if (noticeViewField->kind() != ProtocolValue::Kind::NullValue) {
+            if (!decodePresent(*noticeViewField, noticeView)) return false;
+        }
+    }
     // The schema and its presence section travel together and must correspond
     // (generation + node-id set). Neither alone is a valid frame -- a lone schema
     // would fall back to the root-only default presence, which need not correspond;
@@ -5032,6 +5104,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     if (uiState) out->uiState = std::move(*uiState);
     if (uiPresence) out->uiPresence = std::move(*uiPresence);
     out->promptView = std::move(promptView);
+    out->noticeView = std::move(noticeView);
     return true;
 }
 
@@ -5699,6 +5772,7 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
                             ? encodePalette(*delta.palette().replacement)
                             : ProtocolValue::makeNull());
     fields.emplace_back("prompt_view", toValue(delta.promptView()));
+    fields.emplace_back("notice_view", toValue(delta.noticeView()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5820,6 +5894,18 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
         }
         promptViewDelta = std::move(*decoded);
     }
+    // Additive: an absent notice_view field means "unchanged" (changed=false), so a
+    // delta from a peer that predates the field never spuriously clears the notice; a
+    // present-but-malformed field fails loud.
+    NoticeViewSectionDelta noticeViewDelta;
+    if (const ProtocolValue* noticeViewField = payload.field("notice_view")) {
+        std::optional<NoticeViewSectionDelta> decoded;
+        if (!decodePresent(*noticeViewField, decoded)) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "session delta payload is malformed"};
+        }
+        noticeViewDelta = std::move(*decoded);
+    }
 
     if (!optionalOk || !baseRevision || !revision || !clientId || !viewId ||
         !capabilities || !selection || !history || !clipboard ||
@@ -5849,7 +5935,8 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*selectionNav), std::move(*promptProjection),
                 std::move(*treeWindows), std::move(uiDelta),
                 std::move(uiStateDelta), std::move(uiPresenceDelta),
-                std::move(paletteDelta), std::move(promptViewDelta)),
+                std::move(paletteDelta), std::move(promptViewDelta),
+                std::move(noticeViewDelta)),
             {}};
 }
 

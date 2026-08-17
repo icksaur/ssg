@@ -133,6 +133,13 @@ inline constexpr std::string_view kHeaderPromptInputNodeId = "input_line";
 // PromptView section; the grid host ignores it and renders the parallel
 // PresentationSnapshot::prompt with rects.
 inline constexpr std::string_view kFooterPromptNodeId = "footer.prompt";
+// The draft-conflict notice's semantic surface: a View leaf naming
+// ViewSurface::Notice, placed between the header and the body (one reserved chrome
+// row above the document, M15), hidden by presence unless the active document has an
+// unresolved draft conflict. A native client renders the notice bar from the
+// semantic NoticeView section; the grid host ignores it and renders the parallel
+// ShellNotice with rects.
+inline constexpr std::string_view kNoticeNodeId = "notice";
 
 // The typed well-known areas: a closed set a native client may key off to hand a
 // subtree to its own toolkit. A raw id string is not a placement contract; this
@@ -146,6 +153,7 @@ enum class WellKnownArea : std::uint8_t {
     Content,
     Footer,
     FooterPrompt,
+    Notice,
 };
 
 inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
@@ -157,6 +165,7 @@ inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
     case WellKnownArea::Content: return kContentNodeId;
     case WellKnownArea::Footer: return kFooterNodeId;
     case WellKnownArea::FooterPrompt: return kFooterPromptNodeId;
+    case WellKnownArea::Notice: return kNoticeNodeId;
     }
     throw std::invalid_argument("wellKnownAreaId: unrecognized WellKnownArea");
 }

@@ -646,4 +646,53 @@ check('promptFocusControlMessage carries the clicked input index to prompt.focus
   assert.equal(promptFocusControlMessage(2), 'PFOC:2');
 });
 
+// --- Draft-conflict notice: semantic NoticeView projection, delta, action ingress ---
+import { noticeViewFromSections } from '../../apps/web/reconcile.mjs';
+
+// A decoded semantic NoticeView section, using the encoder's snake_case names.
+const noticeSection = () => ({
+  notice_view: {
+    text: 'Unsaved draft: file changed on disk externally.',
+    actions: [
+      { id: 'draft.notice.diff', label: 'diff', command: 'draft.diff' },
+      { id: 'draft.notice.use_disk', label: 'use disk', command: 'draft.discard' },
+      { id: 'draft.notice.dismiss', label: 'dismiss', command: 'draft.dismiss' },
+    ],
+  },
+});
+
+check('noticeViewFromSections renders the notice from the section, null when absent', () => {
+  assert.equal(noticeViewFromSections(null), null);
+  assert.equal(noticeViewFromSections({}), null);
+  assert.equal(noticeViewFromSections({ notice_view: null }), null);
+  const nv = noticeViewFromSections(noticeSection());
+  assert.equal(nv.text, 'Unsaved draft: file changed on disk externally.');
+  assert.deepEqual(nv.actions.map((a) => a.command), ['draft.diff', 'draft.discard', 'draft.dismiss']);
+  assert.equal(nv.actions[0].label, 'diff');
+});
+
+check('applySessionDeltaSections raises, holds, and CLEARS the notice view', () => {
+  const sections = { document: { text: '' }, notice_view: null };
+  // changed=true with a replacement raises it.
+  applySessionDeltaSections(sections, { notice_view: { changed: 1, replacement: noticeSection().notice_view } });
+  assert.ok(sections.notice_view);
+  assert.equal(noticeViewFromSections(sections).actions.length, 3);
+  // changed=false leaves the prior notice intact (no spurious clear).
+  applySessionDeltaSections(sections, { notice_view: { changed: 0 } });
+  assert.ok(sections.notice_view);
+  // changed=true with a null replacement CLEARS it (a null replacement means the
+  // notice cleared, never "unchanged").
+  applySessionDeltaSections(sections, { notice_view: { changed: 1, replacement: null } });
+  assert.equal(sections.notice_view, null);
+  assert.equal(noticeViewFromSections(sections), null);
+});
+
+check('a notice action carries the plain command id dispatched through the command ingress', () => {
+  const nv = noticeViewFromSections(noticeSection());
+  // The client dispatches each action as 'CMD:'+command; assert the wire string a
+  // click would send matches the already-registered draft commands.
+  assert.deepEqual(nv.actions.map((a) => 'CMD:' + a.command),
+    ['CMD:draft.diff', 'CMD:draft.discard', 'CMD:draft.dismiss']);
+});
+
 console.log('reconcile oracle: ' + checks + ' checks passed');

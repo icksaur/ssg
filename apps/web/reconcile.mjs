@@ -281,6 +281,12 @@ export function applySessionDeltaSections(sections, delta) {
   if (delta.prompt_view && num(delta.prompt_view.changed)) {
     sections.prompt_view = delta.prompt_view.replacement != null ? delta.prompt_view.replacement : null;
   }
+  // The draft-conflict notice travels as a changed-flagged delta exactly like the
+  // footer prompt: a null replacement means the notice CLEARED, so it must not go
+  // through replaceWrapped's non-null guard. changed=false leaves the prior notice.
+  if (delta.notice_view && num(delta.notice_view.changed)) {
+    sections.notice_view = delta.notice_view.replacement != null ? delta.notice_view.replacement : null;
+  }
   const replaceDirect = (name) => { if (delta[name] != null) sections[name] = delta[name]; };
   replaceDirect('ui');
   replaceDirect('ui_state');
@@ -349,6 +355,21 @@ export function promptViewFromSections(sections) {
     activeInput: num(pv.active_input),
   };
 }
+// The draft-conflict notice's geometry-free semantic projection normalized for the
+// renderer, or null when the active document raises no notice. Owns the snake_case
+// wire coupling (command) so the client draws the notice bar and its clickable
+// action labels without re-deriving field names.
+export function noticeViewFromSections(sections) {
+  if (!sections) return null;
+  const nv = sections.notice_view;
+  if (nv == null) return null;
+  const actions = (nv.actions || []).map((a) => ({
+    id: String(a.id == null ? '' : a.id),
+    label: String(a.label == null ? '' : a.label),
+    command: String(a.command == null ? '' : a.command),
+  }));
+  return { text: String(nv.text == null ? '' : nv.text), actions };
+}
 export function isPalettePromptOpen(sections) {
   if (!sections) return false;
   if (num(sections.focus) !== FOCUS_PROMPT) return false;
@@ -390,7 +411,7 @@ export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPU
 export const AXIS = { ROW: 0, COLUMN: 1 };
 export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
-export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5 };
+export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5, NOTICE: 6 };
 const STRUCTURAL_ROLE = { prompt: 16 };
 const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL_ROLE, name)
   ? STRUCTURAL_ROLE[name] : null;
@@ -401,7 +422,7 @@ const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL
 // tree structure + well-known node ids, so there is no region-role set.
 export const WEB_UI_PROFILE = {
   widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.TEXT_INPUT, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
-  surfaces: new Set([SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT]),
+  surfaces: new Set([SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT, SURFACE.NOTICE]),
 };
 
 // The first schema primitive `profile` does not support, as

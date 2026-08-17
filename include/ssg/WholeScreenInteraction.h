@@ -43,6 +43,12 @@ struct WholeScreenTruth {
     // The base focus to restore when the panel hides -- retained by the aggregate across
     // a panel show so hiding the panel returns focus where it was, not blindly to Editor.
     BaseFocus panelReturnFocus = BaseFocus::Editor;
+    // Whether the active document raises a draft-conflict notice. Unlike the prompt
+    // region (derived from the PromptSurface at build time), the notice's source is
+    // per-document runtime state the interaction aggregate does not otherwise hold,
+    // so the runtime reconciles it into truth after each dispatch. Gates the notice
+    // region's presence only.
+    bool noticePresent = false;
 
     friend bool operator==(const WholeScreenTruth&, const WholeScreenTruth&) = default;
 };

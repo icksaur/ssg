@@ -37,6 +37,26 @@ namespace ssg {
 
 class SessionSnapshotCodec;
 
+// One action in the draft-conflict notice: a label bound to the already-registered
+// library `command` it dispatches. Geometry-free -- the grid ShellNoticeAction is
+// this same content plus a Rect, both built from the one draftNotice resolver.
+struct NoticeAction {
+    std::string id;
+    std::string label;
+    std::string command;
+    friend bool operator==(const NoticeAction&, const NoticeAction&) = default;
+};
+
+// The geometry-free semantic projection of the active document's draft-conflict
+// notice (M15): its message and ordered actions. Absent unless the active document
+// has an unresolved draft conflict. A native client renders and drives the notice
+// from this; the grid client instead lowers the parallel ShellNotice with rects.
+struct NoticeView {
+    std::string text;
+    std::vector<NoticeAction> actions;
+    friend bool operator==(const NoticeView&, const NoticeView&) = default;
+};
+
 struct SessionSnapshotSections {
     DocumentViewState document;
     SelectionSet selection;
@@ -85,6 +105,12 @@ struct SessionSnapshotSections {
     // lowers the parallel PresentationSnapshot::prompt with rects. Both derive
     // from the one resolvePromptControls authority.
     std::optional<PromptView> promptView;
+    // The geometry-free semantic projection of the active document's draft-conflict
+    // notice (M15). Absent unless the active document has an unresolved conflict. A
+    // native client renders the notice bar from this; the grid client instead lowers
+    // the parallel ShellNotice with rects. Both derive from the one draftNotice
+    // resolver.
+    std::optional<NoticeView> noticeView;
 };
 
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,
@@ -239,6 +265,15 @@ struct PromptViewSectionDelta {
     std::optional<PromptView> replacement;
 };
 
+// Delta of the optional semantic NoticeView section. `changed` is explicit because
+// the section is itself optional: {true, nullopt} means the notice cleared, {true,
+// value} a new/changed notice, {false, _} unchanged. Read `changed` first. Mirrors
+// PromptViewSectionDelta for the geometry-free channel.
+struct NoticeViewSectionDelta {
+    bool changed = false;
+    std::optional<NoticeView> replacement;
+};
+
 struct SessionReplayResult;
 
 class SessionDelta {
@@ -333,6 +368,9 @@ public:
     [[nodiscard]] PromptViewSectionDelta const& promptView() const noexcept {
         return promptView_;
     }
+    [[nodiscard]] NoticeViewSectionDelta const& noticeView() const noexcept {
+        return noticeView_;
+    }
     [[nodiscard]] StyleSectionDelta const& style() const noexcept {
         return style_;
     }
@@ -376,7 +414,8 @@ private:
         UiStateSectionDelta uiState = {},
         UiPresenceSectionDelta uiPresence = {},
         PaletteSectionDelta palette = {},
-        PromptViewSectionDelta promptView = {});
+        PromptViewSectionDelta promptView = {},
+        NoticeViewSectionDelta noticeView = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -416,6 +455,7 @@ private:
     UiPresenceSectionDelta uiPresence_;
     PaletteSectionDelta palette_;
     PromptViewSectionDelta promptView_;
+    NoticeViewSectionDelta noticeView_;
 };
 
 struct SessionReplayResult {
@@ -469,7 +509,8 @@ public:
         UiStateSectionDelta uiState = {},
         UiPresenceSectionDelta uiPresence = {},
         PaletteSectionDelta palette = {},
-        PromptViewSectionDelta promptView = {}) const;
+        PromptViewSectionDelta promptView = {},
+        NoticeViewSectionDelta noticeView = {}) const;
 };
 
 }  // namespace ssg

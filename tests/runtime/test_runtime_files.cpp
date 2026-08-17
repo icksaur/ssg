@@ -11,6 +11,7 @@
 #include <ssg/TextInputCommands.h>
 
 #include <chrono>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -508,6 +509,89 @@ TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
                     ssg::EditorRuntime::DraftReopenNotice::Restored);
         ASSERT_FALSE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, dims)));
     }
+}
+
+// The semantic NoticeView projection is present exactly on a draft-conflict reopen
+// (nullopt otherwise), so a native/web client raises the notice without the grid.
+TEST(noticeViewIsPresentOnlyOnADraftConflict) {
+    const ssg::ViewportDimensions dims{80, 24};
+    {
+        auto root = uniqueRoot("semantic_notice_conflict");
+        leaveDirtyDraft(root);
+        std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+            << "changed externally\n";
+        auto created = ssg::EditorRuntime::create(configFor(root));
+        ASSERT_TRUE(created.accepted());
+        auto& runtime = *created.runtime;
+        ASSERT_TRUE(reopenNote(runtime).accepted());
+        auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snapshot.has_value());
+        const auto& notice = snapshot->sections().noticeView;
+        ASSERT_TRUE(notice.has_value());
+        ASSERT_FALSE(notice->text.empty());
+        ASSERT_EQ(notice->actions.size(), std::size_t{3});
+    }
+    {
+        auto root = uniqueRoot("semantic_notice_restored");
+        leaveDirtyDraft(root);  // disk unchanged -> Restored, no notice
+        auto created = ssg::EditorRuntime::create(configFor(root));
+        ASSERT_TRUE(created.accepted());
+        auto& runtime = *created.runtime;
+        ASSERT_TRUE(reopenNote(runtime).accepted());
+        auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snapshot.has_value());
+        ASSERT_FALSE(snapshot->sections().noticeView.has_value());
+    }
+}
+
+// The grid ShellNotice and the semantic NoticeView are both projections of the ONE
+// draftNotice() resolver: whenever one raises the notice the other does too, with
+// the same action command ids, and neither raises it without the other.
+TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
+    const ssg::ViewportDimensions dims{80, 24};
+    auto root = uniqueRoot("one_resolver_conflict");
+    leaveDirtyDraft(root);
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+        << "changed externally\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(snapshot.has_value());
+
+    // Both projections agree that a notice is raised.
+    ASSERT_TRUE(hasNoticeBar(*snapshot));
+    const auto& notice = snapshot->sections().noticeView;
+    ASSERT_TRUE(notice.has_value());
+
+    // The semantic actions carry exactly the command ids the grid NoticeAction
+    // nodes dispatch -- proof of a single source. Order is a grid-layout detail, so
+    // compare the command sets.
+    std::vector<std::string> gridCommands;
+    for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
+        if (node.kind == ssg::ShellNodeKind::NoticeAction) {
+            const auto hit = ssg::HitTester{*snapshot}.at(node.rect.x, node.rect.y);
+            ASSERT_TRUE(hit.commandId.has_value());
+            if (hit.commandId) gridCommands.push_back(*hit.commandId);
+        }
+    }
+    std::vector<std::string> semanticCommands;
+    for (const auto& action : notice->actions)
+        semanticCommands.push_back(action.command);
+    std::sort(gridCommands.begin(), gridCommands.end());
+    std::sort(semanticCommands.begin(), semanticCommands.end());
+    ASSERT_EQ(gridCommands.size(), semanticCommands.size());
+    ASSERT_TRUE(gridCommands == semanticCommands);
+
+    // Dismiss clears BOTH projections together.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"draft.dismiss", runtime.revision(), {}})
+                    .accepted());
+    auto cleared = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(cleared.has_value());
+    ASSERT_FALSE(hasNoticeBar(*cleared));
+    ASSERT_FALSE(cleared->sections().noticeView.has_value());
 }
 
 TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
@@ -1190,6 +1274,8 @@ int main() {
     RUN(draftDiscardRefusesACleanSavedDocument);
     RUN(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits);
     RUN(conflictNoticeIsPresentOnlyForAConflictReopen);
+    RUN(noticeViewIsPresentOnlyOnADraftConflict);
+    RUN(theGridNoticeAndSemanticNoticeComeFromTheOneResolver);
     RUN(conflictNoticeReservesChromeWithoutPerturbingTheDocument);
     RUN(clickingNoticeActionsDispatchesTheirCommands);
     RUN(dismissRefusesWhenThereIsNoConflictNotice);

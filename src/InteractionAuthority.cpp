@@ -150,6 +150,16 @@ bool InteractionAuthority::focusPanel() {
     return true;
 }
 
+bool InteractionAuthority::refreshNoticePresence(bool present) {
+    if (truth_.noticePresent == present) return false;
+    // Build from a prospective truth, then adopt both together -- truth_ is never
+    // mutated before the projection is rebuilt.
+    WholeScreenTruth next = truth_;
+    next.noticePresent = present;
+    adopt(std::move(next), prompt_);
+    return true;
+}
+
 bool InteractionAuthority::updateComposition(UiComposition assembly) {    // Prepare both replacements before swapping either: update a COPY of the schema, build
     // the projection over it, then adopt both together, so a rebuild failure cannot leave a
     // new schema paired with the old interaction.

@@ -27,6 +27,15 @@
   #prompt .prompt-toggle.checked { opacity:1; font-weight:bold; }
   #prompt .prompt-count { opacity:.55; margin-left:auto; }
   #prompt .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
+  /* The draft-conflict notice: intrinsic-height chrome above the document, painted
+     with the StatusWarning role background and the Canvas foreground to mirror the
+     terminal NoticeBar. Presence is server-owned; #notice.open is set only while
+     the library publishes a notice_view. */
+  #notice { display:none; align-items:center; gap:1ch; padding:2px 8px;
+            background:var(--ssg-status-warning); color:var(--ssg-canvas); }
+  #notice.open { display:flex; }
+  #notice .notice-action { cursor:pointer; text-decoration:underline dotted; font-weight:bold;
+                           background:none; border:none; color:inherit; font:inherit; padding:0; }
   .chrome .w { white-space:pre; }
   .chrome .w.clickable { cursor:pointer; text-decoration:underline dotted; }
   .chrome .w.spacer { flex:1 1 auto; }
@@ -52,6 +61,7 @@
 <div id="chrome-error"></div>
 <div id="chrome-top" class="chrome"></div>
 <div id="tabs"></div>
+<div id="notice"></div>
 <pre id="doc" tabindex="0"></pre>
 <div id="prompt" tabindex="0" role="group"></div>
 <div id="chrome-bottom" class="chrome"></div>
