@@ -408,6 +408,7 @@ struct GitDiffRefreshWorkerState {
     GitDiffSource source;
     std::unique_ptr<FilesystemWatcher> watcher;
     GitDiffMode mode = GitDiffMode::Poll;
+    bool watcherAvailable = false;
 
     std::mutex mutex;
     std::condition_variable wake;
@@ -416,6 +417,18 @@ struct GitDiffRefreshWorkerState {
     std::chrono::steady_clock::time_point nextRetry =
         std::chrono::steady_clock::time_point::max();
     std::deque<GitDiffScan> pendingScans;
+    // Normalized external-modification events queued in order for the runtime-thread
+    // reconcile, beside pendingScans and woken by the same wake byte. The worker
+    // never touches the flow itself; it only hands these across the thread boundary.
+    std::deque<WatchEvent> pendingWatchEvents;
+    // Set when the watcher reports an Overflow (event loss). The runtime-thread
+    // drain consumes it and re-scans every open document against disk, because the
+    // individual change events were dropped. The worker only signals; it never
+    // touches the flow.
+    bool pendingExternalFullReconcile = false;
+    // Save expectations handed from the save primitive to the worker thread, applied
+    // to the watcher on the worker thread so registration never races poll().
+    std::deque<SaveExpectation> pendingSaveRegistrations;
     std::thread thread;
 
     int wakeReadFd = -1;
@@ -447,7 +460,8 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
                           std::shared_ptr<SyntaxParser> parser,
                           std::vector<StatusFieldProviderBinding>
                               statusFieldProviderOverrides,
-                          bool enableGitDiffWorker)
+                          bool enableGitDiffWorker,
+                          bool enableFilesystemWatcher)
     : root{std::move(canonicalCwd)},
       scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
       recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
@@ -478,21 +492,30 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
                                               std::move(provider.provider));
     }
     homeDirectory = resolveHomeDirectory();
+    workspace.setSaveObserver([this](const std::filesystem::path& relativePath) {
+        registerExternalSaveExpectation(relativePath);
+    });
     refreshTree();
     refreshSyntax();
-    startGitDiffWorker(enableGitDiffWorker);
+    startGitDiffWorker(enableGitDiffWorker, enableFilesystemWatcher);
+    lastPublishedWatcherAvailable =
+        watcherAvailable.load(std::memory_order_relaxed);
 }
 
 EditorRuntime::Impl::~Impl() { stopGitDiffWorker(); }
 
-void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
-    if (!enable) {
+void EditorRuntime::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher) {
+    if (!enableGit && !enableWatcher) {
         return;
     }
     auto state = std::make_unique<GitDiffRefreshWorkerState>(root);
-    if (!state->repository || !state->repository->isUsable()) {
-        return;
-    }
+    const bool gitUsable =
+        enableGit && state->repository && state->repository->isUsable();
+    // Optimistic: the worker thread constructs the watcher off the first-frame
+    // path, so startup never pays for the recursive watch setup (invariant I12).
+    // The thread clears this if construction fails (Decision 1/13's degradation).
+    // False when watching is disabled -- no watcher, so unavailable.
+    watcherAvailable.store(enableWatcher, std::memory_order_relaxed);
     int wakePipe[2] = {-1, -1};
     if (::pipe(wakePipe) != 0 || !setNonBlocking(wakePipe[0]) ||
         !setNonBlocking(wakePipe[1])) {
@@ -502,22 +525,47 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
         if (wakePipe[1] != -1) {
             (void)::close(wakePipe[1]);
         }
+        watcherAvailable.store(false, std::memory_order_relaxed);
         return;
     }
     state->wakeReadFd = wakePipe[0];
     state->wakeWriteFd = wakePipe[1];
-    if (state->mode == GitDiffMode::Event) {
-        try {
-            state->watcher = makePlatformFilesystemWatcher(root);
-        } catch (const std::runtime_error&) {
-            state->mode = GitDiffMode::Poll;
-        }
-        if (!state->watcher) {
-            state->mode = GitDiffMode::Poll;
-        }
-    }
+    const auto watcherRoot = root;
 
-    state->thread = std::thread([worker = state.get()]() {
+    state->thread = std::thread([worker = state.get(), gitUsable, enableWatcher,
+                                 watcherRoot, this]() {
+        // The watcher is a workspace service, not a git feature: construct it on the
+        // worker thread (off the first-frame path) whenever the platform can and
+        // watching is enabled, so external modification is observed in a non-git
+        // workspace and in poll-for-git setups alike (Decision 1). Git's Event mode
+        // is impossible without it.
+        if (enableWatcher) {
+            try {
+                worker->watcher = makePlatformFilesystemWatcher(watcherRoot);
+            } catch (const std::runtime_error&) {
+                worker->watcher = nullptr;
+            }
+        }
+        if (!worker->watcher) {
+            watcherAvailable.store(false, std::memory_order_relaxed);
+            if (worker->mode == GitDiffMode::Event) {
+                worker->mode = GitDiffMode::Poll;
+            }
+            // The optimistic `true` was already seeded before this thread ran, so
+            // an initial construction failure is a real availability edge: write
+            // the wake byte so the runtime-thread drain publishes the false and
+            // advances the revision, exactly like the mid-session watcher-death
+            // edge (Decision 13). Without this a client that saw the optimistic
+            // `true` would never learn watching is off.
+            const char byte = 'g';
+            (void)::write(worker->wakeWriteFd, &byte, 1);
+        }
+        worker->watcherAvailable = worker->watcher != nullptr;
+        // Nothing to serve: no usable git repository to scan and no watcher to
+        // observe. External modification is simply not observed.
+        if (!gitUsable && !worker->watcher) {
+            return;
+        }
         const auto shouldStop = [&]() {
             std::lock_guard lock(worker->mutex);
             return worker->stop;
@@ -626,103 +674,174 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
             }
         };
 
-        if (auto first = maybeRefreshAll()) {
-            handleResult(*first, true);
-        } else {
-            return;
+        const auto applyPendingSaveRegistrations = [&]() {
+            std::deque<SaveExpectation> registrations;
+            {
+                std::lock_guard lock(worker->mutex);
+                registrations.swap(worker->pendingSaveRegistrations);
+            }
+            // Drain unconditionally so registrations never accumulate; apply only
+            // when a watcher exists (accessed on this, the owning, thread).
+            if (!worker->watcher) {
+                return;
+            }
+            for (auto& expectation : registrations) {
+                worker->watcher->registerSave(std::move(expectation));
+            }
+        };
+        // Hand normalized external events to the runtime-thread reconcile, coalescing
+        // the wake byte with the git-scan queue so the host drains both at once.
+        const auto queueWatchEvents = [&](const std::vector<WatchEvent>& events) {
+            bool signal = false;
+            {
+                std::lock_guard lock(worker->mutex);
+                signal = worker->pendingWatchEvents.empty() &&
+                         worker->pendingScans.empty();
+                for (const auto& event : events) {
+                    worker->pendingWatchEvents.push_back(event);
+                }
+            }
+            if (signal) {
+                const char byte = 'g';
+                (void)::write(worker->wakeWriteFd, &byte, 1);
+            }
+        };
+
+        if (gitUsable) {
+            if (auto first = maybeRefreshAll()) {
+                handleResult(*first, true);
+            } else {
+                return;
+            }
         }
         auto nextPoll = std::chrono::steady_clock::now() + kGitDiffPollInterval;
         while (!shouldStop()) {
-            if (worker->mode == GitDiffMode::Poll) {
-                auto wakeAt = nextPoll;
-                {
-                    std::lock_guard lock(worker->mutex);
-                    if (worker->retryPending && worker->nextRetry < wakeAt) {
-                        wakeAt = worker->nextRetry;
+            applyPendingSaveRegistrations();
+            const auto now = std::chrono::steady_clock::now();
+            auto wakeAt = now + kGitDiffPollInterval;
+            {
+                std::lock_guard lock(worker->mutex);
+                if (gitUsable && worker->mode == GitDiffMode::Poll) {
+                    wakeAt = std::min(wakeAt, nextPoll);
+                }
+                if (gitUsable && worker->retryPending) {
+                    wakeAt = std::min(wakeAt, worker->nextRetry);
+                }
+            }
+            const auto timeout =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    wakeAt > now ? wakeAt - now : std::chrono::milliseconds{0});
+
+            if (worker->watcher) {
+                std::vector<WatchEvent> events;
+                try {
+                    events = worker->watcher->poll(timeout);
+                } catch (const std::runtime_error&) {
+                    // The watcher died mid-session; drop it and fall back to git
+                    // polling. External modification is no longer observed, so the
+                    // durable capability flips to unavailable and a wake byte makes
+                    // the runtime-thread drain observe the transition (Decision 13).
+                    worker->watcher.reset();
+                    watcherAvailable.store(false, std::memory_order_relaxed);
+                    {
+                        const char byte = 'g';
+                        (void)::write(worker->wakeWriteFd, &byte, 1);
+                    }
+                    if (gitUsable) {
+                        auto full = maybeRefreshAll();
+                        if (!full) {
+                            break;
+                        }
+                        handleResult(*full, true);
+                    }
+                    continue;
+                }
+                bool overflowed = false;
+                for (const auto& event : events) {
+                    if (event.kind == WatchEventKind::Overflow) {
+                        overflowed = true;
+                        break;
                     }
                 }
+                if (!overflowed && !events.empty()) {
+                    queueWatchEvents(events);
+                }
+                if (overflowed) {
+                    // The watcher lost events: the external flow must resynchronize
+                    // every open document against disk, not just refresh git. Signal
+                    // the runtime-thread drain (which owns the flow) to do the full
+                    // re-scan; the worker never touches the flow itself.
+                    bool signal = false;
+                    {
+                        std::lock_guard lock(worker->mutex);
+                        signal = worker->pendingScans.empty() &&
+                                 worker->pendingWatchEvents.empty() &&
+                                 !worker->pendingExternalFullReconcile;
+                        worker->pendingExternalFullReconcile = true;
+                    }
+                    if (signal) {
+                        const char byte = 'g';
+                        (void)::write(worker->wakeWriteFd, &byte, 1);
+                    }
+                }
+                if (gitUsable && worker->mode == GitDiffMode::Event) {
+                    if (overflowed) {
+                        auto full = maybeRefreshAll();
+                        if (!full) {
+                            break;
+                        }
+                        handleResult(*full, true);
+                    } else if (!events.empty()) {
+                        std::vector<std::filesystem::path> paths;
+                        paths.reserve(events.size() * 2);
+                        for (const auto& event : events) {
+                            paths.push_back(event.path);
+                            if (event.previousPath) {
+                                paths.push_back(*event.previousPath);
+                            }
+                        }
+                        std::sort(paths.begin(), paths.end());
+                        paths.erase(std::unique(paths.begin(), paths.end()),
+                                    paths.end());
+                        auto pathRefresh = maybeRefreshPaths(paths);
+                        if (!pathRefresh) {
+                            break;
+                        }
+                        handleResult(*pathRefresh, false);
+                    }
+                }
+            } else {
                 std::unique_lock lock(worker->mutex);
                 if (worker->wake.wait_until(lock, wakeAt,
                                             [&]() { return worker->stop; })) {
                     break;
                 }
                 lock.unlock();
-            } else {
-                auto timeout = kGitDiffPollInterval;
-                {
-                    std::lock_guard lock(worker->mutex);
-                    if (worker->retryPending) {
-                        const auto now = std::chrono::steady_clock::now();
-                        const auto remaining =
-                            worker->nextRetry > now ? worker->nextRetry - now
-                                                    : std::chrono::milliseconds{0};
-                        timeout = std::min(
-                            timeout,
-                            std::chrono::duration_cast<std::chrono::milliseconds>(
-                                remaining));
-                    }
-                }
-                std::vector<WatchEvent> events;
-                try {
-                    events = worker->watcher->poll(timeout);
-                } catch (const std::runtime_error&) {
-                    auto full = maybeRefreshAll();
-                    if (!full) {
-                        break;
-                    }
-                    handleResult(*full, true);
-                    continue;
-                }
-                bool overflowed = false;
-                std::vector<std::filesystem::path> paths;
-                paths.reserve(events.size() * 2);
-                for (const auto& event : events) {
-                    if (event.kind == WatchEventKind::Overflow) {
-                        overflowed = true;
-                        break;
-                    }
-                    paths.push_back(event.path);
-                    if (event.previousPath) {
-                        paths.push_back(*event.previousPath);
-                    }
-                }
-                if (overflowed) {
-                    auto full = maybeRefreshAll();
-                    if (!full) {
-                        break;
-                    }
-                    handleResult(*full, true);
-                } else if (!paths.empty()) {
-                    std::sort(paths.begin(), paths.end());
-                    paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
-                    auto pathRefresh = maybeRefreshPaths(paths);
-                    if (!pathRefresh) {
-                        break;
-                    }
-                    handleResult(*pathRefresh, false);
-                }
             }
 
-            const auto now = std::chrono::steady_clock::now();
-            bool retryDue = false;
-            {
-                std::lock_guard lock(worker->mutex);
-                retryDue = worker->retryPending && now >= worker->nextRetry;
-            }
-            if (retryDue) {
-                auto full = maybeRefreshAll();
-                if (!full) {
-                    break;
+            const auto afterWait = std::chrono::steady_clock::now();
+            if (gitUsable) {
+                bool retryDue = false;
+                {
+                    std::lock_guard lock(worker->mutex);
+                    retryDue =
+                        worker->retryPending && afterWait >= worker->nextRetry;
                 }
-                handleResult(*full, true);
-            }
-            if (worker->mode == GitDiffMode::Poll && now >= nextPoll) {
-                auto full = maybeRefreshAll();
-                if (!full) {
-                    break;
+                if (retryDue) {
+                    auto full = maybeRefreshAll();
+                    if (!full) {
+                        break;
+                    }
+                    handleResult(*full, true);
                 }
-                handleResult(*full, true);
-                nextPoll = now + kGitDiffPollInterval;
+                if (worker->mode == GitDiffMode::Poll && afterWait >= nextPoll) {
+                    auto full = maybeRefreshAll();
+                    if (!full) {
+                        break;
+                    }
+                    handleResult(*full, true);
+                    nextPoll = afterWait + kGitDiffPollInterval;
+                }
             }
         }
     });
@@ -753,6 +872,7 @@ void EditorRuntime::Impl::stopGitDiffWorker() {
 }
 
 void EditorRuntime::Impl::drainGitDiffScans() {
+    drainWatcherAvailability();
     if (!gitDiffWorker) {
         return;
     }
@@ -767,12 +887,42 @@ void EditorRuntime::Impl::drainGitDiffScans() {
         }
     }
     std::deque<GitDiffScan> scans;
+    std::deque<WatchEvent> events;
+    bool fullReconcile = false;
     {
         std::lock_guard lock(gitDiffWorker->mutex);
         scans.swap(gitDiffWorker->pendingScans);
+        events.swap(gitDiffWorker->pendingWatchEvents);
+        fullReconcile = gitDiffWorker->pendingExternalFullReconcile;
+        gitDiffWorker->pendingExternalFullReconcile = false;
     }
     for (auto& scan : scans) {
         (void)applyGitDiffScan(std::move(scan));
+    }
+    // Git scans first, then the external reconcile once over the whole queue, so a
+    // burst of git scans never starves external ingress and both draw revisions
+    // from the one shared DiffModel in order (Decision 10).
+    if (!events.empty()) {
+        reconcileExternalWatchEvents(
+            std::vector<WatchEvent>{events.begin(), events.end()});
+    }
+    // After ordinary ingress, recover any events the watcher dropped on overflow by
+    // re-scanning every open document against disk (a full external resync).
+    if (fullReconcile) {
+        reconcileAllOpenDocumentsAgainstDisk();
+    }
+}
+
+void EditorRuntime::Impl::drainWatcherAvailability() {
+    const bool current = watcherAvailable.load(std::memory_order_relaxed);
+    if (current == lastPublishedWatcherAvailable) {
+        return;
+    }
+    lastPublishedWatcherAvailable = current;
+    // The atomic already feeds sections(); advancing the revision is what makes a
+    // delta client re-observe the flipped capability (Decision 13).
+    if (session) {
+        session->advanceRevision();
     }
 }
 
@@ -1399,6 +1549,438 @@ CommandHandlerResult EditorRuntime::Impl::openDraftDiff() {
     if (!file.has_value()) return failure("draft diff is unavailable");
     return openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic,
                                   std::nullopt);
+}
+
+namespace {
+
+// The one runtime routine that captures a file's watch state, used both to record
+// a save expectation and to correlate an event whose state the injecting caller
+// did not supply. Consistency between the two is what makes an SSG save match.
+std::optional<WatchFileState> observeWatchState(
+    const std::filesystem::path& path) {
+    std::error_code error;
+    const auto status = std::filesystem::symlink_status(path, error);
+    if (error || status.type() == std::filesystem::file_type::not_found) {
+        return std::nullopt;
+    }
+    std::uint64_t size = 0;
+    if (std::filesystem::is_regular_file(status)) {
+        size = std::filesystem::file_size(path, error);
+        if (error) return std::nullopt;
+    }
+    const auto modified = std::filesystem::last_write_time(path, error);
+    if (error) return std::nullopt;
+    const auto nanos = static_cast<std::int64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            modified.time_since_epoch())
+            .count());
+    try {
+        return WatchFileState{fileIdentity(path), size, nanos};
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
+
+}  // namespace
+
+DiffFileId EditorRuntime::Impl::externalDiffFileId(std::string_view savedPath) {
+    return DiffFileId{"external:" + std::string{savedPath}};
+}
+
+std::optional<std::string> EditorRuntime::Impl::savedPathFromExternalDiffId(
+    const DiffFileId& id) {
+    static constexpr std::string_view prefix{"external:"};
+    const auto& value = id.value();
+    if (std::string_view{value}.substr(0, prefix.size()) != prefix) {
+        return std::nullopt;
+    }
+    return value.substr(prefix.size());
+}
+
+std::optional<FileDocumentId> EditorRuntime::Impl::resolveExternalDocument(
+    const DiffFileId& id) const {
+    const auto savedPath = savedPathFromExternalDiffId(id);
+    if (!savedPath) return std::nullopt;
+    for (const auto documentId : workspace.documents()) {
+        const auto state = workspace.state(documentId);
+        if (state && state->key.kind() == JournalDocumentKeyKind::Saved &&
+            state->key.savedPath() == *savedPath) {
+            return documentId;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<FileDocumentId>
+EditorRuntime::Impl::resolveOpenSavedDocumentByPath(
+    const std::filesystem::path& relativePath) const {
+    const auto normalized = relativePath.generic_string();
+    for (const auto documentId : workspace.documents()) {
+        const auto state = workspace.state(documentId);
+        if (state && state->key.kind() == JournalDocumentKeyKind::Saved &&
+            state->key.savedPath() == normalized) {
+            return documentId;
+        }
+    }
+    return std::nullopt;
+}
+
+void EditorRuntime::Impl::registerExternalSaveExpectation(
+    const std::filesystem::path& relativePath) {
+    const auto observed = observeWatchState(workspace.root() / relativePath);
+    if (!observed) return;
+    SaveExpectation expectation{relativePath, *observed};
+    {
+        std::lock_guard lock(externalSaveMutex);
+        pendingSaveExpectations.push_back(expectation);
+        // Bound the deque: a save the watcher never reports back must not
+        // accumulate forever.
+        constexpr std::size_t kMaxSaveExpectations = 256;
+        while (pendingSaveExpectations.size() > kMaxSaveExpectations) {
+            pendingSaveExpectations.pop_front();
+        }
+    }
+    // Also register with the real watcher's normalizer so a genuine save is stamped
+    // at source (Decision 9); handed to the worker thread, which owns the watcher,
+    // so the main thread never touches it. Bounded so a save the worker never drains
+    // cannot grow without limit.
+    if (gitDiffWorker) {
+        std::lock_guard lock(gitDiffWorker->mutex);
+        auto& queue = gitDiffWorker->pendingSaveRegistrations;
+        queue.push_back(std::move(expectation));
+        constexpr std::size_t kMaxSaveRegistrations = 256;
+        while (queue.size() > kMaxSaveRegistrations) {
+            queue.pop_front();
+        }
+    }
+}
+
+void EditorRuntime::Impl::reconcileExternalWatchEvents(
+    std::vector<WatchEvent> events, bool resync) {
+    const auto flowRevisionBefore = external.viewState().revision;
+    const auto diffRevisionBefore = diff.viewState().revision;
+    for (auto& event : events) {
+        if (event.kind == WatchEventKind::Overflow) {
+            continue;
+        }
+        // Correlate SSG's own writes so a save never reads as an external change.
+        // A self-save resolves the external state: consume exactly its expectation
+        // and clear any pending conflict for the file, so a stale expectation can
+        // never accumulate to suppress a later genuine external edit.
+        {
+            std::optional<WatchFileState> observed;
+            if (event.identity && event.size && event.modificationTime) {
+                observed = WatchFileState{*event.identity, *event.size,
+                                          *event.modificationTime};
+            } else {
+                observed = observeWatchState(workspace.root() / event.path);
+            }
+            bool selfSave = false;
+            if (observed) {
+                std::lock_guard lock(externalSaveMutex);
+                const auto found = std::find_if(
+                    pendingSaveExpectations.begin(),
+                    pendingSaveExpectations.end(),
+                    [&](const SaveExpectation& expectation) {
+                        return expectation.path == event.path &&
+                               expectation.state == *observed;
+                    });
+                if (found != pendingSaveExpectations.end()) {
+                    pendingSaveExpectations.erase(found);
+                    selfSave = true;
+                }
+            }
+            if (selfSave) {
+                // The save already advanced the workspace baseline to the written
+                // bytes; clearing any pending conflict needs no further cross-store
+                // commit, so the dismissal commit is a no-op.
+                (void)external.keepBuffer(
+                    externalDiffFileId(event.path.generic_string()),
+                    [](bool, const std::optional<std::string>&) { return true; });
+                continue;
+            }
+        }
+
+        const std::filesystem::path& lookupPath =
+            (event.kind == WatchEventKind::Rename && event.previousPath)
+                ? *event.previousPath
+                : event.path;
+        const auto documentId = resolveOpenSavedDocumentByPath(lookupPath);
+        if (!documentId) {
+            // A change to a file no open document corresponds to is ignored by this
+            // flow; the tree/git refresh already covers it.
+            continue;
+        }
+        const auto state = workspace.state(*documentId);
+        const auto* document = workspace.tryDocument(*documentId);
+        if (!state || document == nullptr) {
+            continue;
+        }
+
+        const std::string savedPath = event.path.generic_string();
+        const DiffFileId id = externalDiffFileId(savedPath);
+        const std::string baseline = document->snapshot().text;
+
+        std::optional<std::string> diskContent;
+        bool unknownObservation = false;
+        if (event.kind != WatchEventKind::Remove) {
+            diskContent = readFileText(workspace.root() / event.path);
+            if (!diskContent) {
+                // Decision 2a: an unreadable/non-regular path where a file was is
+                // Unknown. Never silently skip it -- raise it as a removal conflict,
+                // so the buffer now orphaned from any regular file surfaces.
+                unknownObservation = true;
+                event.kind = WatchEventKind::Remove;
+            }
+        } else {
+            // A queued ordinary Remove carries only the fact "removed" and is never
+            // re-observed by the watcher. Between the emit and this processing the
+            // path may have reappeared as a directory, an unreadable file, or a
+            // regular file. Re-observe before trusting the Remove so a stale one
+            // cannot match a Missing baseline and be silently skipped: a status
+            // error or a present-but-non-regular/unreadable entry is Unknown (raise
+            // through the same chokepoint), a present regular file is a real change
+            // (raise as Modify), and only a still-genuine absence stays a Remove that
+            // a Missing baseline suppresses. Runtime thread only.
+            std::error_code linkCode;
+            const auto linkStatus =
+                std::filesystem::symlink_status(workspace.root() / event.path,
+                                                linkCode);
+            const bool statusError =
+                linkStatus.type() == std::filesystem::file_type::none;
+            if (statusError) {
+                unknownObservation = true;
+            } else if (std::filesystem::exists(linkStatus)) {
+                auto reobserved = readFileText(workspace.root() / event.path);
+                if (reobserved) {
+                    diskContent = std::move(reobserved);
+                    event.kind = WatchEventKind::Modify;
+                } else {
+                    unknownObservation = true;
+                }
+            }
+        }
+
+        // Decision 4: an event whose observed disk state equals the document's
+        // external baseline is a change already adopted or dismissed (keep_buffer);
+        // skip it so a duplicate/coalesced ordinary event does not re-raise a
+        // dismissed conflict. A rename changes identity (handled by adoption) and an
+        // Unknown observation never matches, so both fall through to processing. The
+        // diff CONTENT stays buffer-vs-disk; only this raise/skip decision consults
+        // the baseline.
+        if (!unknownObservation && event.kind != WatchEventKind::Rename &&
+            workspace.matchesExternalBaseline(*documentId, diskContent)) {
+            continue;
+        }
+
+        // Seed the non-git entry the first time this file is observed, so openDiff
+        // finds a file and applyNonGitEvent is not rejected (Decision 5). Its
+        // revision, like the event's, is allocated from the shared DiffModel.
+        bool seededHere = false;
+        if (!diff.file(id).has_value()) {
+            const Revision seedRevision{diff.viewState().revision.value() + 1};
+            (void)diff.seedNonGit({{id, event.path, baseline}}, seedRevision);
+            seededHere = true;
+        }
+        const Revision diffRevision{diff.viewState().revision.value() + 1};
+
+        std::optional<JournalDocument> journal{JournalDocument{
+            state->key, document->mode(), state->dirty, document->snapshot().text}};
+
+        // The clean auto-reload and rename-adoption paths commit to the workspace
+        // BEFORE the flow publishes the cleared/updated state (Decision 11): the
+        // flow calls this and only adopts when it succeeds, so a failed workspace
+        // commit leaves the prior published conflict rather than a stale buffer.
+        // The commit decodes the RAW disk bytes through the document's encoding.
+        bool committed = false;
+        std::function<bool()> commitClean;
+        std::function<bool()> commitConflictRename;
+        if (event.kind == WatchEventKind::Rename) {
+            commitClean = [&]() {
+                const bool ok =
+                    workspace
+                        .adoptExternalRename(*documentId, savedPath,
+                                             diskContent.value_or(std::string{}),
+                                             /*replaceBuffer=*/true)
+                        .accepted();
+                committed = ok;
+                return ok;
+            };
+            // A dirty rename keeps its buffer, but the document must still adopt
+            // the new path's disk identity and baseline BEFORE the flow publishes
+            // the conflict under the new-path id. The flow calls this and refuses
+            // to publish when it fails, so a failed adoption never leaves an action
+            // referencing a path no document owns.
+            commitConflictRename = [&]() {
+                const bool ok =
+                    workspace
+                        .adoptExternalRename(*documentId, savedPath,
+                                             diskContent.value_or(std::string{}),
+                                             /*replaceBuffer=*/false)
+                        .accepted();
+                committed = ok;
+                return ok;
+            };
+        } else if (event.kind != WatchEventKind::Remove) {
+            commitClean = [&]() {
+                const bool ok =
+                    workspace
+                        .reloadWithContent(*documentId,
+                                           diskContent.value_or(std::string{}))
+                        .accepted();
+                committed = ok;
+                return ok;
+            };
+        }
+
+        ExternalEventInput input{event, id, baseline, diskContent};
+        if (event.kind == WatchEventKind::Rename && event.previousPath) {
+            input.previousId =
+                externalDiffFileId(event.previousPath->generic_string());
+        }
+        const auto result =
+            resync ? external.processResyncEvent(std::move(input), diffRevision,
+                                                 journal, commitClean,
+                                                 commitConflictRename)
+                   : external.processEvent(std::move(input), diffRevision,
+                                           journal, commitClean,
+                                           commitConflictRename);
+        if (!result.accepted()) {
+            // A rejected event must leave no diff entry behind. When this iteration
+            // seeded the new-path entry (so openDiff would have a file), roll it back
+            // so a failed rename-adoption -- or any rejected event -- never orphans a
+            // diff entry keyed to a path no pending action owns.
+            if (seededHere && diff.file(id).has_value()) {
+                const Revision removalRevision{diff.viewState().revision.value() +
+                                               1};
+                (void)diff.removeFile(id, removalRevision);
+            }
+            continue;
+        }
+
+        // A rename changes the namespaced id; retire the stale diff entry keyed by
+        // the old path so a second, orphaned entry is not left behind (Decision 10).
+        if (event.kind == WatchEventKind::Rename && event.previousPath) {
+            const DiffFileId previousId =
+                externalDiffFileId(event.previousPath->generic_string());
+            if (previousId != id && diff.file(previousId).has_value()) {
+                const Revision removalRevision{diff.viewState().revision.value() +
+                                               1};
+                (void)diff.removeFile(previousId, removalRevision);
+            }
+        }
+
+        if (committed) {
+            (void)updateTabsFor(*documentId);
+        }
+    }
+    // The session revision must advance whenever the drain moved the published
+    // state a delta client observes -- not only when the flow's own view changed.
+    // A rejected event that seeded then rolled back a diff entry leaves the shared
+    // DiffModel revision net-advanced with the flow's view unchanged; the diff
+    // section a client sees is keyed to that revision, so the session revision must
+    // track it or a delta client could miss or mis-order the change.
+    if (session && (external.viewState().revision != flowRevisionBefore ||
+                    diff.viewState().revision != diffRevisionBefore)) {
+        session->advanceRevision();
+    }
+}
+
+bool EditorRuntime::Impl::commitExternalDismissal(
+    FileDocumentId document, bool removed,
+    const std::optional<std::string>& dismissedContent) {
+    return workspace.commitExternalDismissal(
+        document, removed, dismissedContent,
+        [&](const std::optional<DraftBaseline>& newBaseline) -> bool {
+            // Decision 5: an already-persisted draft record still carries the
+            // pre-dismissal baseline; refresh it to the dismissed state so a
+            // crash-reopen classifies Unchanged instead of resurrecting the
+            // conflict via draft recovery. No persisted record: nothing to do.
+            const auto state = workspace.state(document);
+            if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
+                return true;
+            }
+            const auto drafts = scratch.recovery().documents;
+            const auto draft = std::find_if(
+                drafts.begin(), drafts.end(),
+                [&](const JournalDocument& candidate) {
+                    return candidate.dirty && candidate.key == state->key;
+                });
+            if (draft == drafts.end()) return true;
+            scratch.updateDocument(JournalDocument{draft->key, draft->mode,
+                                                   draft->dirty,
+                                                   draft->utf8Content,
+                                                   newBaseline});
+            return true;
+        });
+}
+
+void EditorRuntime::Impl::reconcileAllOpenDocumentsAgainstDisk() {
+    std::vector<WatchEvent> synthesized;
+    std::uint64_t sequence = 0;
+    for (const auto documentId : workspace.documents()) {
+        const auto state = workspace.state(documentId);
+        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
+            continue;
+        }
+        const std::filesystem::path relative{state->key.savedPath()};
+        const auto absolute = workspace.root() / relative;
+        std::error_code linkCode;
+        const auto linkStatus = std::filesystem::symlink_status(absolute, linkCode);
+        WatchEvent event;
+        event.path = relative;
+        event.origin = WatchEventOrigin::External;
+        event.sequence = ++sequence;
+        // file_type::none is an indeterminate status (permission denied, I/O error);
+        // file_type::not_found is a determinate clean absence. Only the former is a
+        // status error.
+        if (linkStatus.type() == std::filesystem::file_type::none) {
+            // Decision 2a: a status/stat error is Unknown, not a clean absence -- it
+            // must never become a Missing-matchable Remove the resync could suppress.
+            // Synthesize a Modify so the shared reconcile re-reads, fails, and marks
+            // the observation Unknown, which always raises. This converges on the one
+            // Unknown-detection chokepoint.
+            event.kind = WatchEventKind::Modify;
+            synthesized.push_back(std::move(event));
+            continue;
+        }
+        // The path entry itself is present (a regular file, a directory, or even a
+        // broken symlink) -- distinct from exists(), which follows the link and is
+        // false for a broken symlink, indistinguishable there from a true absence.
+        const bool entryPresent = std::filesystem::exists(linkStatus);
+        std::error_code code;
+        const bool exists = std::filesystem::exists(absolute, code) && !code;
+        if (!entryPresent) {
+            // A genuine absence. A dismissed removal (keep_buffer set the baseline
+            // Missing) must not be re-raised by the resync; only a still-differing
+            // absence raises.
+            if (workspace.matchesExternalBaseline(documentId, std::nullopt)) {
+                continue;
+            }
+            event.kind = WatchEventKind::Remove;
+            synthesized.push_back(std::move(event));
+            continue;
+        }
+        // The entry is present. If it is a readable regular file whose content
+        // matches the baseline, it did not change during the overflow window and
+        // needs no event (and a dirty document must not be told its unchanged disk
+        // file was modified). Otherwise -- a changed file OR an Unknown observation
+        // (unreadable, non-regular, or broken symlink) -- synthesize a Modify. The
+        // shared reconcile re-reads it; on a failed read it marks the observation
+        // Unknown, which ALWAYS raises and never matches a Missing baseline, so an
+        // Unknown never collapses into a Remove the ordinary reconcile could
+        // suppress. Both the ordinary and overflow paths thus converge on the one
+        // Unknown-detection chokepoint (Decision 2a).
+        const auto disk = exists ? readFileText(absolute) : std::nullopt;
+        if (disk && workspace.matchesExternalBaseline(documentId, *disk)) {
+            continue;
+        }
+        event.kind = WatchEventKind::Modify;
+        synthesized.push_back(std::move(event));
+    }
+    if (!synthesized.empty()) {
+        reconcileExternalWatchEvents(std::move(synthesized), /*resync=*/true);
+    }
 }
 
 bool EditorRuntime::Impl::archiveDiscardedDraft(std::string_view savedPath,
@@ -2279,7 +2861,8 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
                                            config.deferEnrichment,
                                            std::move(config.syntaxParser),
                                            std::move(config.statusFieldProviders),
-                                           config.enableGitDiffWorker);
+                                           config.enableGitDiffWorker,
+                                           config.enableFilesystemWatcher);
         // Housekeeping at workspace open rather than on a timer, so it is
         // deterministic and testable. Its result is deliberately ignored: a
         // corrupt archive entry must never stop a user opening their workspace.
@@ -2338,6 +2921,37 @@ std::uint64_t EditorRuntime::liveDocumentRuntimeStateCountForTests() {
 
 void EditorRuntime::setAutosaveDraftByteCapForTests(std::uint64_t cap) {
     impl_->autosaveDraftByteCap = cap;
+}
+
+void EditorRuntime::reconcileExternalWatchEventsForTest(
+    std::vector<WatchEvent> events) {
+    // Mirror the runtime drain: an Overflow in the batch triggers the full
+    // open-document-vs-disk resync (the worker would signal it out of band), the
+    // ordinary events reconcile normally.
+    bool overflowed = false;
+    std::vector<WatchEvent> ordinary;
+    for (auto& event : events) {
+        if (event.kind == WatchEventKind::Overflow) {
+            overflowed = true;
+        } else {
+            ordinary.push_back(std::move(event));
+        }
+    }
+    if (!ordinary.empty()) {
+        impl_->reconcileExternalWatchEvents(std::move(ordinary));
+    }
+    if (overflowed) {
+        impl_->reconcileAllOpenDocumentsAgainstDisk();
+    }
+}
+
+bool EditorRuntime::diffModelHasFileForTest(const DiffFileId& id) const {
+    return impl_->diff.file(id).has_value();
+}
+
+void EditorRuntime::reportWatcherAvailabilityForTest(bool available) {
+    impl_->watcherAvailable.store(available, std::memory_order_relaxed);
+    impl_->drainWatcherAvailability();
 }
 
 bool EditorRuntime::dispatchInProgress() const noexcept {

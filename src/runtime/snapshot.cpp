@@ -394,7 +394,8 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             std::move(uiState),
             std::move(uiPresence),
             promptView(),
-            noticeView()};
+            noticeView(),
+            watcherAvailable.load(std::memory_order_relaxed)};
 }
 
 TreeViewState EditorRuntime::Impl::treeView() const {

@@ -109,9 +109,12 @@ public:
         : recovery_{recovery}, diff_{diff} {}
 
     ExternalModificationResult processEvent(
-        ExternalEventInput input,
-        std::optional<JournalDocument>& document) {
-        if (input.event.sequence <= lastWatcherSequence_) {
+        ExternalEventInput input, Revision diffRevision,
+        std::optional<JournalDocument>& document,
+        std::function<bool()> commitClean = {},
+        std::function<bool()> commitConflictRename = {},
+        bool enforceSequence = true) {
+        if (enforceSequence && input.event.sequence <= lastWatcherSequence_) {
             return failure(ExternalModificationError::StaleEvent);
         }
         if (input.event.kind == WatchEventKind::Overflow) {
@@ -137,16 +140,37 @@ public:
         const bool removed = input.event.kind == WatchEventKind::Remove;
         bool publishStatus = false;
 
+        // A rename changes the path, and the id is derived from the path, so any
+        // pending entry staged under the previous id would be orphaned beside a
+        // fresh one. Retire it first (before locating the entry for the new id).
+        if (input.previousId.has_value() && *input.previousId != input.id) {
+            const auto previous = std::find_if(
+                stagedPending.begin(), stagedPending.end(),
+                [&](const auto& item) {
+                    return item.view.id == *input.previousId;
+                });
+            if (previous != stagedPending.end()) {
+                stagedPending.erase(previous);
+            }
+        }
+
         const auto existing = std::find_if(
             stagedPending.begin(), stagedPending.end(), [&](const auto& item) {
                 return item.view.id == input.id;
             });
 
+        // A clean document adopts the disk change only if the workspace commit the
+        // reconcile supplies succeeds (Decision 11): stage->commit->publish, so a
+        // failed commit falls through to raising the conflict rather than clearing
+        // to a stale buffer.
+        const bool canCleanAdopt = !saveEvent && !stagedDocument.dirty && !removed;
+        bool cleanCommitted = false;
+
         if (saveEvent) {
             if (existing != stagedPending.end()) {
                 stagedPending.erase(existing);
             }
-        } else if (!stagedDocument.dirty && !removed) {
+        } else if (canCleanAdopt && (!commitClean || commitClean())) {
             stagedDocument.utf8Content = *input.diskContent;
             stagedDocument.dirty = false;
             if (input.event.kind == WatchEventKind::Rename) {
@@ -156,7 +180,18 @@ public:
             if (existing != stagedPending.end()) {
                 stagedPending.erase(existing);
             }
+            cleanCommitted = true;
         } else {
+            // A dirty rename keeps its buffer but still publishes the conflict
+            // under the NEW-path id, so the workspace must adopt the new path
+            // (baseline + identity, buffer preserved) BEFORE that id is published
+            // (stage->commit->publish, Decision 11). A failed adoption must not
+            // leave a conflict keyed to a path no document owns, so it fails the
+            // whole event rather than publishing an unresolvable entry.
+            if (input.event.kind == WatchEventKind::Rename &&
+                commitConflictRename && !commitConflictRename()) {
+                return failure(ExternalModificationError::RecoveryFailed);
+            }
             ExternalDocumentView view{
                 input.id,
                 input.event.path,
@@ -188,15 +223,20 @@ public:
             std::move(input.baselineContent),
             input.diskContent};
         const auto diffResult = diff_.applyNonGitEvent(
-            std::move(diffEvent), Revision{input.event.sequence});
+            std::move(diffEvent), diffRevision);
 
-        if (!saveEvent && !document->dirty && !removed) {
+        if (cleanCommitted) {
             document->key = std::move(stagedDocument.key);
             document->utf8Content.swap(stagedDocument.utf8Content);
             document->dirty = false;
         }
         pending_.swap(stagedPending);
-        lastWatcherSequence_ = input.event.sequence;
+        if (enforceSequence) {
+            // A resync (overflow recovery) is not part of the ordered watcher
+            // stream: it must not advance the sequence high-water mark, or the
+            // real events that follow the overflow would be rejected as stale.
+            lastWatcherSequence_ = input.event.sequence;
+        }
         advanceRevision();
         return {ExternalModificationError::None, publishStatus,
                 diffResult.accepted(), std::nullopt};
@@ -231,10 +271,44 @@ public:
                 std::move(result.compensation)};
     }
 
-    ExternalModificationResult keepBuffer(const DiffFileId& id) {
+    ExternalModificationResult resolveReload(
+        const DiffFileId& id, const ExternalReloadCommit& commit) {
         const auto pending = findPending(id);
         if (pending == pending_.end()) {
             return failure(ExternalModificationError::NoExternalChange);
+        }
+        if (!pending->diskContent.has_value()) {
+            return failure(ExternalModificationError::ContentRequired);
+        }
+        const auto committed = commit(*pending->diskContent);
+        if (!committed.committed) {
+            return failure(ExternalModificationError::RecoveryFailed);
+        }
+        pending_.erase(pending);
+        advanceRevision();
+        return {ExternalModificationError::None, false, true,
+                committed.compensation};
+    }
+
+    ExternalModificationResult keepBuffer(
+        const DiffFileId& id, const ExternalKeepBufferCommit& commit) {
+        const auto pending = findPending(id);
+        if (pending == pending_.end()) {
+            return failure(ExternalModificationError::NoExternalChange);
+        }
+        // Dismissing hands the EXACT captured dismissed state to the commit, which
+        // advances the document's IN-MEMORY external baseline and enqueues a
+        // best-effort refresh of any persisted draft record. The pending action
+        // clears ONLY when that in-memory commit lands, so a failed commit leaves
+        // the conflict raised.
+        const bool removed =
+            pending->view.status == ExternalDocumentStatus::ExternallyRemoved;
+        // The commit is the ONLY thing that advances the baseline; an absent or
+        // failed commit must leave the conflict raised. Clearing the pending action
+        // without a landed baseline-advancing commit would resurrect the dismissed
+        // conflict on the next duplicate event, overflow resync, or draft reopen.
+        if (!commit || !commit(removed, pending->diskContent)) {
+            return failure(ExternalModificationError::RecoveryFailed);
         }
         pending_.erase(pending);
         advanceRevision();
@@ -309,8 +383,25 @@ ExternalModificationFlow& ExternalModificationFlow::operator=(
     ExternalModificationFlow&&) noexcept = default;
 
 ExternalModificationResult ExternalModificationFlow::processEvent(
-    ExternalEventInput input, std::optional<JournalDocument>& document) {
-    return impl_->processEvent(std::move(input), document);
+    ExternalEventInput input, Revision diffRevision,
+    std::optional<JournalDocument>& document,
+    std::function<bool()> commitClean,
+    std::function<bool()> commitConflictRename) {
+    return impl_->processEvent(std::move(input), diffRevision, document,
+                               std::move(commitClean),
+                               std::move(commitConflictRename),
+                               /*enforceSequence=*/true);
+}
+
+ExternalModificationResult ExternalModificationFlow::processResyncEvent(
+    ExternalEventInput input, Revision diffRevision,
+    std::optional<JournalDocument>& document,
+    std::function<bool()> commitClean,
+    std::function<bool()> commitConflictRename) {
+    return impl_->processEvent(std::move(input), diffRevision, document,
+                               std::move(commitClean),
+                               std::move(commitConflictRename),
+                               /*enforceSequence=*/false);
 }
 
 ExternalModificationResult ExternalModificationFlow::reload(
@@ -318,9 +409,14 @@ ExternalModificationResult ExternalModificationFlow::reload(
     return impl_->reload(id, document);
 }
 
+ExternalModificationResult ExternalModificationFlow::resolveReload(
+    const DiffFileId& id, const ExternalReloadCommit& commit) {
+    return impl_->resolveReload(id, commit);
+}
+
 ExternalModificationResult ExternalModificationFlow::keepBuffer(
-    const DiffFileId& id) {
-    return impl_->keepBuffer(id);
+    const DiffFileId& id, const ExternalKeepBufferCommit& commit) {
+    return impl_->keepBuffer(id, commit);
 }
 
 ExternalOpenDiffResult ExternalModificationFlow::openDiff(

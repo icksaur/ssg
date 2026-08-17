@@ -34,6 +34,7 @@
 #include <any>
 #include <atomic>
 #include <chrono>
+#include <deque>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -141,7 +142,8 @@ struct EditorRuntime::Impl final : CommandServices,
          bool deferEnrichment = false,
          std::shared_ptr<SyntaxParser> parser = nullptr,
          std::vector<StatusFieldProviderBinding> statusFieldProviderOverrides = {},
-         bool enableGitDiffWorker = true);
+         bool enableGitDiffWorker = true,
+         bool enableFilesystemWatcher = true);
     ~Impl();
 
     std::filesystem::path root;
@@ -500,6 +502,44 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
     [[nodiscard]] GitDiffScanResult applyGitDiffScan(GitDiffScan scan);
+    // CONTRACT
+    // EditorRuntime::Impl: reconcileExternalWatchEvents and every mutation of
+    //   `external` and its shared DiffModel it drives run only on the runtime
+    //   thread, reached through the wake drain (or the test hook that stands in for
+    //   it); the watcher worker thread only queues normalized events and never
+    //   touches the flow. A host never observes a snapshot mid-drain.
+    void reconcileExternalWatchEvents(std::vector<WatchEvent> events,
+                                      bool resync = false);
+    // Overflow recovery: the watcher lost events, so re-derive which OPEN documents
+    // changed by comparing each to its disk baseline and reconcile the differences
+    // through a sequence-free resync. Runs on the runtime thread (the worker only
+    // signals). Without this, modifications during the overflow window are lost.
+    void reconcileAllOpenDocumentsAgainstDisk();
+    // The one runtime-owned external diff identity: a namespaced id derived from a
+    // saved document key, and its reverse resolution to the open document. Both the
+    // ingress reconcile and the action handlers resolve through these, so the id the
+    // section publishes is exactly the id the handlers resolve, and it can never
+    // collide with a git path-keyed entry in the shared DiffModel.
+    [[nodiscard]] static DiffFileId externalDiffFileId(std::string_view savedPath);
+    [[nodiscard]] static std::optional<std::string> savedPathFromExternalDiffId(
+        const DiffFileId& id);
+    [[nodiscard]] std::optional<FileDocumentId> resolveExternalDocument(
+        const DiffFileId& id) const;
+    // Drives the workspace's atomic external-baseline dismissal and refreshes an
+    // already-persisted draft record (Decision 5) to the same baseline, so a
+    // keep_buffer dismissal stops an overflow resync or a crash-reopen from
+    // resurrecting the change. Returns whether the whole cross-store commit landed.
+    [[nodiscard]] bool commitExternalDismissal(
+        FileDocumentId document, bool removed,
+        const std::optional<std::string>& dismissedContent);
+    [[nodiscard]] std::optional<FileDocumentId> resolveOpenSavedDocumentByPath(
+        const std::filesystem::path& relativePath) const;
+    // Records that SSG itself wrote `relativePath`, so the matching watcher event is
+    // correlated as a self-save and never raises a false external conflict. Ordered
+    // by the save primitive before the write is observable; the library owns this,
+    // a client never participates.
+    void registerExternalSaveExpectation(
+        const std::filesystem::path& relativePath);
     [[nodiscard]] CommandHandlerResult openOrFocusLiveDiffTab(
         const DiffFileView& file, NavigationClass classification,
         std::optional<ClientId> userClient);
@@ -587,11 +627,28 @@ struct EditorRuntime::Impl final : CommandServices,
     std::uint64_t treeScanCount = 0;
     std::uint64_t syntaxRunCount = 0;
     std::unique_ptr<GitDiffRefreshWorkerState> gitDiffWorker;
+    // Decision-13 durable capability fact: whether this session has a filesystem
+    // watcher, so the semantic view model can publish "external changes are not
+    // being watched" when the platform cannot provide one. Set optimistically when
+    // a worker is enabled and cleared by the worker thread if watcher construction
+    // fails; atomic because the worker thread writes it and snapshots read it.
+    std::atomic<bool> watcherAvailable{false};
+    // Runtime-owned save correlation. The save primitive records the intended
+    // post-write disk state here; the reconcile consumes a match so an SSG write is
+    // never mistaken for an external modification. Guarded because the save runs on
+    // the dispatch thread and the reconcile on the runtime-thread drain.
+    mutable std::mutex externalSaveMutex;
+    std::deque<SaveExpectation> pendingSaveExpectations;
+    // Runtime-thread mirror of watcherAvailable, so a transition detected during a
+    // drain advances the session revision exactly once per edge. Owned by the
+    // runtime thread; the atomic is the cross-thread carrier.
+    bool lastPublishedWatcherAvailable = false;
 
     void enqueueStatus(StatusPriority priority, std::string text);
-    void startGitDiffWorker(bool enable);
+    void startGitDiffWorker(bool enableGit, bool enableWatcher);
     void stopGitDiffWorker();
     void drainGitDiffScans();
+    void drainWatcherAvailability();
     [[nodiscard]] int gitDiffWakeDescriptor() const;
 };
 

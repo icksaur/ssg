@@ -11,6 +11,7 @@
 #include <compare>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -126,6 +127,11 @@ public:
     Workspace& operator=(const Workspace&) = delete;
 
     [[nodiscard]] const std::filesystem::path& root() const noexcept;
+    // Installs a callback invoked with the relative path each time this workspace
+    // writes a file (save/save-as). The runtime uses it to correlate SSG's own
+    // writes against filesystem-watcher events so a self-save is never reported as
+    // an external modification. A library-internal seam; a client never sets it.
+    void setSaveObserver(std::function<void(const std::filesystem::path&)> observer);
     [[nodiscard]] std::vector<FileDocumentId> documents() const;
     [[nodiscard]] std::optional<WorkspaceDocumentState> state(
         FileDocumentId document) const;
@@ -134,6 +140,34 @@ public:
     // unknown id. Used by draft recovery to detect an external change on reopen.
     [[nodiscard]] std::optional<DraftBaseline> baselineFor(
         FileDocumentId document) const;
+    // Whether an observed disk state equals the document's authoritative external
+    // baseline (the state its edits branch from, as advanced by a keep_buffer
+    // dismissal). `observedContent` is the raw disk bytes, or nullopt when the file
+    // was observed absent. A match means the change was already adopted or
+    // dismissed, so the reconcile skips it instead of re-raising. An
+    // unreadable/non-regular (Unknown) observation is never passed here -- the
+    // caller raises directly, never skips.
+    [[nodiscard]] bool matchesExternalBaseline(
+        FileDocumentId document,
+        const std::optional<std::string>& observedContent) const;
+    // Dismisses an external change: advances this document's authoritative
+    // IN-MEMORY external baseline to the GIVEN dismissed disk bytes
+    // (`removed`==false) or to Missing (`removed`==true), then invokes
+    // `persistDraft` with the projected baseline to refresh an already-persisted
+    // draft record to the same state. The in-memory advance is synchronous; if
+    // `persistDraft` returns false or throws, the in-memory baseline is reverted
+    // and the dismissal fails (returns false), so this document's live state stays
+    // prior and the caller leaves the conflict raised. DURABLE persistence of the
+    // refreshed draft record is best-effort through the scratch durability worker
+    // — the same async window autosave already has — NOT a synchronous cross-store
+    // durability guarantee: a crash within that window may retain the old journal
+    // baseline. The buffer, key, label, and encoding are untouched, and the
+    // advance uses the exact given bytes, never a fresh disk read.
+    [[nodiscard]] bool commitExternalDismissal(
+        FileDocumentId document, bool removed,
+        const std::optional<std::string>& dismissedContent,
+        const std::function<bool(const std::optional<DraftBaseline>&)>&
+            persistDraft);
     // The literal bytes read from disk when the document was opened or last
     // reloaded — the same bytes the baseline hash was computed over. Used by
     // draft recovery to classify a recovered draft against the current disk
@@ -175,6 +209,26 @@ public:
     [[nodiscard]] WorkspaceResult saveAs(FileDocumentId document,
                                           std::string_view path);
     [[nodiscard]] WorkspaceResult reload(FileDocumentId document);
+    // Reversibly replaces an open saved document's buffer with the GIVEN content
+    // (never a fresh disk read), rebaselining to those bytes and recording a
+    // compensation, so the external-modification reload commits exactly the bytes
+    // the conflict was raised about. Unlike reload(), which re-reads disk and could
+    // commit different bytes if disk changed again between raise and reload.
+    [[nodiscard]] WorkspaceResult reloadWithContent(FileDocumentId document,
+                                                    std::string content);
+    // Adopts an externally observed rename of an ALREADY-MOVED file: rekeys the
+    // open document to `newPath`, relabels it, and rebaselines it to the new path's
+    // disk `content`, recording a compensation. It performs NO filesystem move (the
+    // file already moved on disk) -- unlike renameFile(), which moves the file.
+    // `replaceBuffer` replaces the visible buffer with `content` (a clean document
+    // that simply follows its file); when false the buffer is left untouched (a
+    // dirty document whose unsaved edits are preserved while its baseline follows
+    // to the new path). The open document follows its file instead of raising a
+    // spurious removed/created pair.
+    [[nodiscard]] WorkspaceResult adoptExternalRename(FileDocumentId document,
+                                                      std::string_view newPath,
+                                                      std::string content,
+                                                      bool replaceBuffer);
     [[nodiscard]] WorkspaceResult reopenWithEncoding(
         FileDocumentId document, TextEncoding encoding);
     [[nodiscard]] WorkspaceResult setEncoding(

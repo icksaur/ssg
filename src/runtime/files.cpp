@@ -392,8 +392,11 @@ CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId docume
 
 // What to do about a file that changed on disk under an open buffer.
 //
-// Each takes a live diff-file id, which means nothing to a remote client, so
-// these are in-process only.
+// Each takes an external DiffFileId the runtime published in the external-
+// modification section and resolves back to an open document (Decision 14): the id
+// is runtime-resolved from a published token, never client-fabricated, cannot
+// collide with a git path id, and an unknown id is refused. The commands stay
+// in-process because that resolved id means nothing to a remote client.
 void registerExternalModificationCommands(EditorSessionBuilder& builder,
                                           EditorRuntime::Impl& runtime) {
     auto declare = [&](std::string id, std::string summary,
@@ -408,24 +411,61 @@ void registerExternalModificationCommands(EditorSessionBuilder& builder,
                     [&runtime, action](CommandContext&,
                                        DiffFileId const& file) {
                         return runtime.runTransaction([&]() -> CommandHandlerResult {
-                            std::optional<JournalDocument> document;
-                            ExternalModificationResult result;
                             if (action == ExternalAction::Reload) {
-                                result = runtime.external.reload(file, document);
-                            } else if (action == ExternalAction::KeepBuffer) {
-                                result = runtime.external.keepBuffer(file);
-                            } else {
-                                auto opened = runtime.external.openDiff(file);
-                                if (!opened.accepted()) {
+                                const auto documentId =
+                                    runtime.resolveExternalDocument(file);
+                                if (!documentId) {
                                     return failure(
-                                        "external diff target is unavailable");
+                                        "external modification target is "
+                                        "unavailable");
                                 }
-                                return success();
+                                const auto result = runtime.external.resolveReload(
+                                    file,
+                                    [&](const std::string& content)
+                                        -> ExternalReloadCommitResult {
+                                        const auto committed =
+                                            runtime.workspace.reloadWithContent(
+                                                *documentId, content);
+                                        return {committed.accepted(),
+                                                committed.compensation};
+                                    });
+                                return result.accepted()
+                                           ? success()
+                                           : failure(
+                                                 "external modification reload "
+                                                 "failed");
                             }
-                            return result.accepted()
-                                       ? success()
-                                       : failure(
-                                             "external modification command failed");
+                            if (action == ExternalAction::KeepBuffer) {
+                                const auto documentId =
+                                    runtime.resolveExternalDocument(file);
+                                const auto result = runtime.external.keepBuffer(
+                                    file,
+                                    [&](bool removed,
+                                        const std::optional<std::string>& content)
+                                        -> bool {
+                                        if (!documentId) return false;
+                                        return runtime.commitExternalDismissal(
+                                            *documentId, removed, content);
+                                    });
+                                return result.accepted()
+                                           ? success()
+                                           : failure(
+                                                 "external modification command "
+                                                 "failed");
+                            }
+                            auto opened = runtime.external.openDiff(file);
+                            if (!opened.accepted() || !opened.target) {
+                                return failure(
+                                    "external diff target is unavailable");
+                            }
+                            const auto diffFile =
+                                runtime.diff.file(opened.target->id);
+                            if (!diffFile.has_value()) {
+                                return failure("external diff is unavailable");
+                            }
+                            return runtime.openOrFocusLiveDiffTab(
+                                diffFile->get(), NavigationClass::Programmatic,
+                                std::nullopt);
                         });
                     }));
     };

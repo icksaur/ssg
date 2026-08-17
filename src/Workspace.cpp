@@ -88,6 +88,10 @@ bool containsNul(std::span<const std::uint8_t> bytes) {
            bytes.end();
 }
 
+bool containsNul(std::string_view text) {
+    return text.find('\0') != std::string_view::npos;
+}
+
 bool isBeneath(const std::filesystem::path& root,
                 const std::filesystem::path& candidate) {
     auto rootIt = root.begin();
@@ -269,6 +273,32 @@ std::string sanitizeLabel(std::string_view suggested) {
 
 class Workspace::Impl {
 public:
+    // The document's authoritative external baseline: the disk state its edits
+    // branch from. Present carries the branched-from bytes' size+hash+mtime;
+    // Missing means the file was observed absent (a keep_buffer dismissal of a
+    // removal). An absent `present` with `missing==false` is an unknown baseline
+    // (a best-effort stat failed on open), which draft recovery treats as a
+    // conflict. Open/save/reload/rename set Present-from-disk; keep_buffer advances
+    // it to Present(dismissed bytes) or Missing. Implicitly constructs from the
+    // optional<DraftBaseline> the capture path produces, so those sites are
+    // unchanged.
+    struct ExternalBaseline {
+        std::optional<DraftBaseline> present;
+        bool missing = false;
+
+        ExternalBaseline() = default;
+        ExternalBaseline(std::optional<DraftBaseline> disk)  // NOLINT: implicit
+            : present(std::move(disk)) {}
+        static ExternalBaseline removed() {
+            ExternalBaseline value;
+            value.missing = true;
+            return value;
+        }
+
+        friend bool operator==(const ExternalBaseline&,
+                               const ExternalBaseline&) = default;
+    };
+
     struct Entry {
         FileDocumentId id;
         JournalDocumentKey key;
@@ -279,7 +309,7 @@ public:
         Document document;
         SharedBytes persistedText;
         TextEncodingStatus persistedStatus;
-        std::optional<DraftBaseline> baseline;
+        ExternalBaseline baseline;
     };
 
     struct CompensationState {
@@ -293,7 +323,7 @@ public:
         std::optional<DecodedText> priorDecoded;
         SharedBytes priorPersistedText;
         TextEncodingStatus priorPersistedStatus;
-        std::optional<DraftBaseline> priorBaseline;
+        ExternalBaseline priorBaseline;
     };
 
     struct ReplacedWorkspace {
@@ -320,6 +350,10 @@ public:
     std::vector<std::string> recent;
     std::unordered_map<std::string, CompensationState> compensations;
     std::optional<ReplacedWorkspace> replacedWorkspace;
+    // Notified with the relative path each time saveTo writes a file, so the
+    // runtime can correlate SSG's own writes against watcher events. Installed by
+    // the runtime; nullptr in isolation (Workspace tests do not observe saves).
+    std::function<void(const std::filesystem::path&)> saveObserver;
 
     Entry* find(FileDocumentId id) {
         const auto found = std::find_if(
@@ -510,6 +544,12 @@ public:
             // The just-written disk bytes become the new branched-from baseline,
             // so a draft made after this save is compared against what we wrote.
             entry.baseline = captureDiskBaseline(absolute, entry.rawBytes);
+            if (saveObserver) {
+                // Ordered before the write is reported (the reconcile correlates a
+                // waiting expectation), so an SSG save never reads as an external
+                // modification. The library owns this; a client never participates.
+                saveObserver(std::filesystem::path{path});
+            }
             touchRecent(std::move(path));
             result.document = entry.id;
             return result;
@@ -544,6 +584,11 @@ Workspace& Workspace::operator=(Workspace&&) noexcept = default;
 
 const std::filesystem::path& Workspace::root() const noexcept {
     return impl_->root;
+}
+
+void Workspace::setSaveObserver(
+    std::function<void(const std::filesystem::path&)> observer) {
+    impl_->saveObserver = std::move(observer);
 }
 
 FileArchivePruneReport Workspace::pruneArchive(
@@ -591,7 +636,65 @@ std::optional<WorkspaceDocumentState> Workspace::state(
 std::optional<DraftBaseline> Workspace::baselineFor(
     FileDocumentId documentId) const {
     const auto* entry = impl_->find(documentId);
-    return entry ? entry->baseline : std::nullopt;
+    return entry ? entry->baseline.present : std::nullopt;
+}
+
+bool Workspace::matchesExternalBaseline(
+    FileDocumentId documentId,
+    const std::optional<std::string>& observedContent) const {
+    const auto* entry = impl_->find(documentId);
+    if (!entry) return false;
+    const auto& baseline = entry->baseline;
+    if (!observedContent) {
+        // A file observed absent matches only a Missing baseline (a dismissed
+        // removal). An Unknown observation is never passed here.
+        return baseline.missing;
+    }
+    if (!baseline.present) return false;
+    return baseline.present->size == observedContent->size() &&
+           baseline.present->contentHash == fastContentHash(*observedContent);
+}
+
+bool Workspace::commitExternalDismissal(
+    FileDocumentId documentId, bool removed,
+    const std::optional<std::string>& dismissedContent,
+    const std::function<bool(const std::optional<DraftBaseline>&)>&
+        persistDraft) {
+    auto* entry = impl_->find(documentId);
+    if (!entry) return false;
+    // Advance the in-memory baseline first (cheap, revertible), then let the
+    // caller enqueue a best-effort refresh of an already-persisted draft record to
+    // the SAME baseline (durability is the scratch worker's async job, as autosave).
+    // If issuing that refresh fails, revert the in-memory baseline so the workspace
+    // entry stays at its prior state and the conflict remains raised. The buffer,
+    // key, label, and encoding are untouched: only the branched-from disk baseline
+    // moves. The advance uses the exact dismissed bytes, never a fresh disk read.
+    const Impl::ExternalBaseline prior = entry->baseline;
+    if (removed) {
+        entry->baseline = Impl::ExternalBaseline::removed();
+    } else {
+        DraftBaseline advanced;
+        const std::string_view bytes = dismissedContent.value_or(std::string{});
+        advanced.size = static_cast<std::uint64_t>(bytes.size());
+        advanced.contentHash = fastContentHash(bytes);
+        // mtimeNanos is left unset: the observed mtime that pairs with these
+        // dismissed bytes is not available here, and stat-ing the path now would
+        // record newer disk metadata against the older dismissed content. The
+        // raise/skip and draft-classify comparisons use size+contentHash, so mtime
+        // is never load-bearing; a misleading mixed value must not be stored.
+        entry->baseline = Impl::ExternalBaseline{advanced};
+    }
+    bool refreshed = false;
+    try {
+        refreshed = !persistDraft || persistDraft(entry->baseline.present);
+    } catch (...) {
+        refreshed = false;
+    }
+    if (!refreshed) {
+        entry->baseline = prior;
+        return false;
+    }
+    return true;
 }
 
 std::optional<std::string> Workspace::rawDiskContent(
@@ -913,6 +1016,156 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
     }
 }
 
+WorkspaceResult Workspace::reloadWithContent(FileDocumentId id,
+                                             std::string content) {
+    auto* entry = impl_->find(id);
+    if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
+        return failure(WorkspaceError::NotFound,
+                       "saved workspace document does not exist");
+    }
+    if (entry->contentKind != FileContentKind::Text) {
+        return failure(WorkspaceError::ReadOnly,
+                       "read-only content cannot be reloaded");
+    }
+    WorkspaceResult pathError;
+    const auto absolute =
+        impl_->resolve(entry->key.savedPath(), false, pathError);
+    if (!absolute) {
+        return pathError;
+    }
+    // `content` is the RAW disk bytes, not UTF-8 text: decode them through the
+    // document's existing encoding (the same decode the normal open/reload path
+    // uses), so a non-UTF-8 document is neither corrupted nor rejected. The
+    // binary guard is applied to the DECODED text, never the raw bytes: a
+    // wide-encoding document (UTF-16) legitimately carries NUL bytes on disk, so
+    // rejecting raw NUL would wrongly refuse valid content in its own encoding.
+    const std::vector<std::uint8_t> bytes{content.begin(), content.end()};
+    auto decoded =
+        TextCodec{}.decode(asUnsignedBytes(bytes), entry->decoded.status.encoding);
+    if (!decoded.accepted()) {
+        return failure(WorkspaceError::DecodeFailed, decoded.error->message);
+    }
+    if (containsNul(decoded.text->utf8)) {
+        return failure(WorkspaceError::DecodeFailed,
+                       "binary file cannot replace an editable document");
+    }
+    std::optional<JournalDocument> documentBefore{
+        JournalDocument{entry->key, entry->document.mode(),
+                        state(id)->dirty, entry->document.snapshot().text}};
+    const JournalDocument replacement{entry->key, entry->document.mode(), false,
+                                      decoded.text->utf8};
+    const auto action =
+        impl_->recovery.reloadDocument(documentBefore, replacement);
+    if (!action.accepted()) {
+        return failure(WorkspaceError::RecoveryFailed, action.error->message);
+    }
+    if (action.compensation) {
+        Impl::CompensationState comp{id, entry->key, entry->displayLabel};
+        comp.restoresDocument = true;
+        comp.priorDecoded = entry->decoded;
+        comp.priorPersistedText = entry->persistedText;
+        comp.priorPersistedStatus = entry->persistedStatus;
+        comp.priorBaseline = entry->baseline;
+        impl_->compensations.emplace(
+            std::string{action.compensation->value()}, std::move(comp));
+    }
+    entry->document = Document{decoded.text->utf8, entry->document.mode()};
+    entry->decoded = std::move(*decoded.text);
+    entry->rawBytes = bytes;
+    entry->persistedText = SharedBytes::owning(entry->document.snapshot().text);
+    entry->persistedStatus = entry->decoded.status;
+    entry->baseline = captureDiskBaseline(*absolute, entry->rawBytes);
+    WorkspaceResult result;
+    result.document = id;
+    result.compensation = action.compensation;
+    return result;
+}
+
+WorkspaceResult Workspace::adoptExternalRename(FileDocumentId id,
+                                               std::string_view rawNewPath,
+                                               std::string content,
+                                               bool replaceBuffer) {
+    auto* entry = impl_->find(id);
+    if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
+        return failure(WorkspaceError::NotFound,
+                       "saved workspace document does not exist");
+    }
+    WorkspaceResult destinationError;
+    const auto destination =
+        impl_->resolve(rawNewPath, false, destinationError);
+    if (!destination) {
+        return destinationError;
+    }
+    const auto path = normalizedRelative(rawNewPath);
+    if (const auto* duplicate = impl_->findPath(path);
+        duplicate && duplicate->id != id) {
+        return failure(WorkspaceError::AlreadyOpen,
+                       "destination is already open");
+    }
+    // No filesystem move: the file already moved on disk. The recovery record
+    // captures the pre-adoption content so undo restores it; the key and label are
+    // restored from the compensation state (see Workspace::restore) without ever
+    // touching the filesystem.
+    //
+    // `content` is the RAW new-path disk bytes: decode them through the document's
+    // existing encoding so a non-UTF-8 file adopts as text, not corrupted bytes.
+    // The binary guard is applied to the DECODED text, never the raw bytes, so a
+    // wide-encoding document (UTF-16) whose disk bytes legitimately contain NUL is
+    // not wrongly rejected as binary.
+    const std::vector<std::uint8_t> baselineBytes{content.begin(), content.end()};
+    auto decoded = TextCodec{}.decode(asUnsignedBytes(baselineBytes),
+                                      entry->decoded.status.encoding);
+    if (!decoded.accepted()) {
+        return failure(WorkspaceError::DecodeFailed, decoded.error->message);
+    }
+    if (containsNul(decoded.text->utf8)) {
+        return failure(WorkspaceError::DecodeFailed,
+                       "binary file cannot replace an editable document");
+    }
+    const std::string diskText = decoded.text->utf8;
+    const std::string bufferContent =
+        replaceBuffer ? diskText : entry->document.snapshot().text;
+    std::optional<JournalDocument> documentBefore{
+        JournalDocument{entry->key, entry->document.mode(), state(id)->dirty,
+                        entry->document.snapshot().text}};
+    const auto action = impl_->recovery.reloadDocument(
+        documentBefore,
+        JournalDocument{JournalDocumentKey::saved(path),
+                        entry->document.mode(), bufferContent != diskText,
+                        bufferContent});
+    if (!action.accepted()) {
+        return failure(WorkspaceError::RecoveryFailed, action.error->message);
+    }
+    if (action.compensation) {
+        Impl::CompensationState comp{id, entry->key, entry->displayLabel};
+        comp.restoresDocument = true;
+        comp.priorDecoded = entry->decoded;
+        comp.priorPersistedText = entry->persistedText;
+        comp.priorPersistedStatus = entry->persistedStatus;
+        comp.priorBaseline = entry->baseline;
+        impl_->compensations.emplace(
+            std::string{action.compensation->value()}, std::move(comp));
+    }
+    entry->key = JournalDocumentKey::saved(path);
+    entry->displayLabel = destination->filename().string();
+    if (replaceBuffer) {
+        entry->document = Document{diskText, entry->document.mode()};
+        entry->decoded = *decoded.text;
+    }
+    // The baseline is always the new-path disk content, so dirtiness is derived
+    // from buffer-vs-disk regardless of whether the buffer followed. Persisted
+    // status reflects the decoded disk bytes.
+    entry->rawBytes = baselineBytes;
+    entry->persistedText = SharedBytes::owning(diskText);
+    entry->persistedStatus = decoded.text->status;
+    entry->baseline = captureDiskBaseline(*destination, entry->rawBytes);
+    impl_->touchRecent(path);
+    WorkspaceResult result;
+    result.document = id;
+    result.compensation = action.compensation;
+    return result;
+}
+
 WorkspaceResult Workspace::reopenWithEncoding(FileDocumentId id,
                                                TextEncoding encoding) {
     auto* entry = impl_->find(id);
@@ -1184,6 +1437,11 @@ WorkspaceResult Workspace::restore(
                 : SharedBytes::owning(restoredDocument->utf8Content);
         entry->persistedStatus = found->second.priorPersistedStatus;
         entry->baseline = found->second.priorBaseline;
+        // Restore the key and label too, so an adopted external rename is
+        // reversible; a no-op for reload/reloadWithContent, where they are
+        // unchanged.
+        entry->key = found->second.priorKey;
+        entry->displayLabel = found->second.priorLabel;
         impl_->compensations.erase(found);
         return {};
     }

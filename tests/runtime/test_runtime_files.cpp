@@ -33,6 +33,7 @@ ssg::EditorRuntimeConfig configFor(const std::filesystem::path& root) {
     ssg::EditorRuntimeConfig config{
         root / "workspace", root / "scratch", root / "recovery"};
     config.enableGitDiffWorker = false;
+    config.enableFilesystemWatcher = false;
     return config;
 }
 

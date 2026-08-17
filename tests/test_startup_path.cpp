@@ -124,7 +124,15 @@ TEST(firstFrameConstructsNoOptionalSubsystem) {
     // watcher, HTTP) — project invariant I12.
     ssg::resetOptionalConstructionAudit();
     auto root = makeWorkspace("no_optional");
-    auto created = ssg::EditorRuntime::create(configFor(root, /*defer=*/true));
+    // The git-diff worker owns the workspace filesystem watcher, which Phase 5a
+    // makes an always-available background service (Decision 1). It is constructed
+    // on the worker thread, off the first-frame path, so disabling it here isolates
+    // the audit to the MAIN-thread first-frame path this invariant guards; the
+    // background watcher never blocks the first frame.
+    auto config = configFor(root, /*defer=*/true);
+    config.enableGitDiffWorker = false;
+    config.enableFilesystemWatcher = false;
+    auto created = ssg::EditorRuntime::create(config);
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;

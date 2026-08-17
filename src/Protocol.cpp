@@ -5016,6 +5016,10 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back("notice_view", value.noticeView
                                            ? toValue(*value.noticeView)
                                            : ProtocolValue::makeNull());
+    // Additive: whether the session watches for external modification (Decision
+    // 13). A decoder that predates this field ignores it; an absent field decodes
+    // to available (true), so an old peer is never shown as unwatched.
+    fields.emplace_back("watcher_available", toValue(value.watcherAvailable));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
@@ -5075,6 +5079,15 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
             if (!decodePresent(*noticeViewField, noticeView)) return false;
         }
     }
+    // Additive: an absent watcher-availability field decodes to available (true), so
+    // a frame from a peer that predates it is never shown as unwatched; a
+    // present-but-malformed field fails loud.
+    bool watcherAvailable = true;
+    if (const ProtocolValue* watcherField = value.field("watcher_available")) {
+        auto decoded = requireField<bool>(watcherField);
+        if (!decoded) return false;
+        watcherAvailable = *decoded;
+    }
     // The schema and its presence section travel together and must correspond
     // (generation + node-id set). Neither alone is a valid frame -- a lone schema
     // would fall back to the root-only default presence, which need not correspond;
@@ -5105,6 +5118,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     if (uiPresence) out->uiPresence = std::move(*uiPresence);
     out->promptView = std::move(promptView);
     out->noticeView = std::move(noticeView);
+    out->watcherAvailable = watcherAvailable;
     return true;
 }
 
@@ -5773,6 +5787,9 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
                             : ProtocolValue::makeNull());
     fields.emplace_back("prompt_view", toValue(delta.promptView()));
     fields.emplace_back("notice_view", toValue(delta.noticeView()));
+    // Additive: present only when watcher availability flipped (Decision 13). An
+    // absent field means "unchanged" for a peer that predates it.
+    fields.emplace_back("watcher_available", toValue(delta.watcherAvailable()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5802,11 +5819,13 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
     std::optional<ByteOffset> documentCaret;
     std::optional<TextEncodingDelta> textEncoding;
     std::optional<FocusTarget> focus;
+    std::optional<bool> watcherAvailable;
     bool const optionalOk =
         decodeOptionalField(payload.field("topology"), topology) &&
         decodeOptionalField(payload.field("document"), document) &&
         decodeOptionalField(payload.field("document_caret"), documentCaret) &&
         decodeOptionalField(payload.field("focus"), focus) &&
+        decodeOptionalField(payload.field("watcher_available"), watcherAvailable) &&
         decodeOptionalField(payload.field("text_encoding"), textEncoding);
 
     auto selection = requireField<SelectionSetDelta>(payload.field("selection"));
@@ -5936,7 +5955,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*treeWindows), std::move(uiDelta),
                 std::move(uiStateDelta), std::move(uiPresenceDelta),
                 std::move(paletteDelta), std::move(promptViewDelta),
-                std::move(noticeViewDelta)),
+                std::move(noticeViewDelta), watcherAvailable),
             {}};
 }
 

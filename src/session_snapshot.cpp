@@ -100,7 +100,8 @@ bool operator==(SessionSnapshotSections const& left,
            left.ui == right.ui && left.uiState == right.uiState &&
            left.uiPresence == right.uiPresence &&
            left.promptView == right.promptView &&
-           left.noticeView == right.noticeView;
+           left.noticeView == right.noticeView &&
+           left.watcherAvailable == right.watcherAvailable;
 }
 
 bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
@@ -146,7 +147,8 @@ SessionDelta::SessionDelta(
     PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows,
     UiSectionDelta ui, UiStateSectionDelta uiState,
     UiPresenceSectionDelta uiPresence, PaletteSectionDelta palette,
-    PromptViewSectionDelta promptView, NoticeViewSectionDelta noticeView)
+    PromptViewSectionDelta promptView, NoticeViewSectionDelta noticeView,
+    std::optional<bool> watcherAvailable)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -185,7 +187,8 @@ SessionDelta::SessionDelta(
       uiPresence_{std::move(uiPresence)},
       palette_{std::move(palette)},
       promptView_{std::move(promptView)},
-      noticeView_{std::move(noticeView)} {}
+      noticeView_{std::move(noticeView)},
+      watcherAvailable_{watcherAvailable} {}
 
 SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
@@ -322,6 +325,9 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
                                next.promptView},
         NoticeViewSectionDelta{old.noticeView != next.noticeView,
                                next.noticeView},
+        old.watcherAvailable == next.watcherAvailable
+            ? std::nullopt
+            : std::optional{next.watcherAvailable},
     };
 }
 
@@ -425,6 +431,10 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     auto noticeView = delta.noticeView_.changed
                           ? delta.noticeView_.replacement
                           : base.sections().noticeView;
+    // Decision-13 durable capability fact: the delta carries it only when it flips
+    // (nullopt otherwise), so an unchanged availability preserves the base value.
+    auto watcherAvailable =
+        delta.watcherAvailable_.value_or(base.sections().watcherAvailable);
     // A delta may replace the schema or the presence section independently; the
     // resulting pair must still correspond (same generation, same node-id set), or a
     // one-sided replacement would yield an accepted-but-inconsistent snapshot.
@@ -463,6 +473,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(uiPresence),
         std::move(promptView),
         std::move(noticeView),
+        watcherAvailable,
     };
     ClientSnapshotState client = base.client();
     std::optional<PresentationSnapshot> presentation;
@@ -518,7 +529,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     TreeWindowsDelta treeWindows, UiSectionDelta ui,
     UiStateSectionDelta uiState, UiPresenceSectionDelta uiPresence,
     PaletteSectionDelta palette, PromptViewSectionDelta promptView,
-    NoticeViewSectionDelta noticeView) const {
+    NoticeViewSectionDelta noticeView, std::optional<bool> watcherAvailable)
+    const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,
@@ -557,7 +569,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(uiPresence),
                         std::move(palette),
                         std::move(promptView),
-                        std::move(noticeView)};
+                        std::move(noticeView),
+                        watcherAvailable};
 }
 
 }  // namespace ssg

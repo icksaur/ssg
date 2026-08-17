@@ -37,6 +37,16 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(test_runtime_files PRIVATE ssg)
     add_test(NAME test_runtime_files COMMAND test_runtime_files)
 
+    add_executable(test_runtime_external_modification
+        ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_external_modification.cpp
+    )
+    target_include_directories(test_runtime_external_modification PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    target_link_libraries(test_runtime_external_modification PRIVATE ssg)
+    add_test(NAME test_runtime_external_modification
+             COMMAND test_runtime_external_modification)
+
     add_executable(test_runtime_editing
         ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_editing.cpp
     )

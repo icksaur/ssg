@@ -3,6 +3,7 @@
 #include <ssg/DiffModel.h>
 #include <ssg/ChromeDecode.h>
 #include <ssg/EditorSession.h>
+#include <ssg/FilesystemWatcher.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/GitDiffSource.h>
 #include <ssg/StatusFields.h>
@@ -45,7 +46,15 @@ struct EditorRuntimeConfig {
     std::vector<StatusFieldProviderBinding> statusFieldProviders;
     // When false, disables the internal git-diff refresh worker. Tests can use
     // this for deterministic control; default true keeps git-diff wiring library-owned.
+    // This controls git diff computation only, never file watching: the filesystem
+    // watcher is a workspace service that observes external modification whether or
+    // not git diffs are being computed (Decision 1).
     bool enableGitDiffWorker = true;
+    // When false, disables the filesystem watcher (and thus external-modification
+    // ingress). Independent of enableGitDiffWorker so a non-git session still
+    // watches files, and a test driving the reconcile hook can suppress the real
+    // inotify watcher to stay deterministic. Default true keeps watching on.
+    bool enableFilesystemWatcher = true;
 };
 
 class EditorRuntime;
@@ -196,6 +205,20 @@ public:
     // oversized-draft path without materialising a multi-MiB buffer. Test-only;
     // production keeps the default cap.
     void setAutosaveDraftByteCapForTests(std::uint64_t cap);
+    // Injects normalized watch events straight into the runtime-thread external-
+    // modification reconcile, standing in for the watcher worker's queue+drain so a
+    // test drives the real reconcile deterministically without depending on
+    // inotify timing. Test-only; production ingress runs through the wake drain.
+    void reconcileExternalWatchEventsForTest(std::vector<WatchEvent> events);
+    // Whether the shared DiffModel currently holds an entry for `id`. Test-only, so
+    // the external-modification oracle can assert a rejected event orphans no diff
+    // entry keyed to a path no pending action owns.
+    [[nodiscard]] bool diffModelHasFileForTest(const DiffFileId& id) const;
+    // Drives a watcher-availability transition through the runtime-thread path a
+    // real worker uses (store the capability, then drain it so the session
+    // revision advances and delta clients observe the change). Test-only;
+    // production transitions arrive via the worker's wake drain.
+    void reportWatcherAvailabilityForTest(bool available);
     // CONTRACT
     // EditorRuntime::snapshot: the semantic model and interaction state are never
     //   gated on grid geometry. The dimension-taking overload adds an optional

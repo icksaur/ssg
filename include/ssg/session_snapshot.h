@@ -111,6 +111,12 @@ struct SessionSnapshotSections {
     // the parallel ShellNotice with rects. Both derive from the one draftNotice
     // resolver.
     std::optional<NoticeView> noticeView;
+    // Decision-13 durable capability fact: whether the session is watching the
+    // workspace for external modification. False for the whole session when the
+    // platform cannot provide a filesystem watcher, so a client renders "external
+    // changes are not being watched" from library truth rather than inventing it.
+    // Additive on the wire; an absent field decodes to available (true).
+    bool watcherAvailable = true;
 };
 
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,
@@ -371,6 +377,9 @@ public:
     [[nodiscard]] NoticeViewSectionDelta const& noticeView() const noexcept {
         return noticeView_;
     }
+    [[nodiscard]] std::optional<bool> const& watcherAvailable() const noexcept {
+        return watcherAvailable_;
+    }
     [[nodiscard]] StyleSectionDelta const& style() const noexcept {
         return style_;
     }
@@ -415,7 +424,8 @@ private:
         UiPresenceSectionDelta uiPresence = {},
         PaletteSectionDelta palette = {},
         PromptViewSectionDelta promptView = {},
-        NoticeViewSectionDelta noticeView = {});
+        NoticeViewSectionDelta noticeView = {},
+        std::optional<bool> watcherAvailable = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -456,6 +466,7 @@ private:
     PaletteSectionDelta palette_;
     PromptViewSectionDelta promptView_;
     NoticeViewSectionDelta noticeView_;
+    std::optional<bool> watcherAvailable_;
 };
 
 struct SessionReplayResult {
@@ -510,7 +521,8 @@ public:
         UiPresenceSectionDelta uiPresence = {},
         PaletteSectionDelta palette = {},
         PromptViewSectionDelta promptView = {},
-        NoticeViewSectionDelta noticeView = {}) const;
+        NoticeViewSectionDelta noticeView = {},
+        std::optional<bool> watcherAvailable = {}) const;
 };
 
 }  // namespace ssg
