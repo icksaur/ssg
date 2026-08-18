@@ -70,12 +70,14 @@ public:
     struct PendingEvent {
         WatchEvent event;
         WatchTimePoint readyAt;
+        std::uint64_t ingest = 0;
     };
 
     struct RenamePair {
         std::optional<NativeWatchEvent> from;
         std::optional<NativeWatchEvent> to;
         WatchTimePoint readyAt;
+        std::uint64_t fromIngest = 0;
     };
 
     Impl(WatcherConfig requested,
@@ -113,6 +115,11 @@ public:
             requestOverflow();
             return;
         }
+        // A strictly monotonic ingestion ordinal orders events by ARRIVAL, not by
+        // the coarse observation clock (which can stamp a whole poll batch with one
+        // value). expireRenames uses it to tell an atomic-replace recreate -- a
+        // Create that arrived AFTER the rename-away -- from a pre-existing edit.
+        currentIngest_ = nextIngest_++;
         native.path = normalizePath(std::move(native.path));
         if (native.action == NativeWatchAction::RenameFrom ||
             native.action == NativeWatchAction::RenameTo) {
@@ -217,6 +224,7 @@ private:
                 native.observed = stateFor(cache_, native.path);
             }
             found->second.from = std::move(native);
+            found->second.fromIngest = currentIngest_;
         } else {
             found->second.to = std::move(native);
         }
@@ -268,10 +276,34 @@ private:
             }
             const auto& half = current->second;
             if (half.from) {
-                auto event = eventFrom(NativeWatchAction::Remove,
-                                        half.from->path, half.from->observed);
-                cache_.erase(half.from->path);
-                enqueue(std::move(event), now - config_.debounce);
+                // An unpaired rename-away whose path is recreated AFTER it (a pending
+                // Create/Modify observed later than the rename) is an ATOMIC REPLACE
+                // -- an editor saved by renaming the original out of the watched tree
+                // and writing a fresh file at the same path. The workspace effect is a
+                // MODIFY, not a removal: emitting a Remove here would coalesce-cancel
+                // that recreate (Create+Remove nets to nothing) and hide the change.
+                // The recreate must post-date the rename-away by INGESTION ORDER (a
+                // strict monotonic arrival ordinal, not the coarse observation clock
+                // which can stamp a whole poll batch alike): a file modified and THEN
+                // genuinely moved away leaves a pending event ingested before the
+                // rename, and must still surface as a Remove.
+                const auto renameFromIngest = current->second.fromIngest;
+                const auto recreated = std::find_if(
+                    pending_.begin(), pending_.end(),
+                    [&half, renameFromIngest](const PendingEvent& candidate) {
+                        return candidate.event.path == half.from->path &&
+                               candidate.ingest > renameFromIngest &&
+                               (candidate.event.kind == WatchEventKind::Create ||
+                                candidate.event.kind == WatchEventKind::Modify);
+                    });
+                if (recreated != pending_.end()) {
+                    recreated->event.kind = WatchEventKind::Modify;
+                } else {
+                    auto event = eventFrom(NativeWatchAction::Remove,
+                                            half.from->path, half.from->observed);
+                    cache_.erase(half.from->path);
+                    enqueue(std::move(event), now - config_.debounce);
+                }
             } else if (half.to) {
                 auto event = eventFrom(NativeWatchAction::Create,
                                         half.to->path, half.to->observed);
@@ -302,6 +334,7 @@ private:
             if (!distinctReplacement) {
                 if (coalesce(same->event, event)) {
                     same->readyAt = observedAt + config_.debounce;
+                    same->ingest = currentIngest_;
                 } else {
                     pending_.erase(std::next(same).base());
                 }
@@ -312,7 +345,8 @@ private:
             requestOverflow();
             return;
         }
-        pending_.push_back({std::move(event), observedAt + config_.debounce});
+        pending_.push_back({std::move(event), observedAt + config_.debounce,
+                            currentIngest_});
     }
 
     static bool coalesce(WatchEvent& current, const WatchEvent& next) {
@@ -455,6 +489,8 @@ private:
     std::map<std::uint64_t, RenamePair> renames_;
     std::deque<SaveExpectation> saveExpectations_;
     std::uint64_t nextSequence_ = 1;
+    std::uint64_t nextIngest_ = 0;
+    std::uint64_t currentIngest_ = 0;
     bool overflowRequested_ = false;
     bool overflowAnnounced_ = false;
     WatchTimePoint nextRescanAt_ = WatchTimePoint::min();

@@ -236,6 +236,65 @@ TEST(unmatchedRenameHalvesBecomeBoundaryEvents) {
     ASSERT_EQ(events[0].kind, WatchEventKind::Create);
 }
 
+TEST(atomicRenameReplaceSaveIsNeverDroppedAndSurfacesAsModify) {
+    // An editor that saves by renaming the original OUT of the watched tree and
+    // writing a fresh file at the same path (vim writebackup, emacs, VS Code, mv)
+    // produces an UNPAIRED RenameFrom(path) plus a Create(path)+Modify. The
+    // rename-away must not expire to a Remove that coalesce-cancels the recreate:
+    // the workspace effect is a single Modify. A regression here silently hides
+    // every rename-based external save from an open document.
+    WatchEventNormalizer replaced(
+        config(), {WorkspaceEntry{"file.txt", state(9)}}, unchangedScan);
+    replaced.push(raw(NativeWatchAction::RenameFrom, "file.txt",
+                      std::nullopt, /*renameToken=*/10),
+                  kStart);
+    replaced.push(raw(NativeWatchAction::Create, "file.txt", state(11)),
+                  kStart + 1ms);
+    replaced.push(raw(NativeWatchAction::Modify, "file.txt", state(11, 2)),
+                  kStart + 2ms);
+    auto replacedEvents = replaced.takeReady(kStart + 13ms);
+    ASSERT_EQ(replacedEvents.size(), std::size_t{1});
+    ASSERT_EQ(replacedEvents[0].kind, WatchEventKind::Modify);
+    ASSERT_EQ(replacedEvents[0].path, std::filesystem::path{"file.txt"});
+}
+
+TEST(modifyThenGenuineMoveAwayStillReportsRemove) {
+    // The atomic-replace guard must not swallow a genuine move-away: a file
+    // modified and THEN renamed out of the tree (its pending Modify PRE-dates the
+    // rename) must surface as a Remove, not be misread as a recreate/Modify.
+    WatchEventNormalizer movedAway(
+        config(), {WorkspaceEntry{"file.txt", state(9)}}, unchangedScan);
+    movedAway.push(raw(NativeWatchAction::Modify, "file.txt", state(9, 2)),
+                   kStart);
+    movedAway.push(raw(NativeWatchAction::RenameFrom, "file.txt",
+                       std::nullopt, /*renameToken=*/10),
+                   kStart + 1ms);
+    auto events = movedAway.takeReady(kStart + 12ms);
+    ASSERT_EQ(events.size(), std::size_t{1});
+    ASSERT_EQ(events[0].kind, WatchEventKind::Remove);
+    ASSERT_EQ(events[0].path, std::filesystem::path{"file.txt"});
+}
+
+TEST(atomicRenameReplaceInOneClockTickStillSurfacesAsModify) {
+    // The recreate-after-rename test must not rely on the observation clock: a
+    // coarse clock stamps an entire poll batch with one time, so RenameFrom and
+    // the recreating Create can share a timestamp. Ingestion ORDER (arrival), not
+    // the timestamp, must classify this as an atomic replace.
+    WatchEventNormalizer replaced(
+        config(), {WorkspaceEntry{"file.txt", state(9)}}, unchangedScan);
+    replaced.push(raw(NativeWatchAction::RenameFrom, "file.txt",
+                      std::nullopt, /*renameToken=*/10),
+                  kStart);
+    replaced.push(raw(NativeWatchAction::Create, "file.txt", state(11)),
+                  kStart);
+    replaced.push(raw(NativeWatchAction::Modify, "file.txt", state(11, 2)),
+                  kStart);
+    auto events = replaced.takeReady(kStart + 11ms);
+    ASSERT_EQ(events.size(), std::size_t{1});
+    ASSERT_EQ(events[0].kind, WatchEventKind::Modify);
+    ASSERT_EQ(events[0].path, std::filesystem::path{"file.txt"});
+}
+
 TEST(debounceReleasesOnlyAfterTheWindow) {
     WatchEventNormalizer normalizer(config(), {}, unchangedScan);
     normalizer.push(raw(NativeWatchAction::Create, "later.txt", state(1)), kStart);
@@ -470,6 +529,9 @@ int main() {
     RUN(samePathReplacementRequiresMatchingIdentityToCoalesce);
     RUN(samePathReplacementCoalescesFollowupsWithNewIdentity);
     RUN(unmatchedRenameHalvesBecomeBoundaryEvents);
+    RUN(atomicRenameReplaceSaveIsNeverDroppedAndSurfacesAsModify);
+    RUN(modifyThenGenuineMoveAwayStillReportsRemove);
+    RUN(atomicRenameReplaceInOneClockTickStillSurfacesAsModify);
     RUN(debounceReleasesOnlyAfterTheWindow);
     RUN(exactSaveResultIsCorrelatedOnce);
     RUN(overflowRescansAndEmitsSyntheticChanges);
