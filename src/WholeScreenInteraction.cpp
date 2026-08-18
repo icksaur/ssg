@@ -87,6 +87,21 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     }
     if (hasNotice && !truth.noticePresent) hidden.push_back(notice);
 
+    // The external-modification node mirrors the notice: always assembled, present
+    // only while a file is externally changed. Its absence under a raised section
+    // means the schema contract broke and must not be masked. Unlike the notice, it
+    // CAN capture focus -- but only through the explicit external.focus command
+    // (truth.externalFocusHeld), never reactively.
+    const UiNodeId externalMod = nodeId(kExternalModNodeId);
+    const bool hasExternalMod = schema.contains(externalMod);
+    if (truth.externalModificationPresent && !hasExternalMod) {
+        throw std::logic_error(
+            "external modification section requires the externalmod node");
+    }
+    if (hasExternalMod && !truth.externalModificationPresent) {
+        hidden.push_back(externalMod);
+    }
+
     UiInteractionState state{std::move(schema), std::move(hidden)};
 
     // Base focus never strands on an absent panel: Panel is honored only when present.
@@ -99,6 +114,17 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     // node, not merely its container), the footer prompt surface for a footer-region
     // prompt. Both hosts are present when addressed, so captureFocus admits the
     // capture.
+    // The external-modification capture is DERIVED from truth each rebuild (pushed
+    // only when the bar is present and the user has focused it), so it survives
+    // unrelated rebuilds and is never stacked twice. Pushed BEFORE any prompt
+    // capture, so when both are held the LIFO top -- and thus the active context --
+    // is the prompt, and dismissing the prompt returns to the external context.
+    if (truth.externalModificationPresent && hasExternalMod &&
+        truth.externalFocusHeld) {
+        state.captureFocus(
+            FocusCapture{externalMod, FocusTarget::ExternalModification});
+    }
+
     if (promptRegion) {
         const UiNodeId host = headerPrompt ? inputLine : footerPrompt;
         state.captureFocus(FocusCapture{host, FocusTarget::Prompt});

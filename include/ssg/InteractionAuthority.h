@@ -72,6 +72,22 @@ public:
     // region shows/hides. Returns whether presence changed (no rebuild when unchanged).
     bool refreshNoticePresence(bool present);
 
+    // Reconcile the external-modification section's presence into truth, mirroring
+    // refreshNoticePresence: the runtime calls it after each dispatch AND in the
+    // watcher drain (external state changes there, not only on a command). When the
+    // section becomes absent this also clears the external focus flag, so the
+    // capture auto-pops and a later disk event cannot reactively re-steal focus.
+    // Returns whether truth changed.
+    bool refreshExternalModificationPresence(bool present);
+
+    // Focus the external-modification bar: push the derived capture by setting the
+    // truth flag. IDEMPOTENT and present-gated -- a no-op (returns false, no
+    // rebuild) when the bar is absent or focus is already held, so a repeated key
+    // never stacks the capture. releaseExternalFocus pops it (the external.focus_
+    // return command); a no-op when focus is not held.
+    bool captureExternalFocus();
+    bool releaseExternalFocus();
+
     // Re-assemble the whole-screen schema; when its generation advances, rebuild the
     // interaction projection from the SAME truth and prompt over the new schema (the
     // migration). Returns whether the generation advanced.
@@ -88,6 +104,13 @@ public:
     [[nodiscard]] const PromptSurface& prompt() const noexcept { return prompt_; }
     [[nodiscard]] FocusTarget effectiveFocus() const noexcept {
         return interaction_.effectiveFocus();
+    }
+    // The legacy wire projection of the effective focus: the internal
+    // ExternalModification capture is invisible here, so the published `focus`
+    // field stays in the closed set an old client can decode. The external-focus
+    // state is carried separately (WholeScreenTruth::externalFocusHeld).
+    [[nodiscard]] FocusTarget legacyEffectiveFocus() const noexcept {
+        return interaction_.legacyEffectiveFocus();
     }
     [[nodiscard]] std::optional<PickerKind> openPicker() const noexcept {
         return truth_.openPicker;

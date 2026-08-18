@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 191 commands.
+There are 196 commands.
 
 ## clipboard-register
 
@@ -67,6 +67,11 @@ There are 191 commands.
 | `external.reload` | Reload | none | lua |
 | `external.keep_buffer` | Keep Buffer | none | lua |
 | `external.open_diff` | Open Diff | none | lua |
+| `external.select_next` | Select Next External Change | none | lua |
+| `external.select_previous` | Select Previous External Change | none | lua |
+| `external.select` | Select External Change | none | lua |
+| `external.focus` | Focus External Change Bar | none | lua |
+| `external.focus_return` | Leave External Change Bar | none | lua |
 
 ## file-commands
 

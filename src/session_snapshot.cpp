@@ -101,7 +101,8 @@ bool operator==(SessionSnapshotSections const& left,
            left.uiPresence == right.uiPresence &&
            left.promptView == right.promptView &&
            left.noticeView == right.noticeView &&
-           left.watcherAvailable == right.watcherAvailable;
+           left.watcherAvailable == right.watcherAvailable &&
+           left.externalFocusHeld == right.externalFocusHeld;
 }
 
 bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
@@ -148,7 +149,7 @@ SessionDelta::SessionDelta(
     UiSectionDelta ui, UiStateSectionDelta uiState,
     UiPresenceSectionDelta uiPresence, PaletteSectionDelta palette,
     PromptViewSectionDelta promptView, NoticeViewSectionDelta noticeView,
-    std::optional<bool> watcherAvailable)
+    std::optional<bool> watcherAvailable, std::optional<bool> externalFocusHeld)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -188,7 +189,8 @@ SessionDelta::SessionDelta(
       palette_{std::move(palette)},
       promptView_{std::move(promptView)},
       noticeView_{std::move(noticeView)},
-      watcherAvailable_{watcherAvailable} {}
+      watcherAvailable_{watcherAvailable},
+      externalFocusHeld_{externalFocusHeld} {}
 
 SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
@@ -328,6 +330,9 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         old.watcherAvailable == next.watcherAvailable
             ? std::nullopt
             : std::optional{next.watcherAvailable},
+        old.externalFocusHeld == next.externalFocusHeld
+            ? std::nullopt
+            : std::optional{next.externalFocusHeld},
     };
 }
 
@@ -435,6 +440,10 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     // (nullopt otherwise), so an unchanged availability preserves the base value.
     auto watcherAvailable =
         delta.watcherAvailable_.value_or(base.sections().watcherAvailable);
+    // Additive: the delta carries the external-focus flag only when it flips
+    // (nullopt otherwise), so an unchanged state preserves the base value.
+    auto externalFocusHeld =
+        delta.externalFocusHeld_.value_or(base.sections().externalFocusHeld);
     // A delta may replace the schema or the presence section independently; the
     // resulting pair must still correspond (same generation, same node-id set), or a
     // one-sided replacement would yield an accepted-but-inconsistent snapshot.
@@ -474,6 +483,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(promptView),
         std::move(noticeView),
         watcherAvailable,
+        externalFocusHeld,
     };
     ClientSnapshotState client = base.client();
     std::optional<PresentationSnapshot> presentation;
@@ -529,7 +539,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     TreeWindowsDelta treeWindows, UiSectionDelta ui,
     UiStateSectionDelta uiState, UiPresenceSectionDelta uiPresence,
     PaletteSectionDelta palette, PromptViewSectionDelta promptView,
-    NoticeViewSectionDelta noticeView, std::optional<bool> watcherAvailable)
+    NoticeViewSectionDelta noticeView, std::optional<bool> watcherAvailable,
+    std::optional<bool> externalFocusHeld)
     const {
     return SessionDelta{baseRevision,
                         revision,
@@ -570,7 +581,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(palette),
                         std::move(promptView),
                         std::move(noticeView),
-                        watcherAvailable};
+                        watcherAvailable,
+                        externalFocusHeld};
 }
 
 }  // namespace ssg

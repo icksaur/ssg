@@ -248,6 +248,19 @@ KeymapViewState defaultTerminalKeymap() {
     // replace.all) are reachable through the command palette; they do not earn a
     // dedicated key and are left unbound.
 
+    // The external-modification bar. Alt+E focuses it from any state (global,
+    // present-gated by the command); within the external context the arrows move
+    // the selection and Enter/K/D run the offered action on it, mirroring the
+    // panel's navigation, and Escape returns focus without touching prompt
+    // lifecycle.
+    bind(seq({"Alt+KeyE"}), "external.focus", "*");
+    bind(seq({"ArrowDown"}), "external.select_next", "external");
+    bind(seq({"ArrowUp"}), "external.select_previous", "external");
+    bind(seq({"Enter"}), "external.reload", "external");
+    bind(seq({"KeyK"}), "external.keep_buffer", "external");
+    bind(seq({"KeyD"}), "external.open_diff", "external");
+    bind(seq({"Escape"}), "external.focus_return", "external");
+
     return keymap;
 }
 
@@ -1884,6 +1897,14 @@ void EditorRuntime::Impl::reconcileExternalWatchEvents(
                     diff.viewState().revision != diffRevisionBefore)) {
         session->advanceRevision();
     }
+    // External state changes here in the watcher drain, not only on a command
+    // dispatch (Decision 4): reconcile the section's presence into the interaction
+    // authority whenever the flow's view advanced, so the node appears/updates
+    // without waiting for an unrelated command.
+    if (external.viewState().revision != flowRevisionBefore) {
+        interaction.refreshExternalModificationPresence(
+            externalModificationPresent());
+    }
 }
 
 bool EditorRuntime::Impl::commitExternalDismissal(
@@ -2998,6 +3019,8 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
         // dismiss) has settled -- the notice region then shows/hides in the presence
         // section this dispatch publishes.
         impl_->interaction.refreshNoticePresence(impl_->noticePresent());
+        impl_->interaction.refreshExternalModificationPresence(
+            impl_->externalModificationPresent());
         if (result.accepted() && shouldPauseForLocalEdit &&
             existingDocumentMutated(revisionsBefore, impl_->workspace)) {
             (void)impl_->follow.notifyLocalEdit();

@@ -95,6 +95,80 @@ TEST(reconcileDropsOnlyAbsentCaptures) {
     ASSERT_TRUE(focus.effectiveTarget() == FocusTarget::Panel);
 }
 
+FocusCapture external(std::string node) {
+    return FocusCapture{UiNodeId{std::move(node)}, FocusTarget::ExternalModification};
+}
+
+// The legacy wire projection never widens the closed {Editor,Panel,Prompt} set:
+// while the internal ExternalModification capture is the true effective focus, the
+// legacy projection is the surface an old client would see beneath it -- the base,
+// or the top non-external capture when a prompt is also held.
+TEST(theFocusWireFieldStaysInTheLegacyEnumSetWhenExternalHoldsFocus) {
+    KeyboardFocus focus;
+    focus.setBase(BaseFocus::Editor);
+    focus.pushCapture(external("externalmod"));
+    ASSERT_TRUE(focus.effectiveTarget() == FocusTarget::ExternalModification);
+    ASSERT_TRUE(focus.legacyEffectiveTarget() == FocusTarget::Editor);
+
+    // External beneath a prompt: the true focus is the prompt, and the legacy
+    // projection is the prompt too (the top non-external capture), never external.
+    focus.pushCapture(prompt("palette"));
+    ASSERT_TRUE(focus.effectiveTarget() == FocusTarget::Prompt);
+    ASSERT_TRUE(focus.legacyEffectiveTarget() == FocusTarget::Prompt);
+}
+
+// The legacy projection is always a value an old three-value decode array can
+// accept, so a snapshot published while external focus is held never fails an old
+// client's focus decode.
+TEST(anOldClientDecodeToleratesAFocusHeldExternalSnapshot) {
+    auto isLegacy = [](FocusTarget t) {
+        return t == FocusTarget::Editor || t == FocusTarget::Panel ||
+               t == FocusTarget::Prompt;
+    };
+    for (BaseFocus base : {BaseFocus::Editor, BaseFocus::Panel}) {
+        KeyboardFocus focus;
+        focus.setBase(base);
+        focus.pushCapture(external("externalmod"));
+        ASSERT_TRUE(isLegacy(focus.legacyEffectiveTarget()));
+        focus.pushCapture(prompt("palette"));
+        ASSERT_TRUE(isLegacy(focus.legacyEffectiveTarget()));
+    }
+}
+
+// The additive `external_focus_held` wire bool is published from the EFFECTIVE
+// (top) focus, not mere presence of the external capture on the stack. A prompt
+// captured above external makes external NOT effective, so the bool is false and
+// the legacy `focus` field (Prompt) reconstructs focus unambiguously.
+TEST(aPromptAboveExternalPublishesPromptAndExternalNotEffective) {
+    KeyboardFocus focus;
+    focus.setBase(BaseFocus::Editor);
+    focus.pushCapture(external("externalmod"));
+    focus.pushCapture(prompt("palette"));
+
+    // Legacy focus published to the wire is Prompt (the top non-external capture).
+    ASSERT_TRUE(focus.legacyEffectiveTarget() == FocusTarget::Prompt);
+    // The additive bool source: external is NOT the effective top, so false.
+    ASSERT_TRUE(!(focus.effectiveTarget() == FocusTarget::ExternalModification));
+    // A new client reconstructs: bool false => use legacy focus => Prompt.
+}
+
+// The additive bool is true ONLY when external is the top capture; a prompt above
+// it, or no external capture at all, both yield false.
+TEST(externalIsEffectiveOnlyWhenItIsTheTopCapture) {
+    KeyboardFocus focus;
+    focus.setBase(BaseFocus::Editor);
+    ASSERT_TRUE(!(focus.effectiveTarget() == FocusTarget::ExternalModification));
+
+    focus.pushCapture(external("externalmod"));
+    ASSERT_TRUE(focus.effectiveTarget() == FocusTarget::ExternalModification);
+
+    focus.pushCapture(prompt("palette"));
+    ASSERT_TRUE(!(focus.effectiveTarget() == FocusTarget::ExternalModification));
+
+    focus.popCapture();
+    ASSERT_TRUE(focus.effectiveTarget() == FocusTarget::ExternalModification);
+}
+
 }  // namespace
 
 int main() {
@@ -103,5 +177,9 @@ int main() {
     RUN(onlyOnePromptBackedCaptureIsAllowed);
     RUN(focusNeverReferencesAHiddenNodeAfterReconcile);
     RUN(reconcileDropsOnlyAbsentCaptures);
+    RUN(theFocusWireFieldStaysInTheLegacyEnumSetWhenExternalHoldsFocus);
+    RUN(aPromptAboveExternalPublishesPromptAndExternalNotEffective);
+    RUN(externalIsEffectiveOnlyWhenItIsTheTopCapture);
+    RUN(anOldClientDecodeToleratesAFocusHeldExternalSnapshot);
     return failed == 0 ? 0 : 1;
 }

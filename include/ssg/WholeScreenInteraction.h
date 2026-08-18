@@ -50,6 +50,19 @@ struct WholeScreenTruth {
     // region's presence only.
     bool noticePresent = false;
 
+    // Whether any file is externally modified (the external-modification section is
+    // non-empty). Like noticePresent, this is per-flow runtime state the aggregate
+    // does not otherwise hold, reconciled into truth after each dispatch AND in the
+    // watcher drain. Gates the external-modification node's presence and, with it,
+    // whether the external focus capture can anchor.
+    bool externalModificationPresent = false;
+    // Whether the user has focused the external-modification bar. The capture is
+    // DERIVED from this each rebuild (never pushed imperatively), so it survives
+    // unrelated rebuilds and can never be stacked twice; it is pushed only when the
+    // node is also present. Cleared whenever presence drops, so a later disk event
+    // that re-raises the bar never reactively steals focus.
+    bool externalFocusHeld = false;
+
     friend bool operator==(const WholeScreenTruth&, const WholeScreenTruth&) = default;
 };
 

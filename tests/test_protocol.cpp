@@ -610,6 +610,112 @@ TEST(sessionSnapshotRoundTripsThroughTheWire) {
     ASSERT_EQ(*decoded.snapshot, snapshot);
 }
 
+// The additive selected field is optional on the wire: an absent selection decodes
+// back to nullopt, never a fabricated id.
+TEST(anAbsentSelectedExternalIdDecodesAsNone) {
+    auto sect = sections(ssg::Revision{4}, "alpha");
+    sect.externalModification = {
+        ssg::Revision{4},
+        {{ssg::DiffFileId{"a"}, "a.txt",
+          ssg::ExternalDocumentStatus::ExternallyModified, "x",
+          {ssg::ExternalAction::Reload}}},
+        std::nullopt};
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
+            {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, clientView(3), std::move(sect));
+    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_TRUE(decoded.snapshot.has_value());
+    ASSERT_FALSE(
+        decoded.snapshot->sections().externalModification.selected.has_value());
+}
+
+// A present selection that names no file in the same view is a dangling selection;
+// the decoder rejects it loudly rather than replaying an unanchored id.
+TEST(aSelectedExternalIdMustNameAFileOrTheSnapshotDecodeFailsLoud) {
+    auto sect = sections(ssg::Revision{4}, "alpha");
+    sect.externalModification = {
+        ssg::Revision{4},
+        {{ssg::DiffFileId{"a"}, "a.txt",
+          ssg::ExternalDocumentStatus::ExternallyModified, "x",
+          {ssg::ExternalAction::Reload}}},
+        ssg::DiffFileId{"ghost"}};
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
+            {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, clientView(3), std::move(sect));
+    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    ASSERT_FALSE(decoded.accepted());
+}
+
+// The additive external-focus-held field: the default (false) round-trips, a true
+// value round-trips, so a new client reconstructs the true focus from it while the
+// legacy `focus` field stays in the closed decode set.
+TEST(externalFocusHeldIsAdditiveAbsentDecodesFalse) {
+    auto sect = sections(ssg::Revision{4}, "alpha");
+    ASSERT_FALSE(sect.externalFocusHeld);
+    auto quiet = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), sect);
+    auto const decodedQuiet = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(quiet));
+    ASSERT_TRUE(decodedQuiet.accepted());
+    ASSERT_FALSE(decodedQuiet.snapshot->sections().externalFocusHeld);
+    // The legacy focus field is always one an old three-value decode accepts.
+    ASSERT_TRUE(decodedQuiet.snapshot->sections().focus == ssg::FocusTarget::Editor ||
+                decodedQuiet.snapshot->sections().focus == ssg::FocusTarget::Panel ||
+                decodedQuiet.snapshot->sections().focus == ssg::FocusTarget::Prompt);
+
+    sect.externalFocusHeld = true;
+    auto held = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), sect);
+    auto const decodedHeld = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(held));
+    ASSERT_TRUE(decodedHeld.accepted());
+    ASSERT_TRUE(decodedHeld.snapshot->sections().externalFocusHeld);
+}
+
+// A flip of the external-focus-held state is a real delta: it round-trips and
+// replays onto the base.
+TEST(externalFocusHeldFlipIsADeltaThatRoundTrips) {
+    auto beforeSections = sections(ssg::Revision{4}, "alpha");
+    auto afterSections = sections(ssg::Revision{5}, "alpha");
+    afterSections.externalFocusHeld = true;
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), beforeSections);
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), afterSections);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    ASSERT_TRUE(delta.externalFocusHeld().has_value());
+    ASSERT_TRUE(*delta.externalFocusHeld());
+
+    auto const decodedDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        ssg::ProtocolCodec{}.encodeSessionDelta(delta));
+    ASSERT_TRUE(decodedDelta.delta.has_value());
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_TRUE(replayed.snapshot->sections().externalFocusHeld);
+}
+
 // The round-trip above carries a DEFAULT style, so it proves the field is
 // present but not that each of the ~29 hand-written codec fields maps to its
 // own slot.  A copy-paste error (encoding `top` where `bottom` belongs) would
@@ -1705,6 +1811,10 @@ int main() {
     RUN(decodeCommandRequestRejectsMalformedPayload);
     RUN(decodeCommandRequestMapsDomainInvariantFailuresToMalformed);
     RUN(sessionSnapshotRoundTripsThroughTheWire);
+    RUN(anAbsentSelectedExternalIdDecodesAsNone);
+    RUN(aSelectedExternalIdMustNameAFileOrTheSnapshotDecodeFailsLoud);
+    RUN(externalFocusHeldIsAdditiveAbsentDecodesFalse);
+    RUN(externalFocusHeldFlipIsADeltaThatRoundTrips);
     RUN(sessionSnapshotRoundTripsANonDefaultStyle);
     RUN(styleDefineKeysExactlyMatchTheWireCodecFields);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);

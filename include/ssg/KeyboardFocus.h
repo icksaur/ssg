@@ -82,6 +82,21 @@ public:
                                           : FocusTarget::Panel;
     }
 
+    // The effective focus AS A LEGACY CLIENT SEES IT: the top capture whose
+    // context is not ExternalModification, else the base. The legacy wire `focus`
+    // field projects through this so the closed {Editor,Panel,Prompt} set an old
+    // client can decode is never widened by the internal ExternalModification
+    // capture; the external-focus state travels as its own additive wire field.
+    [[nodiscard]] FocusTarget legacyEffectiveTarget() const noexcept {
+        for (auto it = captures_.rbegin(); it != captures_.rend(); ++it) {
+            if (it->context != FocusTarget::ExternalModification) {
+                return it->context;
+            }
+        }
+        return base_ == BaseFocus::Editor ? FocusTarget::Editor
+                                          : FocusTarget::Panel;
+    }
+
     // Remove every capture whose node is not present. After this, the effective
     // focus references a present node (base surfaces are always present), so a
     // hide can never strand focus on a hidden node.

@@ -64,9 +64,10 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     ASSERT_TRUE(footer != nullptr);
     ASSERT_EQ(child(comp.root, 0).id.value(), std::string{kHeaderNodeId});
     ASSERT_EQ(child(comp.root, 1).id.value(), std::string{kNoticeNodeId});
-    ASSERT_EQ(child(comp.root, 2).id.value(), std::string{kBodyNodeId});
-    ASSERT_EQ(child(comp.root, 3).id.value(), std::string{kFooterPromptNodeId});
-    ASSERT_EQ(child(comp.root, 4).id.value(), std::string{kFooterNodeId});
+    ASSERT_EQ(child(comp.root, 2).id.value(), std::string{kExternalModNodeId});
+    ASSERT_EQ(child(comp.root, 3).id.value(), std::string{kBodyNodeId});
+    ASSERT_EQ(child(comp.root, 4).id.value(), std::string{kFooterPromptNodeId});
+    ASSERT_EQ(child(comp.root, 5).id.value(), std::string{kFooterNodeId});
     // The draft-conflict notice is an always-assembled Auto-sized View naming Notice,
     // between the header and the body; presence (not assembly) hides it.
     const UiNode* notice = childById(comp.root, kNoticeNodeId);

@@ -141,6 +141,15 @@ inline constexpr std::string_view kFooterPromptNodeId = "footer.prompt";
 // ShellNotice with rects.
 inline constexpr std::string_view kNoticeNodeId = "notice";
 
+// The external-modification bar's presence-gated node, placed between the notice
+// and the body, adjacent to the notice. In 5b-1 it is a bare presence-gated
+// CONTAINER with no rendered View leaf: it exists so the transient external-focus
+// capture has a node to anchor on and reconcile against (KeyboardFocus pops the
+// capture when this node stops being present). Hidden by presence unless a file is
+// externally changed, so no client renders anything for it yet and grid goldens
+// stay byte-identical; its rendered View leaf is added in 5b-2.
+inline constexpr std::string_view kExternalModNodeId = "externalmod";
+
 // The typed well-known areas: a closed set a native client may key off to hand a
 // subtree to its own toolkit. A raw id string is not a placement contract; this
 // typed identity, plus the structural validation validateUiSchema performs for it
@@ -154,6 +163,7 @@ enum class WellKnownArea : std::uint8_t {
     Footer,
     FooterPrompt,
     Notice,
+    ExternalModification,
 };
 
 inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
@@ -166,6 +176,7 @@ inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
     case WellKnownArea::Footer: return kFooterNodeId;
     case WellKnownArea::FooterPrompt: return kFooterPromptNodeId;
     case WellKnownArea::Notice: return kNoticeNodeId;
+    case WellKnownArea::ExternalModification: return kExternalModNodeId;
     }
     throw std::invalid_argument("wellKnownAreaId: unrecognized WellKnownArea");
 }

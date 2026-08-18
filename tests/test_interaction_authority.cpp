@@ -324,6 +324,79 @@ TEST(focusChangeUnderAnOpenPromptSurfacesWhenThePromptCloses) {
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
 }
 
+// --- External-modification focus capture --------------------------------------------
+
+TEST(theExternalModNodeIsPresentHiddenUntilAFileIsPresentAndGoldensAreUnchanged) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    // The node is always assembled but present-hidden by default -- nothing renders
+    // it, which is why the grid goldens stay byte-identical.
+    ASSERT_FALSE(present(authority, kExternalModNodeId));
+    ASSERT_TRUE(authority.refreshExternalModificationPresence(true));
+    ASSERT_TRUE(present(authority, kExternalModNodeId));
+    ASSERT_TRUE(authority.refreshExternalModificationPresence(false));
+    ASSERT_FALSE(present(authority, kExternalModNodeId));
+}
+
+TEST(theExternalContextIsActiveOnlyWhileTheCaptureHoldsAndFocusReturnPopsIt) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    // Present-gated: focus is refused while no file is present.
+    ASSERT_FALSE(authority.captureExternalFocus());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+
+    ASSERT_TRUE(authority.refreshExternalModificationPresence(true));
+    ASSERT_TRUE(authority.captureExternalFocus());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::ExternalModification);
+    // focus_return pops the capture, back to the base context.
+    ASSERT_TRUE(authority.releaseExternalFocus());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+}
+
+TEST(repeatedExternalFocusIsIdempotentSoOneReturnPops) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    ASSERT_TRUE(authority.refreshExternalModificationPresence(true));
+    ASSERT_TRUE(authority.captureExternalFocus());
+    // A repeated focus press is a no-op: the capture is derived from truth, never
+    // stacked, so a SINGLE return pops it.
+    ASSERT_FALSE(authority.captureExternalFocus());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::ExternalModification);
+    ASSERT_TRUE(authority.releaseExternalFocus());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+    ASSERT_FALSE(authority.releaseExternalFocus());
+}
+
+TEST(theExternalCaptureAutoPopsWhenTheLastFileResolves) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    ASSERT_TRUE(authority.refreshExternalModificationPresence(true));
+    ASSERT_TRUE(authority.captureExternalFocus());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::ExternalModification);
+    // The last file resolves away: presence drops, the capture auto-pops, and the
+    // focus flag is cleared so a later disk event never reactively re-steals focus.
+    ASSERT_TRUE(authority.refreshExternalModificationPresence(false));
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+    ASSERT_FALSE(authority.truth().externalFocusHeld);
+    ASSERT_TRUE(authority.refreshExternalModificationPresence(true));
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
+}
+
+TEST(theExternalCaptureAndAPromptCoexistWithLifoActiveContext) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    ASSERT_TRUE(authority.refreshExternalModificationPresence(true));
+    ASSERT_TRUE(authority.captureExternalFocus());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::ExternalModification);
+    // A footer prompt opens on top: both captures coexist (the prompt guard binds
+    // only prompt captures), and the LIFO top -- the active context -- is the prompt.
+    ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
+    // Dismissing the prompt returns to the still-held external context.
+    ASSERT_TRUE(authority.cancelPrompt().accepted());
+    ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::ExternalModification);
+}
+
 }  // namespace
 
 int main() {
@@ -348,5 +421,10 @@ int main() {
     RUN(panelHideWhilePromptCapturedRestoresBaseUnderThePrompt);
     RUN(providerCyclingWhileHiddenAndEditorFocusedPreservesBoth);
     RUN(editorFocusWithThePanelVisibleKeepsThePanelPresent);
+    RUN(theExternalModNodeIsPresentHiddenUntilAFileIsPresentAndGoldensAreUnchanged);
+    RUN(theExternalContextIsActiveOnlyWhileTheCaptureHoldsAndFocusReturnPopsIt);
+    RUN(repeatedExternalFocusIsIdempotentSoOneReturnPops);
+    RUN(theExternalCaptureAutoPopsWhenTheLastFileResolves);
+    RUN(theExternalCaptureAndAPromptCoexistWithLifoActiveContext);
     return failed;
 }

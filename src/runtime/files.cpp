@@ -392,86 +392,140 @@ CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId docume
 
 // What to do about a file that changed on disk under an open buffer.
 //
-// Each takes an external DiffFileId the runtime published in the external-
-// modification section and resolves back to an open document (Decision 14): the id
-// is runtime-resolved from a published token, never client-fabricated, cannot
-// collide with a git path id, and an unknown id is refused. The commands stay
-// in-process because that resolved id means nothing to a remote client.
+// One behavior path (Decision 3): the action commands are payload-less and act on
+// the library-owned selection; the pointer path first dispatches
+// external.select{DiffFileId} (host-resolved from the published section, the id is
+// runtime-minted, never client-fabricated) then the action. Only an action the
+// selected file's published `actions` set offers is honored; others are a no-op --
+// the security boundary lives here in the command. external.select carries the
+// runtime-resolved id and so stays in-process (that id means nothing to a remote
+// client); the payload-less commands are the keyboard route, reachable in the
+// external focus context.
 void registerExternalModificationCommands(EditorSessionBuilder& builder,
                                           EditorRuntime::Impl& runtime) {
-    auto declare = [&](std::string id, std::string summary,
-                       ExternalAction action) {
-        builder.add(
-            CommandSpecBuilder{std::move(id)}
-                .owner("external-modification-flow")
-                .summary(std::move(summary))
-                .mutates()
-                .lua()
-                .inProcessHandler<DiffFileId>(
-                    [&runtime, action](CommandContext&,
-                                       DiffFileId const& file) {
-                        return runtime.runTransaction([&]() -> CommandHandlerResult {
-                            if (action == ExternalAction::Reload) {
-                                const auto documentId =
-                                    runtime.resolveExternalDocument(file);
-                                if (!documentId) {
-                                    return failure(
-                                        "external modification target is "
-                                        "unavailable");
-                                }
-                                const auto result = runtime.external.resolveReload(
-                                    file,
-                                    [&](const std::string& content)
-                                        -> ExternalReloadCommitResult {
-                                        const auto committed =
-                                            runtime.workspace.reloadWithContent(
-                                                *documentId, content);
-                                        return {committed.accepted(),
-                                                committed.compensation};
-                                    });
-                                return result.accepted()
-                                           ? success()
-                                           : failure(
-                                                 "external modification reload "
-                                                 "failed");
-                            }
-                            if (action == ExternalAction::KeepBuffer) {
-                                const auto documentId =
-                                    runtime.resolveExternalDocument(file);
-                                const auto result = runtime.external.keepBuffer(
-                                    file,
-                                    [&](bool removed,
-                                        const std::optional<std::string>& content)
-                                        -> bool {
-                                        if (!documentId) return false;
-                                        return runtime.commitExternalDismissal(
-                                            *documentId, removed, content);
-                                    });
-                                return result.accepted()
-                                           ? success()
-                                           : failure(
-                                                 "external modification command "
-                                                 "failed");
-                            }
-                            auto opened = runtime.external.openDiff(file);
-                            if (!opened.accepted() || !opened.target) {
-                                return failure(
-                                    "external diff target is unavailable");
-                            }
-                            const auto diffFile =
-                                runtime.diff.file(opened.target->id);
-                            if (!diffFile.has_value()) {
-                                return failure("external diff is unavailable");
-                            }
-                            return runtime.openOrFocusLiveDiffTab(
-                                diffFile->get(), NavigationClass::Programmatic,
-                                std::nullopt);
+    auto act = [&runtime](ExternalAction action) -> CommandHandlerResult {
+        return runtime.runTransaction([&]() -> CommandHandlerResult {
+            const auto view = runtime.external.viewState();
+            if (!view.selected) {
+                return failure("no external modification is selected");
+            }
+            const DiffFileId file = *view.selected;
+            const auto selected = std::find_if(
+                view.files.begin(), view.files.end(),
+                [&](ExternalDocumentView const& candidate) {
+                    return candidate.id == file;
+                });
+            // The selection always names a file (the flow keeps it valid), but an
+            // action the selected file does not offer is a no-op, never applied.
+            if (selected == view.files.end() ||
+                std::find(selected->actions.begin(), selected->actions.end(),
+                          action) == selected->actions.end()) {
+                return success();
+            }
+            if (action == ExternalAction::Reload) {
+                const auto documentId = runtime.resolveExternalDocument(file);
+                if (!documentId) {
+                    return failure(
+                        "external modification target is unavailable");
+                }
+                const auto result = runtime.external.resolveReload(
+                    file,
+                    [&](const std::string& content)
+                        -> ExternalReloadCommitResult {
+                        const auto committed =
+                            runtime.workspace.reloadWithContent(*documentId,
+                                                                content);
+                        return {committed.accepted(), committed.compensation};
+                    });
+                return result.accepted()
+                           ? success()
+                           : failure("external modification reload failed");
+            }
+            if (action == ExternalAction::KeepBuffer) {
+                const auto documentId = runtime.resolveExternalDocument(file);
+                const auto result = runtime.external.keepBuffer(
+                    file,
+                    [&](bool removed,
+                        const std::optional<std::string>& content) -> bool {
+                        if (!documentId) return false;
+                        return runtime.commitExternalDismissal(*documentId,
+                                                               removed, content);
+                    });
+                return result.accepted()
+                           ? success()
+                           : failure("external modification command failed");
+            }
+            auto opened = runtime.external.openDiff(file);
+            if (!opened.accepted() || !opened.target) {
+                return failure("external diff target is unavailable");
+            }
+            const auto diffFile = runtime.diff.file(opened.target->id);
+            if (!diffFile.has_value()) {
+                return failure("external diff is unavailable");
+            }
+            return runtime.openOrFocusLiveDiffTab(
+                diffFile->get(), NavigationClass::Programmatic, std::nullopt);
+        });
+    };
+    auto spec = [](std::string id, std::string summary) {
+        return CommandSpecBuilder{std::move(id)}
+            .owner("external-modification-flow")
+            .summary(std::move(summary))
+            .mutates()
+            .lua();
+    };
+    auto action = [&](std::string id, std::string summary,
+                      ExternalAction which) {
+        builder.add(spec(std::move(id), std::move(summary))
+                        .handler([act, which](CommandContext&) {
+                            return act(which);
+                        }));
+    };
+    action("external.reload", "Reload", ExternalAction::Reload);
+    action("external.keep_buffer", "Keep Buffer", ExternalAction::KeepBuffer);
+    action("external.open_diff", "Open Diff", ExternalAction::OpenDiff);
+
+    builder.add(spec("external.select_next", "Select Next External Change")
+                    .handler([&runtime](CommandContext&) {
+                        return runtime.runTransaction([&] {
+                            (void)runtime.external.selectNext();
+                            return success();
                         });
                     }));
-    };
-    declare("external.reload", "Reload", ExternalAction::Reload);
-    declare("external.keep_buffer", "Keep Buffer", ExternalAction::KeepBuffer);
-    declare("external.open_diff", "Open Diff", ExternalAction::OpenDiff);
+    builder.add(spec("external.select_previous",
+                     "Select Previous External Change")
+                    .handler([&runtime](CommandContext&) {
+                        return runtime.runTransaction([&] {
+                            (void)runtime.external.selectPrevious();
+                            return success();
+                        });
+                    }));
+    // The pointer path's select-then-act target: a runtime-minted id, so in-process.
+    builder.add(spec("external.select", "Select External Change")
+                    .inProcessHandler<DiffFileId>(
+                        [&runtime](CommandContext&, DiffFileId const& file) {
+                            return runtime.runTransaction([&] {
+                                (void)runtime.external.selectFile(file);
+                                return success();
+                            });
+                        }));
+    // The keyboard-first entry point (global, present-gated, idempotent) and its
+    // return. focus pushes the external capture only if not already held; return
+    // pops it, without overloading prompt.cancel.
+    builder.add(spec("external.focus", "Focus External Change Bar")
+                    .handler([&runtime](CommandContext&) {
+                        return runtime.runTransaction([&] {
+                            (void)runtime.interaction.captureExternalFocus();
+                            return success();
+                        });
+                    }));
+    builder.add(spec("external.focus_return", "Leave External Change Bar")
+                    .handler([&runtime](CommandContext&) {
+                        return runtime.runTransaction([&] {
+                            (void)runtime.interaction.releaseExternalFocus();
+                            return success();
+                        });
+                    }));
 }
 
 // How the active document is decoded and written back: its text encoding, its

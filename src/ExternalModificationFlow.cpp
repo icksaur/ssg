@@ -65,6 +65,7 @@ ExternalModificationDelta ExternalModificationDeltaCodec::derive(
             delta.removed.push_back(baseFile.id);
         }
     }
+    delta.selected = target.selected;
     return delta;
 }
 
@@ -94,7 +95,14 @@ ExternalDeltaReplayResult ExternalModificationDeltaCodec::replay(
             *found = upserted;
         }
     }
-    return {ExternalModificationViewState{delta.revision, std::move(files)},
+    // A present selection must name a surviving file, or the replayed state would
+    // carry a dangling selection -- fail loud rather than replay it.
+    if (delta.selected.has_value() &&
+        findFile(files, *delta.selected) == files.end()) {
+        return {std::nullopt, ExternalDeltaError::MalformedDelta};
+    }
+    return {ExternalModificationViewState{delta.revision, std::move(files),
+                                          delta.selected},
             ExternalDeltaError::None};
 }
 
@@ -231,6 +239,7 @@ public:
             document->dirty = false;
         }
         pending_.swap(stagedPending);
+        reconcileSelection(std::nullopt);
         if (enforceSequence) {
             // A resync (overflow recovery) is not part of the ordered watcher
             // stream: it must not advance the sequence high-water mark, or the
@@ -265,7 +274,9 @@ public:
         if (!result.accepted()) {
             return failure(ExternalModificationError::RecoveryFailed);
         }
+        const auto idx = static_cast<std::size_t>(pending - pending_.begin());
         pending_.erase(pending);
+        reconcileSelection(idx);
         advanceRevision();
         return {ExternalModificationError::None, false, true,
                 std::move(result.compensation)};
@@ -284,7 +295,9 @@ public:
         if (!committed.committed) {
             return failure(ExternalModificationError::RecoveryFailed);
         }
+        const auto idx = static_cast<std::size_t>(pending - pending_.begin());
         pending_.erase(pending);
+        reconcileSelection(idx);
         advanceRevision();
         return {ExternalModificationError::None, false, true,
                 committed.compensation};
@@ -310,7 +323,9 @@ public:
         if (!commit || !commit(removed, pending->diskContent)) {
             return failure(ExternalModificationError::RecoveryFailed);
         }
+        const auto idx = static_cast<std::size_t>(pending - pending_.begin());
         pending_.erase(pending);
+        reconcileSelection(idx);
         advanceRevision();
         return {};
     }
@@ -334,8 +349,20 @@ public:
         for (const auto& pending : pending_) {
             state.files.push_back(pending.view);
         }
+        state.selected = selected_;
         return state;
     }
+
+    bool selectFile(const DiffFileId& id) {
+        if (findPending(id) == pending_.end()) return false;
+        if (selected_ && *selected_ == id) return false;
+        selected_ = id;
+        advanceRevision();
+        return true;
+    }
+
+    bool selectNext() { return moveSelection(+1); }
+    bool selectPrevious() { return moveSelection(-1); }
 
 private:
     static ExternalModificationResult failure(
@@ -365,11 +392,46 @@ private:
         revision_ = Revision{revision_.value() + 1};
     }
 
+    // Keep the selection valid against the current file list: cleared when empty,
+    // set to the first file when the section became non-empty, kept when still
+    // valid, and re-homed to the file that now occupies the resolved-away slot
+    // (`preferred`) otherwise.
+    void reconcileSelection(std::optional<std::size_t> preferred) {
+        if (pending_.empty()) {
+            selected_.reset();
+            return;
+        }
+        if (selected_ && findPending(*selected_) != pending_.end()) return;
+        std::size_t index = 0;
+        if (preferred) index = std::min(*preferred, pending_.size() - 1);
+        selected_ = pending_[index].view.id;
+    }
+
+    bool moveSelection(int direction) {
+        if (pending_.empty()) return false;
+        std::size_t current = 0;
+        if (selected_) {
+            const auto found = findPending(*selected_);
+            if (found != pending_.end()) {
+                current = static_cast<std::size_t>(found - pending_.begin());
+            }
+        }
+        const std::size_t size = pending_.size();
+        const std::size_t next =
+            direction > 0 ? (current + 1) % size : (current + size - 1) % size;
+        const DiffFileId nextId = pending_[next].view.id;
+        if (selected_ && *selected_ == nextId) return false;
+        selected_ = nextId;
+        advanceRevision();
+        return true;
+    }
+
     RecoveryManager& recovery_;
     DiffModel& diff_;
     std::uint64_t lastWatcherSequence_ = 0;
     Revision revision_{0};
     std::vector<PendingChange> pending_;
+    std::optional<DiffFileId> selected_;
 };
 
 ExternalModificationFlow::ExternalModificationFlow(RecoveryManager& recovery,
@@ -422,6 +484,16 @@ ExternalModificationResult ExternalModificationFlow::keepBuffer(
 ExternalOpenDiffResult ExternalModificationFlow::openDiff(
     const DiffFileId& id) const {
     return impl_->openDiff(id);
+}
+
+bool ExternalModificationFlow::selectFile(const DiffFileId& id) {
+    return impl_->selectFile(id);
+}
+
+bool ExternalModificationFlow::selectNext() { return impl_->selectNext(); }
+
+bool ExternalModificationFlow::selectPrevious() {
+    return impl_->selectPrevious();
 }
 
 ExternalModificationViewState ExternalModificationFlow::viewState() const {

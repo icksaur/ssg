@@ -68,6 +68,11 @@ struct ExternalDocumentView {
 struct ExternalModificationViewState {
     Revision revision{0};
     std::vector<ExternalDocumentView> files;
+    // The library-owned selection, mirroring TreeProviderView::selected. An id is
+    // stable across list mutation where an index is not. Invariant the flow
+    // maintains and the wire codec enforces: present only when it names a file in
+    // `files`, else nullopt -- never a dangling selection.
+    std::optional<DiffFileId> selected;
 
     friend bool operator==(const ExternalModificationViewState&,
                            const ExternalModificationViewState&) = default;
@@ -78,6 +83,9 @@ struct ExternalModificationDelta {
     Revision revision{0};
     std::vector<ExternalDocumentView> upserted;
     std::vector<DiffFileId> removed;
+    // The target's selection (a selection-only move is a real delta: files
+    // unchanged, selected moved, revision advanced).
+    std::optional<DiffFileId> selected;
 
     friend bool operator==(const ExternalModificationDelta&,
                            const ExternalModificationDelta&) = default;
@@ -232,6 +240,15 @@ public:
     [[nodiscard]] ExternalModificationResult keepBuffer(
         const DiffFileId& id, const ExternalKeepBufferCommit& commit);
     [[nodiscard]] ExternalOpenDiffResult openDiff(const DiffFileId& id) const;
+    // Selection commands mirroring tree.select/select_next/select_previous: the
+    // library owns which file is selected and the payload-less action commands act
+    // on it. Each returns whether the selection moved (a move advances the revision
+    // so a selection-only delta is published). selectFile is a no-op returning false
+    // when the id names no present file; the wraparound movers are no-ops on an
+    // empty section.
+    [[nodiscard]] bool selectFile(const DiffFileId& id);
+    [[nodiscard]] bool selectNext();
+    [[nodiscard]] bool selectPrevious();
     [[nodiscard]] ExternalModificationViewState viewState() const;
 
 private:

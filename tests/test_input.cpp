@@ -81,7 +81,8 @@ TEST(validateKeymapFlagsDuplicateUnreachableAndReservedBindings) {
 TEST(keymapContextsAreStarPlusFocusNames) {
     const auto contexts = ssg::keymapContexts();
     std::set<std::string_view> actual{contexts.begin(), contexts.end()};
-    const std::set<std::string_view> expected{"*", "editor", "panel", "prompt"};
+    const std::set<std::string_view> expected{"*", "editor", "panel", "prompt",
+                                               "external"};
     ASSERT_TRUE(actual == expected);
     ASSERT_EQ(ssg::focusTargetName(ssg::FocusTarget::Editor),
               std::string_view{"editor"});
@@ -89,6 +90,8 @@ TEST(keymapContextsAreStarPlusFocusNames) {
               std::string_view{"panel"});
     ASSERT_EQ(ssg::focusTargetName(ssg::FocusTarget::Prompt),
               std::string_view{"prompt"});
+    ASSERT_EQ(ssg::focusTargetName(ssg::FocusTarget::ExternalModification),
+              std::string_view{"external"});
 }
 
 namespace {

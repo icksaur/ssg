@@ -153,8 +153,9 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
                            "root"};
     }
     const UiContainer* root = nullptr;
-    constexpr std::array rootIds{kHeaderNodeId, kNoticeNodeId, kBodyNodeId,
-                                 kFooterPromptNodeId, kFooterNodeId};
+    constexpr std::array rootIds{kHeaderNodeId,        kNoticeNodeId,
+                                 kExternalModNodeId,   kBodyNodeId,
+                                 kFooterPromptNodeId,  kFooterNodeId};
     if (auto err = requireChildren(schema.root, "root", rootIds, root)) return err;
     const UiNode& header = root->children[0];
     if (header.id.value() != wellKnownAreaId(WellKnownArea::Header) ||
@@ -168,15 +169,25 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
     if (auto err = requireViewLeaf(root->children[1], kNoticeNodeId,
                                    ViewSurface::Notice))
         return err;
-    const UiNode& body = root->children[2];
+    // The external-modification node sits between the notice and the body: in 5b-1
+    // a bare presence-gated CONTAINER with no rendered View leaf (its View leaf is
+    // added in 5b-2). It exists so the external-focus capture has a node to anchor
+    // on; requiring a container here keeps a stray View off it until 5b-2.
+    const UiNode& externalMod = root->children[2];
+    if (externalMod.id.value() !=
+            wellKnownAreaId(WellKnownArea::ExternalModification) ||
+        !externalMod.isContainer()) {
+        return std::string{"externalmod: must be a direct child container of root"};
+    }
+    const UiNode& body = root->children[3];
     // The footer prompt sits between the body and the footer: a View leaf naming
     // ViewSurface::FooterPrompt, always assembled and hidden by presence. It is
     // the sole node permitted to carry an Auto-sized FooterPrompt View; a stray
     // FooterPrompt View anywhere else is rejected below.
-    if (auto err = requireViewLeaf(root->children[3], kFooterPromptNodeId,
+    if (auto err = requireViewLeaf(root->children[4], kFooterPromptNodeId,
                                    ViewSurface::FooterPrompt))
         return err;
-    const UiNode& footer = root->children[4];
+    const UiNode& footer = root->children[5];
     if (footer.id.value() != wellKnownAreaId(WellKnownArea::Footer) ||
         !footer.isContainer()) {
         return std::string{"footer: must be a direct child container of root"};

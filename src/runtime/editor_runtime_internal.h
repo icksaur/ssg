@@ -457,6 +457,13 @@ struct EditorRuntime::Impl final : CommandServices,
     // notice's tree-node presence lives outside the prompt/panel transitions, so the
     // runtime reconciles this into the interaction authority after each dispatch.
     [[nodiscard]] bool noticePresent() const;
+    // Whether any file is externally modified (the external-modification section is
+    // non-empty). Like noticePresent, reconciled into the interaction authority so
+    // the external-modification node's presence tracks it -- after each dispatch and
+    // in the watcher drain.
+    [[nodiscard]] bool externalModificationPresent() const {
+        return !external.viewState().files.empty();
+    }
     // Dismiss the find/replace controller (and its prompt) when the active
     // document identity or revision no longer matches what it evaluated against,
     // so stale matches are never navigable or projected.

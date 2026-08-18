@@ -191,6 +191,12 @@ UiComposition assembleWholeScreen(
     // ShellNotice with rects.
     UiNode notice =
         viewLeaf(kNoticeNodeId, ViewSurface::Notice, Size::autoSize());
+    // The external-modification node, always assembled and hidden by presence
+    // (WholeScreenInteraction). In 5b-1 it is a bare Auto-sized CONTAINER with no
+    // children: it renders nothing (so grid goldens stay byte-identical) and exists
+    // only to anchor the external-focus capture. Its rendered View leaf is 5b-2.
+    UiNode externalMod =
+        container(kExternalModNodeId, Axis::Column, Size::autoSize(), {});
     // The footer-region prompt's semantic surface, always assembled and hidden by
     // presence (WholeScreenInteraction). Auto-sized so its footprint is the
     // runtime's reservation, intrinsic and not varied here by prompt kind; the
@@ -200,7 +206,8 @@ UiComposition assembleWholeScreen(
 
     UiComposition out;
     out.root = container(kRootNodeId, Axis::Column, Size::flex(),
-                         {std::move(header), std::move(notice), std::move(body),
+                         {std::move(header), std::move(notice),
+                          std::move(externalMod), std::move(body),
                           std::move(footerPrompt), std::move(footer)});
     return out;
 }

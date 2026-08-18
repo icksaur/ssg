@@ -388,14 +388,15 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             lspSync,
             lspFeatures,
             theme,
-            interaction.effectiveFocus(),
+            interaction.legacyEffectiveFocus(),
             paletteView(),
             std::move(uiSchema),
             std::move(uiState),
             std::move(uiPresence),
             promptView(),
             noticeView(),
-            watcherAvailable.load(std::memory_order_relaxed)};
+            watcherAvailable.load(std::memory_order_relaxed),
+            interaction.effectiveFocus() == FocusTarget::ExternalModification};
 }
 
 TreeViewState EditorRuntime::Impl::treeView() const {

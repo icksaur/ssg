@@ -40,6 +40,9 @@ public:
     [[nodiscard]] FocusTarget effectiveFocus() const noexcept {
         return focus_.effectiveTarget();
     }
+    [[nodiscard]] FocusTarget legacyEffectiveFocus() const noexcept {
+        return focus_.legacyEffectiveTarget();
+    }
 
     void setBaseFocus(BaseFocus base) noexcept { focus_.setBase(base); }
 

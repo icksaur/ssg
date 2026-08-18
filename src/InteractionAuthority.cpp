@@ -160,6 +160,38 @@ bool InteractionAuthority::refreshNoticePresence(bool present) {
     return true;
 }
 
+bool InteractionAuthority::refreshExternalModificationPresence(bool present) {
+    if (truth_.externalModificationPresent == present &&
+        (present || !truth_.externalFocusHeld)) {
+        return false;
+    }
+    WholeScreenTruth next = truth_;
+    next.externalModificationPresent = present;
+    // Presence dropping clears focus: the capture auto-pops and a later disk event
+    // that re-raises the bar never reactively steals the keyboard.
+    if (!present) next.externalFocusHeld = false;
+    adopt(std::move(next), prompt_);
+    return true;
+}
+
+bool InteractionAuthority::captureExternalFocus() {
+    if (!truth_.externalModificationPresent || truth_.externalFocusHeld) {
+        return false;
+    }
+    WholeScreenTruth next = truth_;
+    next.externalFocusHeld = true;
+    adopt(std::move(next), prompt_);
+    return true;
+}
+
+bool InteractionAuthority::releaseExternalFocus() {
+    if (!truth_.externalFocusHeld) return false;
+    WholeScreenTruth next = truth_;
+    next.externalFocusHeld = false;
+    adopt(std::move(next), prompt_);
+    return true;
+}
+
 bool InteractionAuthority::updateComposition(UiComposition assembly) {    // Prepare both replacements before swapping either: update a COPY of the schema, build
     // the projection over it, then adopt both together, so a rebuild failure cannot leave a
     // new schema paired with the old interaction.

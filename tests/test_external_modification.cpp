@@ -397,6 +397,98 @@ TEST(aRenameRetiresPendingKeyedByThePreviousId) {
     ASSERT_EQ(state.files[0].id, ssg::DiffFileId{"note2"});
 }
 
+TEST(theExternalModSelectionFollowsTheListAndSurvivesResolves) {
+    TemporaryDirectory temporary;
+    ssg::RecoveryManager recovery =
+        ssg::RecoveryManager::create(temporary.path() / "recovery");
+    ssg::DiffModel diff;
+    ASSERT_TRUE(diff.seedNonGit({{ssg::DiffFileId{"a"}, "a.txt", "base\n"},
+                                 {ssg::DiffFileId{"b"}, "b.txt", "base\n"}},
+                                ssg::Revision{1})
+                    .accepted());
+    ssg::ExternalModificationFlow flow{recovery, diff};
+
+    auto raise = [&](const char* id, const char* path, std::uint64_t sequence,
+                     ssg::Revision revision) {
+        std::optional<ssg::JournalDocument> open{
+            {ssg::JournalDocumentKey::saved(path), ssg::DocumentMode::Edit, true,
+             "buffer\n"}};
+        ssg::WatchEvent e;
+        e.kind = ssg::WatchEventKind::Modify;
+        e.path = path;
+        e.sequence = sequence;
+        e.origin = ssg::WatchEventOrigin::External;
+        ssg::ExternalEventInput in{e, ssg::DiffFileId{id}, "base\n",
+                                   std::string{"disk\n"}};
+        ASSERT_TRUE(flow.processEvent(std::move(in), revision, open).accepted());
+    };
+
+    // The section becomes non-empty: the selection homes to the first file.
+    raise("a", "a.txt", 2, ssg::Revision{2});
+    ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"a"});
+    // Adding a file keeps the selection where it was.
+    raise("b", "b.txt", 3, ssg::Revision{3});
+    ASSERT_EQ(flow.viewState().files.size(), 2U);
+    ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"a"});
+
+    // The movers wrap around like the tree.
+    ASSERT_TRUE(flow.selectNext());
+    ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"b"});
+    ASSERT_TRUE(flow.selectNext());
+    ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"a"});
+
+    // Resolving the selected file re-homes to the file that now occupies its slot
+    // (the next file), not to nullopt while others remain.
+    ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"a"});
+    ASSERT_TRUE(flow.keepBuffer(ssg::DiffFileId{"a"},
+                               [](bool, const std::optional<std::string>&) {
+                                   return true;
+                               })
+                    .accepted());
+    ASSERT_EQ(flow.viewState().files.size(), 1U);
+    ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"b"});
+
+    // Resolving the last file clears the selection.
+    ASSERT_TRUE(flow.keepBuffer(ssg::DiffFileId{"b"},
+                               [](bool, const std::optional<std::string>&) {
+                                   return true;
+                               })
+                    .accepted());
+    ASSERT_TRUE(flow.viewState().files.empty());
+    ASSERT_FALSE(flow.viewState().selected.has_value());
+}
+
+TEST(aSelectionOnlyExternalDeltaReplaysToTheMovedSelection) {
+    ssg::ExternalDocumentView fa{ssg::DiffFileId{"a"}, "a.txt",
+                                 ssg::ExternalDocumentStatus::ExternallyModified,
+                                 "x", {ssg::ExternalAction::Reload}};
+    ssg::ExternalDocumentView fb{ssg::DiffFileId{"b"}, "b.txt",
+                                 ssg::ExternalDocumentStatus::ExternallyModified,
+                                 "y", {ssg::ExternalAction::Reload}};
+    ssg::ExternalModificationViewState base{ssg::Revision{5},
+                                            {fa, fb},
+                                            ssg::DiffFileId{"a"}};
+    ssg::ExternalModificationViewState target{ssg::Revision{6},
+                                              {fa, fb},
+                                              ssg::DiffFileId{"b"}};
+    ssg::ExternalModificationDeltaCodec codec;
+    const auto delta = codec.derive(base, target);
+    // A selection-only move: files unchanged, the selected id moved.
+    ASSERT_TRUE(delta.upserted.empty());
+    ASSERT_TRUE(delta.removed.empty());
+    ASSERT_TRUE(delta.selected == ssg::DiffFileId{"b"});
+    const auto replayed = codec.replay(base, delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_TRUE(replayed.state->selected == ssg::DiffFileId{"b"});
+    ASSERT_TRUE(replayed.state->files == base.files);
+
+    // A delta whose selection names no surviving file fails loud, never replaying a
+    // dangling selection.
+    auto dangling = delta;
+    dangling.selected = ssg::DiffFileId{"ghost"};
+    ASSERT_FALSE(codec.replay(base, dangling).accepted());
+}
+
 int main() {
     RUN(commandSetIsCompleteAndOrdered);
     RUN(cleanExternalEditAutoReloadsWithoutRecoveryStatus);
@@ -414,5 +506,7 @@ int main() {
     RUN(aFailedWorkspaceCommitLeavesThePendingActionRaised);
     RUN(aFailedKeepBufferCommitLeavesTheConflictRaised);
     RUN(keepBufferWithNoBaselineAdvancingCommitNeverClears);
+    RUN(theExternalModSelectionFollowsTheListAndSurvivesResolves);
+    RUN(aSelectionOnlyExternalDeltaReplaysToTheMovedSelection);
     return failed == 0 ? 0 : 1;
 }

@@ -117,6 +117,14 @@ struct SessionSnapshotSections {
     // changes are not being watched" from library truth rather than inventing it.
     // Additive on the wire; an absent field decodes to available (true).
     bool watcherAvailable = true;
+    // Whether the external-modification bar is the EFFECTIVE (top) focus, not
+    // merely present on the capture stack. When it is, the legacy `focus` field
+    // above projects to its underlying base so an old client still decodes it, and
+    // this flag lets a new client reconstruct ExternalModification. A Prompt
+    // captured above the external capture makes this FALSE while `focus` publishes
+    // Prompt, so Prompt correctly wins. Additive on the wire; an absent field
+    // decodes to false.
+    bool externalFocusHeld = false;
 };
 
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,
@@ -380,6 +388,9 @@ public:
     [[nodiscard]] std::optional<bool> const& watcherAvailable() const noexcept {
         return watcherAvailable_;
     }
+    [[nodiscard]] std::optional<bool> const& externalFocusHeld() const noexcept {
+        return externalFocusHeld_;
+    }
     [[nodiscard]] StyleSectionDelta const& style() const noexcept {
         return style_;
     }
@@ -425,7 +436,8 @@ private:
         PaletteSectionDelta palette = {},
         PromptViewSectionDelta promptView = {},
         NoticeViewSectionDelta noticeView = {},
-        std::optional<bool> watcherAvailable = {});
+        std::optional<bool> watcherAvailable = {},
+        std::optional<bool> externalFocusHeld = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -467,6 +479,7 @@ private:
     PromptViewSectionDelta promptView_;
     NoticeViewSectionDelta noticeView_;
     std::optional<bool> watcherAvailable_;
+    std::optional<bool> externalFocusHeld_;
 };
 
 struct SessionReplayResult {
@@ -522,7 +535,8 @@ public:
         PaletteSectionDelta palette = {},
         PromptViewSectionDelta promptView = {},
         NoticeViewSectionDelta noticeView = {},
-        std::optional<bool> watcherAvailable = {}) const;
+        std::optional<bool> watcherAvailable = {},
+        std::optional<bool> externalFocusHeld = {}) const;
 };
 
 }  // namespace ssg

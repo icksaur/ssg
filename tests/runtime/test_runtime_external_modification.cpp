@@ -21,6 +21,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 namespace {
 
@@ -910,6 +911,58 @@ TEST(aDraftPersistedBeforeKeepBufferReopensWithoutResurrectingTheConflict) {
                 ssg::EditorRuntime::DraftReopenNotice::Restored);
 }
 
+TEST(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile) {
+    auto session = Session::open("offered_guard", "hi\n", true);
+    const auto buffer = session.runtime->activeDocumentText();
+    std::filesystem::remove(session.workspacePath("note.txt"));
+    session.runtime->reconcileExternalWatchEventsForTest(
+        {watchEvent(ssg::WatchEventKind::Remove, "note.txt", 1)});
+    auto files = externalFiles(*session.runtime);
+    ASSERT_EQ(files.size(), 1U);
+    ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
+    // A removed file offers KeepBuffer/OpenDiff but NOT Reload.
+    ASSERT_TRUE(std::find(files[0].actions.begin(), files[0].actions.end(),
+                          ssg::ExternalAction::Reload) == files[0].actions.end());
+
+    // Dispatching the unoffered Reload is a guarded no-op: the section is untouched
+    // and the buffer preserved.
+    ASSERT_TRUE(session.runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"external.reload", session.runtime->revision(),
+                                {}})
+                    .accepted());
+    files = externalFiles(*session.runtime);
+    ASSERT_EQ(files.size(), 1U);
+    ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
+    ASSERT_EQ(session.runtime->activeDocumentText(), buffer);
+
+    // The offered KeepBuffer, by contrast, resolves the selected file.
+    ASSERT_TRUE(session.runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"external.keep_buffer",
+                                session.runtime->revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(externalFiles(*session.runtime).empty());
+}
+
+TEST(externalPresenceAndSelectionRefreshInTheWatcherDrainNotOnlyOnDispatch) {
+    auto session = Session::open("drain_refresh", "hi\n", true);
+    writeFile(session.workspacePath("note.txt"), "external\n");
+    // Only a watcher event is drained -- no command is dispatched afterwards.
+    session.runtime->reconcileExternalWatchEventsForTest(
+        {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
+
+    auto snapshot =
+        session.runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    const auto& external = snapshot->sections().externalModification;
+    ASSERT_EQ(external.files.size(), 1U);
+    // The library-owned selection homed to the raised file in the watcher drain,
+    // not on a later dispatch: it is already populated in the very first snapshot.
+    ASSERT_TRUE(external.selected.has_value());
+    ASSERT_EQ(*external.selected, external.files[0].id);
+}
+
 }  // namespace
 
 int main() {
@@ -947,5 +1000,7 @@ int main() {
     RUN(aSecondExternalChangeWhileActionsArePendingUpdatesNotDuplicates);
     RUN(anOverflowResyncsOpenDocumentsSoAChangeDuringTheOverflowRaisesItsConflict);
     RUN(watcherUnavailabilityIsPublishedAsDurableRuntimeState);
+    RUN(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile);
+    RUN(externalPresenceAndSelectionRefreshInTheWatcherDrainNotOnlyOnDispatch);
     return failed == 0 ? 0 : 1;
 }

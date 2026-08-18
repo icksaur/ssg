@@ -14,7 +14,8 @@ namespace {
 CompiledContext compileContext(std::string_view name) {
     if (name == "*") return CompiledContext::any();
     for (auto const focus :
-         {FocusTarget::Editor, FocusTarget::Panel, FocusTarget::Prompt}) {
+         {FocusTarget::Editor, FocusTarget::Panel, FocusTarget::Prompt,
+          FocusTarget::ExternalModification}) {
         if (focusTargetName(focus) == name) return CompiledContext::of(focus);
     }
     return CompiledContext::never();

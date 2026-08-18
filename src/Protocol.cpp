@@ -3685,6 +3685,7 @@ ProtocolValue toValue(ExternalModificationViewState const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("revision", toValue(value.revision));
     fields.emplace_back("files", toValue(value.files));
+    fields.emplace_back("selected", toValue(value.selected));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificationViewState>& out) {
@@ -3693,7 +3694,16 @@ bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificatio
     auto revision = requireField<Revision>(value.field("revision"));
     auto files = requireField<std::vector<ExternalDocumentView>>(value.field("files"));
     if (!revision || !files) return false;
-    out.emplace(ExternalModificationViewState{*revision, *files});
+    std::optional<DiffFileId> selected;
+    if (!decodeOptionalField(value.field("selected"), selected)) return false;
+    // A present selection MUST name a file in this view -- a dangling selection is
+    // rejected loud, never silently carried.
+    if (selected.has_value() &&
+        std::none_of(files->begin(), files->end(),
+                     [&](auto const& file) { return file.id == *selected; })) {
+        return false;
+    }
+    out.emplace(ExternalModificationViewState{*revision, *files, selected});
     return true;
 }
 
@@ -3703,6 +3713,7 @@ ProtocolValue toValue(ExternalModificationDelta const& value) {
     fields.emplace_back("revision", toValue(value.revision));
     fields.emplace_back("upserted", toValue(value.upserted));
     fields.emplace_back("removed", toValue(value.removed));
+    fields.emplace_back("selected", toValue(value.selected));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificationDelta>& out) {
@@ -3713,7 +3724,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificatio
     auto upserted = requireField<std::vector<ExternalDocumentView>>(value.field("upserted"));
     auto removed = requireField<std::vector<DiffFileId>>(value.field("removed"));
     if (!baseRevision || !revision || !upserted || !removed) return false;
-    out.emplace(ExternalModificationDelta{*baseRevision, *revision, *upserted, *removed});
+    std::optional<DiffFileId> selected;
+    if (!decodeOptionalField(value.field("selected"), selected)) return false;
+    out.emplace(ExternalModificationDelta{*baseRevision, *revision, *upserted, *removed, selected});
     return true;
 }
 
@@ -5020,6 +5033,14 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     // 13). A decoder that predates this field ignores it; an absent field decodes
     // to available (true), so an old peer is never shown as unwatched.
     fields.emplace_back("watcher_available", toValue(value.watcherAvailable));
+    // Additive: whether the external-modification bar is the EFFECTIVE (top)
+    // focus, not merely present on the capture stack. A Prompt captured above the
+    // external capture makes this false while the legacy `focus` field publishes
+    // Prompt, so a new client reconstructs "effective => ExternalModification,
+    // else legacy focus" unambiguously. A decoder that predates this field
+    // ignores it; an absent field decodes to false, so the legacy `focus` field
+    // alone reconstructs focus for an old peer.
+    fields.emplace_back("external_focus_held", toValue(value.externalFocusHeld));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
@@ -5088,6 +5109,15 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         if (!decoded) return false;
         watcherAvailable = *decoded;
     }
+    // Additive: an absent external-focus-held field decodes to false, so a frame
+    // from a peer that predates it never spuriously holds external focus; a
+    // present-but-malformed field fails loud.
+    bool externalFocusHeld = false;
+    if (const ProtocolValue* heldField = value.field("external_focus_held")) {
+        auto decoded = requireField<bool>(heldField);
+        if (!decoded) return false;
+        externalFocusHeld = *decoded;
+    }
     // The schema and its presence section travel together and must correspond
     // (generation + node-id set). Neither alone is a valid frame -- a lone schema
     // would fall back to the root-only default presence, which need not correspond;
@@ -5119,6 +5149,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     out->promptView = std::move(promptView);
     out->noticeView = std::move(noticeView);
     out->watcherAvailable = watcherAvailable;
+    out->externalFocusHeld = externalFocusHeld;
     return true;
 }
 
@@ -5790,6 +5821,9 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     // Additive: present only when watcher availability flipped (Decision 13). An
     // absent field means "unchanged" for a peer that predates it.
     fields.emplace_back("watcher_available", toValue(delta.watcherAvailable()));
+    // Additive: present only when the external-focus-held state flipped. An absent
+    // field means "unchanged" for a peer that predates it.
+    fields.emplace_back("external_focus_held", toValue(delta.externalFocusHeld()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5820,12 +5854,14 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
     std::optional<TextEncodingDelta> textEncoding;
     std::optional<FocusTarget> focus;
     std::optional<bool> watcherAvailable;
+    std::optional<bool> externalFocusHeld;
     bool const optionalOk =
         decodeOptionalField(payload.field("topology"), topology) &&
         decodeOptionalField(payload.field("document"), document) &&
         decodeOptionalField(payload.field("document_caret"), documentCaret) &&
         decodeOptionalField(payload.field("focus"), focus) &&
         decodeOptionalField(payload.field("watcher_available"), watcherAvailable) &&
+        decodeOptionalField(payload.field("external_focus_held"), externalFocusHeld) &&
         decodeOptionalField(payload.field("text_encoding"), textEncoding);
 
     auto selection = requireField<SelectionSetDelta>(payload.field("selection"));
@@ -5955,7 +5991,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*treeWindows), std::move(uiDelta),
                 std::move(uiStateDelta), std::move(uiPresenceDelta),
                 std::move(paletteDelta), std::move(promptViewDelta),
-                std::move(noticeViewDelta), watcherAvailable),
+                std::move(noticeViewDelta), watcherAvailable, externalFocusHeld),
             {}};
 }
 
