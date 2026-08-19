@@ -257,6 +257,16 @@ constexpr int kEdgeScrollIntervalMs = 40;
 // of open dirty documents that are due (single-file draft recovery, M15).
 constexpr int kAutosaveTickMs = 1000;
 
+// Minimum interval between rendered frames WHILE a pointer drag is held. A drag
+// (scrollbar thumb or text selection) makes the terminal emit motion events at a
+// rate far above a useful refresh rate; without a cap the loop renders a full
+// frame per event and pins a core. Coalescing collapses each read's events to
+// one, and this cap bounds how often a coalesced result is rendered, so input
+// accumulates for the rest of the window instead of driving another frame. ~60fps
+// is smooth for a drag; the drag end position is always honoured because the last
+// event is processed on release.
+constexpr int kDragFrameIntervalMs = 16;
+
 // M9-W signal-event wakeup: the write end of a non-blocking self-pipe.  Signal
 // handlers are the only writers and touch nothing else, so a raw fd in a
 // sig_atomic-safe int is the whole async-signal-safe surface.  -1 until the pipe
@@ -1229,8 +1239,25 @@ int main(int argc, char** argv) {
     // guaranteed to unwind `mode` once past main, so restore the terminal here
     // before it propagates.
     bool firstFrameMarked = false;
+    auto lastFrameAt = std::chrono::steady_clock::time_point{};
     try {
         while (!quit) {
+            // Render-rate cap while a drag is held: a scrollbar or selection drag
+            // floods motion events, and rendering a full frame per event pins a
+            // core. When a drag is active and the previous frame was less than one
+            // drag-frame interval ago, wait out the remainder so the queued motion
+            // events accumulate (and coalesce) into a single frame instead of many.
+            if (draggingGutter.has_value() || dragging) {
+                const auto sinceFrame =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - lastFrameAt)
+                        .count();
+                if (sinceFrame < kDragFrameIntervalMs) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds{
+                        kDragFrameIntervalMs - sinceFrame});
+                }
+            }
+            lastFrameAt = std::chrono::steady_clock::now();
             auto snapshot = refresh();
             if (snapshot) {
                 // The library renders every screen branch, including the declined-
@@ -1279,7 +1306,11 @@ int main(int argc, char** argv) {
                 writeAll(frame);
             }
 
-            char bytes[64];
+            // A read buffer large enough to pull a whole burst of terminal input
+            // (a mouse-drag motion flood, or a paste) in one read, so the inner
+            // decode loop can coalesce a run of drag events into a single frame
+            // instead of rendering once per 64-byte chunk.
+            char bytes[4096];
             // Edge auto-scroll (M8-S2): if a drag is held past the top/bottom of the
             // editor content, don't block indefinitely on input — wake on a timer to
             // scroll one line and re-extend the selection to the new edge cell, so a
@@ -1415,6 +1446,24 @@ int main(int argc, char** argv) {
                     mode.enableKeyboardProtocol();
                 }
                 continue;
+            }
+
+            // Coalesce a burst of pointer drag events: only the final position
+            // matters for a scrollbar drag or a drag-select, and taking a full
+            // snapshot and encoding a full frame for every motion event the
+            // terminal emits at motion rate spikes CPU. If this is a drag and
+            // another pointer event is already buffered behind it, drop this one;
+            // the last drag in the run is processed normally, so the end position
+            // is honoured without the intermediate work.
+            if (decoded.status == ssg::app::DecodeStatus::pointer &&
+                decoded.pointer.kind == ssg::app::PointerKind::drag) {
+                std::size_t peekConsumed = 0;
+                const auto next =
+                    ssg::app::decode_input(buffer, false, peekConsumed);
+                if (next.status == ssg::app::DecodeStatus::pointer &&
+                    next.pointer.kind == ssg::app::PointerKind::drag) {
+                    continue;
+                }
             }
 
             // Adopt fresh authoritative focus before every event after the first
