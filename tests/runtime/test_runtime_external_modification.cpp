@@ -14,6 +14,7 @@
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/TextCodec.h>
 #include <ssg/TextInputCommands.h>
+#include <ssg/CompiledKeymap.h>
 #include <ssg/session_snapshot.h>
 
 #include <filesystem>
@@ -22,6 +23,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <array>
 
 namespace {
 
@@ -244,6 +246,52 @@ TEST(externalActionOnAnUnknownIdIsARejectedNoOp) {
 
     ASSERT_FALSE(result.accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
+}
+
+TEST(exmdStaleIdDoesNotActOnThePreviousSelection) {
+    auto session = Session::open("stale_select", "hi\n", true);
+    writeFile(session.workspacePath("note.txt"), "external\n");
+    session.runtime->reconcileExternalWatchEventsForTest(
+        {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
+    auto files = externalFiles(*session.runtime);
+    ASSERT_EQ(files.size(), 1U);
+    const auto present = files[0].id;
+
+    // external.select on an id absent from the section is REJECTED, so the host's
+    // accepted()-gate skips the follow-up action. selectFile's own bool cannot be
+    // the success signal: it is false for an absent id AND for an already-selected
+    // id. The selection stays on the previously selected present file, and because
+    // select failed no action runs on it.
+    const auto stale = session.runtime->dispatch(
+        ssg::ClientId{1},
+        {"external.select", session.runtime->revision(),
+         ssg::DiffFileId{"external:not-a-real-file.txt"}});
+    ASSERT_FALSE(stale.accepted());
+    auto snapshot =
+        session.runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    const auto& external = snapshot->sections().externalModification;
+    ASSERT_TRUE(external.selected.has_value());
+    ASSERT_EQ(*external.selected, present);
+}
+
+TEST(exmdOnAnAlreadySelectedPresentIdStillActsOnIt) {
+    auto session = Session::open("reselect", "hi\n", true);
+    writeFile(session.workspacePath("note.txt"), "external\n");
+    session.runtime->reconcileExternalWatchEventsForTest(
+        {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
+    auto files = externalFiles(*session.runtime);
+    ASSERT_EQ(files.size(), 1U);
+    const auto present = files[0].id;
+
+    // Selecting the CURRENT selection is a valid no-op: the id names a present
+    // file, so external.select SUCCEEDS and the host lets the action run on it.
+    // (selectFile returns false here because the selection did not move, which is
+    // why presence -- not selectFile's bool -- decides command success.)
+    const auto reselect = session.runtime->dispatch(
+        ssg::ClientId{1},
+        {"external.select", session.runtime->revision(), present});
+    ASSERT_TRUE(reselect.accepted());
 }
 
 TEST(anSsgSaveIsCorrelatedAndRaisesNoExternalNotice) {
@@ -963,6 +1011,46 @@ TEST(externalPresenceAndSelectionRefreshInTheWatcherDrainNotOnlyOnDispatch) {
     ASSERT_EQ(*external.selected, external.files[0].id);
 }
 
+TEST(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld) {
+    // The library keymap authors external.select_next in the "external" context.
+    // A host must resolve the keymap against the EFFECTIVE focus reconstructed from
+    // externalFocusHeld, not the legacy wire `focus` (which never carries
+    // ExternalModification), or the external select/action keys fall through to the
+    // editor while the external bar holds focus.
+    auto session = Session::open("host_ext_context", "hi\n", true);
+    writeFile(session.workspacePath("note.txt"), "external\n");
+    session.runtime->reconcileExternalWatchEventsForTest(
+        {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
+    ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
+    ASSERT_TRUE(session.runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"external.focus", session.runtime->revision(), {}})
+                    .accepted());
+
+    auto snapshot =
+        session.runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    const auto& sections = snapshot->sections();
+    ASSERT_TRUE(sections.externalFocusHeld);
+    ASSERT_TRUE(sections.focus != ssg::FocusTarget::ExternalModification);
+
+    ssg::CompiledKeymap keymap{sections.keymap, *session.runtime->commandCatalog()};
+    ssg::KeyStroke down;
+    down.code = ssg::KeyCode::ArrowDown;
+    const auto stroke = ssg::CompiledKeymap::compile(down);
+
+    // Resolving from the raw wire focus stays in the editor context and never
+    // reaches external.select_next; reconstructing the effective focus routes the
+    // key in the external context.
+    const auto raw = keymap.resolve(std::array{stroke}, sections.focus);
+    ASSERT_TRUE(raw.command.name() != std::string_view{"external.select_next"});
+
+    const auto effective = keymap.resolve(
+        std::array{stroke}, ssg::effectiveFocusFromSections(sections));
+    ASSERT_TRUE(effective.kind == ssg::KeymapMatchKind::Resolved);
+    ASSERT_TRUE(effective.command.name() == std::string_view{"external.select_next"});
+}
+
 }  // namespace
 
 int main() {
@@ -974,6 +1062,8 @@ int main() {
     RUN(externalKeepBufferClearsTheSectionWithoutTouchingTheBuffer);
     RUN(externalOpenDiffOpensALiveDiffTabForThatFile);
     RUN(externalActionOnAnUnknownIdIsARejectedNoOp);
+    RUN(exmdStaleIdDoesNotActOnThePreviousSelection);
+    RUN(exmdOnAnAlreadySelectedPresentIdStillActsOnIt);
     RUN(anSsgSaveIsCorrelatedAndRaisesNoExternalNotice);
     RUN(aGenuineExternalEditAfterASelfSaveIsNotSuppressed);
     RUN(aCleanExternalReloadDecodesNonUtf8BytesThroughTheDocumentsEncoding);
@@ -1002,5 +1092,6 @@ int main() {
     RUN(watcherUnavailabilityIsPublishedAsDurableRuntimeState);
     RUN(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile);
     RUN(externalPresenceAndSelectionRefreshInTheWatcherDrainNotOnlyOnDispatch);
+    RUN(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld);
     return failed == 0 ? 0 : 1;
 }

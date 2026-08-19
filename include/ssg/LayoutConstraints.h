@@ -21,6 +21,18 @@ namespace ssg {
 // placed along the main (leading-to-trailing) axis. Column: placed top-to-bottom.
 enum class Axis : std::uint8_t { Row, Column };
 
+// Whether a node is an independent scroll viewport. None: the node sizes to its
+// content and does not clip. Vertical: the node is a viewport -- its content is
+// laid out at its natural extent and CLIPPED to the node's own size, with the
+// overflow reachable only by scrolling within the node. The scroll OFFSET is
+// client-owned interaction state, never carried here; this only declares that a
+// region is a viewport, so every client derives which regions scroll from the
+// tree instead of inventing it per medium. Unit-neutral like the rest of this
+// header: a grid client reserves a scrollbar gutter, a DOM client sets an
+// overflow container. A decoder treats any unrecognized value as None so a future
+// axis degrades to "not a viewport" rather than failing.
+enum class ScrollAxis : std::uint8_t { None, Vertical };
+
 enum class SizeKind : std::uint8_t { Exact, Flex, Auto };
 
 // A node's size along its PARENT's axis. Exact reserves `extent` units of the

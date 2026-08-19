@@ -191,6 +191,21 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                                              *targets.status_invocation});
                 return dispatch;
             }
+            // An external-modification action selects its file then runs the
+            // action on the library-owned selection -- select-then-act, the same
+            // one behavior path the keyboard drives (Decision 3/6). The file id is
+            // runtime-minted and travels on the hit; the action command is
+            // payload-less and honored only if the selected file offers it (the
+            // command's own guard).
+            if (hit.region == ssg::HitRegion::ExternalAction &&
+                targets.external_file_id && targets.external_action_command) {
+                dispatch.commands.push_back(
+                    {"external.select", *targets.external_file_id});
+                dispatch.commands.push_back(
+                    {*targets.external_action_command, std::any{},
+                     /*gate_on_previous=*/true});
+                return dispatch;
+            }
             if ((hit.region == ssg::HitRegion::HeaderField ||
                  hit.region == ssg::HitRegion::FooterField) &&
                 targets.field_command_id) {
@@ -309,6 +324,46 @@ std::optional<int> edge_scroll(bool dragging, int pointerRow,
     if (pointerRow < content.y) return -1;
     if (pointerRow >= content.bottom()) return 1;
     return std::nullopt;
+}
+
+std::optional<ExternalPointerFrame> parse_external_pointer_frame(
+    std::string_view payload) {
+    constexpr std::string_view kPrefix{"EXMD:"};
+    if (payload.substr(0, kPrefix.size()) != kPrefix) return std::nullopt;
+    auto const rest = payload.substr(kPrefix.size());
+    auto const tab = rest.find('\t');
+    if (tab == std::string_view::npos) return std::nullopt;
+    std::string_view const token = rest.substr(0, tab);
+    // The id is the ENTIRE remainder after the first TAB, opaque and never split
+    // on ':' -- it is "external:"+path and carries colons of its own.
+    std::string_view const id = rest.substr(tab + 1);
+    if (id.empty()) return std::nullopt;
+    ExternalPointerFrame frame{ssg::ExternalAction::Reload, {},
+                               ssg::DiffFileId{std::string{id}}};
+    if (token == "reload") {
+        frame.action = ssg::ExternalAction::Reload;
+        frame.command = "external.reload";
+    } else if (token == "keep_buffer") {
+        frame.action = ssg::ExternalAction::KeepBuffer;
+        frame.command = "external.keep_buffer";
+    } else if (token == "open_diff") {
+        frame.action = ssg::ExternalAction::OpenDiff;
+        frame.command = "external.open_diff";
+    } else {
+        return std::nullopt;
+    }
+    return frame;
+}
+
+bool external_pointer_frame_is_offered(
+    ExternalPointerFrame const& frame,
+    std::vector<ssg::ExternalDocumentView> const& files) {
+    auto const found = std::find_if(
+        files.begin(), files.end(),
+        [&](auto const& file) { return file.id == frame.id; });
+    if (found == files.end()) return false;
+    return std::find(found->actions.begin(), found->actions.end(),
+                     frame.action) != found->actions.end();
 }
 
 }  // namespace ssg::app

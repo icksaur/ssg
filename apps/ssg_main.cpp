@@ -1140,7 +1140,7 @@ int main(int argc, char** argv) {
     auto refresh = [&]() -> std::optional<ssg::SessionSnapshot> {
         auto snapshot = runtime.snapshot(client, terminalSize(), buildReport());
         if (snapshot) {
-            focus = snapshot->sections().focus;
+            focus = effectiveFocusFromSections(snapshot->sections());
             // The compiled index is derived from the authored keymap AND the
             // catalog, so it is rebuilt when either changes -- a keymap.bind, a
             // config reload, or a command registered since -- and never per
@@ -1507,6 +1507,14 @@ int main(int argc, char** argv) {
                                hit.region == ssg::HitRegion::StatusAction) {
                         targets.field_command_id = hit.commandId;
                         targets.status_invocation = hit.statusInvocation;
+                    } else if (hit.region == ssg::HitRegion::ExternalAction &&
+                               hit.externalFileId && hit.commandId) {
+                        // Resolve the runtime-minted file id into the select-then-act
+                        // targets the router dispatches (external.select then the
+                        // payload-less action command).
+                        targets.external_file_id =
+                            ssg::DiffFileId{*hit.externalFileId};
+                        targets.external_action_command = hit.commandId;
                     }
                     // A second left click on the same editor cell within the
                     // window selects the word there instead of just placing the
@@ -1556,8 +1564,16 @@ int main(int argc, char** argv) {
                               hit, decoded.pointer.button, decoded.pointer.kind,
                               effectiveAlt, dragging, dragAnchor, targets,
                               altDragBaseline);
+                bool previousAccepted = true;
                 for (auto const& command : plan.commands) {
-                    dispatch(command.command_id, command.payload);
+                    if (command.gate_on_previous && !previousAccepted) {
+                        continue;
+                    }
+                    previousAccepted =
+                        runtime
+                            .dispatch(client, {command.command_id,
+                                               runtime.revision(), command.payload})
+                            .accepted();
                 }
                 // A gutter gesture on a client-owned surface has no command to
                 // dispatch (the picker's offset must not round-trip), so the

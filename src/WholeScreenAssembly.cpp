@@ -79,9 +79,11 @@ UiNode viewLeaf(std::string_view id, ViewSurface surface, Size size) {
 }
 
 UiNode container(std::string_view id, Axis axis, Size size,
-                 std::vector<UiNode> children) {
+                 std::vector<UiNode> children,
+                 ScrollAxis scroll = ScrollAxis::None) {
     UiContainer body;
     body.axis = axis;
+    body.scroll = scroll;
     body.children = std::move(children);
     return UiNode{UiNodeId{std::string{id}}, size, std::move(body)};
 }
@@ -178,11 +180,17 @@ UiComposition assembleWholeScreen(
         kPanelNodeId, Axis::Column, Size::exact(dimensions.panelTargetWidth),
         {viewLeaf(kFileTreeNodeId, ViewSurface::FileTree, Size::flex()),
          viewLeaf(kGitStatusNodeId, ViewSurface::GitStatus, Size::flex()),
-         viewLeaf(kSymbolsNodeId, ViewSurface::Symbols, Size::flex())});
+         viewLeaf(kSymbolsNodeId, ViewSurface::Symbols, Size::flex())},
+        ScrollAxis::Vertical);
+    // The panel and content containers are the two body scroll viewports: each
+    // clips its provider/document content and scrolls independently. This is the
+    // single source both clients derive scroll from (terminal scrollbar gutter,
+    // DOM overflow container); the inner view-leaves stay non-scrolling content.
     UiNode content = container(
         kContentNodeId, Axis::Column, Size::flex(),
         {viewLeaf(kTabViewNodeId, ViewSurface::TabView, Size::flex()),
-         viewLeaf(kFindResultsNodeId, ViewSurface::FindResults, Size::flex())});
+         viewLeaf(kFindResultsNodeId, ViewSurface::FindResults, Size::flex())},
+        ScrollAxis::Vertical);
     UiNode body = container(kBodyNodeId, Axis::Row, Size::flex(),
                             {std::move(panel), std::move(content)});
     // The draft-conflict notice's semantic surface, always assembled and hidden by
@@ -191,12 +199,15 @@ UiComposition assembleWholeScreen(
     // ShellNotice with rects.
     UiNode notice =
         viewLeaf(kNoticeNodeId, ViewSurface::Notice, Size::autoSize());
-    // The external-modification node, always assembled and hidden by presence
-    // (WholeScreenInteraction). In 5b-1 it is a bare Auto-sized CONTAINER with no
-    // children: it renders nothing (so grid goldens stay byte-identical) and exists
-    // only to anchor the external-focus capture. Its rendered View leaf is 5b-2.
-    UiNode externalMod =
-        container(kExternalModNodeId, Axis::Column, Size::autoSize(), {});
+    // The external-modification bar's semantic surface, always assembled and
+    // hidden by presence (WholeScreenInteraction). Auto-sized so its footprint is
+    // the runtime's reserved chrome rows above the document (adjacent to the
+    // notice, fixed order); the grid host ignores it and renders the bounded
+    // ShellExternalBar with rects. 5b-1 left it a bare container to anchor the
+    // external-focus capture; 5b-2 gives it the rendered View leaf.
+    UiNode externalMod = viewLeaf(kExternalModNodeId,
+                                  ViewSurface::ExternalModification,
+                                  Size::autoSize());
     // The footer-region prompt's semantic surface, always assembled and hidden by
     // presence (WholeScreenInteraction). Auto-sized so its footprint is the
     // runtime's reservation, intrinsic and not varied here by prompt kind; the

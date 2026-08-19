@@ -36,12 +36,34 @@
   #notice.open { display:flex; }
   #notice .notice-action { cursor:pointer; text-decoration:underline dotted; font-weight:bold;
                            background:none; border:none; color:inherit; font:inherit; padding:0; }
+  /* The external-modification bar: multi-row intrinsic-height chrome above the
+     document, mirroring the terminal ExternalModificationBar. Presence is
+     server-owned; #external.open is set only while the section has files. The
+     selected row is highlighted with the Selection role background. */
+  #external { display:none; flex-direction:column; padding:2px 8px;
+              background:var(--ssg-status-warning); color:var(--ssg-canvas); }
+  #external.open { display:flex; }
+  #external .external-header { font-weight:bold; }
+  #external .external-row { display:flex; align-items:center; gap:1ch; }
+  #external .external-row.selected { background:var(--ssg-selection); }
+  #external .external-file { flex:1; white-space:pre; overflow:hidden; text-overflow:ellipsis; }
+  #external .external-action { cursor:pointer; text-decoration:underline dotted; font-weight:bold;
+                               background:none; border:none; color:inherit; font:inherit; padding:0; }
   .chrome .w { white-space:pre; }
   .chrome .w.clickable { cursor:pointer; text-decoration:underline dotted; }
   .chrome .w.spacer { flex:1 1 auto; }
   .chrome .w + .w { margin-left:1ch; }
   #chrome-error { padding:2px 8px; color:var(--ssg-status-warning); font-weight:bold; }
-  #doc { margin:0; padding:8px; white-space:pre-wrap; outline:none; flex:1 1 auto; min-height:0; overflow:auto; }
+  /* The body host: a bounded flex region, NOT the scroll container. Scroll is a
+     per-node property (ScrollAxis) the panel and content containers each own, so
+     the host only bounds their height (flex + min-height:0) and clips its own
+     overflow; each viewport node scrolls independently within it. */
+  #doc { margin:0; white-space:pre-wrap; outline:none; flex:1 1 auto; min-height:0;
+         overflow:hidden; display:flex; flex-direction:column; }
+  /* A surface fills its viewport container so a tall document or tree scrolls
+     within the panel/content viewport rather than growing the page. */
+  .surface { display:flex; flex-direction:column; min-height:0; flex:1 1 auto; }
+  .doc-surface { margin:0; padding:8px; white-space:pre-wrap; flex:1 1 auto; min-height:0; }
   #doc .sel { background:var(--ssg-selection); }
   #doc .caret, #chrome-top .input-line .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
   #chrome-top .input-line { margin-left:1ch; }
@@ -62,6 +84,7 @@
 <div id="chrome-top" class="chrome"></div>
 <div id="tabs"></div>
 <div id="notice"></div>
+<div id="external"></div>
 <pre id="doc" tabindex="0"></pre>
 <div id="prompt" tabindex="0" role="group"></div>
 <div id="chrome-bottom" class="chrome"></div>

@@ -60,6 +60,18 @@ TEST(theSurfaceBackingMappingIsTheSpecifiedContract) {
     ASSERT_TRUE(has(ViewSurface::Symbols, SnapshotSection::Tree));
     ASSERT_TRUE(has(ViewSurface::FooterPrompt, SnapshotSection::PromptView));
     ASSERT_TRUE(has(ViewSurface::Notice, SnapshotSection::NoticeView));
+    ASSERT_TRUE(has(ViewSurface::ExternalModification,
+                    SnapshotSection::ExternalModification));
+}
+
+// The external-modification View surface renders only against its own schema
+// section: its backing is exactly the ExternalModification section and it
+// borrows no other surface's data channel.
+TEST(externalModSurfaceIsBackedOnlyByTheExternalModSection) {
+    const auto sections =
+        viewSurfaceBackingSections(ViewSurface::ExternalModification);
+    ASSERT_EQ(sections.size(), std::size_t{1});
+    ASSERT_TRUE(sections.front() == SnapshotSection::ExternalModification);
 }
 
 // The grid chrome lowering renders only chrome widget kinds; a View reaching it is
@@ -101,6 +113,7 @@ TEST(gridChromeLoweringRefusesAViewCenter) {
 int main() {
     RUN(everyViewSurfaceHasANonEmptyBacking);
     RUN(theSurfaceBackingMappingIsTheSpecifiedContract);
+    RUN(externalModSurfaceIsBackedOnlyByTheExternalModSection);
     RUN(statusActionsIsBackedByPromptStatus);
     RUN(gridChromeLoweringRefusesAViewCenter);
     return failed == 0 ? 0 : 1;

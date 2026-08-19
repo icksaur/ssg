@@ -1,5 +1,7 @@
 #include "http_serve.h"
 
+#include "pointer_routing.h"
+
 #include <ssg/EditorRuntime.h>
 #include <ssg/CommandCatalog.h>
 #include <ssg/CompiledKeymap.h>
@@ -200,7 +202,7 @@ bool handleKey(EditorRuntime& runtime, ClientId client,
 
     FocusTarget focus = FocusTarget::Editor;
     if (auto const snapshot = runtime.snapshot(client)) {
-        focus = snapshot->sections().focus;
+        focus = effectiveFocusFromSections(snapshot->sections());
     }
     auto const resolution =
         keymap.resolve(std::array{CompiledKeymap::compile(stroke)}, focus);
@@ -491,6 +493,38 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                                 (void)runtime.dispatch(
                                     client,
                                     {"tree.activate", runtime.revision(), {}});
+                            }
+                        }
+                        sendUpdateLocked(handle);
+                        return;
+                    }
+                    // A pointer click on an external-modification action: select
+                    // its file then run the action (select-then-act, the same one
+                    // behavior path the keyboard and the TUI pointer drive).
+                    // EXMD:<action>\t<diffFileId>. The action token is fixed
+                    // ({reload,keep_buffer,open_diff}); a TAB delimits it from the
+                    // id, whose ENTIRE remainder is opaque and never split on ':'
+                    // (the id is "external:"+path and contains colons). The (id,
+                    // action) PAIR is validated against the published section --
+                    // the id must be present AND the action must be one that file
+                    // offers -- so an unknown id or an unoffered action is a no-op.
+                    if (payload.rfind("EXMD:", 0) == 0) {
+                        std::lock_guard lock{*runtimeMutex};
+                        if (*attachedHandle != handle) return;
+                        auto const frame =
+                            ssg::app::parse_external_pointer_frame(payload);
+                        auto snapshot = runtime.snapshot(client);
+                        if (frame && snapshot &&
+                            ssg::app::external_pointer_frame_is_offered(
+                                *frame, snapshot->sections()
+                                            .externalModification.files)) {
+                            auto const selected = runtime.dispatch(
+                                client, {"external.select", runtime.revision(),
+                                         frame->id});
+                            if (selected.accepted()) {
+                                (void)runtime.dispatch(
+                                    client, {frame->command, runtime.revision(),
+                                             {}});
                             }
                         }
                         sendUpdateLocked(handle);

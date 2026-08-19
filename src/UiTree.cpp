@@ -48,11 +48,13 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
             }
             if (node.size.kind() == SizeKind::Auto &&
                 *w.surface != ViewSurface::FooterPrompt &&
-                *w.surface != ViewSurface::Notice) {
+                *w.surface != ViewSurface::Notice &&
+                *w.surface != ViewSurface::ExternalModification) {
                 // A View names its client-rendered surface and has no content to
-                // hug, so it is Exact- or Flex-sized -- EXCEPT the footer prompt and
-                // the draft-conflict notice, whose intrinsic (reservation-sized)
-                // footprints the runtime sizes, so they alone may be Auto.
+                // hug, so it is Exact- or Flex-sized -- EXCEPT the footer prompt,
+                // the draft-conflict notice, and the external-modification bar,
+                // whose intrinsic (reservation-sized) footprints the runtime
+                // sizes, so they alone may be Auto.
                 // validateWellKnownAreas pins each allowance to its canonical node.
                 error = here + ": a \"view\" leaf must be Exact- or Flex-sized";
                 return;
@@ -169,16 +171,14 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
     if (auto err = requireViewLeaf(root->children[1], kNoticeNodeId,
                                    ViewSurface::Notice))
         return err;
-    // The external-modification node sits between the notice and the body: in 5b-1
-    // a bare presence-gated CONTAINER with no rendered View leaf (its View leaf is
-    // added in 5b-2). It exists so the external-focus capture has a node to anchor
-    // on; requiring a container here keeps a stray View off it until 5b-2.
-    const UiNode& externalMod = root->children[2];
-    if (externalMod.id.value() !=
-            wellKnownAreaId(WellKnownArea::ExternalModification) ||
-        !externalMod.isContainer()) {
-        return std::string{"externalmod: must be a direct child container of root"};
-    }
+    // The external-modification node sits between the notice and the body: a View
+    // leaf naming ViewSurface::ExternalModification, always assembled and hidden
+    // by presence. It is the sole node permitted to carry an Auto-sized
+    // ExternalModification View; a stray one anywhere else is rejected below. The
+    // node and its presence gating exist from 5b-1; 5b-2 gives it the View leaf.
+    if (auto err = requireViewLeaf(root->children[2], kExternalModNodeId,
+                                   ViewSurface::ExternalModification))
+        return err;
     const UiNode& body = root->children[3];
     // The footer prompt sits between the body and the footer: a View leaf naming
     // ViewSurface::FooterPrompt, always assembled and hidden by presence. It is
@@ -230,6 +230,10 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
         return err;
     if (auto err = rejectStraySurface(schema.root, ViewSurface::Notice,
                                       kNoticeNodeId))
+        return err;
+    if (auto err = rejectStraySurface(schema.root,
+                                      ViewSurface::ExternalModification,
+                                      kExternalModNodeId))
         return err;
     return std::nullopt;
 }

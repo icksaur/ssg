@@ -504,6 +504,8 @@ void registerExternalModificationCommands(EditorSessionBuilder& builder,
     builder.add(spec("external.select", "Select External Change")
                     .inProcessHandler<DiffFileId>(
                         [&runtime](CommandContext&, DiffFileId const& file) {
+                            if (!runtime.external.hasFile(file))
+                                return failure("external change is unavailable");
                             return runtime.runTransaction([&] {
                                 (void)runtime.external.selectFile(file);
                                 return success();

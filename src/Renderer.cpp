@@ -443,6 +443,32 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                        SemanticRole::StatusWarning, style);
             break;
         }
+        case ShellNodeKind::ExternalModificationBar:
+        case ShellNodeKind::ExternalModificationRow: {
+            // The header and each file row fill the bar. A normal row uses the
+            // StatusWarning band (like the notice); the SELECTED row is painted
+            // with the Selection role so it stands out. The action labels sit on
+            // top, painted after (their nodes follow this one).
+            auto const bg = node.role == SemanticRole::Selection
+                                ? semanticIndex(theme, SemanticRole::Selection)
+                                : semanticIndex(theme, SemanticRole::StatusWarning);
+            auto const fg = semanticIndex(theme, SemanticRole::Canvas);
+            fillRect(grid, node.rect, fg, bg, node.role);
+            if (!node.content.empty()) {
+                paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
+                           node.content, fg, bg, node.role, style);
+            }
+            break;
+        }
+        case ShellNodeKind::ExternalModificationAction: {
+            auto const bg = node.role == SemanticRole::Selection
+                                ? semanticIndex(theme, SemanticRole::Selection)
+                                : semanticIndex(theme, SemanticRole::StatusWarning);
+            auto const fg = semanticIndex(theme, SemanticRole::Canvas);
+            paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
+                       node.content, fg, bg, node.role, style);
+            break;
+        }
         default:
             break;  // Containers, panes, and scrollbars are painted elsewhere.
         }

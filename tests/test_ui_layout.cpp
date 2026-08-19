@@ -134,6 +134,26 @@ void assertRect(Rect actual, Rect expected) {
     ASSERT_EQ(actual, expected);
 }
 
+// Clear the scroll flag on the two viewport containers so the schema no longer
+// declares any region scrollable -- used to prove the TUI reserves scrollbars
+// ONLY from the tree's ScrollAxis, not hard-coded pane knowledge.
+void clearViewportScroll() {
+    UiSchema schema = gSchema->schema();
+    std::function<void(UiNode&)> walk = [&](UiNode& node) {
+        if (auto* c = std::get_if<UiContainer>(&node.content)) {
+            if (node.id.value() == kPanelNodeId ||
+                node.id.value() == kContentNodeId) {
+                c->scroll = ScrollAxis::None;
+            }
+            for (auto& child : c->children) walk(child);
+        }
+    };
+    walk(schema.root);
+    auto validated = ValidatedSchema::validate(std::move(schema));
+    ASSERT_TRUE(validated.ok());
+    gSchema = validated.takeSchema();
+}
+
 ShellLayoutRequest request(int columns, int rows) {
     ShellLayoutRequest value;
     value.viewport = {columns, rows};
@@ -758,6 +778,40 @@ TEST(chromeHeightsAndGutterWidthAreHonoured) {
     ASSERT_EQ(gutterResult.view->panelScrollbar->width, 3);
 }
 
+TEST(tuiScrollRegionsAreDerivedFromTheNodeScrollAxis) {
+    ShellState state;
+    // Baseline: the assembled tree marks panel + content Vertical, so the panel
+    // gutter and a per-pane scrollbar are reserved.
+    auto withScroll = request(100, 24);
+    auto a = layoutFor(withScroll, state, /*panelPresent=*/true,
+                       FocusTarget::Panel);
+    ASSERT_TRUE(a.accepted());
+    if (!a.accepted()) return;
+    ASSERT_TRUE(a.view->panelScrollbar.has_value());
+    ASSERT_TRUE(!a.view->panes.empty());
+    if (!a.view->panes.empty())
+        ASSERT_TRUE(a.view->panes.front().scrollbar.width > 0);
+    const auto scrollbarCount = [](const ShellViewState& v) {
+        int n = 0;
+        for (const auto& node : v.accessibilityNodes)
+            if (node.kind == ShellNodeKind::Scrollbar) ++n;
+        return n;
+    };
+    ASSERT_TRUE(scrollbarCount(*a.view) >= 2);
+
+    // With the tree no longer declaring these regions scrollable, NO gutter and
+    // NO scrollbar node is reserved: the tree is the single scroll authority.
+    auto req = request(100, 24);
+    clearViewportScroll();
+    auto b = layoutFor(req, state, /*panelPresent=*/true, FocusTarget::Panel);
+    ASSERT_TRUE(b.accepted());
+    if (!b.accepted()) return;
+    ASSERT_TRUE(!b.view->panelScrollbar.has_value());
+    ASSERT_EQ(scrollbarCount(*b.view), 0);
+    if (!b.view->panes.empty())
+        ASSERT_EQ(b.view->panes.front().scrollbar.width, 0);
+}
+
 // Layout budgets are cell counts, so a label's width must be its display width.
 // Byte counts over-measure every non-ASCII label -- and style glyphs are now
 // configurable, so they can be non-ASCII too.
@@ -1288,7 +1342,127 @@ TEST(panelActiveRoleComesExclusivelyFromTheRequestFocus) {
     ASSERT_TRUE(panelProviderRole(*inactive.view) == SemanticRole::PanelInactive);
 }
 
+// --- 7A-5b: the bounded, windowed external-modification bar ---------------
+
+ShellExternalBar externalBarWith(int fileCount, std::uint32_t selected) {
+    ShellExternalBar bar;
+    for (int i = 0; i < fileCount; ++i) {
+        ShellExternalRow row;
+        row.fileId = "external:file" + std::to_string(i) + ".cpp";
+        row.text = "M file" + std::to_string(i) + ".cpp";
+        row.actions = {{"Reload", "external.reload"},
+                       {"Keep", "external.keep_buffer"},
+                       {"Diff", "external.open_diff"}};
+        bar.rows.push_back(std::move(row));
+    }
+    bar.message = std::to_string(fileCount) + " files changed on disk";
+    bar.selected = selected;
+    return bar;
+}
+
+int countKind(const ShellViewState& view, ShellNodeKind kind) {
+    return static_cast<int>(std::count_if(
+        view.accessibilityNodes.begin(), view.accessibilityNodes.end(),
+        [kind](const AccessibilityNode& n) { return n.kind == kind; }));
+}
+
+TEST(theExternalBarReservesZeroRowsWhenNoConflictSoTheGoldenIsUnchanged) {
+    ShellState state;
+    auto plain = layoutFor(request(80, 24), state);
+    ASSERT_TRUE(plain.accepted());
+    const int baselineTop = plain.view->panes.front().content.y;
+
+    // An external bar with NO files must reserve zero rows: the document top and
+    // every external node count are identical to the no-bar layout.
+    auto req = request(80, 24);
+    req.externalBar = ShellExternalBar{};  // present but empty
+    auto empty = layoutFor(req, state);
+    ASSERT_TRUE(empty.accepted());
+    ASSERT_EQ(empty.view->panes.front().content.y, baselineTop);
+    ASSERT_EQ(countKind(*empty.view, ShellNodeKind::ExternalModificationBar), 0);
+    ASSERT_EQ(countKind(*empty.view, ShellNodeKind::ExternalModificationRow), 0);
+    ASSERT_TRUE(empty.view->externalActions.empty());
+}
+
+TEST(theExternalBarWindowsFilesAroundTheSelectionAndCapsItsHeight) {
+    ShellState state;
+    auto req = request(80, 24);
+    const std::uint32_t selected = 8;
+    req.externalBar = externalBarWith(10, selected);
+    auto result = layoutFor(req, state);
+    ASSERT_TRUE(result.accepted());
+    const auto& view = *result.view;
+
+    // The window is bounded: a header, at most a small number of file rows, plus
+    // one overflow row -- never all ten files.
+    ASSERT_EQ(countKind(view, ShellNodeKind::ExternalModificationBar), 1);
+    const int rows = countKind(view, ShellNodeKind::ExternalModificationRow);
+    ASSERT_TRUE(rows >= 1 && rows <= 5);
+    ASSERT_TRUE(rows < 10);
+
+    // The selected file is visible and highlighted (Selection role); every other
+    // file row uses the StatusWarning band.
+    const std::string selectedId = req.externalBar->rows[selected].fileId;
+    bool sawSelected = false;
+    for (const auto& n : view.accessibilityNodes) {
+        if (n.kind != ShellNodeKind::ExternalModificationRow) continue;
+        if (n.id == selectedId) {
+            sawSelected = true;
+            ASSERT_TRUE(n.role == SemanticRole::Selection);
+        }
+    }
+    ASSERT_TRUE(sawSelected);
+
+    // An overflow "+N more" row is present because ten files exceed the window,
+    // and its count reflects the hidden files.
+    bool sawOverflow = false;
+    for (const auto& n : view.accessibilityNodes) {
+        if (n.kind == ShellNodeKind::ExternalModificationRow &&
+            n.id == "external.overflow") {
+            sawOverflow = true;
+            ASSERT_TRUE(n.content.find("more") != std::string::npos);
+        }
+    }
+    ASSERT_TRUE(sawOverflow);
+
+    // Every published action carries a live select-then-act target.
+    ASSERT_TRUE(!view.externalActions.empty());
+    for (const auto& hit : view.externalActions) {
+        ASSERT_TRUE(!hit.fileId.empty());
+        ASSERT_TRUE(hit.commandId.rfind("external.", 0) == 0);
+    }
+}
+
+TEST(theExternalBarDegradesOnATinyViewportWithoutBreakingFooterGeometry) {
+    ShellState state;
+    // A tall layout's footer, for comparison.
+    auto tall = layoutFor(request(80, 24), state);
+    ASSERT_TRUE(tall.accepted());
+    const Rect tallFooter = *tall.view->footer;
+
+    // A short viewport with many files: the bar must degrade, never consume the
+    // footer or the last document row.
+    auto req = request(80, 8);
+    req.externalBar = externalBarWith(10, 0);
+    auto result = layoutFor(req, state);
+    ASSERT_TRUE(result.accepted());
+    const auto& view = *result.view;
+
+    // At least one document row survives.
+    ASSERT_TRUE(view.panes.front().content.height >= 1);
+    // The footer keeps its geometry (anchored to the viewport bottom, height
+    // unchanged): the bar reserves from the document, never the footer.
+    ASSERT_EQ(view.footer->height, tallFooter.height);
+    ASSERT_EQ(view.footer->bottom(), 8);
+    // The degraded bar shows fewer rows than the tall window would.
+    const int rows = countKind(view, ShellNodeKind::ExternalModificationRow);
+    ASSERT_TRUE(rows >= 0 && rows <= 5);
+}
+
 int main() {
+    RUN(theExternalBarReservesZeroRowsWhenNoConflictSoTheGoldenIsUnchanged);
+    RUN(theExternalBarWindowsFilesAroundTheSelectionAndCapsItsHeight);
+    RUN(theExternalBarDegradesOnATinyViewportWithoutBreakingFooterGeometry);
     RUN(panelPresenceComesExclusivelyFromTheRequest);
     RUN(panelActiveRoleComesExclusivelyFromTheRequestFocus);
     RUN(handAuthoredGeometryGoldens);
@@ -1312,6 +1486,7 @@ int main() {
     RUN(statusFieldManifestHasExactOrderAndLabels);
     RUN(shellLayoutTakesItsDimensionsAndSigilFromStyle);
     RUN(chromeHeightsAndGutterWidthAreHonoured);
+    RUN(tuiScrollRegionsAreDerivedFromTheNodeScrollAxis);
     RUN(labelWidthsAreMeasuredInCellsNotBytes);
     RUN(defaultTabsAreTightWithOneSeparatorCellBetween);
     RUN(configuredTabEdgeAndSeparatorGlyphsChangeGeometry);

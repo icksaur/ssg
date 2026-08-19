@@ -287,6 +287,18 @@ export function applySessionDeltaSections(sections, delta) {
   if (delta.notice_view && num(delta.notice_view.changed)) {
     sections.notice_view = delta.notice_view.replacement != null ? delta.notice_view.replacement : null;
   }
+  // The external-modification section travels as a merge delta (upserted/removed/
+  // selected against a base revision), like the diff section it mirrors. Merge it
+  // into the retained section so the bar tracks live changes without a full
+  // snapshot. `external_focus_held` is an additive top-level bool, present only
+  // when it flips; absent leaves the prior value.
+  if (delta.external_modification) {
+    sections.external_modification =
+      applyExternalModificationDelta(sections.external_modification, delta.external_modification);
+  }
+  if (delta.external_focus_held != null) {
+    sections.external_focus_held = !!num(delta.external_focus_held);
+  }
   const replaceDirect = (name) => { if (delta[name] != null) sections[name] = delta[name]; };
   replaceDirect('ui');
   replaceDirect('ui_state');
@@ -370,6 +382,77 @@ export function noticeViewFromSections(sections) {
   }));
   return { text: String(nv.text == null ? '' : nv.text), actions };
 }
+
+// The ExternalAction ordinals (Reload, KeepBuffer, OpenDiff), pinned to the C++
+// enum, mapped to the pointer token the host parses, a short label, and the
+// payload-less command the keyboard route uses. The status ordinals mirror
+// ExternalDocumentStatus (ExternallyModified, ExternallyRemoved).
+const EXTERNAL_ACTIONS = [
+  { token: 'reload', label: 'Reload', command: 'external.reload' },
+  { token: 'keep_buffer', label: 'Keep', command: 'external.keep_buffer' },
+  { token: 'open_diff', label: 'Diff', command: 'external.open_diff' },
+];
+const EXTERNAL_STATUS_GLYPH = ['M', 'D'];
+
+// Merge an external-modification delta (base_revision/revision/upserted/removed/
+// selected) into the retained section {revision, files, selected}, mirroring the
+// C++ ExternalModificationDeltaCodec.replay: removed ids drop, upserted files
+// replace-or-add by id, and the selection re-homes to the delta's value. Pure.
+export function applyExternalModificationDelta(section, delta) {
+  if (!delta) return section;
+  const base = section && Array.isArray(section.files)
+    ? section : { revision: 0, files: [], selected: null };
+  const byId = new Map(base.files.map((f) => [String(f.id), f]));
+  for (const id of (delta.removed || [])) byId.delete(String(id));
+  for (const f of (delta.upserted || [])) byId.set(String(f.id), f);
+  return {
+    revision: num(delta.revision),
+    files: [...byId.values()],
+    selected: delta.selected != null ? String(delta.selected) : null,
+  };
+}
+
+// The external-modification bar's geometry-free projection for the renderer, or
+// null when no file is externally changed (the bar is absent). Owns the wire
+// coupling (ordinals -> tokens/labels/commands) so the client draws rows, the
+// selected highlight, and the per-row action buttons without re-deriving them.
+export function externalModificationFromSections(sections) {
+  if (!sections) return null;
+  const section = sections.external_modification;
+  if (!section || !Array.isArray(section.files) || section.files.length === 0) return null;
+  const selectedId = section.selected != null ? String(section.selected) : null;
+  const files = section.files.map((f) => {
+    const id = String(f.id == null ? '' : f.id);
+    const statusOrdinal = num(f.status);
+    const glyph = EXTERNAL_STATUS_GLYPH[statusOrdinal] || '?';
+    const actions = (f.actions || []).map((a) => EXTERNAL_ACTIONS[num(a)]).filter(Boolean);
+    return {
+      id,
+      path: String(f.path == null ? '' : f.path),
+      glyph,
+      selected: id === selectedId,
+      actions,
+    };
+  });
+  return { message: files.length + (files.length === 1 ? ' file changed on disk' : ' files changed on disk'), files };
+}
+
+// Whether the external-modification bar holds the effective keyboard focus. The
+// wire `focus` field is NEVER ExternalModification (it is legacy-projected to
+// Editor/Panel/Prompt for older clients); this additive bool is the ONLY signal,
+// so the client MUST read it rather than compare the focus ordinal to a value
+// that never appears on the wire.
+export function externalFocusHeld(sections) {
+  return !!(sections && num(sections.external_focus_held));
+}
+
+// The pointer frame a click on an external action sends: EXMD:<token>\t<id>. The
+// TAB delimits the fixed action token from the opaque id, which is never split on
+// ':' (the id is "external:"+path and contains colons).
+export function encodeExternalAction(token, id) {
+  return 'EXMD:' + token + '\t' + id;
+}
+
 export function isPalettePromptOpen(sections) {
   if (!sections) return false;
   if (num(sections.focus) !== FOCUS_PROMPT) return false;
@@ -410,8 +493,12 @@ export function pickerEpochFromPalette(palette) {
 export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPUT: 4, SPACER: 5, VIEW: 6, STATUS_ACTIONS: 7 };
 export const AXIS = { ROW: 0, COLUMN: 1 };
 export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
+// Whether a node is an independent scroll viewport, pinned to the C++ ScrollAxis
+// enum. An unrecognized value is treated as NONE (a future axis degrades to "not
+// a viewport"), matching the wire decoder's forward-compat rule.
+export const SCROLL = { NONE: 0, VERTICAL: 1 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
-export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5, NOTICE: 6 };
+export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5, NOTICE: 6, EXTERNAL_MODIFICATION: 7 };
 const STRUCTURAL_ROLE = { prompt: 16 };
 const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL_ROLE, name)
   ? STRUCTURAL_ROLE[name] : null;
@@ -422,7 +509,7 @@ const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL
 // tree structure + well-known node ids, so there is no region-role set.
 export const WEB_UI_PROFILE = {
   widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.TEXT_INPUT, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
-  surfaces: new Set([SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT, SURFACE.NOTICE]),
+  surfaces: new Set([SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION]),
 };
 
 // The first schema primitive `profile` does not support, as
@@ -514,6 +601,18 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     return { left: num(i.left) || 0, right: num(i.right) || 0,
              top: num(i.top) || 0, bottom: num(i.bottom) || 0 };
   };
+  // A scroll axis the client does not recognize degrades to NONE, matching the
+  // The scroll axis a node's container declares. ABSENCE (undefined) is None and
+  // an unrecognized numeric ordinal degrades to None (a future axis renders as
+  // "not a viewport"), matching the C++ wire decoder. A PRESENT field that is null
+  // or the wrong TYPE is malformed and returns null so the caller rejects the
+  // frame, exactly as the C++ decoder fails a present non-uint scroll.
+  const scrollOf = (container) => {
+    const raw = container.scroll;
+    if (raw === undefined) return SCROLL.NONE;  // absent only
+    if (typeof raw !== 'number' && typeof raw !== 'bigint') return null;  // null/wrong type -> malformed
+    return num(raw) === SCROLL.VERTICAL ? SCROLL.VERTICAL : SCROLL.NONE;
+  };
   const build = (node) => {
     const st = stateById.get(node.id);
     const hasLeafState = st.leaf != null && typeof st.leaf === 'object';
@@ -521,6 +620,8 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     // Shape validation runs regardless of presence, so a malformed frame is caught.
     if (isContainer) {
       if (hasLeafState) { shapeOk = false; return null; }
+      const scroll = scrollOf(node.container);
+      if (scroll === null) { shapeOk = false; return null; }  // malformed scroll type
       const children = [];
       for (const c of (node.container.children || [])) {
         const built = build(c);
@@ -529,7 +630,7 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
       if (!presentById.get(node.id)) return null;  // hidden subtree not drawn
       return { id: node.id, kind: 'container', axis: num(node.container.axis),
                gap: num(node.container.gap) || 0, size: sizeOf(node),
-               inset: insetOf(node.container), children };
+               scroll, inset: insetOf(node.container), children };
     }
     if (!node.leaf || typeof node.leaf !== 'object') { shapeOk = false; return null; }
     const wk = num(node.leaf.kind);

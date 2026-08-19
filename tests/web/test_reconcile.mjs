@@ -16,6 +16,8 @@ import {
   clampPaletteSelection, encodePaletteSubmit, applyTreeDelta,
   applySessionDeltaSections,
   encodeStatusActionInvocation,
+  externalModificationFromSections, externalFocusHeld, encodeExternalAction,
+  applyExternalModificationDelta,
 } from '../../apps/web/reconcile.mjs';
 
 let checks = 0;
@@ -292,7 +294,7 @@ check('palette-prompt detection reads the wire snake_case field names', () => {
 
 // --- UI-VM: profile rejection + schema/state interpretation ---
 import {
-  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, SIZE, SURFACE,
+  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, SIZE, SURFACE, SCROLL,
   shouldResetLocalQuery, pickerEpochFromPalette,
 } from '../../apps/web/reconcile.mjs';
 
@@ -365,6 +367,48 @@ check('firstUnsupportedPrimitive accepts StatusActions by default and rejects it
   assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root), profile), {
     kind: 'widget', ordinal: WIDGET.STATUS_ACTIONS,
   });
+});
+
+check('interpretChrome carries a node ScrollAxis so a client derives independent scroll, and degrades an unknown axis to none', () => {
+  // The panel and content viewports carry scroll:Vertical(1); their inner leaves
+  // and a chrome row carry none. A future/unknown axis (99) must degrade to none
+  // so an old client renders it as "not a viewport" rather than mis-scrolling.
+  const scrollContainer = (id, scroll, children) =>
+    ({ id, size: {}, container: { axis: 1, gap: 0, scroll, children } });
+  const root = { id: 'root', size: {}, container: { axis: 1, gap: 0, children: [
+    rowNode('body', [
+      scrollContainer('panel', SCROLL.VERTICAL, [leafNode('filetree', WIDGET.VIEW, { surface: SURFACE.FILETREE })]),
+      scrollContainer('content', SCROLL.VERTICAL, [leafNode('tabview', WIDGET.VIEW, { surface: SURFACE.TABVIEW })]),
+    ]),
+    scrollContainer('future', 99, [leafNode('x', WIDGET.VIEW, { surface: SURFACE.NOTICE })]),
+  ] } };
+  const nodes = [];
+  const collect = (n) => { nodes.push(st(n.id)); if (n.container) n.container.children.forEach(collect); };
+  collect(root);
+  const out = interpretChrome(schemaOf(20, root), { generation: 20, nodes }, presenceForSchema(20, root));
+  assert.ok(out && out.root);
+  const byId = {};
+  const walk = (n) => { byId[n.id] = n; if (n.kind === 'container') n.children.forEach(walk); };
+  walk(out.root);
+  assert.equal(byId.panel.scroll, SCROLL.VERTICAL);
+  assert.equal(byId.content.scroll, SCROLL.VERTICAL);
+  assert.equal(byId.filetree.scroll ?? SCROLL.NONE, SCROLL.NONE);
+  assert.equal(byId.tabview.scroll ?? SCROLL.NONE, SCROLL.NONE);
+  assert.equal(byId.body.scroll, SCROLL.NONE);
+  assert.equal(byId.future.scroll, SCROLL.NONE);  // unknown axis -> none
+});
+
+check('interpretChrome rejects a container whose scroll field is null or the wrong type', () => {
+  // Symmetry with the C++ wire decoder: absence (undefined) and an unknown numeric
+  // ordinal degrade to none, but a present null or non-numeric scroll is malformed
+  // and rejects the frame.
+  for (const bad of ['vertical', null]) {
+    const root = { id: 'root', size: {}, container: { axis: 1, gap: 0, scroll: bad, children: [
+      leafNode('a', WIDGET.VIEW, { surface: SURFACE.TABVIEW }),
+    ] } };
+    const nodes = [st('root'), st('a')];
+    assert.equal(interpretChrome(schemaOf(21, root), { generation: 21, nodes }, presenceForSchema(21, root)), null);
+  }
 });
 
 check('interpretChrome applies the per-kind render gate', () => {
@@ -693,6 +737,74 @@ check('a notice action carries the plain command id dispatched through the comma
   // click would send matches the already-registered draft commands.
   assert.deepEqual(nv.actions.map((a) => 'CMD:' + a.command),
     ['CMD:draft.diff', 'CMD:draft.discard', 'CMD:draft.dismiss']);
+});
+
+function externalSection() {
+  return {
+    external_modification: {
+      revision: 3,
+      selected: 'external:src/a:b.cpp',
+      files: [
+        { id: 'external:src/a:b.cpp', path: 'src/a:b.cpp', status: 0,
+          actions: [0, 1, 2] },
+        { id: 'external:src/removed.cpp', path: 'src/removed.cpp', status: 1,
+          actions: [0, 2] },
+      ],
+    },
+  };
+}
+
+check('externalModificationFromSections renders one row per file with the selected highlight', () => {
+  assert.equal(externalModificationFromSections(null), null);
+  assert.equal(externalModificationFromSections({}), null);
+  assert.equal(externalModificationFromSections({ external_modification: { files: [] } }), null);
+  const bar = externalModificationFromSections(externalSection());
+  assert.equal(bar.files.length, 2);
+  assert.equal(bar.message, '2 files changed on disk');
+  // The selected row is the one whose id matches section.selected; the other is not.
+  assert.equal(bar.files[0].selected, true);
+  assert.equal(bar.files[1].selected, false);
+  // Status glyph + offered action labels come from the wire ordinals.
+  assert.equal(bar.files[0].glyph, 'M');
+  assert.equal(bar.files[1].glyph, 'D');
+  assert.deepEqual(bar.files[0].actions.map((a) => a.label), ['Reload', 'Keep', 'Diff']);
+  assert.deepEqual(bar.files[1].actions.map((a) => a.token), ['reload', 'open_diff']);
+});
+
+check('a click on an external action sends EXMD with a tab and never splits the id on colon', () => {
+  const bar = externalModificationFromSections(externalSection());
+  const file = bar.files[0];
+  const action = file.actions[0];
+  const frame = encodeExternalAction(action.token, file.id);
+  assert.equal(frame, 'EXMD:reload\texternal:src/a:b.cpp');
+  // The id is the entire remainder after the first TAB, colons intact.
+  const tab = frame.indexOf('\t');
+  assert.equal(frame.slice(0, tab), 'EXMD:reload');
+  assert.equal(frame.slice(tab + 1), 'external:src/a:b.cpp');
+});
+
+check('the web suppresses document echo when external_focus_held is true, never comparing a focus ordinal', () => {
+  // The wire focus never carries ExternalModification; the additive bool is the
+  // only signal, so a section with focus=Editor(0) but the bool set is external.
+  assert.equal(externalFocusHeld(null), false);
+  assert.equal(externalFocusHeld({ focus: 0 }), false);
+  assert.equal(externalFocusHeld({ focus: 0, external_focus_held: 1 }), true);
+  assert.equal(externalFocusHeld({ external_focus_held: 0 }), false);
+});
+
+check('applyExternalModificationDelta merges upserts, removes, and re-homes the selection', () => {
+  const section = externalSection().external_modification;
+  const merged = applyExternalModificationDelta(section, {
+    revision: 4,
+    removed: ['external:src/removed.cpp'],
+    upserted: [{ id: 'external:src/new.cpp', path: 'src/new.cpp', status: 0, actions: [0] }],
+    selected: 'external:src/new.cpp',
+  });
+  const ids = merged.files.map((f) => String(f.id));
+  assert.ok(!ids.includes('external:src/removed.cpp'));
+  assert.ok(ids.includes('external:src/new.cpp'));
+  assert.equal(merged.selected, 'external:src/new.cpp');
+  assert.equal(merged.revision, 4);
 });
 
 console.log('reconcile oracle: ' + checks + ' checks passed');

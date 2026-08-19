@@ -11,10 +11,11 @@ import {
   dropSettled, project, parseEnvelope,
   isPalettePromptOpen, matcherBoundsFromPalette, clampPaletteSelection,
   encodePaletteSubmit, applySessionDeltaSections, applyTreeDelta,
-  interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE,
+  interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
   encodeStatusActionInvocation, shouldResetLocalQuery, pickerEpochFromPalette,
   promptViewFromSections, PROMPT_CONTROL, promptFocusPlan, promptFocusControlMessage,
   noticeViewFromSections,
+  externalModificationFromSections, externalFocusHeld, encodeExternalAction,
 } from '/reconcile.mjs';
 import { fuzzyRank } from '/fuzzy.mjs';
 
@@ -27,6 +28,7 @@ const chromeBottomEl = document.getElementById('chrome-bottom');
 const chromeErrorEl = document.getElementById('chrome-error');
 const promptEl = document.getElementById('prompt');
 const noticeEl = document.getElementById('notice');
+const externalEl = document.getElementById('external');
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString() : x);
@@ -140,9 +142,24 @@ function renderChromeNode(node, theme, parentAxis = AXIS.ROW, topLevel = false) 
     // sizes to content; the inner tree's sizes below stay authoritative.
     if (topLevel) {
       div.style.width = '100%';
+      // A viewport's clip only takes effect if every ancestor down to it can
+      // shrink below its content; a single missing min-height:0 in the chain lets
+      // the subtree grow instead. The top-level body region is the first link.
+      div.style.minHeight = '0';
     } else {
       applySize(div, node.size, parentAxis);
       applyInset(div, node.inset, node.size, parentAxis);
+    }
+    // An independent scroll viewport (the panel and content containers): clip
+    // content to this node's bounded extent and scroll within it. min-height:0
+    // lets this flex child shrink so overflow-y:auto actually clips rather than
+    // growing the parent. Derived from the tree's ScrollAxis, never hard-coded.
+    if (node.scroll === SCROLL.VERTICAL) {
+      div.style.overflowY = 'auto';
+      div.style.minHeight = '0';
+      // Tag the viewport so its client-owned scroll offset can be preserved across
+      // re-renders (the DOM is rebuilt each frame; the offset must not reset).
+      div.dataset.scrollNode = node.id;
     }
     if (node.gap) div.style.gap = node.gap + 'ch';
     for (const child of node.children) {
@@ -420,6 +437,15 @@ function renderChrome(sections) {
   const interpreted = interpretChrome(schema, stateSection, presenceSection);
   if (!interpreted || !interpreted.root) return false;  // schema/state from different frames; wait
 
+  // Scroll offset is client-owned interaction state: the body DOM is rebuilt each
+  // frame, so capture every viewport's scrollTop by node id before the rebuild and
+  // restore it after, or an ordinary snapshot/delta would jump the panel or
+  // document back to the top.
+  const savedScroll = new Map();
+  for (const vp of docEl.querySelectorAll('[data-scroll-node]')) {
+    savedScroll.set(vp.dataset.scrollNode, vp.scrollTop);
+  }
+
   // The root's children are the well-known areas; render each into its host by
   // its well-known node id. Placement is the tree structure + the id, not a role.
   const root = interpreted.root;
@@ -441,6 +467,12 @@ function renderChrome(sections) {
       if (area.id === 'body') el.style.flex = '1 1 auto';
       host.appendChild(el);
     }
+  }
+  // Restore each viewport's client-owned scroll offset (clamped by the browser to
+  // the new content height).
+  for (const vp of docEl.querySelectorAll('[data-scroll-node]')) {
+    const prev = savedScroll.get(vp.dataset.scrollNode);
+    if (prev != null) vp.scrollTop = prev;
   }
   return renderedBody;
 }
@@ -573,6 +605,46 @@ function renderNotice(sections) {
   }
 }
 
+// Reconcile #external against the published external-modification section (null
+// when no file is externally changed). Renders the message plus one row per file
+// (status glyph + path + its offered action buttons), highlighting the selected
+// row. A click sends EXMD:<token>\t<id> (pointer path); the keyboard route is the
+// forwarded keystrokes resolving in the library's external context.
+function renderExternalModification(sections) {
+  const view = externalModificationFromSections(sections);
+  externalEl.textContent = '';
+  if (!view) {
+    externalEl.classList.remove('open');
+    externalEl.removeAttribute('role');
+    externalEl.removeAttribute('aria-label');
+    return;
+  }
+  externalEl.classList.add('open');
+  externalEl.setAttribute('role', 'status');
+  externalEl.setAttribute('aria-label', view.message);
+  const header = document.createElement('div');
+  header.className = 'external-header';
+  header.textContent = view.message;
+  externalEl.appendChild(header);
+  for (const file of view.files) {
+    const row = document.createElement('div');
+    row.className = 'external-row' + (file.selected ? ' selected' : '');
+    const label = document.createElement('span');
+    label.className = 'external-file';
+    label.textContent = file.glyph + ' ' + file.path;
+    row.appendChild(label);
+    for (const action of file.actions) {
+      const el = document.createElement('button');
+      el.className = 'external-action';
+      el.setAttribute('aria-label', action.label);
+      el.textContent = '[' + action.label + ']';
+      el.addEventListener('click', () => ws.send(encodeExternalAction(action.token, file.id)));
+      row.appendChild(el);
+    }
+    externalEl.appendChild(row);
+  }
+}
+
 // The legacy overlay host is kept only as a closed shell; the active picker is the
 // retained FindResults surface inside the interpreted whole-screen tree.
 function renderPalette() {
@@ -614,6 +686,7 @@ function render() {
   }
   renderPalette();
   renderNotice(s);
+  renderExternalModification(s);
   renderFooterPrompt(s);
 }
 
@@ -738,7 +811,12 @@ function handleKeydown(ev) {
   // re-bases it. Everything else round-trips without echo.
   let editId = '';
   const focus = state.sections ? num(state.sections.focus) : -1;
-  if (printable && !ev.altKey && focus === FOCUS_EDITOR) {
+  // Suppress local echo when the external-modification bar is the effective focus:
+  // the wire `focus` field never carries ExternalModification (it is legacy-
+  // projected), so the additive external_focus_held bool is the only signal that
+  // the keystroke drives the bar's selection/actions, not a document insert.
+  if (printable && !ev.altKey && focus === FOCUS_EDITOR &&
+      !externalFocusHeld(state.sections)) {
     const id = state.nextEditId++;
     state.pending.push({ id, text });
     editId = String(id);

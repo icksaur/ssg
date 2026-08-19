@@ -15,6 +15,7 @@
 #include <ssg/StatusActionInvocation.h>
 #include <ssg/TabManager.h>
 #include <ssg/ShellState.h>
+#include <ssg/ExternalModificationFlow.h>
 
 #include <any>
 #include <chrono>
@@ -31,6 +32,11 @@ namespace ssg::app {
 struct PointerCommand {
     std::string command_id;
     std::any payload;
+    // When set, this command runs only if the immediately preceding command in
+    // the plan was accepted. Used for select-then-act sequences (e.g. an external
+    // action after external.select) so a rejected selection of a stale id does not
+    // let the action run against the previously selected file.
+    bool gate_on_previous = false;
 };
 
 // Which scroll a gesture drives, by the surface it targets. Declared here
@@ -139,6 +145,10 @@ struct PointerTargets {
     ssg::SearchMode picker_mode = ssg::SearchMode::Command;
     std::optional<std::string> field_command_id;    // a header/footer field command
     std::optional<ssg::StatusActionInvocation> status_invocation;
+    // An external-modification action hit (7A-5b): the runtime-minted file id to
+    // select, and the payload-less action command to run on it (select-then-act).
+    std::optional<ssg::DiffFileId> external_file_id;
+    std::optional<std::string> external_action_command;
 };
 
 // The index into `baseline` of the selection the click position `P` lands on, or
@@ -187,5 +197,28 @@ struct PointerTargets {
 // the loop wakes on a timer and re-extends the selection to the new edge cell.
 [[nodiscard]] std::optional<int> edge_scroll(bool dragging, int pointer_row,
                                              ssg::Rect const& content);
+
+// A web pointer click on an external-modification action arrives as the frame
+// `EXMD:<action>\t<diffFileId>`. The action token is one of
+// {reload,keep_buffer,open_diff}; a single TAB delimits it from the id, whose
+// ENTIRE remainder is opaque and is NEVER split on ':' (the id is
+// "external:"+path and contains colons). Returns the parsed action, its command
+// id, and the file id, or nullopt when the frame is malformed or names an
+// unknown action token. Pure.
+struct ExternalPointerFrame {
+    ssg::ExternalAction action;
+    std::string command;  // external.<action>
+    ssg::DiffFileId id;
+};
+[[nodiscard]] std::optional<ExternalPointerFrame> parse_external_pointer_frame(
+    std::string_view payload);
+
+// Whether a parsed frame may be dispatched: the id must name a file currently
+// published in `files` AND that file must offer the frame's action. An unknown
+// id or an unoffered action is a no-op -- the guard the host applies before
+// select-then-act. Pure.
+[[nodiscard]] bool external_pointer_frame_is_offered(
+    ExternalPointerFrame const& frame,
+    std::vector<ssg::ExternalDocumentView> const& files);
 
 }  // namespace ssg::app

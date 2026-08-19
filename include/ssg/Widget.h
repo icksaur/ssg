@@ -64,13 +64,14 @@ enum class ViewSurface : std::uint8_t {
     Symbols,      // the symbols tree provider (a panel provider like files/git)
     FooterPrompt, // the footer-region prompt's controls (semantic PromptView)
     Notice,       // the draft-conflict notice above the document (semantic NoticeView)
+    ExternalModification,  // the external-modification bar above the document (7A-5b)
 };
 
-inline constexpr std::size_t kViewSurfaceCount = 7;
+inline constexpr std::size_t kViewSurfaceCount = 8;
 inline constexpr std::array kAllViewSurfaces{
     ViewSurface::TabView,      ViewSurface::FileTree,     ViewSurface::GitStatus,
     ViewSurface::FindResults,  ViewSurface::Symbols,      ViewSurface::FooterPrompt,
-    ViewSurface::Notice,
+    ViewSurface::Notice,       ViewSurface::ExternalModification,
 };
 static_assert(kAllViewSurfaces.size() == kViewSurfaceCount);
 

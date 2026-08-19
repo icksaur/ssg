@@ -78,6 +78,7 @@ std::optional<Enum> decodeEnumIn(std::optional<std::uint64_t> raw,
 }
 
 constexpr std::array kAllAxes{Axis::Row, Axis::Column};
+constexpr std::array kAllScrollAxes{ScrollAxis::None, ScrollAxis::Vertical};
 constexpr std::array kAllSizeKinds{SizeKind::Exact, SizeKind::Flex,
                                    SizeKind::Auto};
 constexpr std::array kAllOverflows{Overflow::None, Overflow::Truncate,
@@ -240,12 +241,18 @@ ProtocolValue encodeContainer(const UiContainer& container) {
     for (const auto& child : container.children) {
         children.push_back(encodeNode(child));
     }
-    return ProtocolValue::makeObject(
-        {{"axis", enumValue(container.axis)},
-         {"inset", encodeInset(container.inset)},
-         {"gap", ProtocolValue::makeUint(
-                     static_cast<std::uint64_t>(container.gap.extent()))},
-         {"children", ProtocolValue::makeArray(std::move(children))}});
+    ProtocolValue::Object fields{
+        {"axis", enumValue(container.axis)},
+        {"inset", encodeInset(container.inset)},
+        {"gap", ProtocolValue::makeUint(
+                    static_cast<std::uint64_t>(container.gap.extent()))},
+        {"children", ProtocolValue::makeArray(std::move(children))}};
+    // Additive: emit `scroll` only when the container is a viewport, so a tree
+    // whose scroll flags are all None encodes byte-identically to before.
+    if (container.scroll != ScrollAxis::None) {
+        fields.emplace_back("scroll", enumValue(container.scroll));
+    }
+    return ProtocolValue::makeObject(std::move(fields));
 }
 
 ProtocolValue encodeNode(const UiNode& node) {
@@ -272,7 +279,6 @@ std::optional<UiNode> decodeNode(const ProtocolValue& value) {
     UiNode node;
     node.id = UiNodeId{*id};
     node.size = *size;
-
     const ProtocolValue* containerField = value.field("container");
     const ProtocolValue* leafField = value.field("leaf");
     const bool hasContainer = containerField && !isNull(containerField);
@@ -296,6 +302,17 @@ std::optional<UiNode> decodeNode(const ProtocolValue& value) {
         container.axis = *axis;
         container.inset = *inset;
         container.gap = Gap::of(*gap);
+        // Additive + forward-compatible: an ABSENT scroll field is None, and an
+        // unrecognized numeric ordinal degrades to None (a future axis renders as
+        // "not a viewport" rather than rejecting the frame). A PRESENT field of the
+        // wrong TYPE (not a uint) is malformed and fails the decode -- only absence
+        // and unknown ordinals may degrade.
+        if (containerField->field("scroll")) {
+            const auto raw = uintField(*containerField, "scroll");
+            if (!raw) return std::nullopt;
+            container.scroll =
+                decodeEnumIn(raw, kAllScrollAxes).value_or(ScrollAxis::None);
+        }
         for (const auto& childValue : *childrenField->asArray()) {
             auto child = decodeNode(childValue);
             if (!child) return std::nullopt;

@@ -70,6 +70,13 @@ enum class ShellNodeKind : std::uint8_t {
     // A non-interactive glyph painted between adjacent tabs. Carries no hit and
     // no command; it exists so a configured tab separator glyph is drawn.
     TabSeparator,
+    // The external-modification bar reserved above the document (7A-5b): a
+    // multi-row, bounded, windowed surface. The header row spans the width
+    // (StatusWarning); each file row is a windowed entry with the selected one
+    // highlighted; an action is a clickable bracketed sub-region on its row.
+    ExternalModificationBar,
+    ExternalModificationRow,
+    ExternalModificationAction,
 };
 
 struct AccessibilityNode {
@@ -109,6 +116,42 @@ struct ShellNotice {
     std::vector<ShellNoticeAction> actions;
 };
 
+// One offered action on an external-modification row (7A-5b): a bracketed label
+// and the payload-less action command it dispatches after the row is selected.
+struct ShellExternalActionEntry {
+    std::string label;
+    std::string commandId;
+
+    friend bool operator==(const ShellExternalActionEntry&,
+                           const ShellExternalActionEntry&) = default;
+};
+
+// One externally-changed file the bar can show (7A-5b): its runtime-minted id,
+// the display text (status glyph + path), and its offered actions.
+struct ShellExternalRow {
+    std::string fileId;
+    std::string text;
+    std::vector<ShellExternalActionEntry> actions;
+
+    friend bool operator==(const ShellExternalRow&,
+                           const ShellExternalRow&) = default;
+};
+
+// The external-modification bar to reserve above the document (7A-5b). The
+// request carries ALL rows plus the ABSOLUTE selected index; computeShellLayout
+// windows them to a bounded height that never consumes the document/footer, so
+// the tiny-viewport degrade is layout's decision, not the caller's. Absent
+// (nullopt) or with no rows reserves ZERO rows, keeping an empty-section golden
+// byte-identical.
+struct ShellExternalBar {
+    std::string message;
+    std::vector<ShellExternalRow> rows;
+    std::uint32_t selected = 0;
+
+    friend bool operator==(const ShellExternalBar&,
+                           const ShellExternalBar&) = default;
+};
+
 struct TabLabel {
     std::string title;
     std::string accessibleLabel;
@@ -128,6 +171,9 @@ struct ShellLayoutRequest {
     // (M15). Reserving a chrome row (rather than stealing document row 0) keeps
     // the document's own coordinate space -- line numbers, caret, scroll -- intact.
     std::optional<ShellNotice> notice;
+    // The external-modification bar to reserve above the document (7A-5b, below
+    // the notice in a fixed order). Absent or empty reserves ZERO rows.
+    std::optional<ShellExternalBar> externalBar;
     bool emptyState = false;
     std::string panelProviderLabel = "Panel";
     // The panel presence and focus this layout is computed against. Stage-(i) of the
@@ -163,6 +209,19 @@ struct TabHit {
     std::uint32_t index = 0;
 
     friend bool operator==(const TabHit&, const TabHit&) = default;
+};
+
+// A clickable external-modification action's rectangle plus the runtime-minted
+// file id and the payload-less action command it dispatches (7A-5b). Layout
+// publishes one per visible action so the pointer path can select-then-act
+// without parsing the stringly-typed accessibility-node ids.
+struct ExternalActionHit {
+    Rect rect;
+    std::string fileId;
+    std::string commandId;
+
+    friend bool operator==(const ExternalActionHit&,
+                           const ExternalActionHit&) = default;
 };
 
 // One projected palette result row.
@@ -208,6 +267,10 @@ struct ShellViewState {
     std::vector<TabHit> tabHits;
     std::vector<AccessibilityNode> accessibilityNodes;
     std::optional<PaletteProjection> palette;
+    // One entry per visible external-modification action, each carrying its rect,
+    // file id, and action command, so a pointer press maps a cell to a
+    // select-then-act dispatch (7A-5b).
+    std::vector<ExternalActionHit> externalActions;
 
     [[nodiscard]] std::size_t scrollbarCount() const noexcept {
         return panes.size();

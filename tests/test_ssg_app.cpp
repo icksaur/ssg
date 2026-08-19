@@ -120,6 +120,77 @@ TEST(statusActionPointerClickRoutesToInvokeActionWithGeneration) {
 }
 
 
+TEST(aClickOnAnExternalActionRoutesThroughPointerTargetsToSelectThenAct) {
+    // A click on an external-modification action first selects the runtime-minted
+    // file (external.select), then runs the payload-less action on the library-
+    // owned selection -- select-then-act, the one behavior path, with live (not
+    // dead) hit regions.
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::ExternalAction;
+    hit.externalFileId = "external:src/foo:bar.cpp";  // an id that contains ':'
+    hit.commandId = "external.reload";
+    ssg::app::PointerTargets targets;
+    targets.external_file_id = ssg::DiffFileId{*hit.externalFileId};
+    targets.external_action_command = hit.commandId;
+    auto plan = ssg::app::route_pointer(
+        hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+        false, false, std::nullopt, targets, {});
+    ASSERT_EQ(plan.commands.size(), std::size_t{2});
+    ASSERT_EQ(plan.commands[0].command_id, std::string{"external.select"});
+    ASSERT_EQ(std::any_cast<ssg::DiffFileId>(plan.commands[0].payload),
+              ssg::DiffFileId{"external:src/foo:bar.cpp"});
+    ASSERT_EQ(plan.commands[1].command_id, std::string{"external.reload"});
+    // The action is gated on the select: a rejected external.select of a stale id
+    // must not let the action run against the previously selected file.
+    ASSERT_TRUE(plan.commands[1].gate_on_previous);
+    ASSERT_TRUE(!plan.commands[0].gate_on_previous);
+    ASSERT_TRUE(!plan.begins_drag);
+}
+
+
+TEST(exmdParsesActionAndIdWithoutSplittingTheIdOnColon) {
+    // The id is opaque after the first TAB: "external:"+path, colons and all.
+    auto const frame = ssg::app::parse_external_pointer_frame(
+        "EXMD:keep_buffer\texternal:src/a:b:c.cpp");
+    ASSERT_TRUE(frame.has_value());
+    ASSERT_TRUE(frame->action == ssg::ExternalAction::KeepBuffer);
+    ASSERT_EQ(frame->command, std::string{"external.keep_buffer"});
+    ASSERT_EQ(frame->id.value(), std::string{"external:src/a:b:c.cpp"});
+
+    // Malformed frames yield nothing: no TAB, empty id, unknown action token.
+    ASSERT_TRUE(!ssg::app::parse_external_pointer_frame("EXMD:reload").has_value());
+    ASSERT_TRUE(!ssg::app::parse_external_pointer_frame("EXMD:reload\t").has_value());
+    ASSERT_TRUE(!ssg::app::parse_external_pointer_frame("EXMD:nope\texternal:x")
+                     .has_value());
+    ASSERT_TRUE(!ssg::app::parse_external_pointer_frame("SNAP").has_value());
+}
+
+TEST(exmdOnlyDispatchesForAPublishedIdAndOfferedAction) {
+    ssg::ExternalDocumentView file{
+        ssg::DiffFileId{"external:src/a:b.cpp"}, {},
+        ssg::ExternalDocumentStatus::ExternallyModified, {},
+        {ssg::ExternalAction::Reload, ssg::ExternalAction::OpenDiff}};
+    std::vector<ssg::ExternalDocumentView> files{file};
+
+    auto const reload = ssg::app::parse_external_pointer_frame(
+        "EXMD:reload\texternal:src/a:b.cpp");
+    ASSERT_TRUE(reload.has_value());
+    ASSERT_TRUE(ssg::app::external_pointer_frame_is_offered(*reload, files));
+
+    // An action the file does not offer is a no-op.
+    auto const keep = ssg::app::parse_external_pointer_frame(
+        "EXMD:keep_buffer\texternal:src/a:b.cpp");
+    ASSERT_TRUE(keep.has_value());
+    ASSERT_TRUE(!ssg::app::external_pointer_frame_is_offered(*keep, files));
+
+    // An unpublished id is a no-op.
+    auto const unknown = ssg::app::parse_external_pointer_frame(
+        "EXMD:reload\texternal:src/other.cpp");
+    ASSERT_TRUE(unknown.has_value());
+    ASSERT_TRUE(!ssg::app::external_pointer_frame_is_offered(*unknown, files));
+}
+
+
 TEST(encodeAnsiFrameEmitsOrthogonalTintBackgrounds) {
     ssg::CellGrid screen;
     screen.size = {2, 1};
@@ -3124,6 +3195,9 @@ int main() {
     RUN(classifySignalTagsMapsSignalNumbers);
     RUN(encodeAnsiFrameAdaptsToColorDepth);
     RUN(statusActionPointerClickRoutesToInvokeActionWithGeneration);
+    RUN(aClickOnAnExternalActionRoutesThroughPointerTargetsToSelectThenAct);
+    RUN(exmdParsesActionAndIdWithoutSplittingTheIdOnColon);
+    RUN(exmdOnlyDispatchesForAPublishedIdAndOfferedAction);
     RUN(encodeAnsiFrameEmitsOrthogonalTintBackgrounds);
     RUN(detectColorDepthReadsEnvironment);
     RUN(encodeAnsiFrameAddressesRowsAndEmitsPaletteColors);

@@ -27,6 +27,8 @@ enum class HitRegion : std::uint8_t {
     HeaderField,        // a shell header status field
     FooterField,
     StatusAction,        // a shell footer status field
+    ExternalAction,      // an external-modification action: externalFileId +
+                         // commandId are set (7A-5b)
     EditorScrollbar,   // the editor pane gutter: scroll_* are set
     PanelScrollbar,    // the side-panel gutter: scroll_* are set
     PaletteScrollbar,  // the palette gutter: scroll_* are set
@@ -54,6 +56,9 @@ struct RegionHit {
     // Header/footer status-field hits: the published field id and optional command.
     std::optional<std::string> fieldId;
     std::optional<std::string> commandId;
+    // An external-modification action hit: the runtime-minted file id to select
+    // before dispatching `commandId` (select-then-act). 7A-5b.
+    std::optional<std::string> externalFileId;
     std::optional<StatusActionInvocation> statusInvocation;
 
     [[nodiscard]] bool hit() const noexcept { return region != HitRegion::None; }

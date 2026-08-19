@@ -257,6 +257,60 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
         }
         request.notice = ShellNotice{std::move(notice->text), std::move(actions)};
     }
+    // Surface the external-modification bar (7A-5b) from the library-owned view
+    // state: one row per externally-changed file (status glyph + path) carrying
+    // its offered actions, plus the ABSOLUTE selected index. computeShellLayout
+    // windows and bounds it; an empty section reserves zero rows.
+    if (auto externalView = external.viewState(); !externalView.files.empty()) {
+        auto actionLabel = [](ExternalAction action) -> std::string {
+            switch (action) {
+            case ExternalAction::Reload:
+                return "Reload";
+            case ExternalAction::KeepBuffer:
+                return "Keep";
+            case ExternalAction::OpenDiff:
+                return "Diff";
+            }
+            return {};
+        };
+        auto actionCommand = [](ExternalAction action) -> std::string {
+            switch (action) {
+            case ExternalAction::Reload:
+                return "external.reload";
+            case ExternalAction::KeepBuffer:
+                return "external.keep_buffer";
+            case ExternalAction::OpenDiff:
+                return "external.open_diff";
+            }
+            return {};
+        };
+        ShellExternalBar bar;
+        for (auto const& file : externalView.files) {
+            const char* glyph =
+                file.status == ExternalDocumentStatus::ExternallyRemoved ? "D"
+                                                                         : "M";
+            ShellExternalRow row;
+            row.fileId = file.id.value();
+            row.text = std::string{glyph} + " " + file.path.string();
+            for (auto const& action : file.actions) {
+                row.actions.push_back(
+                    {actionLabel(action), actionCommand(action)});
+            }
+            bar.rows.push_back(std::move(row));
+        }
+        bar.message = std::to_string(externalView.files.size()) +
+                      (externalView.files.size() == 1 ? " file changed on disk"
+                                                      : " files changed on disk");
+        if (externalView.selected) {
+            for (std::size_t i = 0; i < externalView.files.size(); ++i) {
+                if (externalView.files[i].id == *externalView.selected) {
+                    bar.selected = static_cast<std::uint32_t>(i);
+                    break;
+                }
+            }
+        }
+        request.externalBar = std::move(bar);
+    }
     request.emptyState = activeDocument() == nullptr;
     request.panelProviderLabel = std::string{panelProviderLabel(interaction.truth().selectedProvider)};
     request.panelPresent = interaction.truth().panelPresent;

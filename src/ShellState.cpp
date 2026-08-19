@@ -27,6 +27,28 @@ const UiNode* schemaArea(const UiSchema& schema, std::string_view areaId) {
     return nullptr;
 }
 
+// Find a node anywhere in the tree by id (the scroll viewports -- panel and
+// content -- are nested under the body, not direct children of the root).
+const UiNode* findNodeById(const UiNode& node, std::string_view id) {
+    if (node.id.value() == id) return &node;
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children)
+            if (const auto* found = findNodeById(child, id)) return found;
+    }
+    return nullptr;
+}
+
+// Whether the node with `id` is declared a vertical scroll viewport. The TUI
+// reserves a scrollbar gutter for a region ONLY when the tree says it scrolls, so
+// the tree -- not hard-coded pane knowledge -- is the single authority for which
+// regions scroll (a node the builder does not mark Vertical reserves no gutter).
+bool nodeScrollsVertically(const UiSchema& schema, std::string_view id) {
+    const UiNode* node = findNodeById(schema.root, id);
+    if (!node) return false;
+    const auto* container = std::get_if<UiContainer>(&node->content);
+    return container && container->scroll == ScrollAxis::Vertical;
+}
+
 // Width of a label in terminal CELLS.  Layout budgets are cell counts, so
 // measuring bytes would mis-size any label -- or any configured style glyph --
 // outside ASCII.
@@ -311,6 +333,15 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     view.viewport = request.viewport;
     const bool distractionFree = state.impl_->distractionFree;
     const int gutterWidth = request.style.dimensions.scrollbarGutterWidth;
+    // The tree is the single authority for which regions scroll: the panel and
+    // content viewports reserve a scrollbar gutter only when their node declares
+    // ScrollAxis::Vertical. The builder marks both, so this reproduces the prior
+    // geometry exactly; a node without the flag reserves no gutter.
+    const bool panelScrolls =
+        nodeScrollsVertically(schema.schema(), kPanelNodeId);
+    const bool contentScrolls =
+        nodeScrollsVertically(schema.schema(), kContentNodeId);
+    const int contentGutter = contentScrolls ? gutterWidth : 0;
     const int headerHeight = request.style.dimensions.headerHeight;
     const int footerHeight = request.style.dimensions.footerHeight;
     const int tabBarHeight = request.style.dimensions.tabBarHeight;
@@ -407,7 +438,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             // Reserve the tree's scrollbar gutter: the right column over the tree
             // content rows (below the provider-label row). Content is the panel
             // minus this column, so tree text width never changes with the thumb.
-            if (panelWidth > gutterWidth && view.panel->height > 1) {
+            if (panelScrolls && panelWidth > gutterWidth && view.panel->height > 1) {
                 view.panelScrollbar =
                     Rect{panelWidth - gutterWidth, view.panel->y + 1,
                          gutterWidth, view.panel->height - 1};
@@ -561,23 +592,107 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         editor.height -= 1;
     }
 
+    // The external-modification bar reserves a BOUNDED, WINDOWED block below the
+    // notice (fixed order), above the document. A header row plus a window of file
+    // rows scrolled to keep the selection visible, with a "+N more" overflow row.
+    // The reserved height is capped so it never consumes the document or footer:
+    // at least one document row always survives. It degrades on a tiny viewport --
+    // header + the selected row, then (below a floor) the header alone with a
+    // count -- and reserves ZERO rows when no file is present, so an empty-section
+    // golden stays byte-identical.
+    if (request.externalBar && !request.externalBar->rows.empty() &&
+        editor.height > 1) {
+        constexpr int kMaxVisibleFileRows = 4;
+        const auto& bar = *request.externalBar;
+        const int total = static_cast<int>(bar.rows.size());
+        const int selected =
+            std::clamp(static_cast<int>(bar.selected), 0, total - 1);
+        // Rows we may take while leaving at least one document row.
+        const int budget = editor.height - 1;
+        const int headerRows = 1;
+        const int fileBudget = std::max(0, budget - headerRows);
+
+        int firstVisible = 0;
+        int shown = 0;
+        bool overflow = false;
+        if (fileBudget >= 1) {
+            const int listRows =
+                std::min({total, kMaxVisibleFileRows, fileBudget});
+            // The overflow indicator claims one of the list rows, but never the
+            // last remaining row (tier-2 degrade shows just the selected file).
+            shown = (total > listRows && listRows > 1) ? listRows - 1 : listRows;
+            overflow = total > shown;
+            // Window so the selected row is visible: clamp its top so
+            // [firstVisible, firstVisible+shown) contains `selected`.
+            firstVisible = std::clamp(selected - shown / 2, 0,
+                                      std::max(0, total - shown));
+        }
+        const int overflowRows = overflow ? 1 : 0;
+        const int reserved = headerRows + shown + overflowRows;
+
+        int y = editor.y;
+        const Rect headerRect{editor.x, y, editor.width, 1};
+        addNode(view, ShellNodeKind::ExternalModificationBar, "external.bar",
+                "External modification bar", headerRect,
+                SemanticRole::StatusWarning, bar.message);
+        y += 1;
+        for (int i = 0; i < shown; ++i) {
+            const int index = firstVisible + i;
+            const auto& row = bar.rows[static_cast<std::size_t>(index)];
+            const bool isSelected = index == selected;
+            const Rect rowRect{editor.x, y, editor.width, 1};
+            const SemanticRole rowRole = isSelected ? SemanticRole::Selection
+                                                    : SemanticRole::StatusWarning;
+            addNode(view, ShellNodeKind::ExternalModificationRow, row.fileId,
+                    "External modification file", rowRect, rowRole, row.text);
+            // Actions pack from the right so the file text owns the left; each is a
+            // clickable sub-rect carrying its file id and action command.
+            int actionX = rowRect.right();
+            for (auto it = row.actions.rbegin(); it != row.actions.rend(); ++it) {
+                const std::string label = "[" + it->label + "]";
+                const int width = displayCells(label);
+                actionX -= width;
+                if (actionX < rowRect.x) break;
+                const Rect actionRect{actionX, y, width, 1};
+                addNode(view, ShellNodeKind::ExternalModificationAction,
+                        row.fileId + "|" + it->commandId, it->label, actionRect,
+                        rowRole, label);
+                view.externalActions.push_back(
+                    {actionRect, row.fileId, it->commandId});
+                actionX -= 1;
+            }
+            y += 1;
+        }
+        if (overflow) {
+            const int more = total - shown;
+            const Rect moreRect{editor.x, y, editor.width, 1};
+            addNode(view, ShellNodeKind::ExternalModificationRow,
+                    "external.overflow", "More external modifications", moreRect,
+                    SemanticRole::StatusWarning,
+                    "+" + std::to_string(more) + " more");
+            y += 1;
+        }
+        editor.y += reserved;
+        editor.height -= reserved;
+    }
+
     const int lineNumberWidth = std::max(0, request.lineNumberGutterWidth);
     const int editorMinimumWidth = request.style.dimensions.editorMinimumWidth;
     if (canLayout(*state.impl_->root, editor)) {
-        layoutPanes(*state.impl_->root, editor, view.panes, gutterWidth,
+        layoutPanes(*state.impl_->root, editor, view.panes, contentGutter,
                     lineNumberWidth, editorMinimumWidth);
     } else {
         int panelessNumbers = lineNumberWidth;
         if (panelessNumbers > 0 &&
-            editor.width - gutterWidth - panelessNumbers < editorMinimumWidth) {
+            editor.width - contentGutter - panelessNumbers < editorMinimumWidth) {
             panelessNumbers = 0;
         }
         view.panes.push_back({
             state.impl_->active,
             editor,
             {editor.x + panelessNumbers, editor.y,
-             editor.width - gutterWidth - panelessNumbers, editor.height},
-            {editor.right() - gutterWidth, editor.y, gutterWidth, editor.height},
+             editor.width - contentGutter - panelessNumbers, editor.height},
+            {editor.right() - contentGutter, editor.y, contentGutter, editor.height},
             panelessNumbers > 0
                 ? Rect{editor.x, editor.y, panelessNumbers, editor.height}
                 : Rect{0, 0, 0, 0},
@@ -588,9 +703,11 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         const auto suffix = std::to_string(pane.id.value());
         addNode(view, ShellNodeKind::Pane, "pane." + suffix,
                  "Editor pane " + suffix, pane.frame, SemanticRole::Canvas);
-        addNode(view, ShellNodeKind::Scrollbar, "pane." + suffix + ".scrollbar",
-                 "Scrollbar for editor pane " + suffix, pane.scrollbar,
-                 SemanticRole::ScrollbarTrack);
+        if (contentScrolls) {
+            addNode(view, ShellNodeKind::Scrollbar, "pane." + suffix + ".scrollbar",
+                     "Scrollbar for editor pane " + suffix, pane.scrollbar,
+                     SemanticRole::ScrollbarTrack);
+        }
         if (request.emptyState) {
             addNode(view, ShellNodeKind::EmptyState,
                      "pane." + suffix + ".empty", "empty editor",

@@ -361,6 +361,10 @@ public:
         return true;
     }
 
+    bool hasFile(const DiffFileId& id) {
+        return findPending(id) != pending_.end();
+    }
+
     bool selectNext() { return moveSelection(+1); }
     bool selectPrevious() { return moveSelection(-1); }
 
@@ -488,6 +492,10 @@ ExternalOpenDiffResult ExternalModificationFlow::openDiff(
 
 bool ExternalModificationFlow::selectFile(const DiffFileId& id) {
     return impl_->selectFile(id);
+}
+
+bool ExternalModificationFlow::hasFile(const DiffFileId& id) {
+    return impl_->hasFile(id);
 }
 
 bool ExternalModificationFlow::selectNext() { return impl_->selectNext(); }

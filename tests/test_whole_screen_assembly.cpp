@@ -132,6 +132,40 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     }
 }
 
+TEST(assembledPanelAndContentAreTheOnlyVerticalScrollViewports) {
+    const UiComposition comp =
+        assembleWholeScreen({}, kHintCommand, dims(), kPromptSigil, std::nullopt);
+    const UiNode* body = childById(comp.root, kBodyNodeId);
+    ASSERT_TRUE(body != nullptr);
+    if (!body) return;
+    const UiNode* panel = childById(*body, kPanelNodeId);
+    const UiNode* content = childById(*body, kContentNodeId);
+    ASSERT_TRUE(panel != nullptr);
+    ASSERT_TRUE(content != nullptr);
+    // The scroll viewport property lives on the container; a leaf can never be a
+    // viewport. `scrollOf` reads the container's axis (None for a leaf).
+    const auto scrollOf = [](const UiNode* node) {
+        if (!node) return ScrollAxis::None;
+        const auto* c = std::get_if<UiContainer>(&node->content);
+        return c ? c->scroll : ScrollAxis::None;
+    };
+    // The two body containers are the authoritative scroll viewports; every client
+    // derives independent scroll from exactly these nodes.
+    ASSERT_TRUE(scrollOf(panel) == ScrollAxis::Vertical);
+    ASSERT_TRUE(scrollOf(content) == ScrollAxis::Vertical);
+    // Inner view-leaves are content within a viewport, not viewports themselves.
+    if (panel) ASSERT_TRUE(scrollOf(childById(*panel, kFileTreeNodeId)) == ScrollAxis::None);
+    if (content) {
+        ASSERT_TRUE(scrollOf(childById(*content, kTabViewNodeId)) == ScrollAxis::None);
+        ASSERT_TRUE(scrollOf(childById(*content, kFindResultsNodeId)) == ScrollAxis::None);
+    }
+    // Chrome/notice regions never scroll.
+    for (const auto id : {kHeaderNodeId, kFooterNodeId, kNoticeNodeId,
+                          kFooterPromptNodeId, kExternalModNodeId, kBodyNodeId}) {
+        ASSERT_TRUE(scrollOf(childById(comp.root, id)) == ScrollAxis::None);
+    }
+}
+
 TEST(builtinHeaderFooterAreProviderBackedAndStable) {
     const std::vector<StatusFieldCatalogEntry> catalog{
         entry("path", StatusFieldRegion::Header, 3),
@@ -329,6 +363,7 @@ TEST(theHeaderCarriesThePromptInputRightAfterTheLeftGroup) {
 
 int main() {
     RUN(builtinHeaderFooterAreProviderBackedAndStable);
+    RUN(assembledPanelAndContentAreTheOnlyVerticalScrollViewports);
     RUN(theCatalogSplitsByRegionDeterministically);
     RUN(composedHeaderAndFooterOverrideTheBuiltins);
     RUN(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted);

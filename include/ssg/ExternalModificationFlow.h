@@ -247,6 +247,11 @@ public:
     // when the id names no present file; the wraparound movers are no-ops on an
     // empty section.
     [[nodiscard]] bool selectFile(const DiffFileId& id);
+    // Whether the id names a file currently present in the section. selectFile's
+    // false conflates an absent id with an already-selected id, so a caller that
+    // must reject only absent ids (external.select gating a follow-up action)
+    // tests presence here instead of using selectFile's bool.
+    [[nodiscard]] bool hasFile(const DiffFileId& id);
     [[nodiscard]] bool selectNext();
     [[nodiscard]] bool selectPrevious();
     [[nodiscard]] ExternalModificationViewState viewState() const;

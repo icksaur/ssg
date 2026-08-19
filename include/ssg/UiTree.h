@@ -74,6 +74,14 @@ struct UiContainer {
     Inset inset;
     Gap gap;
     std::vector<UiNode> children;
+    // Whether this container is an independent scroll viewport (default None). A
+    // client derives scroll behavior from this, never from hard-coded per-region
+    // knowledge; the panel and content containers are the two viewports. Only a
+    // container can be a viewport -- a leaf renders one widget and has no
+    // independent scroll region -- so the property lives here, not on UiNode,
+    // making a leaf viewport unrepresentable. Declared last so the {axis, inset,
+    // gap, children} aggregate initializers stay valid.
+    ScrollAxis scroll = ScrollAxis::None;
 
     friend bool operator==(const UiContainer&, const UiContainer&) = default;
 };

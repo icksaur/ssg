@@ -127,6 +127,18 @@ struct SessionSnapshotSections {
     bool externalFocusHeld = false;
 };
 
+// The effective keyboard focus a CURRENT host resolves the keymap context and
+// input routing against. The wire `focus` field is projected to the legacy set
+// {Editor,Panel,Prompt} for old-client compatibility and never carries
+// ExternalModification; the additive externalFocusHeld flag lets a new host
+// reconstruct it. A host that resolved the keymap from the raw `focus` would
+// never enter the external context while the external bar holds focus.
+[[nodiscard]] inline FocusTarget effectiveFocusFromSections(
+    SessionSnapshotSections const& sections) noexcept {
+    return sections.externalFocusHeld ? FocusTarget::ExternalModification
+                                      : sections.focus;
+}
+
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,
                               SessionSnapshotSections const& right);
 

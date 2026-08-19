@@ -178,6 +178,29 @@ TEST(theNoticeRegionIsVisibleOnlyWhenTruthRaisesANotice) {
     ASSERT_TRUE(b.effectiveFocus() == FocusTarget::Editor);
 }
 
+// The external-modification region mirrors the notice: it must exist in the schema
+// whenever truth raises a file, and it is hidden exactly when no file is changed.
+TEST(externalModRegionRequiresTheExternalModSchemaNode) {
+    WholeScreenTruth raised;
+    raised.externalModificationPresent = true;
+    ASSERT_THROWS(buildWholeScreenInteraction(schemaWithoutPromptInput(), raised),
+                  std::logic_error);
+}
+
+TEST(theExternalModRegionIsVisibleOnlyWhenAFileIsExternallyChanged) {
+    WholeScreenTruth quiet;
+    const auto a = buildWholeScreenInteraction(schemaOf({}), quiet);
+    ASSERT_FALSE(present(a, kExternalModNodeId));
+
+    WholeScreenTruth raised;
+    raised.externalModificationPresent = true;
+    const auto b = buildWholeScreenInteraction(schemaOf({}), raised);
+    ASSERT_TRUE(present(b, kExternalModNodeId));
+    // The bar is present but does not capture focus reactively: only an explicit
+    // external.focus (externalFocusHeld) moves the effective focus onto it.
+    ASSERT_TRUE(b.effectiveFocus() == FocusTarget::Editor);
+}
+
 TEST(baseFocusNeverStrandsOnAnAbsentPanel) {
     WholeScreenTruth truth;
     truth.panelPresent = false;
@@ -276,6 +299,8 @@ int main() {
     RUN(footerPromptRequiresTheFooterPromptSchemaNode);
     RUN(noticeRegionRequiresTheNoticeSchemaNode);
     RUN(theNoticeRegionIsVisibleOnlyWhenTruthRaisesANotice);
+    RUN(externalModRegionRequiresTheExternalModSchemaNode);
+    RUN(theExternalModRegionIsVisibleOnlyWhenAFileIsExternallyChanged);
     RUN(theInputLineIsVisibleOnlyForAHeaderPromptAndCapturesTheInputNode);
     RUN(baseFocusNeverStrandsOnAnAbsentPanel);
     RUN(rebuildOverANewGenerationPreservesTruthAndResetsBasis);

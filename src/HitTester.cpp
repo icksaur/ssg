@@ -144,6 +144,20 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
+    // The external-modification bar's action sub-regions map a cell to a
+    // (fileId, actionCommand) select-then-act target (7A-5b). Published as a
+    // dedicated list so the geometry travels with the hit, never re-parsed from a
+    // stringly-typed node id.
+    for (auto const& action : shell.externalActions) {
+        if (contains(action.rect, column, row)) {
+            RegionHit hit;
+            hit.region = HitRegion::ExternalAction;
+            hit.externalFileId = action.fileId;
+            hit.commandId = action.commandId;
+            return hit;
+        }
+    }
+
     // The side panel and its gutter occupy the leftmost columns, disjoint from
     // the editor/palette pane.
     if (shell.panel && contains(*shell.panel, column, row)) {
