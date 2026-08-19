@@ -366,6 +366,54 @@ TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
         std::invalid_argument);
 }
 
+// The memoization invariant: visibility is a pure function of (snapshot,
+// expanded). It must recompute when the snapshot revision changes OR the
+// expanded set changes, and must NOT recompute for navigation (selection) that
+// changes neither. Keying on the snapshot revision alone would miss the
+// expand/collapse case, since toggleExpanded does not change that revision --
+// this test names that load-bearing half.
+TEST(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation) {
+    TreeModel model;
+    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
+        TreeProviderId{"symbols"}, TreeRevision{1},
+        {{.stableKey = "type/A", .label = "A"},
+         {.stableKey = "type/A/member", .parentKey = "type/A",
+          .label = "member"},
+         {.stableKey = "type/Z", .label = "Z"}}));
+
+    // A repeated identical viewState() (nothing changed) adds no recompute:
+    // the second call is served entirely from cache.
+    TreeModel::resetVisibleNodesRecomputeCount();
+    (void)model.viewState();
+    const auto afterFirst = TreeModel::visibleNodesRecomputeCount();
+    (void)model.viewState();
+    ASSERT_EQ(TreeModel::visibleNodesRecomputeCount(), afterFirst);
+
+    // Navigation changes neither the tree revision nor the expanded set, so it
+    // adds no recompute on top of an already-warm cache.
+    (void)model.viewState();  // warm
+    TreeModel::resetVisibleNodesRecomputeCount();
+    ASSERT_TRUE(model.selectNext());
+    (void)model.viewState();
+    ASSERT_EQ(TreeModel::visibleNodesRecomputeCount(), std::uint64_t{0});
+
+    // Expand/collapse mutates the expanded set but NOT the snapshot revision;
+    // keying on the revision alone would wrongly serve the stale cache here.
+    TreeModel::resetVisibleNodesRecomputeCount();
+    ASSERT_TRUE(model.toggleExpanded(TreeProviderId{"symbols"},
+                                     TreeNodeId{"symbols:type/A"}));
+    (void)model.viewState();
+    ASSERT_TRUE(TreeModel::visibleNodesRecomputeCount() >= std::uint64_t{1});
+
+    // A provider replacement bumps the snapshot revision.
+    TreeModel::resetVisibleNodesRecomputeCount();
+    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
+        TreeProviderId{"symbols"}, TreeRevision{2},
+        {{.stableKey = "type/A", .label = "renamed A"}}));
+    (void)model.viewState();
+    ASSERT_TRUE(TreeModel::visibleNodesRecomputeCount() >= std::uint64_t{1});
+}
+
 int main() {
     RUN(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks);
     RUN(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys);
@@ -376,5 +424,6 @@ int main() {
     RUN(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase);
     RUN(overBudgetDeltaRequiresSnapshotWithoutPartialOperations);
     RUN(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem);
+    RUN(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation);
     return failed == 0 ? 0 : 1;
 }

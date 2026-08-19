@@ -124,7 +124,7 @@ const TreeNode* findNode(const TreeProviderSnapshot& snapshot,
                : nullptr;
 }
 
-std::vector<TreeNodeView> visibleNodes(
+std::vector<TreeNodeView> computeVisibleNodes(
     const TreeProviderSnapshot& snapshot,
     const std::vector<TreeNodeId>& expanded) {
     std::vector<TreeNodeView> result;
@@ -155,7 +155,29 @@ std::size_t providerDeltaCost(const TreeProviderDelta& delta) {
     return 1 + delta.eraseCount + delta.insert.size();
 }
 
+// Per-thread, like Renderer's segmentation counter: tests run single-threaded,
+// and a per-thread counter needs no synchronization on the hot path.
+thread_local std::uint64_t g_visibleNodesRecomputes = 0;
+
 } // namespace
+
+const std::vector<TreeNodeView>& TreeModel::ProviderState::visibleNodes() const {
+    if (!visibleCache || visibleCache->revision != snapshot.revision() ||
+        visibleCache->expandedVersion != expandedVersion) {
+        ++g_visibleNodesRecomputes;
+        visibleCache = VisibleCache{snapshot.revision(), expandedVersion,
+                                    computeVisibleNodes(snapshot, expanded)};
+    }
+    return visibleCache->nodes;
+}
+
+std::uint64_t TreeModel::visibleNodesRecomputeCount() {
+    return g_visibleNodesRecomputes;
+}
+
+void TreeModel::resetVisibleNodesRecomputeCount() {
+    g_visibleNodesRecomputes = 0;
+}
 
 TreeProviderId::TreeProviderId(std::string value) : value_(std::move(value)) {
     validateProviderId(value_);
@@ -321,6 +343,7 @@ void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
         std::erase_if(iterator->expanded, [&](const TreeNodeId& id) {
             return findNode(snapshot, id) == nullptr;
         });
+        iterator->bumpExpanded();
         iterator->snapshot = std::move(snapshot);
     } else {
         providers_.insert(
@@ -335,7 +358,7 @@ void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
         selected_.reset();
         return;
     }
-    auto visible = visibleNodes(active->snapshot, active->expanded);
+    const auto& visible = active->visibleNodes();
     const bool stillValid =
         selected_ && std::any_of(visible.begin(), visible.end(),
                                  [&](const TreeNodeView& view) {
@@ -392,7 +415,7 @@ const TreeModel::ProviderState* TreeModel::activeProvider() const {
 bool TreeModel::selectNext() {
     auto* provider = activeProvider();
     if (provider == nullptr) return false;
-    auto visible = visibleNodes(provider->snapshot, provider->expanded);
+    const auto& visible = provider->visibleNodes();
     if (visible.empty()) {
         selected_.reset();
         return false;
@@ -414,7 +437,7 @@ bool TreeModel::selectNext() {
 bool TreeModel::selectPrevious() {
     auto* provider = activeProvider();
     if (provider == nullptr) return false;
-    auto visible = visibleNodes(provider->snapshot, provider->expanded);
+    const auto& visible = provider->visibleNodes();
     if (visible.empty()) {
         selected_.reset();
         return false;
@@ -436,7 +459,7 @@ bool TreeModel::selectPrevious() {
 bool TreeModel::select(const TreeNodeId& nodeId) {
     auto* provider = activeProvider();
     if (provider == nullptr) return false;
-    auto visible = visibleNodes(provider->snapshot, provider->expanded);
+    const auto& visible = provider->visibleNodes();
     const bool present =
         std::any_of(visible.begin(), visible.end(), [&](const TreeNodeView& view) {
             return view.node.id == nodeId;
@@ -483,6 +506,7 @@ bool TreeModel::toggleExpanded(const TreeProviderId& providerId,
     } else {
         provider->expanded.insert(expanded, nodeId);
     }
+    provider->bumpExpanded();
     revision_ = TreeRevision{revision_.value() + 1};
     return true;
 }
@@ -522,7 +546,7 @@ bool TreeModel::activateProvider(const TreeProviderId& providerId) {    const au
     if (!activeProviderId_ || *activeProviderId_ != providerId) {
         activeProviderId_ = providerId;
         if (const auto* active = activeProvider()) {
-            auto visible = visibleNodes(active->snapshot, active->expanded);
+            const auto& visible = active->visibleNodes();
             const bool stillValid =
                 selected_ &&
                 std::any_of(visible.begin(), visible.end(),
@@ -593,7 +617,7 @@ std::optional<TreeCommandInvocation> TreeModel::invokeNodeCommand(
 std::size_t TreeModel::activeVisibleNodeCount() const {
     const auto* active = activeProvider();
     if (active == nullptr) return 0;
-    return visibleNodes(active->snapshot, active->expanded).size();
+    return active->visibleNodes().size();
 }
 
 TreeViewState TreeModel::viewState() const {
@@ -619,7 +643,7 @@ TreeViewState TreeModel::viewState() const {
         }
         result.providers.push_back(TreeProviderView{
             provider->snapshot.providerId(), provider->snapshot.kind(),
-            visibleNodes(provider->snapshot, provider->expanded),
+            provider->visibleNodes(),
             providerSelected});
     }
     return result;

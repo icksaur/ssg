@@ -247,6 +247,14 @@ public:
 
     TreeViewState viewState() const;
 
+    // Test instrumentation: the number of full visibleNodes recomputations
+    // (cache misses) performed since the last reset. A navigation that changes
+    // neither a provider's tree revision nor its expanded set must recompute
+    // nothing; this counter is what lets a test assert that, without timing.
+    // Per-thread, like Renderer::renderSegmentationCalls.
+    [[nodiscard]] static std::uint64_t visibleNodesRecomputeCount();
+    static void resetVisibleNodesRecomputeCount();
+
     // How many nodes the ACTIVE provider currently shows. Cheaper than
     // viewState(), which builds EVERY provider's view and copies each node
     // list, when the scroll paths need only this one number -- a thumb drag
@@ -259,6 +267,25 @@ private:
     struct ProviderState {
         TreeProviderSnapshot snapshot;
         std::vector<TreeNodeId> expanded;
+
+        // Memoization of the visible-node list. The list is a pure function of
+        // (snapshot, expanded); it is recomputed only when the snapshot revision
+        // changes (a provider replacement) or the expanded set is mutated. A
+        // cursor move or a selection change touches neither, so it is served
+        // from cache. `expandedVersion` is bumped by EVERY mutator of `expanded`
+        // -- keying on the snapshot revision alone would serve a stale list
+        // after an expand/collapse, since toggleExpanded does not change the
+        // snapshot revision.
+        std::uint64_t expandedVersion = 0;
+        struct VisibleCache {
+            TreeRevision revision{0};
+            std::uint64_t expandedVersion = 0;
+            std::vector<TreeNodeView> nodes;
+        };
+        mutable std::optional<VisibleCache> visibleCache;
+
+        [[nodiscard]] const std::vector<TreeNodeView>& visibleNodes() const;
+        void bumpExpanded() noexcept { ++expandedVersion; }
     };
 
     [[nodiscard]] ProviderState* activeProvider();
