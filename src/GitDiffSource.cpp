@@ -3,8 +3,19 @@
 #include <algorithm>
 #include <set>
 #include <stdexcept>
+#include <string_view>
 
 namespace ssg {
+
+GitDiffMode resolveGitDiffMode(const char* envValue,
+                               bool watcherAvailable) noexcept {
+    if (envValue != nullptr) {
+        if (std::string_view{envValue} == "event") return GitDiffMode::Event;
+        if (std::string_view{envValue} == "poll") return GitDiffMode::Poll;
+    }
+    return watcherAvailable ? GitDiffMode::Event : GitDiffMode::Poll;
+}
+
 namespace {
 
 std::optional<DiffFileId> pathIdentity(const std::filesystem::path& path) {
@@ -87,7 +98,15 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
             },
             nextMutationRevision());
         if (!result.accepted()) {
-            return {.applied = false, .requestedRescan = true, .accepted = false};
+            // A file over the DiffModel work budget is a DETERMINISTIC rejection:
+            // re-diffing the same unchanged content will be rejected identically, so
+            // it must NOT request a rescan (that would spin the worker re-running the
+            // whole diff every retry). A watch event on the file's content is what
+            // re-triggers a scan. Any OTHER rejection is transient and does retry.
+            return {.applied = false,
+                    .requestedRescan =
+                        result.error != DiffError::WorkLimitExceeded,
+                    .accepted = false};
         }
         seen.insert(file.id);
         stagedFiles.insert_or_assign(file.id, file);
@@ -184,7 +203,12 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
             },
             nextMutationRevision());
         if (!result.accepted()) {
-            return {.applied = false, .requestedRescan = true, .accepted = false};
+            // Deterministic over-budget rejection does not retry (see applyFullScan);
+            // a watch event on the content re-triggers the scan.
+            return {.applied = false,
+                    .requestedRescan =
+                        result.error != DiffError::WorkLimitExceeded,
+                    .accepted = false};
         }
         present.insert(file.id);
         stagedFiles.insert_or_assign(file.id, file);

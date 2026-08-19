@@ -360,6 +360,45 @@ TEST(appliedScanCarriesBranchSoNoRedundantBranchOnlyScan) {
     ASSERT_FALSE(source.takeBranchOnlyScanIfChanged().has_value());
 }
 
+// A file the DiffModel cannot apply because it exceeds the work budget is a
+// DETERMINISTIC rejection: re-running the same content is rejected identically, so
+// the source must NOT request a rescan (that would spin the worker re-diffing the
+// same content). A transient failure (incomplete scan, invalid path) still retries
+// -- that distinction is what keeps an idle editor off the CPU over a large diff.
+TEST(overBudgetFileRejectionIsDeterministicAndDoesNotRetry) {
+    DiffModel model{DiffConfig{.maximumLineCount = 1}};
+    GitDiffSource source{model};
+    FakeRepository repository;
+    GitDiffScan overBudget{
+        .baselineIdentity = "base-1",
+        .files = {
+            {.id = DiffFileId{"big.cpp"},
+             .path = "big.cpp",
+             .baselineContent = "a\nb\nc\n",
+             .workingContent = "x\ny\nz\n"},
+        },
+        .complete = true,
+    };
+    repository.fullScans.push_back(overBudget);
+    auto rejected = source.refresh(repository);
+    ASSERT_FALSE(rejected.accepted);
+    ASSERT_FALSE(rejected.applied);
+    ASSERT_FALSE(rejected.shouldRetry());  // deterministic over-budget: no retry
+}
+
+// The git-diff mode resolver: an explicit env value wins; otherwise the default
+// follows watcher availability (Event when a watcher will drive refreshes, Poll
+// otherwise). Event-when-watcher is what makes an idle editor cheap.
+TEST(gitDiffModeDefaultsToEventWithWatcherAndPollWithout) {
+    ASSERT_TRUE(resolveGitDiffMode(nullptr, true) == GitDiffMode::Event);
+    ASSERT_TRUE(resolveGitDiffMode(nullptr, false) == GitDiffMode::Poll);
+    ASSERT_TRUE(resolveGitDiffMode("event", false) == GitDiffMode::Event);
+    ASSERT_TRUE(resolveGitDiffMode("poll", true) == GitDiffMode::Poll);
+    // An unrecognized value is not an override; the availability default applies.
+    ASSERT_TRUE(resolveGitDiffMode("garbage", true) == GitDiffMode::Event);
+    ASSERT_TRUE(resolveGitDiffMode("garbage", false) == GitDiffMode::Poll);
+}
+
 }  // namespace
 
 int main() {
@@ -368,6 +407,8 @@ int main() {
     RUN(incompleteScanKeepsPublishedDiffSet);
     RUN(branchPublishesIndependentlyWhenDiffScanIsRejected);
     RUN(appliedScanCarriesBranchSoNoRedundantBranchOnlyScan);
+    RUN(overBudgetFileRejectionIsDeterministicAndDoesNotRetry);
+    RUN(gitDiffModeDefaultsToEventWithWatcherAndPollWithout);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

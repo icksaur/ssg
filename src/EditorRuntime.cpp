@@ -36,16 +36,12 @@ namespace {
 constexpr std::size_t kEagerSyntaxMaxBytes = 2 * 1024 * 1024;
 constexpr auto kGitDiffPollInterval = std::chrono::milliseconds{250};
 constexpr auto kGitDiffRetryDelay = std::chrono::milliseconds{1000};
-
-enum class GitDiffMode { Poll, Event };
-
-GitDiffMode gitDiffModeFromEnvironment() {
-    if (const char* mode = std::getenv("SSG_GIT_DIFF_MODE");
-        mode != nullptr && std::string_view{mode} == "event") {
-        return GitDiffMode::Event;
-    }
-    return GitDiffMode::Poll;
-}
+// Event mode refreshes instantly on watch events; this long-interval full-refresh
+// backstop bounds the staleness of anything the watcher cannot observe -- external
+// git operations, a linked worktree's metadata outside the tree, dropped events on
+// a network filesystem -- without re-scanning at the Poll cadence. Much larger than
+// kGitDiffPollInterval so idle CPU is a small fraction of Poll's.
+constexpr auto kGitDiffBackstopInterval = std::chrono::seconds{3};
 
 bool setNonBlocking(int descriptor) {
     const int flags = ::fcntl(descriptor, F_GETFL, 0);
@@ -413,8 +409,7 @@ std::optional<std::filesystem::path> workspaceChangePath(
 struct GitDiffRefreshWorkerState {
     explicit GitDiffRefreshWorkerState(const std::filesystem::path& rootPath)
         : repository{makePlatformGitRepository(rootPath)},
-          source{sourceModel},
-          mode{gitDiffModeFromEnvironment()} {}
+          source{sourceModel} {}
 
     std::unique_ptr<GitRepository> repository;
     DiffModel sourceModel;
@@ -422,6 +417,9 @@ struct GitDiffRefreshWorkerState {
     std::unique_ptr<FilesystemWatcher> watcher;
     GitDiffMode mode = GitDiffMode::Poll;
     bool watcherAvailable = false;
+    // Test hook: shortens the Event-mode backstop so its full refresh is
+    // deterministically triggerable in a unit test. Unset uses kGitDiffBackstopInterval.
+    std::optional<std::chrono::steady_clock::duration> backstopIntervalOverride;
 
     std::mutex mutex;
     std::condition_variable wake;
@@ -522,6 +520,22 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
         return;
     }
     auto state = std::make_unique<GitDiffRefreshWorkerState>(root);
+    // The unset-default mode follows watcher availability (Event when watching is
+    // enabled, Poll otherwise); an explicit env override still wins. The worker
+    // thread downgrades Event->Poll if the watcher then fails to construct.
+    state->mode = resolveGitDiffMode(std::getenv("SSG_GIT_DIFF_MODE"),
+                                     enableWatcher);
+    // Test seam (consistent with SSG_GIT_DIFF_MODE): a short backstop makes the
+    // Event-mode full-refresh backstop deterministically triggerable. Not a product
+    // knob; the production value lives in kGitDiffBackstopInterval.
+    if (const char* ms = std::getenv("SSG_GIT_DIFF_BACKSTOP_MS");
+        ms != nullptr && *ms != '\0') {
+        char* end = nullptr;
+        const long value = std::strtol(ms, &end, 10);
+        if (end != ms && value > 0) {
+            state->backstopIntervalOverride = std::chrono::milliseconds{value};
+        }
+    }
     const bool gitUsable =
         enableGit && state->repository && state->repository->isUsable();
     // Optimistic: the worker thread constructs the watcher off the first-frame
@@ -674,7 +688,13 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
                 queueLatestScan();
                 clearRetry();
             }
-            if (!refreshed.accepted || refreshed.requestedRescan) {
+            // Retry (or fall back a path scan to a full refresh) ONLY when the source
+            // asked for a rescan -- a transient failure (incomplete scan, index.lock).
+            // A deterministic rejection (a file over the work budget) reports
+            // accepted=false WITHOUT requesting a rescan, and must not schedule a
+            // retry: re-running the diff would burn a core re-rejecting the same
+            // unchanged content. A content change (watch event) re-triggers the scan.
+            if (refreshed.shouldRetry()) {
                 if (!fullRefresh) {
                     auto full = maybeRefreshAll();
                     if (!full) {
@@ -728,6 +748,16 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
             }
         }
         auto nextPoll = std::chrono::steady_clock::now() + kGitDiffPollInterval;
+        // Event mode has no periodic full refresh, so a long-interval backstop
+        // bounds the staleness of anything the watcher cannot observe (Decision:
+        // external git ops, worktree metadata outside the tree, dropped events).
+        auto nextBackstop =
+            std::chrono::steady_clock::now() + kGitDiffBackstopInterval;
+        // A test hook can shorten the backstop so it is deterministically triggerable.
+        const auto backstopInterval = worker->backstopIntervalOverride
+                                          ? *worker->backstopIntervalOverride
+                                          : kGitDiffBackstopInterval;
+        nextBackstop = std::chrono::steady_clock::now() + backstopInterval;
         while (!shouldStop()) {
             applyPendingSaveRegistrations();
             const auto now = std::chrono::steady_clock::now();
@@ -736,6 +766,9 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
                 std::lock_guard lock(worker->mutex);
                 if (gitUsable && worker->mode == GitDiffMode::Poll) {
                     wakeAt = std::min(wakeAt, nextPoll);
+                }
+                if (gitUsable && worker->mode == GitDiffMode::Event) {
+                    wakeAt = std::min(wakeAt, nextBackstop);
                 }
                 if (gitUsable && worker->retryPending) {
                     wakeAt = std::min(wakeAt, worker->nextRetry);
@@ -854,6 +887,15 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
                     }
                     handleResult(*full, true);
                     nextPoll = afterWait + kGitDiffPollInterval;
+                }
+                if (worker->mode == GitDiffMode::Event &&
+                    afterWait >= nextBackstop) {
+                    auto full = maybeRefreshAll();
+                    if (!full) {
+                        break;
+                    }
+                    handleResult(*full, true);
+                    nextBackstop = afterWait + backstopInterval;
                 }
             }
         }

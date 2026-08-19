@@ -15,6 +15,19 @@ namespace ssg {
 
 enum class GitBaselineKind : std::uint8_t { Head };
 
+// How the git-diff worker decides when to refresh. Poll re-scans on a fixed
+// cadence; Event refreshes on filesystem watch events (with a long-interval
+// backstop). The distinction is the worker's; it lives here so the mode resolver
+// below is unit-testable.
+enum class GitDiffMode : std::uint8_t { Poll, Event };
+
+// Resolve the git-diff refresh mode. An explicit env value ("poll" or "event")
+// wins; otherwise the default follows watcher availability -- Event when a watcher
+// will drive refreshes (idle-cheap), Poll otherwise. `envValue` is the raw
+// SSG_GIT_DIFF_MODE string, or nullptr when unset. Pure, so it is unit-testable.
+[[nodiscard]] GitDiffMode resolveGitDiffMode(const char* envValue,
+                                             bool watcherAvailable) noexcept;
+
 struct GitDiffConfig {
     GitBaselineKind baseline = GitBaselineKind::Head;
     std::size_t maxFiles = 10'000;
