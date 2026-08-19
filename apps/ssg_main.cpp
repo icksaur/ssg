@@ -1240,6 +1240,8 @@ int main(int argc, char** argv) {
     // before it propagates.
     bool firstFrameMarked = false;
     auto lastFrameAt = std::chrono::steady_clock::time_point{};
+    // Borrowed by Renderer::render to reuse shaped on-screen lines across frames.
+    ssg::LineLayoutCache renderLineCache;
     try {
         while (!quit) {
             // Render-rate cap while a drag is held: a scrollbar or selection drag
@@ -1262,7 +1264,7 @@ int main(int argc, char** argv) {
             if (snapshot) {
                 // The library renders every screen branch, including the declined-
                 // layout "too small" placeholder (M11-L); the app only encodes.
-                auto grid = ssg::Renderer{}.render(*snapshot);
+                auto grid = ssg::Renderer{}.render(*snapshot, &renderLineCache);
                 std::string frame = ssg::app::encode_frame(
                     grid, colorDepth, !draggingGutter.has_value());
                 if (!firstFrameMarked) {

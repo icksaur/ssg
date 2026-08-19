@@ -1665,7 +1665,61 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     std::filesystem::remove_all(root);
 }
 
-// M12 VP-2b (INV-viewport-bounded-work): with word wrap OFF, a caret navigation
+// Lever 2 (wrap-mode shaping cache): word-wrap shaping is O(document) -- it
+// segments every line to compute wrap positions. The per-document cell runs are
+// cached by (revision, documentId), so a snapshot that changes neither re-shapes
+// nothing, and an edit (new revision) forces a full re-shape. Proven by the
+// compute_cell_run counter: two identical wrap snapshots segment the same
+// (small, non-document-scaled) amount; an edit adds a full-document re-shape.
+TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
+    auto root = std::filesystem::current_path() / "runtime_wrapcache";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    std::string text;
+    for (int i = 0; i < 60; ++i) {
+        text += "line " + std::to_string(i) + " content\n";
+    }
+    std::ofstream{root / "workspace" / "doc.txt"} << text;
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"doc.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"view.toggle_word_wrap", runtime.revision(), {}})
+                    .accepted());
+    ssg::ViewportDimensions const dims{80, 24};
+    (void)runtime.snapshot(ssg::ClientId{1}, dims);  // warm the cache
+
+    // Two identical wrap snapshots: the second re-shapes nothing from the
+    // document -- only the constant chrome/prompt shaping remains.
+    ssg::GraphemeLayout::resetCellRunCalls();
+    (void)runtime.snapshot(ssg::ClientId{1}, dims);
+    auto const base = ssg::GraphemeLayout::cellRunCalls();
+    ssg::GraphemeLayout::resetCellRunCalls();
+    (void)runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_EQ(ssg::GraphemeLayout::cellRunCalls(), base);
+
+    // An edit bumps the document revision, so the whole document is re-shaped:
+    // the count jumps well past the cached-snapshot baseline.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"z"}})
+                    .accepted());
+    ssg::GraphemeLayout::resetCellRunCalls();
+    (void)runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(ssg::GraphemeLayout::cellRunCalls() > base);
+    std::filesystem::remove_all(root);
+}
+
+
 // segments only the visible + moved lines — bounded and INDEPENDENT of document
 // length — not the whole document. Proven by the compute_cell_run counter: the
 // per-move segmentation count is identical for a 50-line and a 20000-line file.
@@ -1862,6 +1916,7 @@ int main() {
     RUN(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus);
     RUN(wordWrapOffRevealsCaretHorizontally);
     RUN(wordWrapOnWrapsLongLinesOffClipsThem);
+    RUN(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges);
     RUN(wordWrapOffNavigationIsViewportBounded);
     RUN(gotoLineClampsToTheOneBasedLineRange);
     RUN(gotoLineRejectsNonNumericInput);

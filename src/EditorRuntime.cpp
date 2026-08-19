@@ -2330,9 +2330,16 @@ void EditorRuntime::Impl::clampSelectionsToActiveDocument() {
     selection.selections = SelectionSet{std::move(clamped)};
 }
 
-std::vector<CellRun> EditorRuntime::Impl::activeCellRuns() const {
+const std::vector<CellRun>& EditorRuntime::Impl::activeCellRuns() const {
+    auto const* document = activeDocument();
+    auto const documentId = activeDocumentId();
+    auto const revision = document ? document->revision() : Revision{0};
+    if (cellRunsRevision && *cellRunsRevision == revision &&
+        cellRunsDocument == documentId) {
+        return cellRunsCache;
+    }
+    std::string const text = document ? document->snapshot().text : std::string{};
     std::vector<CellRun> runs;
-    std::string const text = activeText();
     std::size_t start = 0;
     while (start <= text.size()) {
         auto end = text.find('\n', start);
@@ -2342,7 +2349,10 @@ std::vector<CellRun> EditorRuntime::Impl::activeCellRuns() const {
         start = end + 1;
     }
     if (runs.empty()) runs.push_back(GraphemeLayout{}.computeRun("", 4));
-    return runs;
+    cellRunsCache = std::move(runs);
+    cellRunsRevision = revision;
+    cellRunsDocument = documentId;
+    return cellRunsCache;
 }
 
 ViewportViewState EditorRuntime::Impl::computeEditorViewport(
@@ -2378,7 +2388,7 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
             : Viewport{}.computeUnwrapped(activeText(), content, firstRow,
                                           firstColumn, 4,
                                           diffFile ? &*diffFile : nullptr,
-                                          dimensions);
+                                          dimensions, &viewportLineCache);
     return view;
 }
 

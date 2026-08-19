@@ -1684,6 +1684,41 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     }
 }
 
+// Lever 2 (visible-line cache): render re-shapes the visible document lines each
+// frame. With a borrowed LineLayoutCache a cached render segments strictly fewer
+// lines than an uncached one (the document lines are reused; only the uncached
+// chrome shaping remains), and the two grids are byte-identical.
+TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
+    auto root = uniqueRoot();
+    std::string doc;
+    for (int i = 0; i < 30; ++i) doc += "content line " + std::to_string(i) + "\n";
+    std::ofstream{root / "doc.txt"} << doc;
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"file.open", runtime->revision(), std::string{"doc.txt"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    ssg::LineLayoutCache cache;
+    auto warm = ssg::Renderer{}.render(*snapshot, &cache);  // warm
+    ssg::GraphemeLayout::resetCellRunCalls();
+    auto cached = ssg::Renderer{}.render(*snapshot, &cache);
+    auto const cachedCalls = ssg::GraphemeLayout::cellRunCalls();
+    ssg::GraphemeLayout::resetCellRunCalls();
+    auto uncached = ssg::Renderer{}.render(*snapshot);
+    auto const uncachedCalls = ssg::GraphemeLayout::cellRunCalls();
+
+    // The cache reused the visible document lines: strictly fewer segmentations.
+    ASSERT_TRUE(cachedCalls < uncachedCalls);
+    // Byte-identical output whether or not the cache served the lines.
+    ASSERT_TRUE(cached.canonical() == uncached.canonical());
+    ASSERT_TRUE(warm.canonical() == uncached.canonical());
+    fs::remove_all(root);
+}
+
 int main() {
     RUN(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer);
     RUN(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument);
@@ -1725,6 +1760,7 @@ int main() {
     RUN(lspDiagnosticsUnderlineExactlyTheirRange);
     RUN(staleDiagnosticsAreNotPainted);
     RUN(styleDefineRejectionLeavesTheLiveStyleUnchanged);
+    RUN(cachedRenderReusesDocumentLineShapingAndMatchesUncached);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

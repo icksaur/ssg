@@ -103,7 +103,8 @@ struct LogicalLine {
 // last line is simply absent (skipped by the caller), matching the old
 // out-of-range guard.
 std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
-    std::string const& text, std::span<const VisualRow> visibleRows) {
+    std::string const& text, std::span<const VisualRow> visibleRows,
+    LineLayoutCache* cache) {
     std::unordered_map<std::uint32_t, LogicalLine> lines;
     if (visibleRows.empty()) return lines;
     std::unordered_set<std::uint32_t> referenced;
@@ -120,8 +121,13 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
             end == std::string::npos ? text.size() - begin : end - begin;
         if (referenced.contains(index)) {
             auto const line = std::string_view{text}.substr(begin, length);
-            ++gRenderSegmentationCalls;
-            lines.emplace(index, LogicalLine{line, begin, GraphemeLayout{}.computeRun(line)});
+            if (cache) {
+                lines.emplace(index, LogicalLine{line, begin, cache->run(line, 4)});
+            } else {
+                ++gRenderSegmentationCalls;
+                lines.emplace(index, LogicalLine{line, begin,
+                                                 GraphemeLayout{}.computeRun(line)});
+            }
         }
         if (end == std::string::npos || index >= maxLine) break;
         begin = end + 1;
@@ -669,7 +675,8 @@ std::optional<GridPosition> screenCellFor(ViewportViewState const& viewport,
 
 void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                     Rect const& content, ThemeSnapshot const& theme,
-                    std::uint8_t background, Style const& style) {
+                    std::uint8_t background, Style const& style,
+                    LineLayoutCache* lineCache) {
     auto const& viewport = snapshot.presentation()->viewport;
     auto const activeDiff =
         snapshot.sections().diff.fileForDocument(snapshot.sections().document);
@@ -691,7 +698,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
         }
     }
     auto lines = visibleLogicalLines(snapshot.sections().document.text,
-                                       viewport.visibleRows);
+                                       viewport.visibleRows, lineCache);
     auto const& selection = snapshot.sections().selection;
     auto const& findState = snapshot.sections().findReplace;
     // Find matches are byte offsets into a specific document revision; only paint
@@ -1183,7 +1190,8 @@ std::string CellGrid::canonical() const {
     return output.str();
 }
 
-CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
+CellGrid Renderer::render(SessionSnapshot const& snapshot,
+                          LineLayoutCache* lineCache) const {
     auto const& shell = snapshot.presentation()->shell;
     auto const& theme = snapshot.sections().theme;
     auto const& style = snapshot.presentation()->style;
@@ -1262,7 +1270,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
             paintPalette(grid, *shell.palette, theme, background, style);
         } else {
             paintDocument(grid, snapshot, shell.panes.front().content, theme,
-                           background, style);
+                           background, style, lineCache);
             // After the document: a diagnostic underlines whatever the cell
             // already shows rather than replacing it.
             paintDiagnostics(grid, snapshot, shell.panes.front().content);

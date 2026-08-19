@@ -17,6 +17,7 @@
 #include <ssg/Keymap.h>
 #include <ssg/LspFeatureController.h>
 #include <ssg/LspWorkspaceEditController.h>
+#include <ssg/LineLayoutCache.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/Picker.h>
 #include <ssg/PromptSurface.h>
@@ -348,6 +349,18 @@ struct EditorRuntime::Impl final : CommandServices,
     mutable std::optional<Revision> lineCountRevision;
     mutable std::optional<FileDocumentId> lineCountDocument;
     mutable std::uint32_t lineCountCache = 1;
+    // Cache of the active document's per-logical-line cell runs (wrap-mode
+    // shaping), keyed by (revision, documentId) exactly like the line-count
+    // cache above. Word-wrap shaping is O(document); without this it re-shapes
+    // every line each frame even when navigation left the document unchanged.
+    mutable std::optional<Revision> cellRunsRevision;
+    mutable std::optional<FileDocumentId> cellRunsDocument;
+    mutable std::vector<CellRun> cellRunsCache;
+    // Bounded LRU of shaped visible document lines for the word-wrap-OFF
+    // viewport path (Viewport::computeUnwrapped), which re-shapes on-screen
+    // lines every frame during navigation. Owned here so it survives frames;
+    // Viewport is constructed per call.
+    mutable LineLayoutCache viewportLineCache;
     std::uint64_t nextStatusId = 1;
 
     [[nodiscard]] CommandHandlerResult runTransaction(
@@ -426,7 +439,7 @@ struct EditorRuntime::Impl final : CommandServices,
     // and ranges.  For in-document edits, where a multi-cursor set must survive
     // (typing over N selections leaves N carets, Sublime-style).
     void clampSelectionsToActiveDocument();
-    [[nodiscard]] std::vector<CellRun> activeCellRuns() const;
+    [[nodiscard]] const std::vector<CellRun>& activeCellRuns() const;
     // The editor viewport, gated on word wrap: exact wrapped geometry when word
     // wrap is on; O(visible rows) unwrapped projection (compute_viewport_unwrapped)
     // when off, so a large document's first frame is viewport-bounded (M12).

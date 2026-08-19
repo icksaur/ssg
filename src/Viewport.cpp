@@ -1,6 +1,7 @@
 #include <ssg/Viewport.h>
 
 #include <ssg/DiffModel.h>
+#include <ssg/LineLayoutCache.h>
 
 #include <algorithm>
 #include <array>
@@ -762,7 +763,8 @@ ViewportViewState Viewport::computeUnwrapped(
     std::string_view documentText, ViewportDimensions dimensions,
     uint32_t requestedFirstVisualRow, uint32_t requestedFirstVisualColumn,
     int tabWidth, const DiffFileView* diff,
-    std::optional<ViewportDimensions> clientSurface) const {
+    std::optional<ViewportDimensions> clientSurface,
+    LineLayoutCache* lineCache) const {
     // As in `compute`: project against the painted content area, publish the
     // client's own surface so it can size its grid.
     ViewportDimensions const surface = clientSurface.value_or(dimensions);
@@ -947,8 +949,9 @@ ViewportViewState Viewport::computeUnwrapped(
             continue;
         }
 
-        const auto run = GraphemeLayout{}.computeRun(
-            documentText.substr(start, end - start), tabWidth);
+        const auto lineText = documentText.substr(start, end - start);
+        const auto run = lineCache ? lineCache->run(lineText, tabWidth)
+                                   : GraphemeLayout{}.computeRun(lineText, tabWidth);
 
         // Locate the first span at or past the requested horizontal offset; its
         // start cell is this row's visible origin.  A row shorter than the offset

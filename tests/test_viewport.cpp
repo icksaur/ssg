@@ -1,5 +1,6 @@
 #include <ssg/GraphemeLayout.h>
 #include <ssg/DiffModel.h>
+#include <ssg/LineLayoutCache.h>
 #include <ssg/Selection.h>
 #include <ssg/Viewport.h>
 
@@ -739,6 +740,75 @@ TEST(scrollMappingIsInertWhenNothingScrolls) {
     ASSERT_EQ(still.firstVisible(), std::uint32_t{0});
 }
 
+// Lever 2 (visible-line cache). A LineLayoutCache hit must be byte-identical to a
+// fresh GraphemeLayout::computeRun -- the cache key is the exact (text, tabWidth)
+// so it needs no semantic invalidation. Covers tabs, wide graphemes, and
+// combining sequences, and the (text, tabWidth) key discrimination.
+TEST(cachedLineLayoutEqualsFreshComputeRun) {
+    auto sameRun = [](const ssg::CellRun& a, const ssg::CellRun& b) {
+        if (a.totalCells != b.totalCells) return false;
+        if (a.spans.size() != b.spans.size()) return false;
+        for (std::size_t i = 0; i < a.spans.size(); ++i) {
+            if (a.spans[i].byteOffset != b.spans[i].byteOffset ||
+                a.spans[i].byteLen != b.spans[i].byteLen ||
+                a.spans[i].cellWidth != b.spans[i].cellWidth ||
+                a.spans[i].kind != b.spans[i].kind) {
+                return false;
+            }
+        }
+        return true;
+    };
+    ssg::LineLayoutCache cache;
+    const std::vector<std::string> lines = {
+        "plain ascii",
+        "with\ttab\tstops",
+        "wide \xE6\x97\xA5\xE6\x9C\xAC chars",       // CJK (2-cell)
+        "emoji \xF0\x9F\x98\x80 here",               // U+1F600
+        "combining a\xCC\x81 e\xCC\x80",             // a + acute, e + grave
+        "",
+    };
+    for (const auto& line : lines) {
+        const auto fresh = ssg::GraphemeLayout{}.computeRun(line, 4);
+        // First call (miss) and a second (hit) must both equal the fresh run.
+        ASSERT_TRUE(sameRun(cache.run(line, 4), fresh));
+        ASSERT_TRUE(sameRun(cache.run(line, 4), fresh));
+    }
+    // The tab width is part of the key: the same text at a different width is a
+    // distinct entry equal to its own fresh run, and the two coexist.
+    ssg::LineLayoutCache widthCache;
+    ASSERT_TRUE(sameRun(widthCache.run("a\tb", 8),
+                        ssg::GraphemeLayout{}.computeRun("a\tb", 8)));
+    ASSERT_TRUE(sameRun(widthCache.run("a\tb", 2),
+                        ssg::GraphemeLayout{}.computeRun("a\tb", 2)));
+    ASSERT_EQ(widthCache.size(), std::size_t{2});
+
+    // Bounded: a capacity-2 cache never holds more than 2 entries.
+    ssg::LineLayoutCache tiny{2};
+    (void)tiny.run("one", 4);
+    (void)tiny.run("two", 4);
+    (void)tiny.run("three", 4);
+    ASSERT_EQ(tiny.size(), std::size_t{2});
+}
+
+// Lever 2: the word-wrap-OFF viewport path re-shapes the same visible lines every
+// frame; with a borrowed cache, an identical projection re-segments nothing.
+TEST(unwrappedProjectionReusesCachedVisibleLines) {
+    std::string doc;
+    for (int i = 0; i < 40; ++i) doc += "line " + std::to_string(i) + " text\n";
+    ssg::ViewportDimensions const dims{80, 24};
+    ssg::LineLayoutCache cache;
+    (void)ssg::Viewport{}.computeUnwrapped(doc, dims, 0, 0, 4, nullptr,
+                                           std::nullopt, &cache);  // warm
+    ssg::GraphemeLayout::resetCellRunCalls();
+    (void)ssg::Viewport{}.computeUnwrapped(doc, dims, 0, 0, 4, nullptr,
+                                           std::nullopt, &cache);
+    ASSERT_EQ(ssg::GraphemeLayout::cellRunCalls(), std::uint64_t{0});
+    // Without a cache the same projection re-segments the visible lines.
+    ssg::GraphemeLayout::resetCellRunCalls();
+    (void)ssg::Viewport{}.computeUnwrapped(doc, dims, 0, 0, 4);
+    ASSERT_TRUE(ssg::GraphemeLayout::cellRunCalls() > 0);
+}
+
 int main() {
     RUN(emptyViewportGolden);
     RUN(shortViewportGolden);
@@ -773,6 +843,8 @@ int main() {
     RUN(scrollbarThumbAndFirstRowAreAnExactMatchedPair);
     RUN(scrollToFractionRoundsUniformlyForListSurfaces);
     RUN(scrollMappingIsInertWhenNothingScrolls);
+    RUN(cachedLineLayoutEqualsFreshComputeRun);
+    RUN(unwrappedProjectionReusesCachedVisibleLines);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }

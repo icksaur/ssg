@@ -10,6 +10,7 @@
 #include <ssg/Style.h>
 #include <ssg/Theme.h>
 #include <ssg/ShellState.h>
+#include <ssg/LineLayoutCache.h>
 
 #include <array>
 #include <cstdint>
@@ -93,7 +94,13 @@ struct CellGrid {
 
 class Renderer {
 public:
-    [[nodiscard]] CellGrid render(SessionSnapshot const& snapshot) const;
+    // `lineCache`, when supplied, is a caller-owned bounded cache of shaped
+    // document lines that survives across frames. render() borrows it to skip
+    // re-segmenting on-screen lines that a previous frame already shaped; a
+    // nullptr cache reproduces the exact pre-cache behaviour (a fresh shape per
+    // visible line). The cache holds only stable document-line text.
+    [[nodiscard]] CellGrid render(SessionSnapshot const& snapshot,
+                                  LineLayoutCache* lineCache = nullptr) const;
 
     // Style is no longer a renderer member: it is read from the snapshot's
     // published Style section, so the runtime and the

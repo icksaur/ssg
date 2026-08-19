@@ -15,6 +15,7 @@
 namespace ssg {
 
 struct DiffFileView;
+class LineLayoutCache;
 
 struct ViewportDimensions {
     uint32_t columns;
@@ -310,7 +311,8 @@ public:    // The scrollbar thumb geometry for a list of `total_rows` items show
         uint32_t requestedFirstVisualColumn,
         int tabWidth,
         const DiffFileView* diff = nullptr,
-        std::optional<ViewportDimensions> clientSurface = std::nullopt) const;
+        std::optional<ViewportDimensions> clientSurface = std::nullopt,
+        LineLayoutCache* lineCache = nullptr) const;
 
     [[nodiscard]] RowProjection rowProjection(
         std::span<const CellRun> logicalLines,
