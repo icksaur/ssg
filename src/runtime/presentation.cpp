@@ -366,6 +366,7 @@ void registerAppearanceCommands(EditorSessionBuilder& builder,
                                     return failure(result.error->message);
                                 }
                                 runtime.keymap = std::move(result.keymap);
+                                ++runtime.keymapGeneration;
                                 return success();
                             });
                         }));
@@ -380,6 +381,7 @@ void registerAppearanceCommands(EditorSessionBuilder& builder,
                                     return failure(result.error->message);
                                 }
                                 runtime.keymap = std::move(result.keymap);
+                                ++runtime.keymapGeneration;
                                 return success();
                             });
                         }));

@@ -5690,6 +5690,15 @@ std::string ProtocolCodec::encodeCommandResult(CommandResult const& result) cons
                     static_cast<std::uint8_t>(result.error)));
     fields.emplace_back("revision", toValue(result.revision));
     fields.emplace_back("message", toValue(result.message));
+    // Additive: the dispatch effects a host reads for per-drain snapshot
+    // coalescing. Round-tripped rather than dropped so the decoded result is a
+    // faithful copy; absent on an old peer's message, they default to false.
+    fields.emplace_back(
+        "routingChanged",
+        ProtocolValue::makeUint(result.effects.routingChanged ? 1u : 0u));
+    fields.emplace_back(
+        "geometryChanged",
+        ProtocolValue::makeUint(result.effects.geometryChanged ? 1u : 0u));
     return encodeMessage(ProtocolMessageKind::CommandResult,
                          ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5715,10 +5724,28 @@ DecodeCommandResultResult ProtocolCodec::decodeCommandResult(std::string_view by
         return {ProtocolError::MalformedMessage, std::nullopt,
                "command result payload is malformed"};
     }
-    return {ProtocolError::None,
-            CommandResult{static_cast<CommandError>(*error), *revision,
-                         std::move(*message)},
-            {}};
+    // Additive effects fields: absent on an old peer, so default to false; but a
+    // PRESENT field must be a valid boolean 0/1 -- a malformed or out-of-range
+    // value is a corrupt message, not a silent false.
+    CommandResult result{static_cast<CommandError>(*error), *revision,
+                         std::move(*message)};
+    if (auto const* routingField = payload.field("routingChanged")) {
+        auto routing = requireField<std::uint8_t>(routingField);
+        if (!routing || *routing > 1) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "command result routingChanged field is malformed"};
+        }
+        result.effects.routingChanged = *routing != 0;
+    }
+    if (auto const* geometryField = payload.field("geometryChanged")) {
+        auto geometry = requireField<std::uint8_t>(geometryField);
+        if (!geometry || *geometry > 1) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "command result geometryChanged field is malformed"};
+        }
+        result.effects.geometryChanged = *geometry != 0;
+    }
+    return {ProtocolError::None, std::move(result), {}};
 }
 
 std::string ProtocolCodec::encodeSessionSnapshot(SessionSnapshot const& snapshot) const {

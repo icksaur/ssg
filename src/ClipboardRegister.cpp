@@ -421,4 +421,8 @@ ClipboardViewState ClipboardRegister::viewState() const {
             impl_->systemWrite};
 }
 
+std::uint64_t ClipboardRegister::writeGeneration() const noexcept {
+    return impl_->nextRequestId;
+}
+
 }  // namespace ssg

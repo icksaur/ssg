@@ -216,6 +216,11 @@ struct EditorRuntime::Impl final : CommandServices,
     LspSyncViewState lspSync;
     LspFeatureViewState lspFeatures;
     KeymapViewState keymap{"default", {}};
+    // Advances on every keymap mutation (keymap.bind/unbind, reset to default).
+    // The catalog revision does NOT move on a rebind -- binding an existing
+    // command registers nothing -- so routing-change detection needs this
+    // separate counter.
+    std::uint64_t keymapGeneration = 0;
     ThemeSnapshot theme{};
     // Chrome glyphs and dimensions, beside the theme because they are the same
     // kind of thing: presentation this runtime owns and hands to layout.

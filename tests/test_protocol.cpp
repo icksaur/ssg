@@ -1303,6 +1303,15 @@ TEST(commandResultRoundTripsThroughTheWire) {
     ASSERT_EQ(decoded.result->error, result.error);
     ASSERT_EQ(decoded.result->revision, result.revision);
     ASSERT_EQ(decoded.result->message, result.message);
+    // The additive dispatch-effects fields survive the round-trip rather than
+    // decoding to silent false defaults.
+    ssg::CommandResult withEffects{ssg::CommandError::None, ssg::Revision{4}, ""};
+    withEffects.effects = {/*routing=*/true, /*geometry=*/true};
+    auto const back = ssg::ProtocolCodec{}.decodeCommandResult(
+        ssg::ProtocolCodec{}.encodeCommandResult(withEffects));
+    ASSERT_TRUE(back.result.has_value());
+    ASSERT_TRUE(back.result->effects.routingChanged);
+    ASSERT_TRUE(back.result->effects.geometryChanged);
 }
 
 

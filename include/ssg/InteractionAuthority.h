@@ -121,6 +121,16 @@ public:
     // alone cannot miss a same-kind reopen.
     [[nodiscard]] std::uint64_t pickerEpoch() const noexcept { return pickerEpoch_; }
 
+    // A monotonic counter over every change to interaction routing state -- base
+    // focus, the active prompt's kind/value/control focus, and picker/panel
+    // transitions. A host compares it across a dispatch to learn whether the way
+    // the NEXT key routes changed, without rebuilding a snapshot. Bumped at every
+    // owner swap (adopt), every applied transition, and every direct prompt-only
+    // swap (value/control focus).
+    [[nodiscard]] std::uint64_t routingGeneration() const noexcept {
+        return routingGeneration_;
+    }
+
 private:
     // Adopt a prospective truth and prompt together: reconcile a stale picker identity
     // (valid only while a Palette prompt is active), build the projection over the CURRENT
@@ -134,6 +144,7 @@ private:
     TreeModel& tree_;
     std::uint64_t nextTreeRevision_;
     std::uint64_t pickerEpoch_ = 0;
+    std::uint64_t routingGeneration_ = 0;
     PromptSurface prompt_;
     WholeScreenTruth truth_;
     UiInteractionState interaction_;

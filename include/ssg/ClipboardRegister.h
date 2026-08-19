@@ -137,6 +137,11 @@ public:
 
     [[nodiscard]] ClipboardViewState viewState() const;
 
+    // A monotonic counter that advances on every copy/cut (each mints a new
+    // write id). A host reads it to detect that the register's content changed --
+    // routing state for a paste-into-prompt -- without copying the text.
+    [[nodiscard]] std::uint64_t writeGeneration() const noexcept;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

@@ -32,6 +32,21 @@ enum class CommandError : std::uint8_t {
     RevisionExhausted,
 };
 
+// The routing/geometry consequences of a dispatch, so a host can decide whether
+// a buffered follow-on event needs a fresh snapshot before it is handled
+// (Lever 3 per-drain snapshot coalescing). Separate axes because a key/paste
+// consumes routing state while a pointer/wheel consumes geometry, and a pure
+// cursor move changes geometry without changing routing.
+struct DispatchEffects {
+    bool routingChanged = false;
+    bool geometryChanged = false;
+
+    void merge(DispatchEffects other) noexcept {
+        routingChanged |= other.routingChanged;
+        geometryChanged |= other.geometryChanged;
+    }
+};
+
 struct CommandResult {
     CommandError error;
     // Default-constructed to the null sentinel.  Without the initializer,
@@ -41,6 +56,13 @@ struct CommandResult {
     // through a constructor written to forbid exactly that.
     Revision revision{};
     std::string message;
+    // What this dispatch changed, for a host that coalesces per-drain snapshots
+    // (Lever 3). `routingChanged` is true when any interaction-routing input the
+    // host reads to interpret the NEXT key changed (focus, prompt kind/value,
+    // picker, keymap, catalog, clipboard); `geometryChanged` is the conservative
+    // "any semantic revision advanced" gate a pointer/wheel hit-test consumes.
+    // Both are unioned across every nested and deferred dispatch this call runs.
+    DispatchEffects effects{};
 
     [[nodiscard]] bool accepted() const noexcept {
         return error == CommandError::None;

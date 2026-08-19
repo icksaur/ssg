@@ -2,6 +2,7 @@
 
 #include <ssg/EditorRuntime.h>
 #include <ssg/GraphemeLayout.h>
+#include <ssg/Keymap.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/TextInputCommands.h>
 
@@ -1720,6 +1721,70 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
 }
 
 
+// Lever 3 (dispatch effects). A dispatch reports, via its CommandResult, whether
+// it changed routing state (what a key/paste reads to route) and/or geometry
+// (what a pointer/wheel hit-tests). The host uses these to coalesce per-drain
+// snapshots. A cursor move or text edit changes geometry but not routing; opening
+// a prompt or rebinding a key changes routing; a rejected command changes
+// neither. This names the routing/geometry separation the coalescing relies on --
+// keying only on the session revision (geometry) would wrongly treat a
+// prompt-open as a non-routing change.
+TEST(dispatchEffectsSeparateRoutingFromGeometryAcrossRoutes) {
+    auto root = std::filesystem::current_path() / "runtime_effects";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    std::string text;
+    for (int i = 0; i < 10; ++i) text += "line " + std::to_string(i) + "\n";
+    std::ofstream{root / "workspace" / "doc.txt"} << text;
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    const ssg::ClientId client{1};
+    ASSERT_TRUE(runtime.attach({client, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(client, {"file.open", runtime.revision(),
+                                          std::string{"doc.txt"}}).accepted());
+
+    // A cursor move: geometry advances (a new revision), routing does not.
+    auto down = runtime.dispatch(client, {"cursor.line_down", runtime.revision(), {}});
+    ASSERT_TRUE(down.accepted());
+    ASSERT_TRUE(down.effects.geometryChanged);
+    ASSERT_FALSE(down.effects.routingChanged);
+
+    // Typing text: geometry, not routing.
+    auto ins = runtime.dispatch(client, {"text.insert", runtime.revision(),
+                                         ssg::TextInputArguments{"x"}});
+    ASSERT_TRUE(ins.accepted());
+    ASSERT_TRUE(ins.effects.geometryChanged);
+    ASSERT_FALSE(ins.effects.routingChanged);
+
+    // Opening the palette changes routing (how the next key is interpreted).
+    auto pal = runtime.dispatch(client, {"palette.open", runtime.revision(), {}});
+    ASSERT_TRUE(pal.accepted());
+    ASSERT_TRUE(pal.effects.routingChanged);
+    (void)runtime.dispatch(client, {"palette.close", runtime.revision(), {}});
+
+    // Rebinding a key changes routing even though the catalog revision does not
+    // move (binding an existing command registers nothing).
+    auto bind = runtime.dispatch(
+        client, {"keymap.bind", runtime.revision(),
+                 ssg::KeymapBindArguments{"Ctrl+KeyG", "goto.line", "editor"}});
+    ASSERT_TRUE(bind.accepted());
+    ASSERT_TRUE(bind.effects.routingChanged);
+
+    // A rejected command changes nothing.
+    auto bad = runtime.dispatch(client, {"no.such.command", runtime.revision(), {}});
+    ASSERT_FALSE(bad.accepted());
+    ASSERT_FALSE(bad.effects.routingChanged);
+    ASSERT_FALSE(bad.effects.geometryChanged);
+    std::filesystem::remove_all(root);
+}
+
+
 // segments only the visible + moved lines — bounded and INDEPENDENT of document
 // length — not the whole document. Proven by the compute_cell_run counter: the
 // per-move segmentation count is identical for a 50-line and a 20000-line file.
@@ -1917,6 +1982,7 @@ int main() {
     RUN(wordWrapOffRevealsCaretHorizontally);
     RUN(wordWrapOnWrapsLongLinesOffClipsThem);
     RUN(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges);
+    RUN(dispatchEffectsSeparateRoutingFromGeometryAcrossRoutes);
     RUN(wordWrapOffNavigationIsViewportBounded);
     RUN(gotoLineClampsToTheOneBasedLineRange);
     RUN(gotoLineRejectsNonNumericInput);

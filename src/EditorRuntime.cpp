@@ -2894,6 +2894,7 @@ void EditorRuntime::resetKeymapToDefault() {
     // validated value (see create() above), so no re-validation is needed
     // here -- resetting to it can never fail.
     impl_->keymap = defaultTerminalKeymap();
+    ++impl_->keymapGeneration;
 }
 
 void EditorRuntime::focusEditor() { impl_->interaction.focusEditor(); }
@@ -3042,6 +3043,33 @@ bool EditorRuntime::deferDispatch(ClientId clientId, ClientCommand command) {
 }
 
 CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {
+    // The routing signature: every runtime-owned input a host reads to interpret
+    // the NEXT key. Compared before/after the whole dispatch (which drains nested
+    // and deferred commands), so the effects union every route without annotating
+    // any handler. Focus, prompt kind/value, and picker are subsumed by the
+    // interaction routing generation; keymap, catalog, and clipboard each carry
+    // their own authoritative counter.
+    const auto routingSignature = [&] {
+        return std::tuple{impl_->interaction.routingGeneration(),
+                          impl_->keymapGeneration,
+                          impl_->session->catalog()->revision(),
+                          impl_->clipboard.writeGeneration()};
+    };
+    const auto routingBefore = routingSignature();
+    const auto revisionBefore = impl_->session->revision();
+    const auto withEffects = [&](CommandResult result) {
+        // routingChanged is precise; geometryChanged is the conservative gate a
+        // pointer/wheel hit-test consumes. A routing change (prompt/focus/picker)
+        // also reshapes presentation geometry, and a command that fails after a
+        // partial mutation may move routing without advancing the session
+        // revision -- so geometry is the union of "revision advanced" and "routing
+        // changed", never a subset.
+        const bool routingChanged = routingSignature() != routingBefore;
+        result.effects.routingChanged = routingChanged;
+        result.effects.geometryChanged =
+            routingChanged || impl_->session->revision() != revisionBefore;
+        return result;
+    };
     // The session refuses this too, but it has to be caught HERE as well:
     // everything below touches the session first (the attachment lookup), and
     // would block on the lock the handler's own call is holding before the
@@ -3132,7 +3160,7 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
         (void)impl_->interaction.cancelPrompt();
         impl_->reconcilePickerCandidates();
     }
-    return result;
+    return withEffects(std::move(result));
 }
 
 std::shared_ptr<CommandCatalog> EditorRuntime::commandCatalog() const {

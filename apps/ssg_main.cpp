@@ -958,16 +958,36 @@ int main(int argc, char** argv) {
                                               *runtime.commandCatalog());
     std::vector<ssg::PaletteCandidate> candidates;
 
+    // Lever 3 per-drain snapshot coalescing. `refresh()` is expensive; instead
+    // of taking a fresh snapshot before every buffered event, the coalescer
+    // tracks whether the routing state (what a key/paste reads) or the geometry
+    // (what a pointer/wheel hit-tests) has been dirtied since the last snapshot,
+    // and the loop refreshes lazily only before an event that consumes a dirty
+    // axis. Every dispatch merges its authoritative DispatchEffects here;
+    // host-local picker mutations mark it dirty. It lives at function scope so
+    // the dispatch lambdas below can update it.
+    ssg::app::SnapshotCoalescer coalescer;
+    auto noteEffects = [&](ssg::DispatchEffects effects) {
+        coalescer.noteEffects(effects);
+    };
+    // A host-local picker mutation (query narrowing, selection move, window
+    // scroll) changes the PaletteReport that buildReport() feeds the next
+    // snapshot, so it dirties both axes exactly as a runtime dispatch would.
+    auto markPickerDirty = [&] { coalescer.markPickerDirty(); };
+
     auto dispatch = [&](std::string_view id, std::any payload = {}) {
-        (void)runtime.dispatch(client, {std::string{id}, runtime.revision(),
-                                        std::move(payload)});
+        noteEffects(runtime
+                        .dispatch(client, {std::string{id}, runtime.revision(),
+                                           std::move(payload)})
+                        .effects);
     };
     // The keystroke path's dispatch: the command is already identified, so no
     // name is constructed, hashed or compared.
     auto dispatchHandle = [&](ssg::CommandName const& command,
                               std::any payload = {}) {
-        (void)runtime.dispatch(
-            client, {command, runtime.revision(), std::move(payload)});
+        noteEffects(
+            runtime.dispatch(client, {command, runtime.revision(), std::move(payload)})
+                .effects);
     };
     // Re-center the client-owned palette window on the current selection
     // (keep-visible). Called ONLY when the selection changes (arrow navigation,
@@ -975,6 +995,7 @@ int main(int argc, char** argv) {
     // free offset so a wheel scroll persists. Mirrors
     // the tree's reveal_tree_selection.
     auto revealPaletteSelection = [&] {
+        markPickerDirty();
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
         if (picker.selected >= order.size()) {
             picker.selected = order.empty() ? 0 : order.size() - 1;
@@ -995,6 +1016,7 @@ int main(int argc, char** argv) {
     // ScrollOffset the editor and tree use; only the ownership differs.
     auto scrollPalette = [&](std::int64_t delta) {
         if (!pickerOpen) return;
+        markPickerDirty();
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
         ssg::ScrollOffset offset{picker.firstVisible};
         offset.byLines(delta, static_cast<std::uint32_t>(order.size()),
@@ -1007,6 +1029,7 @@ int main(int argc, char** argv) {
     auto scrollPaletteToFraction = [&](std::uint32_t numerator,
                                        std::uint32_t denominator) {
         if (!pickerOpen) return;
+        markPickerDirty();
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
         ssg::ScrollOffset offset{picker.firstVisible};
         offset.toFraction(numerator, denominator,
@@ -1261,6 +1284,9 @@ int main(int argc, char** argv) {
             }
             lastFrameAt = std::chrono::steady_clock::now();
             auto snapshot = refresh();
+            // The loop-top snapshot is fresh, so nothing is dirty until an event
+            // in this drain mutates state.
+            coalescer.noteRefreshed();
             if (snapshot) {
                 // The library renders every screen branch, including the declined-
                 // layout "too small" placeholder (M11-L); the app only encodes.
@@ -1468,11 +1494,18 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // Adopt fresh authoritative focus before every event after the first
-            // (the first uses the snapshot already taken at the top of the loop).
-            // Capture the refreshed snapshot so pointer hit-testing sees the
-            // current frame's layout.
-            if (!firstEvent) snapshot = refresh();
+            // Per-drain snapshot coalescing (Lever 3): a fresh snapshot before
+            // this event is needed only when the event consumes an axis that an
+            // earlier event in this drain dirtied. A key/paste routes by the
+            // interaction routing state; a pointer/wheel hit-tests geometry;
+            // reply/none/incomplete consume neither. A pure keyboard burst that
+            // changes only geometry (cursor moves) therefore refreshes nothing.
+            // A refresh rebuilds the whole snapshot, clearing both axes.
+            const auto consumes = ssg::app::consumed_axes(decoded.status);
+            if (!firstEvent && coalescer.needsRefresh(consumes)) {
+                snapshot = refresh();
+                coalescer.noteRefreshed();
+            }
             firstEvent = false;
 
             if (decoded.status == ssg::app::DecodeStatus::pointer) {
@@ -1620,11 +1653,11 @@ int main(int argc, char** argv) {
                     if (command.gate_on_previous && !previousAccepted) {
                         continue;
                     }
-                    previousAccepted =
-                        runtime
-                            .dispatch(client, {command.command_id,
-                                               runtime.revision(), command.payload})
-                            .accepted();
+                    auto const pointerResult =
+                        runtime.dispatch(client, {command.command_id,
+                                                  runtime.revision(), command.payload});
+                    noteEffects(pointerResult.effects);
+                    previousAccepted = pointerResult.accepted();
                 }
                 // A gutter gesture on a client-owned surface has no command to
                 // dispatch (the picker's offset must not round-trip), so the

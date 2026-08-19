@@ -59,6 +59,7 @@ bool InteractionAuthority::apply(const CommandTransition& transition) {
     // A finder (re)establishes picker content; advance the epoch even on a File->File
     // reopen (openPicker unchanged) so a candidate owner always refreshes.
     if (finder) ++pickerEpoch_;
+    ++routingGeneration_;
     return true;
 }
 
@@ -75,6 +76,10 @@ void InteractionAuthority::adopt(WholeScreenTruth next, PromptSurface prompt) {
     prompt_ = std::move(prompt);
     truth_ = std::move(next);
     interaction_ = std::move(projection);
+    // adopt is the single owner-swap for prompt/focus/presence, so every routing
+    // change that flows through it (open/submit/cancel prompt, focusEditor/Panel,
+    // a presence refresh) advances the routing generation here.
+    ++routingGeneration_;
 }
 
 PromptCommandResult InteractionAuthority::openPrompt(PromptRequest request) {
@@ -113,7 +118,10 @@ PromptCommandResult InteractionAuthority::updatePromptValue(std::size_t index,
     // so the interaction projection is unchanged -- swap only the prompt, no rebuild.
     PromptSurface copy = prompt_;
     PromptCommandResult result = copy.updateValue(index, std::move(value));
-    if (result.accepted()) prompt_ = std::move(copy);
+    if (result.accepted()) {
+        prompt_ = std::move(copy);
+        ++routingGeneration_;
+    }
     return result;
 }
 
@@ -123,14 +131,20 @@ PromptCommandResult InteractionAuthority::focusPromptControl(std::size_t index) 
     // only the prompt, no rebuild.
     PromptSurface copy = prompt_;
     PromptCommandResult result = copy.focusInput(index);
-    if (result.accepted()) prompt_ = std::move(copy);
+    if (result.accepted()) {
+        prompt_ = std::move(copy);
+        ++routingGeneration_;
+    }
     return result;
 }
 
 PromptCommandResult InteractionAuthority::focusNextPromptControl() {
     PromptSurface copy = prompt_;
     PromptCommandResult result = copy.focusNextInput();
-    if (result.accepted()) prompt_ = std::move(copy);
+    if (result.accepted()) {
+        prompt_ = std::move(copy);
+        ++routingGeneration_;
+    }
     return result;
 }
 
