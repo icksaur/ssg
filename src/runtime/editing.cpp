@@ -506,7 +506,7 @@ void EditorRuntime::Impl::revealPrimaryCaret() {
 // one expression, so the argument type is written once -- in `handler<...>` --
 // and the codec, the unwrap and the reference's argument column are all derived
 // from it.  There is no row elsewhere to keep in step.
-void registerTextInputCommands(EditorSessionBuilder& builder,
+void registerTextInputCommands(CommandCatalog& builder,
                                EditorRuntime::Impl& runtime) {
     // Only insertion carries text.  The other five never read a payload -- the
     // old handler default-constructed one and ignored it -- yet the static table
@@ -558,7 +558,7 @@ void registerTextInputCommands(EditorSessionBuilder& builder,
 }
 
 // Undo and redo.
-void registerHistoryCommands(EditorSessionBuilder& builder,
+void registerHistoryCommands(CommandCatalog& builder,
                              EditorRuntime::Impl& runtime) {
     auto declare = [&](std::string id, std::string summary,
                        HistoryCommand command) {
@@ -579,7 +579,7 @@ void registerHistoryCommands(EditorSessionBuilder& builder,
 }
 
 // The clipboard register: copy, cut and paste over the current selections.
-void registerClipboardCommands(EditorSessionBuilder& builder,
+void registerClipboardCommands(CommandCatalog& builder,
                                EditorRuntime::Impl& runtime) {
     auto declare = [&](std::string id, std::string summary,
                        ClipboardCommand command) {
@@ -602,7 +602,7 @@ void registerClipboardCommands(EditorSessionBuilder& builder,
 
 // Whole-line and whole-selection edits.  None takes an argument: each acts on
 // wherever the selections already are.
-void registerEditSuiteCommands(EditorSessionBuilder& builder,
+void registerEditSuiteCommands(CommandCatalog& builder,
                                EditorRuntime::Impl& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary,
                        EditCommand command) {
@@ -638,7 +638,7 @@ void registerEditSuiteCommands(EditorSessionBuilder& builder,
 }
 
 // Find and replace, in the open document and across the workspace.
-void registerFindReplaceCommands(EditorSessionBuilder& builder,
+void registerFindReplaceCommands(CommandCatalog& builder,
                                  EditorRuntime::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
@@ -719,7 +719,7 @@ void registerFindReplaceCommands(EditorSessionBuilder& builder,
 // pairs each id with its motion, rather than restating that list: the summary
 // is the id's last segment in words, which is the rule every one of them
 // follows.
-void registerSelectionCommands(EditorSessionBuilder& builder,
+void registerSelectionCommands(CommandCatalog& builder,
                                EditorRuntime::Impl& runtime) {
     auto summaryOf = [](std::string_view id) {
         auto const segment = id.substr(id.find('.') + 1);
@@ -765,7 +765,7 @@ void registerSelectionCommands(EditorSessionBuilder& builder,
     }
 }
 
-void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
+void bindRuntimeEditing(CommandCatalog& builder, EditorRuntime::Impl& runtime) {
     registerTextInputCommands(builder, runtime);
     registerSelectionCommands(builder, runtime);
     registerEditSuiteCommands(builder, runtime);

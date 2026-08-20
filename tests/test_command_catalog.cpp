@@ -1,5 +1,6 @@
 #include <ssg/CommandCatalog.h>
-#include <ssg/EditorSessionBuilder.h>
+
+#include "../src/runtime/command_executor.h"
 
 #include "test_helpers.h"
 
@@ -141,7 +142,7 @@ TEST(commandsAreEnumeratedInRegistrationOrderAndGroupedByOwner) {
 // codec is later derived from -- so the type is written once, at the handler.
 //
 // This checks the type is RECORDED, not that dispatch unwraps it: invoking a
-// handler needs a CommandContext, whose constructor is private to EditorSession
+// handler needs a CommandContext, whose constructor is private to CommandExecutor
 // and cannot honestly be fabricated here.  The unwrap is proven end-to-end
 // when a migrated command dispatches through a real session (D3).
 TEST(aTypedHandlerRecordsTheArgumentTypeItConsumes) {
@@ -240,18 +241,18 @@ TEST(concurrentReadsSeeOnlyWholeRegistrations) {
 // keymap resolved a handle for it -- while dispatch consulted a snapshot taken
 // at build time and answered UnknownCommand.  Worse, the handle indexed past
 // that snapshot's parallel array.
-TEST(aCommandRegisteredAfterTheSessionIsBuiltIsDispatchable) {
-    ssg::EditorSessionBuilder builder;
-    builder.add(minimal("early.command"));
-    auto session = builder.build();
-    ASSERT_TRUE(session->attach(
+TEST(aCommandRegisteredAfterExecutorConstructionIsDispatchable) {
+    auto catalog = std::make_shared<ssg::CommandCatalog>();
+    catalog->add(minimal("early.command"));
+    ssg::CommandExecutor executor{catalog};
+    ASSERT_TRUE(executor.attach(
                     ssg::InvocationPrincipal{ssg::ClientId{1},
                                              ssg::InvocationOrigin::InProcess},
                     ssg::ViewId{1})
                     .accepted());
 
     int lateCalls = 0;
-    builder.catalog()->add(
+    catalog->add(
         ssg::CommandSpecBuilder{"late.command"}
             .owner("test-owner")
             .summary("registered after the session existed")
@@ -261,18 +262,18 @@ TEST(aCommandRegisteredAfterTheSessionIsBuiltIsDispatchable) {
                 return ssg::CommandHandlerResult::success();
             }));
 
-    auto const byName = session->dispatch(
-        ssg::ClientId{1}, {"late.command", session->revision(), {}});
+    auto const byName = executor.dispatch(
+        ssg::ClientId{1}, {"late.command", executor.revision(), {}});
     ASSERT_TRUE(byName.accepted());
     ASSERT_EQ(lateCalls, 1);
 
     // And by the handle the catalog issued for it, which is the keystroke
     // path's spelling.
-    auto const handle = builder.catalog()->handleFor("late.command");
+    auto const handle = catalog->handleFor("late.command");
     ASSERT_TRUE(handle.valid());
-    auto const byHandle = session->dispatch(
+    auto const byHandle = executor.dispatch(
         ssg::ClientId{1},
-        {ssg::CommandName{"late.command", handle}, session->revision(), {}});
+        {ssg::CommandName{"late.command", handle}, executor.revision(), {}});
     ASSERT_TRUE(byHandle.accepted());
     ASSERT_EQ(lateCalls, 2);
 }
@@ -449,7 +450,7 @@ TEST(aSwapIsNeverObservedWithNeitherGenerationPresent) {
 }
 
 int main() {
-    RUN(aCommandRegisteredAfterTheSessionIsBuiltIsDispatchable);
+    RUN(aCommandRegisteredAfterExecutorConstructionIsDispatchable);
     RUN(anEmptyCapabilityIsRefusedAtRegistration);
     RUN(registeringPastTheHandleSpaceIsRefused);
     RUN(aSwapExceedingTheHandleSpaceLeavesThePreviousGenerationWorking);

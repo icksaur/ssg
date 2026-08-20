@@ -1,6 +1,6 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/CommandInvocation.cpp
-    ${SSG_SOURCE_DIR}/src/EditorSession.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/command_executor.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

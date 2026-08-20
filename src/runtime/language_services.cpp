@@ -27,7 +27,7 @@ CommandHandlerResult lspWorkspaceCommand(EditorRuntime::Impl& runtime, std::any 
 
 // Renaming a symbol across the workspace.  The new name arrives in-process from
 // the prompt that collected it.
-void registerLspWorkspaceEditCommands(EditorSessionBuilder& builder,
+void registerLspWorkspaceEditCommands(CommandCatalog& builder,
                                       EditorRuntime::Impl& runtime) {
     builder.add(CommandSpecBuilder{"rename.symbol"}
                     .owner("lsp-workspace-edits")
@@ -45,7 +45,7 @@ void registerLspWorkspaceEditCommands(EditorSessionBuilder& builder,
 
 // Go-to, completion and hover.  None takes an argument: each acts on wherever
 // the cursor already is.
-void registerLspFeatureCommands(EditorSessionBuilder& builder,
+void registerLspFeatureCommands(CommandCatalog& builder,
                                 EditorRuntime::Impl& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary) {
         auto const name = id;
@@ -73,7 +73,7 @@ void registerLspFeatureCommands(EditorSessionBuilder& builder,
     declare("hover.dismiss", "", "Dismiss");
 }
 
-void bindRuntimeLanguageServices(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
+void bindRuntimeLanguageServices(CommandCatalog& builder, EditorRuntime::Impl& runtime) {
     registerLspWorkspaceEditCommands(builder, runtime);
     registerLspFeatureCommands(builder, runtime);
 }

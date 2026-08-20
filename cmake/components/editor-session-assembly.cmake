@@ -1,5 +1,4 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/EditorSessionBuilder.cpp
     ${SSG_SOURCE_DIR}/src/StatusFields.cpp
     ${SSG_SOURCE_DIR}/src/session_snapshot.cpp
 )

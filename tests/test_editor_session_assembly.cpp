@@ -1,7 +1,9 @@
 #include "test_helpers.h"
 
-#include <ssg/EditorSessionBuilder.h>
+#include <ssg/CommandCatalog.h>
 #include <ssg/session_snapshot.h>
+
+#include "../src/runtime/command_executor.h"
 
 #include <algorithm>
 #include <fstream>
@@ -104,10 +106,10 @@ private:
 // Registers its own command rather than binding one from the static table: the
 // path under test is service threading, not which commands happen to exist, and
 // a test naming a real command breaks every time that command migrates.
-TEST(builderThreadsServicesThroughTheCommonDispatchPath) {
+TEST(executorThreadsServicesThroughTheCommonDispatchPath) {
     TestServices services;
-    ssg::EditorSessionBuilder builder;
-    builder.add(ssg::CommandSpecBuilder{"probe.services"}
+    auto catalog = std::make_shared<ssg::CommandCatalog>();
+    catalog->add(ssg::CommandSpecBuilder{"probe.services"}
                     .owner("test-owner")
                     .summary("Observes the services it was dispatched with")
                     .observes()
@@ -115,15 +117,15 @@ TEST(builderThreadsServicesThroughTheCommonDispatchPath) {
                         ASSERT_TRUE(context.services() == &services);
                         return ssg::CommandHandlerResult::success();
                     }));
-    auto session = builder.services(services).build();
-    ASSERT_TRUE(session->attach(
+    ssg::CommandExecutor executor{catalog, &services};
+    ASSERT_TRUE(executor.attach(
                     ssg::InvocationPrincipal{
                         ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                     ssg::ViewId{1})
                     .accepted());
-    ASSERT_TRUE(session
-                    ->dispatch(ssg::ClientId{1},
-                               {"probe.services", ssg::Revision{1}, {}})
+    ASSERT_TRUE(executor
+                    .dispatch(ssg::ClientId{1},
+                              {"probe.services", ssg::Revision{1}, {}})
                     .accepted());
 }
 
@@ -314,7 +316,7 @@ static_assert(!std::is_copy_constructible_v<ssg::SessionDelta>);
 }  // namespace
 
 int main() {
-    RUN(builderThreadsServicesThroughTheCommonDispatchPath);
+    RUN(executorThreadsServicesThroughTheCommonDispatchPath);
     RUN(fullSnapshotMatchesReplayedAggregateDelta);
     RUN(nonDocumentTransitionReplaysAndRejectsADifferentClient);
     RUN(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay);

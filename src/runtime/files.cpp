@@ -401,7 +401,7 @@ CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId docume
 // runtime-resolved id and so stays in-process (that id means nothing to a remote
 // client); the payload-less commands are the keyboard route, reachable in the
 // external focus context.
-void registerExternalModificationCommands(EditorSessionBuilder& builder,
+void registerExternalModificationCommands(CommandCatalog& builder,
                                           EditorRuntime::Impl& runtime) {
     auto act = [&runtime](ExternalAction action) -> CommandHandlerResult {
         return runtime.runTransaction([&]() -> CommandHandlerResult {
@@ -532,7 +532,7 @@ void registerExternalModificationCommands(EditorSessionBuilder& builder,
 
 // How the active document is decoded and written back: its text encoding, its
 // line endings, and whether it ends with a newline.
-void registerEncodingCommands(EditorSessionBuilder& builder,
+void registerEncodingCommands(CommandCatalog& builder,
                               EditorRuntime::Impl& runtime) {
     auto declare = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
@@ -582,7 +582,7 @@ void registerEncodingCommands(EditorSessionBuilder& builder,
 // question from a path the user typed, so a principal without
 // `local_file_drop` cannot invoke it.  It is also the only one not offered to
 // Lua.
-void registerFileCommands(EditorSessionBuilder& builder,
+void registerFileCommands(CommandCatalog& builder,
                           EditorRuntime::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
@@ -658,7 +658,7 @@ void registerFileCommands(EditorSessionBuilder& builder,
 // name none -- so each takes an OPTIONAL in-process tab id.  Declaring them as
 // taking nothing dropped that id and made tab.activate act on whichever tab
 // happened to be active.
-void registerTabCommands(EditorSessionBuilder& builder,
+void registerTabCommands(CommandCatalog& builder,
                          EditorRuntime::Impl& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary,
                        TabCommand command) {
@@ -700,7 +700,7 @@ void registerTabCommands(EditorSessionBuilder& builder,
 // live diff of the current buffer (the draft) against its current disk content,
 // so a conflict can be inspected before it is resolved. In-process only: it
 // opens a live diff tab, a concept with no remote representation.
-void registerDraftCommands(EditorSessionBuilder& builder,
+void registerDraftCommands(CommandCatalog& builder,
                            EditorRuntime::Impl& runtime) {
     builder.add(
         CommandSpecBuilder{"draft.diff"}
@@ -737,7 +737,7 @@ void registerDraftCommands(EditorSessionBuilder& builder,
             }));
 }
 
-void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
+void bindRuntimeFiles(CommandCatalog& builder, EditorRuntime::Impl& runtime) {
     registerExternalModificationCommands(builder, runtime);
     registerFileCommands(builder, runtime);
     registerTabCommands(builder, runtime);

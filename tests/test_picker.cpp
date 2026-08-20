@@ -2,7 +2,6 @@
 
 #include "all_command_ids.h"
 
-#include <ssg/EditorSessionBuilder.h>
 #include <ssg/Search.h>
 
 #include "test_helpers.h"

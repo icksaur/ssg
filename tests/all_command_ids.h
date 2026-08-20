@@ -16,7 +16,6 @@
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/EditorRuntime.h>
-#include <ssg/EditorSessionBuilder.h>
 #include <optional>
 #include <typeindex>
 

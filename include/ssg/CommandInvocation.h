@@ -93,7 +93,7 @@ private:
     std::vector<CapabilityId> capabilities_;
 };
 
-class EditorSession;
+class CommandExecutor;
 struct CommandHandlerResult;
 
 class CommandServices {
@@ -141,7 +141,7 @@ public:
     void setActiveView(ViewId view) noexcept;
 
 private:
-    friend class EditorSession;
+    friend class CommandExecutor;
 
     CommandContext(Revision revision, InvocationPrincipal const& principal,
                    CommandServices* services)

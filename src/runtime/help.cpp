@@ -178,7 +178,7 @@ std::string buildHelpDocument(EditorRuntime::Impl const& runtime) {
     return document;
 }
 
-void bindRuntimeHelp(EditorSessionBuilder& builder,
+void bindRuntimeHelp(CommandCatalog& builder,
                      EditorRuntime::Impl& runtime) {
     builder.add(
         CommandSpecBuilder{"help.open"}

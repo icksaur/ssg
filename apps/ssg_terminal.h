@@ -9,7 +9,6 @@
 
 #include <ssg/color.h>
 #include <ssg/Renderer.h>
-#include <ssg/EditorSession.h>
 
 #include <array>
 #include <chrono>

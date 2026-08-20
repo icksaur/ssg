@@ -1,4 +1,4 @@
-#include <ssg/EditorSession.h>
+#include "command_executor.h"
 
 #include <ssg/CommandCatalog.h>
 
@@ -50,7 +50,7 @@ CommandResult rejected(CommandError error, Revision revision,
 
 }  // namespace
 
-struct EditorSession::Impl {
+struct CommandExecutor::Impl {
     Impl(std::shared_ptr<CommandCatalog> commandCatalog,
          CommandServices* commandServices)
         : catalog{std::move(commandCatalog)}, services{commandServices} {}
@@ -67,22 +67,22 @@ struct EditorSession::Impl {
     std::unordered_map<ClientId, AttachedClient, ClientIdHash> clients;
 };
 
-EditorSession::EditorSession(std::shared_ptr<CommandCatalog> catalog,
-                             CommandServices* services)
+CommandExecutor::CommandExecutor(std::shared_ptr<CommandCatalog> catalog,
+                                 CommandServices* services)
     : impl_{std::make_unique<Impl>(std::move(catalog), services)} {
     if (!impl_->catalog) {
         throw std::invalid_argument{"a session requires a command catalog"};
     }
 }
 
-std::shared_ptr<CommandCatalog> const& EditorSession::catalog() const {
+std::shared_ptr<CommandCatalog> const& CommandExecutor::catalog() const {
     return impl_->catalog;
 }
 
-EditorSession::~EditorSession() = default;
+CommandExecutor::~CommandExecutor() = default;
 
-AttachResult EditorSession::attach(InvocationPrincipal principal,
-                                   ViewId viewId) {
+AttachResult CommandExecutor::attach(InvocationPrincipal principal,
+                                    ViewId viewId) {
     std::lock_guard lock{impl_->mutex};
     ClientId const clientId = principal.clientId();
     auto [unused, inserted] = impl_->clients.emplace(
@@ -94,12 +94,12 @@ AttachResult EditorSession::attach(InvocationPrincipal principal,
     return {AttachError::None, {}};
 }
 
-bool EditorSession::detach(ClientId clientId) {
+bool CommandExecutor::detach(ClientId clientId) {
     std::lock_guard lock{impl_->mutex};
     return impl_->clients.erase(clientId) != 0;
 }
 
-std::optional<Revision> EditorSession::activeDispatchRevision() const noexcept {
+std::optional<Revision> CommandExecutor::activeDispatchRevision() const noexcept {
     if (impl_->dispatchingThread.load(std::memory_order_acquire) !=
         std::this_thread::get_id()) {
         return std::nullopt;
@@ -109,8 +109,8 @@ std::optional<Revision> EditorSession::activeDispatchRevision() const noexcept {
     return Revision{impl_->dispatchRevision.load(std::memory_order_relaxed)};
 }
 
-CommandResult EditorSession::dispatch(ClientId clientId,
-                                      ClientCommand const& command) {
+CommandResult CommandExecutor::dispatch(ClientId clientId,
+                                        ClientCommand const& command) {
     // A handler may not dispatch.  The reason is revision accounting, not the
     // lock: the new revision below is computed from a value captured BEFORE the
     // handler runs, so a nested mutation would advance the revision and then be
@@ -207,7 +207,7 @@ CommandResult EditorSession::dispatch(ClientId clientId,
     return {CommandError::None, impl_->revision, {}};
 }
 
-Revision EditorSession::revision() const {
+Revision CommandExecutor::revision() const {
     // A handler asking for the revision is asking from INSIDE a dispatch, which
     // already holds this lock -- and already knows the answer.  Taking the lock
     // again would hang rather than answer.
@@ -216,7 +216,7 @@ Revision EditorSession::revision() const {
     return impl_->revision;
 }
 
-Revision EditorSession::advanceRevision() {
+Revision CommandExecutor::advanceRevision() {
     std::lock_guard lock{impl_->mutex};
     if (impl_->revision.value() == std::numeric_limits<std::uint64_t>::max()) {
         throw std::overflow_error{"session revision is exhausted"};
@@ -225,12 +225,12 @@ Revision EditorSession::advanceRevision() {
     return impl_->revision;
 }
 
-SessionTopology EditorSession::topology() const {
+SessionTopology CommandExecutor::topology() const {
     std::lock_guard lock{impl_->mutex};
     return impl_->topology;
 }
 
-std::optional<AttachedClient> EditorSession::attachedClient(
+std::optional<AttachedClient> CommandExecutor::attachedClient(
     ClientId clientId) const {
     std::lock_guard lock{impl_->mutex};
     auto const found = impl_->clients.find(clientId);

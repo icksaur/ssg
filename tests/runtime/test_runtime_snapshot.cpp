@@ -2,7 +2,6 @@
 #include "../test_helpers.h"
 
 #include <ssg/EditorRuntime.h>
-#include <ssg/EditorSessionBuilder.h>
 #include <ssg/Keymap.h>
 
 #include <algorithm>

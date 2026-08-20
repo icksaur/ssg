@@ -7,7 +7,6 @@
 #include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
 #include <ssg/EditorRuntime.h>
-#include <ssg/EditorSessionBuilder.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>
@@ -48,6 +47,8 @@
 #include <typeindex>
 #include <unordered_map>
 #include <vector>
+
+#include "command_executor.h"
 
 namespace ssg {
 
@@ -120,12 +121,12 @@ private:
     inline static std::atomic<std::uint64_t> liveCount{0};
 };
 
-void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
-void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
-void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
-void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
-void bindRuntimeLanguageServices(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
-void bindRuntimeHelp(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
+void bindRuntimeEditing(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
+void bindRuntimeFiles(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
+void bindRuntimePresentation(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
+void bindRuntimeNavigation(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
+void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
+void bindRuntimeHelp(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
     EditorRuntime::Impl& runtime, Revision revision, FindReplaceCommand command,
     std::any const& payload);
@@ -240,7 +241,9 @@ struct EditorRuntime::Impl final : CommandServices,
     // on a real chrome/structure change.
     std::uint64_t chromeGeneration = 0;
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
-    std::unique_ptr<EditorSession> session;
+    std::shared_ptr<CommandCatalog> catalog =
+        std::make_shared<CommandCatalog>();
+    std::unique_ptr<CommandExecutor> session;
     // Commands a running handler asked to dispatch, run in order once the
     // session lock releases.  The session mutex is not reentrant, so a handler
     // cannot dispatch; this is how it asks for one.

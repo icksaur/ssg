@@ -3,8 +3,9 @@
 #include <ssg/CommandInvocation.h>
 #include <ssg/Document.h>
 #include <ssg/GraphemeLayout.h>
-#include <ssg/EditorSession.h>
 #include <ssg/snapshot.h>
+
+#include "../src/runtime/command_executor.h"
 #include <ssg/Viewport.h>
 
 #include <algorithm>
@@ -262,7 +263,7 @@ void verifyCorrectness(std::string const& base,
     if (unchanged.changed || unchanged.replacement.has_value())
         throw std::runtime_error{"unchanged viewport emitted a payload"};
 
-    ssg::EditorSession idle{std::make_shared<ssg::CommandCatalog>()};
+    ssg::CommandExecutor idle{std::make_shared<ssg::CommandCatalog>()};
     double const cpuStart = processCpuMilliseconds();
     std::this_thread::sleep_for(std::chrono::milliseconds{100});
     timings.idleCpuMilliseconds = processCpuMilliseconds() - cpuStart;
@@ -308,7 +309,7 @@ void measureCommandDelta(std::vector<Operation> const& operations,
                                             : ssg::CommandHandlerResult::failure(
                                                   result.message);
                              }));
-        ssg::EditorSession session{catalog};
+        ssg::CommandExecutor session{catalog};
         ssg::InvocationPrincipal const principal{
             ssg::ClientId{1}, ssg::InvocationOrigin::InProcess};
         if (!session.attach(principal, ssg::ViewId{1}).accepted())

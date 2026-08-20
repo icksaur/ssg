@@ -24,7 +24,6 @@
 
 #include <filesystem>
 #include <string>
-#include <ssg/EditorSessionBuilder.h>
 #include <ssg/FileCommands.h>
 
 #include <algorithm>

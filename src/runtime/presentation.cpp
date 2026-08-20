@@ -311,7 +311,7 @@ CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_v
 // id-branching these handlers used to do.  A single `themeCommand(id, payload)`
 // had to re-derive from the id which of two payload types it held; here the
 // type is stated once, at the command, and the compiler carries it.
-void registerAppearanceCommands(EditorSessionBuilder& builder,
+void registerAppearanceCommands(CommandCatalog& builder,
                                 EditorRuntime::Impl& runtime) {
     auto declare = [&](std::string_view owner, std::string id,
                        std::string summary) {
@@ -391,7 +391,7 @@ void registerAppearanceCommands(EditorSessionBuilder& builder,
 //
 // The scroll commands all record a user navigation when they move the view, so
 // follow-edits knows the user drove rather than the editor.
-void registerViewportCommands(EditorSessionBuilder& builder,
+void registerViewportCommands(CommandCatalog& builder,
                               EditorRuntime::Impl& runtime) {
     builder.add(CommandSpecBuilder{"view.toggle_word_wrap"}
                     .owner("viewport-wrap-scrollbar")
@@ -474,7 +474,7 @@ void registerViewportCommands(EditorSessionBuilder& builder,
 // settings.import_workspace carries a whole settings document from the prompt
 // that collected it, and settings.set/reset carry typed mutations that a remote
 // client may send.  The three that take nothing say so.
-void registerSettingsCommands(EditorSessionBuilder& builder,
+void registerSettingsCommands(CommandCatalog& builder,
                               EditorRuntime::Impl& runtime) {
     auto declare = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
@@ -526,7 +526,7 @@ void registerSettingsCommands(EditorSessionBuilder& builder,
 
 // The prompt line and the status queue.  Only prompt.update_value carries
 // anything: the text typed so far.
-void registerPromptStatusCommands(EditorSessionBuilder& builder,
+void registerPromptStatusCommands(CommandCatalog& builder,
                                   EditorRuntime::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
@@ -594,7 +594,7 @@ void registerPromptStatusCommands(EditorSessionBuilder& builder,
 
 // Panes, the sidebar, and distraction-free mode.  None takes an argument; each
 // acts on the current layout.
-void registerShellLayoutCommands(EditorSessionBuilder& builder,
+void registerShellLayoutCommands(CommandCatalog& builder,
                                  EditorRuntime::Impl& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary) {
         auto name = id;
@@ -641,7 +641,7 @@ void registerShellLayoutCommands(EditorSessionBuilder& builder,
     declare("view.toggle_distraction_free", "", "Toggle Distraction Free");
 }
 
-void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
+void bindRuntimePresentation(CommandCatalog& builder, EditorRuntime::Impl& runtime) {
     registerViewportCommands(builder, runtime);
     registerShellLayoutCommands(builder, runtime);
     registerPromptStatusCommands(builder, runtime);

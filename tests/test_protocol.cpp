@@ -1,6 +1,5 @@
 #include "test_helpers.h"
 
-#include <ssg/EditorSessionBuilder.h>
 #include <ssg/ChromeLowering.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>

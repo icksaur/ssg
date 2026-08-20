@@ -1207,14 +1207,14 @@ WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {
 
 std::vector<SearchCommandDescriptor> EditorRuntime::Impl::descriptors() const {
     std::vector<SearchCommandDescriptor> result;
-    for (auto const* command : session->catalog()->commands()) {
+    for (auto const* command : catalog->commands()) {
         result.push_back({command->id, command->id});
     }
     return result;
 }
 
 PaletteExecutionResult EditorRuntime::Impl::execute(std::string_view commandId) {
-    return {session->catalog()->find(commandId) != nullptr, {}};
+    return {catalog->find(commandId) != nullptr, {}};
 }
 
 WorkspaceApplyResult EditorRuntime::Impl::apply(
@@ -2948,15 +2948,14 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
             return {nullptr,
                     "default keymap lacks a global settings.open escape hatch"};
         }
-        EditorSessionBuilder builder;
-        builder.services(*impl);
-        bindRuntimeEditing(builder, *impl);
-        bindRuntimeFiles(builder, *impl);
-        bindRuntimePresentation(builder, *impl);
-        bindRuntimeNavigation(builder, *impl);
-        bindRuntimeLanguageServices(builder, *impl);
-        bindRuntimeHelp(builder, *impl);
-        impl->session = builder.build();
+        bindRuntimeEditing(*impl->catalog, *impl);
+        bindRuntimeFiles(*impl->catalog, *impl);
+        bindRuntimePresentation(*impl->catalog, *impl);
+        bindRuntimeNavigation(*impl->catalog, *impl);
+        bindRuntimeLanguageServices(*impl->catalog, *impl);
+        bindRuntimeHelp(*impl->catalog, *impl);
+        impl->session =
+            std::make_unique<CommandExecutor>(impl->catalog, impl.get());
         return {std::unique_ptr<EditorRuntime>{new EditorRuntime{std::move(impl)}}, {}};
     } catch (std::exception const& exception) {
         return {nullptr, exception.what()};
@@ -3114,13 +3113,12 @@ ClientInputResult EditorRuntime::input(ClientId clientId,
         return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
     };
 
-    auto const catalogRevision = impl_->session->catalog()->revision();
+    auto const catalogRevision = impl_->catalog->revision();
     if (!impl_->inputKeymap ||
         impl_->inputKeymapGeneration != impl_->keymapGeneration ||
         impl_->inputCatalogRevision != catalogRevision) {
         impl_->inputKeymap =
-            std::make_unique<CompiledKeymap>(impl_->keymap,
-                                             *impl_->session->catalog());
+            std::make_unique<CompiledKeymap>(impl_->keymap, *impl_->catalog);
         impl_->inputKeymapGeneration = impl_->keymapGeneration;
         impl_->inputCatalogRevision = catalogRevision;
     }
@@ -3181,7 +3179,7 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
     const auto routingSignature = [&] {
         return std::tuple{impl_->interaction.routingGeneration(),
                           impl_->keymapGeneration,
-                          impl_->session->catalog()->revision(),
+                          impl_->catalog->revision(),
                           impl_->clipboard.writeGeneration()};
     };
     const auto routingBefore = routingSignature();
@@ -3202,11 +3200,11 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
     // The session refuses this too, but it has to be caught HERE as well:
     // everything below touches the session first (the attachment lookup), and
     // would block on the lock the handler's own call is holding before the
-    // session ever got the chance to refuse.  One message, defined on
-    // EditorSession, so the two guards cannot drift apart.
+    // executor ever got the chance to refuse. One message, defined on
+    // CommandExecutor, so the two guards cannot drift apart.
     if (const auto nested = impl_->session->activeDispatchRevision()) {
         return {CommandError::HandlerFailed, *nested,
-                std::string{EditorSession::kNestedDispatchRefusal}};
+                std::string{CommandExecutor::kNestedDispatchRefusal}};
     }
     // Parameterised by client because a deferred command runs as the client
     // that queued it, whose origin -- and so whether an edit counts as local --
@@ -3293,7 +3291,7 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
 }
 
 std::shared_ptr<CommandCatalog const> EditorRuntime::commandCatalog() const {
-    return impl_->session->catalog();
+    return impl_->catalog;
 }
 
 CommandHandle EditorRuntime::registerCommand(CommandSpecBuilder command) {
@@ -3303,7 +3301,7 @@ CommandHandle EditorRuntime::registerCommand(CommandSpecBuilder command) {
     if (revision().value() == std::numeric_limits<std::uint64_t>::max()) {
         throw std::overflow_error{"session revision exhausted"};
     }
-    auto const handle = impl_->session->catalog()->add(std::move(command));
+    auto const handle = impl_->catalog->add(std::move(command));
     impl_->session->advanceRevision();
     return handle;
 }
@@ -3318,10 +3316,10 @@ std::vector<CommandHandle> EditorRuntime::replaceCommandGeneration(
     if (revision().value() == std::numeric_limits<std::uint64_t>::max()) {
         throw std::overflow_error{"session revision exhausted"};
     }
-    auto const catalogRevision = impl_->session->catalog()->revision();
-    auto handles = impl_->session->catalog()->replaceGeneration(
+    auto const catalogRevision = impl_->catalog->revision();
+    auto handles = impl_->catalog->replaceGeneration(
         retire, std::move(commands));
-    if (impl_->session->catalog()->revision() != catalogRevision) {
+    if (impl_->catalog->revision() != catalogRevision) {
         impl_->session->advanceRevision();
     }
     return handles;

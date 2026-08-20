@@ -313,7 +313,7 @@ CommandHandlerResult followCommand(EditorRuntime::Impl& runtime, std::string_vie
 // The diff commands take a live document id, which is meaningless to a remote
 // client, so they are in-process only: typed for the handler, absent from the
 // protocol.
-void registerDiffAndFollowCommands(EditorSessionBuilder& builder,
+void registerDiffAndFollowCommands(CommandCatalog& builder,
                                    EditorRuntime::Impl& runtime) {
     auto diff = [&](std::string id, std::string summary) {
         auto const name = id;
@@ -357,7 +357,7 @@ void registerDiffAndFollowCommands(EditorSessionBuilder& builder,
 //
 // All eight share one handler, which branches on the id, so each declaration
 // only has to say what the command is called and what it carries.
-void registerTreeCommands(EditorSessionBuilder& builder,
+void registerTreeCommands(CommandCatalog& builder,
                           EditorRuntime::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
@@ -436,7 +436,7 @@ void registerTreeCommands(EditorSessionBuilder& builder,
 }
 
 // The pickers, workspace search, and the go-to jumps.
-void registerSearchPaletteCommands(EditorSessionBuilder& builder,
+void registerSearchPaletteCommands(CommandCatalog& builder,
                                    EditorRuntime::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
@@ -531,7 +531,7 @@ void registerSearchPaletteCommands(EditorSessionBuilder& builder,
                         }));
 }
 
-void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
+void bindRuntimeNavigation(CommandCatalog& builder, EditorRuntime::Impl& runtime) {
     registerDiffAndFollowCommands(builder, runtime);
     registerSearchPaletteCommands(builder, runtime);
     registerTreeCommands(builder, runtime);

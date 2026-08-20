@@ -9,7 +9,7 @@ namespace ssg {
 
 class CommandCatalog;
 
-class EditorSession {
+class CommandExecutor {
 public:
     // Why a handler's dispatch is refused, and what to do instead.
     //
@@ -22,14 +22,14 @@ public:
         "a command handler may not dispatch another command directly; ask for "
         "it instead, so each command still advances the revision exactly once";
 
-    explicit EditorSession(std::shared_ptr<CommandCatalog> catalog,
-                           CommandServices* services = nullptr);
-    ~EditorSession();
+    explicit CommandExecutor(std::shared_ptr<CommandCatalog> catalog,
+                             CommandServices* services = nullptr);
+    ~CommandExecutor();
 
-    EditorSession(EditorSession const&) = delete;
-    EditorSession& operator=(EditorSession const&) = delete;
-    EditorSession(EditorSession&&) = delete;
-    EditorSession& operator=(EditorSession&&) = delete;
+    CommandExecutor(CommandExecutor const&) = delete;
+    CommandExecutor& operator=(CommandExecutor const&) = delete;
+    CommandExecutor(CommandExecutor&&) = delete;
+    CommandExecutor& operator=(CommandExecutor&&) = delete;
 
     // The catalog this session dispatches from.  Held rather than copied, so a
     // command registered later is visible here with no propagation step.
@@ -51,7 +51,7 @@ public:
 
     [[nodiscard]] Revision revision() const;
     // CONTRACT
-    // EditorSession::advanceRevision advances the revision only for the runtime's
+    // CommandExecutor::advanceRevision advances the revision only for the runtime's
     //   own out-of-band authoritative mutations that do not flow through
     //   dispatch; a client-visible command must reach the revision through
     //   dispatch, so this is never a substitute dispatch path.

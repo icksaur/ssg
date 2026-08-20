@@ -1,7 +1,7 @@
 #include <ssg/EditorRuntime.h>
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/EditorSession.h>
+#include "../src/runtime/command_executor.h"
 
 #include "test_helpers.h"
 
@@ -48,7 +48,7 @@ std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
 // session revision advanced by exactly that many steps.
 //
 // This is the property that decides whether a handler may dispatch
-// synchronously.  It cannot: EditorSession::dispatch computes the new revision
+// synchronously. It cannot: CommandExecutor::dispatch computes the new revision
 // from a value captured BEFORE the handler ran, so a nested mutation advances
 // the revision and the outer then writes its own value over it.  Two accepted
 // mutations, one revision step -- and a client replaying deltas against a base
@@ -57,8 +57,8 @@ std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
 // Deferral satisfies the property because each deferred command is its own
 // dispatch with its own revision step.
 //
-// To perturb: make EditorSession::Impl::mutex a std::recursive_mutex, delete
-// the nested-dispatch guards in EditorSession::dispatch and
+// To perturb: make CommandExecutor::Impl::mutex a std::recursive_mutex, delete
+// the nested-dispatch guards in CommandExecutor::dispatch and
 // EditorRuntime::dispatch, have the outer handler dispatch instead of defer,
 // and REBUILD THE LIBRARY (a probe linked against a stale libssg.a still
 // contains the guards and reports a false pass).  The counts then diverge.
@@ -270,7 +270,7 @@ TEST(aHandlerThatDispatchesIsToldToDeferInstead) {
     // And says why it matters, so the rule is not mistaken for an arbitrary
     // limitation by whoever reads it next.
     ASSERT_TRUE(nested.message.find("revision") != std::string::npos);
-    ASSERT_EQ(std::string{ssg::EditorSession::kNestedDispatchRefusal},
+    ASSERT_EQ(std::string{ssg::CommandExecutor::kNestedDispatchRefusal},
               nested.message);
 
     fs::remove_all(root);

@@ -3,7 +3,7 @@
 #include <ssg/CommandCatalog.h>
 #include <ssg/CommandSpecBuilder.h>
 #include <ssg/CommandInvocation.h>
-#include <ssg/EditorSession.h>
+#include "../src/runtime/command_executor.h"
 
 #include <algorithm>
 #include <any>
@@ -81,7 +81,7 @@ TEST(totalOrderAndRegisteredDispatch) {
             clients.push_back(context.principal().clientId().value());
             return ssg::CommandHandlerResult::success();
         })});
-    ssg::EditorSession session{catalog};
+    ssg::CommandExecutor session{catalog};
 
     ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{11}).accepted());
     ASSERT_TRUE(session.attach(principal(2), ssg::ViewId{22}).accepted());
@@ -117,7 +117,7 @@ TEST(staleRejectionAppliesOnlyToMutations) {
                     return ssg::CommandHandlerResult::success();
                 }),
     });
-    ssg::EditorSession session{catalog};
+    ssg::CommandExecutor session{catalog};
     ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{1}).accepted());
     ASSERT_TRUE(
         session.dispatch(ssg::ClientId{1}, request("state.advance", 1)).accepted());
@@ -141,7 +141,7 @@ TEST(clientIdentityAndPrincipalAreIsolated) {
             observedClients.push_back(context.principal().clientId().value());
             return ssg::CommandHandlerResult::success();
         })});
-    ssg::EditorSession session{catalog};
+    ssg::CommandExecutor session{catalog};
     ASSERT_TRUE(session.attach(principal(7), ssg::ViewId{70}).accepted());
     ASSERT_TRUE(session.attach(
         principal(8, ssg::InvocationOrigin::Websocket), ssg::ViewId{80})
@@ -188,7 +188,7 @@ TEST(handlerFailureIsAtomic) {
                     return ssg::CommandHandlerResult::success();
                 }),
     });
-    ssg::EditorSession session{catalog};
+    ssg::CommandExecutor session{catalog};
     ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{1}).accepted());
 
     auto rejectedResult =
@@ -233,7 +233,7 @@ TEST(principalCapabilityEnforcementHasOriginParity) {
             return ssg::CommandHandlerResult::success();
         },
         {ssg::CapabilityId{"local_file_drop"}})});
-    ssg::EditorSession session{catalog};
+    ssg::CommandExecutor session{catalog};
 
     ASSERT_TRUE(session.attach(
         principal(1, ssg::InvocationOrigin::InProcess,
@@ -280,7 +280,7 @@ TEST(executorSerializesConcurrentHandlers) {
             active.fetch_sub(1);
             return ssg::CommandHandlerResult::success();
         })});
-    ssg::EditorSession session{catalog};
+    ssg::CommandExecutor session{catalog};
     ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{1}).accepted());
     ASSERT_TRUE(session.attach(principal(2), ssg::ViewId{2}).accepted());
 
