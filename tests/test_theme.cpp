@@ -1,4 +1,4 @@
-#include "ssg/EditorRuntime.h"
+#include "ssg/EditorSession.h"
 #include "ssg/Theme.h"
 #include "test_helpers.h"
 
@@ -138,23 +138,23 @@ TEST(anEmptyThemeSetTableIsAcceptedAndChangesNothing) {
     if (result.accepted()) ASSERT_EQ(result.snapshot, before);
 }
 
-// EditorRuntime::create's initial theme must be exactly ssg::defaultTheme()
+// EditorSession::create's initial theme must be exactly ssg::defaultTheme()
 // -- the one compiled-in source (see its doc comment in Theme.h) -- and
 // nothing else. This is a wiring regression test: what CAN regress is
-// EditorRuntime::create() silently starting from some other theme.
+// EditorSession::create() silently starting from some other theme.
 TEST(editorRuntimeStartsFromTheDefaultTheme) {
     auto root = std::filesystem::temp_directory_path() /
                 ("ssg_theme_wiring_" + std::to_string(::getpid()));
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    ssg::EditorRuntimeConfig config;
+    ssg::EditorSessionConfig config;
     config.cwd = root / "workspace";
     config.scratchRoot = root / "scratch";
     config.recoveryRoot = root / "recovery";
-    auto created = ssg::EditorRuntime::create(config);
+    auto created = ssg::EditorSession::create(config);
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) { std::filesystem::remove_all(root); return; }
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());

@@ -9,7 +9,7 @@
 
 #include "../test_helpers.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/Renderer.h>
 
 #include <cstdlib>
@@ -43,10 +43,10 @@ std::string readGolden(const std::string& path) {
 // of each, so the golden covers editor-only, panel-shown, palette-open, and find-open.
 std::string captureGridMatrix() {
     auto root = uniqueRoot();
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root / "workspace", root / "scratch", root / "recovery"});
-    if (!created.accepted() || !created.runtime) return "runtime create failed";
-    auto& runtime = *created.runtime;
+    if (!created.accepted() || !created.session) return "runtime create failed";
+    auto& runtime = *created.session;
     (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                          ssg::ViewId{1});
     (void)runtime.dispatch(ssg::ClientId{1},

@@ -427,7 +427,7 @@ CONTRACT line that would only duplicate a testable behavior.
 ### The channel
 
 The transport spine exists: the sectioned envelope in `apps/http_serve.cpp`
-carries tagged sections, and `EditorRuntime::snapshot` has two overloads bound by
+carries tagged sections, and `EditorSession::snapshot` has two overloads bound by
 a CONTRACT line — the dimension-less overload returns the identical semantic
 sections with presentation absent, so a native client already receives the whole
 semantic model without any grid geometry. The UI-VM's tree-and-mutations
@@ -585,7 +585,7 @@ capability set stays host-authoritative and is not overloaded with rendering
 concerns. The widget UI profile is a *distinct*, non-authorizing, host-selected
 fact about a client, following the same host-declares-not-client discipline
 without touching the authorization seam. The
-presentation-optional contract (`EditorRuntime::snapshot`) is leaned on and
+presentation-optional contract (`EditorSession::snapshot`) is leaned on and
 extended — the UI-VM section is medium-agnostic and never gated on grid geometry.
 The one-active-prompt contract (`PromptSurface`) is preserved explicitly: the base
 focus context is `FocusTarget` without its transient `Prompt` member, the effective
@@ -594,7 +594,7 @@ produces the same closed set, and the focus-capture stack holds **at most one
 prompt-backed entry**, so `promptFocusRegion` and the single `PromptSurface`
 request continue to guarantee two prompts cannot be open at once. The capture stack
 layers transient surfaces above the base context without redefining either. The
-host-only chrome-composition seam (`EditorRuntime`) stays a host-only,
+host-only chrome-composition seam (`EditorSession`) stays a host-only,
 non-registered seam; whether publishing the UI-VM section is likewise host-only is
 a question the migration answers, not a contract it breaks.
 

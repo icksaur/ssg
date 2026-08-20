@@ -1,7 +1,7 @@
 #include <ssg/ScriptHost.h>
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/Keymap.h>
 #include <ssg/StatusFields.h>
 #include <ssg/Style.h>
@@ -62,14 +62,14 @@ std::vector<std::string> scriptChromeProviders() {
 }  // namespace
 
 struct ScriptHost::Impl {
-    EditorRuntime& runtime;
+    EditorSession& runtime;
     std::thread::id owningThread{std::this_thread::get_id()};
     LuaCommandHost host;
     // What the last successful evaluation put in the catalog, retired by the
     // next one.
     std::vector<CommandHandle> generation;
 
-    Impl(EditorRuntime& editorRuntime, LuaCommandHostOptions options)
+    Impl(EditorSession& editorRuntime, LuaCommandHostOptions options)
         : runtime{editorRuntime},
           host{std::move(options),
                [this](LuaInvocation const& invocation) {
@@ -156,7 +156,7 @@ struct ScriptHost::Impl {
     }
 };
 
-ScriptHost::ScriptHost(EditorRuntime& runtime) {
+ScriptHost::ScriptHost(EditorSession& runtime) {
     if (!runtime
              .attach({kScriptClientId, InvocationOrigin::Lua,
                       scriptCapabilities()},

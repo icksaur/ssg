@@ -10,7 +10,7 @@
 
 namespace ssg {
 
-class EditorRuntime;
+class EditorSession;
 
 // The client every script-originated command is dispatched as, reserved for the
 // process's one ScriptHost.  Named here rather than buried in the
@@ -40,7 +40,7 @@ class ScriptHost {
 public:
     // Attaches the script client to `runtime`, which must outlive this host.
     // Throws std::runtime_error if the runtime refuses the attachment.
-    explicit ScriptHost(EditorRuntime& runtime);
+    explicit ScriptHost(EditorSession& runtime);
     ~ScriptHost();
 
     ScriptHost(ScriptHost const&) = delete;

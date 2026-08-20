@@ -1,7 +1,7 @@
 // Kind: seam.
 //
 // Proves SessionSnapshotBuilder is faithful: a snapshot it builds renders the
-// document region identically to one the real EditorRuntime produces for the
+// document region identically to one the real EditorSession produces for the
 // same text.
 //
 // This is the test that makes the builder trustworthy.  ONE test pays the cost
@@ -12,7 +12,7 @@
 #include "session_snapshot_builder.h"
 #include "test_helpers.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 
 #include <filesystem>
 #include <fstream>
@@ -57,11 +57,11 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
 
     auto root = uniqueRoot();
     std::ofstream{root / "a.txt", std::ios::binary} << text;
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto runtime = std::move(created.runtime);
+    auto runtime = std::move(created.session);
     (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     ASSERT_TRUE(runtime

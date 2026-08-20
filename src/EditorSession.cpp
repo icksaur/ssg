@@ -1,4 +1,4 @@
-#include "runtime/editor_runtime_internal.h"
+#include "runtime/editor_session_internal.h"
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/DraftReopenClassifier.h>
@@ -463,7 +463,7 @@ std::string tabMessage(TabResult const& result) {
     return result.message.empty() ? "tab operation failed" : result.message;
 }
 
-EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
+EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
                           std::filesystem::path scratchRoot,
                           std::filesystem::path recoveryRoot,
                           std::filesystem::path archiveRoot,
@@ -513,9 +513,9 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
         watcherAvailable.load(std::memory_order_relaxed);
 }
 
-EditorRuntime::Impl::~Impl() { stopGitDiffWorker(); }
+EditorSession::Impl::~Impl() { stopGitDiffWorker(); }
 
-void EditorRuntime::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher) {
+void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher) {
     if (!enableGit && !enableWatcher) {
         return;
     }
@@ -903,7 +903,7 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
     gitDiffWorker = std::move(state);
 }
 
-void EditorRuntime::Impl::stopGitDiffWorker() {
+void EditorSession::Impl::stopGitDiffWorker() {
     if (!gitDiffWorker) {
         return;
     }
@@ -926,7 +926,7 @@ void EditorRuntime::Impl::stopGitDiffWorker() {
     gitDiffWorker.reset();
 }
 
-bool EditorRuntime::Impl::drainGitDiffScans() {
+bool EditorSession::Impl::drainGitDiffScans() {
     auto const availabilityBefore = lastPublishedWatcherAvailable;
     drainWatcherAvailability();
     bool accepted = availabilityBefore != lastPublishedWatcherAvailable;
@@ -972,7 +972,7 @@ bool EditorRuntime::Impl::drainGitDiffScans() {
     return accepted;
 }
 
-void EditorRuntime::Impl::drainWatcherAvailability() {
+void EditorSession::Impl::drainWatcherAvailability() {
     const bool current = watcherAvailable.load(std::memory_order_relaxed);
     if (current == lastPublishedWatcherAvailable) {
         return;
@@ -985,28 +985,28 @@ void EditorRuntime::Impl::drainWatcherAvailability() {
     }
 }
 
-int EditorRuntime::Impl::gitDiffWakeDescriptor() const {
+int EditorSession::Impl::gitDiffWakeDescriptor() const {
     return gitDiffWorker ? gitDiffWorker->wakeReadFd : -1;
 }
 
-CommandHandlerResult EditorRuntime::Impl::runTransaction(
+CommandHandlerResult EditorSession::Impl::runTransaction(
     std::function<CommandHandlerResult()> operation) {
     return operation();
 }
 
-std::any& EditorRuntime::Impl::featureStateValue(std::type_index) {
-    throw std::logic_error{"EditorRuntime exposes feature state through snapshots"};
+std::any& EditorSession::Impl::featureStateValue(std::type_index) {
+    throw std::logic_error{"EditorSession exposes feature state through snapshots"};
 }
 
-void EditorRuntime::Impl::publishStatusValue(std::type_index, std::any statusValue) {
+void EditorSession::Impl::publishStatusValue(std::type_index, std::any statusValue) {
     if (auto const* item = std::any_cast<StatusItem>(&statusValue)) {
         (void)status.enqueue(*item);
     }
 }
 
-void EditorRuntime::Impl::publishDeltaValue(std::type_index, std::any) {}
+void EditorSession::Impl::publishDeltaValue(std::type_index, std::any) {}
 
-TabLifecycleResult EditorRuntime::Impl::close(
+TabLifecycleResult EditorSession::Impl::close(
     const TabState& tab, std::chrono::milliseconds durabilityTimeout) {
     if (!tab.document) {
         if (tab.kind == TabKind::ReadOnlyOutput) {
@@ -1118,7 +1118,7 @@ TabLifecycleResult EditorRuntime::Impl::close(
             scratch.waitUntilDurable(durabilityTimeout)};
 }
 
-TabLifecycleResult EditorRuntime::Impl::reopen(
+TabLifecycleResult EditorSession::Impl::reopen(
     const TabState& tab, const RecoveryRecordId& compensation) {
     std::optional<JournalDocument> restoredDocument;
     auto restored = recovery.restoreDocument(compensation, restoredDocument);
@@ -1175,7 +1175,7 @@ TabLifecycleResult EditorRuntime::Impl::reopen(
             reopenedState->key, true};
 }
 
-WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {
+WorkspaceSnapshot EditorSession::Impl::snapshot(Revision revision) const {
     WorkspaceSnapshot result;
     result.revision = revision;
     for (auto const id : workspace.documents()) {
@@ -1209,7 +1209,7 @@ WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {
     return result;
 }
 
-std::vector<SearchCommandDescriptor> EditorRuntime::Impl::descriptors() const {
+std::vector<SearchCommandDescriptor> EditorSession::Impl::descriptors() const {
     std::vector<SearchCommandDescriptor> result;
     for (auto const* command : catalog->commands()) {
         result.push_back({command->id, command->id});
@@ -1217,11 +1217,11 @@ std::vector<SearchCommandDescriptor> EditorRuntime::Impl::descriptors() const {
     return result;
 }
 
-PaletteExecutionResult EditorRuntime::Impl::execute(std::string_view commandId) {
+PaletteExecutionResult EditorSession::Impl::execute(std::string_view commandId) {
     return {catalog->find(commandId) != nullptr, {}};
 }
 
-WorkspaceApplyResult EditorRuntime::Impl::apply(
+WorkspaceApplyResult EditorSession::Impl::apply(
     const WorkspaceReplacePreview& preview, WorkspaceRecoverySink& recoverySink) {
     std::vector<std::filesystem::path> paths;
     std::vector<std::string> normalizedPaths;
@@ -1308,7 +1308,7 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
     return {FindReplaceError::None, record.appliedRevision, {}};
 }
 
-WorkspaceApplyResult EditorRuntime::Impl::recover(const WorkspaceRecoveryRecord& record) {
+WorkspaceApplyResult EditorSession::Impl::recover(const WorkspaceRecoveryRecord& record) {
     for (auto const& change : record.changes) {
         // This is the rollback path, so an interrupted write here would leave a
         // file that is neither the edited version nor the original.
@@ -1321,9 +1321,9 @@ WorkspaceApplyResult EditorRuntime::Impl::recover(const WorkspaceRecoveryRecord&
     return {FindReplaceError::None, record.appliedRevision, {}};
 }
 
-bool EditorRuntime::Impl::store(const WorkspaceRecoveryRecord&) { return true; }
+bool EditorSession::Impl::store(const WorkspaceRecoveryRecord&) { return true; }
 
-std::optional<LspDocumentSnapshot> EditorRuntime::Impl::snapshot(std::string_view uri) const {
+std::optional<LspDocumentSnapshot> EditorSession::Impl::snapshot(std::string_view uri) const {
     auto path = pathFromUri(uri);
     if (!path) return std::nullopt;
     for (auto const id : workspace.documents()) {
@@ -1337,7 +1337,7 @@ std::optional<LspDocumentSnapshot> EditorRuntime::Impl::snapshot(std::string_vie
     return std::nullopt;
 }
 
-LspWorkspaceDocumentWriteResult EditorRuntime::Impl::apply(
+LspWorkspaceDocumentWriteResult EditorSession::Impl::apply(
     std::string uri, Revision expectedRevision, std::string text) {
     for (auto const id : workspace.documents()) {
         auto state = workspace.state(id);
@@ -1355,7 +1355,7 @@ LspWorkspaceDocumentWriteResult EditorRuntime::Impl::apply(
     return {Revision{0}, LspWorkspaceDocumentError::UnknownDocument, "document URI is not open"};
 }
 
-LspWorkspaceFileResult EditorRuntime::Impl::snapshot(std::string_view uri, LspWorkspaceFileNode& node) const {
+LspWorkspaceFileResult EditorSession::Impl::snapshot(std::string_view uri, LspWorkspaceFileNode& node) const {
     auto path = pathFromUri(uri);
     if (!path) return {LspWorkspaceFileError::NotFound, "URI is not a file URI"};
     if (!std::filesystem::exists(*path)) {
@@ -1378,7 +1378,7 @@ LspWorkspaceFileResult EditorRuntime::Impl::snapshot(std::string_view uri, LspWo
 }
 
 
-LspWorkspaceFileResult EditorRuntime::Impl::createFile(std::string uri, bool overwrite) {
+LspWorkspaceFileResult EditorSession::Impl::createFile(std::string uri, bool overwrite) {
     auto path = pathFromUri(uri);
     if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
     if (overwrite) {
@@ -1395,7 +1395,7 @@ LspWorkspaceFileResult EditorRuntime::Impl::createFile(std::string uri, bool ove
     return asLspResult(createFileExclusively(*path, {}));
 }
 
-LspWorkspaceFileResult EditorRuntime::Impl::writeFile(std::string uri, std::string content) {
+LspWorkspaceFileResult EditorSession::Impl::writeFile(std::string uri, std::string content) {
     auto path = pathFromUri(uri);
     if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
     // Atomic replace rather than truncate-then-stream: an LSP edit interrupted
@@ -1408,7 +1408,7 @@ LspWorkspaceFileResult EditorRuntime::Impl::writeFile(std::string uri, std::stri
     return {};
 }
 
-LspWorkspaceFileResult EditorRuntime::Impl::renamePath(std::string oldUri, std::string newUri, bool overwrite) {
+LspWorkspaceFileResult EditorSession::Impl::renamePath(std::string oldUri, std::string newUri, bool overwrite) {
     auto oldPath = pathFromUri(oldUri);
     auto newPath = pathFromUri(newUri);
     if (!oldPath || !newPath) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
@@ -1421,7 +1421,7 @@ LspWorkspaceFileResult EditorRuntime::Impl::renamePath(std::string oldUri, std::
     return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
 }
 
-LspWorkspaceFileResult EditorRuntime::Impl::deletePath(std::string uri, bool recursive) {
+LspWorkspaceFileResult EditorSession::Impl::deletePath(std::string uri, bool recursive) {
     auto path = pathFromUri(uri);
     if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
     std::error_code code;
@@ -1431,7 +1431,7 @@ LspWorkspaceFileResult EditorRuntime::Impl::deletePath(std::string uri, bool rec
     return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
 }
 
-LspWorkspaceFileResult EditorRuntime::Impl::restorePath(std::string uri, const LspWorkspaceFileNode& node) {
+LspWorkspaceFileResult EditorSession::Impl::restorePath(std::string uri, const LspWorkspaceFileNode& node) {
     auto path = pathFromUri(uri);
     if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
     if (node.kind == LspWorkspaceFileNodeKind::Missing) {
@@ -1447,7 +1447,7 @@ LspWorkspaceFileResult EditorRuntime::Impl::restorePath(std::string uri, const L
     return writeFile(std::move(uri), node.content);
 }
 
-std::optional<FileDocumentId> EditorRuntime::Impl::activeDocumentId() const {
+std::optional<FileDocumentId> EditorSession::Impl::activeDocumentId() const {
     // The active tab is the single source of truth for the active editor
     // document.  With no active tab (e.g. the last tab was closed) there is no
     // active document and the shell renders its empty state; the editor view
@@ -1474,7 +1474,7 @@ std::optional<FileDocumentId> EditorRuntime::Impl::activeDocumentId() const {
     return std::nullopt;
 }
 
-const TabState* EditorRuntime::Impl::activeTabState() const {
+const TabState* EditorSession::Impl::activeTabState() const {
     auto const& view = tabs.viewState();
     if (!view.active) return nullptr;
     auto found = std::find_if(view.tabs.begin(), view.tabs.end(),
@@ -1485,7 +1485,7 @@ const TabState* EditorRuntime::Impl::activeTabState() const {
     return &*found;
 }
 
-CommandHandlerResult EditorRuntime::Impl::openOrFocusLiveDiffTab(
+CommandHandlerResult EditorSession::Impl::openOrFocusLiveDiffTab(
     const DiffFileView& file, NavigationClass classification,
     std::optional<ClientId> userClient, std::optional<ViewId> userView) {
     const auto target = diffOpenFile(file);
@@ -1531,7 +1531,7 @@ CommandHandlerResult EditorRuntime::Impl::openOrFocusLiveDiffTab(
     return success();
 }
 
-CommandHandlerResult EditorRuntime::Impl::openReadOnlyTab(
+CommandHandlerResult EditorSession::Impl::openReadOnlyTab(
     TabKind kind, std::string contentIdentity, std::string label,
     std::string text, LanguageId language) {
     // Build the replacement document FIRST, then swap: a ReadOnly document
@@ -1566,7 +1566,7 @@ CommandHandlerResult EditorRuntime::Impl::openReadOnlyTab(
     return success();
 }
 
-CommandHandlerResult EditorRuntime::Impl::openDraftDiff() {
+CommandHandlerResult EditorSession::Impl::openDraftDiff() {
     const auto id = activeDocumentId();
     if (!id) return failure("no active document");
     const auto state = workspace.state(*id);
@@ -1642,11 +1642,11 @@ std::optional<WatchFileState> observeWatchState(
 
 }  // namespace
 
-DiffFileId EditorRuntime::Impl::externalDiffFileId(std::string_view savedPath) {
+DiffFileId EditorSession::Impl::externalDiffFileId(std::string_view savedPath) {
     return DiffFileId{"external:" + std::string{savedPath}};
 }
 
-std::optional<std::string> EditorRuntime::Impl::savedPathFromExternalDiffId(
+std::optional<std::string> EditorSession::Impl::savedPathFromExternalDiffId(
     const DiffFileId& id) {
     static constexpr std::string_view prefix{"external:"};
     const auto& value = id.value();
@@ -1656,7 +1656,7 @@ std::optional<std::string> EditorRuntime::Impl::savedPathFromExternalDiffId(
     return value.substr(prefix.size());
 }
 
-std::optional<FileDocumentId> EditorRuntime::Impl::resolveExternalDocument(
+std::optional<FileDocumentId> EditorSession::Impl::resolveExternalDocument(
     const DiffFileId& id) const {
     const auto savedPath = savedPathFromExternalDiffId(id);
     if (!savedPath) return std::nullopt;
@@ -1671,7 +1671,7 @@ std::optional<FileDocumentId> EditorRuntime::Impl::resolveExternalDocument(
 }
 
 std::optional<FileDocumentId>
-EditorRuntime::Impl::resolveOpenSavedDocumentByPath(
+EditorSession::Impl::resolveOpenSavedDocumentByPath(
     const std::filesystem::path& relativePath) const {
     const auto normalized = relativePath.generic_string();
     for (const auto documentId : workspace.documents()) {
@@ -1684,7 +1684,7 @@ EditorRuntime::Impl::resolveOpenSavedDocumentByPath(
     return std::nullopt;
 }
 
-void EditorRuntime::Impl::registerExternalSaveExpectation(
+void EditorSession::Impl::registerExternalSaveExpectation(
     const std::filesystem::path& relativePath) {
     const auto observed = observeWatchState(workspace.root() / relativePath);
     if (!observed) return;
@@ -1714,7 +1714,7 @@ void EditorRuntime::Impl::registerExternalSaveExpectation(
     }
 }
 
-void EditorRuntime::Impl::reconcileExternalWatchEvents(
+void EditorSession::Impl::reconcileExternalWatchEvents(
     std::vector<WatchEvent> events, bool resync) {
     const auto flowRevisionBefore = external.viewState().revision;
     const auto diffRevisionBefore = diff.viewState().revision;
@@ -1953,7 +1953,7 @@ void EditorRuntime::Impl::reconcileExternalWatchEvents(
     }
 }
 
-bool EditorRuntime::Impl::commitExternalDismissal(
+bool EditorSession::Impl::commitExternalDismissal(
     FileDocumentId document, bool removed,
     const std::optional<std::string>& dismissedContent) {
     return workspace.commitExternalDismissal(
@@ -1982,7 +1982,7 @@ bool EditorRuntime::Impl::commitExternalDismissal(
         });
 }
 
-void EditorRuntime::Impl::reconcileAllOpenDocumentsAgainstDisk() {
+void EditorSession::Impl::reconcileAllOpenDocumentsAgainstDisk() {
     std::vector<WatchEvent> synthesized;
     std::uint64_t sequence = 0;
     for (const auto documentId : workspace.documents()) {
@@ -2050,7 +2050,7 @@ void EditorRuntime::Impl::reconcileAllOpenDocumentsAgainstDisk() {
     }
 }
 
-bool EditorRuntime::Impl::archiveDiscardedDraft(std::string_view savedPath,
+bool EditorSession::Impl::archiveDiscardedDraft(std::string_view savedPath,
                                                 std::string_view content) {
     // Beside the scratch store (not the workspace deleted-file archive, which
     // the housekeeping pruner owns), so a discarded draft is never pruned as a
@@ -2081,7 +2081,7 @@ bool EditorRuntime::Impl::archiveDiscardedDraft(std::string_view savedPath,
     return createFileExclusively(target, bytes).ok();
 }
 
-CommandHandlerResult EditorRuntime::Impl::discardDraft() {
+CommandHandlerResult EditorSession::Impl::discardDraft() {
     const auto id = activeDocumentId();
     if (!id) return failure("no active document");
     const auto state = workspace.state(*id);
@@ -2120,7 +2120,7 @@ CommandHandlerResult EditorRuntime::Impl::discardDraft() {
     return updateTabsFor(*id);
 }
 
-CommandHandlerResult EditorRuntime::Impl::dismissDraftNotice() {
+CommandHandlerResult EditorSession::Impl::dismissDraftNotice() {
     const auto id = activeDocumentId();
     if (!id) return failure("no active document");
     const auto found = documentRuntimeStates.find(id->value());
@@ -2134,7 +2134,7 @@ CommandHandlerResult EditorRuntime::Impl::dismissDraftNotice() {
     return success();
 }
 
-void EditorRuntime::Impl::refreshLiveDiffDocuments(const DiffViewState& diffView) {
+void EditorSession::Impl::refreshLiveDiffDocuments(const DiffViewState& diffView) {
     for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
         const auto id = DiffFileId{it->first};
         auto file = std::find_if(
@@ -2171,7 +2171,7 @@ void EditorRuntime::Impl::refreshLiveDiffDocuments(const DiffViewState& diffView
     }
 }
 
-bool EditorRuntime::Impl::openOrRevealFollowTargetProgrammatic(
+bool EditorSession::Impl::openOrRevealFollowTargetProgrammatic(
     const FollowTarget& target) {
     const auto file = diff.file(target.id);
     if (!file.has_value()) {
@@ -2188,23 +2188,23 @@ bool EditorRuntime::Impl::openOrRevealFollowTargetProgrammatic(
     return revealCurrentDiffTarget(target, NavigationClass::Programmatic);
 }
 
-Document const* EditorRuntime::Impl::activeDocument() const {
+Document const* EditorSession::Impl::activeDocument() const {
     auto id = activeDocumentId();
     return id ? workspace.tryDocument(*id) : nullptr;
 }
 
-Document* EditorRuntime::Impl::activeDocument() {
+Document* EditorSession::Impl::activeDocument() {
     auto id = activeDocumentId();
     return id ? const_cast<Document*>(workspace.tryDocument(*id)) : nullptr;
 }
 
-void EditorRuntime::Impl::ensureDocumentRuntimeState(FileDocumentId document) {
+void EditorSession::Impl::ensureDocumentRuntimeState(FileDocumentId document) {
     documentRuntimeStates.try_emplace(
         document.value(),
         DocumentRuntimeState{HistoryConfig::defaults(), syntaxParser});
 }
 
-void EditorRuntime::Impl::discardDocumentRuntimeState(FileDocumentId document) {
+void EditorSession::Impl::discardDocumentRuntimeState(FileDocumentId document) {
     documentRuntimeStates.erase(document.value());
     documentLanguageOverrides.erase(document.value());
     autosave.forget(document);
@@ -2223,7 +2223,7 @@ void EditorRuntime::Impl::discardDocumentRuntimeState(FileDocumentId document) {
     }
 }
 
-DocumentHistory& EditorRuntime::Impl::historyFor(FileDocumentId document) {
+DocumentHistory& EditorSession::Impl::historyFor(FileDocumentId document) {
     auto it = documentRuntimeStates.find(document.value());
     if (it == documentRuntimeStates.end()) {
         throw std::logic_error{
@@ -2232,7 +2232,7 @@ DocumentHistory& EditorRuntime::Impl::historyFor(FileDocumentId document) {
     return it->second.history;
 }
 
-SyntaxModel& EditorRuntime::Impl::syntaxFor(FileDocumentId document) {
+SyntaxModel& EditorSession::Impl::syntaxFor(FileDocumentId document) {
     auto it = documentRuntimeStates.find(document.value());
     if (it == documentRuntimeStates.end()) {
         throw std::logic_error{
@@ -2241,7 +2241,7 @@ SyntaxModel& EditorRuntime::Impl::syntaxFor(FileDocumentId document) {
     return it->second.syntax;
 }
 
-SyntaxViewState EditorRuntime::Impl::activeSyntaxView() const {
+SyntaxViewState EditorSession::Impl::activeSyntaxView() const {
     if (auto id = activeDocumentId()) {
         if (auto it = documentRuntimeStates.find(id->value());
             it != documentRuntimeStates.end()) {
@@ -2254,23 +2254,23 @@ SyntaxViewState EditorRuntime::Impl::activeSyntaxView() const {
     return SyntaxViewState::plainText(revision, LanguageId::plainText(), text, 4);
 }
 
-std::optional<WorkspaceDocumentState> EditorRuntime::Impl::activeWorkspaceState() const {
+std::optional<WorkspaceDocumentState> EditorSession::Impl::activeWorkspaceState() const {
     auto id = activeDocumentId();
     return id ? workspace.state(*id) : std::nullopt;
 }
 
-std::optional<DiffFileView> EditorRuntime::Impl::activeDiffFile() const {
+std::optional<DiffFileView> EditorSession::Impl::activeDiffFile() const {
     const auto diffState = diff.viewState();
     const auto file = diffState.fileForDocument(documentView());
     return file ? std::optional<DiffFileView>{file->get()} : std::nullopt;
 }
 
-std::string EditorRuntime::Impl::activeText() const {
+std::string EditorSession::Impl::activeText() const {
     auto const* document = activeDocument();
     return document ? document->snapshot().text : std::string{};
 }
 
-int EditorRuntime::Impl::lineNumberGutterWidth() const {
+int EditorSession::Impl::lineNumberGutterWidth() const {
     if (!lineNumbers) return 0;
     auto const* document = activeDocument();
     if (document == nullptr) return 0;
@@ -2290,7 +2290,7 @@ int EditorRuntime::Impl::lineNumberGutterWidth() const {
     return static_cast<int>(std::to_string(lineCountCache).size()) + 1;
 }
 
-void EditorRuntime::Impl::resetSelectionForActiveDocument() {
+void EditorSession::Impl::resetSelectionForActiveDocument() {
     selection = initialSelection();
     for (auto& [_, view] : viewPresentations) {
         view.requestedFirstVisualRow = 0;
@@ -2300,7 +2300,7 @@ void EditorRuntime::Impl::resetSelectionForActiveDocument() {
     }
 }
 
-void EditorRuntime::Impl::clampSelectionToActiveDocument() {
+void EditorSession::Impl::clampSelectionToActiveDocument() {
     auto text = activeText();
     auto offset = selection.selections.primary().active.byteOffset.value();
     if (offset > text.size()) offset = text.size();
@@ -2308,7 +2308,7 @@ void EditorRuntime::Impl::clampSelectionToActiveDocument() {
     selection.selections = SelectionSet{std::vector<Selection>{Selection{position, position}}};
 }
 
-void EditorRuntime::Impl::clampSelectionsToActiveDocument() {
+void EditorSession::Impl::clampSelectionsToActiveDocument() {
     auto text = activeText();
     auto clampPosition = [&](DocumentPosition const& p) {
         auto offset = p.byteOffset.value();
@@ -2339,7 +2339,7 @@ void EditorRuntime::Impl::clampSelectionsToActiveDocument() {
     selection.selections = SelectionSet{std::move(clamped)};
 }
 
-const std::vector<CellRun>& EditorRuntime::Impl::activeCellRuns() const {
+const std::vector<CellRun>& EditorSession::Impl::activeCellRuns() const {
     auto const* document = activeDocument();
     auto const documentId = activeDocumentId();
     auto const revision = document ? document->revision() : Revision{0};
@@ -2364,7 +2364,7 @@ const std::vector<CellRun>& EditorRuntime::Impl::activeCellRuns() const {
     return cellRunsCache;
 }
 
-ViewportViewState EditorRuntime::Impl::computeEditorViewport(
+ViewportViewState EditorSession::Impl::computeEditorViewport(
     ViewPresentationState& presentation, std::uint32_t firstRow,
     std::uint32_t firstColumn) const {
     auto const dimensions = presentation.dimensions;
@@ -2404,14 +2404,14 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
     return view;
 }
 
-ViewportViewState EditorRuntime::Impl::viewport(
+ViewportViewState EditorSession::Impl::viewport(
     ViewPresentationState& presentation) const {
     return computeEditorViewport(
         presentation, presentation.requestedFirstVisualRow,
         presentation.requestedFirstVisualColumn);
 }
 
-void EditorRuntime::Impl::refreshTree() {
+void EditorSession::Impl::refreshTree() {
     if (deferringEnrichment) {
         pendingTreeRefresh = true;
         return;
@@ -2421,7 +2421,7 @@ void EditorRuntime::Impl::refreshTree() {
         TreeProviderId{"filesystem"}, root, interaction.allocateTreeRevision()));
 }
 
-void EditorRuntime::Impl::rebuildInteractionSchema(
+void EditorSession::Impl::rebuildInteractionSchema(
     const StyleDimensions& dimensions,
     std::string_view promptSigil,
     const std::optional<ValidatedComposition>& composed) {
@@ -2433,14 +2433,14 @@ void EditorRuntime::Impl::rebuildInteractionSchema(
 // Opens a picker through the authority: apply(OpenFinder) atomically opens the Palette
 // prompt, sets the picker identity, and advances the picker epoch. File candidates are
 // refreshed by reconcilePickerCandidates() off that epoch, not here.
-bool EditorRuntime::Impl::openPickerPrompt(PickerKind kind) {
+bool EditorSession::Impl::openPickerPrompt(PickerKind kind) {
     return interaction.apply(OpenFinder{kind});
 }
 
 // The index opens its OWN repository handle rather than sharing the git-diff
 // worker's: that one is owned by its thread, and libgit2 handles are not safe to
 // use from two threads.
-void EditorRuntime::Impl::rebuildFileCandidates() {
+void EditorSession::Impl::rebuildFileCandidates() {
     auto matcher = makePlatformGitIgnoreMatcher(root);
     WorkspaceFileIndexOptions options;
     options.respectGitignore =
@@ -2454,7 +2454,7 @@ void EditorRuntime::Impl::rebuildFileCandidates() {
 // picker rebuilds its candidates synchronously before the next snapshot; any other picker
 // state clears them, so a closed or replaced picker never publishes a stale walk. Replaces
 // the old reconcileOpenPicker, which derived openPicker from the prompt.
-void EditorRuntime::Impl::reconcilePickerCandidates() {
+void EditorSession::Impl::reconcilePickerCandidates() {
     const auto epoch = interaction.pickerEpoch();
     if (interaction.openPicker() == PickerKind::File) {
         if (epoch != lastPickerEpoch) rebuildFileCandidates();
@@ -2464,7 +2464,7 @@ void EditorRuntime::Impl::reconcilePickerCandidates() {
     lastPickerEpoch = epoch;
 }
 
-void EditorRuntime::Impl::reconcileFindDocument() {
+void EditorSession::Impl::reconcileFindDocument() {
     if (!findReplace.viewState().open) {
         findDocumentId.reset();
         return;
@@ -2486,7 +2486,7 @@ void EditorRuntime::Impl::reconcileFindDocument() {
     findDocumentId.reset();
 }
 
-void EditorRuntime::Impl::refreshSyntax() {
+void EditorSession::Impl::refreshSyntax() {
     auto id = activeDocumentId();
     if (!id) return;
     auto& model = syntaxFor(*id);
@@ -2514,7 +2514,7 @@ void EditorRuntime::Impl::refreshSyntax() {
     (void)model.parse(revision, std::move(language), std::move(text));
 }
 
-void EditorRuntime::Impl::primeDeferred() {
+void EditorSession::Impl::primeDeferred() {
     if (!deferringEnrichment) return;
     deferringEnrichment = false;
     // Run whichever scans were requested while deferring, now that the first
@@ -2537,7 +2537,7 @@ void EditorRuntime::Impl::primeDeferred() {
     if (ran && session) session->advanceRevision();
 }
 
-void EditorRuntime::Impl::enqueueStatus(StatusPriority priority, std::string text) {
+void EditorSession::Impl::enqueueStatus(StatusPriority priority, std::string text) {
     auto value = nextStatusId++;
     (void)status.enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}});
 }
@@ -2570,7 +2570,7 @@ std::vector<AutosaveCandidate> autosaveCandidates(const Workspace& workspace) {
 
 } // namespace
 
-std::size_t EditorRuntime::Impl::persistAutosaveDraft(FileDocumentId document) {
+std::size_t EditorSession::Impl::persistAutosaveDraft(FileDocumentId document) {
     auto state = workspace.state(document);
     auto const* current = workspace.tryDocument(document);
     if (!state || current == nullptr) return 0;
@@ -2610,7 +2610,7 @@ std::size_t EditorRuntime::Impl::persistAutosaveDraft(FileDocumentId document) {
     return 1;
 }
 
-void EditorRuntime::Impl::reconcileDraftOnOpen(FileDocumentId document) {
+void EditorSession::Impl::reconcileDraftOnOpen(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) return;
 
@@ -2663,7 +2663,7 @@ void EditorRuntime::Impl::reconcileDraftOnOpen(FileDocumentId document) {
     }
 }
 
-std::size_t EditorRuntime::Impl::flushDueAutosaveDrafts() {
+std::size_t EditorSession::Impl::flushDueAutosaveDrafts() {
     autosave.setInterval(std::chrono::milliseconds{
         uint32Setting(settings, SettingKey::AutosaveDebounceMs, 10000)});
     const auto candidates = autosaveCandidates(workspace);
@@ -2675,7 +2675,7 @@ std::size_t EditorRuntime::Impl::flushDueAutosaveDrafts() {
     return flushed;
 }
 
-std::size_t EditorRuntime::Impl::flushAllAutosaveDrafts() {
+std::size_t EditorSession::Impl::flushAllAutosaveDrafts() {
     const auto candidates = autosaveCandidates(workspace);
     std::size_t flushed = 0;
     for (const auto id :
@@ -2685,7 +2685,7 @@ std::size_t EditorRuntime::Impl::flushAllAutosaveDrafts() {
     return flushed;
 }
 
-ExternalDiffBurstResult EditorRuntime::Impl::applyExternalDiffBurst(
+ExternalDiffBurstResult EditorSession::Impl::applyExternalDiffBurst(
     std::vector<ExternalDiffRevision> changes) {
     if (changes.empty()) {
         return {ExternalDiffBurstError::EmptyBurst};
@@ -2734,7 +2734,7 @@ ExternalDiffBurstResult EditorRuntime::Impl::applyExternalDiffBurst(
     return {};
 }
 
-GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
+GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
     if (scan.revision.value() == 0) {
         auto const previousBranch = currentGitBranch;
         currentGitBranch = scan.currentBranch;
@@ -2849,7 +2849,7 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
     return {};
 }
 
-bool EditorRuntime::Impl::revealCurrentDiffTarget(
+bool EditorSession::Impl::revealCurrentDiffTarget(
     const FollowTarget& target, NavigationClass classification) {
     const auto text = activeText();
     const auto offset = lineStartOffset(text, target.newestHunkLine);
@@ -2884,7 +2884,7 @@ bool EditorRuntime::Impl::revealCurrentDiffTarget(
     return true;
 }
 
-bool EditorRuntime::Impl::revealDiffTarget(
+bool EditorSession::Impl::revealDiffTarget(
     const FollowTarget& target, NavigationClass classification) {
     if (target.deleted) {
         return false;
@@ -2897,7 +2897,7 @@ bool EditorRuntime::Impl::revealDiffTarget(
     return revealCurrentDiffTarget(target, classification);
 }
 
-void EditorRuntime::Impl::recordNavigation(
+void EditorSession::Impl::recordNavigation(
     ClientId client, ViewId viewId, NavigationClass classification) {
     auto const& view = presentation(viewId);
     (void)follow.applyNavigation(
@@ -2907,22 +2907,22 @@ void EditorRuntime::Impl::recordNavigation(
                                       view.requestedFirstVisualColumn}});
 }
 
-EditorRuntime::EditorRuntime(std::unique_ptr<Impl> implementation) noexcept
+EditorSession::EditorSession(std::unique_ptr<Impl> implementation) noexcept
     : impl_{std::move(implementation)} {}
-EditorRuntime::~EditorRuntime() = default;
+EditorSession::~EditorSession() = default;
 
-EditorRuntime::Impl::ViewPresentationState&
-EditorRuntime::Impl::presentation(ViewId viewId) {
+EditorSession::Impl::ViewPresentationState&
+EditorSession::Impl::presentation(ViewId viewId) {
     return viewPresentations.at(viewId);
 }
 
-EditorRuntime::Impl::ViewPresentationState const&
-EditorRuntime::Impl::presentation(
+EditorSession::Impl::ViewPresentationState const&
+EditorSession::Impl::presentation(
     ViewId viewId) const {
     return viewPresentations.at(viewId);
 }
 
-void EditorRuntime::resetKeymapToDefault() {
+void EditorSession::resetKeymapToDefault() {
     std::lock_guard operationLock{impl_->operationMutex};
     // defaultTerminalKeymap() is a fixed, already-construction-time-
     // validated value (see create() above), so no re-validation is needed
@@ -2931,12 +2931,12 @@ void EditorRuntime::resetKeymapToDefault() {
     ++impl_->keymapGeneration;
 }
 
-void EditorRuntime::focusEditor() {
+void EditorSession::focusEditor() {
     std::lock_guard operationLock{impl_->operationMutex};
     impl_->interaction.focusEditor();
 }
 
-void EditorRuntime::setComposedUi(std::optional<ValidatedComposition> composition) {
+void EditorSession::setComposedUi(std::optional<ValidatedComposition> composition) {
     std::lock_guard operationLock{impl_->operationMutex};
     // A composition-only reload (a script that just calls ssg.chrome, or one
     // that drops the call) runs outside command dispatch, so nothing else
@@ -2954,7 +2954,7 @@ void EditorRuntime::setComposedUi(std::optional<ValidatedComposition> compositio
     if (impl_->session) impl_->session->advanceRevision();
 }
 
-EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
+EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
     try {
         auto cwd = canonicalDirectory(config.cwd);
         if (config.scratchRoot.empty()) config.scratchRoot = cwd / ".ssg" / "scratch";
@@ -2994,13 +2994,13 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
         bindRuntimeHelp(*impl->catalog, *impl);
         impl->session =
             std::make_unique<CommandExecutor>(impl->catalog, impl.get());
-        return {std::unique_ptr<EditorRuntime>{new EditorRuntime{std::move(impl)}}, {}};
+        return {std::unique_ptr<EditorSession>{new EditorSession{std::move(impl)}}, {}};
     } catch (std::exception const& exception) {
         return {nullptr, exception.what()};
     }
 }
 
-AttachResult EditorRuntime::attach(InvocationPrincipal principal, ViewId viewId) {
+AttachResult EditorSession::attach(InvocationPrincipal principal, ViewId viewId) {
     std::lock_guard operationLock{impl_->operationMutex};
     auto clientId = principal.clientId();
     auto result = impl_->session->attach(std::move(principal), viewId);
@@ -3016,7 +3016,7 @@ AttachResult EditorRuntime::attach(InvocationPrincipal principal, ViewId viewId)
     return result;
 }
 
-bool EditorRuntime::detach(ClientId clientId) {
+bool EditorSession::detach(ClientId clientId) {
     std::lock_guard operationLock{impl_->operationMutex};
     auto attached = impl_->clientViews.find(clientId);
     (void)impl_->follow.detachClient(clientId);
@@ -3034,7 +3034,7 @@ bool EditorRuntime::detach(ClientId clientId) {
     return detached;
 }
 
-PumpResult EditorRuntime::pump() {
+PumpResult EditorSession::pump() {
     if (impl_->session->activeDispatchRevision()) {
         throw std::logic_error{"worker results cannot be pumped during dispatch"};
     }
@@ -3045,34 +3045,34 @@ PumpResult EditorRuntime::pump() {
     return {after != before, after};
 }
 
-void EditorRuntime::primeDeferred() {
+void EditorSession::primeDeferred() {
     std::lock_guard operationLock{impl_->operationMutex};
     impl_->primeDeferred();
 }
-std::size_t EditorRuntime::flushDueAutosaveDrafts() {
+std::size_t EditorSession::flushDueAutosaveDrafts() {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->flushDueAutosaveDrafts();
 }
-std::size_t EditorRuntime::flushAllAutosaveDrafts() {
+std::size_t EditorSession::flushAllAutosaveDrafts() {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->flushAllAutosaveDrafts();
 }
 
-EditorRuntime::DeferredWorkCounts EditorRuntime::deferredWorkCounts() const {
+EditorSession::DeferredWorkCounts EditorSession::deferredWorkCounts() const {
     std::lock_guard operationLock{impl_->operationMutex};
     return {impl_->syntaxRunCount, impl_->treeScanCount};
 }
 
-std::uint64_t EditorRuntime::liveDocumentRuntimeStateCountForTests() {
+std::uint64_t EditorSession::liveDocumentRuntimeStateCountForTests() {
     return DocumentRuntimeState::liveInstances();
 }
 
-void EditorRuntime::setAutosaveDraftByteCapForTests(std::uint64_t cap) {
+void EditorSession::setAutosaveDraftByteCapForTests(std::uint64_t cap) {
     std::lock_guard operationLock{impl_->operationMutex};
     impl_->autosaveDraftByteCap = cap;
 }
 
-void EditorRuntime::reconcileExternalWatchEventsForTest(
+void EditorSession::reconcileExternalWatchEventsForTest(
     std::vector<WatchEvent> events) {
     std::lock_guard operationLock{impl_->operationMutex};
     // Mirror the runtime drain: an Overflow in the batch triggers the full
@@ -3095,37 +3095,37 @@ void EditorRuntime::reconcileExternalWatchEventsForTest(
     }
 }
 
-bool EditorRuntime::diffModelHasFileForTest(const DiffFileId& id) const {
+bool EditorSession::diffModelHasFileForTest(const DiffFileId& id) const {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->diff.file(id).has_value();
 }
 
-void EditorRuntime::reportWatcherAvailabilityForTest(bool available) {
+void EditorSession::reportWatcherAvailabilityForTest(bool available) {
     std::lock_guard operationLock{impl_->operationMutex};
     impl_->watcherAvailable.store(available, std::memory_order_relaxed);
     impl_->drainWatcherAvailability();
 }
 
-bool EditorRuntime::dispatchInProgress() const noexcept {
+bool EditorSession::dispatchInProgress() const noexcept {
     return impl_->session->activeDispatchRevision().has_value();
 }
 
-bool EditorRuntime::Impl::defer(std::optional<ClientId> as,
+bool EditorSession::Impl::defer(std::optional<ClientId> as,
                                 ClientCommand command) {
     if (!session->activeDispatchRevision()) return false;
     return deferredCommands.enqueue({as, std::move(command)});
 }
 
-bool EditorRuntime::deferDispatch(ClientId clientId, ClientCommand command) {
+bool EditorSession::deferDispatch(ClientId clientId, ClientCommand command) {
     return impl_->defer(clientId, std::move(command));
 }
 
 namespace {
 
-CommandResult dispatchLocked(EditorRuntime::Impl* impl_, ClientId clientId,
+CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
                              ClientCommand const& command);
 
-ClientInputResult inputLocked(EditorRuntime::Impl* impl_, ClientId clientId,
+ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                               ClientKeyInput const& input) {
     if (!impl_->session->attachedClient(clientId)) {
         return {ClientInputOutcome::Rejected, std::nullopt,
@@ -3256,7 +3256,7 @@ ClientInputResult inputLocked(EditorRuntime::Impl* impl_, ClientId clientId,
     return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
 }
 
-CommandResult dispatchLocked(EditorRuntime::Impl* impl_, ClientId clientId,
+CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
                              ClientCommand const& command) {
     // The routing signature: every runtime-owned input a host reads to interpret
     // the NEXT key. Compared before/after the whole dispatch (which drains nested
@@ -3373,7 +3373,7 @@ CommandResult dispatchLocked(EditorRuntime::Impl* impl_, ClientId clientId,
 
 }  // namespace
 
-ClientInputResult EditorRuntime::input(ClientId clientId,
+ClientInputResult EditorSession::input(ClientId clientId,
                                        ClientKeyInput const& input) {
     if (const auto nested = impl_->session->activeDispatchRevision()) {
         return {ClientInputOutcome::Rejected, std::nullopt,
@@ -3386,7 +3386,7 @@ ClientInputResult EditorRuntime::input(ClientId clientId,
     return inputLocked(impl_.get(), clientId, input);
 }
 
-CommandResult EditorRuntime::dispatch(ClientId clientId,
+CommandResult EditorSession::dispatch(ClientId clientId,
                                       ClientCommand const& command) {
     // A handler must be refused before taking the non-recursive aggregate lock.
     if (const auto nested = impl_->session->activeDispatchRevision()) {
@@ -3397,11 +3397,11 @@ CommandResult EditorRuntime::dispatch(ClientId clientId,
     return dispatchLocked(impl_.get(), clientId, command);
 }
 
-std::shared_ptr<CommandCatalog const> EditorRuntime::commandCatalog() const {
+std::shared_ptr<CommandCatalog const> EditorSession::commandCatalog() const {
     return impl_->catalog;
 }
 
-CommandHandle EditorRuntime::registerCommand(CommandSpecBuilder command) {
+CommandHandle EditorSession::registerCommand(CommandSpecBuilder command) {
     if (dispatchInProgress()) {
         throw std::logic_error{"commands cannot be registered during dispatch"};
     }
@@ -3415,7 +3415,7 @@ CommandHandle EditorRuntime::registerCommand(CommandSpecBuilder command) {
     return handle;
 }
 
-std::vector<CommandHandle> EditorRuntime::replaceCommandGeneration(
+std::vector<CommandHandle> EditorSession::replaceCommandGeneration(
     std::span<CommandHandle const> retire,
     std::vector<CommandSpecBuilder> commands) {
     if (dispatchInProgress()) {
@@ -3436,24 +3436,24 @@ std::vector<CommandHandle> EditorRuntime::replaceCommandGeneration(
     return handles;
 }
 
-Revision EditorRuntime::revision() const {
+Revision EditorSession::revision() const {
     if (const auto active = impl_->session->activeDispatchRevision()) {
         return *active;
     }
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->session->revision();
 }
-std::filesystem::path const& EditorRuntime::workspaceRoot() const noexcept { return impl_->root; }
-ExternalDiffBurstResult EditorRuntime::applyExternalDiffBurst(
+std::filesystem::path const& EditorSession::workspaceRoot() const noexcept { return impl_->root; }
+ExternalDiffBurstResult EditorSession::applyExternalDiffBurst(
     std::vector<ExternalDiffRevision> changes) {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyExternalDiffBurst(std::move(changes));
 }
-GitDiffScanResult EditorRuntime::applyGitDiffScan(GitDiffScan scan) {
+GitDiffScanResult EditorSession::applyGitDiffScan(GitDiffScan scan) {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyGitDiffScan(std::move(scan));
 }
-std::optional<SessionSnapshot> EditorRuntime::present(
+std::optional<SessionSnapshot> EditorSession::present(
     ClientId clientId, ViewportDimensions dimensions,
     PaletteReport paletteReport) {
     if (impl_->session->activeDispatchRevision()) {
@@ -3504,7 +3504,7 @@ std::optional<SessionSnapshot> EditorRuntime::present(
                                      std::move(treeWindows));
 }
 
-std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId,
+std::optional<SessionSnapshot> EditorSession::snapshot(ClientId clientId,
                                                        PaletteReport paletteReport) const {
     std::lock_guard operationLock{impl_->operationMutex};
     auto client = impl_->session->attachedClient(clientId);
@@ -3520,16 +3520,16 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId,
                            std::move(sections)};
 }
 
-int EditorRuntime::gitDiffWakeDescriptor() const {
+int EditorSession::gitDiffWakeDescriptor() const {
     return impl_->gitDiffWakeDescriptor();
 }
 
-std::string EditorRuntime::activeDocumentText() const {
+std::string EditorSession::activeDocumentText() const {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->activeText();
 }
 
-EditorRuntime::DraftReopenNotice EditorRuntime::activeDraftReopenNotice() const {
+EditorSession::DraftReopenNotice EditorSession::activeDraftReopenNotice() const {
     std::lock_guard operationLock{impl_->operationMutex};
     const auto id = impl_->activeDocumentId();
     if (!id) return DraftReopenNotice::None;

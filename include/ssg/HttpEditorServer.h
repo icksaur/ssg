@@ -16,7 +16,7 @@ class Server;
 
 namespace ssg {
 
-class EditorRuntime;
+class EditorSession;
 
 class SessionId {
 public:
@@ -75,6 +75,8 @@ public:
 
 struct HttpEditorRouteConfig {
     std::string route{"/session"};
+    // Counts wire frames waiting to be written. It must admit the ordered
+    // state-plus-completion pair produced by one accepted operation.
     std::size_t outboundQueueMessages{32};
     std::size_t replayDeltas{64};
     std::chrono::milliseconds writeTimeout{1000};
@@ -84,6 +86,8 @@ struct HttpEditorRouteConfig {
 struct HttpEditorServerConfig {
     std::uint16_t port;
     std::string route{"/session"};
+    // Counts wire frames waiting to be written. It must admit the ordered
+    // state-plus-completion pair produced by one accepted operation.
     std::size_t outboundQueueMessages{32};
     std::size_t replayDeltas{64};
     std::chrono::milliseconds writeTimeout{1000};
@@ -91,7 +95,7 @@ struct HttpEditorServerConfig {
 };
 
 // CONTRACT
-// HttpEditorRoute: the referenced EditorRuntime, connection policy, and
+// HttpEditorRoute: the referenced EditorSession, connection policy, and
 //   Http::Server must outlive
 //   the route, and the server must be stopped before the route is destroyed, so
 //   no registered connection callback can run against freed route state. A route
@@ -100,7 +104,7 @@ struct HttpEditorServerConfig {
 //   over freed state.
 class HttpEditorRoute {
 public:
-    HttpEditorRoute(Http::Server& server, EditorRuntime& runtime,
+    HttpEditorRoute(Http::Server& server, EditorSession& runtime,
                     HttpEditorConnectionPolicy& policy,
                     HttpEditorRouteConfig config = {});
     ~HttpEditorRoute();
@@ -117,7 +121,7 @@ private:
 
 class HttpEditorServer {
 public:
-    HttpEditorServer(EditorRuntime& runtime,
+    HttpEditorServer(EditorSession& runtime,
                      HttpEditorConnectionPolicy& policy,
                      HttpEditorServerConfig config);
     ~HttpEditorServer();

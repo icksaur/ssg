@@ -1,4 +1,4 @@
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/Keymap.h>
 #include <ssg/Renderer.h>
 #include <ssg/session_snapshot.h>
@@ -20,11 +20,11 @@ concept HasDimensionedSnapshot = requires(Runtime& runtime) {
     runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
 };
 
-static_assert(!HasDimensionedSnapshot<ssg::EditorRuntime>);
+static_assert(!HasDimensionedSnapshot<ssg::EditorSession>);
 
 // Milestone 11 — Library API is the contract.
 //
-// M11-1: the TUI screen is a pure function of the production EditorRuntime's
+// M11-1: the TUI screen is a pure function of the production EditorSession's
 // SessionSnapshot.  These tests drive the REAL runtime (not a hand-authored
 // fixture model) through a fixed script and assert the screen contract:
 // geometry, no uninitialised cells, theme-sourced colour, expected content, and
@@ -49,13 +49,13 @@ fs::path uniqueRoot(std::string const& name) {
 
 // A production runtime over a workspace with exactly one known file, so the
 // rendered screen (including any filesystem tree) is deterministic.
-std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
+std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
     std::ofstream{root / "workspace" / "alpha.txt", std::ios::binary}
         << "first line\nsecond line\nthird line\n";
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
-    auto runtime = std::move(created.runtime);
+    auto runtime = std::move(created.session);
     (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     return runtime;
@@ -112,7 +112,7 @@ ssg::PaletteReport projectReport(
 
 // The published candidate list for an open palette, straight from the runtime.
 std::vector<ssg::PaletteCandidate> publishedCandidates(
-    ssg::EditorRuntime& runtime) {
+    ssg::EditorSession& runtime) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"palette.open", runtime.revision(), {}})
                     .accepted());

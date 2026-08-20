@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/startup_audit.h>
 #include <ssg/FilesystemWatcher.h>
 
@@ -37,8 +37,8 @@ fs::path makeWorkspace(std::string const& name) {
     return root;
 }
 
-ssg::EditorRuntimeConfig configFor(fs::path const& root, bool defer) {
-    ssg::EditorRuntimeConfig config;
+ssg::EditorSessionConfig configFor(fs::path const& root, bool defer) {
+    ssg::EditorSessionConfig config;
     config.cwd = root / "workspace";
     config.scratchRoot = root / "scratch";
     config.recoveryRoot = root / "recovery";
@@ -50,10 +50,10 @@ ssg::EditorRuntimeConfig configFor(fs::path const& root, bool defer) {
 
 TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
     auto root = makeWorkspace("deferred");
-    auto created = ssg::EditorRuntime::create(configFor(root, /*defer=*/true));
+    auto created = ssg::EditorSession::create(configFor(root, /*defer=*/true));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
@@ -92,10 +92,10 @@ TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
 
 TEST(eagerConstructionRunsEnrichmentImmediately) {
     auto root = makeWorkspace("eager");
-    auto created = ssg::EditorRuntime::create(configFor(root, /*defer=*/false));
+    auto created = ssg::EditorSession::create(configFor(root, /*defer=*/false));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
@@ -132,10 +132,10 @@ TEST(firstFrameConstructsNoOptionalSubsystem) {
     auto config = configFor(root, /*defer=*/true);
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
-    auto created = ssg::EditorRuntime::create(config);
+    auto created = ssg::EditorSession::create(config);
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
@@ -186,10 +186,10 @@ TEST(optionalConstructionAuditIsWiredPositiveControl) {
 // test's first assertion becoming the WRONG one to rely on silently.
 TEST(panelShowFilesRequiresPrimeDeferredFirst) {
     auto root = makeWorkspace("panel_ordering");
-    auto created = ssg::EditorRuntime::create(configFor(root, /*defer=*/true));
+    auto created = ssg::EditorSession::create(configFor(root, /*defer=*/true));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
@@ -216,10 +216,10 @@ TEST(panelShowFilesRequiresPrimeDeferredFirst) {
 // ends with focus on the panel instead of the editor.
 TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
     auto root = makeWorkspace("focus_ordering");
-    auto created = ssg::EditorRuntime::create(configFor(root, /*defer=*/true));
+    auto created = ssg::EditorSession::create(configFor(root, /*defer=*/true));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());

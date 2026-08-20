@@ -66,7 +66,7 @@ Do these in order. The first item is the generator of everything else.
    the current wording produced.
 2. **Generate the command catalog from `data/required-commands.json`.** Delete
    `kExpectedCommands`, `kExpectedCategoryCounts`, both count `static_assert`s,
-   and the hand-written body of `tests/runtime/command_cases.h`. Use
+   and the hand-written body of `tests/session/command_cases.h`. Use
    `configure_file`, already proven in `cmake/components/editor-session-assembly.cmake:11`.
    Adding a command drops from **13 edit sites to 2**. Removes ~410 duplicated lines.
 3. **Delete the 10 arbitrary-appearance fixtures** (`fixtures/tui/*` 363 lines,
@@ -94,7 +94,7 @@ Do these in order. The first item is the generator of everything else.
 ## Phase 3 — architectural (only if 1–2 do not suffice)
 
 - Extract `DocumentEditingSession`, then `PresentationState` / `WorkspaceSession`
-  / `ClientRegistry` / `CommandDispatcher` from `EditorRuntime` (1,911 → ~400 of
+  / `ClientRegistry` / `CommandDispatcher` from `EditorSession` (1,911 → ~400 of
   composition). This is what finally makes class-level tests sufficient.
 - Split `RecoveryManager.cpp` into `DurableFileOps` / `RecoveryJournal` /
   `RecoveryPolicy`. Do this **carefully and last** — it is the riskiest code.

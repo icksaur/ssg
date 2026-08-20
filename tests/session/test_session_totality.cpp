@@ -1,6 +1,6 @@
 #include "../test_helpers.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/Renderer.h>
 #include <ssg/ShellState.h>
 #include <ssg/Viewport.h>
@@ -99,11 +99,11 @@ const std::vector<UiState>& uiStates() {
 
 void runState(const UiState& state) {
     auto root = makeRoot(state.name);
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) { fs::remove_all(root); return; }
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     if (state.openDocument) {

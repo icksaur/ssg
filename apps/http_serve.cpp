@@ -1,6 +1,6 @@
 #include "http_serve.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/HttpEditorServer.h>
 
 #include <http.h>
@@ -51,7 +51,7 @@ public:
 
 }  // namespace
 
-int run_http_server(EditorRuntime& runtime, unsigned short port) {
+int run_http_server(EditorSession& runtime, unsigned short port) {
     ClientId const setupClient{1};
     if (!runtime
              .attach({setupClient, InvocationOrigin::InProcess}, ViewId{1})

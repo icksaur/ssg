@@ -1,5 +1,5 @@
 #include <ssg/HttpEditorServer.h>
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/startup_audit.h>
 
 #include <http.h>
@@ -85,7 +85,7 @@ struct HttpEditorRoute::Impl {
 
     struct Connection {
         // Serializes messages and close callbacks for this connection only.
-        // Runtime-wide command ordering belongs to EditorRuntime.
+        // Runtime-wide command ordering belongs to EditorSession.
         std::recursive_mutex receiveMutex;
         std::mutex mutex;
         std::condition_variable ready;
@@ -105,7 +105,7 @@ struct HttpEditorRoute::Impl {
 
     using ReplayKey = std::pair<std::string, std::uint64_t>;
 
-    Impl(Http::Server& httpServer, EditorRuntime& editorRuntime,
+    Impl(Http::Server& httpServer, EditorSession& editorRuntime,
          HttpEditorConnectionPolicy& connectionPolicy,
          HttpEditorRouteConfig routeConfig)
         : runtime{editorRuntime},
@@ -117,10 +117,11 @@ struct HttpEditorRoute::Impl {
             throw std::invalid_argument{
                 "WebSocket route must start with a slash"};
         }
-        if (config.outboundQueueMessages == 0 || config.replayDeltas == 0 ||
+        if (config.outboundQueueMessages < 2 || config.replayDeltas == 0 ||
             config.writeTimeout <= std::chrono::milliseconds::zero()) {
             throw std::invalid_argument{
-                "WebSocket queue, replay, and write timeout must be positive"};
+                "WebSocket queue must admit a response pair; replay and write "
+                "timeout must be positive"};
         }
         server.ws(
             config.route,
@@ -177,12 +178,16 @@ struct HttpEditorRoute::Impl {
         if (command.accepted()) {
             auto const result = runtime.dispatch(
                 *clientId, *command.command);
+            std::vector<Outbound> response;
             if (result.accepted()) {
                 (void)runtime.pump();
-                publishSession(*sessionId);
+                if (auto state = publishSession(*sessionId, handle)) {
+                    response.push_back(std::move(*state));
+                }
             }
-            enqueue(handle, connection,
-                    {ProtocolCodec{}.encodeCommandResult(result), true});
+            response.push_back(
+                {ProtocolCodec{}.encodeCommandResult(result), true});
+            enqueueBatch(handle, connection, std::move(response));
             return;
         }
 
@@ -190,13 +195,16 @@ struct HttpEditorRoute::Impl {
             message.data, config.protocolLimits);
         if (input.accepted()) {
             auto const result = runtime.input(*clientId, *input.input);
+            std::vector<Outbound> response;
             if (result.command && result.command->accepted()) {
                 (void)runtime.pump();
-                publishSession(*sessionId);
+                if (auto state = publishSession(*sessionId, handle)) {
+                    response.push_back(std::move(*state));
+                }
             }
-            enqueue(
-                handle, connection,
+            response.push_back(
                 {ProtocolCodec{}.encodeClientInputResult(result), true});
+            enqueueBatch(handle, connection, std::move(response));
             return;
         }
 
@@ -304,8 +312,11 @@ struct HttpEditorRoute::Impl {
         return true;
     }
 
-    void publishSession(SessionId const& sessionId) {
+    std::optional<Outbound> publishSession(
+        SessionId const& sessionId,
+        std::optional<Http::WebSocketHandle> deferHandle = std::nullopt) {
         std::vector<Http::WebSocketHandle> closeAfterPublish;
+        std::optional<Outbound> deferred;
         std::unique_lock publishLock{publishMutex};
         std::vector<std::pair<Http::WebSocketHandle,
                               std::shared_ptr<Connection>>>
@@ -356,12 +367,17 @@ struct HttpEditorRoute::Impl {
             }
             connection->snapshot = std::move(current);
             stateLock.unlock();
-            enqueue(handle, connection, {std::move(encoded), true});
+            if (deferHandle && handle == *deferHandle) {
+                deferred.emplace(Outbound{std::move(encoded), true});
+            } else {
+                enqueue(handle, connection, {std::move(encoded), true});
+            }
         }
         publishLock.unlock();
         for (auto handle : closeAfterPublish) {
             server.closeConnection(handle);
         }
+        return deferred;
     }
 
     void publish() {
@@ -391,16 +407,29 @@ struct HttpEditorRoute::Impl {
     void enqueue(Http::WebSocketHandle handle,
                  std::shared_ptr<Connection> const& connection,
                  Outbound outbound) {
+        std::vector<Outbound> batch;
+        batch.push_back(std::move(outbound));
+        enqueueBatch(handle, connection, std::move(batch));
+    }
+
+    void enqueueBatch(Http::WebSocketHandle handle,
+                      std::shared_ptr<Connection> const& connection,
+                      std::vector<Outbound> batch) {
+        if (batch.empty()) return;
         bool overflow = false;
         {
             std::lock_guard lock{connection->mutex};
             if (connection->stopping) return;
-            if (connection->queue.size() >=
-                config.outboundQueueMessages) {
+            if (connection->queue.size() >
+                    config.outboundQueueMessages ||
+                batch.size() > config.outboundQueueMessages -
+                                   connection->queue.size()) {
                 connection->stopping = true;
                 overflow = true;
             } else {
-                connection->queue.push_back(std::move(outbound));
+                for (auto& outbound : batch) {
+                    connection->queue.push_back(std::move(outbound));
+                }
             }
         }
         connection->ready.notify_one();
@@ -503,7 +532,7 @@ struct HttpEditorRoute::Impl {
         return std::nullopt;
     }
 
-    EditorRuntime& runtime;
+    EditorSession& runtime;
     // Derived from the session's catalog rather than handed in as a value: a
     // command registered while the server is running must be decodable at once,
     // and a snapshot taken at construction could not be (R8).
@@ -518,7 +547,7 @@ struct HttpEditorRoute::Impl {
 };
 
 HttpEditorRoute::HttpEditorRoute(
-    Http::Server& server, EditorRuntime& runtime,
+    Http::Server& server, EditorSession& runtime,
     HttpEditorConnectionPolicy& policy, HttpEditorRouteConfig config)
     : impl_{std::make_unique<Impl>(server, runtime, policy,
                                    std::move(config))} {}
@@ -528,7 +557,7 @@ HttpEditorRoute::~HttpEditorRoute() = default;
 void HttpEditorRoute::publish() { impl_->publish(); }
 
 struct HttpEditorServer::Impl {
-    Impl(EditorRuntime& runtime,
+    Impl(EditorSession& runtime,
          HttpEditorConnectionPolicy& policy, HttpEditorServerConfig config)
         : server{config.port},
           route{server, runtime, policy,
@@ -560,7 +589,7 @@ struct HttpEditorServer::Impl {
 };
 
 HttpEditorServer::HttpEditorServer(
-    EditorRuntime& runtime,
+    EditorSession& runtime,
     HttpEditorConnectionPolicy& policy, HttpEditorServerConfig config)
     : impl_{std::make_unique<Impl>(
           runtime, policy, std::move(config))} {}

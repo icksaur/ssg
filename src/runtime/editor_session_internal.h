@@ -6,7 +6,7 @@
 #include <ssg/DiffModel.h>
 #include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>
@@ -79,7 +79,7 @@ inline std::uint32_t uint32Setting(SettingsModel const& settings, SettingKey key
 struct GitDiffRefreshWorkerState;
 
 // The reopen outcome of a document's recovered draft (single-file draft
-// recovery, M15). Mirrors EditorRuntime::DraftReopenNotice; lives per-document
+// recovery, M15). Mirrors EditorSession::DraftReopenNotice; lives per-document
 // so the notice (p5) and discard (p6) phases can read it by document id.
 enum class DraftReopenOutcome { None, Restored, Conflict };
 
@@ -121,20 +121,20 @@ private:
     inline static std::atomic<std::uint64_t> liveCount{0};
 };
 
-void bindRuntimeEditing(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
-void bindRuntimeFiles(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
-void bindRuntimePresentation(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
-void bindRuntimeNavigation(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
-void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
-void bindRuntimeHelp(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
+void bindRuntimeEditing(CommandCatalog& catalog, EditorSession::Impl& runtime);
+void bindRuntimeFiles(CommandCatalog& catalog, EditorSession::Impl& runtime);
+void bindRuntimePresentation(CommandCatalog& catalog, EditorSession::Impl& runtime);
+void bindRuntimeNavigation(CommandCatalog& catalog, EditorSession::Impl& runtime);
+void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorSession::Impl& runtime);
+void bindRuntimeHelp(CommandCatalog& catalog, EditorSession::Impl& runtime);
 [[nodiscard]] CommandHandlerResult executePickerFileOpen(
-    EditorRuntime::Impl& runtime, InvocationPrincipal const& principal,
+    EditorSession::Impl& runtime, InvocationPrincipal const& principal,
     std::string const& path);
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
-    EditorRuntime::Impl& runtime, ViewId viewId, Revision revision,
+    EditorSession::Impl& runtime, ViewId viewId, Revision revision,
     FindReplaceCommand command, std::any const& payload);
 
-struct EditorRuntime::Impl final : CommandServices,
+struct EditorSession::Impl final : CommandServices,
                                    TabLifecycle,
                                    SearchWorkspaceSource,
                                    SearchCommandSource,
@@ -236,7 +236,7 @@ struct EditorRuntime::Impl final : CommandServices,
     Style style{};
     // The init.lua-composed header/footer,
     // pushed by the host after each init.lua evaluation via
-    // EditorRuntime::setComposedUi. nullopt keeps the built-in chrome; a
+    // EditorSession::setComposedUi. nullopt keeps the built-in chrome; a
     // present region REPLACES that region's built-in status fields in shellView.
     std::optional<ValidatedComposition> composedUi;
     // Bumped whenever composedUi changes, so the published medium-agnostic UI
@@ -320,7 +320,7 @@ struct EditorRuntime::Impl final : CommandServices,
         // Only reachable through Impl::defer, which is what enforces that a
         // dispatch is actually in progress.  Queueing outside one would strand
         // the command until some later, unrelated dispatch drained it.
-        friend struct EditorRuntime::Impl;
+        friend struct EditorSession::Impl;
         [[nodiscard]] bool enqueue(DeferredCommand deferred) {
             if (commands_.size() >= kMaximum) return false;
             commands_.push_back(std::move(deferred));
@@ -539,7 +539,7 @@ struct EditorRuntime::Impl final : CommandServices,
         std::vector<ExternalDiffRevision> changes);
     [[nodiscard]] GitDiffScanResult applyGitDiffScan(GitDiffScan scan);
     // CONTRACT
-    // EditorRuntime::Impl: reconcileExternalWatchEvents and every mutation of
+    // EditorSession::Impl: reconcileExternalWatchEvents and every mutation of
     //   `external` and its shared DiffModel it drives run only on the runtime
     //   thread, reached through the wake drain (or the test hook that stands in for
     //   it); the watcher worker thread only queues normalized events and never

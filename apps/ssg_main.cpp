@@ -1,7 +1,7 @@
 // The `ssg` terminal editor entry point.  This file owns terminal I/O only:
 // raw mode, size queries, byte reads, frame writes, and clean restoration.  All
 // editor, workspace, and layout behavior is the ssg library's; the app attaches
-// an in-process client to an EditorRuntime, renders the library's snapshot, and
+// an in-process client to an EditorSession, renders the library's snapshot, and
 // forwards input.
 //
 // Milestone 1 scope: launch over a path argument, draw the shell grid, and quit
@@ -13,7 +13,7 @@
 #include "pointer_routing.h"
 #include "ssg_terminal.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/TreeSitterGrammars.h>
 #include <ssg/HitTester.h>
 #include <ssg/FindReplace.h>
@@ -365,7 +365,7 @@ std::optional<std::string> readInitScriptIfPresent(
 // caller can seed InitScriptWatcher's "last applied" baseline and avoid
 // redundantly re-evaluating the SAME unchanged content on its first poll.
 std::optional<std::string> loadInitScript(ssg::ScriptHost& scripts,
-                                          ssg::EditorRuntime& runtime) {
+                                          ssg::EditorSession& runtime) {
     auto const scriptPath = resolveInitScriptPath();
     if (!scriptPath) return std::nullopt;
     auto script = readInitScriptIfPresent(*scriptPath, true);
@@ -381,9 +381,9 @@ std::optional<std::string> loadInitScript(ssg::ScriptHost& scripts,
 constexpr std::chrono::milliseconds kInitScriptPollInterval{500};
 
 // Watches init.lua for changes on a background thread and wakes the main
-// loop to re-evaluate it -- mirrors EditorRuntime's OWN git-diff-worker
+// loop to re-evaluate it -- mirrors EditorSession's OWN git-diff-worker
 // shape (background poll thread + wake self-pipe + main-thread-only apply,
-// src/EditorRuntime.cpp's startGitDiffWorker/drainGitDiffScans) as a
+// src/EditorSession.cpp's startGitDiffWorker/drainGitDiffScans) as a
 // SEPARATE, dedicated mechanism (not sharing that worker's thread or
 // pipe): init.lua lives outside the workspace tree, where the library's
 // FilesystemWatcher (a workspace-rooted native recursive watcher) does not
@@ -445,7 +445,7 @@ public:
     // Drains the wake pipe and, if a stable new script is queued,
     // evaluates it on the CALLING (main) thread. Call this only after the
     // main loop's select() reports wakeDescriptor() readable.
-    void drainAndEvaluate(ssg::ScriptHost& scripts, ssg::EditorRuntime& runtime) {
+    void drainAndEvaluate(ssg::ScriptHost& scripts, ssg::EditorSession& runtime) {
         char buffer[64];
         while (::read(wakePipe_[0], buffer, sizeof buffer) > 0) {
         }
@@ -715,7 +715,7 @@ int main(int argc, char** argv) {
         fs::temp_directory_path() / ("ssg-" + std::to_string(::getpid()));
     fs::create_directories(recoveryBase / "recovery", code);
 
-    ssg::EditorRuntimeConfig config;
+    ssg::EditorSessionConfig config;
     config.cwd = target.cwd;
     config.scratchRoot = stateBase / "scratch";
     config.recoveryRoot = recoveryBase / "recovery";
@@ -725,12 +725,12 @@ int main(int argc, char** argv) {
     // drawn.
     config.deferEnrichment = true;
     config.syntaxParser = ssg::TreeSitterParserFactory::createDefault();
-    auto created = ssg::EditorRuntime::create(config);
+    auto created = ssg::EditorSession::create(config);
     if (!created.accepted()) {
         std::fprintf(stderr, "ssg: %s\n", created.message.c_str());
         return 1;
     }
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     if (httpPort) {
         // Apply the same init.lua the TUI does BEFORE the web host attaches and
         // compiles the keymap, so both clients share the user's configured
@@ -1330,7 +1330,7 @@ int main(int argc, char** argv) {
                 if (!wait.input) continue;
             }
             if (wait.initScript) {
-                // Worker completion is accepted only by EditorRuntime::pump();
+                // Worker completion is accepted only by EditorSession::pump();
                 // nothing else drains this -- evaluate the reloaded script here,
                 // on the main thread, exactly like startup's loadInitScript.
                 initScriptWatcher->drainAndEvaluate(scripts, runtime);

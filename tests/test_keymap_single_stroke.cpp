@@ -5,7 +5,7 @@
 // binding fails here, forcing whoever adds it to teach BOTH clients a pending
 // buffer rather than silently letting one drop the prefix and diverge.
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/Keymap.h>
 
 #include "test_helpers.h"
@@ -32,9 +32,9 @@ fs::path uniqueRoot() {
 TEST(theAuthoritativeKeymapHasNoMultiStrokeBindingSoSingleStrokeResolutionIsComplete) {
     auto const root = uniqueRoot();
     auto created =
-        ssg::EditorRuntime::create({root, root / "scratch", root / "recovery"});
+        ssg::EditorSession::create({root, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime
                     .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                             ssg::ViewId{1})

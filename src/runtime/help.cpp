@@ -1,4 +1,4 @@
-#include "editor_runtime_internal.h"
+#include "editor_session_internal.h"
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/CommandSpecBuilder.h>
@@ -167,7 +167,7 @@ std::string renderCommandList(CommandCatalog const& catalog) {
 // keybinding table, then configuration help and the full command list.
 // Reassembled on every help.open so the generated sections always reflect the
 // current keymap and catalog.
-std::string buildHelpDocument(EditorRuntime::Impl const& runtime) {
+std::string buildHelpDocument(EditorSession::Impl const& runtime) {
     auto const& catalog = *runtime.session->catalog();
     std::string document{kHelpPreamble};
     document += renderKeybindings(runtime.keymap, catalog);
@@ -179,7 +179,7 @@ std::string buildHelpDocument(EditorRuntime::Impl const& runtime) {
 }
 
 void bindRuntimeHelp(CommandCatalog& builder,
-                     EditorRuntime::Impl& runtime) {
+                     EditorSession::Impl& runtime) {
     builder.add(
         CommandSpecBuilder{"help.open"}
             .owner("help-system")

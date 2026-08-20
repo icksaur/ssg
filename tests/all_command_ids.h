@@ -15,7 +15,7 @@
 // declarations are used; fixtures supply their own stub handlers.
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <optional>
 #include <typeindex>
 
@@ -52,10 +52,10 @@ inline std::vector<CommandFacts> const& allCommandFacts() {
         std::filesystem::remove_all(root);
         std::filesystem::create_directories(root);
         std::vector<CommandFacts> collected;
-        auto created = ssg::EditorRuntime::create({root});
-        if (created.runtime) {
+        auto created = ssg::EditorSession::create({root});
+        if (created.session) {
             for (auto const* command :
-                 created.runtime->commandCatalog()->commands()) {
+                 created.session->commandCatalog()->commands()) {
                 collected.push_back(
                     {command->id, command->owner, command->luaApi,
                      command->initScript,
@@ -64,7 +64,7 @@ inline std::vector<CommandFacts> const& allCommandFacts() {
                      command->argument.type, command->argument.wire});
             }
         }
-        created.runtime.reset();
+        created.session.reset();
         std::filesystem::remove_all(root);
         return collected;
     }();

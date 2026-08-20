@@ -14,7 +14,7 @@ struct RuntimeFixture {
         root = std::filesystem::current_path() / "tui_runtime";
         std::filesystem::remove_all(root);
         std::filesystem::create_directories(root / "workspace");
-        auto created = ssg::EditorRuntime::create(
+        auto created = ssg::EditorSession::create(
             {.cwd = root / "workspace",
              .scratchRoot = root / "scratch",
              .recoveryRoot = root / "recovery",
@@ -23,13 +23,13 @@ struct RuntimeFixture {
         if (!created.accepted()) {
             throw std::runtime_error{created.message};
         }
-        runtime = std::move(created.runtime);
+        runtime = std::move(created.session);
     }
 
     ~RuntimeFixture() { std::filesystem::remove_all(root); }
 
     std::filesystem::path root;
-    std::unique_ptr<ssg::EditorRuntime> runtime;
+    std::unique_ptr<ssg::EditorSession> runtime;
 };
 
 TEST(terminalEventsResolveThroughPublishedInputModels) {

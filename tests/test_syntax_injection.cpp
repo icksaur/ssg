@@ -1,4 +1,4 @@
-#include "ssg/EditorRuntime.h"
+#include "ssg/EditorSession.h"
 #include "ssg/SyntaxModel.h"
 #include "test_helpers.h"
 
@@ -23,7 +23,7 @@ private:
 
 // A SyntaxParser test double that tags the entire document as Keyword and counts
 // how many times the runtime drove it. It proves the injection seam: the runtime
-// uses the parser handed to it via EditorRuntimeConfig, not a hard-constructed one.
+// uses the parser handed to it via EditorSessionConfig, not a hard-constructed one.
 class RecordingParser final : public SyntaxParser {
 public:
     explicit RecordingParser(bool grammarAvailable = true)
@@ -73,8 +73,8 @@ bool hasScope(const SyntaxViewState& syntax, SyntaxScope scope) {
     return false;
 }
 
-EditorRuntimeConfig configFor(const std::filesystem::path& root) {
-    EditorRuntimeConfig config;
+EditorSessionConfig configFor(const std::filesystem::path& root) {
+    EditorSessionConfig config;
     config.cwd = root / "workspace";
     config.scratchRoot = root / "scratch";
     config.recoveryRoot = root / "recovery";
@@ -91,10 +91,10 @@ TEST(injectedParserDrivesHighlighting) {
     auto config = configFor(root);
     config.syntaxParser = parser;
 
-    auto created = EditorRuntime::create(std::move(config));
+    auto created = EditorSession::create(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime
                     .attach({ClientId{1}, InvocationOrigin::InProcess},
                             ViewId{1})
@@ -122,10 +122,10 @@ TEST(nullParserYieldsPlainText) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}";
 
-    auto created = EditorRuntime::create(configFor(root));
+    auto created = EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime
                     .attach({ClientId{1}, InvocationOrigin::InProcess},
                             ViewId{1})
@@ -154,10 +154,10 @@ TEST(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame) {
     config.deferEnrichment = true;
     config.syntaxParser = parser;
 
-    auto created = EditorRuntime::create(std::move(config));
+    auto created = EditorSession::create(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime
                     .attach({ClientId{1}, InvocationOrigin::InProcess},
                             ViewId{1})
@@ -188,10 +188,10 @@ TEST(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred) {
     config.deferEnrichment = true;
     config.syntaxParser = parser;
 
-    auto created = EditorRuntime::create(std::move(config));
+    auto created = EditorSession::create(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime
                     .attach({ClientId{1}, InvocationOrigin::InProcess},
                             ViewId{1})
@@ -230,10 +230,10 @@ TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
     config.deferEnrichment = true;
     config.syntaxParser = parser;
 
-    auto created = EditorRuntime::create(std::move(config));
+    auto created = EditorSession::create(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime
                     .attach({ClientId{1}, InvocationOrigin::InProcess},
                             ViewId{1})
@@ -286,16 +286,16 @@ TEST(closingTabDestroysDocumentRuntimeState) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}\n";
 
-    const auto baseline = EditorRuntime::liveDocumentRuntimeStateCountForTests();
+    const auto baseline = EditorSession::liveDocumentRuntimeStateCountForTests();
     {
         auto parser = std::make_shared<RecordingParser>();
         auto config = configFor(root);
         config.syntaxParser = parser;
 
-        auto created = EditorRuntime::create(std::move(config));
+        auto created = EditorSession::create(std::move(config));
         ASSERT_TRUE(created.accepted());
         if (!created.accepted()) return;
-        auto& runtime = *created.runtime;
+        auto& runtime = *created.session;
         ASSERT_TRUE(runtime
                         .attach({ClientId{1}, InvocationOrigin::InProcess},
                                 ViewId{1})
@@ -306,15 +306,15 @@ TEST(closingTabDestroysDocumentRuntimeState) {
                                    std::string{"main.cpp"}})
                         .accepted());
 
-        ASSERT_TRUE(EditorRuntime::liveDocumentRuntimeStateCountForTests() >=
+        ASSERT_TRUE(EditorSession::liveDocumentRuntimeStateCountForTests() >=
                     baseline + 1);
         ASSERT_TRUE(runtime
                         .dispatch(ClientId{1},
                                   {"tab.close", runtime.revision(), {}})
                         .accepted());
-        ASSERT_EQ(EditorRuntime::liveDocumentRuntimeStateCountForTests(), baseline);
+        ASSERT_EQ(EditorSession::liveDocumentRuntimeStateCountForTests(), baseline);
     }
-    ASSERT_EQ(EditorRuntime::liveDocumentRuntimeStateCountForTests(), baseline);
+    ASSERT_EQ(EditorSession::liveDocumentRuntimeStateCountForTests(), baseline);
 }
 
 }  // namespace

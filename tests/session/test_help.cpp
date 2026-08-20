@@ -1,6 +1,6 @@
 #include "../test_helpers.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/Keymap.h>
 #include <ssg/ShellState.h>
 #include <ssg/Style.h>
@@ -24,8 +24,8 @@ std::filesystem::path uniqueRoot(std::string_view name) {
     return root;
 }
 
-ssg::EditorRuntimeConfig configFor(const std::filesystem::path& root) {
-    ssg::EditorRuntimeConfig config{
+ssg::EditorSessionConfig configFor(const std::filesystem::path& root) {
+    ssg::EditorSessionConfig config{
         root / "workspace", root / "scratch", root / "recovery"};
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
@@ -34,26 +34,26 @@ ssg::EditorRuntimeConfig configFor(const std::filesystem::path& root) {
 
 struct Harness {
     std::filesystem::path root;
-    ssg::EditorRuntimeCreateResult created;
-    ssg::EditorRuntime* runtime = nullptr;
+    ssg::EditorSessionCreateResult created;
+    ssg::EditorSession* runtime = nullptr;
 
     explicit Harness(std::string_view name) : root(uniqueRoot(name)),
-        created(ssg::EditorRuntime::create(configFor(root))) {
+        created(ssg::EditorSession::create(configFor(root))) {
         if (created.accepted()) {
-            runtime = created.runtime.get();
+            runtime = created.session.get();
             (void)runtime->attach(
                 {ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                 ssg::ViewId{1});
         }
     }
     ~Harness() {
-        created.runtime.reset();
+        created.session.reset();
         std::error_code code;
         std::filesystem::remove_all(root, code);
     }
 };
 
-std::optional<ssg::TabState> activeTab(ssg::EditorRuntime& runtime) {
+std::optional<ssg::TabState> activeTab(ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot || !snapshot->sections().tabs.active) return std::nullopt;
     for (const auto& tab : snapshot->sections().tabs.tabs) {
@@ -62,14 +62,14 @@ std::optional<ssg::TabState> activeTab(ssg::EditorRuntime& runtime) {
     return std::nullopt;
 }
 
-std::size_t tabCount(ssg::EditorRuntime& runtime) {
+std::size_t tabCount(ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     return snapshot ? snapshot->sections().tabs.tabs.size() : 0;
 }
 
 // The rendered tab title (composedTabTitle) for the active tab, read from the
 // shell layout's Tab node whose id matches the active tab index.
-std::string activeTabNodeContent(ssg::EditorRuntime& runtime) {
+std::string activeTabNodeContent(ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {120, 24});
     if (!snapshot) return {};
     std::string content;
@@ -82,7 +82,7 @@ std::string activeTabNodeContent(ssg::EditorRuntime& runtime) {
 }
 
 std::optional<ssg::AccessibilityNode> footerHelpNode(
-    ssg::EditorRuntime& runtime) {
+    ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {120, 24});
     if (!snapshot) return std::nullopt;
     for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {

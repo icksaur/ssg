@@ -1,6 +1,6 @@
 #include "../test_helpers.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
 #include <ssg/Selection.h>
@@ -66,10 +66,10 @@ private:
 
 TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
     auto root = uniqueRoot();
-    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
 
@@ -89,10 +89,10 @@ TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
 
 TEST(typingUndoBreaksOnWordAndLineBoundaries) {
     auto root = uniqueRoot();
-    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{3}), std::nullopt}}).accepted());
@@ -122,10 +122,10 @@ TEST(typingUndoBreaksOnWordAndLineBoundaries) {
 TEST(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "other.txt"} << "cat";
-    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
 
@@ -150,12 +150,12 @@ TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
     std::filesystem::create_directories(workspace / ".ssg" / "scratch");
     std::filesystem::create_directories(workspace / ".ssg" / "recovery");
     std::ofstream{workspace / "other.txt"} << "cat";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, workspace / ".ssg" / "scratch",
         workspace / ".ssg" / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
@@ -192,10 +192,10 @@ TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
 TEST(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "edit.txt"} << "cat cat";
-    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
 
@@ -221,12 +221,12 @@ TEST(workspaceSearchAndReplaceExcludeRuntimeStateRoots) {
     std::ofstream{workspace / ".ssg" / "scratch" / "hidden.txt"} << "secret";
     std::ofstream{workspace / ".ssg" / "recovery" / "journal.txt"} << "secret";
 
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, workspace / ".ssg" / "scratch",
         workspace / ".ssg" / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"search.workspace", runtime.revision(), std::string{"#secret"}}).accepted());
@@ -251,11 +251,11 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "hits.txt"} << "cat cat cat";
 
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"hits.txt"}}).accepted());
 
@@ -306,11 +306,11 @@ TEST(findCloseSucceedsWithoutAnActiveDocument) {
     auto root = uniqueRoot();
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     // No document is open: find.close (and next/previous) must not be rejected by
@@ -326,11 +326,11 @@ TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "doc.txt"} << "hello";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"doc.txt"}}).accepted());
 
@@ -363,11 +363,11 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "a.txt"} << "cat cat cat";
     std::ofstream{workspace / "b.txt"} << "dog dog dog";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
@@ -399,11 +399,11 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
         text += '\n';
     }
     std::ofstream{workspace / "tall.txt"} << text;
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
 
@@ -436,11 +436,11 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "r.txt"} << "cat cat cat";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"r.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
@@ -491,11 +491,11 @@ TEST(replaceAllReplacesEveryMatch) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "r.txt"} << "cat cat cat";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"r.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
@@ -516,11 +516,11 @@ TEST(replaceCommandsAreBenignNoOpsWithoutAReplacePrompt) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "r.txt"} << "cat cat cat";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"r.txt"}}).accepted());
 
@@ -542,11 +542,11 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "m.txt"} << "Cat cat CAT";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
 
@@ -583,11 +583,11 @@ TEST(replaceOpenPreservesFindOptions) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "m.txt"} << "Cat cat CAT";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
@@ -615,11 +615,11 @@ TEST(findCloseDismissesTheReplacePrompt) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "m.txt"} << "cat cat";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
@@ -644,10 +644,10 @@ TEST(findCloseDismissesTheReplacePrompt) {
 
 TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
     auto root = uniqueRoot();
-    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
@@ -712,10 +712,10 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     std::string text;
     for (int i = 0; i < 100; ++i) text += "a\n";  // line L starts at byte L*2
     std::ofstream{root / "workspace" / "tall.txt", std::ios::binary} << text;
-    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
 
@@ -798,10 +798,10 @@ TEST(undoAndPasteRevealTheCaret) {
     std::string text;
     for (int i = 0; i < 100; ++i) text += "a\n";
     std::ofstream{root / "workspace" / "tall.txt", std::ios::binary} << text;
-    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
@@ -841,10 +841,10 @@ TEST(multiCursorPastePreservesAllCursors) {
     std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "m.txt", std::ios::binary} << "aaa\nbbb\nccc\n";
-    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
@@ -877,11 +877,11 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
     std::filesystem::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "m.txt", std::ios::binary}
         << "aaa\nbbb\nccc\n";
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -953,10 +953,10 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     for (int i = 0; i < 90; ++i) text += "filler\n";
     text += "needle\n";
     std::ofstream{root / "workspace" / "t.txt", std::ios::binary} << text;
-    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"t.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
@@ -983,11 +983,11 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
     std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "f.txt"} << "cat cat cat";
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime
                     .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                             ssg::ViewId{1})
@@ -1078,13 +1078,13 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
 // find.word_under_cursor: leader,8 seeds find with the word under the caret and
 // searches the whole document literally.
 namespace {
-ssg::EditorRuntimeCreateResult openWith(const std::filesystem::path& root,
+ssg::EditorSessionCreateResult openWith(const std::filesystem::path& root,
                                           std::string_view name,
                                           std::string_view contents) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / std::string{name}} << contents;
-    return ssg::EditorRuntime::create({workspace, root / "scratch", root / "recovery"});
+    return ssg::EditorSession::create({workspace, root / "scratch", root / "recovery"});
 }
 }  // namespace
 
@@ -1093,7 +1093,7 @@ TEST(findWordUnderCursorSeedsTheCaretWordAndFindsEveryOccurrence) {
     auto created = openWith(root, "w.txt", "alpha beta alpha");
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"w.txt"}}).accepted());
 
@@ -1123,7 +1123,7 @@ TEST(findWordUnderCursorTakesTheWordWhenTheCaretSitsJustPastIt) {
     auto created = openWith(root, "w.txt", "alpha beta");
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"w.txt"}}).accepted());
     // Move the caret to offset 5 -- the space, immediately past "alpha".
@@ -1145,7 +1145,7 @@ TEST(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally) {
     auto created = openWith(root, "w.txt", "a.b axb a.b");
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"w.txt"}}).accepted());
     // Select the first three bytes, "a.b", spanning a word boundary the caret
@@ -1176,7 +1176,7 @@ TEST(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret) {
     auto created = openWith(root, "w.txt", "a  b");
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"w.txt"}}).accepted());
     // Move the caret to offset 2, between the two spaces: no word on either side.
@@ -1207,11 +1207,11 @@ TEST(promptReservationIsSingleSourcedAndFullWidthAcrossPanel) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "hits.txt"} << "cat cat cat";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"hits.txt"}}).accepted());
 
@@ -1270,11 +1270,11 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "hits.txt"} << "cat cat cat";
-    auto created = ssg::EditorRuntime::create({
+    auto created = ssg::EditorSession::create({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"hits.txt"}}).accepted());
 

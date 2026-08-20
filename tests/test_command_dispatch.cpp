@@ -1,4 +1,4 @@
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 
 #include <ssg/CommandCatalog.h>
 #include "../src/runtime/command_executor.h"
@@ -31,14 +31,14 @@ fs::path uniqueRoot() {
     return root;
 }
 
-std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
-    auto created = ssg::EditorRuntime::create(
+std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
+    auto created = ssg::EditorSession::create(
         {.cwd = root,
          .scratchRoot = root / "scratch",
          .recoveryRoot = root / "recovery",
          .enableGitDiffWorker = false,
          .enableFilesystemWatcher = false});
-    auto runtime = std::move(created.runtime);
+    auto runtime = std::move(created.session);
     if (runtime) {
         (void)runtime->attach(
             {ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
@@ -67,7 +67,7 @@ std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
 //
 // To perturb: make CommandExecutor::Impl::mutex a std::recursive_mutex, delete
 // the nested-dispatch guards in CommandExecutor::dispatch and
-// EditorRuntime::dispatch, have the outer handler dispatch instead of defer,
+// EditorSession::dispatch, have the outer handler dispatch instead of defer,
 // and REBUILD THE LIBRARY (a probe linked against a stale libssg.a still
 // contains the guards and reports a false pass).  The counts then diverge.
 TEST(revisionAdvancesExactlyOncePerAcceptedMutation) {

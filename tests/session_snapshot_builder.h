@@ -3,7 +3,7 @@
 // Kind: seam.
 //
 // Builds a SessionSnapshot directly, so a test of presentation does not have to
-// stand up an EditorRuntime over a real directory first.
+// stand up an EditorSession over a real directory first.
 //
 // The renderer is already a pure function of a snapshot
 // (`Renderer::render(SessionSnapshot const&)`), but a snapshot used to be

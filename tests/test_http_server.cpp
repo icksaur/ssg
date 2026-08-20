@@ -1,5 +1,5 @@
 #include "test_helpers.h"
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/FileCommands.h>
 #include <ssg/HttpEditorServer.h>
 #include <ssg/Protocol.h>
@@ -205,7 +205,7 @@ struct Fixture {
         root = std::filesystem::current_path() / "http_server_runtime";
         std::filesystem::remove_all(root);
         std::filesystem::create_directories(root / "workspace");
-        auto created = ssg::EditorRuntime::create(
+        auto created = ssg::EditorSession::create(
             {.cwd = root / "workspace",
              .scratchRoot = root / "scratch",
              .recoveryRoot = root / "recovery",
@@ -214,7 +214,7 @@ struct Fixture {
         if (!created.accepted()) {
             throw std::runtime_error{created.message};
         }
-        runtime = std::move(created.runtime);
+        runtime = std::move(created.session);
         auto const setup = ssg::InvocationPrincipal{
             ssg::ClientId{99}, ssg::InvocationOrigin::InProcess};
         if (!runtime->attach(setup, ssg::ViewId{99}).accepted() ||
@@ -231,7 +231,7 @@ struct Fixture {
 
     bool remote_;
     std::filesystem::path root;
-    std::unique_ptr<ssg::EditorRuntime> runtime;
+    std::unique_ptr<ssg::EditorSession> runtime;
     std::optional<TestPolicy> policy;
 };
 
@@ -541,7 +541,7 @@ TEST(replayLargerThanTheOutboundQueueFallsBackToSnapshot) {
     constexpr std::uint16_t port = 18779;
     ssg::HttpEditorServer server{
         *fixture.runtime,
-        *fixture.policy, {port, "/session", 1, 8, 250ms}};
+        *fixture.policy, {port, "/session", 2, 8, 250ms}};
     server.start();
     std::this_thread::sleep_for(20ms);
     ssg::Revision initialRevision;
@@ -556,7 +556,8 @@ TEST(replayLargerThanTheOutboundQueueFallsBackToSnapshot) {
         auto registry = ssg::CommandArgumentCodecRegistry{
             fixture.runtime->commandCatalog()};
         auto revision = initialRevision;
-        for (auto const& text : {std::string{"a"}, std::string{"b"}}) {
+        for (auto const& text :
+             {std::string{"a"}, std::string{"b"}, std::string{"c"}}) {
             sendAll(socket.socket,
                      maskedFrame(0x2, ssg::ProtocolCodec{}.encodeCommandRequest(
                                            {"text.insert",
@@ -616,17 +617,17 @@ TEST(attachRejectsAForeignPreambleWithoutAPartialRequest) {
     }
 }
 
-TEST(serverConstructionRejectsAZeroQueueOrReplay) {
+TEST(serverConstructionRejectsAnUndersizedQueueOrZeroReplay) {
     Fixture fixture;
     ASSERT_THROWS(
         ssg::HttpEditorServer(
             *fixture.runtime,
-            *fixture.policy, {18778, "/session", 0, 1, 250ms}),
+            *fixture.policy, {18778, "/session", 1, 1, 250ms}),
         std::invalid_argument);
     ASSERT_THROWS(
         ssg::HttpEditorServer(
             *fixture.runtime,
-            *fixture.policy, {18778, "/session", 1, 0, 250ms}),
+            *fixture.policy, {18778, "/session", 2, 0, 250ms}),
         std::invalid_argument);
 }
 
@@ -740,7 +741,7 @@ int main() {
     RUN(replayLargerThanTheOutboundQueueFallsBackToSnapshot);
     RUN(attachRequestNeverCarriesAClientGrantedCapability);
     RUN(attachRejectsAForeignPreambleWithoutAPartialRequest);
-    RUN(serverConstructionRejectsAZeroQueueOrReplay);
+    RUN(serverConstructionRejectsAnUndersizedQueueOrZeroReplay);
     RUN(attachOnlyBindsAWebsocketOriginPrincipal);
     RUN(aBoundConnectionRejectsAnyFrameThatIsNotATypedCommand);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

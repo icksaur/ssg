@@ -1,6 +1,6 @@
 #include <ssg/HitTester.h>
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/Selection.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/session_snapshot.h>
@@ -25,11 +25,11 @@ fs::path uniqueRoot() {
     return root;
 }
 
-std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
-    auto created = ssg::EditorRuntime::create(
+std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
+    auto created = ssg::EditorSession::create(
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
-    auto runtime = std::move(created.runtime);
+    auto runtime = std::move(created.session);
     (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     return runtime;

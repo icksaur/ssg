@@ -1,6 +1,6 @@
 #include "../test_helpers.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/TextInputCommands.h>
 
 #include <filesystem>
@@ -21,10 +21,10 @@ std::filesystem::path uniqueRoot() {
 
 TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
     auto root = uniqueRoot();
-    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"code.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"x"}}).accepted());

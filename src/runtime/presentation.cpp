@@ -1,4 +1,4 @@
-#include "editor_runtime_internal.h"
+#include "editor_session_internal.h"
 
 
 #include <algorithm>
@@ -14,7 +14,7 @@ bool userNavigationShellCommand(std::string_view id) {
            id == "pane.focus_up" || id == "pane.focus_down";
 }
 
-CommandHandlerResult setWordWrap(EditorRuntime::Impl& runtime) {
+CommandHandlerResult setWordWrap(EditorSession::Impl& runtime) {
     bool next = !boolSetting(runtime.settings, SettingKey::WordWrap, runtime.wordWrap);
     auto mutation = runtime.settings.set(SettingScope::Workspace, SettingKey::WordWrap, next);
     if (!mutation.accepted()) return failure(mutation.error->message);
@@ -22,7 +22,7 @@ CommandHandlerResult setWordWrap(EditorRuntime::Impl& runtime) {
     return success();
 }
 
-CommandHandlerResult setLineNumbers(EditorRuntime::Impl& runtime) {
+CommandHandlerResult setLineNumbers(EditorSession::Impl& runtime) {
     bool next = !boolSetting(runtime.settings, SettingKey::LineNumbers,
                              runtime.lineNumbers);
     auto mutation = runtime.settings.set(SettingScope::Workspace,
@@ -32,7 +32,7 @@ CommandHandlerResult setLineNumbers(EditorRuntime::Impl& runtime) {
     return success();
 }
 
-CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, ViewId viewId,
+CommandHandlerResult scrollLines(EditorSession::Impl& runtime, ViewId viewId,
                                  std::any const& payload) {
     auto const* arguments = payloadAs<ScrollLinesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_lines requires scroll-lines payload");
@@ -52,7 +52,7 @@ CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, ViewId viewId,
     return success();
 }
 
-CommandHandlerResult scrollPages(EditorRuntime::Impl& runtime, ViewId viewId,
+CommandHandlerResult scrollPages(EditorSession::Impl& runtime, ViewId viewId,
                                  std::any const& payload) {
     auto const* arguments = payloadAs<ScrollPagesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_pages requires scroll-pages payload");
@@ -68,7 +68,7 @@ CommandHandlerResult scrollPages(EditorRuntime::Impl& runtime, ViewId viewId,
     return success();
 }
 
-CommandHandlerResult scrollFraction(EditorRuntime::Impl& runtime, ViewId viewId,
+CommandHandlerResult scrollFraction(EditorSession::Impl& runtime, ViewId viewId,
                                     std::any const& payload) {
     auto const* arguments = payloadAs<ScrollFractionArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_to_fraction requires scroll-fraction payload");
@@ -86,7 +86,7 @@ CommandHandlerResult scrollFraction(EditorRuntime::Impl& runtime, ViewId viewId,
     return success();
 }
 
-CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, ViewId viewId,
+CommandHandlerResult shellCommand(EditorSession::Impl& runtime, ViewId viewId,
                                   std::string_view id) {
     if (id == "pane.split_horizontal") runtime.shell.splitActive(SplitAxis::Horizontal);
     else if (id == "pane.split_vertical") runtime.shell.splitActive(SplitAxis::Vertical);
@@ -126,7 +126,7 @@ CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, ViewId viewId,
     return success();
 }
 
-CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
+CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
                                          ViewId viewId,
                                          Revision revision,
                                          std::string_view id,
@@ -229,14 +229,14 @@ std::string settingMessage(SettingMutation const& mutation) {
     return mutation.error ? mutation.error->message : "setting mutation failed";
 }
 
-void syncRuntimeSettings(EditorRuntime::Impl& runtime) {
+void syncRuntimeSettings(EditorSession::Impl& runtime) {
     runtime.wordWrap = boolSetting(runtime.settings, SettingKey::WordWrap,
                                      runtime.wordWrap);
     runtime.lineNumbers = boolSetting(runtime.settings, SettingKey::LineNumbers,
                                       runtime.lineNumbers);
 }
 
-CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
+CommandHandlerResult settingsCommand(EditorSession::Impl& runtime, std::string_view id, std::any const& payload) {
     if (id == "settings.open") {
         auto opened = runtime.interaction.openPrompt(PromptRequest{
             PromptKind::Settings, "settings",
@@ -313,7 +313,7 @@ CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_v
 // had to re-derive from the id which of two payload types it held; here the
 // type is stated once, at the command, and the compiler carries it.
 void registerAppearanceCommands(CommandCatalog& builder,
-                                EditorRuntime::Impl& runtime) {
+                                EditorSession::Impl& runtime) {
     auto declare = [&](std::string_view owner, std::string id,
                        std::string summary) {
         return CommandSpecBuilder{std::move(id)}
@@ -393,7 +393,7 @@ void registerAppearanceCommands(CommandCatalog& builder,
 // The scroll commands all record a user navigation when they move the view, so
 // follow-edits knows the user drove rather than the editor.
 void registerViewportCommands(CommandCatalog& builder,
-                              EditorRuntime::Impl& runtime) {
+                              EditorSession::Impl& runtime) {
     builder.add(CommandSpecBuilder{"view.toggle_word_wrap"}
                     .owner("viewport-wrap-scrollbar")
                     .label("Toggle Word Wrap")
@@ -480,7 +480,7 @@ void registerViewportCommands(CommandCatalog& builder,
 // that collected it, and settings.set/reset carry typed mutations that a remote
 // client may send.  The three that take nothing say so.
 void registerSettingsCommands(CommandCatalog& builder,
-                              EditorRuntime::Impl& runtime) {
+                              EditorSession::Impl& runtime) {
     auto declare = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
             .owner("settings-model")
@@ -532,7 +532,7 @@ void registerSettingsCommands(CommandCatalog& builder,
 // The prompt line and the status queue.  Only prompt.update_value carries
 // anything: the text typed so far.
 void registerPromptStatusCommands(CommandCatalog& builder,
-                                  EditorRuntime::Impl& runtime) {
+                                  EditorSession::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
             .owner("prompt-status-surface")
@@ -604,7 +604,7 @@ void registerPromptStatusCommands(CommandCatalog& builder,
 // Panes, the sidebar, and distraction-free mode.  None takes an argument; each
 // acts on the current layout.
 void registerShellLayoutCommands(CommandCatalog& builder,
-                                 EditorRuntime::Impl& runtime) {
+                                 EditorSession::Impl& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary) {
         auto name = id;
         auto built =
@@ -652,7 +652,7 @@ void registerShellLayoutCommands(CommandCatalog& builder,
     declare("view.toggle_distraction_free", "", "Toggle Distraction Free");
 }
 
-void bindRuntimePresentation(CommandCatalog& builder, EditorRuntime::Impl& runtime) {
+void bindRuntimePresentation(CommandCatalog& builder, EditorSession::Impl& runtime) {
     registerViewportCommands(builder, runtime);
     registerShellLayoutCommands(builder, runtime);
     registerPromptStatusCommands(builder, runtime);

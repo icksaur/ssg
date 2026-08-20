@@ -3,7 +3,7 @@ target_sources(ssg PRIVATE
 )
 
 # Tree-sitter is compiled unconditionally.  Highlighting is disabled at RUNTIME
-# by constructing the runtime with a null EditorRuntimeConfig::syntaxParser,
+# by constructing the runtime with a null EditorSessionConfig::syntaxParser,
 # which yields plain text.
 enable_language(C)
 

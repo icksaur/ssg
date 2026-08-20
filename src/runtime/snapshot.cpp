@@ -1,4 +1,4 @@
-#include "editor_runtime_internal.h"
+#include "editor_session_internal.h"
 
 #include <ssg/CommandCatalog.h>
 
@@ -114,7 +114,7 @@ void bindStatusFieldCommands(std::vector<StatusField>& fields,
 
 } // namespace
 
-DocumentViewState EditorRuntime::Impl::documentView() const {
+DocumentViewState EditorSession::Impl::documentView() const {
     auto const* document = activeDocument();
     if (document == nullptr) return {Revision{0}, {}, ByteOffset{0}, std::nullopt};
     auto snapshot = document->snapshot();
@@ -132,12 +132,12 @@ DocumentViewState EditorRuntime::Impl::documentView() const {
             std::move(diffFileIdentity)};
 }
 
-TextEncodingViewState EditorRuntime::Impl::textEncodingView() const {
+TextEncodingViewState EditorSession::Impl::textEncodingView() const {
     auto state = activeWorkspaceState();
     return {state ? state->encoding : TextEncodingStatus{}};
 }
 
-PromptStatusViewState EditorRuntime::Impl::promptStatusView() const {
+PromptStatusViewState EditorSession::Impl::promptStatusView() const {
     // Semantic prompt state: which prompt is open (authoritative, present even for
     // a header-hosted prompt with no footer view) and the status queue. No
     // dimensions needed, so a semantic snapshot is obtainable without geometry.
@@ -147,7 +147,7 @@ PromptStatusViewState EditorRuntime::Impl::promptStatusView() const {
     return view;
 }
 
-std::optional<PromptViewState> EditorRuntime::Impl::promptProjection(
+std::optional<PromptViewState> EditorSession::Impl::promptProjection(
     ViewportDimensions dimensions,
     std::optional<Rect> promptReservation) const {
     // Grid projection of the footer-anchored interaction.prompt(). Single-source prompt rect:
@@ -168,12 +168,12 @@ std::optional<PromptViewState> EditorRuntime::Impl::promptProjection(
     return view;
 }
 
-void EditorRuntime::Impl::projectFindReplacePrompt(PromptViewState& promptView) const {
+void EditorSession::Impl::projectFindReplacePrompt(PromptViewState& promptView) const {
     applyFindReplaceValues(promptView.controls, promptView.kind,
                            findReplace.viewState());
 }
 
-std::optional<PromptView> EditorRuntime::Impl::promptView() const {
+std::optional<PromptView> EditorSession::Impl::promptView() const {
     auto const& request = interaction.prompt().request();
     if (!request) return std::nullopt;
     // Only a footer-region prompt is published here; the header-hosted palette
@@ -190,7 +190,7 @@ std::optional<PromptView> EditorRuntime::Impl::promptView() const {
     return view;
 }
 
-std::optional<NoticeView> EditorRuntime::Impl::draftNotice() const {
+std::optional<NoticeView> EditorSession::Impl::draftNotice() const {
     // Only the Conflict outcome raises the notice; a Restored draft is a quieter
     // state with no external change to resolve. The action command ids are already
     // registered; the host only dispatches them.
@@ -208,15 +208,15 @@ std::optional<NoticeView> EditorRuntime::Impl::draftNotice() const {
          {"draft.notice.dismiss", "dismiss", "draft.dismiss"}}};
 }
 
-std::optional<NoticeView> EditorRuntime::Impl::noticeView() const {
+std::optional<NoticeView> EditorSession::Impl::noticeView() const {
     return draftNotice();
 }
 
-bool EditorRuntime::Impl::noticePresent() const {
+bool EditorSession::Impl::noticePresent() const {
     return draftNotice().has_value();
 }
 
-StatusFieldProjection EditorRuntime::Impl::chromeStatusFields(
+StatusFieldProjection EditorSession::Impl::chromeStatusFields(
     ChromeFieldMode mode) const {
     auto statusProjection = status.footerProjection();
     auto followProjection = follow.footerProjection();
@@ -234,7 +234,7 @@ StatusFieldProjection EditorRuntime::Impl::chromeStatusFields(
     return fields;
 }
 
-ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
+ShellViewState EditorSession::Impl::shellView(ViewportDimensions dimensions,
                                                PaletteReport const& paletteReport) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.viewState().tabs) {
@@ -380,7 +380,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     return view;
 }
 
-SessionSnapshotSections EditorRuntime::Impl::sections(
+SessionSnapshotSections EditorSession::Impl::sections(
     PaletteReport const& paletteReport) const {
     auto currentHistory = HistoryViewState{false, false, 0};
     if (auto id = activeDocumentId()) {
@@ -439,13 +439,13 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             interaction.effectiveFocus() == FocusTarget::ExternalModification};
 }
 
-TreeViewState EditorRuntime::Impl::treeView() const {
+TreeViewState EditorSession::Impl::treeView() const {
     // Semantic only: providers, nodes, selection, expansion. The grid scroll
     // window is a presentation projection produced by treeWindows().
     return tree.viewState();
 }
 
-std::vector<TreeWindow> EditorRuntime::Impl::treeWindows(
+std::vector<TreeWindow> EditorSession::Impl::treeWindows(
     ViewPresentationState const& presentation) const {
     auto view = tree.viewState();
     if (view.providers.empty()) return {};
@@ -480,7 +480,7 @@ std::vector<TreeWindow> EditorRuntime::Impl::treeWindows(
     return {std::move(window)};
 }
 
-void EditorRuntime::Impl::revealTreeSelection(ViewId viewId) {
+void EditorSession::Impl::revealTreeSelection(ViewId viewId) {
     auto view = tree.viewState();
     if (view.providers.empty()) return;
     auto const& provider = view.providers.front();
@@ -501,7 +501,7 @@ void EditorRuntime::Impl::revealTreeSelection(ViewId viewId) {
     viewPresentation.treeFirstVisible = offset.firstVisible();
 }
 
-void EditorRuntime::Impl::scrollTreeToFraction(ViewId viewId,
+void EditorSession::Impl::scrollTreeToFraction(ViewId viewId,
                                                 std::uint32_t numerator,
                                                 std::uint32_t denominator) {
     // Only the node COUNT is needed, and this runs per pointer motion during a
@@ -519,7 +519,7 @@ void EditorRuntime::Impl::scrollTreeToFraction(ViewId viewId,
     viewPresentation.treeFirstVisible = offset.firstVisible();
 }
 
-void EditorRuntime::Impl::scrollTree(ViewId viewId, std::int64_t rows) {
+void EditorSession::Impl::scrollTree(ViewId viewId, std::int64_t rows) {
     // Same reasoning as scrollTreeToFraction: the wheel path needs the count,
     // not the view.
     auto const nodes = tree.activeVisibleNodeCount();
@@ -537,7 +537,7 @@ void EditorRuntime::Impl::scrollTree(ViewId viewId, std::int64_t rows) {
 // Publishes the candidate set of whichever picker is open.  The mode and the
 // candidate source both come from the picker descriptor, so a new picker adds a
 // case here rather than a second hardcoded view.
-PaletteViewState EditorRuntime::Impl::paletteView() const {
+PaletteViewState EditorSession::Impl::paletteView() const {
     PaletteViewState view;
     if (!interaction.openPicker()) return view;
     auto const* picker = pickerCatalog().find(*interaction.openPicker());

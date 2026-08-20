@@ -16,7 +16,7 @@
 // The pty capture is Linux-scoped (forkpty); the decoder and comparison are
 // portable and would back a Windows ConPTY harness unchanged.
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/Renderer.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/Theme.h>
@@ -239,15 +239,15 @@ fs::path makeFixture() {
 // `startsOnANewBuffer` mirrors apps/ssg_main.cpp opening an unnamed buffer when
 // no file was opened at startup. Tests that go on to open a real file leave it
 // false, because in that case the app opens the file instead.
-std::unique_ptr<ssg::EditorRuntime> makeHeadless(fs::path const& root,
+std::unique_ptr<ssg::EditorSession> makeHeadless(fs::path const& root,
                                                  bool startsOnANewBuffer = false) {
-    ssg::EditorRuntimeConfig config;
+    ssg::EditorSessionConfig config;
     config.cwd = root / "workspace";
     config.scratchRoot = root / "scratch";
     config.recoveryRoot = root / "recovery";
-    auto created = ssg::EditorRuntime::create(config);
+    auto created = ssg::EditorSession::create(config);
     if (!created.accepted()) return nullptr;
-    auto runtime = std::move(created.runtime);
+    auto runtime = std::move(created.session);
     (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     // The app opens its startup document BEFORE showing the sidebar, so the

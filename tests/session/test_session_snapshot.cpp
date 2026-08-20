@@ -1,7 +1,7 @@
 #include "command_cases.h"
 #include "../test_helpers.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/Keymap.h>
 
 #include <algorithm>
@@ -25,13 +25,13 @@ std::filesystem::path uniqueRoot(std::string_view name) {
     return root;
 }
 
-ssg::EditorRuntimeConfig configFor(const std::filesystem::path& root) {
+ssg::EditorSessionConfig configFor(const std::filesystem::path& root) {
     return {root / "workspace", root / "scratch", root / "recovery"};
 }
 
 TEST(constructionRejectsInvalidCwd) {
     auto root = uniqueRoot("invalid_cwd");
-    auto result = ssg::EditorRuntime::create(configFor(root / "missing"));
+    auto result = ssg::EditorSession::create(configFor(root / "missing"));
     ASSERT_FALSE(result.accepted());
     ASSERT_FALSE(result.message.empty());
 }
@@ -43,11 +43,11 @@ TEST(constructionRejectsInvalidCwd) {
 
 TEST(runtimeConstructsAttachesAndProducesLiveSnapshot) {
     auto root = uniqueRoot("snapshot");
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
 
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ssg::InvocationPrincipal principal{ssg::ClientId{7}, ssg::InvocationOrigin::InProcess};
     ASSERT_TRUE(runtime.attach(std::move(principal), ssg::ViewId{9}).accepted());
 
@@ -67,13 +67,13 @@ TEST(runtimeSourcesDoNotIncludeFixtureModel) {
         if (!entry.is_regular_file()) continue;
         if (entry.path().extension() != ".cpp" && entry.path().extension() != ".h") continue;
         const auto relative = std::filesystem::relative(entry.path(), root).generic_string();
-        if (relative.rfind("src/runtime/", 0) != 0 && relative != "src/EditorRuntime.cpp") continue;
+        if (relative.rfind("src/runtime/", 0) != 0 && relative != "src/EditorSession.cpp") continue;
         std::ifstream input{entry.path()};
         const std::string text{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
         found = found || text.find("FixtureModel") != std::string::npos;
         snapshotConstCast =
             snapshotConstCast ||
-            text.find("const_cast<EditorRuntime::Impl*>") != std::string::npos;
+            text.find("const_cast<EditorSession::Impl*>") != std::string::npos;
     }
     ASSERT_FALSE(found);
     ASSERT_FALSE(snapshotConstCast);
@@ -81,10 +81,10 @@ TEST(runtimeSourcesDoNotIncludeFixtureModel) {
 
 TEST(runtimePublishesValidCuratedKeymap) {
     auto root = uniqueRoot("keymap_valid");
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -102,10 +102,10 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
         std::ofstream file{root / "workspace" / "long.txt"};
         for (int line = 1; line <= 60; ++line) file << "line " << line << "\n";
     }
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -168,10 +168,10 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
         std::ofstream file{root / "workspace" / "snug.txt"};
         for (int line = 1; line <= 23; ++line) file << "line " << line << "\n";
     }
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -192,10 +192,10 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
 // has done anything, so it stops meaning "you have work to lose".
 TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
     auto root = uniqueRoot("scratch_dirty");
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -222,10 +222,10 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     auto root = uniqueRoot("scratch_close");
     std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
     std::ofstream{root / "workspace" / "beta.txt"} << "beta\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     auto const tabLabels = [&] {
@@ -297,10 +297,10 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
 TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
     auto root = uniqueRoot("scratch_keep");
     std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -333,10 +333,10 @@ TEST(anEmptySavedFileIsNeverDiscardedAsScratch) {
     auto root = uniqueRoot("scratch_empty_file");
     std::ofstream{root / "workspace" / "blank.txt"};
     std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -370,10 +370,10 @@ TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
         std::ofstream file{root / "workspace" / "wide.txt"};
         file << std::string(70, 'a');
     }
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -399,10 +399,10 @@ TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
 TEST(curatedKeymapBindingsAreArgumentFree) {
     auto root = uniqueRoot("keymap_argfree");
     std::ofstream{root / "workspace" / "doc.txt"} << "alpha\nbeta\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     (void)runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"doc.txt"}});
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
@@ -433,10 +433,10 @@ TEST(curatedKeymapBindingsAreArgumentFree) {
 
 TEST(curatedKeymapResolvesPerContext) {
     auto root = uniqueRoot("keymap_resolve");
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -571,10 +571,10 @@ TEST(curatedKeymapResolvesPerContext) {
 TEST(addCursorChordProducesMultipleSelections) {
     auto root = uniqueRoot("multi_cursor");
     std::ofstream{root / "workspace" / "m.txt"} << "alpha\nbeta\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
 
@@ -597,10 +597,10 @@ TEST(addCursorChordProducesMultipleSelections) {
 
 TEST(settingsOpenFocusesASettingsPrompt) {
     auto root = uniqueRoot("settings_open");
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.open", runtime.revision(), {}}).accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
@@ -618,10 +618,10 @@ TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
     // Semantic state is never gated on grid geometry.
     auto root = uniqueRoot("dimensionless_semantic");
     std::ofstream{root / "workspace" / "m.txt"} << "alpha\nbeta\ngamma\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
     // Show the panel and select a node so the tree has a live scroll window: the

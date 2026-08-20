@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ssg/Keymap.h>
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/session_snapshot.h>
 
 #include <array>
@@ -33,7 +33,7 @@ private:
 
 class TuiClient {
 public:
-    TuiClient(EditorRuntime& runtime, InvocationPrincipal principal,
+    TuiClient(EditorSession& runtime, InvocationPrincipal principal,
               ViewId viewId, ViewportDimensions dimensions);
     ~TuiClient();
 
@@ -52,7 +52,7 @@ public:
 private:
     void refresh();
 
-    EditorRuntime* runtime_;
+    EditorSession* runtime_;
     InvocationPrincipal principal_;
     ViewId viewId_;
     ViewportDimensions dimensions_;

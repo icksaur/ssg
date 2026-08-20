@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/FileCommands.h>
 #include <ssg/PromptSurface.h>
 
@@ -36,17 +36,17 @@ private:
     fs::path path_;
 };
 
-std::unique_ptr<ssg::EditorRuntime> makeRuntime(const fs::path& root) {
-    auto created = ssg::EditorRuntime::create(
+std::unique_ptr<ssg::EditorSession> makeRuntime(const fs::path& root) {
+    auto created = ssg::EditorSession::create(
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
-    auto runtime = std::move(created.runtime);
+    auto runtime = std::move(created.session);
     (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     return runtime;
 }
 
-ssg::CommandResult run(ssg::EditorRuntime& runtime, std::string id,
+ssg::CommandResult run(ssg::EditorSession& runtime, std::string id,
                        std::any payload = {}) {
     return runtime.dispatch(
         ssg::ClientId{1},
@@ -56,7 +56,7 @@ ssg::CommandResult run(ssg::EditorRuntime& runtime, std::string id,
 // The prompt as the client sees it. commandId is deliberately NOT here -- it is
 // runtime-internal attribution -- so these tests observe which command a prompt
 // belongs to through what submitting it DOES, which is the stronger oracle.
-bool pathPromptOpen(ssg::EditorRuntime& runtime) {
+bool pathPromptOpen(ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return false;
     const auto& prompt = snapshot->presentation()->prompt;

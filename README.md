@@ -97,7 +97,7 @@ add_subdirectory(path/to/ssg)
 target_link_libraries(my_app PRIVATE ssg)
 ```
 
-`ssg::Document` is the smallest entry point; `ssg::EditorRuntime` is the
+`ssg::Document` is the smallest entry point; `ssg::EditorSession` is the
 batteries-included editor session. See
 [`development.md`](development.md) for the API surface, building, and testing.
 

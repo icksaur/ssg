@@ -6,7 +6,7 @@
 #include <ssg/CommandCatalog.h>
 
 #include "all_command_ids.h"
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/WholeScreenAssembly.h>
 
 #include <unistd.h>
@@ -179,11 +179,11 @@ std::shared_ptr<ssg::CommandCatalog const> staticTableCatalog() {
                           ("ssg-protocol-catalog-" + std::to_string(::getpid()));
         std::filesystem::remove_all(root);
         std::filesystem::create_directories(root);
-        auto created = ssg::EditorRuntime::create({root});
-        auto result = created.runtime ? created.runtime->commandCatalog()
+        auto created = ssg::EditorSession::create({root});
+        auto result = created.session ? created.session->commandCatalog()
                                       : nullptr;
         // The runtime owns the catalog; keep it alive for the test's lifetime.
-        static auto keepAlive = std::move(created.runtime);
+        static auto keepAlive = std::move(created.session);
         std::filesystem::remove_all(root);
         return result;
     }();

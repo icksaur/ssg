@@ -1,4 +1,4 @@
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/Renderer.h>
 #include <ssg/session_snapshot.h>
 
@@ -17,7 +17,7 @@ namespace fs = std::filesystem;
 
 struct Fixture {
     fs::path root;
-    std::unique_ptr<ssg::EditorRuntime> runtime;
+    std::unique_ptr<ssg::EditorSession> runtime;
 
     ~Fixture() { fs::remove_all(root); }
 };
@@ -28,10 +28,10 @@ Fixture makeFixture(std::string_view text) {
     fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     std::ofstream{root / "overlay.cpp"} << text;
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return {std::move(root), nullptr};
-    auto runtime = std::move(created.runtime);
+    auto runtime = std::move(created.session);
     (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     (void)runtime->dispatch(

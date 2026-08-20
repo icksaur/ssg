@@ -1,4 +1,4 @@
-#include "editor_runtime_internal.h"
+#include "editor_session_internal.h"
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/Selection.h>
@@ -14,10 +14,10 @@ namespace {
 // currently published palette candidate set (the command mode's candidates,
 // which `palette_view()` publishes from `descriptors()`) and that the invoking
 // principal holds its required capabilities.  On success the target id is
-// stashed for the EditorRuntime dispatch wrapper to execute through the registry
+// stashed for the EditorSession dispatch wrapper to execute through the registry
 // (the session mutex is non-reentrant, so the handler cannot re-enter dispatch).
 // This keeps execution server-owned and rejects any id the palette never offered
-CommandHandlerResult validatePaletteTarget(EditorRuntime::Impl& runtime,
+CommandHandlerResult validatePaletteTarget(EditorSession::Impl& runtime,
                                              CommandContext& context,
                                              std::string const& commandId) {
     bool const paletteOpen = runtime.interaction.prompt().active() &&
@@ -51,7 +51,7 @@ CommandHandlerResult validatePaletteTarget(EditorRuntime::Impl& runtime,
     return success();
 }
 
-CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext& context, std::string_view id, std::any const& payload) {
+CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext& context, std::string_view id, std::any const& payload) {
     Revision const revision = context.revision();
     if (id == "palette.open") {
         if (!runtime.openPickerPrompt(PickerKind::Command)) {
@@ -171,7 +171,7 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
     return success();
 }
 
-CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
+CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
                                  CommandContext& context,
                                  std::string_view id,
                                  std::any const& payload) {
@@ -263,7 +263,7 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
     return command ? success() : failure("tree node command does not exist");
 }
 
-CommandHandlerResult diffCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
+CommandHandlerResult diffCommand(EditorSession::Impl& runtime, std::string_view id, std::any const& payload) {
     auto const* fileId = payloadAs<DiffFileId>(payload);
     if (fileId == nullptr) return failure(std::string{id} + " requires a diff file ID payload");
     auto file = runtime.diff.file(*fileId);
@@ -292,7 +292,7 @@ CommandHandlerResult diffCommand(EditorRuntime::Impl& runtime, std::string_view 
     return success();
 }
 
-CommandHandlerResult followCommand(EditorRuntime::Impl& runtime, std::string_view id) {
+CommandHandlerResult followCommand(EditorSession::Impl& runtime, std::string_view id) {
     const auto modeBefore = runtime.follow.viewState().mode;
     FollowEditsResult result;
     if (id == "follow_edits.pause") {
@@ -327,7 +327,7 @@ CommandHandlerResult followCommand(EditorRuntime::Impl& runtime, std::string_vie
 // client, so they are in-process only: typed for the handler, absent from the
 // protocol.
 void registerDiffAndFollowCommands(CommandCatalog& builder,
-                                   EditorRuntime::Impl& runtime) {
+                                   EditorSession::Impl& runtime) {
     auto diff = [&](std::string id, std::string summary) {
         auto const name = id;
         builder.add(CommandSpecBuilder{std::move(id)}
@@ -371,7 +371,7 @@ void registerDiffAndFollowCommands(CommandCatalog& builder,
 // All eight share one handler, which branches on the id, so each declaration
 // only has to say what the command is called and what it carries.
 void registerTreeCommands(CommandCatalog& builder,
-                          EditorRuntime::Impl& runtime) {
+                          EditorSession::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
             .owner("tree-providers")
@@ -460,7 +460,7 @@ void registerTreeCommands(CommandCatalog& builder,
 
 // The pickers, workspace search, and the go-to jumps.
 void registerSearchPaletteCommands(CommandCatalog& builder,
-                                   EditorRuntime::Impl& runtime) {
+                                   EditorSession::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
             .owner("search-palette")
@@ -592,7 +592,7 @@ void registerSearchPaletteCommands(CommandCatalog& builder,
                         }));
 }
 
-void bindRuntimeNavigation(CommandCatalog& builder, EditorRuntime::Impl& runtime) {
+void bindRuntimeNavigation(CommandCatalog& builder, EditorSession::Impl& runtime) {
     registerDiffAndFollowCommands(builder, runtime);
     registerSearchPaletteCommands(builder, runtime);
     registerTreeCommands(builder, runtime);

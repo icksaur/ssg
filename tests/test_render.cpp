@@ -1,6 +1,6 @@
 #include <ssg/Renderer.h>
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/FindReplace.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/StatusFields.h>
@@ -33,11 +33,11 @@ fs::path uniqueRoot() {
     return base;
 }
 
-std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
-    auto created = ssg::EditorRuntime::create(
+std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
+    auto created = ssg::EditorSession::create(
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
-    auto runtime = std::move(created.runtime);
+    auto runtime = std::move(created.session);
     (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     return runtime;

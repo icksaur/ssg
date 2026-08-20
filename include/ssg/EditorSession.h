@@ -25,7 +25,7 @@ namespace ssg {
 
 class CommandCatalog;
 
-struct EditorRuntimeConfig {
+struct EditorSessionConfig {
     std::filesystem::path cwd;
     std::filesystem::path scratchRoot;
     std::filesystem::path recoveryRoot;
@@ -60,13 +60,13 @@ struct EditorRuntimeConfig {
     bool enableFilesystemWatcher = true;
 };
 
-class EditorRuntime;
+class EditorSession;
 
-struct EditorRuntimeCreateResult {
-    std::unique_ptr<EditorRuntime> runtime;
+struct EditorSessionCreateResult {
+    std::unique_ptr<EditorSession> session;
     std::string message;
 
-    [[nodiscard]] bool accepted() const noexcept { return runtime != nullptr; }
+    [[nodiscard]] bool accepted() const noexcept { return session != nullptr; }
 };
 
 struct ExternalDiffRevision {
@@ -107,24 +107,24 @@ struct PumpResult {
 };
 
 // CONTRACT
-// EditorRuntime: resetKeymapToDefault, focusEditor, setComposedUi,
+// EditorSession: resetKeymapToDefault, focusEditor, setComposedUi,
 //   primeDeferred, and the autosave-flush methods are host-only orchestration
 //   seams, called on the session thread. They deliberately bypass the command
 //   registry and are not user-visible actions, so they are never registered or
 //   exposed through the Lua API; that omission is intentional, not a gap.
-class EditorRuntime {
+class EditorSession {
 public:
-    [[nodiscard]] static EditorRuntimeCreateResult create(
-        EditorRuntimeConfig config);
+    [[nodiscard]] static EditorSessionCreateResult create(
+        EditorSessionConfig config);
 
-    ~EditorRuntime();
-    EditorRuntime(EditorRuntime const&) = delete;
-    EditorRuntime& operator=(EditorRuntime const&) = delete;
-    EditorRuntime(EditorRuntime&&) = delete;
-    EditorRuntime& operator=(EditorRuntime&&) = delete;
+    ~EditorSession();
+    EditorSession(EditorSession const&) = delete;
+    EditorSession& operator=(EditorSession const&) = delete;
+    EditorSession(EditorSession&&) = delete;
+    EditorSession& operator=(EditorSession&&) = delete;
 
     // CONTRACT
-    // EditorRuntime is the serialized aggregate boundary. Each public state
+    // EditorSession is the serialized aggregate boundary. Each public state
     // operation completes before another state operation can observe it; command
     // dispatch includes handler requests, reconciliation, revision publication,
     // and public result construction. A handler must request a follow-up through
@@ -174,7 +174,7 @@ public:
         std::vector<ExternalDiffRevision> changes);
     [[nodiscard]] GitDiffScanResult applyGitDiffScan(GitDiffScan scan);
     // Resets the live keymap to defaultTerminalKeymap() -- the same
-    // hand-reviewed keymap installed at EditorRuntime::create. Called by
+    // hand-reviewed keymap installed at EditorSession::create. Called by
     // the host (apps/ssg_main.cpp) immediately before every init.lua
     // evaluation (startup AND auto-reload), so keymap.bind/keymap.unbind
     // always start from a clean slate: init.lua's current content is the
@@ -245,7 +245,7 @@ public:
     // production transitions arrive via the worker's wake drain.
     void reportWatcherAvailabilityForTest(bool available);
     // CONTRACT
-    // EditorRuntime::snapshot: the semantic model and interaction state are never
+    // EditorSession::snapshot: the semantic model and interaction state are never
     //   gated on grid geometry. present() adds an optional
     //   PresentationSnapshot (viewport, style, footer prompt, shell layout,
     //   selection scroll, tree scroll windows); present() updates and captures
@@ -275,7 +275,7 @@ public:
     struct Impl;
 
 private:
-    explicit EditorRuntime(std::unique_ptr<Impl> implementation) noexcept;
+    explicit EditorSession(std::unique_ptr<Impl> implementation) noexcept;
 
     std::unique_ptr<Impl> impl_;
 };

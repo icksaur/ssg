@@ -1,13 +1,13 @@
 #include "init_script.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/ScriptHost.h>
 
 #include <cstdio>
 
 namespace ssg::app {
 
-void evaluateInitScript(ScriptHost& scripts, EditorRuntime& runtime,
+void evaluateInitScript(ScriptHost& scripts, EditorSession& runtime,
                         std::filesystem::path const& scriptPath,
                         std::string const& script) {
     auto const result = scripts.evaluate(script);

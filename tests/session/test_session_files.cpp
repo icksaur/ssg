@@ -1,6 +1,6 @@
 #include "../test_helpers.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/FileCommands.h>
 #include <ssg/GitDiffSource.h>
 #include <ssg/HitTester.h>
@@ -29,8 +29,8 @@ std::filesystem::path uniqueRoot(std::string_view name) {
     return root;
 }
 
-ssg::EditorRuntimeConfig configFor(const std::filesystem::path& root) {
-    ssg::EditorRuntimeConfig config{
+ssg::EditorSessionConfig configFor(const std::filesystem::path& root) {
+    ssg::EditorSessionConfig config{
         root / "workspace", root / "scratch", root / "recovery"};
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
@@ -52,7 +52,7 @@ void writeBytes(const std::filesystem::path& path, std::initializer_list<std::ui
     for (auto byte : bytes) output.put(static_cast<char>(byte));
 }
 
-bool activeTabDirty(ssg::EditorRuntime& runtime) {
+bool activeTabDirty(ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return false;
     const auto& tabs = snapshot->sections().tabs;
@@ -63,7 +63,7 @@ bool activeTabDirty(ssg::EditorRuntime& runtime) {
     return false;
 }
 
-bool activeTabIsLiveDiff(ssg::EditorRuntime& runtime) {
+bool activeTabIsLiveDiff(ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return false;
     const auto& tabs = snapshot->sections().tabs;
@@ -99,7 +99,7 @@ bool hasNoticeBar(const ssg::SessionSnapshot& snapshot) {
     return findShellNode(snapshot, ssg::ShellNodeKind::NoticeBar) != nullptr;
 }
 
-bool statusMentions(ssg::EditorRuntime& runtime, std::string_view needle) {
+bool statusMentions(ssg::EditorSession& runtime, std::string_view needle) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return false;
     for (const auto& item : snapshot->sections().promptStatus.status.items) {
@@ -112,9 +112,9 @@ bool statusMentions(ssg::EditorRuntime& runtime, std::string_view needle) {
 // recoverable draft in `root/scratch`. Returns the drafted buffer text.
 std::string leaveDirtyDraft(const std::filesystem::path& root) {
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     if (!created.accepted()) return {};
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                          ssg::ViewId{1});
     (void)runtime.dispatch(ssg::ClientId{1},
@@ -127,7 +127,7 @@ std::string leaveDirtyDraft(const std::filesystem::path& root) {
     return draft;
 }
 
-ssg::CommandResult reopenNote(ssg::EditorRuntime& runtime) {
+ssg::CommandResult reopenNote(ssg::EditorSession& runtime) {
     (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                          ssg::ViewId{1});
     return runtime.dispatch(
@@ -142,14 +142,14 @@ TEST(reopeningADirtyDraftRestoresTheEditsWhenDiskIsUnchanged) {
 
     // Disk untouched since the edits branched: recover the draft as a dirty
     // buffer with a "restored" notice, no conflict.
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     ASSERT_EQ(runtime.activeDocumentText(), draft);
     ASSERT_TRUE(activeTabDirty(runtime));
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::Restored);
+                ssg::EditorSession::DraftReopenNotice::Restored);
 }
 
 TEST(reopeningAConvergedDraftDropsItAndOpensClean) {
@@ -160,14 +160,14 @@ TEST(reopeningAConvergedDraftDropsItAndOpensClean) {
     // converged. There is nothing unsaved to recover.
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << draft;
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     ASSERT_EQ(runtime.activeDocumentText(), draft);
     ASSERT_FALSE(activeTabDirty(runtime));
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::None);
+                ssg::EditorSession::DraftReopenNotice::None);
     // The draft was dropped, so the clean buffer has nothing to flush.
     ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{0});
 }
@@ -180,16 +180,16 @@ TEST(reopeningADraftAfterAnExternalChangeFlagsConflict) {
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
         << "changed externally\n";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     // The draft still loads as a dirty buffer (never a blind blocking choice)...
     ASSERT_EQ(runtime.activeDocumentText(), draft);
     ASSERT_TRUE(activeTabDirty(runtime));
     // ...but the conflict notice fires because disk changed.
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::Conflict);
+                ssg::EditorSession::DraftReopenNotice::Conflict);
 }
 
 TEST(editingAndSavingARestoredDraftRoundTripsCoherently) {
@@ -201,9 +201,9 @@ TEST(editingAndSavingARestoredDraftRoundTripsCoherently) {
     {
         std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
             << "one\r\ntwo\r\n";
-        auto created = ssg::EditorRuntime::create(configFor(root));
+        auto created = ssg::EditorSession::create(configFor(root));
         ASSERT_TRUE(created.accepted());
-        auto& runtime = *created.runtime;
+        auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
         ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                      {"text.insert", runtime.revision(),
@@ -211,12 +211,12 @@ TEST(editingAndSavingARestoredDraftRoundTripsCoherently) {
                         .accepted());
         ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
     }
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::Restored);
+                ssg::EditorSession::DraftReopenNotice::Restored);
     const auto restored = runtime.activeDocumentText();
     // A further edit after restore must apply cleanly and stay dirty...
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -244,9 +244,9 @@ TEST(reactivatingAnOpenTabDoesNotReapplyItsDraft) {
     ASSERT_TRUE(!draft.empty());
     std::ofstream{root / "workspace" / "other.txt", std::ios::binary} << "other\n";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     ASSERT_EQ(runtime.activeDocumentText(), draft);
     // Edit past the recovered draft, open another file, then re-open note.txt:
@@ -276,12 +276,12 @@ TEST(draftDiffOnAConflictShowsDraftAgainstDiskHunks) {
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
         << "changed externally\n";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::Conflict);
+                ssg::EditorSession::DraftReopenNotice::Conflict);
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"draft.diff", runtime.revision(), {}})
@@ -302,9 +302,9 @@ TEST(draftDiffWithDiskMissingDiffsDraftAgainstEmpty) {
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
         << "changed externally\n";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     // The file vanishes after the draft is open: draft.diff must still succeed,
     // diffing the draft against empty rather than failing.
@@ -325,9 +325,9 @@ TEST(draftDiffSurvivesAGitScanThatDoesNotMentionTheFile) {
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
         << "changed externally\n";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"draft.diff", runtime.revision(), {}})
@@ -361,12 +361,12 @@ TEST(draftDiscardArchivesTheDraftAndLoadsDiskContent) {
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
         << "changed externally\n";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::Conflict);
+                ssg::EditorSession::DraftReopenNotice::Conflict);
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"draft.discard", runtime.revision(), {}})
@@ -376,7 +376,7 @@ TEST(draftDiscardArchivesTheDraftAndLoadsDiskContent) {
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"changed externally\n"});
     ASSERT_FALSE(activeTabDirty(runtime));
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::None);
+                ssg::EditorSession::DraftReopenNotice::None);
 
     // (a)+(c): the discarded edits were archived (reversible), byte-for-byte.
     const auto archived = archivedDrafts(root);
@@ -395,31 +395,31 @@ TEST(discardedDraftIsRemovedFromScratchSoReopenIsClean) {
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
         << "changed externally\n";
     {
-        auto created = ssg::EditorRuntime::create(configFor(root));
+        auto created = ssg::EditorSession::create(configFor(root));
         ASSERT_TRUE(created.accepted());
-        auto& runtime = *created.runtime;
+        auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
         ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                      {"draft.discard", runtime.revision(), {}})
                         .accepted());
     }
     // A fresh session over the same store must find no draft to recover.
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"changed externally\n"});
     ASSERT_FALSE(activeTabDirty(runtime));
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::None);
+                ssg::EditorSession::DraftReopenNotice::None);
 }
 
 TEST(draftDiscardRefusesACleanSavedDocument) {
     auto root = uniqueRoot("draft_discard_clean");
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                          ssg::ViewId{1});
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -449,9 +449,9 @@ TEST(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits) {
 
     const auto relKey = rel.generic_string();
     {
-        auto created = ssg::EditorRuntime::create(configFor(root));
+        auto created = ssg::EditorSession::create(configFor(root));
         ASSERT_TRUE(created.accepted());
-        auto& runtime = *created.runtime;
+        auto& runtime = *created.session;
         (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                              ssg::ViewId{1});
         ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -465,9 +465,9 @@ TEST(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits) {
     }
     std::ofstream{root / "workspace" / rel, std::ios::binary} << "changed\n";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                          ssg::ViewId{1});
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -490,24 +490,24 @@ TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
         leaveDirtyDraft(root);
         std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
             << "changed externally\n";
-        auto created = ssg::EditorRuntime::create(configFor(root));
+        auto created = ssg::EditorSession::create(configFor(root));
         ASSERT_TRUE(created.accepted());
-        auto& runtime = *created.runtime;
+        auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
         ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                    ssg::EditorRuntime::DraftReopenNotice::Conflict);
+                    ssg::EditorSession::DraftReopenNotice::Conflict);
         ASSERT_TRUE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, dims)));
     }
     {
         // Restored (disk unchanged): a quieter state, no yellow notice.
         auto root = uniqueRoot("notice_restored");
         leaveDirtyDraft(root);  // disk still "hi\n"
-        auto created = ssg::EditorRuntime::create(configFor(root));
+        auto created = ssg::EditorSession::create(configFor(root));
         ASSERT_TRUE(created.accepted());
-        auto& runtime = *created.runtime;
+        auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
         ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                    ssg::EditorRuntime::DraftReopenNotice::Restored);
+                    ssg::EditorSession::DraftReopenNotice::Restored);
         ASSERT_FALSE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, dims)));
     }
 }
@@ -521,9 +521,9 @@ TEST(noticeViewIsPresentOnlyOnADraftConflict) {
         leaveDirtyDraft(root);
         std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
             << "changed externally\n";
-        auto created = ssg::EditorRuntime::create(configFor(root));
+        auto created = ssg::EditorSession::create(configFor(root));
         ASSERT_TRUE(created.accepted());
-        auto& runtime = *created.runtime;
+        auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
         auto snapshot = runtime.present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snapshot.has_value());
@@ -535,9 +535,9 @@ TEST(noticeViewIsPresentOnlyOnADraftConflict) {
     {
         auto root = uniqueRoot("semantic_notice_restored");
         leaveDirtyDraft(root);  // disk unchanged -> Restored, no notice
-        auto created = ssg::EditorRuntime::create(configFor(root));
+        auto created = ssg::EditorSession::create(configFor(root));
         ASSERT_TRUE(created.accepted());
-        auto& runtime = *created.runtime;
+        auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
         auto snapshot = runtime.present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snapshot.has_value());
@@ -554,9 +554,9 @@ TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     leaveDirtyDraft(root);
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
         << "changed externally\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
@@ -608,9 +608,9 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     leaveDirtyDraft(conflictRoot);
     std::ofstream{conflictRoot / "workspace" / "note.txt", std::ios::binary}
         << "changed externally\n";
-    auto conflictCreated = ssg::EditorRuntime::create(configFor(conflictRoot));
+    auto conflictCreated = ssg::EditorSession::create(configFor(conflictRoot));
     ASSERT_TRUE(conflictCreated.accepted());
-    auto& conflict = *conflictCreated.runtime;
+    auto& conflict = *conflictCreated.session;
     ASSERT_TRUE(reopenNote(conflict).accepted());
     auto conflictSnap = conflict.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(conflictSnap.has_value());
@@ -618,9 +618,9 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
 
     auto restoredRoot = uniqueRoot("notice_perturb_restored");
     leaveDirtyDraft(restoredRoot);  // disk unchanged -> Restored, no notice
-    auto restoredCreated = ssg::EditorRuntime::create(configFor(restoredRoot));
+    auto restoredCreated = ssg::EditorSession::create(configFor(restoredRoot));
     ASSERT_TRUE(restoredCreated.accepted());
-    auto& restored = *restoredCreated.runtime;
+    auto& restored = *restoredCreated.session;
     ASSERT_TRUE(reopenNote(restored).accepted());
     auto restoredSnap = restored.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(restoredSnap.has_value());
@@ -651,9 +651,9 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
     leaveDirtyDraft(root);
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
         << "changed externally\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
@@ -677,7 +677,7 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
                                  {"draft.dismiss", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::None);
+                ssg::EditorSession::DraftReopenNotice::None);
     ASSERT_FALSE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, dims)));
 }
 
@@ -687,18 +687,18 @@ TEST(dismissRefusesWhenThereIsNoConflictNotice) {
     // silently mutate the (non-notice) restored state.
     auto root = uniqueRoot("notice_dismiss_restored");
     leaveDirtyDraft(root);  // disk unchanged -> Restored
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::Restored);
+                ssg::EditorSession::DraftReopenNotice::Restored);
     ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
                                   {"draft.dismiss", runtime.revision(), {}})
                      .accepted());
     // The restored state is untouched.
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::Restored);
+                ssg::EditorSession::DraftReopenNotice::Restored);
 }
 
 TEST(liveDiffVirtualDocumentIsNotAutosavedAsADraft) {
@@ -707,9 +707,9 @@ TEST(liveDiffVirtualDocumentIsNotAutosavedAsADraft) {
     // untitled scratch draft. It must never be an autosave candidate.
     auto root = uniqueRoot("diff_candidate_clean");
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
@@ -732,9 +732,9 @@ TEST(liveDiffTabDoesNotInflateTheDirtyDocumentFlushCount) {
     // draft flushes (the real document); the diff virtual doc is excluded.
     auto root = uniqueRoot("diff_candidate_dirty");
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
@@ -764,13 +764,13 @@ TEST(binaryDiskReplacementRaisesConflictNotSilentDraftLoss) {
     leaveDirtyDraft(root);  // draft "!hi\n", disk "hi\n"
     writeBytes(root / "workspace" / "note.txt", {0x00, 0x01, 0x02, 0x00, 0xff});
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     // Not silently None: the conflict is surfaced (old behaviour left it None).
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::Conflict);
+                ssg::EditorSession::DraftReopenNotice::Conflict);
     ASSERT_TRUE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, {80, 24})));
 }
 
@@ -780,9 +780,9 @@ TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
     // rather than silently written or partially drafted.
     auto root = uniqueRoot("draft_oversize");
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     runtime.setAutosaveDraftByteCapForTests(4);  // "hi\n" + edits exceed it
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
@@ -799,12 +799,12 @@ TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
     ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
     ASSERT_TRUE(statusMentions(runtime, "too large to autosave"));
     // A fresh session over the same store finds no draft (no false partial).
-    auto reCreated = ssg::EditorRuntime::create(configFor(root));
+    auto reCreated = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(reCreated.accepted());
-    auto& reopened = *reCreated.runtime;
+    auto& reopened = *reCreated.session;
     ASSERT_TRUE(reopenNote(reopened).accepted());
     ASSERT_TRUE(reopened.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::None);
+                ssg::EditorSession::DraftReopenNotice::None);
     ASSERT_FALSE(activeTabDirty(reopened));
 }
 
@@ -814,9 +814,9 @@ TEST(loweringAutosaveDebounceMsEnablesAFlushTheDefaultSuppresses) {
     // lowering AutosaveDebounceMs lets that same pending edit flush.
     auto root = uniqueRoot("draft_debounce_setting");
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
@@ -858,15 +858,15 @@ TEST(touchingTheFileWithIdenticalBytesIsNotAFalseConflict) {
     std::this_thread::sleep_for(std::chrono::milliseconds{10});
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
     // Unchanged, not Conflict: the draft is restored quietly, no yellow notice.
     ASSERT_EQ(runtime.activeDocumentText(), draft);
     ASSERT_TRUE(activeTabDirty(runtime));
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorRuntime::DraftReopenNotice::Restored);
+                ssg::EditorSession::DraftReopenNotice::Restored);
     ASSERT_FALSE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, {80, 24})));
 }
 
@@ -874,9 +874,9 @@ TEST(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile) {
     // An untitled scratch buffer has no disk side to diff against.
     auto root = uniqueRoot("draft_diff_untitled");
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                          ssg::ViewId{1});
     // The session starts on an empty untitled buffer; draft.diff must refuse it.
@@ -893,10 +893,10 @@ TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
     for (int i = 0; i < 100; ++i) tall += "line\n";
     std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << tall;
     std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << tall;
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
@@ -922,10 +922,10 @@ TEST(openEditSaveRoundTripsRealDiskBytes) {
         output << "hello";
     }
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto open = runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"note.txt"}});
@@ -943,10 +943,10 @@ TEST(openEditSaveRoundTripsRealDiskBytes) {
 
 TEST(droppedContentRequiresRealCapability) {
     auto root = uniqueRoot("drop");
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket}, ssg::ViewId{1}).accepted());
 
     auto denied = runtime.dispatch(ssg::ClientId{1}, {"file.open_dropped_content", runtime.revision(), ssg::DroppedContentArguments{{'a'}, "a.txt"}});
@@ -977,10 +977,10 @@ TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
     auto expected = ssg::TextCodec{}.encode(*decoded.text);
     ASSERT_TRUE(expected.accepted());
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"note.txt"}}).accepted());
 
@@ -999,10 +999,10 @@ TEST(reopenWithEncodingDispatchRedecodesRealFileBytes) {
     auto root = uniqueRoot("reopen_encoding");
     writeBytes(root / "workspace" / "latin.txt", {0xe9, 0x0d});
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"latin.txt"}}).accepted());
 
@@ -1020,10 +1020,10 @@ TEST(closingTheLastTabClearsTheEditorDocument) {
     std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << "alpha";
     std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << "beta";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto tabCount = [&] {
@@ -1056,10 +1056,10 @@ TEST(tabActivateFocusesTheEditor) {
     std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << "alpha";
     std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << "beta";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
@@ -1088,10 +1088,10 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     for (int i = 0; i < 100; ++i) tall += "line\n";
     std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << tall;
     std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << tall;
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
@@ -1122,10 +1122,10 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
     std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << "alpha";
     std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << "beta";
 
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
@@ -1192,10 +1192,10 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
 TEST(autosaveFlushesADirtyDocumentEagerlyThenDebounces) {
     auto root = uniqueRoot("autosave_eager");
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"note.txt"}}).accepted());
 
@@ -1215,10 +1215,10 @@ TEST(autosaveFlushesADirtyDocumentEagerlyThenDebounces) {
 TEST(autosaveFlushesNothingWhenNoDocumentIsDirty) {
     auto root = uniqueRoot("autosave_clean");
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"note.txt"}}).accepted());
     // Edit then save -> clean again -> no autosave.
@@ -1230,10 +1230,10 @@ TEST(autosaveFlushesNothingWhenNoDocumentIsDirty) {
 TEST(autosaveFlushAllForcesADirtyDocumentAfterAnEagerFlush) {
     auto root = uniqueRoot("autosave_exit");
     std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
-    auto created = ssg::EditorRuntime::create(configFor(root));
+    auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"note.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"!"}}).accepted());

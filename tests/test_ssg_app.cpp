@@ -1,7 +1,7 @@
 #include "pointer_routing.h"
 #include "ssg_terminal.h"
 
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 #include <ssg/focus.h>
 #include <ssg/HitTester.h>
 #include <ssg/PromptSurface.h>
@@ -282,11 +282,11 @@ TEST(unicodeEndToEndGridAndEncoding) {
     const std::string line = "ab" + cjk + ecombining + emoji;
     std::ofstream{root / "workspace" / "u.txt", std::ios::binary} << line << "\n";
 
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -941,11 +941,11 @@ TEST(decodeKittyKeyMatchesEveryDefaultBinding) {
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
@@ -2426,11 +2426,11 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
     fs::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "f.txt"} << "abcdefghij\n";
 
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
@@ -3097,11 +3097,11 @@ TEST(evaluateInitScriptPushesComposedChromeToTheRuntime) {
     fs::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "f.txt"} << "hello\n";
 
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
@@ -3230,11 +3230,11 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
     std::string text;
     for (int i = 0; i < 12; ++i) text += "line " + std::to_string(i) + "\n";
     std::ofstream{root / "workspace" / "doc.txt"} << text;
-    auto created = ssg::EditorRuntime::create(
+    auto created = ssg::EditorSession::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
+    auto& runtime = *created.session;
     const ssg::ClientId client{1};
     ASSERT_TRUE(runtime.attach({client, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());

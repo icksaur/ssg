@@ -5,7 +5,7 @@
 
 namespace ssg {
 class ScriptHost;
-class EditorRuntime;
+class EditorSession;
 }  // namespace ssg
 
 namespace ssg::app {
@@ -25,7 +25,7 @@ namespace ssg::app {
 // MUST NEVER be called with an empty/whitespace-only `script`: an empty Lua
 // chunk is trivially valid and would look like a silent successful "reload" of
 // nothing; callers only invoke this when there is real content to run.
-void evaluateInitScript(ScriptHost& scripts, EditorRuntime& runtime,
+void evaluateInitScript(ScriptHost& scripts, EditorSession& runtime,
                         std::filesystem::path const& scriptPath,
                         std::string const& script);
 

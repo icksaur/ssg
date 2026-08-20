@@ -12,7 +12,7 @@
 #include "test_helpers.h"
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSession.h>
 
 #include <ssg/CommandReference.h>
 
@@ -82,10 +82,10 @@ TEST(theGeneratedCommandReferenceIsCurrent) {
                       ("ssg-command-reference-" + std::to_string(::getpid()));
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
-    auto created = ssg::EditorRuntime::create({root});
-    ASSERT_TRUE(created.runtime != nullptr);
-    if (!created.runtime) return;
-    auto const catalog = created.runtime->commandCatalog();
+    auto created = ssg::EditorSession::create({root});
+    ASSERT_TRUE(created.session != nullptr);
+    if (!created.session) return;
+    auto const catalog = created.session->commandCatalog();
     auto const rendered = ssg::CommandReferenceRenderer{}.render(*catalog);
     std::filesystem::remove_all(root);
 
