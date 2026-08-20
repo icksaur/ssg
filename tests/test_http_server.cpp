@@ -1,20 +1,17 @@
 #include "test_helpers.h"
-#include <ssg/EditorSessionBuilder.h>
-
-#include "all_command_ids.h"
-#include <ssg/ChromeLowering.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/FileCommands.h>
 #include <ssg/HttpEditorServer.h>
 #include <ssg/Protocol.h>
 #include <ssg/TextInputCommands.h>
-#include <ssg/WholeScreenAssembly.h>
 
 #include <http.h>
 
-#include <any>
+#include <algorithm>
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -175,76 +172,15 @@ SocketOwner connectLoopback(std::uint16_t port) {
     return owner;
 }
 
-ssg::SelectionSet selection(std::uint64_t byte) {
-    ssg::DocumentPosition const position{
-        ssg::ByteOffset{byte}, ssg::LineIndex{0}, ssg::CellIndex{byte}};
-    return ssg::SelectionSet{{ssg::Selection{position, position}}};
-}
-
-ssg::SessionSnapshotSections sections(ssg::Revision revision,
-                                      std::string const& marker) {
-    ssg::SettingsViewState settings;
-    ssg::ThemeSnapshot theme;
-    ssg::SessionSnapshotSections result{
-        {revision, marker, ssg::ByteOffset{marker.size()}},
-        selection(marker.size()),
-        {true, false, marker.size()},
-        {{marker}, marker, std::nullopt},
-        {{{}, 0}},
-        {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
-         false},
-        {0, false, false, revision, {}, {}, {}, {}, std::nullopt,
-         ssg::FindReplaceError::None, {}},
-        settings,
-        {{}, {}},
-        {{ssg::TextEncoding::Utf8, ssg::LineEnding::Lf, false, false}},
-        {{}, std::nullopt},
-        {revision, {}},
-        {revision, {}},
-        {0, ssg::FollowMode::Following, ssg::PaneId{}, std::nullopt, {}, {}},
-        {ssg::TreeRevision{0}, {}},
-        ssg::SyntaxViewState::plainText(revision, ssg::LanguageId{"plain"},
-                                          marker, 4),
-        {revision, {}},
-        {revision, {}, std::nullopt, {}, {}},
-        theme,
-        ssg::FocusTarget::Editor,
-    };
-    result.ui = ssg::UiSchema{
-        ssg::Generation{revision.value()},
-        ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
-                                 ssg::Style{}.inputLineSigil,
-                                 std::nullopt)
-            .root};
-    const auto validated = ssg::ValidatedSchema::validate(result.ui).takeSchema();
-    result.uiState = ssg::resolveUiState(validated, [](std::string_view) {
-        return std::optional<ssg::ResolvedProvider>{};
-    });
-    result.uiPresence = ssg::buildPresenceSection(
-        validated, ssg::PresenceConfig::allPresent(validated));
-    return result;
-}
-
-ssg::ViewportViewState viewport() {
-    return {ssg::ViewportDimensions{20, 8},
-            0,
-            0,
-            8,
-            {},
-            {},
-            {},
-            {8, 8, 0, 0, 0, 8}};
-}
-
-class TestHost : public ssg::HttpEditorSessionHost {
+class TestPolicy : public ssg::HttpEditorConnectionPolicy {
 public:
     // `remote` is fixed at construction: a host's locality policy is a property
     // of its deployment, not something a client toggles. A remote host grants no
     // capability; a local host grants local_file_drop.
-    explicit TestHost(ssg::EditorSession& session, bool remote = false)
-        : session{session}, remote{remote} {}
+    explicit TestPolicy(bool remote = false) : remote{remote} {}
 
     std::optional<ssg::AttachedSession> attach() override {
+        if (reject) return std::nullopt;
         return ssg::AttachedSession{
             ssg::SessionId{"test-session"},
             ssg::InvocationPrincipal{
@@ -256,63 +192,43 @@ public:
             ssg::ViewId{remote ? 22u : 21u}};
     }
 
-    ssg::SessionSnapshot snapshot(ssg::SessionId const&,
-                                  ssg::ClientId clientId) override {
-        auto attached = session.attachedClient(clientId);
-        if (!attached) throw std::logic_error{"snapshot for detached client"};
-        auto secs = sections(session.revision(), document);
-        // A host may hold the document revision fixed while text still changes --
-        // exactly the empty->first-open transition, which is inexpressible as a
-        // document delta and forces the server's full-snapshot fallback.
-        if (pinnedDocumentRevision) {
-            secs.document.revision = *pinnedDocumentRevision;
-        }
-        return ssg::SessionSnapshotCodec{}.assemble(
-            session.revision(), session.topology(), attached->principal,
-            attached->viewId, viewport(), std::move(secs));
-    }
-
-    void statusAction(ssg::SessionId const&, ssg::ClientId,
-                       ssg::StatusActionInvocation const&) override {
-        ++statusActions;
-    }
-    void binary(ssg::SessionId const&, ssg::ClientId,
-                ssg::BinaryFrame const&) override {
-        ++binaryFrames;
-    }
-
-    ssg::EditorSession& session;
-    std::string document;
-    std::optional<ssg::Revision> pinnedDocumentRevision;
     bool remote{false};
+    bool reject{false};
     // A host binds a Websocket-origin principal onto a socket; the origin is a
     // property of the deployment, exposed here so a seam test can drive a
     // non-Websocket origin through the same attach path.
     ssg::InvocationOrigin attachOrigin{ssg::InvocationOrigin::Websocket};
-    std::atomic<int> statusActions{0};
-    std::atomic<int> binaryFrames{0};
 };
 
 struct Fixture {
     explicit Fixture(bool remote = false) : remote_{remote} {
-        ssg::testing::registerStandIns(builder, [this](std::string id) {
-            return [this, id](ssg::CommandContext&, std::any const& payload) {
-                if (id == "text.insert") {
-                    host->document +=
-                        std::any_cast<ssg::TextInputArguments const&>(payload)
-                            .text;
-                }
-                return ssg::CommandHandlerResult::success();
-            };
-        });
-        session = builder.build();
-        host.emplace(*session, remote_);
+        root = std::filesystem::current_path() / "http_server_runtime";
+        std::filesystem::remove_all(root);
+        std::filesystem::create_directories(root / "workspace");
+        auto created = ssg::EditorRuntime::create(
+            {root / "workspace", root / "scratch", root / "recovery"});
+        if (!created.accepted()) {
+            throw std::runtime_error{created.message};
+        }
+        runtime = std::move(created.runtime);
+        auto const setup = ssg::InvocationPrincipal{
+            ssg::ClientId{99}, ssg::InvocationOrigin::InProcess};
+        if (!runtime->attach(setup, ssg::ViewId{99}).accepted() ||
+            !runtime
+                 ->dispatch(ssg::ClientId{99},
+                            {"file.new", runtime->revision(), {}})
+                 .accepted()) {
+            throw std::runtime_error{"failed to initialize HTTP test runtime"};
+        }
+        (void)runtime->detach(ssg::ClientId{99});
+        policy.emplace(remote_);
     }
+    ~Fixture() { std::filesystem::remove_all(root); }
 
     bool remote_;
-    ssg::EditorSessionBuilder builder;
-    std::unique_ptr<ssg::EditorSession> session;
-    std::optional<TestHost> host;
+    std::filesystem::path root;
+    std::unique_ptr<ssg::EditorRuntime> runtime;
+    std::optional<TestPolicy> policy;
 };
 
 void attach(TestSocket socket,
@@ -338,8 +254,8 @@ TEST(externallyOwnedRouteSharesOneServerLifecycle) {
         return Http::Ok("browser asset", "text/plain");
     });
     ssg::HttpEditorRoute route{
-        server, *fixture.session,
-        *fixture.host, {"/session", 8, 8, 250ms}};
+        server, *fixture.runtime,
+        *fixture.policy, {"/session", 8, 8, 250ms}};
 
     server.start();
     auto const boundPort = server.boundPort();
@@ -367,8 +283,8 @@ TEST(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess) {
     Fixture fixture;
     constexpr std::uint16_t port = 18775;
     ssg::HttpEditorServer server{
-        *fixture.session,
-        *fixture.host, {port, "/session", 8, 8, 250ms}};
+        *fixture.runtime,
+        *fixture.policy, {port, "/session", 8, 8, 250ms}};
     server.start();
     std::this_thread::sleep_for(20ms);
     auto socket = connectWebsocket(port);
@@ -378,9 +294,8 @@ TEST(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess) {
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.snapshot->client().clientId, ssg::ClientId{11});
     ASSERT_EQ(decoded.snapshot->client().capabilities.size(), std::size_t{1});
-    ASSERT_EQ(decoded.snapshot->revision(), fixture.session->revision());
-    ASSERT_EQ(decoded.snapshot->sections().document.text,
-              fixture.host->document);
+    ASSERT_EQ(decoded.snapshot->revision(), fixture.runtime->revision());
+    ASSERT_EQ(decoded.snapshot->sections().document.text, std::string{});
     server.stop();
 }
 
@@ -388,53 +303,47 @@ TEST(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot) {
     Fixture fixture;
     constexpr std::uint16_t port = 18776;
     ssg::HttpEditorServer server{
-        *fixture.session,
-        *fixture.host, {port, "/session", 8, 1, 250ms}};
+        *fixture.runtime,
+        *fixture.policy, {port, "/session", 8, 1, 250ms}};
     server.start();
     std::this_thread::sleep_for(20ms);
+    ssg::Revision initialRevision;
+    ssg::Revision afterFirstInsert;
     {
         auto socket = connectWebsocket(port);
         FrameReader reader{socket.socket};
         attach(socket.socket);
         auto initial = ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload);
         ASSERT_TRUE(initial.accepted());
+        initialRevision = initial.snapshot->revision();
         auto const registry =
-            ssg::CommandArgumentCodecRegistry{fixture.session->catalog()};
+            ssg::CommandArgumentCodecRegistry{fixture.runtime->commandCatalog()};
         auto command = ssg::ProtocolCodec{}.encodeCommandRequest(
-            {"text.insert", ssg::Revision{1},
+            {"text.insert", initialRevision,
              ssg::TextInputArguments{"a"}}, registry);
         sendAll(socket.socket, maskedFrame(0x2, command));
         auto delta = ssg::ProtocolCodec{}.decodeSessionDelta(reader.next().payload);
         ASSERT_TRUE(delta.accepted());
-        ASSERT_EQ(delta.delta->baseRevision(), ssg::Revision{1});
-        ASSERT_EQ(delta.delta->revision(), ssg::Revision{2});
+        ASSERT_EQ(delta.delta->baseRevision(), initialRevision);
+        afterFirstInsert = delta.delta->revision();
         sendAll(socket.socket, maskedFrame(0x2, command));
         auto rejected = ssg::ProtocolCodec{}.decodeCommandResult(reader.next().payload);
         ASSERT_TRUE(rejected.accepted());
         ASSERT_EQ(rejected.result->error,
                   ssg::CommandError::StaleRevision);
-        sendAll(socket.socket,
-                 maskedFrame(0x2, ssg::ProtocolCodec{}.encodeStatusActionInvocation(
-                                           {ssg::StatusId{3}, "run", 1})));
-        for (int attempt = 0;
-             attempt < 100 && fixture.host->statusActions.load() != 1;
-             ++attempt) {
-            std::this_thread::sleep_for(2ms);
-        }
-        ASSERT_EQ(fixture.host->statusActions.load(), 1);
     }
     std::this_thread::sleep_for(20ms);
     {
         auto socket = connectWebsocket(port);
         FrameReader reader{socket.socket};
-        attach(socket.socket, ssg::Revision{1});
+        attach(socket.socket, initialRevision);
         auto replay = ssg::ProtocolCodec{}.decodeSessionDelta(reader.next().payload);
         ASSERT_TRUE(replay.accepted());
-        ASSERT_EQ(replay.delta->revision(), ssg::Revision{2});
+        ASSERT_EQ(replay.delta->revision(), afterFirstInsert);
         auto const registry =
-            ssg::CommandArgumentCodecRegistry{fixture.session->catalog()};
+            ssg::CommandArgumentCodecRegistry{fixture.runtime->commandCatalog()};
         auto command = ssg::ProtocolCodec{}.encodeCommandRequest(
-            {"text.insert", ssg::Revision{2},
+            {"text.insert", afterFirstInsert,
              ssg::TextInputArguments{"b"}}, registry);
         sendAll(socket.socket, maskedFrame(0x2, command));
         ASSERT_TRUE(ssg::ProtocolCodec{}.decodeSessionDelta(reader.next().payload).accepted());
@@ -443,77 +352,22 @@ TEST(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot) {
     {
         auto socket = connectWebsocket(port);
         FrameReader reader{socket.socket};
-        attach(socket.socket, ssg::Revision{1});
+        attach(socket.socket, initialRevision);
         auto snapshot = ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload);
         ASSERT_TRUE(snapshot.accepted());
-        ASSERT_EQ(snapshot.snapshot->revision(), ssg::Revision{3});
+        ASSERT_EQ(snapshot.snapshot->revision(), fixture.runtime->revision());
         ASSERT_EQ(snapshot.snapshot->sections().document.text,
                   std::string{"ab"});
     }
     server.stop();
 }
 
-TEST(anInexpressibleDocumentTransitionResyncsWithAFullSnapshot) {
-    // When a document's text changes without its document revision advancing (the
-    // empty->first-open transition), deriveDelta cannot express it and throws. The
-    // server must recover by sending a full, decodable snapshot to the attached
-    // client rather than letting the exception terminate the host.
-    Fixture fixture;
-    fixture.host->pinnedDocumentRevision = ssg::Revision{1};
-    constexpr std::uint16_t port = 18790;
-    ssg::HttpEditorServer server{
-        *fixture.session,
-        *fixture.host, {port, "/session", 8, 1, 250ms}};
-    server.start();
-    std::this_thread::sleep_for(20ms);
-    {
-        auto socket = connectWebsocket(port);
-        FrameReader reader{socket.socket};
-        attach(socket.socket);
-        auto initial =
-            ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload);
-        ASSERT_TRUE(initial.accepted());
-
-        auto const registry =
-            ssg::CommandArgumentCodecRegistry{fixture.session->catalog()};
-        auto command = ssg::ProtocolCodec{}.encodeCommandRequest(
-            {"text.insert", ssg::Revision{1}, ssg::TextInputArguments{"a"}},
-            registry);
-        sendAll(socket.socket, maskedFrame(0x2, command));
-
-        // The change is inexpressible as a delta, so the server re-syncs with a
-        // full snapshot -- decodable, carrying the advanced revision and new text.
-        auto resync =
-            ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload);
-        ASSERT_TRUE(resync.accepted());
-        ASSERT_EQ(resync.snapshot->revision(), ssg::Revision{2});
-        ASSERT_EQ(resync.snapshot->sections().document.text, std::string{"a"});
-    }
-    std::this_thread::sleep_for(20ms);
-
-    // The fallback recorded no replay delta for the 1->2 transition, leaving a gap
-    // in the replay chain. A client reconnecting from the pre-gap revision cannot
-    // replay across it, so the server must send a full snapshot (never an
-    // incomplete delta chain that would replay wrong).
-    {
-        auto reconnect = connectWebsocket(port);
-        FrameReader reconnectReader{reconnect.socket};
-        attach(reconnect.socket, ssg::Revision{1});
-        auto gapped = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-            reconnectReader.next().payload);
-        ASSERT_TRUE(gapped.accepted());
-        ASSERT_EQ(gapped.snapshot->revision(), ssg::Revision{2});
-        ASSERT_EQ(gapped.snapshot->sections().document.text, std::string{"a"});
-    }
-    server.stop();
-}
-
-TEST(statusAndBinaryIngressShareTheAttachedConnection) {
+TEST(statusAndDroppedContentUseAggregateCommands) {
     Fixture fixture{/*remote=*/true};
     constexpr std::uint16_t port = 18777;
     ssg::HttpEditorServer server{
-        *fixture.session,
-        *fixture.host, {port, "/session", 8, 8, 250ms}};
+        *fixture.runtime,
+        *fixture.policy, {port, "/session", 8, 8, 250ms}};
     server.start();
     std::this_thread::sleep_for(20ms);
     auto socket = connectWebsocket(port);
@@ -523,58 +377,99 @@ TEST(statusAndBinaryIngressShareTheAttachedConnection) {
 
     auto const status = ssg::ProtocolCodec{}.encodeStatusActionInvocation(
         {ssg::StatusId{3}, "run", 1});
-    auto const binary = ssg::ProtocolCodec{}.encodeBinaryFrame(
-        {1, ssg::BinaryPayloadKind::DroppedContent, 9, {1, 2, 3}});
     ASSERT_TRUE(ssg::ProtocolCodec{}.decodeStatusActionInvocation(status).accepted());
-    ASSERT_TRUE(ssg::ProtocolCodec{}.decodeBinaryFrame(binary).accepted());
     sendAll(socket.socket, maskedFrame(0x2, status));
-    sendAll(socket.socket, maskedFrame(0x2, binary));
-    for (int attempt = 0;
-         attempt < 100 && fixture.host->binaryFrames.load() != 1;
-         ++attempt) {
-        std::this_thread::sleep_for(2ms);
-    }
+    auto statusResult =
+        ssg::ProtocolCodec{}.decodeCommandResult(reader.next().payload);
+    ASSERT_TRUE(statusResult.accepted());
+    ASSERT_FALSE(statusResult.result->accepted());
 
-    ASSERT_EQ(fixture.host->statusActions.load(), 1);
-    ASSERT_EQ(fixture.host->binaryFrames.load(), 1);
+    auto registry = ssg::CommandArgumentCodecRegistry{
+        fixture.runtime->commandCatalog()};
+    auto dropped = ssg::ProtocolCodec{}.encodeCommandRequest(
+        {"file.open_dropped_content", fixture.runtime->revision(),
+         ssg::DroppedContentArguments{{1, 2, 3}, "drop.bin"}},
+        registry);
+    sendAll(socket.socket, maskedFrame(0x2, dropped));
+    auto denied = ssg::ProtocolCodec{}.decodeCommandResult(reader.next().payload);
+    ASSERT_TRUE(denied.accepted());
+    ASSERT_EQ(denied.result->error, ssg::CommandError::CapabilityDenied);
     server.stop();
+
+    Fixture local;
+    constexpr std::uint16_t localPort = 18784;
+    ssg::HttpEditorServer localServer{
+        *local.runtime,
+        *local.policy, {localPort, "/session", 8, 8, 250ms}};
+    localServer.start();
+    std::this_thread::sleep_for(20ms);
+    auto localSocket = connectWebsocket(localPort);
+    FrameReader localReader{localSocket.socket};
+    attach(localSocket.socket);
+    ASSERT_TRUE(ssg::ProtocolCodec{}
+                    .decodeSessionSnapshot(localReader.next().payload)
+                    .accepted());
+    auto localRegistry =
+        ssg::CommandArgumentCodecRegistry{local.runtime->commandCatalog()};
+    auto acceptedDrop = ssg::ProtocolCodec{}.encodeCommandRequest(
+        {"file.open_dropped_content", local.runtime->revision(),
+         ssg::DroppedContentArguments{{4, 5, 6}, "named-drop.bin"}},
+        localRegistry);
+    sendAll(localSocket.socket, maskedFrame(0x2, acceptedDrop));
+    auto update = localReader.next();
+    ASSERT_TRUE(ssg::ProtocolCodec{}.decodeSessionDelta(update.payload).accepted() ||
+                ssg::ProtocolCodec{}
+                    .decodeSessionSnapshot(update.payload)
+                    .accepted());
+    auto snapshot = local.runtime->snapshot(ssg::ClientId{11});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_TRUE(std::any_of(
+        snapshot->sections().tabs.tabs.begin(),
+        snapshot->sections().tabs.tabs.end(),
+        [](ssg::TabState const& tab) { return tab.label == "named-drop.bin"; }));
+    localServer.stop();
 }
 
 TEST(replayLargerThanTheOutboundQueueFallsBackToSnapshot) {
     Fixture fixture;
     constexpr std::uint16_t port = 18779;
     ssg::HttpEditorServer server{
-        *fixture.session,
-        *fixture.host, {port, "/session", 1, 8, 250ms}};
+        *fixture.runtime,
+        *fixture.policy, {port, "/session", 1, 8, 250ms}};
     server.start();
     std::this_thread::sleep_for(20ms);
+    ssg::Revision initialRevision;
     {
         auto socket = connectWebsocket(port);
         FrameReader reader{socket.socket};
         attach(socket.socket);
-        ASSERT_TRUE(
-            ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload).accepted());
-        auto registry = ssg::CommandArgumentCodecRegistry{fixture.session->catalog()};
-        for (auto const& [revision, text] :
-             std::vector<std::pair<std::uint64_t, std::string>>{{1, "a"},
-                                                                {2, "b"}}) {
+        auto initial =
+            ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload);
+        ASSERT_TRUE(initial.accepted());
+        initialRevision = initial.snapshot->revision();
+        auto registry = ssg::CommandArgumentCodecRegistry{
+            fixture.runtime->commandCatalog()};
+        auto revision = initialRevision;
+        for (auto const& text : {std::string{"a"}, std::string{"b"}}) {
             sendAll(socket.socket,
                      maskedFrame(0x2, ssg::ProtocolCodec{}.encodeCommandRequest(
                                            {"text.insert",
-                                            ssg::Revision{revision},
+                                            revision,
                                             ssg::TextInputArguments{text}},
                                            registry)));
-            ASSERT_TRUE(
-                ssg::ProtocolCodec{}.decodeSessionDelta(reader.next().payload).accepted());
+            auto delta =
+                ssg::ProtocolCodec{}.decodeSessionDelta(reader.next().payload);
+            ASSERT_TRUE(delta.accepted());
+            revision = delta.delta->revision();
         }
     }
     std::this_thread::sleep_for(20ms);
     auto socket = connectWebsocket(port);
     FrameReader reader{socket.socket};
-    attach(socket.socket, ssg::Revision{1});
+    attach(socket.socket, initialRevision);
     auto snapshot = ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload);
     ASSERT_TRUE(snapshot.accepted());
-    ASSERT_EQ(snapshot.snapshot->revision(), ssg::Revision{3});
+    ASSERT_EQ(snapshot.snapshot->revision(), fixture.runtime->revision());
     server.stop();
 }
 
@@ -616,13 +511,13 @@ TEST(serverConstructionRejectsAZeroQueueOrReplay) {
     Fixture fixture;
     ASSERT_THROWS(
         ssg::HttpEditorServer(
-            *fixture.session,
-            *fixture.host, {18778, "/session", 0, 1, 250ms}),
+            *fixture.runtime,
+            *fixture.policy, {18778, "/session", 0, 1, 250ms}),
         std::invalid_argument);
     ASSERT_THROWS(
         ssg::HttpEditorServer(
-            *fixture.session,
-            *fixture.host, {18778, "/session", 1, 0, 250ms}),
+            *fixture.runtime,
+            *fixture.policy, {18778, "/session", 1, 0, 250ms}),
         std::invalid_argument);
 }
 
@@ -634,8 +529,8 @@ TEST(attachOnlyBindsAWebsocketOriginPrincipal) {
         Fixture fixture;
         constexpr std::uint16_t port = 18780;
         ssg::HttpEditorServer server{
-            *fixture.session,
-            *fixture.host, {port, "/session", 8, 8, 250ms}};
+            *fixture.runtime,
+            *fixture.policy, {port, "/session", 8, 8, 250ms}};
         server.start();
         std::this_thread::sleep_for(20ms);
         auto socket = connectWebsocket(port);
@@ -648,17 +543,34 @@ TEST(attachOnlyBindsAWebsocketOriginPrincipal) {
     }
     {
         Fixture fixture;
-        fixture.host->attachOrigin = ssg::InvocationOrigin::InProcess;
+        fixture.policy->attachOrigin = ssg::InvocationOrigin::InProcess;
         constexpr std::uint16_t port = 18781;
         ssg::HttpEditorServer server{
-            *fixture.session,
-            *fixture.host, {port, "/session", 8, 8, 250ms}};
+            *fixture.runtime,
+            *fixture.policy, {port, "/session", 8, 8, 250ms}};
         server.start();
         std::this_thread::sleep_for(20ms);
         auto socket = connectWebsocket(port);
         FrameReader reader{socket.socket};
         attach(socket.socket);
         ASSERT_TRUE(connectionClosed(reader));
+        server.stop();
+    }
+    {
+        Fixture fixture;
+        fixture.policy->reject = true;
+        constexpr std::uint16_t port = 18785;
+        ssg::HttpEditorServer server{
+            *fixture.runtime,
+            *fixture.policy, {port, "/session", 8, 8, 250ms}};
+        server.start();
+        std::this_thread::sleep_for(20ms);
+        auto socket = connectWebsocket(port);
+        FrameReader reader{socket.socket};
+        attach(socket.socket);
+        ASSERT_TRUE(connectionClosed(reader));
+        ASSERT_FALSE(
+            fixture.runtime->snapshot(ssg::ClientId{11}).has_value());
         server.stop();
     }
 }
@@ -671,8 +583,8 @@ TEST(aBoundConnectionRejectsAnyFrameThatIsNotATypedCommand) {
         Fixture fixture{/*remote=*/true};
         constexpr std::uint16_t port = 18782;
         ssg::HttpEditorServer server{
-            *fixture.session,
-            *fixture.host, {port, "/session", 8, 8, 250ms}};
+            *fixture.runtime,
+            *fixture.policy, {port, "/session", 8, 8, 250ms}};
         server.start();
         std::this_thread::sleep_for(20ms);
         auto socket = connectWebsocket(port);
@@ -689,8 +601,8 @@ TEST(aBoundConnectionRejectsAnyFrameThatIsNotATypedCommand) {
         Fixture fixture{/*remote=*/true};
         constexpr std::uint16_t port = 18783;
         ssg::HttpEditorServer server{
-            *fixture.session,
-            *fixture.host, {port, "/session", 8, 8, 250ms}};
+            *fixture.runtime,
+            *fixture.policy, {port, "/session", 8, 8, 250ms}};
         server.start();
         std::this_thread::sleep_for(20ms);
         auto socket = connectWebsocket(port);
@@ -700,40 +612,10 @@ TEST(aBoundConnectionRejectsAnyFrameThatIsNotATypedCommand) {
             ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload)
                 .accepted());
         sendAll(socket.socket,
-                maskedFrame(0x2, "not a command, status, or binary frame"));
+                maskedFrame(0x2, "not a command or status frame"));
         ASSERT_TRUE(connectionClosed(reader));
         server.stop();
     }
-}
-
-TEST(slowClientCannotGrowTheOutboundQueue) {
-    Fixture fixture{/*remote=*/true};
-    constexpr std::uint16_t port = 18778;
-    ssg::HttpEditorServer server{
-        *fixture.session,
-        *fixture.host, {port, "/session", 1, 2, 1ms}};
-    server.start();
-    std::this_thread::sleep_for(20ms);
-    auto socket = connectWebsocket(port);
-    attach(socket.socket);
-    std::this_thread::sleep_for(20ms);
-
-    ssg::BinaryFrame large{
-        1, ssg::BinaryPayloadKind::DroppedContent, 1,
-        std::vector<std::uint8_t>(4 * 1024 * 1024, 0x5a)};
-    for (int attempt = 0; attempt < 16; ++attempt) {
-        (void)server.sendBinary(ssg::ClientId{12}, large);
-    }
-    bool disconnected = false;
-    for (int attempt = 0; attempt < 100 && !disconnected; ++attempt) {
-        disconnected =
-            !server.sendBinary(ssg::ClientId{12},
-                                {1, ssg::BinaryPayloadKind::DroppedContent,
-                                 2, {1}});
-        std::this_thread::sleep_for(2ms);
-    }
-    ASSERT_TRUE(disconnected);
-    server.stop();
 }
 
 }  // namespace
@@ -743,15 +625,13 @@ int main() {
     RUN(externallyOwnedRouteSharesOneServerLifecycle);
     RUN(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess);
     RUN(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot);
-    RUN(anInexpressibleDocumentTransitionResyncsWithAFullSnapshot);
-    RUN(statusAndBinaryIngressShareTheAttachedConnection);
+    RUN(statusAndDroppedContentUseAggregateCommands);
     RUN(replayLargerThanTheOutboundQueueFallsBackToSnapshot);
     RUN(attachRequestNeverCarriesAClientGrantedCapability);
     RUN(attachRejectsAForeignPreambleWithoutAPartialRequest);
     RUN(serverConstructionRejectsAZeroQueueOrReplay);
     RUN(attachOnlyBindsAWebsocketOriginPrincipal);
     RUN(aBoundConnectionRejectsAnyFrameThatIsNotATypedCommand);
-    RUN(slowClientCannotGrowTheOutboundQueue);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -1327,65 +1327,6 @@ TEST(statusActionInvocationRoundTripsThroughTheWire) {
 }
 
 // ---------------------------------------------------------------------------
-// Binary-frame envelope: round trip plus decoded-byte-lifetime independence.
-
-TEST(binaryFrameRoundTripsThroughTheWire) {
-    ssg::BinaryFrame const frame{
-        1, ssg::BinaryPayloadKind::DroppedContent, 99, {9, 8, 7, 6, 5}};
-    auto const bytes = ssg::ProtocolCodec{}.encodeBinaryFrame(frame);
-    auto const decoded = ssg::ProtocolCodec{}.decodeBinaryFrame(bytes);
-    ASSERT_TRUE(decoded.accepted());
-    ASSERT_TRUE(decoded.frame.has_value());
-    ASSERT_EQ(*decoded.frame, frame);
-}
-
-TEST(binaryFrameDecodedBytesOutliveTheInputBuffer) {
-    std::optional<ssg::BinaryFrame> survivingFrame;
-    {
-        std::string bytes = ssg::ProtocolCodec{}.encodeBinaryFrame(ssg::BinaryFrame{
-            1, ssg::BinaryPayloadKind::DroppedContent, 7, {1, 2, 3, 4, 5, 6}});
-        auto decoded = ssg::ProtocolCodec{}.decodeBinaryFrame(bytes);
-        ASSERT_TRUE(decoded.accepted());
-        survivingFrame = std::move(decoded.frame);
-        // bytes (the input buffer) is destroyed at the end of this scope;
-        // surviving_frame must not reference it.
-        bytes.assign(bytes.size(), '\0');
-    }
-    ASSERT_TRUE(survivingFrame.has_value());
-    ASSERT_EQ(survivingFrame->bytes,
-             (std::vector<std::uint8_t>{1, 2, 3, 4, 5, 6}));
-    ASSERT_EQ(survivingFrame->requestId, std::uint64_t{7});
-}
-
-TEST(binaryFrameRejectsAnUnsupportedPayloadKind) {
-    std::string bytes = ssg::ProtocolCodec{}.encodeBinaryFrame(ssg::BinaryFrame{
-        1, ssg::BinaryPayloadKind::DroppedContent, 1, {1}});
-    bytes[1] = static_cast<char>(0xEE);
-    auto const decoded = ssg::ProtocolCodec{}.decodeBinaryFrame(bytes);
-    ASSERT_FALSE(decoded.accepted());
-    ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
-}
-
-TEST(binaryFrameRejectsOversizedDeclaredLengthAndFrame) {
-    ssg::ProtocolLimits limits;
-    limits.maxBinaryFrameBytes = 4;
-    auto const bytes = ssg::ProtocolCodec{}.encodeBinaryFrame(ssg::BinaryFrame{
-        1, ssg::BinaryPayloadKind::DroppedContent, 1, {1, 2, 3, 4, 5}});
-    auto const decoded = ssg::ProtocolCodec{}.decodeBinaryFrame(bytes, limits);
-    ASSERT_FALSE(decoded.accepted());
-    ASSERT_EQ(decoded.error, ssg::ProtocolError::BinaryFrameTooLarge);
-}
-
-TEST(binaryFrameRejectsTruncatedInput) {
-    auto bytes = ssg::ProtocolCodec{}.encodeBinaryFrame(ssg::BinaryFrame{
-        1, ssg::BinaryPayloadKind::DroppedContent, 1, {1, 2, 3}});
-    bytes.resize(bytes.size() - 1);
-    auto const decoded = ssg::ProtocolCodec{}.decodeBinaryFrame(bytes);
-    ASSERT_FALSE(decoded.accepted());
-    ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
-}
-
-// ---------------------------------------------------------------------------
 // Malformed / truncated / oversized / unknown-version / unknown-kind corpus,
 // exercised against a representative message from each of the six kinds.
 
@@ -1641,14 +1582,6 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
         ASSERT_EQ(decoded.invocation->statusId, ssg::StatusId{9});
         ASSERT_EQ(decoded.invocation->actionId, std::string{"dismiss"});
     }
-    {
-        auto decoded =
-            ssg::ProtocolCodec{}.decodeBinaryFrame(readFixtureBytes("binary_frame.hex"));
-        ASSERT_TRUE(decoded.accepted());
-        ASSERT_EQ(decoded.frame->requestId, std::uint64_t{99});
-        ASSERT_EQ(decoded.frame->bytes,
-                 (std::vector<std::uint8_t>{9, 8, 7, 6, 5}));
-    }
 }
 
 }  // namespace
@@ -1841,11 +1774,6 @@ int main() {
     RUN(sessionSnapshotRoundTripsTreeScrollFields);
     RUN(commandResultRoundTripsThroughTheWire);
     RUN(statusActionInvocationRoundTripsThroughTheWire);
-    RUN(binaryFrameRoundTripsThroughTheWire);
-    RUN(binaryFrameDecodedBytesOutliveTheInputBuffer);
-    RUN(binaryFrameRejectsAnUnsupportedPayloadKind);
-    RUN(binaryFrameRejectsOversizedDeclaredLengthAndFrame);
-    RUN(binaryFrameRejectsTruncatedInput);
     RUN(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus);
     RUN(retiredWireKindsAreNeverReclaimed);
     RUN(protocolMessageKindOrdinalsAreNeverRenumbered);

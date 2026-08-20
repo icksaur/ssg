@@ -181,6 +181,74 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
     }
 }
 
+TEST(attachedClientsShareFollowPauseQueueAndResumeState) {
+    auto runtime = followPauseRuntime("alpha\nbeta\n");
+    if (!runtime) return;
+
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"view.scroll_lines", runtime->revision(),
+                                ssg::ScrollLinesArguments{3}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{2},
+                               {"view.scroll_lines", runtime->revision(),
+                                ssg::ScrollLinesArguments{10}})
+                    .accepted());
+
+    auto paused = runtime->snapshot(ssg::ClientId{1},
+                                    ssg::ViewportDimensions{80, 20});
+    ASSERT_TRUE(paused.has_value());
+    if (!paused) return;
+    ASSERT_EQ(paused->sections().followEdits.mode, ssg::FollowMode::Paused);
+    ASSERT_EQ(paused->sections().followEdits.clients.size(), std::size_t{3});
+
+    auto const sourceRevision = runtime->revision().value();
+    ASSERT_TRUE(runtime
+                    ->applyExternalDiffBurst(
+                        {{{.kind = ssg::NonGitDiffEventKind::Create,
+                           .id = ssg::DiffFileId{"watched-a"},
+                           .path = "watched-a.txt",
+                           .baselineContent = "",
+                           .targetContent = "first\nbeta\n"},
+                          ssg::Revision{sourceRevision + 1}},
+                         {{.kind = ssg::NonGitDiffEventKind::Create,
+                           .id = ssg::DiffFileId{"watched-b"},
+                           .path = "watched-b.txt",
+                           .baselineContent = "",
+                           .targetContent = "newest\n"},
+                          ssg::Revision{sourceRevision + 2}}})
+                    .accepted());
+
+    paused = runtime->snapshot(ssg::ClientId{2},
+                               ssg::ViewportDimensions{80, 20});
+    ASSERT_TRUE(paused.has_value());
+    if (!paused) return;
+    ASSERT_EQ(paused->sections().followEdits.mode, ssg::FollowMode::Paused);
+    ASSERT_EQ(paused->sections().followEdits.queuedTargets.size(),
+              std::size_t{2});
+
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{2},
+                               {"follow_edits.resume", runtime->revision(), {}})
+                    .accepted());
+    auto first = runtime->snapshot(ssg::ClientId{1},
+                                   ssg::ViewportDimensions{80, 20});
+    auto second = runtime->snapshot(ssg::ClientId{2},
+                                    ssg::ViewportDimensions{80, 20});
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(second.has_value());
+    if (!first || !second) return;
+    ASSERT_EQ(first->sections().followEdits.mode, ssg::FollowMode::Following);
+    ASSERT_EQ(second->sections().followEdits.mode, ssg::FollowMode::Following);
+    ASSERT_TRUE(first->sections().followEdits.activeTarget.has_value());
+    if (!first->sections().followEdits.activeTarget) return;
+    ASSERT_EQ(first->sections().followEdits.activeTarget->id,
+              ssg::DiffFileId{"watched-b"});
+    ASSERT_EQ(first->sections().followEdits.activeTarget,
+              second->sections().followEdits.activeTarget);
+}
+
 TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "a.txt"} << "a\n";
@@ -1958,6 +2026,7 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
 int main() {
     RUN(searchTreeDiffAndFollowSectionsUseRuntimeState);
     RUN(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow);
+    RUN(attachedClientsShareFollowPauseQueueAndResumeState);
     RUN(gitDiffScanUpdatesDiffAndRejectsStaleBatches);
     RUN(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision);
     RUN(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan);

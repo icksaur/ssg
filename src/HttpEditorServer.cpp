@@ -1,5 +1,5 @@
 #include <ssg/HttpEditorServer.h>
-#include <ssg/EditorSession.h>
+#include <ssg/EditorRuntime.h>
 #include <ssg/startup_audit.h>
 
 #include <http.h>
@@ -102,12 +102,12 @@ struct HttpEditorRoute::Impl {
 
     using ReplayKey = std::pair<std::string, std::uint64_t>;
 
-    Impl(Http::Server& httpServer, EditorSession& editorSession,
-         HttpEditorSessionHost& sessionHost,
+    Impl(Http::Server& httpServer, EditorRuntime& editorRuntime,
+         HttpEditorConnectionPolicy& connectionPolicy,
          HttpEditorRouteConfig routeConfig)
-        : session{editorSession},
-          argumentCodecs{session.catalog()},
-          host{sessionHost},
+        : runtime{editorRuntime},
+          argumentCodecs{runtime.commandCatalog()},
+          policy{connectionPolicy},
           config{std::move(routeConfig)},
           server{httpServer} {
         if (config.route.empty() || config.route.front() != '/') {
@@ -163,7 +163,7 @@ struct HttpEditorRoute::Impl {
         auto command = ProtocolCodec{}.decodeCommandRequest(
             message.data, argumentCodecs, config.protocolLimits);
         if (command.accepted()) {
-            auto const result = session.dispatch(
+            auto const result = runtime.dispatch(
                 connection->binding->principal.clientId(), *command.command);
             if (!result.accepted()) {
                 enqueue(handle, connection,
@@ -178,21 +178,15 @@ struct HttpEditorRoute::Impl {
                                                        config.protocolLimits);
         if (status.accepted()) {
             try {
-                host.statusAction(connection->binding->sessionId,
-                                   connection->binding->principal.clientId(),
-                                   *status.invocation);
-                publishSession(connection->binding->sessionId);
-            } catch (...) {
-                close(handle, connection);
-            }
-            return;
-        }
-        auto binary = ProtocolCodec{}.decodeBinaryFrame(message.data, config.protocolLimits);
-        if (binary.accepted()) {
-            try {
-                host.binary(connection->binding->sessionId,
-                            connection->binding->principal.clientId(),
-                            *binary.frame);
+                auto const result = runtime.dispatch(
+                    connection->binding->principal.clientId(),
+                    {"status.invoke_action", runtime.revision(),
+                     *status.invocation});
+                if (!result.accepted()) {
+                    enqueue(handle, connection,
+                            {ProtocolCodec{}.encodeCommandResult(result), true});
+                    return;
+                }
                 publishSession(connection->binding->sessionId);
             } catch (...) {
                 close(handle, connection);
@@ -208,19 +202,23 @@ struct HttpEditorRoute::Impl {
         auto request =
             decodeSessionAttachRequest(payload, config.protocolLimits);
         if (!request.accepted()) return false;
-        auto attached = host.attach();
+        auto attached = policy.attach();
         if (!attached) return false;
         if (attached->principal.origin() != InvocationOrigin::Websocket) {
             return false;
         }
         auto const clientId = attached->principal.clientId();
         auto const attachResult =
-            session.attach(attached->principal, attached->viewId);
+            runtime.attach(attached->principal, attached->viewId);
         if (!attachResult.accepted()) return false;
 
         connection->binding.emplace(std::move(*attached));
-        connection->snapshot.emplace(host.snapshot(
-            connection->binding->sessionId, clientId));
+        connection->snapshot = runtime.snapshot(clientId);
+        if (!connection->snapshot) {
+            (void)runtime.detach(clientId);
+            connection->binding.reset();
+            return false;
+        }
         auto const currentRevision = connection->snapshot->revision();
 
         bool replayed = false;
@@ -272,12 +270,15 @@ struct HttpEditorRoute::Impl {
             }
         }
         for (auto const& [handle, connection] : targets) {
-            auto current = host.snapshot(
-                connection->binding->sessionId,
-                connection->binding->principal.clientId());
+            auto current =
+                runtime.snapshot(connection->binding->principal.clientId());
+            if (!current) {
+                close(handle, connection);
+                continue;
+            }
             if (!connection->snapshot ||
-                connection->snapshot->revision() == current.revision()) {
-                connection->snapshot.emplace(std::move(current));
+                connection->snapshot->revision() == current->revision()) {
+                connection->snapshot = std::move(current);
                 continue;
             }
             // The delta is only an optimization. When a transition cannot be
@@ -289,15 +290,16 @@ struct HttpEditorRoute::Impl {
             std::string encoded;
             try {
                 auto delta =
-                    SessionSnapshotCodec{}.deriveDelta(*connection->snapshot, current);
+                    SessionSnapshotCodec{}.deriveDelta(*connection->snapshot,
+                                                       *current);
                 encoded = ProtocolCodec{}.encodeSessionDelta(delta);
                 auto& history = replay[replayKey(*connection->binding)];
                 history.push_back({delta.baseRevision(), delta.revision(), encoded});
                 while (history.size() > config.replayDeltas) history.pop_front();
             } catch (std::exception const&) {
-                encoded = ProtocolCodec{}.encodeSessionSnapshot(current);
+                encoded = ProtocolCodec{}.encodeSessionSnapshot(*current);
             }
-            connection->snapshot.emplace(std::move(current));
+            connection->snapshot = std::move(current);
             enqueue(handle, connection, {std::move(encoded), true});
         }
     }
@@ -362,7 +364,7 @@ struct HttpEditorRoute::Impl {
         {
             std::lock_guard processLock{processingMutex};
             if (connection->binding && !connection->detached) {
-                (void)session.detach(
+                (void)runtime.detach(
                     connection->binding->principal.clientId());
                 connection->detached = true;
             }
@@ -390,7 +392,7 @@ struct HttpEditorRoute::Impl {
         }
         std::lock_guard processLock{processingMutex};
         if (connection->binding && !connection->detached) {
-            (void)session.detach(connection->binding->principal.clientId());
+            (void)runtime.detach(connection->binding->principal.clientId());
             connection->detached = true;
         }
     }
@@ -415,31 +417,12 @@ struct HttpEditorRoute::Impl {
         return nullptr;
     }
 
-    bool sendTo(ClientId clientId, std::string payload) {
-        std::lock_guard processLock{processingMutex};
-        auto connection = find(clientId);
-        if (!connection) return false;
-        Http::WebSocketHandle handle = 0;
-        {
-            std::lock_guard lock{connectionsMutex};
-            for (auto const& entry : connections) {
-                if (entry.second == connection) {
-                    handle = entry.first;
-                    break;
-                }
-            }
-        }
-        if (handle == 0) return false;
-        enqueue(handle, connection, {std::move(payload), true});
-        return true;
-    }
-
-    EditorSession& session;
+    EditorRuntime& runtime;
     // Derived from the session's catalog rather than handed in as a value: a
     // command registered while the server is running must be decodable at once,
     // and a snapshot taken at construction could not be (R8).
     CommandArgumentCodecRegistry argumentCodecs;
-    HttpEditorSessionHost& host;
+    HttpEditorConnectionPolicy& policy;
     HttpEditorRouteConfig config;
     Http::Server& server;
     std::recursive_mutex processingMutex;
@@ -449,23 +432,18 @@ struct HttpEditorRoute::Impl {
 };
 
 HttpEditorRoute::HttpEditorRoute(
-    Http::Server& server, EditorSession& session,
-    HttpEditorSessionHost& host, HttpEditorRouteConfig config)
-    : impl_{std::make_unique<Impl>(server, session, host,
+    Http::Server& server, EditorRuntime& runtime,
+    HttpEditorConnectionPolicy& policy, HttpEditorRouteConfig config)
+    : impl_{std::make_unique<Impl>(server, runtime, policy,
                                    std::move(config))} {}
 
 HttpEditorRoute::~HttpEditorRoute() = default;
 
-bool HttpEditorRoute::sendBinary(ClientId clientId,
-                                  BinaryFrame const& frame) {
-    return impl_->sendTo(clientId, ProtocolCodec{}.encodeBinaryFrame(frame));
-}
-
 struct HttpEditorServer::Impl {
-    Impl(EditorSession& session,
-              HttpEditorSessionHost& host, HttpEditorServerConfig config)
+    Impl(EditorRuntime& runtime,
+         HttpEditorConnectionPolicy& policy, HttpEditorServerConfig config)
         : server{config.port},
-          route{server, session, host,
+          route{server, runtime, policy,
                 {std::move(config.route), config.outboundQueueMessages,
                  config.replayDeltas, config.writeTimeout,
                  config.protocolLimits}} {
@@ -494,19 +472,14 @@ struct HttpEditorServer::Impl {
 };
 
 HttpEditorServer::HttpEditorServer(
-    EditorSession& session,
-    HttpEditorSessionHost& host, HttpEditorServerConfig config)
+    EditorRuntime& runtime,
+    HttpEditorConnectionPolicy& policy, HttpEditorServerConfig config)
     : impl_{std::make_unique<Impl>(
-          session, host, std::move(config))} {}
+          runtime, policy, std::move(config))} {}
 
 HttpEditorServer::~HttpEditorServer() = default;
 
 void HttpEditorServer::start() { impl_->start(); }
 void HttpEditorServer::stop() { impl_->stop(); }
-
-bool HttpEditorServer::sendBinary(ClientId clientId,
-                                   BinaryFrame const& frame) {
-    return impl_->route.sendBinary(clientId, frame);
-}
 
 }  // namespace ssg

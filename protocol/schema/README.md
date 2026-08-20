@@ -93,30 +93,11 @@ carry a typed payload; every other command's payload is the wire null:
 | `file.open_dropped_content`                        | `DroppedContentArguments`   |
 | everything else                                    | none (wire null)            |
 
-## Binary-frame envelope
-
-The only P0 binary-payload support (e.g. carrying `file.open_dropped_content`
-bytes out of band of the tagged-value tree):
-
-```
-[u8 version][u8 payload_kind][u64 request_id][u32 declared_length][declared_length bytes]
-```
-
-`payload_kind` matches `BinaryPayloadKind` (currently only
-`dropped_content = 0`; any other value is `ProtocolError::malformed_message`).
-`declared_length` and the overall buffer are both checked against
-`ProtocolLimits::max_binary_frame_bytes`
-(`ProtocolError::binary_frame_too_large`); a short buffer is
-`ProtocolError::truncated_message`; trailing bytes past `declared_length` are
-`ProtocolError::malformed_message`. Decoded bytes are copied into an owned
-`std::vector<std::uint8_t>` independent of the input buffer, so the input may
-be destroyed immediately after `decode_binary_frame` returns.
-
 ## Fixtures
 
 `tests/fixtures/protocol/` holds one hex-encoded canonical wire message per
-message kind plus one binary frame, generated once against the current codec
-and asserted stable by `tests/test_protocol.cpp`'s
+message kind, generated once against the current codec and asserted stable by
+`tests/test_protocol.cpp`'s
 `canonical_fixtures_decode_to_the_expected_values` test. A fixture failing to
 decode, or decoding to different field values, signals an unintended wire
 format change.

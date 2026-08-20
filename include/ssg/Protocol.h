@@ -27,15 +27,12 @@ struct ProtocolLimits {
     // keep the default envelope large enough to decode messages emitted by the
     // default encoder.
     std::size_t maxMessageBytes{32 * 1024 * 1024};
-    std::size_t maxInsertBytes{32 * 1024};
-
     // Bounds enforced by the complete codec (Plan 6): a `ProtocolValue` wire
     // value tree is rejected rather than grown without limit.
     std::size_t maxValueDepth{32};
     std::size_t maxCollectionLength{65536};
     std::size_t maxTextBytes{8 * 1024 * 1024};
     std::size_t maxBytesLength{16 * 1024 * 1024};
-    std::size_t maxBinaryFrameBytes{16 * 1024 * 1024};
 };
 
 enum class ProtocolError : std::uint8_t {
@@ -44,66 +41,14 @@ enum class ProtocolError : std::uint8_t {
     MalformedMessage,
     UnsupportedVersion,
     UnsupportedCommand,
-    InsertTooLarge,
     TruncatedMessage,
     ValueBoundsExceeded,
     UnsupportedMessageKind,
-    BinaryFrameTooLarge,
-};
-
-struct InsertRequest {
-    Revision baseRevision;
-    std::string text;
-
-    bool operator==(InsertRequest const&) const = default;
-};
-
-struct DecodeInsertResult {
-    ProtocolError error;
-    std::optional<InsertRequest> request;
-    std::string message;
-
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::None;
-    }
-};
-
-struct SliceResponse {
-    ProtocolError protocolError;
-    CommandError commandError;
-    DocumentViewState snapshot;
-    std::optional<DocumentDelta> delta;
-    std::string message;
-
-    [[nodiscard]] bool accepted() const noexcept {
-        return protocolError == ProtocolError::None &&
-               commandError == CommandError::None;
-    }
-    bool operator==(SliceResponse const&) const = default;
-};
-
-class CoreEditorSlice {
-public:
-    CoreEditorSlice();
-    ~CoreEditorSlice();
-
-    CoreEditorSlice(CoreEditorSlice const&) = delete;
-    CoreEditorSlice& operator=(CoreEditorSlice const&) = delete;
-
-    [[nodiscard]] bool attach(InvocationPrincipal principal);
-    [[nodiscard]] bool detach(ClientId clientId);
-    [[nodiscard]] SliceResponse execute(ClientId clientId,
-                                        InsertRequest const& request);
-    [[nodiscard]] DocumentViewState snapshot() const;
-
-private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
 };
 
 // Complete protocol codec (Plan 6): a bounded, versioned wire value tree, a
 // typed command-argument registry over it, aggregate snapshot/delta
-// reconstruction, clipboard/status messages, and a binary-frame envelope.
+// reconstruction and clipboard/status messages.
 // All of it is socket-free; ../http and http_server own the transport.
 
 // A bounded, versioned tree value used as the wire representation for every
@@ -282,47 +227,8 @@ struct DecodeStatusActionInvocationResult {
     }
 };
 
-// Binary-frame envelope: the only P0 binary-payload support. Producing
-// streaming-output or image payloads remains stretch work; this envelope
-// exists so ingress commands (e.g. `file.open_dropped_content`) can carry
-// raw bytes with bounded, validated framing.
-
-enum class BinaryPayloadKind : std::uint8_t {
-    DroppedContent,
-};
-
-struct BinaryFrame {
-    std::uint8_t version;
-    BinaryPayloadKind kind;
-    std::uint64_t requestId;
-    std::vector<std::uint8_t> bytes;
-
-    bool operator==(BinaryFrame const&) const = default;
-};
-
-struct DecodeBinaryFrameResult {
-    ProtocolError error;
-    // Decoded bytes are copied into this owned frame independently of the
-    // input buffer; the input may be destroyed immediately after decoding.
-    std::optional<BinaryFrame> frame;
-    std::string message;
-
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::None;
-    }
-};
-
 class ProtocolCodec {
 public:
-    [[nodiscard]] std::string encodeInsertRequest(
-        InsertRequest const& request) const;
-    [[nodiscard]] DecodeInsertResult decodeInsertRequest(
-        std::string_view message, ProtocolLimits limits = {}) const;
-    [[nodiscard]] std::string encodeSliceResponse(
-        SliceResponse const& response) const;
-    [[nodiscard]] SliceResponse decodeSliceResponse(
-        std::string_view message, ProtocolLimits limits = {}) const;
-
     [[nodiscard]] std::string encodeCommandRequest(
         ClientCommand const& command,
         CommandArgumentCodecRegistry const& registry) const;
@@ -345,9 +251,6 @@ public:
     [[nodiscard]] DecodeStatusActionInvocationResult
     decodeStatusActionInvocation(std::string_view bytes,
                                  ProtocolLimits limits = {}) const;
-    [[nodiscard]] std::string encodeBinaryFrame(BinaryFrame const& frame) const;
-    [[nodiscard]] DecodeBinaryFrameResult decodeBinaryFrame(
-        std::string_view bytes, ProtocolLimits limits = {}) const;
 };
 
 // Introspection for the style.define key-parity guard: the field names the

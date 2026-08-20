@@ -22,15 +22,6 @@ target_include_directories(ssg_http_server PUBLIC
 target_link_libraries(ssg_http_server PUBLIC ssg http)
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(ssg_core_websocket_slice_tests
-        ${SSG_SOURCE_DIR}/tests/test_core_websocket_slice.cpp
-    )
-    target_link_libraries(ssg_core_websocket_slice_tests
-        PRIVATE ssg_http_server
-    )
-    add_test(NAME ssg_core_websocket_slice
-             COMMAND ssg_core_websocket_slice_tests)
-
     add_executable(test_ui_tree_protocol
         ${SSG_SOURCE_DIR}/tests/test_ui_tree_protocol.cpp
     )

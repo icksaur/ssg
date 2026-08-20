@@ -72,30 +72,4 @@ inline std::vector<CommandFacts> const& allCommandFacts() {
     return facts;
 }
 
-// Registers a stand-in for every command the editor offers, with the caller's
-// handler.  Effect and capabilities are copied from the real declaration so a
-// fixture's dispatch decisions match the real session's.
-template <typename MakeHandler>
-void registerStandIns(ssg::EditorSessionBuilder& builder,
-                      MakeHandler&& makeHandler) {
-    for (auto const& facts : allCommandFacts()) {
-        ssg::CommandSpecBuilder spec{facts.id};
-        spec.owner("test-stand-in").summary("stand-in");
-        if (facts.mutates) {
-            spec.mutates();
-        } else {
-            spec.observes();
-        }
-        for (auto const& capability : facts.requiredCapabilities) {
-            spec.capability(std::string{capability.value()});
-        }
-        // Untyped by necessity: one stand-in handler serves every command, so
-        // it cannot name the argument any single one consumes.  It still
-        // declares the real command's WIRE type, so it encodes identically.
-        spec.untypedHandler(makeHandler(facts.id),
-                            facts.wire ? facts.argument : std::nullopt);
-        builder.add(std::move(spec));
-    }
-}
-
 }  // namespace ssg::testing

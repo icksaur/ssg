@@ -1,13 +1,12 @@
 #pragma once
 
 #include <ssg/Keymap.h>
-#include <ssg/EditorSession.h>
+#include <ssg/EditorRuntime.h>
 #include <ssg/session_snapshot.h>
 
 #include <array>
 #include <any>
 #include <cstdint>
-#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -34,10 +33,8 @@ private:
 
 class TuiClient {
 public:
-    using SnapshotProvider = std::function<SessionSnapshot()>;
-
-    TuiClient(EditorSession& session, InvocationPrincipal principal,
-              ViewId view_id, SnapshotProvider snapshot_provider);
+    TuiClient(EditorRuntime& runtime, InvocationPrincipal principal,
+              ViewId viewId, ViewportDimensions dimensions);
     ~TuiClient();
 
     TuiClient(TuiClient const&) = delete;
@@ -55,10 +52,10 @@ public:
 private:
     void refresh();
 
-    EditorSession* session_;
+    EditorRuntime* runtime_;
     InvocationPrincipal principal_;
-    ViewId view_id_;
-    SnapshotProvider snapshot_provider_;
+    ViewId viewId_;
+    ViewportDimensions dimensions_;
     std::optional<SessionSnapshot> snapshot_;
 };
 

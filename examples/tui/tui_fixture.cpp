@@ -64,27 +64,24 @@ std::optional<SemanticCommand> TerminalInputCapture::capture(
 
 void TerminalInputCapture::reset() noexcept { pending_.clear(); }
 
-TuiClient::TuiClient(EditorSession& session, InvocationPrincipal principal,
-                     ViewId viewId, SnapshotProvider snapshotProvider)
-    : session_{&session},
+TuiClient::TuiClient(EditorRuntime& runtime, InvocationPrincipal principal,
+                     ViewId viewId, ViewportDimensions dimensions)
+    : runtime_{&runtime},
       principal_{std::move(principal)},
-      view_id_{viewId},
-      snapshot_provider_{std::move(snapshotProvider)} {
-    if (!snapshot_provider_) {
-        throw std::invalid_argument{"TUI snapshot provider is required"};
-    }
-    auto attached = session_->attach(principal_, view_id_);
+      viewId_{viewId},
+      dimensions_{dimensions} {
+    auto attached = runtime_->attach(principal_, viewId_);
     if (!attached.accepted()) throw std::invalid_argument{attached.message};
     try {
         refresh();
     } catch (...) {
-        (void)session_->detach(principal_.clientId());
+        (void)runtime_->detach(principal_.clientId());
         throw;
     }
 }
 
 TuiClient::~TuiClient() {
-    if (session_) (void)session_->detach(principal_.clientId());
+    if (runtime_) (void)runtime_->detach(principal_.clientId());
 }
 
 CommandResult TuiClient::submit(SemanticCommand const& command) {
@@ -92,7 +89,7 @@ CommandResult TuiClient::submit(SemanticCommand const& command) {
 }
 
 CommandResult TuiClient::submit(std::string commandId, std::any payload) {
-    auto result = session_->dispatch(
+    auto result = runtime_->dispatch(
         principal_.clientId(),
         {std::move(commandId), snapshot_->revision(), std::move(payload)});
     if (result.accepted()) refresh();
@@ -100,14 +97,11 @@ CommandResult TuiClient::submit(std::string commandId, std::any payload) {
 }
 
 void TuiClient::refresh() {
-    auto next = snapshot_provider_();
-    if (next.client().clientId != principal_.clientId() ||
-        next.client().viewId != view_id_ ||
-        next.revision() != session_->revision()) {
-        throw std::logic_error{
-            "TUI snapshot provider returned a different attachment or revision"};
+    auto next = runtime_->snapshot(principal_.clientId(), dimensions_);
+    if (!next) {
+        throw std::logic_error{"TUI runtime did not return its attached snapshot"};
     }
-    snapshot_ = std::move(next);
+    snapshot_ = std::move(*next);
 }
 
 }  // namespace ssg::tui

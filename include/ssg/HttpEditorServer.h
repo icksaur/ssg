@@ -16,6 +16,8 @@ class Server;
 
 namespace ssg {
 
+class EditorRuntime;
+
 class SessionId {
 public:
     explicit SessionId(std::string value);
@@ -53,35 +55,22 @@ struct AttachedSession {
 };
 
 // CONTRACT
-// HttpEditorSessionHost: the host is the sole authority for a connection's
+// HttpEditorConnectionPolicy: the policy is the sole authority for a connection's
 //   session id, principal, and capabilities, deriving them from its own policy
 //   and never from client-supplied input. SSG is not an authentication
 //   boundary; a credential-less attach is a deliberate refusal, not an
 //   unimplemented feature, and a host that needs authentication enforces it in
 //   its transport before a connection reaches attach.
-// CONTRACT
-// HttpEditorSessionHost: snapshot() returns the library's aggregate view for
-//   the attached client unchanged; the transport reconstructs no feature state
-//   and reads no capability from a client payload. Capabilities come only from
-//   the principal fixed at attach, so the direct and WebSocket paths cannot
-//   diverge into two editors.
-class HttpEditorSessionHost {
+class HttpEditorConnectionPolicy {
 public:
-    virtual ~HttpEditorSessionHost() = default;
+    virtual ~HttpEditorConnectionPolicy() = default;
 
     // Bind a new connection to a session. The host assigns the session id,
     // principal, and view by its own policy, or may decline (return nullopt) to
     // cap sessions or reject a connection. Locality-based grants (e.g.
     // `local_file_drop` for a trusted local UI) follow the host's deployment and
-    // bind choice. The host correlates later snapshot()/binary() callbacks by the
-    // SessionId/ClientId it returned here.
+    // bind choice.
     [[nodiscard]] virtual std::optional<AttachedSession> attach() = 0;
-    [[nodiscard]] virtual SessionSnapshot snapshot(SessionId const& sessionId,
-                                                   ClientId clientId) = 0;
-    virtual void statusAction(SessionId const& sessionId, ClientId clientId,
-                               StatusActionInvocation const& invocation) = 0;
-    virtual void binary(SessionId const& sessionId, ClientId clientId,
-                        BinaryFrame const& frame) = 0;
 };
 
 struct HttpEditorRouteConfig {
@@ -102,7 +91,8 @@ struct HttpEditorServerConfig {
 };
 
 // CONTRACT
-// HttpEditorRoute: the referenced EditorSession and Http::Server must outlive
+// HttpEditorRoute: the referenced EditorRuntime, connection policy, and
+//   Http::Server must outlive
 //   the route, and the server must be stopped before the route is destroyed, so
 //   no registered connection callback can run against freed route state. A route
 //   destroyed while its server is still bound aborts deliberately rather than
@@ -110,16 +100,13 @@ struct HttpEditorServerConfig {
 //   over freed state.
 class HttpEditorRoute {
 public:
-    HttpEditorRoute(Http::Server& server, EditorSession& session,
-                    HttpEditorSessionHost& host,
+    HttpEditorRoute(Http::Server& server, EditorRuntime& runtime,
+                    HttpEditorConnectionPolicy& policy,
                     HttpEditorRouteConfig config = {});
     ~HttpEditorRoute();
 
     HttpEditorRoute(HttpEditorRoute const&) = delete;
     HttpEditorRoute& operator=(HttpEditorRoute const&) = delete;
-
-    [[nodiscard]] bool sendBinary(ClientId clientId,
-                                   BinaryFrame const& frame);
 
 private:
     struct Impl;
@@ -128,8 +115,8 @@ private:
 
 class HttpEditorServer {
 public:
-    HttpEditorServer(EditorSession& session,
-                      HttpEditorSessionHost& host,
+    HttpEditorServer(EditorRuntime& runtime,
+                     HttpEditorConnectionPolicy& policy,
                      HttpEditorServerConfig config);
     ~HttpEditorServer();
 
@@ -138,9 +125,6 @@ public:
 
     void start();
     void stop();
-
-    [[nodiscard]] bool sendBinary(ClientId clientId,
-                                   BinaryFrame const& frame);
 
 private:
     struct Impl;
