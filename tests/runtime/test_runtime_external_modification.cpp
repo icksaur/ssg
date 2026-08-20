@@ -972,6 +972,16 @@ TEST(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile) {
     ASSERT_TRUE(std::find(files[0].actions.begin(), files[0].actions.end(),
                           ssg::ExternalAction::Reload) == files[0].actions.end());
 
+    ASSERT_TRUE(
+        session.runtime
+            ->dispatch(
+                ssg::ClientId{1},
+                {"external.invoke_action", session.runtime->revision(),
+                 ssg::ExternalActionInvocation{
+                     files[0].id, ssg::ExternalAction::Reload}})
+            .accepted());
+    ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
+
     // Dispatching the unoffered Reload is a guarded no-op: the section is untouched
     // and the buffer preserved.
     ASSERT_TRUE(session.runtime

@@ -32,7 +32,7 @@ bound.
 
 ## Message envelope
 
-Every one of the seven message kinds shares one envelope:
+Every message kind shares one envelope:
 
 ```
 [u8 wire_version][u8 message_kind][tagged ProtocolValue payload]
@@ -43,7 +43,8 @@ Every one of the seven message kinds shares one envelope:
 `ProtocolMessageKind` (`command_request = 0`, `session_snapshot = 1`,
 `session_delta = 2` (3 and 4 are retired clipboard kinds, permanently
 reserved so surviving kinds keep their wire values),
-`status_action_invocation = 5`, `command_result = 6`); decoding with the wrong `decode_*` function
+`status_action_invocation = 5`, `command_result = 6`, `client_input = 7`,
+`client_input_result = 8`); decoding with the wrong `decode_*` function
 for a message reports `ProtocolError::unsupported_message_kind`. Trailing
 bytes after a fully-decoded payload are rejected as
 `ProtocolError::malformed_message`; a buffer exceeding
@@ -73,6 +74,12 @@ Payload shapes (object field names, all required unless noted optional):
   `derive_session_delta`.
 - `status_action_invocation`: encodes `StatusActionInvocation` directly
   (`status_id`, `action_id`, `generation`).
+- `client_input`: `{stroke, committed_text}`. `stroke` is either null or a
+  `{code, control, alt, meta, shift}` object. The key code is its stable name.
+- `client_input_result`: `{outcome, client_owned, command}`. `client_owned` is
+  null or `{kind, text}` and `command` is null or a `command_result` payload.
+  Hosts send exactly one result for each accepted input request, after any
+  resulting snapshot or delta has been queued.
 
 ## Command argument codec registry
 
@@ -80,18 +87,16 @@ Payload shapes (object field names, all required unless noted optional):
 `p0_command_descriptors()` (the assembled P0 catalog) to exactly one wire
 adapter. There is no untyped fallback: `CommandArgumentCodecRegistry`'s
 constructor throws `std::invalid_argument` unless the supplied entries cover
-the catalog exactly (no missing, extra, or duplicate IDs). Six command IDs
-carry a typed payload; every other command's payload is the wire null:
+the catalog exactly (no missing, extra, or duplicate IDs). Argument-bearing
+descriptors name their concrete payload type; payload-less descriptors use wire
+null. Browser compound interactions use these typed payloads:
 
-| Command ID(s)                                   | Payload type               |
-|---------------------------------------------------|-----------------------------|
-| every `text.*` ID (`text_input_command_set()`)     | `TextInputArguments`        |
-| every selection-navigation ID (`selection_navigation_command_set()`) | `SelectionCommandArguments` |
-| `view.scroll_lines`                                | `ScrollLinesArguments`      |
-| `view.scroll_pages`                                | `ScrollPagesArguments`      |
-| `view.scroll_to_fraction`                          | `ScrollFractionArguments`   |
-| `file.open_dropped_content`                        | `DroppedContentArguments`   |
-| everything else                                    | none (wire null)            |
+| Command ID                 | Payload type                |
+|----------------------------|-----------------------------|
+| `picker.submit`            | `PickerSubmitArguments`     |
+| `tree.activate_node`       | `TreeSelectArguments`       |
+| `prompt.focus_control`     | `PromptFocusArguments`      |
+| `external.invoke_action`   | `ExternalActionInvocation`  |
 
 ## Fixtures
 

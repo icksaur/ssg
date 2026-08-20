@@ -3,32 +3,89 @@
 // reconciliation exactly as the browser runs them. Nothing here touches
 // document/window; client.mjs owns all rendering and I/O.
 
-// Decode one tagged ProtocolValue from a DataView at {p}. Returns [value, next].
-// Mirrors protocol/schema/README.md's tag encoding.
-export function decodeValue(dv, p) {
+const PROTOCOL_LIMITS = {
+  messageBytes: 32 * 1024 * 1024,
+  valueDepth: 32,
+  collectionLength: 65536,
+  textBytes: 8 * 1024 * 1024,
+  bytesLength: 16 * 1024 * 1024,
+};
+const wireTextDecoder = new TextDecoder('utf-8', { fatal: true });
+
+function requireWireBytes(dv, p, count) {
+  if (!Number.isSafeInteger(count) || count < 0 ||
+      p < 0 || p > dv.byteLength || count > dv.byteLength - p) {
+    throw new Error('truncated protocol value');
+  }
+}
+
+// Decode one bounded tagged ProtocolValue from a DataView at {p}. Returns
+// [value, next] and mirrors protocol/schema/README.md's tag encoding.
+export function decodeValue(dv, p, depth = 0) {
+  if (depth >= PROTOCOL_LIMITS.valueDepth) {
+    throw new Error('protocol value depth exceeded');
+  }
+  requireWireBytes(dv, p, 1);
   const tag = dv.getUint8(p); p += 1;
   switch (tag) {
     case 0: return [null, p];
-    case 1: return [dv.getUint8(p) !== 0, p + 1];
-    case 2: { const v = dv.getBigInt64(p, true); return [v, p + 8]; }
-    case 3: { const v = dv.getBigUint64(p, true); return [v, p + 8]; }
+    case 1: {
+      requireWireBytes(dv, p, 1);
+      const value = dv.getUint8(p);
+      if (value > 1) throw new Error('malformed protocol bool');
+      return [value !== 0, p + 1];
+    }
+    case 2: {
+      requireWireBytes(dv, p, 8);
+      const v = dv.getBigInt64(p, true);
+      return [v, p + 8];
+    }
+    case 3: {
+      requireWireBytes(dv, p, 8);
+      const v = dv.getBigUint64(p, true);
+      return [v, p + 8];
+    }
     case 4: case 5: {
+      requireWireBytes(dv, p, 4);
       const n = dv.getUint32(p, true); p += 4;
+      const limit = tag === 4 ? PROTOCOL_LIMITS.textBytes
+                              : PROTOCOL_LIMITS.bytesLength;
+      if (n > limit) throw new Error('protocol value length exceeded');
+      requireWireBytes(dv, p, n);
       const bytes = new Uint8Array(dv.buffer, dv.byteOffset + p, n); p += n;
-      if (tag === 4) return [new TextDecoder().decode(bytes), p];
+      if (tag === 4) return [wireTextDecoder.decode(bytes), p];
       return [bytes.slice(), p];
     }
     case 6: {
+      requireWireBytes(dv, p, 4);
       const n = dv.getUint32(p, true); p += 4; const arr = [];
-      for (let i = 0; i < n; i++) { const [v, np] = decodeValue(dv, p); arr.push(v); p = np; }
+      if (n > PROTOCOL_LIMITS.collectionLength) {
+        throw new Error('protocol collection length exceeded');
+      }
+      for (let i = 0; i < n; i++) {
+        const [v, np] = decodeValue(dv, p, depth + 1);
+        arr.push(v); p = np;
+      }
       return [arr, p];
     }
     case 7: {
+      requireWireBytes(dv, p, 4);
       const n = dv.getUint32(p, true); p += 4; const obj = {};
+      if (n > PROTOCOL_LIMITS.collectionLength) {
+        throw new Error('protocol collection length exceeded');
+      }
       for (let i = 0; i < n; i++) {
+        requireWireBytes(dv, p, 4);
         const kl = dv.getUint32(p, true); p += 4;
-        const key = new TextDecoder().decode(new Uint8Array(dv.buffer, dv.byteOffset + p, kl)); p += kl;
-        const [v, np] = decodeValue(dv, p); obj[key] = v; p = np;
+        if (kl > PROTOCOL_LIMITS.textBytes) {
+          throw new Error('protocol object key length exceeded');
+        }
+        requireWireBytes(dv, p, kl);
+        const key = wireTextDecoder.decode(
+          new Uint8Array(dv.buffer, dv.byteOffset + p, kl));
+        p += kl;
+        const [v, np] = decodeValue(dv, p, depth + 1);
+        obj[key] = v; p = np;
       }
       return [obj, p];
     }
@@ -75,23 +132,137 @@ export function byteToIndex(text, offsets) {
 
 export const utf8Bytes = (s) => new TextEncoder().encode(s).length;
 
-export function encodeStatusActionInvocation({ statusId, actionId, generation }) {
-  const enc = new TextEncoder();
-  const chunks = [new Uint8Array([1, 5])];
-  const u32 = (n) => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n, true); return b; };
-  const u64 = (n) => { const b = new Uint8Array(8); new DataView(b.buffer).setBigUint64(0, BigInt(n), true); return b; };
-  const text = (s) => { const b = enc.encode(s); return [new Uint8Array([4]), u32(b.length), b]; };
-  const uint = (n) => [new Uint8Array([3]), u64(n)];
-  const field = (k, parts) => { const kb = enc.encode(k); chunks.push(u32(kb.length), kb, ...parts); };
-  chunks.push(new Uint8Array([7]), u32(3));
-  field('status_id', uint(statusId));
-  field('action_id', text(actionId));
-  field('generation', uint(generation));
+function concat(chunks) {
   const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
   let p = 0;
   for (const c of chunks) { out.set(c, p); p += c.length; }
   return out;
 }
+
+const u32 = (n) => {
+  const b = new Uint8Array(4);
+  new DataView(b.buffer).setUint32(0, n, true);
+  return b;
+};
+const u64 = (n) => {
+  const b = new Uint8Array(8);
+  new DataView(b.buffer).setBigUint64(0, BigInt(n), true);
+  return b;
+};
+
+export function encodeValue(value) {
+  const enc = new TextEncoder();
+  if (value == null) return new Uint8Array([0]);
+  if (typeof value === 'boolean') return new Uint8Array([1, value ? 1 : 0]);
+  if (typeof value === 'number' || typeof value === 'bigint') {
+    return concat([new Uint8Array([3]), u64(value)]);
+  }
+  if (typeof value === 'string') {
+    const bytes = enc.encode(value);
+    return concat([new Uint8Array([4]), u32(bytes.length), bytes]);
+  }
+  if (value instanceof Uint8Array) {
+    return concat([new Uint8Array([5]), u32(value.length), value]);
+  }
+  if (Array.isArray(value)) {
+    return concat([new Uint8Array([6]), u32(value.length),
+                   ...value.map(encodeValue)]);
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value);
+    const fields = [];
+    for (const [key, fieldValue] of entries) {
+      const bytes = enc.encode(key);
+      fields.push(u32(bytes.length), bytes, encodeValue(fieldValue));
+    }
+    return concat([new Uint8Array([7]), u32(entries.length), ...fields]);
+  }
+  throw new TypeError('unsupported protocol value');
+}
+
+export function encodeMessage(kind, payload) {
+  return concat([new Uint8Array([1, kind]), encodeValue(payload)]);
+}
+
+export function decodeMessage(buffer) {
+  const dv = new DataView(buffer);
+  if (dv.byteLength > PROTOCOL_LIMITS.messageBytes) {
+    throw new Error('protocol message length exceeded');
+  }
+  if (dv.byteLength < 3 || dv.getUint8(0) !== 1) {
+    throw new Error('unsupported protocol frame');
+  }
+  const kind = dv.getUint8(1);
+  const [payload, end] = decodeValue(dv, 2);
+  if (end !== dv.byteLength) throw new Error('trailing protocol bytes');
+  return { kind, payload };
+}
+
+export function browserInboundKind(kind) {
+  if (kind === 1) return 'snapshot';
+  if (kind === 2) return 'delta';
+  if (kind === 6) return 'command-result';
+  if (kind === 8) return 'input-result';
+  return 'ignore';
+}
+
+export function encodeCommandRequest(id, baseRevision, payload = null) {
+  return encodeMessage(0, { id, base_revision: BigInt(baseRevision), payload });
+}
+
+export function encodeClientInput({ code = '', control = false, alt = false,
+                                    meta = false, shift = false, text = '' }) {
+  const stroke = code ? { code, control, alt, meta, shift } : null;
+  return encodeMessage(7, { stroke, committed_text: text });
+}
+
+export function encodeStatusActionInvocation({ statusId, actionId, generation }) {
+  return encodeMessage(5, {
+    status_id: BigInt(statusId), action_id: actionId,
+    generation: BigInt(generation),
+  });
+}
+
+export const encodePickerSubmit = (candidateId, revision) =>
+  encodeCommandRequest('picker.submit', revision,
+                       { candidate_id: String(candidateId) });
+
+export const encodeTreeActivation = (nodeId, revision) =>
+  encodeCommandRequest('tree.activate_node', revision,
+                       { node_id: String(nodeId) });
+
+export const encodePromptFocus = (index, revision) =>
+  encodeCommandRequest('prompt.focus_control', revision,
+                       { index: BigInt(index) });
+
+export const encodeExternalAction = (action, fileId, revision) =>
+  encodeCommandRequest('external.invoke_action', revision,
+                       { file_id: String(fileId), action: BigInt(action) });
+
+export function settleInput(inputQueue, pending, result, appliedRevision) {
+  if (inputQueue.length === 0) return null;
+  const required = result && result.command
+    ? BigInt(result.command.revision) : BigInt(appliedRevision);
+  if (BigInt(appliedRevision) < required) return null;
+  const [input, ...remainingInputs] = inputQueue;
+  const remainingPending = input.predictionId == null
+    ? pending : pending.filter((item) => item.id !== input.predictionId);
+  return { inputQueue: remainingInputs, pending: remainingPending };
+}
+
+export const isCurrentGeneration = (current, callbackGeneration) =>
+  current === callbackGeneration;
+
+export const replayAttachFrame = (hasState, revision) =>
+  'SSG1 ATTACH ' + (hasState ? BigInt(revision) : '-');
+
+export const deltaIsContiguous = (revision, delta) =>
+  !!delta && BigInt(delta.base_revision) === BigInt(revision);
+
+export const clearUncertainInputs = () => ({ pending: [], inputQueue: [] });
+
+export const reconnectDelay = (attempt) =>
+  Math.min(250 * (2 ** attempt), 5000);
 
 // --- M3 local-echo reconciliation (pure; the browser and the node test share
 // this exact code so the client behavior is what the test pins) ---
@@ -110,11 +281,6 @@ export function applyDocumentDelta(text, delta) {
 
 // The still-unacknowledged predicted text, in type order.
 export const predictedText = (pending) => pending.map((p) => p.text).join('');
-
-// Drop every prediction the host has settled (applied or rejected): both leave
-// the authoritative document as truth, so re-basing keeps only ids beyond it.
-export const dropSettled = (pending, settledId) =>
-  pending.filter((p) => num(p.id) > num(settledId));
 
 // Project the authoritative document plus caret-anchored predictions into what
 // to show: the predicted text spliced in at the caret, the displayed caret moved
@@ -136,25 +302,6 @@ export function project(authText, authCaret, pending) {
 // after the caret moves right by the predicted byte length.
 export const shiftOffset = (offset, predStart, predBytes) =>
   offset >= predStart ? offset + predBytes : offset;
-
-// Parse the host envelope: [u64 LE settledClientEditId][u8 sectionCount], then
-// sectionCount sections each [u8 tag][u32 LE length][bytes]. Returns the settled
-// id and each section as a tag plus a DataView over its bytes, so the caller
-// decodes tag 0 (library body) and tag 1 (palette report JSON) each its own way.
-export function parseEnvelope(buffer) {
-  const dv = new DataView(buffer);
-  const settledId = dv.getBigUint64(0, true);
-  let p = 8;
-  const count = dv.getUint8(p); p += 1;
-  const sections = [];
-  for (let i = 0; i < count; i++) {
-    const tag = dv.getUint8(p); p += 1;
-    const len = dv.getUint32(p, true); p += 4;
-    sections.push({ tag, dv: new DataView(buffer, p, len), length: len });
-    p += len;
-  }
-  return { settledId, sections };
-}
 
 
 function wireNumber(value, name) {
@@ -181,11 +328,6 @@ export function matcherBoundsFromPalette(palette) {
   const maxMagnitude = wireNumber(palette.max_parameter_magnitude, 'max_parameter_magnitude');
   const maxCandidateBytes = wireNumber(palette.max_candidate_bytes, 'max_candidate_bytes');
   return { params: matcherParametersFromWire(palette.parameters), maxMagnitude, maxCandidateBytes };
-}
-
-export function encodePaletteSubmit(candidateId) {
-  if (candidateId == null || candidateId === '') return null;
-  return 'PSUB:' + String(candidateId);
 }
 
 // Apply a tree section delta to the retained tree, mirroring the C++
@@ -337,12 +479,6 @@ export function promptFocusPlan(prev, pv) {
            restoreFocus: false, activeDescendant: pv.activeInput };
 }
 
-// The host ingress that focuses a clicked footer-prompt input by its input index,
-// dispatched to prompt.focus_control server-side. One place owns the wire string.
-export function promptFocusControlMessage(index) {
-  return 'PFOC:' + index;
-}
-
 
 // The active footer prompt's geometry-free semantic projection normalized for the
 // renderer, or null when no footer-region prompt is open. Owns the snake_case wire
@@ -384,13 +520,12 @@ export function noticeViewFromSections(sections) {
 }
 
 // The ExternalAction ordinals (Reload, KeepBuffer, OpenDiff), pinned to the C++
-// enum, mapped to the pointer token the host parses, a short label, and the
-// payload-less command the keyboard route uses. The status ordinals mirror
+// enum and mapped to a short label. The status ordinals mirror
 // ExternalDocumentStatus (ExternallyModified, ExternallyRemoved).
 const EXTERNAL_ACTIONS = [
-  { token: 'reload', label: 'Reload', command: 'external.reload' },
-  { token: 'keep_buffer', label: 'Keep', command: 'external.keep_buffer' },
-  { token: 'open_diff', label: 'Diff', command: 'external.open_diff' },
+  { action: 0, label: 'Reload' },
+  { action: 1, label: 'Keep' },
+  { action: 2, label: 'Diff' },
 ];
 const EXTERNAL_STATUS_GLYPH = ['M', 'D'];
 
@@ -444,13 +579,6 @@ export function externalModificationFromSections(sections) {
 // that never appears on the wire.
 export function externalFocusHeld(sections) {
   return !!(sections && num(sections.external_focus_held));
-}
-
-// The pointer frame a click on an external action sends: EXMD:<token>\t<id>. The
-// TAB delimits the fixed action token from the opaque id, which is never split on
-// ':' (the id is "external:"+path and contains colons).
-export function encodeExternalAction(token, id) {
-  return 'EXMD:' + token + '\t' + id;
 }
 
 export function isPalettePromptOpen(sections) {

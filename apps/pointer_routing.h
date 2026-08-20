@@ -198,27 +198,4 @@ struct PointerTargets {
 [[nodiscard]] std::optional<int> edge_scroll(bool dragging, int pointer_row,
                                              ssg::Rect const& content);
 
-// A web pointer click on an external-modification action arrives as the frame
-// `EXMD:<action>\t<diffFileId>`. The action token is one of
-// {reload,keep_buffer,open_diff}; a single TAB delimits it from the id, whose
-// ENTIRE remainder is opaque and is NEVER split on ':' (the id is
-// "external:"+path and contains colons). Returns the parsed action, its command
-// id, and the file id, or nullopt when the frame is malformed or names an
-// unknown action token. Pure.
-struct ExternalPointerFrame {
-    ssg::ExternalAction action;
-    std::string command;  // external.<action>
-    ssg::DiffFileId id;
-};
-[[nodiscard]] std::optional<ExternalPointerFrame> parse_external_pointer_frame(
-    std::string_view payload);
-
-// Whether a parsed frame may be dispatched: the id must name a file currently
-// published in `files` AND that file must offer the frame's action. An unknown
-// id or an unoffered action is a no-op -- the guard the host applies before
-// select-then-act. Pure.
-[[nodiscard]] bool external_pointer_frame_is_offered(
-    ExternalPointerFrame const& frame,
-    std::vector<ssg::ExternalDocumentView> const& files);
-
 }  // namespace ssg::app

@@ -7,15 +7,18 @@
 // keystroke shows before its round trip completes.
 
 import {
-  decodeValue, findSections, num, cssColor, byteToIndex, utf8Bytes,
-  dropSettled, project, parseEnvelope,
+  findSections, num, cssColor, byteToIndex, utf8Bytes, project, decodeMessage,
+  browserInboundKind,
   isPalettePromptOpen, matcherBoundsFromPalette, clampPaletteSelection,
-  encodePaletteSubmit, applySessionDeltaSections, applyTreeDelta,
+  encodePickerSubmit, applySessionDeltaSections, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
+  encodeCommandRequest, encodeClientInput, encodeTreeActivation,
   encodeStatusActionInvocation, shouldResetLocalQuery, pickerEpochFromPalette,
-  promptViewFromSections, PROMPT_CONTROL, promptFocusPlan, promptFocusControlMessage,
+  promptViewFromSections, PROMPT_CONTROL, promptFocusPlan, encodePromptFocus,
   noticeViewFromSections,
   externalModificationFromSections, externalFocusHeld, encodeExternalAction,
+  settleInput, isCurrentGeneration, replayAttachFrame, deltaIsContiguous,
+  clearUncertainInputs, reconnectDelay,
 } from '/reconcile.mjs';
 import { fuzzyRank } from '/fuzzy.mjs';
 
@@ -56,7 +59,9 @@ const GIT_STATUS = [
 // local predictions. Snapshots replace `sections`; deltas mutate it in place.
 const state = {
   sections: null,
+  revision: 0n,
   pending: [],
+  inputQueue: [],
   nextEditId: 1,
   // The palette/finder is a client-owned derived view: the browser owns the
   // query text and selection index, and ranks the published candidate universe locally.
@@ -214,7 +219,7 @@ function renderChromeNode(node, theme, parentAxis = AXIS.ROW, topLevel = false) 
   applySize(el, node.size, parentAxis);
   if (node.command) {
     el.title = node.command;
-    el.addEventListener('click', () => ws.send('CMD:' + node.command));
+    el.addEventListener('click', () => sendCommand(node.command));
   }
   return el;
 }
@@ -315,7 +320,8 @@ function renderTreeSurface(parent, surface, tree) {
       // A click selects then activates the node -- opening a file or toggling a
       // directory -- the same library commands a TUI pointer press dispatches.
       if (typeof n.id === 'string') {
-        div.addEventListener('click', () => ws.send('TSEL:' + n.id));
+        div.addEventListener('click', () =>
+          sendTyped(encodeTreeActivation(n.id, state.revision)));
       }
       parent.appendChild(div);
     }
@@ -364,7 +370,7 @@ function renderStatusActionsNode(node) {
       if (bg) button.style.backgroundColor = bg;
       if (fg) button.style.color = fg;
       button.style.borderColor = fg || 'currentColor';
-      button.addEventListener('click', () => ws.send(encodeStatusActionInvocation({
+      button.addEventListener('click', () => sendTyped(encodeStatusActionInvocation({
         statusId: item.id, actionId: action.id, generation: item.generation,
       })));
       el.appendChild(button);
@@ -515,7 +521,7 @@ function buildPromptControls(pv) {
       el.addEventListener('mousedown', (ev) => {
         ev.preventDefault();
         promptEl.focus({ preventScroll: true });
-        ws.send(promptFocusControlMessage(index));
+        sendTyped(encodePromptFocus(index, state.revision));
       });
       promptEl.appendChild(el);
     } else if (control.kind === PROMPT_CONTROL.TOGGLE) {
@@ -528,7 +534,7 @@ function buildPromptControls(pv) {
       if (control.command) {
         el.addEventListener('mousedown', (ev) => {
           ev.preventDefault();
-          ws.send('CMD:' + control.command);
+          sendCommand(control.command);
         });
       }
       promptEl.appendChild(el);
@@ -600,7 +606,7 @@ function renderNotice(sections) {
     el.className = 'notice-action';
     el.setAttribute('aria-label', action.label);
     el.textContent = '[' + action.label + ']';
-    el.addEventListener('click', () => ws.send('CMD:' + action.command));
+    el.addEventListener('click', () => sendCommand(action.command));
     noticeEl.appendChild(el);
   }
 }
@@ -608,8 +614,8 @@ function renderNotice(sections) {
 // Reconcile #external against the published external-modification section (null
 // when no file is externally changed). Renders the message plus one row per file
 // (status glyph + path + its offered action buttons), highlighting the selected
-// row. A click sends EXMD:<token>\t<id> (pointer path); the keyboard route is the
-// forwarded keystrokes resolving in the library's external context.
+// row. A click sends the published file/action identity through the typed route;
+// forwarded keystrokes resolve in the library's external context.
 function renderExternalModification(sections) {
   const view = externalModificationFromSections(sections);
   externalEl.textContent = '';
@@ -638,7 +644,8 @@ function renderExternalModification(sections) {
       el.className = 'external-action';
       el.setAttribute('aria-label', action.label);
       el.textContent = '[' + action.label + ']';
-      el.addEventListener('click', () => ws.send(encodeExternalAction(action.token, file.id)));
+      el.addEventListener('click', () =>
+        sendTyped(encodeExternalAction(action.action, file.id, state.revision)));
       row.appendChild(el);
     }
     externalEl.appendChild(row);
@@ -658,16 +665,16 @@ function refreshFinder() {
 }
 
 function applyDelta(d) {
-  applySessionDeltaSections(state.sections, d);
+  if (!state.sections || !deltaIsContiguous(state.revision, d)) return false;
+  const next = structuredClone(state.sections);
+  applySessionDeltaSections(next, d);
   // The tree is retained and spliced in place; only a genuinely inexpressible
   // tree transition (snapshot_required, a missed base revision, or a malformed
   // splice) falls back to a full snapshot, so ordinary expand/open/select no
   // longer churns the panel through a resync.
-  if (d.tree && !applyTreeDelta(state.sections.tree, d.tree)) {
-    statusEl.textContent = 'tree update requires full snapshot; resyncing';
-    if (ws.readyState === WebSocket.OPEN) ws.send('SNAP');
-    return false;
-  }
+  if (d.tree && !applyTreeDelta(next.tree, d.tree)) return false;
+  state.sections = next;
+  state.revision = BigInt(d.revision);
   return true;
 }
 
@@ -692,31 +699,85 @@ function render() {
 
 let wasPaletteOpen = false;
 let lastPickerEpoch = 0n;
+let ws = null;
+let socketGeneration = 0;
+let reconnectAttempts = 0;
+let reconnectTimer = null;
 
-const ws = new WebSocket('ws://' + location.host + '/session');
-ws.binaryType = 'arraybuffer';
+function sendTyped(frame) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+  ws.send(frame);
+  return true;
+}
 
-ws.onopen = () => { statusEl.textContent = 'attached; awaiting snapshot'; ws.send('SSG1 ATTACH -'); };
-ws.onmessage = (e) => {
-  if (typeof e.data === 'string') { statusEl.textContent = e.data; return; }
+function sendCommand(id, payload = null) {
+  return sendTyped(encodeCommandRequest(id, state.revision, payload));
+}
+
+function discardPredictions() {
+  const cleared = clearUncertainInputs();
+  state.pending = cleared.pending;
+  state.inputQueue = cleared.inputQueue;
+  render();
+}
+
+function reconnect(reason) {
+  statusEl.textContent = reason + '; reconnecting';
+  if (ws) ws.close();
+}
+
+function applyProtocolFrame(buffer) {
+  const { kind, payload } = decodeMessage(buffer);
+  const inbound = browserInboundKind(kind);
+  if (inbound === 'snapshot') {
+    state.sections = findSections(payload);
+    state.revision = BigInt(payload.revision);
+    reconnectAttempts = 0;
+  } else if (inbound === 'delta') {
+    if (!applyDelta(payload)) {
+      reconnect('state gap');
+      return false;
+    }
+  } else if (inbound === 'command-result') {
+    if (payload.revision != null && BigInt(payload.revision) > state.revision) {
+      reconnect('command result preceded state');
+      return false;
+    }
+  } else if (inbound === 'input-result') {
+    const settled = settleInput(
+      state.inputQueue, state.pending, payload, state.revision);
+    if (!settled) {
+      reconnect('input result preceded state');
+      return false;
+    }
+    state.inputQueue = settled.inputQueue;
+    state.pending = settled.pending;
+  } else {
+    // Additive server messages are safe to ignore. Required incompatible
+    // semantics must use a new wire version, which decodeMessage rejects.
+    return true;
+  }
+  return true;
+}
+
+function connect() {
+  const generation = ++socketGeneration;
+  const socket = new WebSocket('ws://' + location.host + '/session');
+  ws = socket;
+  socket.binaryType = 'arraybuffer';
+  socket.onopen = () => {
+    if (!isCurrentGeneration(socketGeneration, generation)) return;
+    statusEl.textContent = 'attached; awaiting state';
+    socket.send(replayAttachFrame(!!state.sections, state.revision));
+  };
+  socket.onmessage = (e) => {
+    if (!isCurrentGeneration(socketGeneration, generation)) return;
+    if (typeof e.data === 'string') {
+      statusEl.textContent = e.data;
+      return;
+    }
   try {
-    const { settledId, sections } = parseEnvelope(e.data);
-    let resyncRequested = false;
-    let snapshotApplied = false;
-    for (const sec of sections) {
-      if (sec.tag === 0) {                 // library body: version@0, kind@1, value@2
-        const kind = sec.dv.getUint8(1);
-        const [payload] = decodeValue(sec.dv, 2);
-        if (kind === 1) { state.sections = findSections(payload); snapshotApplied = true; }
-        else if (kind === 2) resyncRequested = !applyDelta(payload) || resyncRequested;
-      }
-    }
-    // Settle predictions only against an accepted delta or a replacement snapshot.
-    // A resync-rejected delta leaves the authoritative document stale until the
-    // requested snapshot arrives, so predicted text must survive until then.
-    if (snapshotApplied || !resyncRequested) {
-      state.pending = dropSettled(state.pending, settledId);
-    }
+    if (!applyProtocolFrame(e.data)) return;
     if (!state.sections) { statusEl.textContent = 'no sections yet'; return; }
 
     // Reset the browser-owned query on a fresh open: a closed->open transition, or
@@ -731,19 +792,39 @@ ws.onmessage = (e) => {
     lastPickerEpoch = epoch;
 
     render();
-    if (!resyncRequested) statusEl.textContent = 'live (' + e.data.byteLength + ' bytes)';
+    statusEl.textContent = 'live (' + e.data.byteLength + ' bytes)';
     // Keep the document focused for the common editor case, but never steal focus
     // from an open footer prompt: it owns the keyboard while it is up, and
     // renderFooterPrompt has already placed focus on its container.
     if (!footerPromptOpen) docEl.focus();
-  } catch (err) { statusEl.textContent = 'render error: ' + err.message; }
-};
-ws.onclose = () => { statusEl.textContent += ' [closed]'; };
-ws.onerror = () => { statusEl.textContent = 'ws error'; };
+    } catch (err) {
+      statusEl.textContent = 'protocol error: ' + err.message;
+      reconnect('protocol error');
+    }
+  };
+  socket.onclose = () => {
+    if (!isCurrentGeneration(socketGeneration, generation)) return;
+    discardPredictions();
+    if (reconnectAttempts >= 8) {
+      statusEl.textContent = 'connection unavailable';
+      return;
+    }
+    const delay = reconnectDelay(reconnectAttempts++);
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, delay);
+  };
+  socket.onerror = () => {
+    if (isCurrentGeneration(socketGeneration, generation)) {
+      statusEl.textContent = 'ws error';
+    }
+  };
+}
+
+connect();
 
 docEl.addEventListener('keydown', handleKeydown);
 // The footer prompt owns keyboard focus while open, so its container needs the
-// same handler: keystrokes and Backspace round-trip as KEY frames the shared seam
+// same handler: keystrokes and Backspace round-trip through the shared typed seam
 // edits, and Tab resolves server-side to prompt.focus_next_control. Attaching to
 // the container (not document) keeps the two focus owners' handlers symmetric.
 promptEl.addEventListener('keydown', handleKeydown);
@@ -768,8 +849,9 @@ function handleKeydown(ev) {
       p.selected = clampPaletteSelection(p.selected, locallyRankedPaletteRows(state.sections && state.sections.palette).length);
       const rows = locallyRankedPaletteRows(state.sections && state.sections.palette);
       const candidate = rows[p.selected];
-      const message = candidate && encodePaletteSubmit(candidate.id);
-      if (message) ws.send(message);
+      if (candidate) {
+        sendTyped(encodePickerSubmit(candidate.id, state.revision));
+      }
       return;
     }
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
@@ -797,7 +879,6 @@ function handleKeydown(ev) {
     // Escape and other keys fall through to the keymap (Escape -> prompt.cancel).
   }
 
-  const mods = (ev.altKey ? 'a' : '') + (ev.shiftKey ? 's' : '');
   // Array.from counts Unicode scalars, so a supplementary-plane character (two
   // UTF-16 code units in ev.key) still registers as one printable scalar and is
   // sent, consistent with the UTF-8 offset contract.
@@ -809,7 +890,7 @@ function handleKeydown(ev) {
   // and no chord modifier is held (typing into a prompt, or an Alt chord, is not
   // a document insert); the char shows this frame and the host's settlement
   // re-bases it. Everything else round-trips without echo.
-  let editId = '';
+  let predictionId = null;
   const focus = state.sections ? num(state.sections.focus) : -1;
   // Suppress local echo when the external-modification bar is the effective focus:
   // the wire `focus` field never carries ExternalModification (it is legacy-
@@ -819,8 +900,17 @@ function handleKeydown(ev) {
       !externalFocusHeld(state.sections)) {
     const id = state.nextEditId++;
     state.pending.push({ id, text });
-    editId = String(id);
-    render();
+    predictionId = id;
   }
-  ws.send('KEY:' + ev.code + ':' + mods + ':' + editId + ':' + text);
+  const sent = sendTyped(encodeClientInput({
+    code: ev.code, alt: ev.altKey, shift: ev.shiftKey, text,
+  }));
+  if (!sent) {
+    if (predictionId != null) {
+      state.pending = state.pending.filter((item) => item.id !== predictionId);
+    }
+    return;
+  }
+  state.inputQueue.push({ predictionId });
+  if (predictionId != null) render();
 }

@@ -3,21 +3,20 @@
 // not a copy. Run by ctest via node when node is available.
 //
 // Contract pinned: the client shows the authoritative document plus its own
-// not-yet-settled predictions; when the host settles an id, exactly the
-// predictions through that id drop and the remainder re-bases onto the
-// authoritative document. Applied and rejected settle identically because
-// authoritative state wins.
+// not-yet-completed predictions. Typed input results complete in FIFO order only
+// after their result revision is visible; authoritative state always wins.
 
 import assert from 'node:assert/strict';
 import {
-  applyDocumentDelta, dropSettled, project, byteToIndex, utf8Bytes,
-  parseEnvelope,
+  applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput,
+  decodeMessage, browserInboundKind, encodeClientInput, encodeCommandRequest,
   isPalettePromptOpen, matcherParametersFromWire, matcherBoundsFromPalette,
-  clampPaletteSelection, encodePaletteSubmit, applyTreeDelta,
+  clampPaletteSelection, encodePickerSubmit, encodeTreeActivation, applyTreeDelta,
   applySessionDeltaSections,
-  encodeStatusActionInvocation,
+  encodeStatusActionInvocation, encodePromptFocus,
   externalModificationFromSections, externalFocusHeld, encodeExternalAction,
-  applyExternalModificationDelta,
+  applyExternalModificationDelta, isCurrentGeneration, replayAttachFrame,
+  deltaIsContiguous, clearUncertainInputs, reconnectDelay,
 } from '../../apps/web/reconcile.mjs';
 
 let checks = 0;
@@ -45,11 +44,13 @@ check('applyDocumentDelta inserts and replaces on byte offsets', () => {
   assert.equal(applyDocumentDelta('\u{1f600}z', { start: 0, erased_bytes: 4, inserted_text: '' }), 'z');
 });
 
-check('dropSettled keeps only predictions beyond the settled id', () => {
-  const p = [{ id: 1, text: 'a' }, { id: 2, text: 'b' }, { id: 3, text: 'c' }];
-  assert.deepEqual(dropSettled(p, 0).map((x) => x.id), [1, 2, 3]);
-  assert.deepEqual(dropSettled(p, 2).map((x) => x.id), [3]);
-  assert.deepEqual(dropSettled(p, 3).map((x) => x.id), []);
+check('settleInput is FIFO and waits for the result revision', () => {
+  const queue = [{ predictionId: 1 }, { predictionId: 2 }];
+  const pending = [{ id: 1, text: 'a' }, { id: 2, text: 'b' }];
+  assert.equal(settleInput(queue, pending, { command: { revision: 4n } }, 3n), null);
+  const first = settleInput(queue, pending, { command: { revision: 4n } }, 4n);
+  assert.deepEqual(first.inputQueue, [{ predictionId: 2 }]);
+  assert.deepEqual(first.pending, [{ id: 2, text: 'b' }]);
 });
 
 check('project splices predictions at the caret and moves the caret past them', () => {
@@ -60,109 +61,95 @@ check('project splices predictions at the caret and moves the caret past them', 
   assert.equal(r.predEnd, 3);
 });
 
-// --- The end-to-end reconciliation property, over an interleaving of local
-// keystrokes, coalesced server settlements, and a background revision bump. ---
-check('typed text is always shown, and settled predictions re-base exactly', () => {
-  // The user types these characters (one is astral), each predicted at the caret.
+// --- The end-to-end reconciliation property over local keystrokes, authoritative
+// deltas, and ordered positive input completion. ---
+check('typed text remains shown while FIFO results re-base predictions', () => {
   const typed = ['h', 'e', '\u{1f600}', 'y'];
-
-  // Client state.
   let pending = [];
+  let inputQueue = [];
   let nextId = 1;
-  const typedQueue = [];           // ids the server has not yet applied
-
-  // Authoritative document (what the server owns).
   let authText = '';
-  let authCaret = 0;               // byte offset
-
-  // What the user has committed to typing so far (prediction source of truth).
+  let authCaret = 0;
+  let revision = 0n;
   let typedSoFar = '';
-
   const shown = () => project(authText, authCaret, pending).text;
-
-  // Server applies the next `count` queued predictions as one coalesced delta
-  // (insert at the caret), then settles up to the last applied id.
-  const serverApply = (count) => {
-    const batch = typedQueue.splice(0, count);
-    if (batch.length === 0) return 0;
-    const inserted = batch.map((e) => e.text).join('');
-    authText = applyDocumentDelta(authText, { start: authCaret, erased_bytes: 0, inserted_text: inserted });
-    authCaret += utf8Bytes(inserted);
-    const settledId = batch[batch.length - 1].id;
-    pending = dropSettled(pending, settledId);
-    return settledId;
-  };
-
   const typeKey = (ch) => {
     const id = nextId++;
     pending.push({ id, text: ch });
-    typedQueue.push({ id, text: ch });
+    inputQueue.push({ predictionId: id, text: ch });
     typedSoFar += ch;
-    // The predicted char is visible immediately, before any round trip.
     assert.equal(shown(), typedSoFar);
   };
-
-  // Interleave: type two, coalesce-apply two, type two more, a background frame
-  // (no settlement, no user content change), then apply the rest one at a time.
-  typeKey(typed[0]);
-  typeKey(typed[1]);
-  assert.equal(shown(), 'he');
-  serverApply(2);                            // coalesced settlement of h,e
-  assert.equal(shown(), 'he');               // stable across the round trip
-  assert.equal(pending.length, 0);
-
-  typeKey(typed[2]);                          // astral
-  typeKey(typed[3]);
-  assert.equal(shown(), typedSoFar);
-
-  // A background revision bump: authoritative gains no user content and settles
-  // nothing; the still-unsettled predictions must survive untouched.
-  const before = shown();
-  pending = dropSettled(pending, 0);          // settledId sentinel = nothing new
-  assert.equal(shown(), before);
-  assert.equal(pending.length, 2);
-
-  serverApply(1);                             // settle the astral char only
-  assert.equal(shown(), typedSoFar);
-  assert.equal(pending.length, 1);
-  serverApply(1);                             // settle the last char
-  assert.equal(shown(), typedSoFar);
-  assert.equal(pending.length, 0);
-
-  // Everything the user typed is now authoritative and shown.
+  for (const ch of typed) typeKey(ch);
+  for (const ch of typed) {
+    revision++;
+    authText = applyDocumentDelta(authText, {
+      start: authCaret, erased_bytes: 0, inserted_text: ch,
+    });
+    authCaret += utf8Bytes(ch);
+    const settled = settleInput(
+      inputQueue, pending, { command: { revision } }, revision);
+    inputQueue = settled.inputQueue;
+    pending = settled.pending;
+    assert.equal(shown(), typedSoFar);
+  }
   assert.equal(authText, 'he\u{1f600}y');
-  assert.equal(shown(), 'he\u{1f600}y');
+  assert.equal(pending.length, 0);
 });
 
-// --- Authoritative-wins on divergence: a rejected prediction (never applied)
-// settles by id and is dropped without ever appearing in the document. ---
-check('a rejected prediction is dropped on settlement, authoritative wins', () => {
-  let pending = [{ id: 1, text: 'x' }];
-  const authText = '';               // the host rejected the insert: no change
-  const authCaret = 0;
-  assert.equal(project(authText, authCaret, pending).text, 'x');   // predicted
-  pending = dropSettled(pending, 1); // host settles id 1 (rejected)
-  assert.equal(project(authText, authCaret, pending).text, '');    // re-based away
+check('a rejected input completion removes its prediction', () => {
+  const settled = settleInput(
+    [{ predictionId: 1 }], [{ id: 1, text: 'x' }],
+    { command: { revision: 2n } }, 2n);
+  assert.deepEqual(settled.pending, []);
+  assert.equal(project('', 0, settled.pending).text, '');
 });
 
-// --- Host envelope framing and the palette stale-report guard ---
-check('parseEnvelope splits settledId and tagged sections', () => {
-  // [u64 settledId=7][count=2][tag0 len3 'abc'][tag1 len2 '{}']
-  const bytes = [];
-  const push64 = (v) => { let b = BigInt(v); for (let i = 0; i < 8; i++) { bytes.push(Number(b & 0xffn)); b >>= 8n; } };
-  const push32 = (v) => { for (let i = 0; i < 4; i++) bytes.push((v >> (i * 8)) & 0xff); };
-  push64(7); bytes.push(2);
-  bytes.push(0); push32(3); bytes.push(97, 98, 99);      // tag 0 "abc"
-  bytes.push(1); push32(2); bytes.push(123, 125);        // tag 1 "{}"
-  const buf = new Uint8Array(bytes).buffer;
-  const { settledId, sections } = parseEnvelope(buf);
-  assert.equal(settledId, 7n);
-  assert.equal(sections.length, 2);
-  assert.equal(sections[0].tag, 0);
-  assert.equal(sections[0].length, 3);
-  assert.equal(sections[1].tag, 1);
-  const s1 = new TextDecoder().decode(new Uint8Array(sections[1].dv.buffer, sections[1].dv.byteOffset, sections[1].length));
-  assert.equal(s1, '{}');
+check('typed raw input and command requests round-trip through ProtocolValue', () => {
+  assert.deepEqual(decodeMessage(encodeClientInput({
+    code: 'KeyA', alt: true, shift: false, text: 'a',
+  }).buffer), {
+    kind: 7,
+    payload: {
+      stroke: { code: 'KeyA', control: false, alt: true, meta: false, shift: false },
+      committed_text: 'a',
+    },
+  });
+
+  check('browser protocol decoding rejects malformed and over-bound values', () => {
+    assert.throws(() => decodeMessage(
+      new Uint8Array([2, 9, 0]).buffer), /unsupported protocol frame/);
+    assert.throws(() => decodeMessage(
+      new Uint8Array([1, 1, 1, 2]).buffer), /malformed protocol bool/);
+    assert.throws(() => decodeMessage(
+      new Uint8Array([1, 1, 4, 4, 0, 0, 0, 65]).buffer), /truncated/);
+    assert.throws(() => decodeMessage(
+      new Uint8Array([1, 1, 6, 1, 0, 1, 0]).buffer), /collection length/);
+  });
+
+  check('browser ignores additive message kinds without weakening wire versions', () => {
+    const decoded = decodeMessage(new Uint8Array([1, 9, 0]).buffer);
+    assert.equal(browserInboundKind(decoded.kind), 'ignore');
+    assert.equal(browserInboundKind(1), 'snapshot');
+    assert.equal(browserInboundKind(8), 'input-result');
+  });
+
+  check('reconnect logic is generation-safe, resumes revision, and clears uncertainty', () => {
+    assert.equal(isCurrentGeneration(4, 3), false);
+    assert.equal(isCurrentGeneration(4, 4), true);
+    assert.equal(replayAttachFrame(false, 9n), 'SSG1 ATTACH -');
+    assert.equal(replayAttachFrame(true, 9n), 'SSG1 ATTACH 9');
+    assert.equal(deltaIsContiguous(9n, { base_revision: 9n }), true);
+    assert.equal(deltaIsContiguous(9n, { base_revision: 8n }), false);
+    assert.deepEqual(clearUncertainInputs(), { pending: [], inputQueue: [] });
+    assert.ok(reconnectDelay(20) < Infinity);
+    assert.equal(reconnectDelay(20), reconnectDelay(21));
+  });
+  assert.deepEqual(decodeMessage(
+    encodeCommandRequest('buffer.undo', 9n).buffer), {
+    kind: 0,
+    payload: { id: 'buffer.undo', base_revision: 9n, payload: null },
+  });
 });
 
 check('encodeStatusActionInvocation emits the exact StatusActionInvocation wire frame', () => {
@@ -219,9 +206,13 @@ check('clampPaletteSelection keeps the persisted selection inside local rows', (
   assert.equal(clampPaletteSelection(2, 0), 0);
 });
 
-check('encodePaletteSubmit sends the candidate id, not a selected index and query', () => {
-  assert.equal(encodePaletteSubmit('command.open'), 'PSUB:command.open');
-  assert.equal(encodePaletteSubmit(''), null);
+check('compound interaction commands carry published identities and revision', () => {
+  assert.deepEqual(decodeMessage(encodePickerSubmit('command.open', 5n).buffer).payload,
+    { id: 'picker.submit', base_revision: 5n,
+      payload: { candidate_id: 'command.open' } });
+  assert.deepEqual(decodeMessage(encodeTreeActivation('tree:src', 6n).buffer).payload,
+    { id: 'tree.activate_node', base_revision: 6n,
+      payload: { node_id: 'tree:src' } });
 });
 
 check('applyTreeDelta splices the retained tree and resyncs only when inexpressible', () => {
@@ -618,8 +609,7 @@ check('pickerEpochFromPalette treats absent as zero and rejects malformed presen
 
 // --- Footer prompt: semantic PromptView projection, delta, focus plan, ingress ---
 import {
-  promptViewFromSections, promptFocusPlan, promptFocusControlMessage,
-  PROMPT_CONTROL,
+  promptViewFromSections, promptFocusPlan, PROMPT_CONTROL,
 } from '../../apps/web/reconcile.mjs';
 
 // A decoded semantic PromptView section, using the encoder's snake_case names.
@@ -685,9 +675,9 @@ check('promptFocusPlan focuses only on open and active-input change, never per m
   assert.equal(promptFocusPlan(closed, null).restoreFocus, false);
 });
 
-check('promptFocusControlMessage carries the clicked input index to prompt.focus_control', () => {
-  assert.equal(promptFocusControlMessage(0), 'PFOC:0');
-  assert.equal(promptFocusControlMessage(2), 'PFOC:2');
+check('prompt focus uses a typed revision-checked compound command', () => {
+  assert.deepEqual(decodeMessage(encodePromptFocus(2, 7n).buffer).payload,
+    { id: 'prompt.focus_control', base_revision: 7n, payload: { index: 2n } });
 });
 
 // --- Draft-conflict notice: semantic NoticeView projection, delta, action ingress ---
@@ -733,10 +723,9 @@ check('applySessionDeltaSections raises, holds, and CLEARS the notice view', () 
 
 check('a notice action carries the plain command id dispatched through the command ingress', () => {
   const nv = noticeViewFromSections(noticeSection());
-  // The client dispatches each action as 'CMD:'+command; assert the wire string a
-  // click would send matches the already-registered draft commands.
-  assert.deepEqual(nv.actions.map((a) => 'CMD:' + a.command),
-    ['CMD:draft.diff', 'CMD:draft.discard', 'CMD:draft.dismiss']);
+  assert.deepEqual(nv.actions.map((a) =>
+    decodeMessage(encodeCommandRequest(a.command, 3n).buffer).payload.id),
+    ['draft.diff', 'draft.discard', 'draft.dismiss']);
 });
 
 function externalSection() {
@@ -768,19 +757,17 @@ check('externalModificationFromSections renders one row per file with the select
   assert.equal(bar.files[0].glyph, 'M');
   assert.equal(bar.files[1].glyph, 'D');
   assert.deepEqual(bar.files[0].actions.map((a) => a.label), ['Reload', 'Keep', 'Diff']);
-  assert.deepEqual(bar.files[1].actions.map((a) => a.token), ['reload', 'open_diff']);
+  assert.deepEqual(bar.files[1].actions.map((a) => a.action), [0, 2]);
 });
 
-check('a click on an external action sends EXMD with a tab and never splits the id on colon', () => {
+check('a click on an external action sends a typed validated invocation', () => {
   const bar = externalModificationFromSections(externalSection());
   const file = bar.files[0];
   const action = file.actions[0];
-  const frame = encodeExternalAction(action.token, file.id);
-  assert.equal(frame, 'EXMD:reload\texternal:src/a:b.cpp');
-  // The id is the entire remainder after the first TAB, colons intact.
-  const tab = frame.indexOf('\t');
-  assert.equal(frame.slice(0, tab), 'EXMD:reload');
-  assert.equal(frame.slice(tab + 1), 'external:src/a:b.cpp');
+  assert.deepEqual(
+    decodeMessage(encodeExternalAction(action.action, file.id, 11n).buffer).payload,
+    { id: 'external.invoke_action', base_revision: 11n,
+      payload: { file_id: 'external:src/a:b.cpp', action: 0n } });
 });
 
 check('the web suppresses document echo when external_focus_held is true, never comparing a focus ordinal', () => {

@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 196 commands.
+There are 199 commands.
 
 ## clipboard-register
 
@@ -67,6 +67,7 @@ There are 196 commands.
 | `external.reload` | Reload | none | lua |
 | `external.keep_buffer` | Keep Buffer | none | lua |
 | `external.open_diff` | Open Diff | none | lua |
+| `external.invoke_action` | Invoke External Change Action | external action | lua |
 | `external.select_next` | Select Next External Change | none | lua |
 | `external.select_previous` | Select Previous External Change | none | lua |
 | `external.select` | Select External Change | none | lua |
@@ -183,6 +184,7 @@ There are 196 commands.
 | `search.results_next` | Results Next | none | lua |
 | `search.results_previous` | Results Previous | none | lua |
 | `palette.execute` | Execute | palette selection | lua |
+| `picker.submit` | Submit Picker Candidate | picker candidate | lua |
 | `search.workspace` | Workspace | none | lua |
 | `goto.file` | Go to File | none | lua |
 | `goto.symbol` | Go to Symbol | none | lua |
@@ -308,6 +310,7 @@ There are 196 commands.
 | `tree.select_next` | Select Next | none | lua |
 | `tree.select_previous` | Select Previous | none | lua |
 | `tree.activate` | Open Selected | none | lua |
+| `tree.activate_node` | Open Node | tree node | lua |
 | `tree.invoke_node_command` | Invoke Node Command | none | lua |
 | `tree.select` | Select | tree node | lua |
 | `tree.scroll` | Scroll | scroll lines | lua |

@@ -184,6 +184,18 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
         panelProviderTreeBinding(runtime.interaction.truth().selectedProvider).id);
     if (id == "tree.select_next") { (void)runtime.tree.selectNext(); runtime.revealTreeSelection(context.viewId()); return success(); }
     if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); runtime.revealTreeSelection(context.viewId()); return success(); }
+    if (id == "tree.activate_node") {
+        auto const* arguments = payloadAs<TreeSelectArguments>(payload);
+        if (arguments == nullptr) {
+            return failure("tree.activate_node requires a node id payload");
+        }
+        if (!runtime.tree.select(arguments->nodeId)) {
+            return failure("tree node is not selectable");
+        }
+        runtime.revealTreeSelection(context.viewId());
+        (void)runtime.interaction.focusPanel();
+        return treeCommand(runtime, context, "tree.activate", {});
+    }
     if (id == "tree.activate") {
         auto treeView = runtime.tree.viewState();
         auto providerKind = treeView.providers.empty()
@@ -391,6 +403,16 @@ void registerTreeCommands(CommandCatalog& builder,
                                                "tree.activate", {});
                         });
                     }));
+    builder.add(spec("tree.activate_node", "Open Node")
+                    .handler<TreeSelectArguments>(
+                       [&runtime](CommandContext& context,
+                                  TreeSelectArguments const& arguments) {
+                           return runtime.runTransaction([&] {
+                               return treeCommand(
+                                   runtime, context, "tree.activate_node",
+                                   std::any{arguments});
+                           });
+                       }));
     builder.add(spec("tree.invoke_node_command", "Invoke Node Command")
                     .optionalInProcessHandler<TreeCommandInvocation>(
                         [&runtime](CommandContext& context,
@@ -481,6 +503,44 @@ void registerSearchPaletteCommands(CommandCatalog& builder,
                                                      "palette.execute",
                                                      std::any{arguments});
                             });
+                        }));
+
+    builder.add(spec("picker.submit", "Submit Picker Candidate")
+                    .handler<PickerSubmitArguments>(
+                        [&runtime](CommandContext& context,
+                                  PickerSubmitArguments const& arguments) {
+                           return runtime.runTransaction([&] {
+                               auto const palette = runtime.paletteView();
+                               auto const published = std::find_if(
+                                   palette.candidates.begin(),
+                                   palette.candidates.end(),
+                                   [&](auto const& candidate) {
+                                       return candidate.id ==
+                                              arguments.candidateId;
+                                   });
+                               if (published == palette.candidates.end()) {
+                                   return failure(
+                                       "candidate is not in the open picker");
+                               }
+                               if (palette.mode == SearchMode::Command) {
+                                   return searchCommand(
+                                       runtime, context, "palette.execute",
+                                       std::any{PaletteExecuteArguments{
+                                           arguments.candidateId}});
+                               }
+                               if (palette.mode == SearchMode::File) {
+                                   auto result = executePickerFileOpen(
+                                       runtime, context.principal(),
+                                       arguments.candidateId);
+                                   if (result.accepted) {
+                                       (void)runtime.interaction.apply(
+                                           CloseFinder{});
+                                   }
+                                   return result;
+                               }
+                               return failure(
+                                   "open picker has no submit action");
+                           });
                         }));
 
     // An absent query searches for the current one.

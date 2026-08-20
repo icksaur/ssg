@@ -2,6 +2,7 @@
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/EditCommands.h>
+#include <ssg/ExternalModificationFlow.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
@@ -46,7 +47,9 @@ std::unordered_map<std::type_index, std::string_view> const& argumentNames() {
         {typeid(WorkspaceReplaceArguments), "workspace replace"},
         {typeid(WorkspaceReplacePreview), "workspace apply"},
         {typeid(PaletteExecuteArguments), "palette selection"},
+        {typeid(PickerSubmitArguments), "picker candidate"},
         {typeid(TreeSelectArguments), "tree node"},
+        {typeid(ExternalActionInvocation), "external action"},
         {typeid(FindQueryArguments), "query"},
         {typeid(PromptValueArguments), "prompt value"},
         {typeid(PromptFocusArguments), "prompt focus"},

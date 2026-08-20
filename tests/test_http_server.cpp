@@ -279,8 +279,99 @@ TEST(externallyOwnedRouteSharesOneServerLifecycle) {
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.snapshot->client().clientId, ssg::ClientId{11});
 
+    ASSERT_TRUE(fixture.runtime
+                    ->applyGitDiffScan(
+                        {.revision = ssg::Revision{1},
+                         .baselineIdentity = "head:index",
+                         .files = {{.id = ssg::DiffFileId{"changed"},
+                                    .path = "changed.txt",
+                                    .baselineContent = "",
+                                    .workingContent = "changed\n"}}})
+                    .accepted());
+    route.publish();
+    auto published =
+        ssg::ProtocolCodec{}.decodeSessionDelta(reader.next().payload);
+    ASSERT_TRUE(published.accepted());
+    ASSERT_EQ(published.delta->revision(), fixture.runtime->revision());
+
     server.stop();
     ASSERT_FALSE(server.boundPort().has_value());
+}
+
+TEST(typedClientInputPublishesStateBeforeItsResult) {
+    Fixture fixture;
+    constexpr std::uint16_t port = 18786;
+    ssg::HttpEditorServer server{
+        *fixture.runtime,
+        *fixture.policy, {port, "/session", 8, 8, 250ms}};
+    server.start();
+    std::this_thread::sleep_for(20ms);
+    auto socket = connectWebsocket(port);
+    FrameReader reader{socket.socket};
+    attach(socket.socket);
+    auto initial = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        reader.next().payload);
+    ASSERT_TRUE(initial.accepted());
+
+    sendAll(socket.socket,
+            maskedFrame(
+                0x2, ssg::ProtocolCodec{}.encodeClientInput(
+                         {ssg::KeyStroke{}, "typed"})));
+    auto firstFrame = reader.next().payload;
+    auto delta =
+        ssg::ProtocolCodec{}.decodeSessionDelta(firstFrame);
+    ASSERT_TRUE(delta.accepted());
+    auto completion = ssg::ProtocolCodec{}.decodeClientInputResult(
+        reader.next().payload);
+    ASSERT_TRUE(completion.accepted());
+    ASSERT_EQ(completion.result->outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_TRUE(completion.result->command.has_value());
+    ASSERT_TRUE(completion.result->command->accepted());
+    ASSERT_EQ(completion.result->command->revision,
+              delta.delta->revision());
+    ASSERT_EQ(fixture.runtime->activeDocumentText(),
+              std::string{"typed"});
+    server.stop();
+}
+
+TEST(acceptedNoChangeCommandStillReceivesAResult) {
+    Fixture fixture;
+    auto handle = fixture.runtime->registerCommand(
+        ssg::CommandSpecBuilder{"test.observe"}
+            .owner("test")
+            .summary("Observe")
+            .observes()
+            .handler([](ssg::CommandContext&) {
+                return ssg::CommandHandlerResult::success();
+            }));
+    ASSERT_TRUE(handle.valid());
+    constexpr std::uint16_t port = 18787;
+    ssg::HttpEditorServer server{
+        *fixture.runtime,
+        *fixture.policy, {port, "/session", 8, 8, 250ms}};
+    server.start();
+    std::this_thread::sleep_for(20ms);
+    auto socket = connectWebsocket(port);
+    FrameReader reader{socket.socket};
+    attach(socket.socket);
+    auto initial = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        reader.next().payload);
+    ASSERT_TRUE(initial.accepted());
+    auto registry = ssg::CommandArgumentCodecRegistry{
+        fixture.runtime->commandCatalog()};
+    sendAll(socket.socket,
+            maskedFrame(
+                0x2, ssg::ProtocolCodec{}.encodeCommandRequest(
+                         {"test.observe", initial.snapshot->revision(), {}},
+                         registry)));
+    auto completion = ssg::ProtocolCodec{}.decodeCommandResult(
+        reader.next().payload);
+    ASSERT_TRUE(completion.accepted());
+    ASSERT_TRUE(completion.result->accepted());
+    ASSERT_EQ(completion.result->revision,
+              initial.snapshot->revision());
+    server.stop();
 }
 
 TEST(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess) {
@@ -330,6 +421,11 @@ TEST(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot) {
         ASSERT_TRUE(delta.accepted());
         ASSERT_EQ(delta.delta->baseRevision(), initialRevision);
         afterFirstInsert = delta.delta->revision();
+        auto accepted = ssg::ProtocolCodec{}.decodeCommandResult(
+            reader.next().payload);
+        ASSERT_TRUE(accepted.accepted());
+        ASSERT_TRUE(accepted.result->accepted());
+        ASSERT_EQ(accepted.result->revision, afterFirstInsert);
         sendAll(socket.socket, maskedFrame(0x2, command));
         auto rejected = ssg::ProtocolCodec{}.decodeCommandResult(reader.next().payload);
         ASSERT_TRUE(rejected.accepted());
@@ -351,6 +447,9 @@ TEST(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot) {
              ssg::TextInputArguments{"b"}}, registry);
         sendAll(socket.socket, maskedFrame(0x2, command));
         ASSERT_TRUE(ssg::ProtocolCodec{}.decodeSessionDelta(reader.next().payload).accepted());
+        ASSERT_TRUE(ssg::ProtocolCodec{}
+                        .decodeCommandResult(reader.next().payload)
+                        .result->accepted());
     }
     std::this_thread::sleep_for(20ms);
     {
@@ -425,6 +524,9 @@ TEST(statusAndDroppedContentUseAggregateCommands) {
                 ssg::ProtocolCodec{}
                     .decodeSessionSnapshot(update.payload)
                     .accepted());
+    ASSERT_TRUE(ssg::ProtocolCodec{}
+                    .decodeCommandResult(localReader.next().payload)
+                    .result->accepted());
     auto snapshot = local.runtime->snapshot(ssg::ClientId{11});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_TRUE(std::any_of(
@@ -465,6 +567,9 @@ TEST(replayLargerThanTheOutboundQueueFallsBackToSnapshot) {
                 ssg::ProtocolCodec{}.decodeSessionDelta(reader.next().payload);
             ASSERT_TRUE(delta.accepted());
             revision = delta.delta->revision();
+            ASSERT_TRUE(ssg::ProtocolCodec{}
+                            .decodeCommandResult(reader.next().payload)
+                            .result->accepted());
         }
     }
     std::this_thread::sleep_for(20ms);
@@ -581,7 +686,7 @@ TEST(attachOnlyBindsAWebsocketOriginPrincipal) {
 
 TEST(aBoundConnectionRejectsAnyFrameThatIsNotATypedCommand) {
     // The whole product travels one ordered channel; a bound connection accepts
-    // only typed binary command frames. A text frame, or a binary frame that
+    // only supported typed binary frames. A text frame, or a binary frame that
     // decodes as no typed message, opens no second channel: it closes.
     {
         Fixture fixture{/*remote=*/true};
@@ -628,6 +733,8 @@ int main() {
     std::cout << "=== HTTP editor server ===\n";
     RUN(externallyOwnedRouteSharesOneServerLifecycle);
     RUN(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess);
+    RUN(typedClientInputPublishesStateBeforeItsResult);
+    RUN(acceptedNoChangeCommandStillReceivesAResult);
     RUN(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot);
     RUN(statusAndDroppedContentUseAggregateCommands);
     RUN(replayLargerThanTheOutboundQueueFallsBackToSnapshot);

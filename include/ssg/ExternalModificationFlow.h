@@ -21,6 +21,14 @@ enum class ExternalAction : std::uint8_t {
     OpenDiff,
 };
 
+struct ExternalActionInvocation {
+    DiffFileId fileId;
+    ExternalAction action;
+
+    friend bool operator==(const ExternalActionInvocation&,
+                           const ExternalActionInvocation&) = default;
+};
+
 enum class ExternalDocumentStatus : std::uint8_t {
     ExternallyModified,
     ExternallyRemoved,

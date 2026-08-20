@@ -108,6 +108,8 @@ public:
     HttpEditorRoute(HttpEditorRoute const&) = delete;
     HttpEditorRoute& operator=(HttpEditorRoute const&) = delete;
 
+    void publish();
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

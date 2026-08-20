@@ -97,6 +97,13 @@ struct PaletteExecuteArguments {
     friend bool operator==(const PaletteExecuteArguments&, const PaletteExecuteArguments&) = default;
 };
 
+struct PickerSubmitArguments {
+    std::string candidateId;
+
+    friend bool operator==(const PickerSubmitArguments&,
+                           const PickerSubmitArguments&) = default;
+};
+
 struct PaletteReport {
     std::string query;
     std::string ghost;

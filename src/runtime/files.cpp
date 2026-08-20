@@ -402,10 +402,16 @@ CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId docume
 // runtime-resolved id and so stays in-process (that id means nothing to a remote
 // client); the payload-less commands are the keyboard route, reachable in the
 // external focus context.
+CommandHandlerResult executePickerFileOpen(
+    EditorRuntime::Impl& runtime, InvocationPrincipal const& principal,
+    std::string const& path) {
+    return bindFile(runtime, principal, FileCommand::Open, std::any{path});
+}
+
 void registerExternalModificationCommands(CommandCatalog& builder,
                                           EditorRuntime::Impl& runtime) {
-    auto act = [&runtime](ExternalAction action) -> CommandHandlerResult {
-        return runtime.runTransaction([&]() -> CommandHandlerResult {
+    auto applyAction = [&runtime](
+                           ExternalAction action) -> CommandHandlerResult {
             const auto view = runtime.external.viewState();
             if (!view.selected) {
                 return failure("no external modification is selected");
@@ -466,7 +472,6 @@ void registerExternalModificationCommands(CommandCatalog& builder,
             }
             return runtime.openOrFocusLiveDiffTab(
                 diffFile->get(), NavigationClass::Programmatic, std::nullopt);
-        });
     };
     auto spec = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
@@ -478,13 +483,31 @@ void registerExternalModificationCommands(CommandCatalog& builder,
     auto action = [&](std::string id, std::string summary,
                       ExternalAction which) {
         builder.add(spec(std::move(id), std::move(summary))
-                        .handler([act, which](CommandContext&) {
-                            return act(which);
+                        .handler([&runtime, applyAction, which](CommandContext&) {
+                            return runtime.runTransaction(
+                                [&] { return applyAction(which); });
                         }));
     };
     action("external.reload", "Reload", ExternalAction::Reload);
     action("external.keep_buffer", "Keep Buffer", ExternalAction::KeepBuffer);
     action("external.open_diff", "Open Diff", ExternalAction::OpenDiff);
+
+    builder.add(
+        spec("external.invoke_action", "Invoke External Change Action")
+            .handler<ExternalActionInvocation>(
+                [&runtime, applyAction](
+                    CommandContext&,
+                    ExternalActionInvocation const& invocation) {
+                    return runtime.runTransaction([&] {
+                        if (!runtime.external.hasFile(invocation.fileId)) {
+                            return failure(
+                                "external change is unavailable");
+                        }
+                        (void)runtime.external.selectFile(
+                            invocation.fileId);
+                        return applyAction(invocation.action);
+                    });
+                }));
 
     builder.add(spec("external.select_next", "Select Next External Change")
                     .handler([&runtime](CommandContext&) {

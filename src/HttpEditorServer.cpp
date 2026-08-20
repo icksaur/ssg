@@ -177,12 +177,26 @@ struct HttpEditorRoute::Impl {
         if (command.accepted()) {
             auto const result = runtime.dispatch(
                 *clientId, *command.command);
-            if (!result.accepted()) {
-                enqueue(handle, connection,
-                        {ProtocolCodec{}.encodeCommandResult(result), true});
-                return;
+            if (result.accepted()) {
+                (void)runtime.pump();
+                publishSession(*sessionId);
             }
-            publishSession(*sessionId);
+            enqueue(handle, connection,
+                    {ProtocolCodec{}.encodeCommandResult(result), true});
+            return;
+        }
+
+        auto input = ProtocolCodec{}.decodeClientInput(
+            message.data, config.protocolLimits);
+        if (input.accepted()) {
+            auto const result = runtime.input(*clientId, *input.input);
+            if (result.command && result.command->accepted()) {
+                (void)runtime.pump();
+                publishSession(*sessionId);
+            }
+            enqueue(
+                handle, connection,
+                {ProtocolCodec{}.encodeClientInputResult(result), true});
             return;
         }
 
@@ -199,6 +213,7 @@ struct HttpEditorRoute::Impl {
                             {ProtocolCodec{}.encodeCommandResult(result), true});
                     return;
                 }
+                (void)runtime.pump();
                 publishSession(*sessionId);
             } catch (...) {
                 close(handle, connection);
@@ -291,7 +306,6 @@ struct HttpEditorRoute::Impl {
 
     void publishSession(SessionId const& sessionId) {
         std::vector<Http::WebSocketHandle> closeAfterPublish;
-        (void)runtime.pump();
         std::unique_lock publishLock{publishMutex};
         std::vector<std::pair<Http::WebSocketHandle,
                               std::shared_ptr<Connection>>>
@@ -304,6 +318,7 @@ struct HttpEditorRoute::Impl {
                     connection->binding->sessionId == sessionId) {
                     targets.emplace_back(handle, connection);
                 }
+
             }
         }
         for (auto const& [handle, connection] : targets) {
@@ -346,6 +361,25 @@ struct HttpEditorRoute::Impl {
         publishLock.unlock();
         for (auto handle : closeAfterPublish) {
             server.closeConnection(handle);
+        }
+    }
+
+    void publish() {
+        std::vector<SessionId> sessions;
+        {
+            std::lock_guard lock{connectionsMutex};
+            for (auto const& [_, connection] : connections) {
+                std::lock_guard connectionLock{connection->mutex};
+                if (!connection->binding || connection->stopping) continue;
+                auto const& id = connection->binding->sessionId;
+                if (std::find(sessions.begin(), sessions.end(), id) ==
+                    sessions.end()) {
+                    sessions.push_back(id);
+                }
+            }
+        }
+        for (auto const& session : sessions) {
+            publishSession(session);
         }
     }
 
@@ -490,6 +524,8 @@ HttpEditorRoute::HttpEditorRoute(
                                    std::move(config))} {}
 
 HttpEditorRoute::~HttpEditorRoute() = default;
+
+void HttpEditorRoute::publish() { impl_->publish(); }
 
 struct HttpEditorServer::Impl {
     Impl(EditorRuntime& runtime,

@@ -1006,8 +1006,12 @@ ProtocolValue toValue(TextInputArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TextInputArguments>& out);
 ProtocolValue toValue(PaletteExecuteArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PaletteExecuteArguments>& out);
+ProtocolValue toValue(PickerSubmitArguments const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<PickerSubmitArguments>& out);
 ProtocolValue toValue(TreeSelectArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeSelectArguments>& out);
+ProtocolValue toValue(ExternalActionInvocation const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalActionInvocation>& out);
 ProtocolValue toValue(FindQueryArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<FindQueryArguments>& out);
 ProtocolValue toValue(PromptValueArguments const& value);
@@ -4830,6 +4834,21 @@ bool decodePresent(ProtocolValue const& value, std::optional<PaletteExecuteArgum
     return true;
 }
 
+ProtocolValue toValue(PickerSubmitArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("candidate_id", toValue(value.candidateId));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<PickerSubmitArguments>& out) {
+    if (!value.asObject()) return false;
+    auto candidateId =
+        requireField<std::string>(value.field("candidate_id"));
+    if (!candidateId) return false;
+    out.emplace(PickerSubmitArguments{*candidateId});
+    return true;
+}
+
 ProtocolValue toValue(TreeSelectArguments const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("node_id", toValue(value.nodeId));
@@ -4841,6 +4860,28 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeSelectArguments
     auto nodeId = requireField<TreeNodeId>(value.field("node_id"));
     if (!nodeId) return false;
     out.emplace(TreeSelectArguments{*nodeId});
+    return true;
+}
+
+ProtocolValue toValue(ExternalActionInvocation const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("file_id", toValue(value.fileId));
+    fields.emplace_back(
+        "action", ProtocolValue::makeUint(
+                      static_cast<std::uint8_t>(value.action)));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<ExternalActionInvocation>& out) {
+    if (!value.asObject()) return false;
+    auto fileId = requireField<DiffFileId>(value.field("file_id"));
+    auto action = requireField<std::uint8_t>(value.field("action"));
+    if (!fileId || !action ||
+        *action > static_cast<std::uint8_t>(ExternalAction::OpenDiff)) {
+        return false;
+    }
+    out.emplace(ExternalActionInvocation{
+        *fileId, static_cast<ExternalAction>(*action)});
     return true;
 }
 
@@ -5213,7 +5254,9 @@ argumentCodecsByType() {
         table.emplace(typeid(WorkspaceReplaceArguments), makeTypedCodec<WorkspaceReplaceArguments>());
         table.emplace(typeid(WorkspaceReplacePreview), makeWorkspaceApplyCodec());
         table.emplace(typeid(PaletteExecuteArguments), makeTypedCodec<PaletteExecuteArguments>());
+        table.emplace(typeid(PickerSubmitArguments), makeTypedCodec<PickerSubmitArguments>());
         table.emplace(typeid(TreeSelectArguments), makeTypedCodec<TreeSelectArguments>());
+        table.emplace(typeid(ExternalActionInvocation), makeTypedCodec<ExternalActionInvocation>());
         table.emplace(typeid(FindQueryArguments), makeTypedCodec<FindQueryArguments>());
         table.emplace(typeid(PromptValueArguments), makeTypedCodec<PromptValueArguments>());
         table.emplace(typeid(PromptFocusArguments), makeTypedCodec<PromptFocusArguments>());
@@ -5331,7 +5374,9 @@ DecodeCommandRequestResult ProtocolCodec::decodeCommandRequest(
             {}};
 }
 
-std::string ProtocolCodec::encodeCommandResult(CommandResult const& result) const {
+namespace {
+
+ProtocolValue commandResultValue(CommandResult const& result) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back(
         "error", ProtocolValue::makeUint(
@@ -5347,21 +5392,13 @@ std::string ProtocolCodec::encodeCommandResult(CommandResult const& result) cons
     fields.emplace_back(
         "geometryChanged",
         ProtocolValue::makeUint(result.effects.geometryChanged ? 1u : 0u));
-    return encodeMessage(ProtocolMessageKind::CommandResult,
-                         ProtocolValue::makeObject(std::move(fields)));
+    return ProtocolValue::makeObject(std::move(fields));
 }
 
-DecodeCommandResultResult ProtocolCodec::decodeCommandResult(std::string_view bytes,
-                                               ProtocolLimits limits) const {
-    auto decoded =
-        decodeMessage(bytes, ProtocolMessageKind::CommandResult, limits);
-    if (decoded.error != ProtocolError::None) {
-        return {decoded.error, std::nullopt, decoded.message};
-    }
-    auto const& payload = *decoded.payload;
+std::optional<CommandResult> commandResultFromValue(
+    ProtocolValue const& payload) {
     if (!payload.asObject()) {
-        return {ProtocolError::MalformedMessage, std::nullopt,
-               "command result payload is not an object"};
+        return std::nullopt;
     }
     auto error = requireField<std::uint8_t>(payload.field("error"));
     auto revision = requireField<Revision>(payload.field("revision"));
@@ -5369,8 +5406,7 @@ DecodeCommandResultResult ProtocolCodec::decodeCommandResult(std::string_view by
     if (!error || *error > static_cast<std::uint8_t>(
                               CommandError::RevisionExhausted) ||
         !revision || !message) {
-        return {ProtocolError::MalformedMessage, std::nullopt,
-               "command result payload is malformed"};
+        return std::nullopt;
     }
     // Additive effects fields: absent on an old peer, so default to false; but a
     // PRESENT field must be a valid boolean 0/1 -- a malformed or out-of-range
@@ -5380,18 +5416,149 @@ DecodeCommandResultResult ProtocolCodec::decodeCommandResult(std::string_view by
     if (auto const* routingField = payload.field("routingChanged")) {
         auto routing = requireField<std::uint8_t>(routingField);
         if (!routing || *routing > 1) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "command result routingChanged field is malformed"};
+            return std::nullopt;
         }
         result.effects.routingChanged = *routing != 0;
     }
     if (auto const* geometryField = payload.field("geometryChanged")) {
         auto geometry = requireField<std::uint8_t>(geometryField);
         if (!geometry || *geometry > 1) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "command result geometryChanged field is malformed"};
+            return std::nullopt;
         }
         result.effects.geometryChanged = *geometry != 0;
+    }
+    return result;
+}
+
+}  // namespace
+
+std::string ProtocolCodec::encodeCommandResult(CommandResult const& result) const {
+    return encodeMessage(ProtocolMessageKind::CommandResult,
+                         commandResultValue(result));
+}
+
+DecodeCommandResultResult ProtocolCodec::decodeCommandResult(
+    std::string_view bytes, ProtocolLimits limits) const {
+    auto decoded =
+        decodeMessage(bytes, ProtocolMessageKind::CommandResult, limits);
+    if (decoded.error != ProtocolError::None) {
+        return {decoded.error, std::nullopt, decoded.message};
+    }
+    auto result = commandResultFromValue(*decoded.payload);
+    if (!result) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "command result payload is malformed"};
+    }
+    return {ProtocolError::None, std::move(result), {}};
+}
+
+std::string ProtocolCodec::encodeClientInput(
+    ClientKeyInput const& input) const {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back(
+        "stroke", input.stroke.code == KeyCode::None
+                      ? ProtocolValue::makeNull()
+                      : toValue(input.stroke));
+    fields.emplace_back("committed_text", toValue(input.committedText));
+    return encodeMessage(ProtocolMessageKind::ClientInput,
+                         ProtocolValue::makeObject(std::move(fields)));
+}
+
+DecodeClientInputResult ProtocolCodec::decodeClientInput(
+    std::string_view bytes, ProtocolLimits limits) const {
+    auto decoded =
+        decodeMessage(bytes, ProtocolMessageKind::ClientInput, limits);
+    if (decoded.error != ProtocolError::None) {
+        return {decoded.error, std::nullopt, decoded.message};
+    }
+    auto const& payload = *decoded.payload;
+    auto const* strokeField = payload.field("stroke");
+    auto text = requireField<std::string>(payload.field("committed_text"));
+    if (!payload.asObject() || strokeField == nullptr || !text) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "client input payload is malformed"};
+    }
+    KeyStroke stroke;
+    if (strokeField->kind() != ProtocolValue::Kind::NullValue) {
+        auto decodedStroke = requireField<KeyStroke>(strokeField);
+        if (!decodedStroke) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client input stroke is malformed"};
+        }
+        stroke = *decodedStroke;
+    }
+    return {ProtocolError::None,
+            ClientKeyInput{stroke, std::move(*text)}, {}};
+}
+
+std::string ProtocolCodec::encodeClientInputResult(
+    ClientInputResult const& result) const {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back(
+        "outcome", ProtocolValue::makeUint(
+                       static_cast<std::uint8_t>(result.outcome)));
+    if (result.clientOwned) {
+        std::vector<ProtocolValue::Field> owned;
+        owned.emplace_back(
+            "kind", ProtocolValue::makeUint(
+                        static_cast<std::uint8_t>(result.clientOwned->kind)));
+        owned.emplace_back("text", toValue(result.clientOwned->text));
+        fields.emplace_back("client_owned",
+                            ProtocolValue::makeObject(std::move(owned)));
+    } else {
+        fields.emplace_back("client_owned", ProtocolValue::makeNull());
+    }
+    fields.emplace_back(
+        "command", result.command ? commandResultValue(*result.command)
+                                   : ProtocolValue::makeNull());
+    return encodeMessage(ProtocolMessageKind::ClientInputResult,
+                         ProtocolValue::makeObject(std::move(fields)));
+}
+
+DecodeClientInputResultResult ProtocolCodec::decodeClientInputResult(
+    std::string_view bytes, ProtocolLimits limits) const {
+    auto decoded = decodeMessage(
+        bytes, ProtocolMessageKind::ClientInputResult, limits);
+    if (decoded.error != ProtocolError::None) {
+        return {decoded.error, std::nullopt, decoded.message};
+    }
+    auto const& payload = *decoded.payload;
+    auto outcome = requireField<std::uint8_t>(payload.field("outcome"));
+    if (!payload.asObject() || !outcome ||
+        *outcome > static_cast<std::uint8_t>(ClientInputOutcome::Rejected)) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "client input result payload is malformed"};
+    }
+    ClientInputResult result{static_cast<ClientInputOutcome>(*outcome),
+                             std::nullopt, std::nullopt};
+    auto const* ownedField = payload.field("client_owned");
+    if (ownedField == nullptr) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "client input result is missing client_owned"};
+    }
+    if (ownedField->kind() != ProtocolValue::Kind::NullValue) {
+        auto kind = requireField<std::uint8_t>(ownedField->field("kind"));
+        auto text = requireField<std::string>(ownedField->field("text"));
+        if (!ownedField->asObject() || !kind || !text ||
+            *kind > static_cast<std::uint8_t>(
+                        ClientOwnedInputKind::Submit)) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client input result client_owned is malformed"};
+        }
+        result.clientOwned = ClientOwnedInput{
+            static_cast<ClientOwnedInputKind>(*kind), std::move(*text)};
+    }
+    auto const* commandField = payload.field("command");
+    if (commandField == nullptr) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "client input result is missing command"};
+    }
+    if (commandField->kind() != ProtocolValue::Kind::NullValue) {
+        result.command = commandResultFromValue(*commandField);
+        if (!result.command) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client input result command is malformed"};
+        }
     }
     return {ProtocolError::None, std::move(result), {}};
 }

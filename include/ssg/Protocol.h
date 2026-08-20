@@ -5,6 +5,7 @@
 #include <ssg/snapshot.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/ClipboardRegister.h>
+#include <ssg/ClientInput.h>
 
 #include <any>
 #include <typeindex>
@@ -175,6 +176,8 @@ enum class ProtocolMessageKind : std::uint8_t {
     // what a system clipboard did, and a client had nothing useful to report.
     StatusActionInvocation = 5,
     CommandResult = 6,
+    ClientInput = 7,
+    ClientInputResult = 8,
 };
 
 struct DecodeCommandRequestResult {
@@ -190,6 +193,26 @@ struct DecodeCommandRequestResult {
 struct DecodeCommandResultResult {
     ProtocolError error;
     std::optional<CommandResult> result;
+    std::string message;
+
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == ProtocolError::None;
+    }
+};
+
+struct DecodeClientInputResult {
+    ProtocolError error;
+    std::optional<ClientKeyInput> input;
+    std::string message;
+
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == ProtocolError::None;
+    }
+};
+
+struct DecodeClientInputResultResult {
+    ProtocolError error;
+    std::optional<ClientInputResult> result;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
@@ -238,6 +261,14 @@ public:
     [[nodiscard]] std::string encodeCommandResult(
         CommandResult const& result) const;
     [[nodiscard]] DecodeCommandResultResult decodeCommandResult(
+        std::string_view bytes, ProtocolLimits limits = {}) const;
+    [[nodiscard]] std::string encodeClientInput(
+        ClientKeyInput const& input) const;
+    [[nodiscard]] DecodeClientInputResult decodeClientInput(
+        std::string_view bytes, ProtocolLimits limits = {}) const;
+    [[nodiscard]] std::string encodeClientInputResult(
+        ClientInputResult const& result) const;
+    [[nodiscard]] DecodeClientInputResultResult decodeClientInputResult(
         std::string_view bytes, ProtocolLimits limits = {}) const;
     [[nodiscard]] std::string encodeSessionSnapshot(
         SessionSnapshot const& snapshot) const;

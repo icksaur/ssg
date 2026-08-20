@@ -127,6 +127,9 @@ void bindRuntimePresentation(CommandCatalog& catalog, EditorRuntime::Impl& runti
 void bindRuntimeNavigation(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
 void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
 void bindRuntimeHelp(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
+[[nodiscard]] CommandHandlerResult executePickerFileOpen(
+    EditorRuntime::Impl& runtime, InvocationPrincipal const& principal,
+    std::string const& path);
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
     EditorRuntime::Impl& runtime, ViewId viewId, Revision revision,
     FindReplaceCommand command, std::any const& payload);

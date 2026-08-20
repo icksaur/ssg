@@ -261,6 +261,43 @@ TEST(commandRequestRoundTripsWithPaletteExecuteArguments) {
               std::any_cast<ssg::PaletteExecuteArguments>(command.payload));
 }
 
+TEST(commandRequestRoundTripsCompoundBrowserActions) {
+    auto const registry =
+        ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
+    {
+        ssg::ClientCommand const command{
+            "picker.submit", ssg::Revision{4},
+            ssg::PickerSubmitArguments{"src/main.cpp"}};
+        auto decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
+            ssg::ProtocolCodec{}.encodeCommandRequest(command, registry),
+            registry);
+        ASSERT_TRUE(decoded.accepted());
+        auto const* arguments =
+            std::any_cast<ssg::PickerSubmitArguments>(
+                &decoded.command->payload);
+        ASSERT_TRUE(arguments != nullptr);
+        ASSERT_EQ(arguments->candidateId, std::string{"src/main.cpp"});
+    }
+    {
+        ssg::ClientCommand const command{
+            "external.invoke_action", ssg::Revision{5},
+            ssg::ExternalActionInvocation{
+                ssg::DiffFileId{"external:file"},
+                ssg::ExternalAction::KeepBuffer}};
+        auto decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
+            ssg::ProtocolCodec{}.encodeCommandRequest(command, registry),
+            registry);
+        ASSERT_TRUE(decoded.accepted());
+        auto const* arguments =
+            std::any_cast<ssg::ExternalActionInvocation>(
+                &decoded.command->payload);
+        ASSERT_TRUE(arguments != nullptr);
+        ASSERT_EQ(arguments->fileId,
+                  ssg::DiffFileId{"external:file"});
+        ASSERT_EQ(arguments->action, ssg::ExternalAction::KeepBuffer);
+    }
+}
+
 TEST(commandRequestRoundTripsWithFindQueryArguments) {
     auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{
@@ -1313,6 +1350,51 @@ TEST(commandResultRoundTripsThroughTheWire) {
     ASSERT_TRUE(back.result->effects.geometryChanged);
 }
 
+TEST(clientInputAndResultRoundTripThroughTheWire) {
+    ssg::KeyStroke stroke;
+    stroke.code = ssg::KeyCode::KeyA;
+    stroke.control = true;
+    stroke.shift = true;
+    ssg::ClientKeyInput const input{stroke, "alpha"};
+    auto const decodedInput = ssg::ProtocolCodec{}.decodeClientInput(
+        ssg::ProtocolCodec{}.encodeClientInput(input));
+    ASSERT_TRUE(decodedInput.accepted());
+    ASSERT_TRUE(decodedInput.input.has_value());
+    ASSERT_EQ(decodedInput.input->stroke, input.stroke);
+    ASSERT_EQ(decodedInput.input->committedText, input.committedText);
+
+    ssg::CommandResult command{ssg::CommandError::None,
+                               ssg::Revision{9}, ""};
+    command.effects.routingChanged = true;
+    ssg::ClientInputResult const result{
+        ssg::ClientInputOutcome::Dispatched, std::nullopt, command};
+    auto const decodedResult =
+        ssg::ProtocolCodec{}.decodeClientInputResult(
+            ssg::ProtocolCodec{}.encodeClientInputResult(result));
+    ASSERT_TRUE(decodedResult.accepted());
+    ASSERT_TRUE(decodedResult.result.has_value());
+    ASSERT_EQ(decodedResult.result->outcome, result.outcome);
+    ASSERT_FALSE(decodedResult.result->clientOwned.has_value());
+    ASSERT_TRUE(decodedResult.result->command.has_value());
+    ASSERT_EQ(decodedResult.result->command->revision, command.revision);
+    ASSERT_TRUE(
+        decodedResult.result->command->effects.routingChanged);
+
+    ssg::ClientInputResult const owned{
+        ssg::ClientInputOutcome::ClientOwned,
+        ssg::ClientOwnedInput{ssg::ClientOwnedInputKind::AppendText, "q"},
+        std::nullopt};
+    auto const decodedOwned =
+        ssg::ProtocolCodec{}.decodeClientInputResult(
+            ssg::ProtocolCodec{}.encodeClientInputResult(owned));
+    ASSERT_TRUE(decodedOwned.accepted());
+    ASSERT_TRUE(decodedOwned.result->clientOwned.has_value());
+    ASSERT_EQ(decodedOwned.result->clientOwned->kind,
+              ssg::ClientOwnedInputKind::AppendText);
+    ASSERT_EQ(decodedOwned.result->clientOwned->text, std::string{"q"});
+    ASSERT_FALSE(decodedOwned.result->command.has_value());
+}
+
 
 TEST(statusActionInvocationRoundTripsThroughTheWire) {
     ssg::StatusActionInvocation const invocation{ssg::StatusId{9}, "dismiss", 3};
@@ -1410,10 +1492,13 @@ TEST(protocolMessageKindOrdinalsAreNeverRenumbered) {
     ASSERT_EQ(static_cast<int>(Kind::SessionDelta), 2);
     ASSERT_EQ(static_cast<int>(Kind::StatusActionInvocation), 5);
     ASSERT_EQ(static_cast<int>(Kind::CommandResult), 6);
+    ASSERT_EQ(static_cast<int>(Kind::ClientInput), 7);
+    ASSERT_EQ(static_cast<int>(Kind::ClientInputResult), 8);
 
     for (auto const kind : {Kind::CommandRequest, Kind::SessionSnapshot,
                             Kind::SessionDelta, Kind::StatusActionInvocation,
-                            Kind::CommandResult}) {
+                            Kind::CommandResult, Kind::ClientInput,
+                            Kind::ClientInputResult}) {
         ASSERT_NE(static_cast<int>(kind), 3);
         ASSERT_NE(static_cast<int>(kind), 4);
     }
@@ -1524,6 +1609,18 @@ TEST(regenerateCanonicalFixtures) {
         ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
     writeFixtureHex("session_delta.hex",
                       ssg::ProtocolCodec{}.encodeSessionDelta(ssg::SessionSnapshotCodec{}.deriveDelta(before, after)));
+    ssg::KeyStroke stroke;
+    stroke.code = ssg::KeyCode::KeyA;
+    stroke.control = true;
+    writeFixtureHex(
+        "client_input.hex",
+        ssg::ProtocolCodec{}.encodeClientInput({stroke, "hello"}));
+    writeFixtureHex(
+        "client_input_result.hex",
+        ssg::ProtocolCodec{}.encodeClientInputResult(
+            {ssg::ClientInputOutcome::Dispatched, std::nullopt,
+             ssg::CommandResult{ssg::CommandError::None,
+                                ssg::Revision{5}, ""}}));
 }
 
 TEST(canonicalFixturesDecodeToTheExpectedValues) {
@@ -1556,6 +1653,23 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
         ASSERT_EQ(decoded.result->revision, ssg::Revision{17});
         ASSERT_EQ(decoded.result->message,
                   std::string{"base revision is stale"});
+    }
+    {
+        auto decoded = ssg::ProtocolCodec{}.decodeClientInput(
+            readFixtureBytes("client_input.hex"));
+        ASSERT_TRUE(decoded.accepted());
+        ASSERT_EQ(decoded.input->stroke.code, ssg::KeyCode::KeyA);
+        ASSERT_TRUE(decoded.input->stroke.control);
+        ASSERT_EQ(decoded.input->committedText, std::string{"hello"});
+    }
+    {
+        auto decoded = ssg::ProtocolCodec{}.decodeClientInputResult(
+            readFixtureBytes("client_input_result.hex"));
+        ASSERT_TRUE(decoded.accepted());
+        ASSERT_EQ(decoded.result->outcome,
+                  ssg::ClientInputOutcome::Dispatched);
+        ASSERT_TRUE(decoded.result->command.has_value());
+        ASSERT_EQ(decoded.result->command->revision, ssg::Revision{5});
     }
     {
         auto decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
@@ -1732,6 +1846,7 @@ int main() {
     RUN(everySettingKeyRoundTripsThroughTheCommandCodec);
     RUN(commandRequestRoundTripsWithNoPayload);
     RUN(commandRequestRoundTripsWithPaletteExecuteArguments);
+    RUN(commandRequestRoundTripsCompoundBrowserActions);
     RUN(commandRequestRoundTripsWithFindQueryArguments);
     RUN(commandRequestRoundTripsWithPromptValueArguments);
     RUN(commandRequestRoundTripsWithTreeScrollToFraction);
@@ -1772,6 +1887,7 @@ int main() {
     RUN(twoClientCapabilityAndViewportIsolationSurvivesTheWire);
     RUN(sessionSnapshotRoundTripsTreeScrollFields);
     RUN(commandResultRoundTripsThroughTheWire);
+    RUN(clientInputAndResultRoundTripThroughTheWire);
     RUN(statusActionInvocationRoundTripsThroughTheWire);
     RUN(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus);
     RUN(retiredWireKindsAreNeverReclaimed);

@@ -1270,12 +1270,18 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     ASSERT_TRUE(pickerIsOpen());
     auto missing = runtime.dispatch(
         ssg::ClientId{1},
-        {"file.open", runtime.revision(), std::string{"gone.txt"}});
+        {"picker.submit", runtime.revision(),
+         ssg::PickerSubmitArguments{"gone.txt"}});
     ASSERT_FALSE(missing.accepted());
     ASSERT_TRUE(pickerIsOpen());
 
     // A successful open dismisses it.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"present.txt"}}).accepted());
+    ASSERT_TRUE(
+        runtime
+            .dispatch(ssg::ClientId{1},
+                      {"picker.submit", runtime.revision(),
+                       ssg::PickerSubmitArguments{"present.txt"}})
+            .accepted());
     ASSERT_FALSE(pickerIsOpen());
     std::filesystem::remove_all(root);
 }
@@ -1528,8 +1534,10 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
 
     // The file click pair [tree.select, tree.activate] ends on the editor (the
     // file opens, so tree.activate's focus_editor wins over tree.select's panel).
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*fileId}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(
+        ssg::ClientId{1},
+        {"tree.activate_node", runtime.revision(),
+         ssg::TreeSelectArguments{*fileId}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // From editor focus, tree.select alone moves keyboard focus to the panel.

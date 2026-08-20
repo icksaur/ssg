@@ -150,48 +150,6 @@ TEST(aClickOnAnExternalActionRoutesThroughPointerTargetsToSelectThenAct) {
 }
 
 
-TEST(exmdParsesActionAndIdWithoutSplittingTheIdOnColon) {
-    // The id is opaque after the first TAB: "external:"+path, colons and all.
-    auto const frame = ssg::app::parse_external_pointer_frame(
-        "EXMD:keep_buffer\texternal:src/a:b:c.cpp");
-    ASSERT_TRUE(frame.has_value());
-    ASSERT_TRUE(frame->action == ssg::ExternalAction::KeepBuffer);
-    ASSERT_EQ(frame->command, std::string{"external.keep_buffer"});
-    ASSERT_EQ(frame->id.value(), std::string{"external:src/a:b:c.cpp"});
-
-    // Malformed frames yield nothing: no TAB, empty id, unknown action token.
-    ASSERT_TRUE(!ssg::app::parse_external_pointer_frame("EXMD:reload").has_value());
-    ASSERT_TRUE(!ssg::app::parse_external_pointer_frame("EXMD:reload\t").has_value());
-    ASSERT_TRUE(!ssg::app::parse_external_pointer_frame("EXMD:nope\texternal:x")
-                     .has_value());
-    ASSERT_TRUE(!ssg::app::parse_external_pointer_frame("SNAP").has_value());
-}
-
-TEST(exmdOnlyDispatchesForAPublishedIdAndOfferedAction) {
-    ssg::ExternalDocumentView file{
-        ssg::DiffFileId{"external:src/a:b.cpp"}, {},
-        ssg::ExternalDocumentStatus::ExternallyModified, {},
-        {ssg::ExternalAction::Reload, ssg::ExternalAction::OpenDiff}};
-    std::vector<ssg::ExternalDocumentView> files{file};
-
-    auto const reload = ssg::app::parse_external_pointer_frame(
-        "EXMD:reload\texternal:src/a:b.cpp");
-    ASSERT_TRUE(reload.has_value());
-    ASSERT_TRUE(ssg::app::external_pointer_frame_is_offered(*reload, files));
-
-    // An action the file does not offer is a no-op.
-    auto const keep = ssg::app::parse_external_pointer_frame(
-        "EXMD:keep_buffer\texternal:src/a:b.cpp");
-    ASSERT_TRUE(keep.has_value());
-    ASSERT_TRUE(!ssg::app::external_pointer_frame_is_offered(*keep, files));
-
-    // An unpublished id is a no-op.
-    auto const unknown = ssg::app::parse_external_pointer_frame(
-        "EXMD:reload\texternal:src/other.cpp");
-    ASSERT_TRUE(unknown.has_value());
-    ASSERT_TRUE(!ssg::app::external_pointer_frame_is_offered(*unknown, files));
-}
-
 
 TEST(encodeAnsiFrameEmitsOrthogonalTintBackgrounds) {
     ssg::CellGrid screen;
@@ -3349,8 +3307,6 @@ int main() {
     RUN(encodeAnsiFrameAdaptsToColorDepth);
     RUN(statusActionPointerClickRoutesToInvokeActionWithGeneration);
     RUN(aClickOnAnExternalActionRoutesThroughPointerTargetsToSelectThenAct);
-    RUN(exmdParsesActionAndIdWithoutSplittingTheIdOnColon);
-    RUN(exmdOnlyDispatchesForAPublishedIdAndOfferedAction);
     RUN(encodeAnsiFrameEmitsOrthogonalTintBackgrounds);
     RUN(detectColorDepthReadsEnvironment);
     RUN(encodeAnsiFrameAddressesRowsAndEmitsPaletteColors);
