@@ -92,6 +92,139 @@ void openLiveDiffTabForLongTxt(ssg::EditorRuntime& runtime) {
                     .accepted());
 }
 
+TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1},
+                             ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.new", runtime.revision(), {}})
+                    .accepted());
+
+    auto text = runtime.input(
+        ssg::ClientId{1}, {ssg::KeyStroke{}, "hello"});
+    ASSERT_EQ(text.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_TRUE(text.command.has_value());
+    ASSERT_TRUE(text.command->accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_EQ(snapshot->sections().document.text, std::string{"hello"});
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"palette.open", runtime.revision(), {}})
+                    .accepted());
+    auto const before = runtime.revision();
+    auto paletteText = runtime.input(
+        ssg::ClientId{1}, {ssg::KeyStroke{}, "q"});
+    ASSERT_EQ(paletteText.outcome, ssg::ClientInputOutcome::ClientOwned);
+    ASSERT_TRUE(paletteText.clientOwned.has_value());
+    ASSERT_EQ(paletteText.clientOwned->kind,
+              ssg::ClientOwnedInputKind::AppendText);
+    ASSERT_EQ(paletteText.clientOwned->text, std::string{"q"});
+    ASSERT_EQ(runtime.revision(), before);
+
+    ssg::KeyStroke down;
+    down.code = ssg::KeyCode::ArrowDown;
+    auto paletteDown = runtime.input(ssg::ClientId{1}, {down, {}});
+    ASSERT_EQ(paletteDown.outcome, ssg::ClientInputOutcome::ClientOwned);
+    ASSERT_TRUE(paletteDown.clientOwned.has_value());
+    ASSERT_EQ(paletteDown.clientOwned->kind,
+              ssg::ClientOwnedInputKind::SelectNext);
+    ASSERT_EQ(runtime.revision(), before);
+
+    ssg::KeyStroke escape;
+    escape.code = ssg::KeyCode::Escape;
+    auto paletteEscape = runtime.input(ssg::ClientId{1}, {escape, {}});
+    ASSERT_EQ(paletteEscape.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_TRUE(paletteEscape.command.has_value());
+    ASSERT_TRUE(paletteEscape.command->accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_TRUE(snapshot->sections().promptStatus.activeKind !=
+                ssg::PromptKind::Palette);
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"find.open", runtime.revision(), {}})
+                    .accepted());
+    auto promptText = runtime.input(
+        ssg::ClientId{1}, {ssg::KeyStroke{}, "alpha beta"});
+    ASSERT_EQ(promptText.outcome, ssg::ClientInputOutcome::Dispatched);
+    ssg::KeyStroke backspace;
+    backspace.code = ssg::KeyCode::Backspace;
+    auto graphemeDelete =
+        runtime.input(ssg::ClientId{1}, {backspace, {}});
+    ASSERT_EQ(graphemeDelete.outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    snapshot = runtime.snapshot(ssg::ClientId{1});
+    ASSERT_TRUE(snapshot->sections().promptView.has_value());
+    ASSERT_EQ(snapshot->sections().promptView->controls.front().value,
+              std::string{"alpha bet"});
+    backspace.alt = true;
+    auto wordDelete = runtime.input(ssg::ClientId{1}, {backspace, {}});
+    ASSERT_EQ(wordDelete.outcome, ssg::ClientInputOutcome::Dispatched);
+    snapshot = runtime.snapshot(ssg::ClientId{1});
+    ASSERT_TRUE(snapshot->sections().promptView.has_value());
+    ASSERT_EQ(snapshot->sections().promptView->controls.front().value,
+              std::string{"alpha "});
+
+    auto const afterInput = runtime.revision();
+    auto unknown = runtime.input(
+        ssg::ClientId{9}, {ssg::KeyStroke{}, "ignored"});
+    ASSERT_EQ(unknown.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_TRUE(unknown.command.has_value());
+    ASSERT_EQ(unknown.command->error, ssg::CommandError::UnknownClient);
+    ASSERT_EQ(runtime.revision(), afterInput);
+}
+
+TEST(commandRegistrationIsAggregateOwnedAndAdvancesRevision) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    auto const before = runtime.revision();
+    auto const handle = runtime.registerCommand(
+        ssg::CommandSpecBuilder{"test.aggregate_registration"}
+            .owner("test")
+            .summary("aggregate registration")
+            .observes()
+            .handler([](ssg::CommandContext&) {
+                return ssg::CommandHandlerResult::success();
+            }));
+    ASSERT_TRUE(handle.valid());
+    ASSERT_TRUE(runtime.commandCatalog()->find(
+                    "test.aggregate_registration") != nullptr);
+    ASSERT_TRUE(runtime.revision() > before);
+
+    auto const acceptedRevision = runtime.revision();
+    bool refused = false;
+    try {
+        (void)runtime.registerCommand(
+            ssg::CommandSpecBuilder{"test.aggregate_registration"}
+                .owner("duplicate")
+                .summary("duplicate")
+                .observes()
+                .handler([](ssg::CommandContext&) {
+                    return ssg::CommandHandlerResult::success();
+                }));
+    } catch (std::runtime_error const&) {
+        refused = true;
+    }
+    ASSERT_TRUE(refused);
+    ASSERT_EQ(runtime.revision(), acceptedRevision);
+}
+
 TEST(viewportShellSettingsAndThemeAreLiveSections) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -1247,6 +1380,8 @@ TEST(providerTransitionsPreservePanelVisibilityAndFocusLive) {
 }
 
 int main() {
+    RUN(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal);
+    RUN(commandRegistrationIsAggregateOwnedAndAdvancesRevision);
     RUN(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot);
     RUN(aRejectedFinderCloseIsReportedAndMutatesNothing);
     RUN(providerTransitionsPreservePanelVisibilityAndFocusLive);

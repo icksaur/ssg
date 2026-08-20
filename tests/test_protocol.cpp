@@ -174,7 +174,7 @@ ssg::ViewportViewState clientView(std::uint32_t firstRow) {
 // the static rows because these tests exercise the WIRE, not dispatch.
 //
 // Deleted with the static table.
-std::shared_ptr<ssg::CommandCatalog> staticTableCatalog() {
+std::shared_ptr<ssg::CommandCatalog const> staticTableCatalog() {
     static auto const catalog = [] {
         auto const root = std::filesystem::temp_directory_path() /
                           ("ssg-protocol-catalog-" + std::to_string(::getpid()));

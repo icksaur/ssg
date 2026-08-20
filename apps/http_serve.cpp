@@ -3,15 +3,12 @@
 #include "pointer_routing.h"
 
 #include <ssg/EditorRuntime.h>
-#include <ssg/CommandCatalog.h>
-#include <ssg/CompiledKeymap.h>
 #include <ssg/FindReplace.h>
 #include <ssg/HttpEditorServer.h>
 #include <ssg/KeyCode.h>
 #include <ssg/Keymap.h>
 #include <ssg/PaletteSubmit.h>
 #include <ssg/Protocol.h>
-#include <ssg/PromptRouting.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
 #include <ssg/StatusQueue.h>
@@ -70,80 +67,6 @@ constexpr std::array<WebAsset, 4> kWebAssets{{
     {"/fuzzy.mjs", "fuzzy.mjs", "text/javascript"},
 }};
 
-// Reconstruct the shared routing state from the runtime's live focus, active
-// prompt, and the published semantic PromptView -- its active input and that
-// input's current value -- so append and deletion edit exactly the input the
-// library considers active, for every footer prompt kind (find, replace, and the
-// generic goto/save/settings prompts alike). The palette is the one client-owned
-// prompt: its query lives only in the browser, so it stays a bare Palette with no
-// server-held value and the seam appends client-side.
-PromptRoutingState buildPromptRouting(SessionSnapshot const& snapshot) {
-    auto const& sections = snapshot.sections();
-    PromptRoutingState state;
-    state.focus = sections.focus;
-    if (sections.promptStatus.activeKind &&
-        *sections.promptStatus.activeKind == PromptKind::Palette) {
-        state.prompt = ActivePrompt::Palette;
-        return state;
-    }
-    if (!sections.promptView) return state;
-    auto const& view = *sections.promptView;
-    switch (view.kind) {
-    case PromptKind::Find:
-        state.prompt = ActivePrompt::Find;
-        break;
-    case PromptKind::Replace:
-        state.prompt = ActivePrompt::Replace;
-        break;
-    case PromptKind::Path:
-    case PromptKind::Settings:
-    case PromptKind::CommandArgument:
-        state.prompt = ActivePrompt::TextPrompt;
-        break;
-    case PromptKind::Palette:
-        return state;
-    }
-    state.activeInput = view.activeInput;
-    std::size_t inputIndex = 0;
-    for (auto const& control : view.controls) {
-        if (control.kind != PromptControlKind::Input) continue;
-        if (inputIndex == view.activeInput) {
-            state.currentValue = control.value;
-            break;
-        }
-        ++inputIndex;
-    }
-    return state;
-}
-
-// Apply one edit (append or backward delete) to the active prompt input through
-// the shared seam, so the web host makes the exact routing and delete decision
-// the TUI does. The palette query is the one client-owned derived view: the
-// browser edits it locally, so an AppendPaletteQuery/Ignore result dispatches
-// nothing here. Returns true when a library command was actually dispatched, so
-// the caller settles a predicted edit only once it has genuinely been resolved.
-bool routeEdit(EditorRuntime& runtime, ClientId client,
-               PromptTextEdit const& change) {
-    auto snapshot = runtime.snapshot(client);
-    if (!snapshot) return false;
-    auto const route = PromptTextRouter{}.edit(buildPromptRouting(*snapshot), change);
-    switch (route.kind) {
-    case PromptTextRoute::Kind::Dispatch:
-        (void)runtime.dispatch(
-            client, {route.command, runtime.revision(), route.payload});
-        return true;
-    case PromptTextRoute::Kind::AppendPaletteQuery:
-    case PromptTextRoute::Kind::Ignore:
-        break;
-    }
-    return false;
-}
-
-bool routeText(EditorRuntime& runtime, ClientId client, std::string const& text) {
-    return routeEdit(runtime, client,
-                     PromptTextEdit{PromptTextEdit::Kind::Append, text});
-}
-
 // A parsed KEY:<event.code>:<mods>:<editId>:<text> frame. editId is present when
 // the client predicted this input locally (caret-anchored text insertion) and
 // wants it settled; it comes before text so text may itself contain ':'.
@@ -186,8 +109,7 @@ std::optional<KeyFrame> parseKeyFrame(std::string_view body) {
 // multi-stroke behavior the TUI does not have, so it is deferred until the keymap
 // grows a multi-stroke binding and both clients adopt it. Returns true when a
 // command was dispatched, so a predicted edit is settled only once resolved.
-bool handleKey(EditorRuntime& runtime, ClientId client,
-               CompiledKeymap const& keymap, KeyFrame const& frame) {
+bool handleKey(EditorRuntime& runtime, ClientId client, KeyFrame const& frame) {
     KeyStroke stroke;
     stroke.code = keyCodeFromName(frame.code);
     stroke.control = frame.mods.find('c') != std::string_view::npos;
@@ -195,36 +117,9 @@ bool handleKey(EditorRuntime& runtime, ClientId client,
     stroke.meta = frame.mods.find('m') != std::string_view::npos;
     stroke.shift = frame.mods.find('s') != std::string_view::npos;
 
-    if (stroke.code == KeyCode::None) {
-        if (!frame.text.empty()) return routeText(runtime, client, frame.text);
-        return false;
-    }
-
-    FocusTarget focus = FocusTarget::Editor;
-    if (auto const snapshot = runtime.snapshot(client)) {
-        focus = effectiveFocusFromSections(snapshot->sections());
-    }
-    auto const resolution =
-        keymap.resolve(std::array{CompiledKeymap::compile(stroke)}, focus);
-    if (resolution.kind == KeymapMatchKind::Resolved) {
-        (void)runtime.dispatch(client,
-                               {resolution.command, runtime.revision(), {}});
-        return true;
-    }
-    // Backspace / Alt+Backspace reach a footer prompt as keycodes, not text; the
-    // editor binds them in its own keymap context (resolved above), so an
-    // unresolved Backspace here means a prompt owns the keyboard. Route it through
-    // the same deletion seam the append path uses so grapheme/word semantics are
-    // identical across hosts.
-    if (stroke.code == KeyCode::Backspace) {
-        return routeEdit(runtime, client,
-                         PromptTextEdit{stroke.alt
-                                            ? PromptTextEdit::Kind::DeleteWordBack
-                                            : PromptTextEdit::Kind::DeleteGraphemeBack,
-                                        {}});
-    }
-    if (!frame.text.empty()) return routeText(runtime, client, frame.text);
-    return false;
+    auto const result =
+        runtime.input(client, {stroke, frame.text});
+    return result.outcome == ClientInputOutcome::Dispatched;
 }
 
 // Sentinel settled-id meaning "nothing settled yet". Client edit ids start at 1,
@@ -284,15 +179,6 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     }
 
     Http::Server server{port, Http::BindAddress::loopback};
-
-    // Compile the runtime's keymap once for keystroke resolution. The --http
-    // path runs no init script, so the bindings are the defaults; rebuilding on
-    // a keymap change is deferred until the web path can load one.
-    std::shared_ptr<CompiledKeymap> compiledKeymap;
-    if (auto const initial = runtime.snapshot(client)) {
-        compiledKeymap = std::make_shared<CompiledKeymap>(
-            initial->sections().keymap, *runtime.commandCatalog());
-    }
 
     // Per-connection reconciliation state: the last semantic snapshot sent (to
     // derive the next delta against) and the highest client edit id settled.
@@ -368,7 +254,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
             .onOpen = {},
             .onMessage =
                 [&runtime, &server, client, sendSnapshotLocked, sendUpdateLocked,
-                 compiledKeymap, settledId,
+                 settledId,
                  runtimeMutex, attachedHandle](Http::WebSocketHandle handle,
                             Http::WebSocketMessage message) {
                     // A single connection's malformed or unexpected message must
@@ -382,10 +268,9 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                         auto const frame = parseKeyFrame(payload.substr(4));
                         std::lock_guard lock{*runtimeMutex};
                         if (*attachedHandle != handle) return;
-                        if (frame && compiledKeymap) {
+                        if (frame) {
                             bool dispatched = false;
-                            dispatched = handleKey(
-                                runtime, client, *compiledKeymap, *frame);
+                            dispatched = handleKey(runtime, client, *frame);
                             // Settle the predicted edit only once it is actually
                             // resolved (applied or rejected) by a real dispatch;
                             // a malformed or no-op frame must not falsely

@@ -13,14 +13,11 @@
 #include "pointer_routing.h"
 #include "ssg_terminal.h"
 
-#include <ssg/CommandCatalog.h>
-#include <ssg/CompiledKeymap.h>
 #include <ssg/EditorRuntime.h>
 #include <ssg/TreeSitterGrammars.h>
 #include <ssg/HitTester.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
-#include <ssg/PromptRouting.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/ScriptHost.h>
 #include <ssg/PaletteSearcher.h>
@@ -945,17 +942,9 @@ int main(int argc, char** argv) {
     // collect edits through prompt.update_value on input index 0.
     bool textPromptOpen = false;
     std::string textPromptValue;
-    // The clipboard's text as the library publishes it, so pasting into a prompt
-    // reads authoritative state rather than a client-side copy of the register.
-    std::string clipboardText;
     // The last clipboard write served to the terminal, so one copy produces one
     // OSC 52 rather than one per frame for as long as it stays published.
     ssg::app::SystemClipboardWriter clipboardWriter;
-    ssg::KeymapViewState keymap;
-    ssg::CatalogRevision compiledForRevision = 0;
-    std::unique_ptr<ssg::CompiledKeymap> compiledKeymap =
-        std::make_unique<ssg::CompiledKeymap>(keymap,
-                                              *runtime.commandCatalog());
     std::vector<ssg::PaletteCandidate> candidates;
 
     // Lever 3 per-drain snapshot coalescing. `refresh()` is expensive; instead
@@ -1049,109 +1038,36 @@ int main(int argc, char** argv) {
             dispatch(submit->command.name(), submit->payload);
         }
     };
-    // Dispatch a resolved command, fulfilling prompt-context commands against the
-    // client-local palette view when a palette prompt is open.  Palette
-    // open/closed is reconciled from the
-    // server focus on the next snapshot, not forced here, so a failed submit (no
-    // candidate / rejected execute) leaves the prompt open rather than
-    // desynchronizing the client.
-    // The commands the client intercepts before the registry sees them, and the
-    // commands that open a picker.  Both are resolved to handles once, so the
-    // keystroke path compares integers instead of command names.
-    struct InterceptHandles {
-        ssg::CommandName promptSubmit{"prompt.submit"};
-        ssg::CommandName promptCancel{"prompt.cancel"};
-        ssg::CommandName promptNext{"prompt.next"};
-        ssg::CommandName promptPrevious{"prompt.previous"};
-        ssg::CommandName paletteNext{"palette.next"};
-        ssg::CommandName palettePrevious{"palette.previous"};
-        ssg::CommandName paletteClose{"palette.close"};
-        ssg::CommandName clipboardPaste{"clipboard.paste"};
-        std::vector<ssg::CommandName> pickerOpeners;
-    };
-    InterceptHandles const intercept = [] {
-        InterceptHandles handles;
-        for (auto const& descriptor : ssg::pickerCatalog().descriptors()) {
-            handles.pickerOpeners.emplace_back(descriptor.openCommandId);
-        }
-        return handles;
-    }();
-    auto dispatchResolved = [&](ssg::CommandName const& command) {
-        if (pickerOpen && focus == ssg::FocusTarget::Prompt) {
-            if (command == intercept.promptSubmit) {
-                submitSelectedCandidate();
-                return;
-            }
-            if (command == intercept.promptCancel) {
-                dispatchHandle(intercept.paletteClose);
-                return;
-            }
-            if (command == intercept.promptNext ||
-                command == intercept.paletteNext) {
-                ++picker.selected;
-                revealPaletteSelection();
-                return;
-            }
-            if (command == intercept.promptPrevious ||
-                command == intercept.palettePrevious) {
-                if (picker.selected > 0) --picker.selected;
-                revealPaletteSelection();
-                return;
-            }
-        }
-        dispatchHandle(command);
-        // Any picker's open command starts a fresh window.  Driven off the
-        // catalog rather than a hardcoded "palette.open" so adding a picker
-        // cannot forget to reset the query and selection -- which silently
-        // inherits the previous picker's filter.
-        bool opensAPicker = false;
-        for (auto const& opener : intercept.pickerOpeners) {
-            if (command == opener) opensAPicker = true;
-        }
-        if (opensAPicker) {
-            pickerOpen = true;
-            picker.query.clear();
-            picker.selected = 0;
-            picker.firstVisible = 0;
-            revealPaletteSelection();
-        }
-    };
-    auto promptEdit = [&](ssg::PromptTextEdit const& change) {
-        ssg::PromptRoutingState state;
-        state.focus = focus;
-        if (pickerOpen) {
-            state.prompt = ssg::ActivePrompt::Palette;
-        } else if (replaceOpen) {
-            state.prompt = ssg::ActivePrompt::Replace;
-            // The TUI's Replace prompt edits the replacement input; its query was
-            // fixed during the Find phase. Input 1 is the replacement, matching
-            // the library's reset-on-open, so the seam routes to
-            // replace.update_replacement.
-            state.activeInput = 1;
-            state.currentValue = replaceReplacement;
-        } else if (findOpen) {
-            state.prompt = ssg::ActivePrompt::Find;
-            state.currentValue = findQuery;
-        } else if (textPromptOpen) {
-            state.prompt = ssg::ActivePrompt::TextPrompt;
-            state.currentValue = textPromptValue;
-        }
-        auto const route = ssg::PromptTextRouter{}.edit(state, change);
-        switch (route.kind) {
-        case ssg::PromptTextRoute::Kind::Dispatch:
-            dispatch(route.command.name(), route.payload);
-            break;
-        case ssg::PromptTextRoute::Kind::AppendPaletteQuery:
-            picker.query += route.appendText;
+    auto applyClientOwnedInput = [&](ssg::ClientOwnedInput const& input) {
+        switch (input.kind) {
+        case ssg::ClientOwnedInputKind::AppendText:
+            picker.query += input.text;
             picker.selected = 0;
             revealPaletteSelection();
             break;
-        case ssg::PromptTextRoute::Kind::Ignore:
+        case ssg::ClientOwnedInputKind::DeleteGraphemeBackward:
+        case ssg::ClientOwnedInputKind::DeleteWordBackward:
+            popCodePoint(picker.query);
+            picker.selected = 0;
+            revealPaletteSelection();
+            break;
+        case ssg::ClientOwnedInputKind::SelectNext:
+            ++picker.selected;
+            revealPaletteSelection();
+            break;
+        case ssg::ClientOwnedInputKind::SelectPrevious:
+            if (picker.selected > 0) --picker.selected;
+            revealPaletteSelection();
+            break;
+        case ssg::ClientOwnedInputKind::Submit:
+            submitSelectedCandidate();
             break;
         }
     };
-    auto routeText = [&](std::string const& text) {
-        promptEdit(ssg::PromptTextEdit{ssg::PromptTextEdit::Kind::Append, text});
+    auto routeInput = [&](ssg::KeyStroke stroke, std::string text) {
+        auto result = runtime.input(client, {stroke, std::move(text)});
+        if (result.clientOwned) applyClientOwnedInput(*result.clientOwned);
+        return result.outcome;
     };
 
     auto buildReport = [&] {
@@ -1166,26 +1082,13 @@ int main(int argc, char** argv) {
         }
         return report;
     };
-    // Take a fresh snapshot and adopt its authoritative client state (focus,
-    // keymap, published candidates).  Called before every input event so that
-    // coalesced input after a focus-changing command routes against the new
-    // focus rather than a stale one.
+    // Take a fresh snapshot and adopt its authoritative client state. Called
+    // before every input event so coalesced input after a focus-changing command
+    // routes against the new focus rather than a stale one.
     auto refresh = [&]() -> std::optional<ssg::SessionSnapshot> {
         auto snapshot = runtime.snapshot(client, terminalSize(), buildReport());
         if (snapshot) {
             focus = effectiveFocusFromSections(snapshot->sections());
-            // The compiled index is derived from the authored keymap AND the
-            // catalog, so it is rebuilt when either changes -- a keymap.bind, a
-            // config reload, or a command registered since -- and never per
-            // keystroke.
-            auto const catalogRevision = runtime.commandCatalog()->revision();
-            if (keymap != snapshot->sections().keymap ||
-                catalogRevision != compiledForRevision) {
-                keymap = snapshot->sections().keymap;
-                compiledForRevision = catalogRevision;
-                compiledKeymap = std::make_unique<ssg::CompiledKeymap>(
-                    keymap, *runtime.commandCatalog());
-            }
             candidates = snapshot->sections().palette.candidates;
             pickerMode = snapshot->sections().palette.mode;
             // Cache the palette pane height for the next window computation: the
@@ -1200,10 +1103,6 @@ int main(int argc, char** argv) {
                 picker.paneRows = static_cast<std::uint32_t>(
                     std::max(shell.panes.front().content.height, 1));
             }
-            // The clipboard's text, so a paste into a prompt can be served from
-            // authoritative published state rather than the app keeping its own
-            // copy of what was cut or copied.
-            clipboardText = snapshot->sections().clipboard.plainText;
             // A copy or cut offers its text for the SYSTEM clipboard.  Serve it
             // with OSC 52, which over SSH is the only way the remote editor can
             // reach the local clipboard at all.  Fire and forget: keyed by id so
@@ -1229,7 +1128,13 @@ int main(int argc, char** argv) {
             // the picker query.
             auto const activeKind = snapshot->sections().promptStatus.activeKind;
             auto const& activePrompt = snapshot->presentation()->prompt;
+            bool const wasPickerOpen = pickerOpen;
             pickerOpen = activeKind == ssg::PromptKind::Palette;
+            if (pickerOpen && !wasPickerOpen) {
+                picker.query.clear();
+                picker.selected = 0;
+                picker.firstVisible = 0;
+            }
             bool const findPromptActive = activeKind == ssg::PromptKind::Find;
             findOpen = findView.open && findPromptActive;
             findQuery = findView.query;
@@ -1706,7 +1611,9 @@ int main(int argc, char** argv) {
                 // without touching the keymap, so a newline in the paste cannot
                 // fire whatever Enter is bound to and an escape sequence in it
                 // cannot be obeyed.
-                if (!decoded.text.empty()) routeText(decoded.text);
+                if (!decoded.text.empty()) {
+                    (void)routeInput(ssg::KeyStroke{}, decoded.text);
+                }
                 continue;
             }
             if (decoded.status == ssg::app::DecodeStatus::scroll) {
@@ -1740,53 +1647,13 @@ int main(int argc, char** argv) {
                 continue;
             }
 
-            // A printable without a keycode (e.g. multibyte text) cannot be a
-            // binding; route it straight to the text sink.
-            if (decoded.stroke.code == ssg::KeyCode::None) {
-                routeText(decoded.text);
-                continue;
-            }
-
-            auto resolution = compiledKeymap->resolve(
-                std::array{ssg::CompiledKeymap::compile(decoded.stroke)}, focus);
-            if (resolution.kind == ssg::KeymapMatchKind::Resolved) {
-                // Pasting into a prompt inserts into the PROMPT's text, not the
-                // document behind it.  A prompt's value is edited client-side
-                // (the same TextRouting::PromptQuery path typing goes through),
-                // so the paste is served here from the clipboard text the
-                // library publishes.  Dispatching it instead would silently
-                // paste into the document while the user looks at a prompt.
-                if (focus == ssg::FocusTarget::Prompt &&
-                    resolution.command == intercept.clipboardPaste) {
-                    if (!clipboardText.empty()) routeText(clipboardText);
-                } else {
-                    dispatchResolved(resolution.command);
-                }
-            } else {
-                // No binding.  Quit is the sole app-local key (process
-                // lifecycle); everything else routes as text where applicable.
-                const auto stroke = decoded.stroke;
-                const bool quitKey = stroke.code == ssg::KeyCode::KeyQ &&
-                                     stroke.alt && !stroke.control;
-                if (quitKey) {
+            auto const outcome = routeInput(decoded.stroke, decoded.text);
+            if (outcome == ssg::ClientInputOutcome::Unhandled) {
+                // Quit is process lifecycle, not editor behavior.
+                auto const& stroke = decoded.stroke;
+                if (stroke.code == ssg::KeyCode::KeyQ && stroke.alt &&
+                    !stroke.control) {
                     quit = true;
-                } else if (pickerOpen && focus == ssg::FocusTarget::Prompt &&
-                           stroke.code == ssg::KeyCode::Backspace) {
-                    popCodePoint(picker.query);
-                    picker.selected = 0;
-                    revealPaletteSelection();
-                } else if ((findOpen || replaceOpen || textPromptOpen) &&
-                           focus == ssg::FocusTarget::Prompt &&
-                           stroke.code == ssg::KeyCode::Backspace) {
-                    // The shared seam owns grapheme/word-aware deletion of the
-                    // active input, so a prompt backspace deletes identically in
-                    // every host. Alt selects word deletion, matching the editor.
-                    promptEdit(ssg::PromptTextEdit{
-                        stroke.alt ? ssg::PromptTextEdit::Kind::DeleteWordBack
-                                   : ssg::PromptTextEdit::Kind::DeleteGraphemeBack,
-                        {}});
-                } else if (!decoded.text.empty()) {
-                    routeText(decoded.text);
                 }
             }
         }

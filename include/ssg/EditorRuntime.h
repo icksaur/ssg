@@ -2,6 +2,8 @@
 
 #include <ssg/DiffModel.h>
 #include <ssg/ChromeDecode.h>
+#include <ssg/ClientInput.h>
+#include <ssg/CommandSpecBuilder.h>
 #include <ssg/EditorClient.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/FollowEditsModel.h>
@@ -15,6 +17,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -120,6 +123,8 @@ public:
     [[nodiscard]] bool detach(ClientId clientId);
     [[nodiscard]] CommandResult dispatch(ClientId clientId,
                                          ClientCommand const& command);
+    [[nodiscard]] ClientInputResult input(ClientId clientId,
+                                          ClientKeyInput const& input);
 
     // Asks for `command` to be dispatched once the dispatch in progress
     // finishes, and reports whether the request was taken.
@@ -141,7 +146,15 @@ public:
 
     // The commands this runtime offers.  Held, not copied: a command
     // registered later is visible through the same pointer.
-    [[nodiscard]] std::shared_ptr<CommandCatalog> commandCatalog() const;
+    [[nodiscard]] std::shared_ptr<CommandCatalog const> commandCatalog() const;
+    // CONTRACT
+    // Command registration is host orchestration on the session thread. It must
+    // not run concurrently with input, dispatch, or another registration, and a
+    // command handler must defer orchestration rather than register reentrantly.
+    [[nodiscard]] CommandHandle registerCommand(CommandSpecBuilder command);
+    [[nodiscard]] std::vector<CommandHandle> replaceCommandGeneration(
+        std::span<CommandHandle const> retire,
+        std::vector<CommandSpecBuilder> commands);
 
     [[nodiscard]] Revision revision() const;
     [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;

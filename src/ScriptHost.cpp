@@ -240,7 +240,7 @@ LuaResult ScriptHost::offerGeneration(std::vector<std::string> const& ids) {
     }
 
     try {
-        impl_->generation = impl_->runtime.commandCatalog()->replaceGeneration(
+        impl_->generation = impl_->runtime.replaceCommandGeneration(
             impl_->generation, std::move(specs));
     } catch (std::exception const& refused) {
         // The catalog validated the whole batch before applying any of it, so

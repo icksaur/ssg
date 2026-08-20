@@ -3042,6 +3042,135 @@ bool EditorRuntime::deferDispatch(ClientId clientId, ClientCommand command) {
     return impl_->defer(clientId, std::move(command));
 }
 
+ClientInputResult EditorRuntime::input(ClientId clientId,
+                                       ClientKeyInput const& input) {
+    if (!impl_->session->attachedClient(clientId)) {
+        return {ClientInputOutcome::Rejected, std::nullopt,
+                CommandResult{CommandError::UnknownClient, revision(),
+                              "client ID is not attached", {}}};
+    }
+
+    auto dispatchInput = [&](CommandName command,
+                             std::any payload = {}) -> ClientInputResult {
+        auto result =
+            dispatch(clientId, {std::move(command), revision(), std::move(payload)});
+        return {ClientInputOutcome::Dispatched, std::nullopt, std::move(result)};
+    };
+    auto clientOwned = [](ClientOwnedInputKind kind,
+                          std::string text = {}) -> ClientInputResult {
+        return {ClientInputOutcome::ClientOwned,
+                ClientOwnedInput{kind, std::move(text)}, std::nullopt};
+    };
+
+    PromptRoutingState routing;
+    routing.focus = impl_->interaction.effectiveFocus();
+    auto const promptStatus = impl_->promptStatusView();
+    if (promptStatus.activeKind == PromptKind::Palette) {
+        routing.prompt = ActivePrompt::Palette;
+    } else if (auto const view = impl_->promptView()) {
+        switch (view->kind) {
+        case PromptKind::Find:
+            routing.prompt = ActivePrompt::Find;
+            break;
+        case PromptKind::Replace:
+            routing.prompt = ActivePrompt::Replace;
+            break;
+        case PromptKind::Path:
+        case PromptKind::Settings:
+        case PromptKind::CommandArgument:
+            routing.prompt = ActivePrompt::TextPrompt;
+            break;
+        case PromptKind::Palette:
+            break;
+        }
+        routing.activeInput = view->activeInput;
+        std::size_t inputIndex = 0;
+        for (auto const& control : view->controls) {
+            if (control.kind != PromptControlKind::Input) continue;
+            if (inputIndex++ == view->activeInput) {
+                routing.currentValue = control.value;
+                break;
+            }
+        }
+    }
+
+    auto routeTextEdit = [&](PromptTextEdit edit) -> ClientInputResult {
+        auto const route = PromptTextRouter{}.edit(routing, edit);
+        if (route.kind == PromptTextRoute::Kind::Dispatch) {
+            return dispatchInput(route.command, route.payload);
+        }
+        if (routing.prompt == ActivePrompt::Palette) {
+            switch (edit.kind) {
+            case PromptTextEdit::Kind::Append:
+                return clientOwned(ClientOwnedInputKind::AppendText,
+                                   route.appendText);
+            case PromptTextEdit::Kind::DeleteGraphemeBack:
+                return clientOwned(
+                    ClientOwnedInputKind::DeleteGraphemeBackward);
+            case PromptTextEdit::Kind::DeleteWordBack:
+                return clientOwned(ClientOwnedInputKind::DeleteWordBackward);
+            }
+        }
+        return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
+    };
+
+    auto const catalogRevision = impl_->session->catalog()->revision();
+    if (!impl_->inputKeymap ||
+        impl_->inputKeymapGeneration != impl_->keymapGeneration ||
+        impl_->inputCatalogRevision != catalogRevision) {
+        impl_->inputKeymap =
+            std::make_unique<CompiledKeymap>(impl_->keymap,
+                                             *impl_->session->catalog());
+        impl_->inputKeymapGeneration = impl_->keymapGeneration;
+        impl_->inputCatalogRevision = catalogRevision;
+    }
+
+    if (input.stroke.code != KeyCode::None) {
+        auto const resolved = impl_->inputKeymap->resolve(
+            std::array{CompiledKeymap::compile(input.stroke)}, routing.focus);
+        if (resolved.kind == KeymapMatchKind::Resolved) {
+            auto const& command = resolved.command;
+            if (routing.prompt == ActivePrompt::Palette) {
+                if (command == "prompt.submit") {
+                    return clientOwned(ClientOwnedInputKind::Submit);
+                }
+                if (command == "prompt.next" || command == "palette.next") {
+                    return clientOwned(ClientOwnedInputKind::SelectNext);
+                }
+                if (command == "prompt.previous" ||
+                    command == "palette.previous") {
+                    return clientOwned(ClientOwnedInputKind::SelectPrevious);
+                }
+                if (command == "prompt.cancel") {
+                    return dispatchInput("palette.close");
+                }
+            }
+            if (routing.focus == FocusTarget::Prompt &&
+                command == "clipboard.paste") {
+                auto const text = impl_->clipboard.viewState().plainText;
+                if (text.empty()) {
+                    return {ClientInputOutcome::Unhandled, std::nullopt,
+                            std::nullopt};
+                }
+                return routeTextEdit(
+                    {PromptTextEdit::Kind::Append, std::move(text)});
+            }
+            return dispatchInput(command);
+        }
+        if (input.stroke.code == KeyCode::Backspace) {
+            return routeTextEdit(
+                {input.stroke.alt ? PromptTextEdit::Kind::DeleteWordBack
+                                  : PromptTextEdit::Kind::DeleteGraphemeBack,
+                 {}});
+        }
+    }
+    if (!input.committedText.empty()) {
+        return routeTextEdit(
+            {PromptTextEdit::Kind::Append, input.committedText});
+    }
+    return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
+}
+
 CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {
     // The routing signature: every runtime-owned input a host reads to interpret
     // the NEXT key. Compared before/after the whole dispatch (which drains nested
@@ -3163,8 +3292,39 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
     return withEffects(std::move(result));
 }
 
-std::shared_ptr<CommandCatalog> EditorRuntime::commandCatalog() const {
+std::shared_ptr<CommandCatalog const> EditorRuntime::commandCatalog() const {
     return impl_->session->catalog();
+}
+
+CommandHandle EditorRuntime::registerCommand(CommandSpecBuilder command) {
+    if (dispatchInProgress()) {
+        throw std::logic_error{"commands cannot be registered during dispatch"};
+    }
+    if (revision().value() == std::numeric_limits<std::uint64_t>::max()) {
+        throw std::overflow_error{"session revision exhausted"};
+    }
+    auto const handle = impl_->session->catalog()->add(std::move(command));
+    impl_->session->advanceRevision();
+    return handle;
+}
+
+std::vector<CommandHandle> EditorRuntime::replaceCommandGeneration(
+    std::span<CommandHandle const> retire,
+    std::vector<CommandSpecBuilder> commands) {
+    if (dispatchInProgress()) {
+        throw std::logic_error{
+            "command generations cannot be replaced during dispatch"};
+    }
+    if (revision().value() == std::numeric_limits<std::uint64_t>::max()) {
+        throw std::overflow_error{"session revision exhausted"};
+    }
+    auto const catalogRevision = impl_->session->catalog()->revision();
+    auto handles = impl_->session->catalog()->replaceGeneration(
+        retire, std::move(commands));
+    if (impl_->session->catalog()->revision() != catalogRevision) {
+        impl_->session->advanceRevision();
+    }
+    return handles;
 }
 
 Revision EditorRuntime::revision() const { return impl_->session->revision(); }

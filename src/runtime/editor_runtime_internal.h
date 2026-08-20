@@ -14,12 +14,14 @@
 #include <ssg/FollowEditsModel.h>
 #include <ssg/DocumentHistory.h>
 #include <ssg/CommandCatalog.h>
+#include <ssg/CompiledKeymap.h>
 #include <ssg/Keymap.h>
 #include <ssg/LspFeatureController.h>
 #include <ssg/LspWorkspaceEditController.h>
 #include <ssg/LineLayoutCache.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/Picker.h>
+#include <ssg/PromptRouting.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
 #include <ssg/Settings.h>
@@ -221,6 +223,9 @@ struct EditorRuntime::Impl final : CommandServices,
     // command registers nothing -- so routing-change detection needs this
     // separate counter.
     std::uint64_t keymapGeneration = 0;
+    std::unique_ptr<CompiledKeymap> inputKeymap;
+    std::optional<std::uint64_t> inputKeymapGeneration;
+    std::optional<CatalogRevision> inputCatalogRevision;
     ThemeSnapshot theme{};
     // Chrome glyphs and dimensions, beside the theme because they are the same
     // kind of thing: presentation this runtime owns and hands to layout.
