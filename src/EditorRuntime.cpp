@@ -2890,6 +2890,7 @@ EditorRuntime::EditorRuntime(std::unique_ptr<Impl> implementation) noexcept
 EditorRuntime::~EditorRuntime() = default;
 
 void EditorRuntime::resetKeymapToDefault() {
+    std::lock_guard operationLock{impl_->operationMutex};
     // defaultTerminalKeymap() is a fixed, already-construction-time-
     // validated value (see create() above), so no re-validation is needed
     // here -- resetting to it can never fail.
@@ -2897,9 +2898,13 @@ void EditorRuntime::resetKeymapToDefault() {
     ++impl_->keymapGeneration;
 }
 
-void EditorRuntime::focusEditor() { impl_->interaction.focusEditor(); }
+void EditorRuntime::focusEditor() {
+    std::lock_guard operationLock{impl_->operationMutex};
+    impl_->interaction.focusEditor();
+}
 
 void EditorRuntime::setComposedUi(std::optional<ValidatedComposition> composition) {
+    std::lock_guard operationLock{impl_->operationMutex};
     // A composition-only reload (a script that just calls ssg.chrome, or one
     // that drops the call) runs outside command dispatch, so nothing else
     // advances the session revision. Delta-gated clients derive a frame only
@@ -2963,6 +2968,7 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
 }
 
 AttachResult EditorRuntime::attach(InvocationPrincipal principal, ViewId viewId) {
+    std::lock_guard operationLock{impl_->operationMutex};
     auto clientId = principal.clientId();
     auto result = impl_->session->attach(std::move(principal), viewId);
     if (result.accepted()) {
@@ -2972,19 +2978,26 @@ AttachResult EditorRuntime::attach(InvocationPrincipal principal, ViewId viewId)
 }
 
 bool EditorRuntime::detach(ClientId clientId) {
+    std::lock_guard operationLock{impl_->operationMutex};
     (void)impl_->follow.detachClient(clientId);
     return impl_->session->detach(clientId);
 }
 
-void EditorRuntime::primeDeferred() { impl_->primeDeferred(); }
+void EditorRuntime::primeDeferred() {
+    std::lock_guard operationLock{impl_->operationMutex};
+    impl_->primeDeferred();
+}
 std::size_t EditorRuntime::flushDueAutosaveDrafts() {
+    std::lock_guard operationLock{impl_->operationMutex};
     return impl_->flushDueAutosaveDrafts();
 }
 std::size_t EditorRuntime::flushAllAutosaveDrafts() {
+    std::lock_guard operationLock{impl_->operationMutex};
     return impl_->flushAllAutosaveDrafts();
 }
 
 EditorRuntime::DeferredWorkCounts EditorRuntime::deferredWorkCounts() const {
+    std::lock_guard operationLock{impl_->operationMutex};
     return {impl_->syntaxRunCount, impl_->treeScanCount};
 }
 
@@ -2993,11 +3006,13 @@ std::uint64_t EditorRuntime::liveDocumentRuntimeStateCountForTests() {
 }
 
 void EditorRuntime::setAutosaveDraftByteCapForTests(std::uint64_t cap) {
+    std::lock_guard operationLock{impl_->operationMutex};
     impl_->autosaveDraftByteCap = cap;
 }
 
 void EditorRuntime::reconcileExternalWatchEventsForTest(
     std::vector<WatchEvent> events) {
+    std::lock_guard operationLock{impl_->operationMutex};
     // Mirror the runtime drain: an Overflow in the batch triggers the full
     // open-document-vs-disk resync (the worker would signal it out of band), the
     // ordinary events reconcile normally.
@@ -3019,10 +3034,12 @@ void EditorRuntime::reconcileExternalWatchEventsForTest(
 }
 
 bool EditorRuntime::diffModelHasFileForTest(const DiffFileId& id) const {
+    std::lock_guard operationLock{impl_->operationMutex};
     return impl_->diff.file(id).has_value();
 }
 
 void EditorRuntime::reportWatcherAvailabilityForTest(bool available) {
+    std::lock_guard operationLock{impl_->operationMutex};
     impl_->watcherAvailable.store(available, std::memory_order_relaxed);
     impl_->drainWatcherAvailability();
 }
@@ -3041,18 +3058,26 @@ bool EditorRuntime::deferDispatch(ClientId clientId, ClientCommand command) {
     return impl_->defer(clientId, std::move(command));
 }
 
-ClientInputResult EditorRuntime::input(ClientId clientId,
-                                       ClientKeyInput const& input) {
+namespace {
+
+CommandResult dispatchLocked(EditorRuntime::Impl* impl_, ClientId clientId,
+                             ClientCommand const& command);
+
+ClientInputResult inputLocked(EditorRuntime::Impl* impl_, ClientId clientId,
+                              ClientKeyInput const& input) {
     if (!impl_->session->attachedClient(clientId)) {
         return {ClientInputOutcome::Rejected, std::nullopt,
-                CommandResult{CommandError::UnknownClient, revision(),
+                CommandResult{CommandError::UnknownClient,
+                              impl_->session->revision(),
                               "client ID is not attached", {}}};
     }
 
     auto dispatchInput = [&](CommandName command,
                              std::any payload = {}) -> ClientInputResult {
-        auto result =
-            dispatch(clientId, {std::move(command), revision(), std::move(payload)});
+        auto result = dispatchLocked(
+            impl_, clientId,
+            {std::move(command), impl_->session->revision(),
+             std::move(payload)});
         return {ClientInputOutcome::Dispatched, std::nullopt, std::move(result)};
     };
     auto clientOwned = [](ClientOwnedInputKind kind,
@@ -3169,7 +3194,8 @@ ClientInputResult EditorRuntime::input(ClientId clientId,
     return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
 }
 
-CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {
+CommandResult dispatchLocked(EditorRuntime::Impl* impl_, ClientId clientId,
+                             ClientCommand const& command) {
     // The routing signature: every runtime-owned input a host reads to interpret
     // the NEXT key. Compared before/after the whole dispatch (which drains nested
     // and deferred commands), so the effects union every route without annotating
@@ -3184,7 +3210,9 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
     };
     const auto routingBefore = routingSignature();
     const auto revisionBefore = impl_->session->revision();
-    const auto withEffects = [&](CommandResult result) {
+    const auto withEffects = [&](ExecutorResult outcome) {
+        CommandResult result{outcome.error, outcome.revision,
+                             std::move(outcome.message), {}};
         // routingChanged is precise; geometryChanged is the conservative gate a
         // pointer/wheel hit-test consumes. A routing change (prompt/focus/picker)
         // also reshapes presentation geometry, and a command that fails after a
@@ -3197,15 +3225,6 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
             routingChanged || impl_->session->revision() != revisionBefore;
         return result;
     };
-    // The session refuses this too, but it has to be caught HERE as well:
-    // everything below touches the session first (the attachment lookup), and
-    // would block on the lock the handler's own call is holding before the
-    // executor ever got the chance to refuse. One message, defined on
-    // CommandExecutor, so the two guards cannot drift apart.
-    if (const auto nested = impl_->session->activeDispatchRevision()) {
-        return {CommandError::HandlerFailed, *nested,
-                std::string{CommandExecutor::kNestedDispatchRefusal}};
-    }
     // Parameterised by client because a deferred command runs as the client
     // that queued it, whose origin -- and so whether an edit counts as local --
     // may differ from the client whose dispatch is draining the queue.
@@ -3263,10 +3282,10 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
             // a sequence whose earlier step did not happen.
             if (!deferredResult.accepted()) {
                 impl_->deferredCommands.clear();
-                return CommandResult{deferredResult.error,
-                                     deferredResult.revision,
-                                     std::string{deferred.command.id.name()} +
-                                         ": " + deferredResult.message};
+                return ExecutorResult{
+                    deferredResult.error, deferredResult.revision,
+                    std::string{deferred.command.id.name()} + ": " +
+                        deferredResult.message};
             }
             outcome = deferredResult;
         }
@@ -3290,6 +3309,32 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
     return withEffects(std::move(result));
 }
 
+}  // namespace
+
+ClientInputResult EditorRuntime::input(ClientId clientId,
+                                       ClientKeyInput const& input) {
+    if (const auto nested = impl_->session->activeDispatchRevision()) {
+        return {ClientInputOutcome::Rejected, std::nullopt,
+                CommandResult{CommandError::HandlerFailed, *nested,
+                              std::string{
+                                  kNestedDispatchRefusal},
+                              {}}};
+    }
+    std::lock_guard operationLock{impl_->operationMutex};
+    return inputLocked(impl_.get(), clientId, input);
+}
+
+CommandResult EditorRuntime::dispatch(ClientId clientId,
+                                      ClientCommand const& command) {
+    // A handler must be refused before taking the non-recursive aggregate lock.
+    if (const auto nested = impl_->session->activeDispatchRevision()) {
+        return {CommandError::HandlerFailed, *nested,
+                std::string{kNestedDispatchRefusal}};
+    }
+    std::lock_guard operationLock{impl_->operationMutex};
+    return dispatchLocked(impl_.get(), clientId, command);
+}
+
 std::shared_ptr<CommandCatalog const> EditorRuntime::commandCatalog() const {
     return impl_->catalog;
 }
@@ -3298,7 +3343,9 @@ CommandHandle EditorRuntime::registerCommand(CommandSpecBuilder command) {
     if (dispatchInProgress()) {
         throw std::logic_error{"commands cannot be registered during dispatch"};
     }
-    if (revision().value() == std::numeric_limits<std::uint64_t>::max()) {
+    std::lock_guard operationLock{impl_->operationMutex};
+    if (impl_->session->revision().value() ==
+        std::numeric_limits<std::uint64_t>::max()) {
         throw std::overflow_error{"session revision exhausted"};
     }
     auto const handle = impl_->catalog->add(std::move(command));
@@ -3313,7 +3360,9 @@ std::vector<CommandHandle> EditorRuntime::replaceCommandGeneration(
         throw std::logic_error{
             "command generations cannot be replaced during dispatch"};
     }
-    if (revision().value() == std::numeric_limits<std::uint64_t>::max()) {
+    std::lock_guard operationLock{impl_->operationMutex};
+    if (impl_->session->revision().value() ==
+        std::numeric_limits<std::uint64_t>::max()) {
         throw std::overflow_error{"session revision exhausted"};
     }
     auto const catalogRevision = impl_->catalog->revision();
@@ -3325,17 +3374,26 @@ std::vector<CommandHandle> EditorRuntime::replaceCommandGeneration(
     return handles;
 }
 
-Revision EditorRuntime::revision() const { return impl_->session->revision(); }
+Revision EditorRuntime::revision() const {
+    if (const auto active = impl_->session->activeDispatchRevision()) {
+        return *active;
+    }
+    std::lock_guard operationLock{impl_->operationMutex};
+    return impl_->session->revision();
+}
 std::filesystem::path const& EditorRuntime::workspaceRoot() const noexcept { return impl_->root; }
 ExternalDiffBurstResult EditorRuntime::applyExternalDiffBurst(
     std::vector<ExternalDiffRevision> changes) {
+    std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyExternalDiffBurst(std::move(changes));
 }
 GitDiffScanResult EditorRuntime::applyGitDiffScan(GitDiffScan scan) {
+    std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyGitDiffScan(std::move(scan));
 }
 std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, ViewportDimensions dimensions,
                                                        PaletteReport paletteReport) const {
+    std::lock_guard operationLock{impl_->operationMutex};
     const_cast<EditorRuntime::Impl*>(impl_.get())->drainGitDiffScans();
     auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
@@ -3365,6 +3423,7 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
 
 std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId,
                                                        PaletteReport paletteReport) const {
+    std::lock_guard operationLock{impl_->operationMutex};
     const_cast<EditorRuntime::Impl*>(impl_.get())->drainGitDiffScans();
     auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
@@ -3383,9 +3442,13 @@ int EditorRuntime::gitDiffWakeDescriptor() const {
     return impl_->gitDiffWakeDescriptor();
 }
 
-std::string EditorRuntime::activeDocumentText() const { return impl_->activeText(); }
+std::string EditorRuntime::activeDocumentText() const {
+    std::lock_guard operationLock{impl_->operationMutex};
+    return impl_->activeText();
+}
 
 EditorRuntime::DraftReopenNotice EditorRuntime::activeDraftReopenNotice() const {
+    std::lock_guard operationLock{impl_->operationMutex};
     const auto id = impl_->activeDocumentId();
     if (!id) return DraftReopenNotice::None;
     const auto found = impl_->documentRuntimeStates.find(id->value());

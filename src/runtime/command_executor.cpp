@@ -43,8 +43,8 @@ struct ClientIdHash {
     }
 };
 
-CommandResult rejected(CommandError error, Revision revision,
-                       std::string message) {
+ExecutorResult rejected(CommandError error, Revision revision,
+                        std::string message) {
     return {error, revision, std::move(message)};
 }
 
@@ -109,26 +109,8 @@ std::optional<Revision> CommandExecutor::activeDispatchRevision() const noexcept
     return Revision{impl_->dispatchRevision.load(std::memory_order_relaxed)};
 }
 
-CommandResult CommandExecutor::dispatch(ClientId clientId,
-                                        ClientCommand const& command) {
-    // A handler may not dispatch.  The reason is revision accounting, not the
-    // lock: the new revision below is computed from a value captured BEFORE the
-    // handler runs, so a nested mutation would advance the revision and then be
-    // overwritten -- two accepted mutations, one revision step, and a client
-    // replaying deltas silently misses an edit.
-    //
-    // A handler that needs another command asks for it instead, and it runs as
-    // its own dispatch with its own revision step. The oracle
-    // revisionAdvancesExactlyOncePerAcceptedMutation which pins this.
-    //
-    // (A handler that dispatched would also deadlock on the non-reentrant lock
-    // its own call holds.  That is a symptom; making the lock reentrant would
-    // only make the revision loss reachable.)
-    if (auto const nested = activeDispatchRevision()) {
-        return rejected(CommandError::HandlerFailed, *nested,
-                        std::string{kNestedDispatchRefusal});
-    }
-
+ExecutorResult CommandExecutor::dispatch(ClientId clientId,
+                                         ClientCommand const& command) {
     std::lock_guard lock{impl_->mutex};
     Revision const currentRevision = impl_->revision;
     DispatchMarker const marker{impl_->dispatchingThread,

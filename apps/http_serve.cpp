@@ -185,11 +185,13 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     // The host serves one client, so a single cell suffices.
     auto prevSnapshot = std::make_shared<std::optional<SessionSnapshot>>();
     auto settledId = std::make_shared<std::atomic<std::uint64_t>>(kNoSettlement);
-    auto runtimeMutex = std::make_shared<std::mutex>();
+    // Protects this adapter's attachment, settlement watermark, and previous
+    // snapshot. EditorRuntime serializes authoritative editor operations.
+    auto connectionMutex = std::make_shared<std::mutex>();
     // M1 serves exactly one browser, sharing the single attached ClientId; a
     // second concurrent attach is refused explicitly rather than silently
     // mutating the first client's state. Multi-client is a later milestone.
-    // Guarded by runtimeMutex; 0 means no attached connection.
+    // Guarded by connectionMutex; 0 means no attached connection.
     auto attachedHandle = std::make_shared<Http::WebSocketHandle>(0);
 
     // Send the whole semantic snapshot as the envelope body -- the first frame
@@ -255,7 +257,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
             .onMessage =
                 [&runtime, &server, client, sendSnapshotLocked, sendUpdateLocked,
                  settledId,
-                 runtimeMutex, attachedHandle](Http::WebSocketHandle handle,
+                 connectionMutex, attachedHandle](Http::WebSocketHandle handle,
                             Http::WebSocketMessage message) {
                     // A single connection's malformed or unexpected message must
                     // never terminate the server process: an exception escaping this
@@ -266,7 +268,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     std::string_view const payload{message.data};
                     if (payload.rfind("KEY:", 0) == 0) {
                         auto const frame = parseKeyFrame(payload.substr(4));
-                        std::lock_guard lock{*runtimeMutex};
+                        std::lock_guard lock{*connectionMutex};
                         if (*attachedHandle != handle) return;
                         if (frame) {
                             bool dispatched = false;
@@ -289,7 +291,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     // no side effect, so no separate validation is needed.
                     if (payload.rfind("CMD:", 0) == 0) {
                         std::string const command{payload.substr(4)};
-                        std::lock_guard lock{*runtimeMutex};
+                        std::lock_guard lock{*connectionMutex};
                         if (*attachedHandle != handle) return;
                         if (!command.empty()) {
                             (void)runtime.dispatch(
@@ -304,7 +306,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     // effect, so no separate validation is needed.
                     if (payload.rfind("PFOC:", 0) == 0) {
                         auto const indexText = payload.substr(5);
-                        std::lock_guard lock{*runtimeMutex};
+                        std::lock_guard lock{*connectionMutex};
                         if (*attachedHandle != handle) return;
                         std::size_t index = 0;
                         auto const parsed = std::from_chars(
@@ -322,7 +324,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     auto const status = ProtocolCodec{}.decodeStatusActionInvocation(
                         message.data);
                     if (status.accepted()) {
-                        std::lock_guard lock{*runtimeMutex};
+                        std::lock_guard lock{*connectionMutex};
                         if (*attachedHandle != handle) return;
                         (void)runtime.dispatch(
                             client, {"status.invoke_action", runtime.revision(),
@@ -333,7 +335,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     // Submit the selected candidate by authoritative candidate id.
                     if (payload.rfind("PSUB:", 0) == 0) {
                         std::string const id{payload.substr(5)};
-                        std::lock_guard lock{*runtimeMutex};
+                        std::lock_guard lock{*connectionMutex};
                         if (*attachedHandle != handle) return;
                         auto snapshot = runtime.snapshot(client);
                         if (snapshot && !id.empty()) {
@@ -364,7 +366,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     // select-then-Enter mean the same thing.
                     if (payload.rfind("TSEL:", 0) == 0) {
                         std::string const id{payload.substr(5)};
-                        std::lock_guard lock{*runtimeMutex};
+                        std::lock_guard lock{*connectionMutex};
                         if (*attachedHandle != handle) return;
                         if (!id.empty()) {
                             // Activate only when the selection was accepted: an
@@ -394,7 +396,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     // the id must be present AND the action must be one that file
                     // offers -- so an unknown id or an unoffered action is a no-op.
                     if (payload.rfind("EXMD:", 0) == 0) {
-                        std::lock_guard lock{*runtimeMutex};
+                        std::lock_guard lock{*connectionMutex};
                         if (*attachedHandle != handle) return;
                         auto const frame =
                             ssg::app::parse_external_pointer_frame(payload);
@@ -416,7 +418,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                         return;
                     }
                     if (payload == "SNAP") {
-                        std::lock_guard lock{*runtimeMutex};
+                        std::lock_guard lock{*connectionMutex};
                         if (*attachedHandle != handle) return;
                         sendSnapshotLocked(handle);
                         return;
@@ -425,7 +427,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     if (!attach.accepted()) {
                         return;
                     }
-                    std::lock_guard lock{*runtimeMutex};
+                    std::lock_guard lock{*connectionMutex};
                     if (*attachedHandle != 0) {
                         (void)server.send(
                             handle,
@@ -441,10 +443,10 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                     }
                 },
             .onClose =
-                [runtimeMutex, attachedHandle](Http::WebSocketHandle handle) {
+                [connectionMutex, attachedHandle](Http::WebSocketHandle handle) {
                     // Only the attached connection closing detaches the client; an
                     // unattached or attach-refused socket closing must not.
-                    std::lock_guard lock{*runtimeMutex};
+                    std::lock_guard lock{*connectionMutex};
                     if (*attachedHandle == handle) *attachedHandle = 0;
                 },
         });
@@ -461,12 +463,12 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     std::fprintf(stderr,
                  "ssg: serving http://127.0.0.1:%u/  (Ctrl-C to stop)\n",
                  static_cast<unsigned>(port));
-    auto gitWakeDescriptor = [&runtime, runtimeMutex]() {
-        std::lock_guard lock{*runtimeMutex};
+    auto gitWakeDescriptor = [&runtime, connectionMutex]() {
+        std::lock_guard lock{*connectionMutex};
         return runtime.gitDiffWakeDescriptor();
     };
-    auto consumeGitWake = [&runtime, runtimeMutex]() {
-        std::lock_guard lock{*runtimeMutex};
+    auto consumeGitWake = [&runtime, connectionMutex]() {
+        std::lock_guard lock{*connectionMutex};
         int const fd = runtime.gitDiffWakeDescriptor();
         if (fd == -1) return;
         char scratch[64];
@@ -481,8 +483,8 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
         }
     };
     auto broadcastGitUpdate = [&runtime, &server, client, prevSnapshot,
-                               runtimeMutex, settledId, attachedHandle]() {
-        std::lock_guard lock{*runtimeMutex};
+                               connectionMutex, settledId, attachedHandle]() {
+        std::lock_guard lock{*connectionMutex};
         auto current = runtime.snapshot(client);
         if (!current) return;
         // Send under the lock so delta derivation, prevSnapshot advance, and the
@@ -504,8 +506,8 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
         }
         *prevSnapshot = std::move(current);
     };
-    auto flushDueDrafts = [&runtime, runtimeMutex]() {
-        std::lock_guard lock{*runtimeMutex};
+    auto flushDueDrafts = [&runtime, connectionMutex]() {
+        std::lock_guard lock{*connectionMutex};
         return runtime.flushDueAutosaveDrafts();
     };
     while (!g_stop.load()) {
@@ -526,7 +528,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     {
         // A clean shutdown flushes every dirty draft, capturing edits newer than
         // the last periodic flush, so no in-flight recovery draft is lost.
-        std::lock_guard lock{*runtimeMutex};
+        std::lock_guard lock{*connectionMutex};
         (void)runtime.flushAllAutosaveDrafts();
     }
     server.stop();

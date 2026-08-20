@@ -241,6 +241,7 @@ struct EditorRuntime::Impl final : CommandServices,
     // on a real chrome/structure change.
     std::uint64_t chromeGeneration = 0;
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
+    mutable std::mutex operationMutex;
     std::shared_ptr<CommandCatalog> catalog =
         std::make_shared<CommandCatalog>();
     std::unique_ptr<CommandExecutor> session;

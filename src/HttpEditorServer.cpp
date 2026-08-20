@@ -84,6 +84,9 @@ struct HttpEditorRoute::Impl {
     };
 
     struct Connection {
+        // Serializes messages and close callbacks for this connection only.
+        // Runtime-wide command ordering belongs to EditorRuntime.
+        std::recursive_mutex receiveMutex;
         std::mutex mutex;
         std::condition_variable ready;
         std::deque<Outbound> queue;
@@ -147,8 +150,17 @@ struct HttpEditorRoute::Impl {
         auto connection = find(handle);
         if (!connection) return;
 
-        std::lock_guard processLock{processingMutex};
-        if (!connection->binding) {
+        std::lock_guard receiveLock{connection->receiveMutex};
+        std::optional<ClientId> clientId;
+        std::optional<SessionId> sessionId;
+        {
+            std::lock_guard stateLock{connection->mutex};
+            if (connection->binding) {
+                clientId = connection->binding->principal.clientId();
+                sessionId = connection->binding->sessionId;
+            }
+        }
+        if (!clientId) {
             if (message.opcode != 0x1 ||
                 !attach(handle, connection, message.data)) {
                 close(handle, connection);
@@ -164,13 +176,13 @@ struct HttpEditorRoute::Impl {
             message.data, argumentCodecs, config.protocolLimits);
         if (command.accepted()) {
             auto const result = runtime.dispatch(
-                connection->binding->principal.clientId(), *command.command);
+                *clientId, *command.command);
             if (!result.accepted()) {
                 enqueue(handle, connection,
                         {ProtocolCodec{}.encodeCommandResult(result), true});
                 return;
             }
-            publishSession(connection->binding->sessionId);
+            publishSession(*sessionId);
             return;
         }
 
@@ -179,7 +191,7 @@ struct HttpEditorRoute::Impl {
         if (status.accepted()) {
             try {
                 auto const result = runtime.dispatch(
-                    connection->binding->principal.clientId(),
+                    *clientId,
                     {"status.invoke_action", runtime.revision(),
                      *status.invocation});
                 if (!result.accepted()) {
@@ -187,7 +199,7 @@ struct HttpEditorRoute::Impl {
                             {ProtocolCodec{}.encodeCommandResult(result), true});
                     return;
                 }
-                publishSession(connection->binding->sessionId);
+                publishSession(*sessionId);
             } catch (...) {
                 close(handle, connection);
             }
@@ -208,26 +220,40 @@ struct HttpEditorRoute::Impl {
             return false;
         }
         auto const clientId = attached->principal.clientId();
-        auto const attachResult =
+        auto attachResult =
             runtime.attach(attached->principal, attached->viewId);
+        if (attachResult.error == AttachError::DuplicateClient) {
+            // A reconnect can arrive before the server thread has observed the
+            // prior socket's close. The host-authenticated client identity is
+            // authoritative, so retire that stale binding before retrying.
+            // The new connection has no binding yet, so findClient cannot expose
+            // it as another reconnect's "previous" connection: receive-mutex
+            // acquisition is one-way from an unbound connection to its old bound
+            // connection and cannot form an old-to-new cycle.
+            if (auto previous = findClient(clientId)) {
+                close(previous->first, previous->second);
+                attachResult =
+                    runtime.attach(attached->principal, attached->viewId);
+            }
+        }
         if (!attachResult.accepted()) return false;
 
-        connection->binding.emplace(std::move(*attached));
-        connection->snapshot = runtime.snapshot(clientId);
-        if (!connection->snapshot) {
+        std::lock_guard publishLock{publishMutex};
+        auto snapshot = runtime.snapshot(clientId);
+        if (!snapshot) {
             (void)runtime.detach(clientId);
-            connection->binding.reset();
             return false;
         }
-        auto const currentRevision = connection->snapshot->revision();
+        auto const currentRevision = snapshot->revision();
 
         bool replayed = false;
+        std::vector<std::string> outbound;
         if (request.request->lastAppliedRevision) {
             auto next = *request.request->lastAppliedRevision;
             if (next == currentRevision) {
                 replayed = true;
             } else {
-                auto const key = replayKey(*connection->binding);
+                auto const key = replayKey(*attached);
                 auto const found = replay.find(key);
                 std::vector<std::string> chain;
                 if (found != replay.end()) {
@@ -241,21 +267,30 @@ struct HttpEditorRoute::Impl {
                 if (next == currentRevision && !chain.empty() &&
                     chain.size() <= config.outboundQueueMessages) {
                     for (auto& encoded : chain) {
-                        enqueue(handle, connection,
-                                {std::move(encoded), true});
+                        outbound.push_back(std::move(encoded));
                     }
                     replayed = true;
                 }
             }
         }
         if (!replayed) {
-            enqueue(handle, connection,
-                    {ProtocolCodec{}.encodeSessionSnapshot(*connection->snapshot), true});
+            outbound.push_back(
+                ProtocolCodec{}.encodeSessionSnapshot(*snapshot));
+        }
+        {
+            std::lock_guard stateLock{connection->mutex};
+            connection->binding.emplace(std::move(*attached));
+            connection->snapshot.emplace(std::move(*snapshot));
+        }
+        for (auto& encoded : outbound) {
+            enqueue(handle, connection, {std::move(encoded), true});
         }
         return true;
     }
 
     void publishSession(SessionId const& sessionId) {
+        std::vector<Http::WebSocketHandle> closeAfterPublish;
+        std::unique_lock publishLock{publishMutex};
         std::vector<std::pair<Http::WebSocketHandle,
                               std::shared_ptr<Connection>>>
             targets;
@@ -270,10 +305,13 @@ struct HttpEditorRoute::Impl {
             }
         }
         for (auto const& [handle, connection] : targets) {
-            auto current =
-                runtime.snapshot(connection->binding->principal.clientId());
+            std::unique_lock stateLock{connection->mutex};
+            if (!connection->binding) continue;
+            auto current = runtime.snapshot(
+                connection->binding->principal.clientId());
             if (!current) {
-                close(handle, connection);
+                stateLock.unlock();
+                closeAfterPublish.push_back(handle);
                 continue;
             }
             if (!connection->snapshot ||
@@ -300,7 +338,12 @@ struct HttpEditorRoute::Impl {
                 encoded = ProtocolCodec{}.encodeSessionSnapshot(*current);
             }
             connection->snapshot = std::move(current);
+            stateLock.unlock();
             enqueue(handle, connection, {std::move(encoded), true});
+        }
+        publishLock.unlock();
+        for (auto handle : closeAfterPublish) {
+            server.closeConnection(handle);
         }
     }
 
@@ -356,19 +399,19 @@ struct HttpEditorRoute::Impl {
 
     void close(Http::WebSocketHandle handle,
                std::shared_ptr<Connection> const& connection) {
+        std::lock_guard receiveLock{connection->receiveMutex};
+        std::optional<ClientId> detachClient;
         {
-            std::lock_guard lock{connection->mutex};
+            std::lock_guard stateLock{connection->mutex};
             connection->stopping = true;
-        }
-        connection->ready.notify_one();
-        {
-            std::lock_guard processLock{processingMutex};
             if (connection->binding && !connection->detached) {
-                (void)runtime.detach(
-                    connection->binding->principal.clientId());
+                detachClient =
+                    connection->binding->principal.clientId();
                 connection->detached = true;
             }
         }
+        connection->ready.notify_one();
+        if (detachClient) (void)runtime.detach(*detachClient);
         server.closeConnection(handle);
     }
 
@@ -382,7 +425,7 @@ struct HttpEditorRoute::Impl {
             connections.erase(found);
         }
         {
-            std::lock_guard lock{connection->mutex};
+            std::lock_guard stateLock{connection->mutex};
             connection->stopping = true;
         }
         connection->ready.notify_one();
@@ -390,11 +433,17 @@ struct HttpEditorRoute::Impl {
             connection->writer.get_id() != std::this_thread::get_id()) {
             connection->writer.join();
         }
-        std::lock_guard processLock{processingMutex};
-        if (connection->binding && !connection->detached) {
-            (void)runtime.detach(connection->binding->principal.clientId());
-            connection->detached = true;
+        std::lock_guard receiveLock{connection->receiveMutex};
+        std::optional<ClientId> detachClient;
+        {
+            std::lock_guard stateLock{connection->mutex};
+            if (connection->binding && !connection->detached) {
+                detachClient =
+                    connection->binding->principal.clientId();
+                connection->detached = true;
+            }
         }
+        if (detachClient) (void)runtime.detach(*detachClient);
     }
 
     std::shared_ptr<Connection> find(Http::WebSocketHandle handle) {
@@ -403,18 +452,19 @@ struct HttpEditorRoute::Impl {
         return found == connections.end() ? nullptr : found->second;
     }
 
-    std::shared_ptr<Connection> find(ClientId clientId) {
+    std::optional<std::pair<Http::WebSocketHandle,
+                            std::shared_ptr<Connection>>>
+    findClient(ClientId clientId) {
         std::lock_guard lock{connectionsMutex};
         for (auto const& [handle, connection] : connections) {
-            (void)handle;
             std::lock_guard connectionLock{connection->mutex};
             if (connection->binding &&
                 !connection->stopping &&
                 connection->binding->principal.clientId() == clientId) {
-                return connection;
+                return std::pair{handle, connection};
             }
         }
-        return nullptr;
+        return std::nullopt;
     }
 
     EditorRuntime& runtime;
@@ -425,7 +475,7 @@ struct HttpEditorRoute::Impl {
     HttpEditorConnectionPolicy& policy;
     HttpEditorRouteConfig config;
     Http::Server& server;
-    std::recursive_mutex processingMutex;
+    std::mutex publishMutex;
     std::mutex connectionsMutex;
     std::map<Http::WebSocketHandle, std::shared_ptr<Connection>> connections;
     std::map<ReplayKey, std::deque<ReplayRecord>> replay;

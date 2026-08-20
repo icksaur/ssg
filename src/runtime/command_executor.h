@@ -9,19 +9,25 @@ namespace ssg {
 
 class CommandCatalog;
 
+struct ExecutorResult {
+    CommandError error;
+    Revision revision;
+    std::string message;
+
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == CommandError::None;
+    }
+};
+
+// The aggregate checks this before acquiring its non-recursive operation mutex.
+// A caller meeting the refusal needs the supported alternative, not only the
+// prohibition.
+inline constexpr std::string_view kNestedDispatchRefusal =
+    "a command handler may not dispatch another command directly; ask for "
+    "it instead, so each command still advances the revision exactly once";
+
 class CommandExecutor {
 public:
-    // Why a handler's dispatch is refused, and what to do instead.
-    //
-    // Defined once because two guards report it: this class, and
-    // EditorRuntime::dispatch, whose wrapper touches the session before
-    // dispatching and so must refuse earlier.  A caller meeting this needs the
-    // alternative, not just the prohibition -- composing commands is a
-    // supported thing to want.
-    static constexpr std::string_view kNestedDispatchRefusal =
-        "a command handler may not dispatch another command directly; ask for "
-        "it instead, so each command still advances the revision exactly once";
-
     explicit CommandExecutor(std::shared_ptr<CommandCatalog> catalog,
                              CommandServices* services = nullptr);
     ~CommandExecutor();
@@ -46,8 +52,8 @@ public:
     [[nodiscard]] std::optional<Revision> activeDispatchRevision()
         const noexcept;
 
-    [[nodiscard]] CommandResult dispatch(ClientId clientId,
-                                         ClientCommand const& command);
+    [[nodiscard]] ExecutorResult dispatch(ClientId clientId,
+                                          ClientCommand const& command);
 
     [[nodiscard]] Revision revision() const;
     // CONTRACT

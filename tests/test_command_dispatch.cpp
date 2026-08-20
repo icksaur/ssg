@@ -5,7 +5,10 @@
 
 #include "test_helpers.h"
 
+#include <atomic>
+#include <chrono>
 #include <filesystem>
+#include <future>
 #include <memory>
 #include <string>
 #include <vector>
@@ -15,6 +18,7 @@
 namespace {
 
 namespace fs = std::filesystem;
+using namespace std::chrono_literals;
 
 // Pid-unique so parallel ctest runs cannot remove a directory another test is
 // still using.
@@ -28,8 +32,12 @@ fs::path uniqueRoot() {
 }
 
 std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
-    auto created =
-        ssg::EditorRuntime::create({root, root / "scratch", root / "recovery"});
+    auto created = ssg::EditorRuntime::create(
+        {.cwd = root,
+         .scratchRoot = root / "scratch",
+         .recoveryRoot = root / "recovery",
+         .enableGitDiffWorker = false,
+         .enableFilesystemWatcher = false});
     auto runtime = std::move(created.runtime);
     if (runtime) {
         (void)runtime->attach(
@@ -270,7 +278,7 @@ TEST(aHandlerThatDispatchesIsToldToDeferInstead) {
     // And says why it matters, so the rule is not mistaken for an arbitrary
     // limitation by whoever reads it next.
     ASSERT_TRUE(nested.message.find("revision") != std::string::npos);
-    ASSERT_EQ(std::string{ssg::CommandExecutor::kNestedDispatchRefusal},
+    ASSERT_EQ(std::string{ssg::kNestedDispatchRefusal},
               nested.message);
 
     fs::remove_all(root);
@@ -321,6 +329,100 @@ TEST(aHandlerCannotMutateTheCommandCatalogReentrantly) {
     fs::remove_all(root);
 }
 
+TEST(aggregateOperationHidesIntermediateDeferredRevisions) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+
+    std::promise<void> deferredStartedPromise;
+    auto deferredStarted = deferredStartedPromise.get_future();
+    std::promise<void> releaseDeferredPromise;
+    auto releaseDeferred = releaseDeferredPromise.get_future().share();
+    std::atomic<int> stage{0};
+    std::atomic<std::uint64_t> observedRevision{0};
+
+    runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.blocking_deferred"}
+            .owner("test-oracle")
+            .summary("blocks the aggregate operation")
+            .mutates()
+            .handler([&](ssg::CommandContext&) {
+                stage.store(2);
+                deferredStartedPromise.set_value();
+                releaseDeferred.wait();
+                stage.store(3);
+                return ssg::CommandHandlerResult::success();
+            }));
+    runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.primary"}
+            .owner("test-oracle")
+            .summary("queues the blocking command")
+            .mutates()
+            .handler([&](ssg::CommandContext& context) {
+                stage.store(1);
+                if (!runtime->deferDispatch(
+                        ssg::ClientId{1},
+                        {"oracle.blocking_deferred", context.revision(), {}})) {
+                    return ssg::CommandHandlerResult::failure(
+                        "could not queue");
+                }
+                return ssg::CommandHandlerResult::success();
+            }));
+    runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.second"}
+            .owner("test-oracle")
+            .summary("records the revision it observes")
+            .observes()
+            .handler([&](ssg::CommandContext& context) {
+                observedRevision.store(context.revision().value());
+                return ssg::CommandHandlerResult::success();
+            }));
+
+    auto const before = runtime->revision();
+    auto first = std::async(std::launch::async, [&] {
+        return runtime->dispatch(
+            ssg::ClientId{1}, {"oracle.primary", before, {}});
+    });
+    deferredStarted.wait();
+    ASSERT_EQ(stage.load(), 2);
+
+    std::promise<void> snapshotEnteringPromise;
+    auto snapshotEntering = snapshotEnteringPromise.get_future();
+    auto snapshot = std::async(std::launch::async, [&] {
+        snapshotEnteringPromise.set_value();
+        return runtime->snapshot(ssg::ClientId{1});
+    });
+    std::promise<void> secondEnteringPromise;
+    auto secondEntering = secondEnteringPromise.get_future();
+    auto second = std::async(std::launch::async, [&] {
+        secondEnteringPromise.set_value();
+        return runtime->dispatch(
+            ssg::ClientId{1}, {"oracle.second", before, {}});
+    });
+    snapshotEntering.wait();
+    secondEntering.wait();
+
+    ASSERT_TRUE(snapshot.wait_for(20ms) == std::future_status::timeout);
+    ASSERT_TRUE(second.wait_for(20ms) == std::future_status::timeout);
+
+    releaseDeferredPromise.set_value();
+    auto const firstResult = first.get();
+    auto const captured = snapshot.get();
+    auto const secondResult = second.get();
+
+    ASSERT_TRUE(firstResult.accepted());
+    ASSERT_TRUE(captured.has_value());
+    ASSERT_TRUE(secondResult.accepted());
+    ASSERT_EQ(stage.load(), 3);
+    ASSERT_EQ(firstResult.revision.value(), before.value() + 2);
+    if (captured) {
+        ASSERT_EQ(captured->revision().value(), before.value() + 2);
+    }
+    ASSERT_EQ(observedRevision.load(), before.value() + 2);
+
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
@@ -330,6 +432,7 @@ int main() {
     RUN(aFailedChainAdvancesTheRevisionOnlyForCommandsThatRan);
     RUN(aHandlerThatDispatchesIsToldToDeferInstead);
     RUN(aHandlerCannotMutateTheCommandCatalogReentrantly);
+    RUN(aggregateOperationHidesIntermediateDeferredRevisions);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

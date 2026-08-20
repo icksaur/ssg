@@ -118,6 +118,12 @@ public:
     EditorRuntime(EditorRuntime&&) = delete;
     EditorRuntime& operator=(EditorRuntime&&) = delete;
 
+    // CONTRACT
+    // EditorRuntime is the serialized aggregate boundary. Each public state
+    // operation completes before another state operation can observe it; command
+    // dispatch includes handler requests, reconciliation, revision publication,
+    // and public result construction. A handler must request a follow-up through
+    // deferDispatch rather than re-entering a state operation.
     [[nodiscard]] AttachResult attach(InvocationPrincipal principal,
                                       ViewId viewId);
     [[nodiscard]] bool detach(ClientId clientId);

@@ -7,18 +7,14 @@
 
 #include <algorithm>
 #include <any>
-#include <atomic>
-#include <chrono>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <type_traits>
 #include <vector>
 
 namespace {
 
-using namespace std::chrono_literals;
 
 static_assert(!std::is_copy_assignable_v<ssg::InvocationPrincipal>);
 static_assert(!std::is_move_assignable_v<ssg::InvocationPrincipal>);
@@ -265,44 +261,6 @@ TEST(principalCapabilityEnforcementHasOriginParity) {
     ASSERT_EQ(calls, 2);
 }
 
-TEST(executorSerializesConcurrentHandlers) {
-    std::atomic<int> active{0};
-    std::atomic<int> maximum{0};
-    auto catalog = catalogOf({command(
-        "executor.observe", ssg::CommandEffect::Observation,
-        [&](ssg::CommandContext&, std::any const&) {
-            int now = active.fetch_add(1) + 1;
-            int seen = maximum.load();
-            while (seen < now &&
-                   !maximum.compare_exchange_weak(seen, now)) {
-            }
-            std::this_thread::sleep_for(2ms);
-            active.fetch_sub(1);
-            return ssg::CommandHandlerResult::success();
-        })});
-    ssg::CommandExecutor session{catalog};
-    ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(session.attach(principal(2), ssg::ViewId{2}).accepted());
-
-    std::vector<std::thread> threads;
-    std::atomic<int> dispatchFailures{0};
-    for (std::uint64_t i = 0; i < 12; ++i) {
-        threads.emplace_back([&, i] {
-            auto client = ssg::ClientId{(i % 2) + 1};
-            if (!session.dispatch(client, request("executor.observe", 0))
-                     .accepted()) {
-                dispatchFailures.fetch_add(1);
-            }
-        });
-    }
-    for (auto& thread : threads) {
-        thread.join();
-    }
-
-    ASSERT_EQ(maximum.load(), 1);
-    ASSERT_EQ(dispatchFailures.load(), 0);
-}
-
 }  // namespace
 
 int main() {
@@ -311,7 +269,6 @@ int main() {
     RUN(clientIdentityAndPrincipalAreIsolated);
     RUN(handlerFailureIsAtomic);
     RUN(principalCapabilityEnforcementHasOriginParity);
-    RUN(executorSerializesConcurrentHandlers);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

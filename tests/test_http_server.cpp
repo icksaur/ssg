@@ -206,7 +206,11 @@ struct Fixture {
         std::filesystem::remove_all(root);
         std::filesystem::create_directories(root / "workspace");
         auto created = ssg::EditorRuntime::create(
-            {root / "workspace", root / "scratch", root / "recovery"});
+            {.cwd = root / "workspace",
+             .scratchRoot = root / "scratch",
+             .recoveryRoot = root / "recovery",
+             .enableGitDiffWorker = false,
+             .enableFilesystemWatcher = false});
         if (!created.accepted()) {
             throw std::runtime_error{created.message};
         }
