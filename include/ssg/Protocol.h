@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/EditorSession.h>
+#include <ssg/EditorClient.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/snapshot.h>
 #include <ssg/StatusQueue.h>

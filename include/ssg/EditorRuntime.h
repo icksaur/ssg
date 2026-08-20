@@ -2,7 +2,7 @@
 
 #include <ssg/DiffModel.h>
 #include <ssg/ChromeDecode.h>
-#include <ssg/EditorSession.h>
+#include <ssg/EditorClient.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/GitDiffSource.h>

@@ -1,4 +1,5 @@
 #include <ssg/HttpEditorServer.h>
+#include <ssg/EditorSession.h>
 #include <ssg/startup_audit.h>
 
 #include <http.h>

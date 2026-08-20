@@ -13,7 +13,7 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
 #include <ssg/Selection.h>
-#include <ssg/EditorSession.h>
+#include <ssg/EditorClient.h>
 #include <ssg/Settings.h>
 #include <ssg/snapshot.h>
 #include <ssg/StatusQueue.h>
