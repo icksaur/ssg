@@ -94,7 +94,7 @@ TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
                             {"file.open", runtime->revision(), std::string{"alpha.txt"}});
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"beta.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {60, 12});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {60, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     const auto& shell = snapshot->presentation()->shell;
@@ -151,7 +151,7 @@ TEST(renderPaintsContentNotAccessibilityLabels) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"file.open", runtime->revision(), std::string{"hello.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -183,7 +183,7 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
         {"cursor.set_position", runtime->revision(),
          ssg::SelectionCommandArguments{atBeta, std::nullopt}});
 
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& pane = snapshot->presentation()->shell.panes.front();
@@ -233,7 +233,7 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"select.add_cursor_down", runtime->revision(), {}});
 
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().selection.items().size(),
@@ -271,7 +271,7 @@ TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
     auto segmentCountFor = [&](std::string const& file) -> std::uint64_t {
         (void)runtime->dispatch(
             ssg::ClientId{1}, {"file.open", runtime->revision(), file});
-        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return 0;
         ssg::Renderer::resetRenderSegmentationCalls();
@@ -309,10 +309,10 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
         {"file.open", runtime->revision(), std::string{"long.txt"}});
 
     ssg::ViewportDimensions const dims{40, 8};
-    (void)runtime->snapshot(ssg::ClientId{1}, dims);  // prime the pane cache
+    (void)runtime->present(ssg::ClientId{1}, dims);  // prime the pane cache
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"cursor.line_end", runtime->revision(), {}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, dims);
+    auto snapshot = runtime->present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_TRUE(snapshot->presentation()->viewport.firstVisualColumn > 0);
@@ -353,7 +353,7 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"file.open", runtime->revision(), std::string{"hello.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
@@ -408,7 +408,7 @@ TEST(renderShowsPaletteQueryAndGhostInHeader) {
     report.rows = {{"file.save", "Save File", ""}};
     report.selected = std::uint32_t{0};
     auto snapshot =
-        runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
+        runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -444,7 +444,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
 
     // Baseline: no selection -> the document row has no selection-role cells.
     {
-        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         auto grid = ssg::Renderer{}.render(*snapshot);
@@ -462,7 +462,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
     // Select to end of the first line: "alpha" cells carry the selection role.
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"select.line_end", runtime->revision(), {}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -512,7 +512,7 @@ TEST(renderFillsEndOfLineForMultilineSelection) {
     // newline after "alpha", so alpha's end-of-line fills to the pane edge.
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"select.line_down", runtime->revision(), {}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -546,7 +546,7 @@ TEST(renderHighlightsWideGlyphCells) {
         {"file.open", runtime->revision(), std::string{"w.txt"}});
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"select.all", runtime->revision(), {}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -581,7 +581,7 @@ TEST(renderPaintsSecondaryRangedSelectionCaret) {
                             {"select.word_right", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"select.add_next_occurrence", runtime->revision(), {}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& items = snapshot->sections().selection.items();
@@ -618,7 +618,7 @@ TEST(renderPaintsSecondaryCaretAsACell) {
     // the other renders as a caret-role cell.
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"select.add_cursor_down", runtime->revision(), {}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().selection.items().size(),
@@ -654,7 +654,7 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"find.update_query", runtime->revision(), ssg::FindQueryArguments{"cat"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().findReplace.matches.size(), std::size_t{3});
@@ -708,7 +708,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"text.insert", runtime->revision(), ssg::TextInputArguments{"z"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_FALSE(snapshot->sections().findReplace.open);
@@ -741,7 +741,7 @@ TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"replace.update_replacement", runtime->revision(), ssg::FindQueryArguments{"dog"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -773,7 +773,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
 
     // Default options: all three indicators render unchecked.
     {
-        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         auto grid = ssg::Renderer{}.render(*snapshot);
@@ -788,7 +788,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
     // Toggling case flips its indicator to checked.
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"find.toggle_case", runtime->revision(), {}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -818,7 +818,7 @@ TEST(renderPromptControlLabelsAreLowercaseChrome) {
                           Case{"file.open", "open file", "Open file"}}) {
         (void)runtime->dispatch(ssg::ClientId{1},
                                 {c.command, runtime->revision(), {}});
-        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) continue;
         auto grid = ssg::Renderer{}.render(*snapshot);
@@ -844,11 +844,11 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
     // Prime the cached panel height (the command-path keep-visible reads it).
-    (void)runtime->snapshot(ssg::ClientId{1}, {80, 12});
+    (void)runtime->present(ssg::ClientId{1}, {80, 12});
     for (int i = 0; i < 60; ++i) {
         (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
     }
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 12});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->presentation()->shell;
@@ -881,7 +881,7 @@ TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
     // Expand the root so its two files are visible; the tree still fits.
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->presentation()->shell;
@@ -908,7 +908,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"file.open", runtime->revision(), std::string{"hello.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto presentation = *snapshot->presentation();
@@ -965,7 +965,7 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"file.open", runtime->revision(), std::string{"hello.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto presentation = *snapshot->presentation();
@@ -1013,7 +1013,7 @@ TEST(renderTooSmallMatchesHandAuthoredGolden) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     // A 24-wide, 3-row terminal fits the whole 18-cell message, centered.
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {24, 3});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {24, 3});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -1056,7 +1056,7 @@ TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
     // exactly as the app does.
     ssg::PaletteReport report;
     report.query = "save";
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -1093,7 +1093,7 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
 
     ssg::PaletteReport report;
     report.query = "\u00e9\u00e9\u00e9";  // 3 characters, 6 bytes, 3 columns.
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -1126,7 +1126,7 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
 
     ssg::PaletteReport report;
     report.query = std::string(300, 'x');
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -1193,7 +1193,7 @@ TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
     (void)runtime->dispatch(ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->presentation()->shell;
@@ -1283,7 +1283,7 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
         runtime->dispatch(ssg::ClientId{1}, {"style.define", runtime->revision(), args});
     ASSERT_TRUE(applied.accepted());
 
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The published section carries the new glyphs.
@@ -1345,7 +1345,7 @@ TEST(styleDefineRejectionLeavesTheLiveStyleUnchanged) {
         runtime->dispatch(ssg::ClientId{1}, {"style.define", runtime->revision(), args});
     ASSERT_FALSE(rejected.accepted());
 
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The good key in the rejected table did NOT leak into the live style.
@@ -1698,7 +1698,7 @@ TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 

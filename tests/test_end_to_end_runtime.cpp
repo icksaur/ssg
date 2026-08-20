@@ -86,7 +86,7 @@ TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
         tui, tuiPrincipal, ssg::ViewId{2}, ssg::ViewportDimensions{80, 24}};
 
     auto directSnapshot =
-        direct.snapshot(directPrincipal.clientId(),
+        direct.present(directPrincipal.clientId(),
                         ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(directSnapshot.has_value());
     ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));
@@ -109,7 +109,7 @@ TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
         auto tuiResult = client.submit(step.command, step.payload);
         ASSERT_TRUE(directResult.accepted());
         ASSERT_TRUE(tuiResult.accepted());
-        directSnapshot = direct.snapshot(
+        directSnapshot = direct.present(
             directPrincipal.clientId(), ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(directSnapshot.has_value());
         ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));

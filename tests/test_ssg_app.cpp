@@ -334,7 +334,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"file.open", runtime.revision(), std::string{"u.txt"}})
                     .accepted());
-    auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (!snap.has_value()) return;
     auto grid = ssg::Renderer{}.render(*snap);
@@ -378,7 +378,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
         (void)runtime.dispatch(ssg::ClientId{1},
                                {"cursor.set_position", runtime.revision(),
                                 ssg::SelectionCommandArguments{pos, std::nullopt}});
-        auto s = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto s = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         if (!s) return -1;
         auto g = ssg::Renderer{}.render(*s);
         return g.caret ? g.caret->column : -1;
@@ -990,7 +990,7 @@ TEST(decodeKittyKeyMatchesEveryDefaultBinding) {
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
-    auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (!snap.has_value()) return;
 
@@ -2500,7 +2500,7 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
                                    std::nullopt, ssg::Selection{*p7, *p7}}})
                     .accepted());
 
-    auto beforeSnap = runtime.snapshot(ssg::ClientId{1}, {80, 12});
+    auto beforeSnap = runtime.present(ssg::ClientId{1}, {80, 12});
     ASSERT_TRUE(beforeSnap.has_value());
     if (!beforeSnap) return;
     auto const& items = beforeSnap->sections().selection.items();
@@ -2519,7 +2519,7 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
                 .accepted());
     }
 
-    auto afterSnap = runtime.snapshot(ssg::ClientId{1}, {80, 12});
+    auto afterSnap = runtime.present(ssg::ClientId{1}, {80, 12});
     ASSERT_TRUE(afterSnap.has_value());
     if (!afterSnap) return;
     auto const& survivors = afterSnap->sections().selection.items();
@@ -3156,7 +3156,7 @@ TEST(evaluateInitScriptPushesComposedChromeToTheRuntime) {
 
     const ssg::ViewportDimensions dims{80, 12};
     const auto hasHeaderField = [&](std::string_view id) {
-        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snap = runtime.present(ssg::ClientId{1}, dims);
         if (!snap) return false;
         for (const auto& node : snap->presentation()->shell.accessibilityNodes) {
             if (node.kind == ssg::ShellNodeKind::HeaderField && node.id == id)
@@ -3285,7 +3285,7 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
     const ssg::ViewportDimensions dims{80, 24};
 
     ssg::app::SnapshotCoalescer coalescer;
-    (void)runtime.snapshot(client, dims);  // loop-top snapshot
+    (void)runtime.present(client, dims);  // loop-top snapshot
     coalescer.noteRefreshed();
 
     // A burst of cursor-down keys. Each consumes routing; each dirties only
@@ -3302,7 +3302,7 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
     const auto pointerAxes =
         ssg::app::consumed_axes(ssg::app::DecodeStatus::pointer);
     ASSERT_TRUE(coalescer.needsRefresh(pointerAxes));
-    auto afterBurst = runtime.snapshot(client, dims);
+    auto afterBurst = runtime.present(client, dims);
     coalescer.noteRefreshed();
     ASSERT_TRUE(afterBurst.has_value());
     ASSERT_EQ(afterBurst->sections().selection.primary().active.line.value(),
@@ -3320,7 +3320,7 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
     coalescer.noteEffects(
         runtime.dispatch(client, {"palette.open", runtime.revision(), {}}).effects);
     ASSERT_TRUE(coalescer.needsRefresh(keyAxes));
-    auto afterOpen = runtime.snapshot(client, dims);
+    auto afterOpen = runtime.present(client, dims);
     coalescer.noteRefreshed();
     ASSERT_TRUE(afterOpen.has_value());
     ASSERT_TRUE(afterOpen->sections().promptStatus.activeKind ==

@@ -15,6 +15,13 @@
 
 #include <unistd.h>
 
+template <typename Runtime>
+concept HasDimensionedSnapshot = requires(Runtime& runtime) {
+    runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+};
+
+static_assert(!HasDimensionedSnapshot<ssg::EditorRuntime>);
+
 // Milestone 11 — Library API is the contract.
 //
 // M11-1: the TUI screen is a pure function of the production EditorRuntime's
@@ -109,7 +116,7 @@ std::vector<ssg::PaletteCandidate> publishedCandidates(
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"palette.open", runtime.revision(), {}})
                     .accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return {};
     return snapshot->sections().palette.candidates;
 }
@@ -189,7 +196,7 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     ASSERT_TRUE(!report.rows.empty());
     if (report.rows.empty()) return;
 
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -225,7 +232,7 @@ TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
                                   {"file.open", runtime->revision(),
                                    std::string{"alpha.txt"}})
                     .accepted());
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -258,7 +265,7 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     report.rows = {{"file.save", "Save File", ""},
                    {"file.save_as", "Save As", ""}};
     report.selected = std::uint32_t{0};
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -280,7 +287,7 @@ TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
                                   {"file.open", runtime->revision(),
                                    std::string{"alpha.txt"}})
                     .accepted());
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {24, 3});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {24, 3});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -320,14 +327,14 @@ TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
         {"prompt.cancel", {}},
     };
 
-    auto previous = runtime->snapshot(ssg::ClientId{1}, dims);
+    auto previous = runtime->present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(previous.has_value());
     if (!previous) return;
 
     for (auto const& step : script) {
         (void)runtime->dispatch(
             ssg::ClientId{1}, {step.command, runtime->revision(), step.payload});
-        auto fresh = runtime->snapshot(ssg::ClientId{1}, dims);
+        auto fresh = runtime->present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(fresh.has_value());
         if (!fresh) break;
 

@@ -59,7 +59,7 @@ std::string captureGridMatrix() {
     // parity is already covered by the ui-layout golden and test_render. The publish's real
     // risk -- the body/panel/content region -- is fully captured.
     auto emit = [&](const std::string& name) {
-        auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snapshot = runtime.present(ssg::ClientId{1}, dims);
         out << "=== " << name << " ===\n";
         if (!snapshot) {
             out << "(no snapshot)\n";

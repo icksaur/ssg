@@ -239,6 +239,7 @@ struct HttpEditorRoute::Impl {
         if (!attachResult.accepted()) return false;
 
         std::lock_guard publishLock{publishMutex};
+        (void)runtime.pump();
         auto snapshot = runtime.snapshot(clientId);
         if (!snapshot) {
             (void)runtime.detach(clientId);
@@ -290,6 +291,7 @@ struct HttpEditorRoute::Impl {
 
     void publishSession(SessionId const& sessionId) {
         std::vector<Http::WebSocketHandle> closeAfterPublish;
+        (void)runtime.pump();
         std::unique_lock publishLock{publishMutex};
         std::vector<std::pair<Http::WebSocketHandle,
                               std::shared_ptr<Connection>>>

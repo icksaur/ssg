@@ -52,8 +52,8 @@ void writeBytes(const std::filesystem::path& path, std::initializer_list<std::ui
     for (auto byte : bytes) output.put(static_cast<char>(byte));
 }
 
-bool activeTabDirty(const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+bool activeTabDirty(ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return false;
     const auto& tabs = snapshot->sections().tabs;
     if (!tabs.active) return false;
@@ -63,8 +63,8 @@ bool activeTabDirty(const ssg::EditorRuntime& runtime) {
     return false;
 }
 
-bool activeTabIsLiveDiff(const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+bool activeTabIsLiveDiff(ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return false;
     const auto& tabs = snapshot->sections().tabs;
     if (!tabs.active) return false;
@@ -99,8 +99,8 @@ bool hasNoticeBar(const ssg::SessionSnapshot& snapshot) {
     return findShellNode(snapshot, ssg::ShellNodeKind::NoticeBar) != nullptr;
 }
 
-bool statusMentions(const ssg::EditorRuntime& runtime, std::string_view needle) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+bool statusMentions(ssg::EditorRuntime& runtime, std::string_view needle) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return false;
     for (const auto& item : snapshot->sections().promptStatus.status.items) {
         if (item.accessibleLabel.find(needle) != std::string::npos) return true;
@@ -496,7 +496,7 @@ TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
         ASSERT_TRUE(reopenNote(runtime).accepted());
         ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                     ssg::EditorRuntime::DraftReopenNotice::Conflict);
-        ASSERT_TRUE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, dims)));
+        ASSERT_TRUE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, dims)));
     }
     {
         // Restored (disk unchanged): a quieter state, no yellow notice.
@@ -508,7 +508,7 @@ TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
         ASSERT_TRUE(reopenNote(runtime).accepted());
         ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                     ssg::EditorRuntime::DraftReopenNotice::Restored);
-        ASSERT_FALSE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, dims)));
+        ASSERT_FALSE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, dims)));
     }
 }
 
@@ -525,7 +525,7 @@ TEST(noticeViewIsPresentOnlyOnADraftConflict) {
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.runtime;
         ASSERT_TRUE(reopenNote(runtime).accepted());
-        auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snapshot = runtime.present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snapshot.has_value());
         const auto& notice = snapshot->sections().noticeView;
         ASSERT_TRUE(notice.has_value());
@@ -539,7 +539,7 @@ TEST(noticeViewIsPresentOnlyOnADraftConflict) {
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.runtime;
         ASSERT_TRUE(reopenNote(runtime).accepted());
-        auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snapshot = runtime.present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snapshot.has_value());
         ASSERT_FALSE(snapshot->sections().noticeView.has_value());
     }
@@ -558,7 +558,7 @@ TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.runtime;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
 
     // Both projections agree that a notice is raised.
@@ -589,7 +589,7 @@ TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"draft.dismiss", runtime.revision(), {}})
                     .accepted());
-    auto cleared = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto cleared = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(cleared.has_value());
     ASSERT_FALSE(hasNoticeBar(*cleared));
     ASSERT_FALSE(cleared->sections().noticeView.has_value());
@@ -612,7 +612,7 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     ASSERT_TRUE(conflictCreated.accepted());
     auto& conflict = *conflictCreated.runtime;
     ASSERT_TRUE(reopenNote(conflict).accepted());
-    auto conflictSnap = conflict.snapshot(ssg::ClientId{1}, dims);
+    auto conflictSnap = conflict.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(conflictSnap.has_value());
     ASSERT_TRUE(hasNoticeBar(*conflictSnap));
 
@@ -622,7 +622,7 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     ASSERT_TRUE(restoredCreated.accepted());
     auto& restored = *restoredCreated.runtime;
     ASSERT_TRUE(reopenNote(restored).accepted());
-    auto restoredSnap = restored.snapshot(ssg::ClientId{1}, dims);
+    auto restoredSnap = restored.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(restoredSnap.has_value());
     ASSERT_FALSE(hasNoticeBar(*restoredSnap));
 
@@ -655,7 +655,7 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.runtime;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
 
     // Each action node hit-tests to its command id.
@@ -678,7 +678,7 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
                     .accepted());
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                 ssg::EditorRuntime::DraftReopenNotice::None);
-    ASSERT_FALSE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, dims)));
+    ASSERT_FALSE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, dims)));
 }
 
 TEST(dismissRefusesWhenThereIsNoConflictNotice) {
@@ -771,7 +771,7 @@ TEST(binaryDiskReplacementRaisesConflictNotSilentDraftLoss) {
     // Not silently None: the conflict is surfaced (old behaviour left it None).
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                 ssg::EditorRuntime::DraftReopenNotice::Conflict);
-    ASSERT_TRUE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, {80, 24})));
+    ASSERT_TRUE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, {80, 24})));
 }
 
 TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
@@ -867,7 +867,7 @@ TEST(touchingTheFileWithIdenticalBytesIsNotAFalseConflict) {
     ASSERT_TRUE(activeTabDirty(runtime));
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                 ssg::EditorRuntime::DraftReopenNotice::Restored);
-    ASSERT_FALSE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, {80, 24})));
+    ASSERT_FALSE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, {80, 24})));
 }
 
 TEST(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile) {
@@ -900,7 +900,7 @@ TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
-        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snap = runtime.present(ssg::ClientId{1}, dims);
         return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
 
@@ -987,7 +987,7 @@ TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_encoding", runtime.revision(), ssg::SetEncodingArguments{ssg::TextEncoding::Utf8Bom}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_line_ending", runtime.revision(), ssg::SetLineEndingArguments{ssg::LineEnding::Crlf}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_final_newline", runtime.revision(), ssg::SetFinalNewlineArguments{true}}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->sections().textEncoding.status, decoded.text->status);
 
@@ -1009,7 +1009,7 @@ TEST(reopenWithEncodingDispatchRedecodesRealFileBytes) {
     auto reopened = runtime.dispatch(ssg::ClientId{1}, {"file.reopen_with_encoding", runtime.revision(), ssg::ReopenWithEncodingArguments{ssg::TextEncoding::Iso88591}});
     ASSERT_TRUE(reopened.accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"\xC3\xA9\n"});
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->sections().textEncoding.status.encoding, ssg::TextEncoding::Iso88591);
     ASSERT_EQ(snapshot->sections().textEncoding.status.lineEnding, ssg::LineEnding::Cr);
@@ -1027,7 +1027,7 @@ TEST(closingTheLastTabClearsTheEditorDocument) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto tabCount = [&] {
-        return runtime.snapshot(ssg::ClientId{1}, {80, 24})->sections().tabs.tabs.size();
+        return runtime.present(ssg::ClientId{1}, {80, 24})->sections().tabs.tabs.size();
     };
 
     // Open two files: two tabs, the active document shows content.
@@ -1046,7 +1046,7 @@ TEST(closingTheLastTabClearsTheEditorDocument) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.close", runtime.revision(), {}}).accepted());
     ASSERT_EQ(tabCount(), std::size_t{0});
     ASSERT_TRUE(runtime.activeDocumentText().empty());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) ASSERT_TRUE(snapshot->sections().document.text.empty());
 }
@@ -1065,7 +1065,7 @@ TEST(tabActivateFocusesTheEditor) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
-        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snap = runtime.present(ssg::ClientId{1}, dims);
         return snap ? snap->sections().focus : ssg::FocusTarget::Editor;
     };
 
@@ -1075,7 +1075,7 @@ TEST(tabActivateFocusesTheEditor) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.focus", runtime.revision(), {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
-    auto first = runtime.snapshot(ssg::ClientId{1}, dims)->sections().tabs.tabs.front().id;
+    auto first = runtime.present(ssg::ClientId{1}, dims)->sections().tabs.tabs.front().id;
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.activate", runtime.revision(), first}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 }
@@ -1095,7 +1095,7 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
-        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snap = runtime.present(ssg::ClientId{1}, dims);
         return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
@@ -1148,7 +1148,7 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
                     .accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"beta"});
 
-    auto beforeClose = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    auto beforeClose = runtime.present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(beforeClose.has_value());
     if (!beforeClose.has_value()) return;
     std::optional<ssg::TabId> tabA;
@@ -1175,7 +1175,7 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
                     .accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"!alpha"});
 
-    auto afterReopen = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    auto afterReopen = runtime.present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(afterReopen.has_value());
     if (!afterReopen.has_value()) return;
     std::optional<ssg::FileDocumentId> reopenedDocumentA;

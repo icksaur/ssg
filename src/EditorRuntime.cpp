@@ -926,10 +926,12 @@ void EditorRuntime::Impl::stopGitDiffWorker() {
     gitDiffWorker.reset();
 }
 
-void EditorRuntime::Impl::drainGitDiffScans() {
+bool EditorRuntime::Impl::drainGitDiffScans() {
+    auto const availabilityBefore = lastPublishedWatcherAvailable;
     drainWatcherAvailability();
+    bool accepted = availabilityBefore != lastPublishedWatcherAvailable;
     if (!gitDiffWorker) {
-        return;
+        return accepted;
     }
     char scratch[64];
     while (true) {
@@ -951,6 +953,7 @@ void EditorRuntime::Impl::drainGitDiffScans() {
         fullReconcile = gitDiffWorker->pendingExternalFullReconcile;
         gitDiffWorker->pendingExternalFullReconcile = false;
     }
+    accepted = accepted || !scans.empty() || !events.empty() || fullReconcile;
     for (auto& scan : scans) {
         (void)applyGitDiffScan(std::move(scan));
     }
@@ -966,6 +969,7 @@ void EditorRuntime::Impl::drainGitDiffScans() {
     if (fullReconcile) {
         reconcileAllOpenDocumentsAgainstDisk();
     }
+    return accepted;
 }
 
 void EditorRuntime::Impl::drainWatcherAvailability() {
@@ -1483,7 +1487,7 @@ const TabState* EditorRuntime::Impl::activeTabState() const {
 
 CommandHandlerResult EditorRuntime::Impl::openOrFocusLiveDiffTab(
     const DiffFileView& file, NavigationClass classification,
-    std::optional<ClientId> userClient) {
+    std::optional<ClientId> userClient, std::optional<ViewId> userView) {
     const auto target = diffOpenFile(file);
     const auto diffText = liveDiffDocumentText(file);
     std::optional<FileDocumentId> document;
@@ -1520,8 +1524,8 @@ CommandHandlerResult EditorRuntime::Impl::openOrFocusLiveDiffTab(
     if (!opened.accepted()) {
         return failure(tabMessage(opened));
     }
-    if (userClient.has_value()) {
-        recordNavigation(*userClient, classification);
+    if (userClient && userView) {
+        recordNavigation(*userClient, *userView, classification);
     }
     interaction.focusEditor();
     return success();
@@ -2288,7 +2292,12 @@ int EditorRuntime::Impl::lineNumberGutterWidth() const {
 
 void EditorRuntime::Impl::resetSelectionForActiveDocument() {
     selection = initialSelection();
-    requestedFirstVisualRow = 0;
+    for (auto& [_, view] : viewPresentations) {
+        view.requestedFirstVisualRow = 0;
+        view.requestedFirstVisualColumn = 0;
+        view.desiredCell.reset();
+        view.viewportLineCache = LineLayoutCache{};
+    }
 }
 
 void EditorRuntime::Impl::clampSelectionToActiveDocument() {
@@ -2356,8 +2365,9 @@ const std::vector<CellRun>& EditorRuntime::Impl::activeCellRuns() const {
 }
 
 ViewportViewState EditorRuntime::Impl::computeEditorViewport(
-    ViewportDimensions dimensions, std::uint32_t firstRow,
+    ViewPresentationState& presentation, std::uint32_t firstRow,
     std::uint32_t firstColumn) const {
+    auto const dimensions = presentation.dimensions;
     const auto diffFile = activeDiffFile();
     // Scroll against the region the editor actually PAINTS, not the terminal's
     // full surface.  The shell spends rows on the header, the tab bar, the
@@ -2366,8 +2376,7 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
     // its maximum scroll offset leaves the last few lines permanently
     // unreachable and it reports no scrollbar for a document that is in fact
     // clipped; horizontally it breaks wrapped lines past the right edge of the
-    // pane, so the tail is painted nowhere.  `lastPaneContentRows` /
-    // `lastPaneContentColumns` are the pane content size the shell layout just
+    // pane, so the tail is painted nowhere. The retained pane content size is
     // computed -- the same numbers page-up/page-down already scroll by.
     //
     // Clamped to the client surface because a terminal too small to lay out at
@@ -2375,9 +2384,11 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
     // otherwise size the viewport larger than the screen.
     ViewportDimensions const content{
         std::max<std::uint32_t>(
-            1, std::min<std::uint32_t>(lastPaneContentColumns, dimensions.columns)),
+            1, std::min<std::uint32_t>(presentation.paneContentColumns,
+                                       dimensions.columns)),
         std::max<std::uint32_t>(
-            1, std::min<std::uint32_t>(lastPaneContentRows, dimensions.rows))};
+            1, std::min<std::uint32_t>(presentation.paneContentRows,
+                                       dimensions.rows))};
     auto const view =
         wordWrap
             ? Viewport{}.compute(activeCellRuns(), content, firstRow,
@@ -2388,13 +2399,16 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
             : Viewport{}.computeUnwrapped(activeText(), content, firstRow,
                                           firstColumn, 4,
                                           diffFile ? &*diffFile : nullptr,
-                                          dimensions, &viewportLineCache);
+                                          dimensions,
+                                          &presentation.viewportLineCache);
     return view;
 }
 
-ViewportViewState EditorRuntime::Impl::viewport(ViewportDimensions dimensions) const {
-    return computeEditorViewport(dimensions, requestedFirstVisualRow,
-                                   requestedFirstVisualColumn);
+ViewportViewState EditorRuntime::Impl::viewport(
+    ViewPresentationState& presentation) const {
+    return computeEditorViewport(
+        presentation, presentation.requestedFirstVisualRow,
+        presentation.requestedFirstVisualColumn);
 }
 
 void EditorRuntime::Impl::refreshTree() {
@@ -2846,18 +2860,25 @@ bool EditorRuntime::Impl::revealCurrentDiffTarget(
     }
     selection.selections =
         SelectionSet{std::vector<Selection>{Selection{*position, *position}}};
+    std::optional<std::uint32_t> targetRow;
     if (const auto file = diff.file(target.id)) {
         const auto projection =
             Viewport{}.rowProjectionUnwrapped(text, file->get());
-        requestedFirstVisualRow = projection.visualRowForBufferLine(
+        targetRow = projection.visualRowForBufferLine(
             static_cast<std::uint32_t>(std::min<std::size_t>(
                 target.newestHunkLine,
                 std::numeric_limits<std::uint32_t>::max())));
-        selection.firstVisualRow = requestedFirstVisualRow;
     }
-    revealPrimaryCaret();
     for (const auto& client : follow.viewState().clients) {
-        recordNavigation(client.client, classification);
+        if (auto attached = clientViews.find(client.client);
+            attached != clientViews.end()) {
+            auto& view = presentation(attached->second);
+            if (targetRow) {
+                view.requestedFirstVisualRow = *targetRow;
+            }
+            revealPrimaryCaret(attached->second);
+            recordNavigation(client.client, attached->second, classification);
+        }
     }
     interaction.focusEditor();
     return true;
@@ -2877,17 +2898,29 @@ bool EditorRuntime::Impl::revealDiffTarget(
 }
 
 void EditorRuntime::Impl::recordNavigation(
-    ClientId client, NavigationClass classification) {
+    ClientId client, ViewId viewId, NavigationClass classification) {
+    auto const& view = presentation(viewId);
     (void)follow.applyNavigation(
         {.client = client,
          .classification = classification,
-         .offset = FollowScrollOffset{requestedFirstVisualRow,
-                                      requestedFirstVisualColumn}});
+         .offset = FollowScrollOffset{view.requestedFirstVisualRow,
+                                      view.requestedFirstVisualColumn}});
 }
 
 EditorRuntime::EditorRuntime(std::unique_ptr<Impl> implementation) noexcept
     : impl_{std::move(implementation)} {}
 EditorRuntime::~EditorRuntime() = default;
+
+EditorRuntime::Impl::ViewPresentationState&
+EditorRuntime::Impl::presentation(ViewId viewId) {
+    return viewPresentations.at(viewId);
+}
+
+EditorRuntime::Impl::ViewPresentationState const&
+EditorRuntime::Impl::presentation(
+    ViewId viewId) const {
+    return viewPresentations.at(viewId);
+}
 
 void EditorRuntime::resetKeymapToDefault() {
     std::lock_guard operationLock{impl_->operationMutex};
@@ -2972,15 +3005,44 @@ AttachResult EditorRuntime::attach(InvocationPrincipal principal, ViewId viewId)
     auto clientId = principal.clientId();
     auto result = impl_->session->attach(std::move(principal), viewId);
     if (result.accepted()) {
-        (void)impl_->follow.attachClient(clientId, ViewportDimensions{80, 24});
+        auto& references = impl_->viewReferences[viewId];
+        if (references++ == 0) {
+            impl_->viewPresentations.try_emplace(viewId);
+        }
+        impl_->clientViews.emplace(clientId, viewId);
+        (void)impl_->follow.attachClient(
+            clientId, impl_->presentation(viewId).dimensions);
     }
     return result;
 }
 
 bool EditorRuntime::detach(ClientId clientId) {
     std::lock_guard operationLock{impl_->operationMutex};
+    auto attached = impl_->clientViews.find(clientId);
     (void)impl_->follow.detachClient(clientId);
-    return impl_->session->detach(clientId);
+    auto const detached = impl_->session->detach(clientId);
+    if (detached && attached != impl_->clientViews.end()) {
+        auto const viewId = attached->second;
+        impl_->clientViews.erase(attached);
+        auto references = impl_->viewReferences.find(viewId);
+        if (references != impl_->viewReferences.end() &&
+            --references->second == 0) {
+            impl_->viewReferences.erase(references);
+            impl_->viewPresentations.erase(viewId);
+        }
+    }
+    return detached;
+}
+
+PumpResult EditorRuntime::pump() {
+    if (impl_->session->activeDispatchRevision()) {
+        throw std::logic_error{"worker results cannot be pumped during dispatch"};
+    }
+    std::lock_guard operationLock{impl_->operationMutex};
+    auto const before = impl_->session->revision();
+    (void)impl_->drainGitDiffScans();
+    auto const after = impl_->session->revision();
+    return {after != before, after};
 }
 
 void EditorRuntime::primeDeferred() {
@@ -3391,12 +3453,17 @@ GitDiffScanResult EditorRuntime::applyGitDiffScan(GitDiffScan scan) {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyGitDiffScan(std::move(scan));
 }
-std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, ViewportDimensions dimensions,
-                                                       PaletteReport paletteReport) const {
+std::optional<SessionSnapshot> EditorRuntime::present(
+    ClientId clientId, ViewportDimensions dimensions,
+    PaletteReport paletteReport) {
+    if (impl_->session->activeDispatchRevision()) {
+        throw std::logic_error{"a view cannot be presented during dispatch"};
+    }
     std::lock_guard operationLock{impl_->operationMutex};
-    const_cast<EditorRuntime::Impl*>(impl_.get())->drainGitDiffScans();
     auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
+    auto& presentation = impl_->presentation(client->viewId);
+    presentation.dimensions = dimensions;
     // Sections FIRST, then the viewport: computing the shell layout is what
     // caches the pane content height the viewport scrolls against.  As
     // arguments to one call their evaluation order would be unspecified, so the
@@ -3406,13 +3473,29 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
     // treeView() (inside sections) and viewport() resolve their scroll against.
     // Its geometry is the presentation's shell projection; its focus is semantic.
     auto shell = impl_->shellView(dimensions, paletteReport);
+    if (!shell.panes.empty()) {
+        auto const& content = shell.panes.front().content;
+        presentation.paneContentRows =
+            static_cast<std::uint32_t>(std::max(content.height, 1));
+        presentation.paneContentColumns =
+            static_cast<std::uint32_t>(std::max(content.width, 1));
+    }
+    presentation.reservedPromptRows =
+        impl_->interaction.prompt().active() &&
+                impl_->interaction.prompt().request()
+            ? promptRowCount(impl_->interaction.prompt().request()->kind)
+            : 0;
+    presentation.panelContentRows =
+        shell.panel ? static_cast<std::uint32_t>(
+                          std::max(shell.panel->height - 1, 0))
+                    : 0;
     auto sections = impl_->sections(paletteReport);
-    auto viewport = impl_->viewport(dimensions);
+    auto viewport = impl_->viewport(presentation);
     auto promptView = impl_->promptProjection(dimensions, shell.prompt);
-    ssg::SelectionNavigation selectionNav{impl_->selection.firstVisualRow,
-                                          impl_->selection.firstVisualColumn,
-                                          impl_->selection.desiredCell};
-    auto treeWindows = impl_->treeWindows();
+    ssg::SelectionNavigation selectionNav{
+        presentation.requestedFirstVisualRow,
+        presentation.requestedFirstVisualColumn, presentation.desiredCell};
+    auto treeWindows = impl_->treeWindows(presentation);
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
                                      std::move(viewport), std::move(sections),
@@ -3424,7 +3507,6 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
 std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId,
                                                        PaletteReport paletteReport) const {
     std::lock_guard operationLock{impl_->operationMutex};
-    const_cast<EditorRuntime::Impl*>(impl_.get())->drainGitDiffScans();
     auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
     // Semantic-only: no ViewportDimensions, so no shell layout, viewport, prompt

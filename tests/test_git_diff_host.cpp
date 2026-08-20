@@ -74,8 +74,9 @@ std::map<std::string, ssg::GitTreeStatus> porcelainStatuses(const fs::path& root
 }
 
 std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
-    const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ssg::EditorRuntime& runtime) {
+    (void)runtime.pump();
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) {
         return {};
@@ -129,7 +130,8 @@ bool waitForDiffCount(ssg::EditorRuntime& runtime, std::size_t expectedCount,
                       std::chrono::milliseconds timeout) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
-        auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        (void)runtime.pump();
+        auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         if (snapshot && snapshot->sections().diff.files.size() == expectedCount) {
             return true;
         }
@@ -193,7 +195,7 @@ TEST(gitDiffHostWorkerPollingAndEventRefreshProduceExpectedDiffView) {
         ASSERT_TRUE(
             waitForDiffCount(runtime, 1, std::chrono::milliseconds{3000}));
         auto changed =
-            runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+            runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(changed.has_value());
         if (!changed) return;
         ASSERT_EQ(changed->sections().diff.files.front().id,
@@ -251,7 +253,7 @@ TEST(gitDiffHostWorkerStartsFromSubdirectoryWorkspace) {
     ASSERT_EQ(runStatus(root, "add src/tracked.txt"), 0);
     ASSERT_TRUE(waitForDiffCount(runtime, 1, std::chrono::milliseconds{3000}));
 
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().diff.files.size(), std::size_t{1});

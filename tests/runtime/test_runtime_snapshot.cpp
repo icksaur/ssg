@@ -51,7 +51,7 @@ TEST(runtimeConstructsAttachesAndProducesLiveSnapshot) {
     ssg::InvocationPrincipal principal{ssg::ClientId{7}, ssg::InvocationOrigin::InProcess};
     ASSERT_TRUE(runtime.attach(std::move(principal), ssg::ViewId{9}).accepted());
 
-    auto snapshot = runtime.snapshot(ssg::ClientId{7}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{7}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->revision(), runtime.revision());
@@ -62,6 +62,7 @@ TEST(runtimeConstructsAttachesAndProducesLiveSnapshot) {
 TEST(runtimeSourcesDoNotIncludeFixtureModel) {
     auto root = std::filesystem::path{SSG_SOURCE_SCAN_ROOT};
     bool found = false;
+    bool snapshotConstCast = false;
     for (const auto& entry : std::filesystem::recursive_directory_iterator{root / "src"}) {
         if (!entry.is_regular_file()) continue;
         if (entry.path().extension() != ".cpp" && entry.path().extension() != ".h") continue;
@@ -70,8 +71,12 @@ TEST(runtimeSourcesDoNotIncludeFixtureModel) {
         std::ifstream input{entry.path()};
         const std::string text{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
         found = found || text.find("FixtureModel") != std::string::npos;
+        snapshotConstCast =
+            snapshotConstCast ||
+            text.find("const_cast<EditorRuntime::Impl*>") != std::string::npos;
     }
     ASSERT_FALSE(found);
+    ASSERT_FALSE(snapshotConstCast);
 }
 
 TEST(runtimePublishesValidCuratedKeymap) {
@@ -81,7 +86,7 @@ TEST(runtimePublishesValidCuratedKeymap) {
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     const auto& keymap = snapshot->sections().keymap;
@@ -117,7 +122,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
     // painting ended, which is the footer.
     std::uint32_t lastVisibleLine = 0;
     for (int step = 0; step < 80; ++step) {
-        auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snapshot = runtime.present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         auto const& view = snapshot->presentation()->viewport;
@@ -131,7 +136,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
                                {"cursor.line_down", runtime.revision(), {}});
     }
     // The last line of the document was reached, not merely approached.
-    auto final = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto final = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(final.has_value());
     if (!final) return;
     ASSERT_EQ(lastVisibleLine, final->presentation()->viewport.totalVisualRows - 1);
@@ -141,7 +146,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"view.scroll_lines", runtime.revision(),
                                   ssg::ScrollLinesArguments{500}}).accepted());
-    auto bottom = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto bottom = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(bottom.has_value());
     if (!bottom) return;
     auto const& view = bottom->presentation()->viewport;
@@ -173,7 +178,7 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
                                  {"file.open", runtime.revision(),
                                   std::string{"snug.txt"}}).accepted());
     runtime.focusEditor();
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& view = snapshot->presentation()->viewport;
@@ -198,7 +203,7 @@ TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
     runtime.focusEditor();
 
     auto const dirty = [&] {
-        auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
         auto const& tabs = snapshot->sections().tabs.tabs;
         return !tabs.empty() && tabs.front().dirty;
     };
@@ -224,7 +229,7 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     auto const tabLabels = [&] {
-        auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
         std::vector<std::string> labels;
         for (auto const& tab : snapshot->sections().tabs.tabs) {
             labels.push_back(tab.label);
@@ -307,7 +312,7 @@ TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"file.open", runtime.revision(),
                                   std::string{"alpha.txt"}}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     bool keptScratch = false;
@@ -340,7 +345,7 @@ TEST(anEmptySavedFileIsNeverDiscardedAsScratch) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"file.open", runtime.revision(),
                                   std::string{"alpha.txt"}}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     bool keptBlank = false;
@@ -382,8 +387,8 @@ TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
                                  {"panel.show_files", runtime.revision(), {}})
                     .accepted());
     // Prime the pane-size cache, then read the frame laid out against it.
-    (void)runtime.snapshot(ssg::ClientId{1}, dims);
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+    (void)runtime.present(ssg::ClientId{1}, dims);
+    auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& view = snapshot->presentation()->viewport;
@@ -400,7 +405,7 @@ TEST(curatedKeymapBindingsAreArgumentFree) {
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     (void)runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
@@ -433,7 +438,7 @@ TEST(curatedKeymapResolvesPerContext) {
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     const auto& keymap = snapshot->sections().keymap;
@@ -575,7 +580,7 @@ TEST(addCursorChordProducesMultipleSelections) {
 
     // Resolve the add-cursor-down chord from the published keymap, then dispatch
     // the resolved command: the snapshot must show more than one selection.
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     const auto chord = *ssg::KeyCodec{}.parseSequence({"Alt+KeyJ"});
@@ -584,7 +589,7 @@ TEST(addCursorChordProducesMultipleSelections) {
     ASSERT_EQ(resolved.commandId, std::string{"select.add_cursor_down"});
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {resolved.commandId, runtime.revision(), {}}).accepted());
 
-    auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto after = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (!after) return;
     ASSERT_TRUE(after->sections().selection.items().size() > std::size_t{1});
@@ -598,7 +603,7 @@ TEST(settingsOpenFocusesASettingsPrompt) {
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.open", runtime.revision(), {}}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The chord actually opens: focus moves to the prompt with a visible input.
@@ -626,7 +631,7 @@ TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
 
     // A grid client (with dimensions) and a native client (without) taken at the
     // same revision.
-    auto grid = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto grid = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     auto semantic = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(grid.has_value());
     ASSERT_TRUE(semantic.has_value());

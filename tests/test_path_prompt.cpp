@@ -57,7 +57,7 @@ ssg::CommandResult run(ssg::EditorRuntime& runtime, std::string id,
 // runtime-internal attribution -- so these tests observe which command a prompt
 // belongs to through what submitting it DOES, which is the stronger oracle.
 bool pathPromptOpen(ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return false;
     const auto& prompt = snapshot->presentation()->prompt;
     return prompt.has_value() && prompt->kind == ssg::PromptKind::Path;

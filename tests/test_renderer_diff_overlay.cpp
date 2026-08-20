@@ -132,7 +132,7 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
                               {"tree.activate", runtime.revision(), {}})
                     .accepted());
 
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_TRUE(snapshot->sections().tabs.active.has_value());
@@ -171,7 +171,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_TRUE(fixture.runtime != nullptr);
     if (!fixture.runtime) return;
 
-    auto base = fixture.runtime->snapshot(ssg::ClientId{1}, {40, 10});
+    auto base = fixture.runtime->present(ssg::ClientId{1}, {40, 10});
     ASSERT_TRUE(base.has_value());
     if (!base) return;
 

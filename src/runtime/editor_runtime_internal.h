@@ -128,8 +128,8 @@ void bindRuntimeNavigation(CommandCatalog& catalog, EditorRuntime::Impl& runtime
 void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
 void bindRuntimeHelp(CommandCatalog& catalog, EditorRuntime::Impl& runtime);
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
-    EditorRuntime::Impl& runtime, Revision revision, FindReplaceCommand command,
-    std::any const& payload);
+    EditorRuntime::Impl& runtime, ViewId viewId, Revision revision,
+    FindReplaceCommand command, std::any const& payload);
 
 struct EditorRuntime::Impl final : CommandServices,
                                    TabLifecycle,
@@ -272,6 +272,23 @@ struct EditorRuntime::Impl final : CommandServices,
         ClientCommand command;
     };
 
+    // CONTRACT
+    // A view's client-derived geometry and scroll projection never become
+    // aggregate-wide behavior. Distinct ViewIds retain independent presentation
+    // state; clients intentionally sharing a ViewId share this record.
+    struct ViewPresentationState {
+        ViewportDimensions dimensions{80, 24};
+        std::uint32_t paneContentRows = 24;
+        std::uint32_t paneContentColumns = 80;
+        std::uint32_t reservedPromptRows = 0;
+        std::uint32_t panelContentRows = 0;
+        std::uint32_t requestedFirstVisualRow = 0;
+        std::uint32_t requestedFirstVisualColumn = 0;
+        std::optional<CellIndex> desiredCell;
+        std::uint32_t treeFirstVisible = 0;
+        LineLayoutCache viewportLineCache;
+    };
+
     // The queue, shaped so `Impl::defer` is the only way to ADD to it -- by
     // construction, not by convention.
     //
@@ -335,26 +352,11 @@ struct EditorRuntime::Impl final : CommandServices,
     mutable CatalogRevision commandCandidateCatalogRevision = 0;
     mutable KeymapViewState commandCandidateKeymap;
     mutable bool commandCandidateCacheValid = false;
-    std::uint32_t requestedFirstVisualRow = 0;
-    // Horizontal scroll offset in cells (word wrap OFF only; VP-H). Reveal and the
-    // horizontal scroll command update it; the viewport path passes it through.
-    std::uint32_t requestedFirstVisualColumn = 0;
-    // The document pane geometry from the most recent snapshot, plus the prompt
-    // rows that snapshot reserved.  Used to reveal find matches against the real
-    // pane height (not a fixed 24) so a match never lands behind the prompt rows.
-    // Adding the reserved rows back yields a prompt-agnostic pane height, from
-    // which the reveal subtracts the find prompt's rows deterministically.
-    mutable std::uint32_t lastPaneContentRows = 24;
-    mutable std::uint32_t lastPaneContentColumns = 80;
-    mutable std::uint32_t lastReservedPromptRows = 0;
-    // The side-panel (tree) content height from the most recent snapshot (a
-    // read-only layout cache, like last_pane_content_rows), and the server-owned
-    // tree scroll offset. The offset is written on the command path only
-    // (reveal_tree_selection after a selection/expansion change, or tree.scroll
-    // for a wheel) using the last cached height, so snapshot generation never
-    // mutates it — one client's snapshot cannot move another client's scroll
-    mutable std::uint32_t lastPanelContentRows = 0;
-    std::uint32_t treeFirstVisible = 0;
+    std::map<ViewId, ViewPresentationState> viewPresentations;
+    std::map<ViewId, std::size_t> viewReferences;
+    std::map<ClientId, ViewId> clientViews;
+    [[nodiscard]] ViewPresentationState& presentation(ViewId viewId);
+    [[nodiscard]] ViewPresentationState const& presentation(ViewId viewId) const;
     bool wordWrap = false;
     bool lineNumbers = false;
     // Cache of the active document's logical line count keyed by its revision,
@@ -370,11 +372,6 @@ struct EditorRuntime::Impl final : CommandServices,
     mutable std::optional<Revision> cellRunsRevision;
     mutable std::optional<FileDocumentId> cellRunsDocument;
     mutable std::vector<CellRun> cellRunsCache;
-    // Bounded LRU of shaped visible document lines for the word-wrap-OFF
-    // viewport path (Viewport::computeUnwrapped), which re-shapes on-screen
-    // lines every frame during navigation. Owned here so it survives frames;
-    // Viewport is constructed per call.
-    mutable LineLayoutCache viewportLineCache;
     std::uint64_t nextStatusId = 1;
 
     [[nodiscard]] CommandHandlerResult runTransaction(
@@ -458,9 +455,10 @@ struct EditorRuntime::Impl final : CommandServices,
     // wrap is on; O(visible rows) unwrapped projection (compute_viewport_unwrapped)
     // when off, so a large document's first frame is viewport-bounded (M12).
     [[nodiscard]] ViewportViewState computeEditorViewport(
-        ViewportDimensions dimensions, std::uint32_t firstRow,
+        ViewPresentationState& presentation, std::uint32_t firstRow,
         std::uint32_t firstColumn) const;
-    [[nodiscard]] ViewportViewState viewport(ViewportDimensions dimensions) const;
+    [[nodiscard]] ViewportViewState viewport(
+        ViewPresentationState& presentation) const;
     [[nodiscard]] SessionSnapshotSections sections(
         PaletteReport const& paletteReport = {}) const;
     [[nodiscard]] PromptStatusViewState promptStatusView() const;
@@ -512,23 +510,24 @@ struct EditorRuntime::Impl final : CommandServices,
     // The tree view state with its scroll offset, scrollbar, and visible-window
     // hit map resolved against the last panel height (keep-selection-visible).
     [[nodiscard]] TreeViewState treeView() const;
-    [[nodiscard]] std::vector<TreeWindow> treeWindows() const;
+    [[nodiscard]] std::vector<TreeWindow> treeWindows(
+        ViewPresentationState const& presentation) const;
     // Scroll the tree so the selected node is visible, using the last cached
     // panel height. Called on the command path after a selection/expansion change
     // (never during snapshot generation), so it cannot perturb another client.
-    void revealTreeSelection();
+    void revealTreeSelection(ViewId viewId);
     // Scroll the tree viewport by `rows` (wheel), adjusting the server-owned
     // offset clamped to [0, maximum_first_row] WITHOUT moving the selection --
     // the tree analog of the editor's view.scroll_lines.
-    void scrollTree(std::int64_t rows);
-    void scrollTreeToFraction(std::uint32_t numerator,
+    void scrollTree(ViewId viewId, std::int64_t rows);
+    void scrollTreeToFraction(ViewId viewId, std::uint32_t numerator,
                               std::uint32_t denominator);
     // Scroll the editor viewport minimally so the PRIMARY caret is visible, using
     // the last cached pane dimensions. Called on the command path after any edit
     // moves the caret (typing, delete, undo/redo, paste), so the view follows the
     // caret instead of leaving the user typing off-screen. The plain-caret
     // analog of reveal_active_find_match.
-    void revealPrimaryCaret();
+    void revealPrimaryCaret(ViewId viewId);
     [[nodiscard]] TextEncodingViewState textEncodingView() const;
     [[nodiscard]] DocumentViewState documentView() const;
     [[nodiscard]] CommandHandlerResult updateTabsFor(FileDocumentId document);
@@ -576,7 +575,8 @@ struct EditorRuntime::Impl final : CommandServices,
         const std::filesystem::path& relativePath);
     [[nodiscard]] CommandHandlerResult openOrFocusLiveDiffTab(
         const DiffFileView& file, NavigationClass classification,
-        std::optional<ClientId> userClient);
+        std::optional<ClientId> userClient,
+        std::optional<ViewId> userView = std::nullopt);
     // Open (or re-focus) a read-only, in-memory tab of generated text content.
     // The reusable primitive behind the help page and any future
     // generated-content tab. Opens the text as a DocumentMode::ReadOnly virtual
@@ -614,7 +614,8 @@ struct EditorRuntime::Impl final : CommandServices,
         const FollowTarget& target, NavigationClass classification);
     [[nodiscard]] bool revealDiffTarget(
         const FollowTarget& target, NavigationClass classification);
-    void recordNavigation(ClientId client, NavigationClass classification);
+    void recordNavigation(ClientId client, ViewId viewId,
+                          NavigationClass classification);
     void refreshTree();
     // Re-assemble the authority-owned whole-screen schema from the given chrome inputs and
     // migrate the interaction over it. Takes the inputs as parameters (not members) so a
@@ -681,7 +682,7 @@ struct EditorRuntime::Impl final : CommandServices,
     void enqueueStatus(StatusPriority priority, std::string text);
     void startGitDiffWorker(bool enableGit, bool enableWatcher);
     void stopGitDiffWorker();
-    void drainGitDiffScans();
+    [[nodiscard]] bool drainGitDiffScans();
     void drainWatcherAvailability();
     [[nodiscard]] int gitDiffWakeDescriptor() const;
 };

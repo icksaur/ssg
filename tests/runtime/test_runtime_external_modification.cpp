@@ -105,19 +105,19 @@ struct Session {
 };
 
 std::vector<ssg::ExternalDocumentView> externalFiles(
-    const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     if (!snapshot) return {};
     return snapshot->sections().externalModification.files;
 }
 
-bool watcherAvailable(const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+bool watcherAvailable(ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     return snapshot && snapshot->sections().watcherAvailable;
 }
 
-std::string activeTabLabel(const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+std::string activeTabLabel(ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     if (!snapshot) return {};
     const auto& tabs = snapshot->sections().tabs;
     if (!tabs.active) return {};
@@ -127,8 +127,8 @@ std::string activeTabLabel(const ssg::EditorRuntime& runtime) {
     return {};
 }
 
-bool activeTabIsLiveDiff(const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+bool activeTabIsLiveDiff(ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     if (!snapshot) return false;
     const auto& tabs = snapshot->sections().tabs;
     if (!tabs.active) return false;
@@ -268,7 +268,7 @@ TEST(exmdStaleIdDoesNotActOnThePreviousSelection) {
          ssg::DiffFileId{"external:not-a-real-file.txt"}});
     ASSERT_FALSE(stale.accepted());
     auto snapshot =
-        session.runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        session.runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     const auto& external = snapshot->sections().externalModification;
     ASSERT_TRUE(external.selected.has_value());
@@ -817,7 +817,7 @@ TEST(aStatusErrorOnAMissingBaselineRaisesOnTheOverflowPath) {
     runtime->reconcileExternalWatchEventsForTest(
         {watchEvent(ssg::WatchEventKind::Remove, "sub/note.txt", 1)});
     auto snapshot0 =
-        runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_EQ(snapshot0->sections().externalModification.files.size(), 1U);
     ASSERT_TRUE(
         runtime
@@ -832,7 +832,7 @@ TEST(aStatusErrorOnAMissingBaselineRaisesOnTheOverflowPath) {
     runtime->reconcileExternalWatchEventsForTest(
         {watchEvent(ssg::WatchEventKind::Overflow, "", 2)});
     auto snapshot1 =
-        runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     const auto& raised = snapshot1->sections().externalModification.files;
     // Restore permission before asserting so the test dir is always cleanable.
     std::filesystem::permissions(root / "workspace" / "sub",
@@ -1001,7 +1001,7 @@ TEST(externalPresenceAndSelectionRefreshInTheWatcherDrainNotOnlyOnDispatch) {
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
 
     auto snapshot =
-        session.runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        session.runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     const auto& external = snapshot->sections().externalModification;
     ASSERT_EQ(external.files.size(), 1U);
@@ -1028,7 +1028,7 @@ TEST(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld) {
                     .accepted());
 
     auto snapshot =
-        session.runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        session.runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     const auto& sections = snapshot->sections();
     ASSERT_TRUE(sections.externalFocusHeld);

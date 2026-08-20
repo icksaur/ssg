@@ -402,7 +402,7 @@ TEST(decoderRoundtripsTheEncodedFrame) {
                                   {"file.open", runtime->revision(),
                                    std::string{"alpha.txt"}})
                     .accepted());
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -458,7 +458,7 @@ TEST(realBinaryOutputMatchesRenderSnapshot) {
     auto runtime = makeHeadless(root, true);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) { fs::remove_all(root); return; }
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -502,7 +502,7 @@ TEST(realBinaryWideGlyphOutputMatchesRender) {
     // startup focuses the editor after opening it (see "Always open Files
     // sidebar at startup"); mirror that here so the reference matches.
     runtime->focusEditor();
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
     auto grid = ssg::Renderer{}.render(*snapshot);

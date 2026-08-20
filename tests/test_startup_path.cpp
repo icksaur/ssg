@@ -63,7 +63,7 @@ TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
 
     // Producing the first frame (a snapshot) must not have run the deferrable
     // O(document) syntax pass or the O(workspace) tree scan.
-    (void)runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    (void)runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     auto before = runtime.deferredWorkCounts();
     ASSERT_EQ(before.syntaxRuns, std::uint64_t{0});
     ASSERT_EQ(before.treeScans, std::uint64_t{0});
@@ -142,7 +142,7 @@ TEST(firstFrameConstructsNoOptionalSubsystem) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"file.open", runtime.revision(), std::string{"code.txt"}})
                     .accepted());
-    (void)runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    (void)runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
 
     // Exhaustive over the enumerated subsystems (a missing enum entry fails the
     // static_assert in startup_audit.h, so the list cannot silently omit one).
@@ -230,7 +230,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
                     .accepted());
     runtime.focusEditor();
     auto beforePanel =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(beforePanel.has_value());
     if (beforePanel) {
         ASSERT_EQ(beforePanel->sections().focus, ssg::FocusTarget::Editor);
@@ -243,7 +243,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
                         ssg::ClientId{1}, {"panel.show_files", runtime.revision(), {}})
                     .accepted());
     auto afterPanel =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterPanel.has_value());
     if (afterPanel) {
         ASSERT_EQ(afterPanel->sections().focus, ssg::FocusTarget::Panel);
@@ -253,7 +253,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
     // focusEditor() again restores the correct final focus.
     runtime.focusEditor();
     auto restored =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(restored.has_value());
     if (restored) {
         ASSERT_EQ(restored->sections().focus, ssg::FocusTarget::Editor);

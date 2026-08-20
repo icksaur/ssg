@@ -159,7 +159,7 @@ ExecutorResult CommandExecutor::dispatch(ClientId clientId,
     }
 
     CommandContext context{currentRevision, client->second.principal,
-                           impl_->services};
+                           client->second.viewId, impl_->services};
     CommandHandlerResult handlerResult;
     try {
         handlerResult = command_->handler(context, command.payload);

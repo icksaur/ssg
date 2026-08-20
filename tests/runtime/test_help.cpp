@@ -53,8 +53,8 @@ struct Harness {
     }
 };
 
-std::optional<ssg::TabState> activeTab(const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+std::optional<ssg::TabState> activeTab(ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot || !snapshot->sections().tabs.active) return std::nullopt;
     for (const auto& tab : snapshot->sections().tabs.tabs) {
         if (tab.id == *snapshot->sections().tabs.active) return tab;
@@ -62,15 +62,15 @@ std::optional<ssg::TabState> activeTab(const ssg::EditorRuntime& runtime) {
     return std::nullopt;
 }
 
-std::size_t tabCount(const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+std::size_t tabCount(ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     return snapshot ? snapshot->sections().tabs.tabs.size() : 0;
 }
 
 // The rendered tab title (composedTabTitle) for the active tab, read from the
 // shell layout's Tab node whose id matches the active tab index.
-std::string activeTabNodeContent(const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {120, 24});
+std::string activeTabNodeContent(ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, {120, 24});
     if (!snapshot) return {};
     std::string content;
     for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
@@ -82,8 +82,8 @@ std::string activeTabNodeContent(const ssg::EditorRuntime& runtime) {
 }
 
 std::optional<ssg::AccessibilityNode> footerHelpNode(
-    const ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {120, 24});
+    ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.present(ssg::ClientId{1}, {120, 24});
     if (!snapshot) return std::nullopt;
     for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
         if (node.kind == ssg::ShellNodeKind::FooterHint) return node;
@@ -260,7 +260,7 @@ TEST(savingAHelpTabFailsGracefullyWithoutAPrompt) {
     // Refused, not prompted: a read-only document cannot be saved.
     ASSERT_FALSE(save.accepted());
     // No Save-As path prompt was opened.
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
         ASSERT_FALSE(snapshot->presentation()->prompt.has_value());
@@ -374,7 +374,7 @@ TEST(helpTabIsHighlightedAsMarkdown) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"help.open", runtime.revision(), {}})
                     .accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 40});
+    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 40});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& syntax = snapshot->sections().syntax;

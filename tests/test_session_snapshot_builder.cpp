@@ -69,7 +69,7 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
                                {"file.open", runtime->revision(),
                                 std::string{"a.txt"}})
                     .accepted());
-    auto real = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto real = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(real.has_value());
     if (!real) return;
 

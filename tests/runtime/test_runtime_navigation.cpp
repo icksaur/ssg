@@ -59,7 +59,7 @@ std::size_t countTabsOfKind(const ssg::TabViewState& tabs, ssg::TabKind kind) {
 
 ssg::FollowMode followMode(ssg::EditorRuntime& runtime) {
     auto snapshot =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) {
         return ssg::FollowMode::Paused;
@@ -109,7 +109,7 @@ TEST(searchTreeDiffAndFollowSectionsUseRuntimeState) {
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"search.workspace", runtime.revision(), std::string{"needle"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"follow_edits.pause", runtime.revision(), {}}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_FALSE(snapshot->sections().search.results.empty());
     ASSERT_FALSE(snapshot->sections().tree.providers.empty());
@@ -160,7 +160,7 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
                     .accepted());
 
     const ssg::ViewportDimensions dimensions{20, 6};
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, dimensions);
+    auto snapshot = runtime.present(ssg::ClientId{1}, dimensions);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().document.diffFileIdentity,
@@ -173,7 +173,7 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
                     .dispatch(ssg::ClientId{1},
                               {"cursor.line_up", runtime.revision(), {}})
                     .accepted());
-    snapshot = runtime.snapshot(ssg::ClientId{1}, dimensions);
+    snapshot = runtime.present(ssg::ClientId{1}, dimensions);
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
         ASSERT_EQ(snapshot->sections().followEdits.mode,
@@ -196,7 +196,7 @@ TEST(attachedClientsShareFollowPauseQueueAndResumeState) {
                                 ssg::ScrollLinesArguments{10}})
                     .accepted());
 
-    auto paused = runtime->snapshot(ssg::ClientId{1},
+    auto paused = runtime->present(ssg::ClientId{1},
                                     ssg::ViewportDimensions{80, 20});
     ASSERT_TRUE(paused.has_value());
     if (!paused) return;
@@ -220,7 +220,7 @@ TEST(attachedClientsShareFollowPauseQueueAndResumeState) {
                           ssg::Revision{sourceRevision + 2}}})
                     .accepted());
 
-    paused = runtime->snapshot(ssg::ClientId{2},
+    paused = runtime->present(ssg::ClientId{2},
                                ssg::ViewportDimensions{80, 20});
     ASSERT_TRUE(paused.has_value());
     if (!paused) return;
@@ -232,9 +232,9 @@ TEST(attachedClientsShareFollowPauseQueueAndResumeState) {
                     ->dispatch(ssg::ClientId{2},
                                {"follow_edits.resume", runtime->revision(), {}})
                     .accepted());
-    auto first = runtime->snapshot(ssg::ClientId{1},
+    auto first = runtime->present(ssg::ClientId{1},
                                    ssg::ViewportDimensions{80, 20});
-    auto second = runtime->snapshot(ssg::ClientId{2},
+    auto second = runtime->present(ssg::ClientId{2},
                                     ssg::ViewportDimensions{80, 20});
     ASSERT_TRUE(first.has_value());
     ASSERT_TRUE(second.has_value());
@@ -279,7 +279,7 @@ TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
         }};
     ASSERT_TRUE(runtime.applyGitDiffScan(scan).accepted());
 
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().diff.files.size(), std::size_t{2});
@@ -339,7 +339,7 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
                                ssg::TextInputArguments{"!"}})
                     .accepted());
 
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().document.diffFileIdentity, std::nullopt);
@@ -373,7 +373,7 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
                          .files = {}})
                     .accepted());
     auto emptyFirst =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(emptyFirst.has_value());
     if (!emptyFirst) return;
     auto* emptyFirstGit =
@@ -391,7 +391,7 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
                          .files = {}})
                     .accepted());
     auto emptySecond =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(emptySecond.has_value());
     if (!emptySecond) return;
     auto* emptySecondGit =
@@ -428,7 +428,7 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
                              }})
                     .accepted());
 
-    auto first = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto first = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(first.has_value());
     if (!first) return;
     auto* firstGit =
@@ -463,7 +463,7 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
                              }})
                     .accepted());
 
-    auto second = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto second = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(second.has_value());
     if (!second) return;
     auto* secondGit =
@@ -518,7 +518,7 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
                               {"tree.activate", runtime.revision(), {}})
                     .accepted());
 
-    auto first = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto first = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(first.has_value());
     if (!first) return;
     ASSERT_EQ(countTabsOfKind(first->sections().tabs, ssg::TabKind::Document),
@@ -540,7 +540,7 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
                               {"tree.activate", runtime.revision(), {}})
                     .accepted());
     auto second =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(second.has_value());
     if (!second) return;
     ASSERT_EQ(countTabsOfKind(second->sections().tabs, ssg::TabKind::Document),
@@ -589,7 +589,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
                               {"tree.activate", runtime.revision(), {}})
                     .accepted());
 
-    auto first = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto first = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(first.has_value());
     if (!first) return;
     std::optional<ssg::TabId> documentTab;
@@ -616,7 +616,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
                                *documentTab})
                     .accepted());
     auto afterDocumentClose =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterDocumentClose.has_value());
     if (!afterDocumentClose) return;
     ASSERT_EQ(countTabsOfKind(afterDocumentClose->sections().tabs,
@@ -634,7 +634,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
                                std::string{"coexist.txt"}})
                     .accepted());
     auto reopened =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(reopened.has_value());
     if (!reopened) return;
     ASSERT_EQ(countTabsOfKind(reopened->sections().tabs, ssg::TabKind::Document),
@@ -653,7 +653,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
                                *liveDiffTab})
                     .accepted());
     auto afterLiveDiffClose =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterLiveDiffClose.has_value());
     if (!afterLiveDiffClose) return;
     ASSERT_EQ(countTabsOfKind(afterLiveDiffClose->sections().tabs,
@@ -704,7 +704,7 @@ TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
                     .accepted());
 
     auto snapshot =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(countTabsOfKind(snapshot->sections().tabs, ssg::TabKind::LiveDiff),
@@ -757,7 +757,7 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
                                         std::string{"alpha NEEDLE omega"}}}})
                     .accepted());
     auto beforeResume =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(beforeResume.has_value());
     if (!beforeResume) return;
     ASSERT_EQ(beforeResume->sections().followEdits.mode,
@@ -771,7 +771,7 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
                               {"follow_edits.resume", runtime.revision(), {}})
                     .accepted());
     auto afterProgrammatic =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterProgrammatic.has_value());
     if (!afterProgrammatic) return;
     ASSERT_EQ(afterProgrammatic->sections().followEdits.mode,
@@ -793,7 +793,7 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
                               {"tree.activate", runtime.revision(), {}})
                     .accepted());
     auto afterUser =
-        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterUser.has_value());
     if (!afterUser) return;
     ASSERT_EQ(afterUser->sections().followEdits.mode, ssg::FollowMode::Paused);
@@ -852,7 +852,7 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
     };
     const auto followState = [](ssg::EditorRuntime& runtime) {
         auto snapshot =
-            runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+            runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return ssg::FollowEditsViewState();
         return snapshot->sections().followEdits;
@@ -1104,14 +1104,14 @@ TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().focus, ssg::FocusTarget::Prompt);
     ASSERT_FALSE(snapshot->sections().palette.candidates.empty());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.close", runtime.revision(), {}}).accepted());
-    auto closed = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto closed = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(closed.has_value());
     if (!closed) return;
     ASSERT_EQ(closed->sections().focus, ssg::FocusTarget::Editor);
@@ -1132,11 +1132,11 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
 
     auto candidatesAfter = [&](std::string const& closeCommand) {
         ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
-        auto open = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto open = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(open.has_value());
         if (open) ASSERT_FALSE(open->sections().palette.candidates.empty());
         (void)runtime.dispatch(ssg::ClientId{1}, {closeCommand, runtime.revision(), {}});
-        auto shut = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto shut = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(shut.has_value());
         if (shut) ASSERT_TRUE(shut->sections().palette.candidates.empty());
     };
@@ -1150,7 +1150,7 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
     (void)runtime.dispatch(
         ssg::ClientId{1},
         {"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"edit.undo"}});
-    auto executed = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto executed = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(executed.has_value());
     if (executed) ASSERT_TRUE(executed->sections().palette.candidates.empty());
 }
@@ -1176,7 +1176,7 @@ TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.open", runtime.revision(), {}}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
@@ -1221,7 +1221,7 @@ TEST(togglingGitignoreRebuildsTheOpenFilePickerIndex) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto candidateIds = [&] {
-        auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         std::set<std::string> paths;
         if (snapshot) {
             for (auto const& candidate : snapshot->sections().palette.candidates) {
@@ -1261,7 +1261,7 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto pickerIsOpen = [&] {
-        auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         return snapshot && !snapshot->sections().palette.candidates.empty();
     };
 
@@ -1297,7 +1297,7 @@ TEST(paletteExecuteValidatesCandidateMembership) {
     ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1}, {"palette.execute", runtime.revision(), {}}).accepted());
     // A published command id validates, executes server-side, and closes the palette.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"file.save"}}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().focus, ssg::FocusTarget::Editor);
@@ -1311,7 +1311,7 @@ TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
@@ -1373,7 +1373,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
     // Baseline: selection at the top (root), window pinned to the top with a live
     // thumb.
     {
-        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snap = runtime.present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         auto const& p = snap->sections().tree.providers.front();
@@ -1393,7 +1393,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
     }
     std::uint32_t deepFirst = 0;
     {
-        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snap = runtime.present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         auto const& p = snap->sections().tree.providers.front();
@@ -1422,7 +1422,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
         ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_previous", runtime.revision(), {}}).accepted());
     }
     {
-        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snap = runtime.present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         ASSERT_EQ(snap->presentation()->treeWindows.front().firstVisible, std::uint32_t{0});
@@ -1454,7 +1454,7 @@ TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
 
     const ssg::ViewportDimensions dims{80, 24};
-    auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto snap = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snap.has_value());
     if (!snap) return;
     auto const& nodes = snap->sections().tree.providers.front().nodes;
@@ -1466,7 +1466,7 @@ TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"tree.select", runtime.revision(),
                                   ssg::TreeSelectArguments{target}}).accepted());
-    auto after = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto after = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(after.has_value());
     if (!after) return;
     ASSERT_TRUE(after->sections().tree.providers.front().selected.has_value());
@@ -1479,7 +1479,7 @@ TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
     ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
                                   {"tree.select", runtime.revision(), {}}).accepted());
     // The selection is unchanged after the rejected attempts.
-    auto again = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto again = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(again.has_value());
     if (!again) return;
     ASSERT_EQ(*again->sections().tree.providers.front().selected, target);
@@ -1503,7 +1503,7 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
                                ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
-        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snap = runtime.present(ssg::ClientId{1}, dims);
         return snap ? snap->sections().focus : ssg::FocusTarget::Editor;
     };
     // Showing the panel now focuses it (QOL); expand the root so a directory node
@@ -1513,7 +1513,7 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
-    auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto snap = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snap.has_value());
     if (!snap) return;
     std::optional<ssg::TreeNodeId> dirId;
@@ -1562,15 +1562,19 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{2}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{2}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
     // Expand the root so the 40 files become a tree taller than a short panel.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
     const ssg::ViewportDimensions dims{80, 12};
 
-    auto baseline = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto baseline = runtime.present(ssg::ClientId{1}, dims);
+    auto otherView = runtime.present(ssg::ClientId{2}, dims);
     ASSERT_TRUE(baseline.has_value());
-    if (!baseline) return;
+    ASSERT_TRUE(otherView.has_value());
+    if (!baseline || !otherView) return;
     auto const& p0 = baseline->sections().tree.providers.front();
     auto const& w0 = baseline->presentation()->treeWindows.front();
     ASSERT_EQ(w0.firstVisible, std::uint32_t{0});
@@ -1581,18 +1585,23 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"tree.scroll", runtime.revision(),
                                   ssg::ScrollLinesArguments{3}}).accepted());
-    auto scrolled = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto scrolled = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
     auto const& p1 = scrolled->sections().tree.providers.front();
     ASSERT_EQ(scrolled->presentation()->treeWindows.front().firstVisible, std::uint32_t{3});
+    otherView = runtime.present(ssg::ClientId{2}, dims);
+    ASSERT_TRUE(otherView.has_value());
+    if (!otherView) return;
+    ASSERT_EQ(otherView->presentation()->treeWindows.front().firstVisible,
+              std::uint32_t{0});
     ASSERT_EQ(p1.selected, selectedBefore);  // selection unchanged
 
     // Wheel up past the top clamps at 0.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"tree.scroll", runtime.revision(),
                                   ssg::ScrollLinesArguments{-99}}).accepted());
-    auto topped = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto topped = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(topped.has_value());
     if (!topped) return;
     ASSERT_EQ(topped->presentation()->treeWindows.front().firstVisible, std::uint32_t{0});
@@ -1601,7 +1610,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"tree.scroll", runtime.revision(),
                                   ssg::ScrollLinesArguments{999}}).accepted());
-    auto bottomed = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto bottomed = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(bottomed.has_value());
     if (!bottomed) return;
     auto const& w3 = bottomed->presentation()->treeWindows.front();
@@ -1641,7 +1650,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
 
     ssg::ViewportDimensions const dims{24, 6};
     // Prime the pane-size cache the reveal path reads.
-    auto primed = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto primed = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(primed.has_value());
     if (!primed) return;
     ASSERT_EQ(primed->presentation()->viewport.firstVisualColumn, std::uint32_t{0});
@@ -1651,7 +1660,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"cursor.line_end", runtime.revision(), {}})
                     .accepted());
-    auto scrolled = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto scrolled = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
     auto const offset = scrolled->presentation()->viewport.firstVisualColumn;
@@ -1664,7 +1673,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"cursor.line_start", runtime.revision(), {}})
                     .accepted());
-    auto reset = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto reset = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(reset.has_value());
     if (!reset) return;
     ASSERT_EQ(reset->presentation()->viewport.firstVisualColumn, std::uint32_t{0});
@@ -1699,7 +1708,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     // Word wrap OFF (default): three logical lines (the trailing newline yields a
     // final empty line) -> three visual rows total; the 200-cell line is ONE
     // clipped visual row.
-    auto off = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto off = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(off.has_value());
     if (!off) return;
     ASSERT_EQ(off->presentation()->viewport.totalVisualRows, std::uint32_t{3});
@@ -1714,7 +1723,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"view.toggle_word_wrap", runtime.revision(), {}})
                     .accepted());
-    auto on = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto on = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(on.has_value());
     if (!on) return;
     ASSERT_TRUE(on->presentation()->viewport.totalVisualRows > 3u);  // wrapped
@@ -1727,7 +1736,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"cursor.line_end", runtime.revision(), {}})
                     .accepted());
-    auto wrappedEnd = runtime.snapshot(ssg::ClientId{1}, dims);
+    auto wrappedEnd = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(wrappedEnd.has_value());
     if (!wrappedEnd) return;
     ASSERT_EQ(wrappedEnd->presentation()->viewport.firstVisualColumn, std::uint32_t{0});
@@ -1765,15 +1774,15 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
                                  {"view.toggle_word_wrap", runtime.revision(), {}})
                     .accepted());
     ssg::ViewportDimensions const dims{80, 24};
-    (void)runtime.snapshot(ssg::ClientId{1}, dims);  // warm the cache
+    (void)runtime.present(ssg::ClientId{1}, dims);  // warm the cache
 
     // Two identical wrap snapshots: the second re-shapes nothing from the
     // document -- only the constant chrome/prompt shaping remains.
     ssg::GraphemeLayout::resetCellRunCalls();
-    (void)runtime.snapshot(ssg::ClientId{1}, dims);
+    (void)runtime.present(ssg::ClientId{1}, dims);
     auto const base = ssg::GraphemeLayout::cellRunCalls();
     ssg::GraphemeLayout::resetCellRunCalls();
-    (void)runtime.snapshot(ssg::ClientId{1}, dims);
+    (void)runtime.present(ssg::ClientId{1}, dims);
     ASSERT_EQ(ssg::GraphemeLayout::cellRunCalls(), base);
 
     // An edit bumps the document revision, so the whole document is re-shaped:
@@ -1783,7 +1792,7 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
                                   ssg::TextInputArguments{"z"}})
                     .accepted());
     ssg::GraphemeLayout::resetCellRunCalls();
-    (void)runtime.snapshot(ssg::ClientId{1}, dims);
+    (void)runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(ssg::GraphemeLayout::cellRunCalls() > base);
     std::filesystem::remove_all(root);
 }
@@ -1883,7 +1892,7 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
     auto navSegmentations = [&](std::string const& file) -> std::uint64_t {
         (void)runtime.dispatch(
             ssg::ClientId{1}, {"file.open", runtime.revision(), file});
-        (void)runtime.snapshot(ssg::ClientId{1}, dims);  // prime pane cache
+        (void)runtime.present(ssg::ClientId{1}, dims);  // prime pane cache
         ssg::GraphemeLayout::resetCellRunCalls();
         for (int i = 0; i < 4; ++i) {
             (void)runtime.dispatch(
@@ -1921,7 +1930,7 @@ std::unique_ptr<ssg::EditorRuntime> gotoLineRuntime() {
 }
 
 std::uint32_t gotoCaretLine(ssg::EditorRuntime& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     if (!snapshot) return 0;
     return snapshot->sections().selection.primary().active.line.value();
 }
@@ -2001,7 +2010,7 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
                     ->dispatch(ssg::ClientId{1},
                                {"goto.line", runtime->revision(), {}})
                     .accepted());
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     const auto& prompt = snapshot->presentation()->prompt;

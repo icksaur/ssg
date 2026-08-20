@@ -19,6 +19,7 @@ EditCommandSettings editSettings(EditorRuntime::Impl const&) {
 }
 
 CommandHandlerResult applyTransaction(EditorRuntime::Impl& runtime,
+                                       ViewId viewId,
                                        EditTransaction const& transaction,
                                        SelectionSet const& selectionsAfter,
                                        HistoryEditKind kind) {
@@ -31,13 +32,14 @@ CommandHandlerResult applyTransaction(EditorRuntime::Impl& runtime,
     if (!result.accepted()) return failure(result.message);
     runtime.selection.selections = result.selections.value_or(selectionsAfter);
     runtime.clampSelectionsToActiveDocument();
-    runtime.revealPrimaryCaret();
+    runtime.revealPrimaryCaret(viewId);
     (void)runtime.updateTabsFor(*id);
     runtime.refreshSyntax();
     return success();
 }
 
 CommandHandlerResult bindText(EditorRuntime::Impl& runtime,
+                               ViewId viewId,
                                TextInputCommand command,
                                TextInputArguments arguments) {
     if (runtime.activeTabIsLiveDiff()) {
@@ -54,8 +56,9 @@ CommandHandlerResult bindText(EditorRuntime::Impl& runtime,
     if (!result.accepted() || !result.transaction || !result.selections) {
         return failure(result.message);
     }
-    auto outcome = applyTransaction(runtime, *result.transaction, *result.selections,
-                                     historyEditKind(command));
+    auto outcome =
+        applyTransaction(runtime, viewId, *result.transaction,
+                         *result.selections, historyEditKind(command));
     // Keep undo word-granular: seal the current unit after a newline or after
     // inserting a whitespace/punctuation boundary, so the next word starts a
     // fresh undo step.
@@ -77,6 +80,7 @@ CommandHandlerResult bindText(EditorRuntime::Impl& runtime,
 }
 
 CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
+                                    ViewId viewId,
                                     ClientId client,
                                     SelectionCommand command,
                                     std::any const& payload) {
@@ -88,19 +92,29 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
     // snapshot, not a fake {80, 24}: page motion advances by the real height and
     // the built-in caret reveal uses the real height/width (so a far-right column
     // on a wide line is not clamped at column 80).
+    auto& presentation = runtime.presentation(viewId);
     ViewportDimensions const viewport{
-        std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
-        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
+        std::max<std::uint32_t>(presentation.paneContentColumns, 1),
+        std::max<std::uint32_t>(presentation.paneContentRows, 1)};
+    auto navigation = runtime.selection;
+    navigation.firstVisualRow = presentation.requestedFirstVisualRow;
+    navigation.firstVisualColumn = presentation.requestedFirstVisualColumn;
+    navigation.desiredCell = presentation.desiredCell;
     const auto diffFile = runtime.activeDiffFile();
-    auto result = ssg::SelectionNavigator{}.apply(runtime.activeText(), runtime.selection,
+    auto result = ssg::SelectionNavigator{}.apply(runtime.activeText(), navigation,
                                              command, viewport,
                                              arguments, {}, 4,
                                              runtime.wordWrap,
                                              diffFile ? &*diffFile : nullptr);
     if (!result.accepted()) return failure(result.message);
-    if (result.delta.replacement) runtime.selection = *result.delta.replacement;
-    runtime.requestedFirstVisualRow = runtime.selection.firstVisualRow;
-    runtime.requestedFirstVisualColumn = runtime.selection.firstVisualColumn;
+    if (result.delta.replacement) {
+        runtime.selection.selections = result.delta.replacement->selections;
+        navigation = *result.delta.replacement;
+    }
+    presentation.requestedFirstVisualRow = navigation.firstVisualRow;
+    presentation.requestedFirstVisualColumn =
+        navigation.firstVisualColumn;
+    presentation.desiredCell = navigation.desiredCell;
     if (auto active = runtime.activeDocumentId()) {
         runtime.historyFor(*active).breakCoalescing();
     }
@@ -116,11 +130,12 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
         command == SelectionCommand::SelectWordAtPosition) {
         runtime.interaction.focusEditor();
     }
-    runtime.recordNavigation(client, NavigationClass::User);
+    runtime.recordNavigation(client, viewId, NavigationClass::User);
     return success();
 }
 
-CommandHandlerResult bindEdit(EditorRuntime::Impl& runtime, EditCommand command) {
+CommandHandlerResult bindEdit(EditorRuntime::Impl& runtime, ViewId viewId,
+                              EditCommand command) {
     if (runtime.activeTabIsLiveDiff()) {
         return failure("edit command cannot mutate a diff document");
     }
@@ -131,11 +146,12 @@ CommandHandlerResult bindEdit(EditorRuntime::Impl& runtime, EditCommand command)
     if (!result.accepted() || !result.transaction || !result.selections) {
         return failure(result.message);
     }
-    return applyTransaction(runtime, *result.transaction, *result.selections,
-                             HistoryEditKind::Other);
+    return applyTransaction(runtime, viewId, *result.transaction,
+                            *result.selections, HistoryEditKind::Other);
 }
 
-CommandHandlerResult bindHistory(EditorRuntime::Impl& runtime, HistoryCommand command) {
+CommandHandlerResult bindHistory(EditorRuntime::Impl& runtime, ViewId viewId,
+                                 HistoryCommand command) {
     if (runtime.activeTabIsLiveDiff()) {
         return failure("history command cannot mutate a diff document");
     }
@@ -147,13 +163,14 @@ CommandHandlerResult bindHistory(EditorRuntime::Impl& runtime, HistoryCommand co
     if (!result.accepted()) return failure(result.message);
     if (result.selections) runtime.selection.selections = *result.selections;
     runtime.clampSelectionsToActiveDocument();
-    runtime.revealPrimaryCaret();
+    runtime.revealPrimaryCaret(viewId);
     (void)runtime.updateTabsFor(*id);
     runtime.refreshSyntax();
     return success();
 }
 
-CommandHandlerResult bindClipboard(EditorRuntime::Impl& runtime, ClipboardCommand command) {
+CommandHandlerResult bindClipboard(EditorRuntime::Impl& runtime, ViewId viewId,
+                                   ClipboardCommand command) {
     if (runtime.activeTabIsLiveDiff() && command != ClipboardCommand::Copy) {
         return failure("clipboard mutation is unavailable in diff mode");
     }
@@ -182,7 +199,7 @@ CommandHandlerResult bindClipboard(EditorRuntime::Impl& runtime, ClipboardComman
         // selection set) so a cut/paste with the caret off-screen scrolls into
         // view. Do NOT clamp here: clamp_selection_to_active_document collapses
         // the set to a single caret and would discard a multi-cursor cut/paste.
-        runtime.revealPrimaryCaret();
+        runtime.revealPrimaryCaret(viewId);
         (void)runtime.updateTabsFor(*id);
         runtime.refreshSyntax();
     }
@@ -191,7 +208,7 @@ CommandHandlerResult bindClipboard(EditorRuntime::Impl& runtime, ClipboardComman
 
 // Move the primary selection onto the active find match and reveal it so the
 // viewport scrolls to follow find navigation (find.next/previous/update_query).
-void revealActiveFindMatch(EditorRuntime::Impl& runtime) {
+void revealActiveFindMatch(EditorRuntime::Impl& runtime, ViewId viewId) {
     auto const& state = runtime.findReplace.viewState();
     if (!state.open || !state.activeMatch ||
         *state.activeMatch >= state.matches.size()) {
@@ -211,23 +228,30 @@ void revealActiveFindMatch(EditorRuntime::Impl& runtime) {
     // margin) guarantees the match lands above the prompt whether or not it was
     // open last snapshot.
     auto const reserved = promptRowCount(PromptKind::Find) + 1;
-    auto const baseRows = runtime.lastPaneContentRows +
-                           runtime.lastReservedPromptRows;
+    auto& presentation = runtime.presentation(viewId);
+    auto const baseRows = presentation.paneContentRows +
+                          presentation.reservedPromptRows;
     auto const revealRows = baseRows > reserved
                                  ? baseRows - reserved
                                  : std::uint32_t{1};
-    ViewportDimensions revealViewport{runtime.lastPaneContentColumns,
+    ViewportDimensions revealViewport{presentation.paneContentColumns,
                                        revealRows};
+    auto navigation = runtime.selection;
+    navigation.firstVisualRow = presentation.requestedFirstVisualRow;
+    navigation.firstVisualColumn = presentation.requestedFirstVisualColumn;
+    navigation.desiredCell = presentation.desiredCell;
     const auto diffFile = runtime.activeDiffFile();
     auto result = ssg::SelectionNavigator{}.apply(
-        text, runtime.selection, SelectionCommand::ViewRevealCaret,
+        text, navigation, SelectionCommand::ViewRevealCaret,
         revealViewport, {}, {}, 4, runtime.wordWrap,
         diffFile ? &*diffFile : nullptr);
     if (result.accepted() && result.delta.replacement) {
-        runtime.selection = *result.delta.replacement;
+        navigation = *result.delta.replacement;
     }
-    runtime.requestedFirstVisualRow = runtime.selection.firstVisualRow;
-    runtime.requestedFirstVisualColumn = runtime.selection.firstVisualColumn;
+    presentation.requestedFirstVisualRow = navigation.firstVisualRow;
+    presentation.requestedFirstVisualColumn =
+        navigation.firstVisualColumn;
+    presentation.desiredCell = navigation.desiredCell;
 }
 
 // A replace prompt is active when the controller is open in replace mode AND
@@ -265,6 +289,7 @@ std::vector<PromptToggle> findOptionToggles(EditorRuntime::Impl& runtime) {
 }
 
 CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
+                                     ViewId viewId,
                                      Revision revision,
                                      FindReplaceCommand command,
                                      std::any const& payload) {
@@ -294,7 +319,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
         case FindReplaceCommand::FindOpen:
             runtime.findReplace.open(snapshot, FindRequest{query, runtime.findReplace.viewState().options, range});
             runtime.findDocumentId = runtime.activeDocumentId();
-            revealActiveFindMatch(runtime);
+            revealActiveFindMatch(runtime, viewId);
             // Open the find prompt so focus moves to it and the reserved rows
             // display the controller query (projected at snapshot time).
             if (auto opened = runtime.interaction.openPrompt(PromptRequest{
@@ -320,7 +345,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             runtime.findReplace.open(
                 snapshot, FindRequest{needle, options, std::nullopt});
             runtime.findDocumentId = runtime.activeDocumentId();
-            revealActiveFindMatch(runtime);
+            revealActiveFindMatch(runtime, viewId);
             if (auto opened = runtime.interaction.openPrompt(PromptRequest{
                     PromptKind::Find, "find", {{"find.query", "find query", needle}},
                     findOptionToggles(runtime),
@@ -333,7 +358,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
         case FindReplaceCommand::ReplaceOpen:
             runtime.findReplace.openReplace(snapshot, FindRequest{query, runtime.findReplace.viewState().options, range});
             runtime.findDocumentId = runtime.activeDocumentId();
-            revealActiveFindMatch(runtime);
+            revealActiveFindMatch(runtime, viewId);
             // Three-row replace prompt: query (row 0, display-only, seeded from
             // the current find query), replacement (row 1, editable), and the
             // option/match-count row.  The client edits only the replacement.
@@ -371,19 +396,19 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
         case FindReplaceCommand::FindNext:
             if (!findOrReplacePromptActive(runtime)) return success();
             runtime.findReplace.next();
-            revealActiveFindMatch(runtime);
+            revealActiveFindMatch(runtime, viewId);
             return success();
         case FindReplaceCommand::FindPrevious:
             if (!findOrReplacePromptActive(runtime)) return success();
             runtime.findReplace.previous();
-            revealActiveFindMatch(runtime);
+            revealActiveFindMatch(runtime, viewId);
             return success();
         case FindReplaceCommand::FindUpdateQuery: {
             auto const* arguments = payloadAs<FindQueryArguments>(payload);
             if (arguments == nullptr) return failure("find.update_query requires a query payload");
             runtime.findReplace.updateQuery(snapshot, arguments->query, range);
             runtime.findDocumentId = runtime.activeDocumentId();
-            revealActiveFindMatch(runtime);
+            revealActiveFindMatch(runtime, viewId);
             return success();
         }
         case FindReplaceCommand::FindToggleCase:
@@ -419,7 +444,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             if (!result.accepted()) return failure(result.message);
             runtime.refreshSyntax();
             auto tabsResult = runtime.updateTabsFor(*id);
-            revealActiveFindMatch(runtime);
+            revealActiveFindMatch(runtime, viewId);
             // If no match remains to reveal (common after replace.all), still
             // reveal the primary caret so a replace with the caret off-screen
             // scrolls into view, per the edits-reveal policy. When a match does
@@ -428,7 +453,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             auto const& fr = runtime.findReplace.viewState();
             if (!fr.open || !fr.activeMatch ||
                 *fr.activeMatch >= fr.matches.size()) {
-                runtime.revealPrimaryCaret();
+                runtime.revealPrimaryCaret(viewId);
             }
             return tabsResult;
         }
@@ -472,31 +497,38 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
 } // namespace
 
 CommandHandlerResult executeFindReplaceCommand(EditorRuntime::Impl& runtime,
+                                                ViewId viewId,
                                                Revision revision,
                                                FindReplaceCommand command,
                                                std::any const& payload) {
-    return bindFindReplace(runtime, revision, command, payload);
+    return bindFindReplace(runtime, viewId, revision, command, payload);
 }
 
-void EditorRuntime::Impl::revealPrimaryCaret() {
+void EditorRuntime::Impl::revealPrimaryCaret(ViewId viewId) {
     // Reveal against the real editor pane cached from the last snapshot: the
     // content rows/columns already exclude any reserved prompt rows, so no prompt
     // adjustment is needed (unlike reveal_active_find_match, which runs while the
     // find prompt is open). The offset is re-clamped in compute_viewport, so a
     // one-frame-stale cache can never place it out of range.
+    auto& view = presentation(viewId);
     ViewportDimensions revealViewport{
-        std::max<std::uint32_t>(lastPaneContentColumns, 1),
-        std::max<std::uint32_t>(lastPaneContentRows, 1)};
+        std::max<std::uint32_t>(view.paneContentColumns, 1),
+        std::max<std::uint32_t>(view.paneContentRows, 1)};
+    auto navigation = selection;
+    navigation.firstVisualRow = view.requestedFirstVisualRow;
+    navigation.firstVisualColumn = view.requestedFirstVisualColumn;
+    navigation.desiredCell = view.desiredCell;
     const auto diffFile = activeDiffFile();
     auto result = ssg::SelectionNavigator{}.apply(
-        activeText(), selection, SelectionCommand::ViewRevealCaret,
+        activeText(), navigation, SelectionCommand::ViewRevealCaret,
         revealViewport, {}, {}, 4, wordWrap,
         diffFile ? &*diffFile : nullptr);
     if (result.accepted() && result.delta.replacement) {
-        selection = *result.delta.replacement;
+        navigation = *result.delta.replacement;
     }
-    requestedFirstVisualRow = selection.firstVisualRow;
-    requestedFirstVisualColumn = selection.firstVisualColumn;
+    view.requestedFirstVisualRow = navigation.firstVisualRow;
+    view.requestedFirstVisualColumn = navigation.firstVisualColumn;
+    view.desiredCell = navigation.desiredCell;
 }
 
 // The text-input commands, declared where they are implemented.
@@ -521,9 +553,10 @@ void registerTextInputCommands(CommandCatalog& builder,
                         .summary(std::move(summary))
                         .mutates()
                         .lua()
-                        .handler([&runtime, command](CommandContext&) {
+                        .handler([&runtime, command](CommandContext& context) {
                             return runtime.runTransaction([&] {
-                                return bindText(runtime, command, {});
+                                return bindText(runtime, context.viewId(),
+                                                command, {});
                             });
                         }));
     };
@@ -535,10 +568,10 @@ void registerTextInputCommands(CommandCatalog& builder,
                     .mutates()
                     .lua()
                     .handler<TextInputArguments>(
-                        [&runtime](CommandContext&,
+                        [&runtime](CommandContext& context,
                                    TextInputArguments const& arguments) {
                             return runtime.runTransaction([&] {
-                                return bindText(runtime,
+                                return bindText(runtime, context.viewId(),
                                                 TextInputCommand::Insert,
                                                 arguments);
                             });
@@ -568,9 +601,10 @@ void registerHistoryCommands(CommandCatalog& builder,
                         .summary(std::move(summary))
                         .mutates()
                         .lua()
-                        .handler([&runtime, command](CommandContext&) {
+                        .handler([&runtime, command](CommandContext& context) {
                             return runtime.runTransaction([&] {
-                                return bindHistory(runtime, command);
+                                return bindHistory(runtime, context.viewId(),
+                                                   command);
                             });
                         }));
     };
@@ -589,9 +623,10 @@ void registerClipboardCommands(CommandCatalog& builder,
                         .summary(std::move(summary))
                         .mutates()
                         .lua()
-                        .handler([&runtime, command](CommandContext&) {
+                        .handler([&runtime, command](CommandContext& context) {
                             return runtime.runTransaction([&] {
-                                return bindClipboard(runtime, command);
+                                return bindClipboard(runtime, context.viewId(),
+                                                     command);
                             });
                         }));
     };
@@ -611,9 +646,10 @@ void registerEditSuiteCommands(CommandCatalog& builder,
                          .summary(std::move(summary))
                          .mutates()
                          .lua()
-                         .handler([&runtime, command](CommandContext&) {
+                         .handler([&runtime, command](CommandContext& context) {
                              return runtime.runTransaction([&] {
-                                 return bindEdit(runtime, command);
+                                 return bindEdit(runtime, context.viewId(),
+                                                 command);
                              });
                          });
         if (!label.empty()) built.label(std::move(label));
@@ -653,7 +689,8 @@ void registerFindReplaceCommands(CommandCatalog& builder,
                          .handler([&runtime, command](CommandContext& context) {
                              return runtime.runTransaction([&] {
                                  return executeFindReplaceCommand(
-                                     runtime, context.revision(), command, {});
+                                     runtime, context.viewId(),
+                                     context.revision(), command, {});
                              });
                          });
         if (!label.empty()) built.label(std::move(label));
@@ -691,7 +728,8 @@ void registerFindReplaceCommands(CommandCatalog& builder,
                                 std::optional<Arguments> const& arguments) {
                                 return runtime.runTransaction([&] {
                                     return executeFindReplaceCommand(
-                                        runtime, context.revision(), command,
+                                        runtime, context.viewId(),
+                                        context.revision(), command,
                                         arguments ? std::any{*arguments}
                                                   : std::any{});
                                 });
@@ -757,7 +795,8 @@ void registerSelectionCommands(CommandCatalog& builder,
                             arguments) {
                         return runtime.runTransaction([&] {
                             return bindSelection(
-                                runtime, context.principal().clientId(),
+                                runtime, context.viewId(),
+                                context.principal().clientId(),
                                 command,
                                 arguments ? std::any{*arguments} : std::any{});
                         });

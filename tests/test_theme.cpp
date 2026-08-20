@@ -158,7 +158,7 @@ TEST(editorRuntimeStartsFromTheDefaultTheme) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
         ASSERT_EQ(snapshot->sections().theme, ssg::defaultTheme());

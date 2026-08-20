@@ -1086,7 +1086,7 @@ int main(int argc, char** argv) {
     // before every input event so coalesced input after a focus-changing command
     // routes against the new focus rather than a stale one.
     auto refresh = [&]() -> std::optional<ssg::SessionSnapshot> {
-        auto snapshot = runtime.snapshot(client, terminalSize(), buildReport());
+        auto snapshot = runtime.present(client, terminalSize(), buildReport());
         if (snapshot) {
             focus = effectiveFocusFromSections(snapshot->sections());
             candidates = snapshot->sections().palette.candidates;
@@ -1330,13 +1330,16 @@ int main(int argc, char** argv) {
                 if (!wait.input) continue;
             }
             if (wait.initScript) {
-                // Unlike git-diff (auto-drained inside EditorRuntime::snapshot()),
+                // Worker completion is accepted only by EditorRuntime::pump();
                 // nothing else drains this -- evaluate the reloaded script here,
                 // on the main thread, exactly like startup's loadInitScript.
                 initScriptWatcher->drainAndEvaluate(scripts, runtime);
                 if (!wait.input) continue;
             }
-            if (wait.gitDiff && !wait.input) continue;
+            if (wait.gitDiff) {
+                (void)runtime.pump();
+                if (!wait.input) continue;
+            }
             if (!wait.input) continue;  // Wake-only cycle: re-render and retry.
             auto readBytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
             if (readBytes <= 0) break;

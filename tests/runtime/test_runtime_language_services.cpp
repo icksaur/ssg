@@ -31,7 +31,7 @@ TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
 
     auto completion = runtime.dispatch(ssg::ClientId{1}, {"completion.open", runtime.revision(), {}});
     ASSERT_FALSE(completion.accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->sections().syntax.revision(), snapshot->sections().document.revision);
     ASSERT_FALSE(snapshot->sections().lspFeatures.status.empty());

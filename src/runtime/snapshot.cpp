@@ -344,18 +344,6 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     if (!result.accepted()) return {};
     auto view = *result.view;
 
-    if (!view.panes.empty()) {
-        auto const& content = view.panes.front().content;
-        lastPaneContentRows = static_cast<std::uint32_t>(std::max(content.height, 1));
-        lastPaneContentColumns = static_cast<std::uint32_t>(std::max(content.width, 1));
-        lastReservedPromptRows = static_cast<std::uint32_t>(request.reservedPromptRows);
-    }
-    // Cache the tree content height (panel height minus the provider-label row)
-    // so tree_view can resolve the scroll offset against the real panel size.
-    lastPanelContentRows =
-        view.panel ? static_cast<std::uint32_t>(std::max(view.panel->height - 1, 0))
-                   : 0;
-
     if (paletteOpen && !view.panes.empty()) {
         // The client owns palette ranking for latency and normally supplies the
         // windowed report. On the frame the palette OPENS, though, the client has
@@ -401,8 +389,6 @@ SessionSnapshotSections EditorRuntime::Impl::sections(
             currentHistory = found->second.history.viewState();
         }
     }
-    // The shell layout is computed by the caller (EditorRuntime::snapshot) before
-    // this, warming the panel-height cache that treeView() and viewport() read.
     auto treeSection = treeView();
     const UiInteractionState& interactionState = interaction.interaction();
     const ValidatedSchema& validatedSchema = interactionState.schema();
@@ -459,7 +445,8 @@ TreeViewState EditorRuntime::Impl::treeView() const {
     return tree.viewState();
 }
 
-std::vector<TreeWindow> EditorRuntime::Impl::treeWindows() const {
+std::vector<TreeWindow> EditorRuntime::Impl::treeWindows(
+    ViewPresentationState const& presentation) const {
     auto view = tree.viewState();
     if (view.providers.empty()) return {};
     // Only the active (front) provider is rendered. Resolve a display window from
@@ -479,7 +466,8 @@ std::vector<TreeWindow> EditorRuntime::Impl::treeWindows() const {
     }
     auto scroll = Viewport{}.listScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
-        lastPanelContentRows, treeFirstVisible, selectedIndex,
+        presentation.panelContentRows, presentation.treeFirstVisible,
+        selectedIndex,
         /*keep_selection_visible=*/false);
     TreeWindow window;
     window.firstVisible = scroll.firstVisible;
@@ -492,7 +480,7 @@ std::vector<TreeWindow> EditorRuntime::Impl::treeWindows() const {
     return {std::move(window)};
 }
 
-void EditorRuntime::Impl::revealTreeSelection() {
+void EditorRuntime::Impl::revealTreeSelection(ViewId viewId) {
     auto view = tree.viewState();
     if (view.providers.empty()) return;
     auto const& provider = view.providers.front();
@@ -505,14 +493,16 @@ void EditorRuntime::Impl::revealTreeSelection() {
         }
     }
     if (!selectedIndex) return;
-    auto offset = ScrollOffset{treeFirstVisible};
+    auto& viewPresentation = presentation(viewId);
+    auto offset = ScrollOffset{viewPresentation.treeFirstVisible};
     offset.revealSelection(*selectedIndex,
                            static_cast<std::uint32_t>(provider.nodes.size()),
-                           lastPanelContentRows);
-    treeFirstVisible = offset.firstVisible();
+                           viewPresentation.panelContentRows);
+    viewPresentation.treeFirstVisible = offset.firstVisible();
 }
 
-void EditorRuntime::Impl::scrollTreeToFraction(std::uint32_t numerator,
+void EditorRuntime::Impl::scrollTreeToFraction(ViewId viewId,
+                                                std::uint32_t numerator,
                                                 std::uint32_t denominator) {
     // Only the node COUNT is needed, and this runs per pointer motion during a
     // thumb drag, so it must not rebuild every provider's view.
@@ -521,13 +511,15 @@ void EditorRuntime::Impl::scrollTreeToFraction(std::uint32_t numerator,
     // The panel's counterpart to view.scroll_to_fraction: a gutter click or
     // thumb drag positions the tree along its track. Same ScrollOffset the
     // editor uses, so both gutters map a pointer row to a position identically.
-    auto offset = ScrollOffset{treeFirstVisible};
+    auto& viewPresentation = presentation(viewId);
+    auto offset = ScrollOffset{viewPresentation.treeFirstVisible};
     offset.toFraction(numerator, denominator,
-                      static_cast<std::uint32_t>(nodes), lastPanelContentRows);
-    treeFirstVisible = offset.firstVisible();
+                      static_cast<std::uint32_t>(nodes),
+                      viewPresentation.panelContentRows);
+    viewPresentation.treeFirstVisible = offset.firstVisible();
 }
 
-void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
+void EditorRuntime::Impl::scrollTree(ViewId viewId, std::int64_t rows) {
     // Same reasoning as scrollTreeToFraction: the wheel path needs the count,
     // not the view.
     auto const nodes = tree.activeVisibleNodeCount();
@@ -535,10 +527,11 @@ void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
     // keep-visible is not applied: a wheel scroll moves the viewport, not the
     // selection (a later revealTreeSelection re-snaps). The saturating
     // clamp-shift lives in ScrollOffset, shared with every other surface.
-    auto offset = ScrollOffset{treeFirstVisible};
+    auto& viewPresentation = presentation(viewId);
+    auto offset = ScrollOffset{viewPresentation.treeFirstVisible};
     offset.byLines(rows, static_cast<std::uint32_t>(nodes),
-                   lastPanelContentRows);
-    treeFirstVisible = offset.firstVisible();
+                   viewPresentation.panelContentRows);
+    viewPresentation.treeFirstVisible = offset.firstVisible();
 }
 
 // Publishes the candidate set of whichever picker is open.  The mode and the

@@ -118,7 +118,7 @@ void runState(const UiState& state) {
         // snapshot() is total: it always returns a value.  The typed "too small"
         // outcome is a zeroed shell viewport ({0,0}); a laid-out shell carries the
         // requested dimensions.
-        auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+        auto snapshot = runtime.present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot.has_value()) continue;
         auto const& shell = snapshot->presentation()->shell;

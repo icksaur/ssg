@@ -244,6 +244,7 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
 }
 
 CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
+                              ViewId viewId,
                               ClientId client,
                               TabCommand command,
                               std::any const& payload) {
@@ -273,7 +274,7 @@ CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
     // active tab's caret is on-screen instead of inheriting the previous tab's
     // scroll offset.
     if (runtime.activeDocumentId() != documentBefore) {
-        runtime.revealPrimaryCaret();
+        runtime.revealPrimaryCaret(viewId);
     }
     runtime.refreshSyntax();
     // Focus follows the pointer (M8-F): activating a tab (a tab click, or the
@@ -285,7 +286,7 @@ CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
     if (runtime.tabs.viewState().active != activeTabBefore &&
         (command == TabCommand::Activate || command == TabCommand::Next ||
          command == TabCommand::Previous)) {
-        runtime.recordNavigation(client, NavigationClass::User);
+        runtime.recordNavigation(client, viewId, NavigationClass::User);
     }
     return success();
 }
@@ -672,7 +673,7 @@ void registerTabCommands(CommandCatalog& builder,
                     [&runtime, command](CommandContext& context,
                                         std::optional<TabId> const& tab) {
                         return runtime.runTransaction([&] {
-                            return bindTab(runtime,
+                            return bindTab(runtime, context.viewId(),
                                            context.principal().clientId(),
                                            command,
                                            tab ? std::any{*tab} : std::any{});

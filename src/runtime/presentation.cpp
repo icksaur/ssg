@@ -32,7 +32,8 @@ CommandHandlerResult setLineNumbers(EditorRuntime::Impl& runtime) {
     return success();
 }
 
-CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, std::any const& payload) {
+CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, ViewId viewId,
+                                 std::any const& payload) {
     auto const* arguments = payloadAs<ScrollLinesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_lines requires scroll-lines payload");
     // Clamp the STORED request to the real scroll range. Leaving it unbounded
@@ -42,35 +43,33 @@ CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, std::any const& p
     // resolved against the pane the last snapshot cached, the same viewport
     // scroll_to_fraction bounds against. Word wrap off (the default) makes this
     // O(visible rows); the drag path already pays the wrapped cost per notch.
-    ViewportDimensions const viewport{
-        std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
-        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
-    auto const view = runtime.computeEditorViewport(viewport, 0, 0);
-    auto offset = ScrollOffset{runtime.requestedFirstVisualRow};
-    offset.byLines(arguments->rows, view.totalVisualRows, viewport.rows);
-    runtime.requestedFirstVisualRow = offset.firstVisible();
-    runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
+    auto& presentation = runtime.presentation(viewId);
+    auto const view = runtime.computeEditorViewport(presentation, 0, 0);
+    auto offset = ScrollOffset{presentation.requestedFirstVisualRow};
+    offset.byLines(arguments->rows, view.totalVisualRows,
+                   presentation.paneContentRows);
+    presentation.requestedFirstVisualRow = offset.firstVisible();
     return success();
 }
 
-CommandHandlerResult scrollPages(EditorRuntime::Impl& runtime, std::any const& payload) {
+CommandHandlerResult scrollPages(EditorRuntime::Impl& runtime, ViewId viewId,
+                                 std::any const& payload) {
     auto const* arguments = payloadAs<ScrollPagesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_pages requires scroll-pages payload");
     // Same range clamp as scroll_lines above: a page is the real pane height, and
     // byPages saturates the multiply before bounding, so paging past the end
     // pins at the last line instead of accumulating slack.
-    ViewportDimensions const viewport{
-        std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
-        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
-    auto const view = runtime.computeEditorViewport(viewport, 0, 0);
-    auto offset = ScrollOffset{runtime.requestedFirstVisualRow};
-    offset.byPages(arguments->pages, view.totalVisualRows, viewport.rows);
-    runtime.requestedFirstVisualRow = offset.firstVisible();
-    runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
+    auto& presentation = runtime.presentation(viewId);
+    auto const view = runtime.computeEditorViewport(presentation, 0, 0);
+    auto offset = ScrollOffset{presentation.requestedFirstVisualRow};
+    offset.byPages(arguments->pages, view.totalVisualRows,
+                   presentation.paneContentRows);
+    presentation.requestedFirstVisualRow = offset.firstVisible();
     return success();
 }
 
-CommandHandlerResult scrollFraction(EditorRuntime::Impl& runtime, std::any const& payload) {
+CommandHandlerResult scrollFraction(EditorRuntime::Impl& runtime, ViewId viewId,
+                                    std::any const& payload) {
     auto const* arguments = payloadAs<ScrollFractionArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_to_fraction requires scroll-fraction payload");
     // Resolve maximum_first_row against the REAL pane cached from the last
@@ -78,28 +77,26 @@ CommandHandlerResult scrollFraction(EditorRuntime::Impl& runtime, std::any const
     // terminal that is not 24 rows tall. Route through
     // the same wrap-gated viewport the snapshot uses so the drag maps to the same
     // total the scrollbar thumb was drawn from (M12).
-    ViewportDimensions const viewport{
-        std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
-        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
-    auto view = runtime.computeEditorViewport(viewport, 0, 0);
-    auto offset = ScrollOffset{runtime.requestedFirstVisualRow};
+    auto& presentation = runtime.presentation(viewId);
+    auto view = runtime.computeEditorViewport(presentation, 0, 0);
+    auto offset = ScrollOffset{presentation.requestedFirstVisualRow};
     offset.toFraction(arguments->numerator, arguments->denominator,
-                      view.totalVisualRows, viewport.rows);
-    runtime.requestedFirstVisualRow = offset.firstVisible();
-    runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
+                      view.totalVisualRows, presentation.paneContentRows);
+    presentation.requestedFirstVisualRow = offset.firstVisible();
     return success();
 }
 
-CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, std::string_view id) {
+CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, ViewId viewId,
+                                  std::string_view id) {
     if (id == "pane.split_horizontal") runtime.shell.splitActive(SplitAxis::Horizontal);
     else if (id == "pane.split_vertical") runtime.shell.splitActive(SplitAxis::Vertical);
     else if (id == "pane.close") (void)runtime.shell.closeActivePane();
     else if (id == "pane.next") runtime.shell.nextPane();
     else if (id == "pane.previous") runtime.shell.previousPane();
-    else if (id == "pane.focus_left") { if (runtime.shell.focusPane(PaneDirection::Left, runtime.shellView(ViewportDimensions{80, 24}))) runtime.interaction.focusEditor(); }
-    else if (id == "pane.focus_right") { if (runtime.shell.focusPane(PaneDirection::Right, runtime.shellView(ViewportDimensions{80, 24}))) runtime.interaction.focusEditor(); }
-    else if (id == "pane.focus_up") { if (runtime.shell.focusPane(PaneDirection::Up, runtime.shellView(ViewportDimensions{80, 24}))) runtime.interaction.focusEditor(); }
-    else if (id == "pane.focus_down") { if (runtime.shell.focusPane(PaneDirection::Down, runtime.shellView(ViewportDimensions{80, 24}))) runtime.interaction.focusEditor(); }
+    else if (id == "pane.focus_left") { if (runtime.shell.focusPane(PaneDirection::Left, runtime.shellView(runtime.presentation(viewId).dimensions))) runtime.interaction.focusEditor(); }
+    else if (id == "pane.focus_right") { if (runtime.shell.focusPane(PaneDirection::Right, runtime.shellView(runtime.presentation(viewId).dimensions))) runtime.interaction.focusEditor(); }
+    else if (id == "pane.focus_up") { if (runtime.shell.focusPane(PaneDirection::Up, runtime.shellView(runtime.presentation(viewId).dimensions))) runtime.interaction.focusEditor(); }
+    else if (id == "pane.focus_down") { if (runtime.shell.focusPane(PaneDirection::Down, runtime.shellView(runtime.presentation(viewId).dimensions))) runtime.interaction.focusEditor(); }
     else if (id == "panel.toggle") (void)runtime.interaction.apply(TogglePanel{});
     else if (id == "panel.focus") (void)runtime.interaction.focusPanel();
     else if (id == "panel.show_files") {
@@ -130,6 +127,7 @@ CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, std::string_view
 }
 
 CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
+                                         ViewId viewId,
                                          Revision revision,
                                          std::string_view id,
                                          std::any const& payload) {
@@ -147,19 +145,22 @@ CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
                                    ? FindReplaceCommand::ReplaceCurrent
                                    : FindReplaceCommand::FindNext;
                 return executeFindReplaceCommand(
-                    runtime, revision, command, payload);
+                    runtime, viewId, revision, command, payload);
             }
             if (id == "prompt.cancel") {
                 return executeFindReplaceCommand(
-                    runtime, revision, FindReplaceCommand::FindClose, payload);
+                    runtime, viewId, revision, FindReplaceCommand::FindClose,
+                    payload);
             }
             if (id == "prompt.next") {
                 return executeFindReplaceCommand(
-                    runtime, revision, FindReplaceCommand::FindNext, payload);
+                    runtime, viewId, revision, FindReplaceCommand::FindNext,
+                    payload);
             }
             if (id == "prompt.previous") {
                 return executeFindReplaceCommand(
-                    runtime, revision, FindReplaceCommand::FindPrevious, payload);
+                    runtime, viewId, revision, FindReplaceCommand::FindPrevious,
+                    payload);
             }
             return failure("command is not valid for a find/replace prompt");
         }
@@ -427,11 +428,12 @@ void registerViewportCommands(CommandCatalog& builder,
                         [&runtime](CommandContext& context,
                                    ScrollLinesArguments const& arguments) {
                             return runtime.runTransaction([&] {
-                                auto result = scrollLines(runtime,
+                                auto result = scrollLines(runtime, context.viewId(),
                                                           std::any{arguments});
                                 if (result.accepted) {
                                     runtime.recordNavigation(
                                         context.principal().clientId(),
+                                        context.viewId(),
                                         NavigationClass::User);
                                 }
                                 return result;
@@ -442,11 +444,12 @@ void registerViewportCommands(CommandCatalog& builder,
                         [&runtime](CommandContext& context,
                                    ScrollPagesArguments const& arguments) {
                             return runtime.runTransaction([&] {
-                                auto result = scrollPages(runtime,
+                                auto result = scrollPages(runtime, context.viewId(),
                                                           std::any{arguments});
                                 if (result.accepted) {
                                     runtime.recordNavigation(
                                         context.principal().clientId(),
+                                        context.viewId(),
                                         NavigationClass::User);
                                 }
                                 return result;
@@ -458,10 +461,12 @@ void registerViewportCommands(CommandCatalog& builder,
                                    ScrollFractionArguments const& arguments) {
                             return runtime.runTransaction([&] {
                                 auto result =
-                                    scrollFraction(runtime, std::any{arguments});
+                                    scrollFraction(runtime, context.viewId(),
+                                                   std::any{arguments});
                                 if (result.accepted) {
                                     runtime.recordNavigation(
                                         context.principal().clientId(),
+                                        context.viewId(),
                                         NavigationClass::User);
                                 }
                                 return result;
@@ -541,7 +546,8 @@ void registerPromptStatusCommands(CommandCatalog& builder,
                          .handler([&runtime, name](CommandContext& context) {
                              return runtime.runTransaction([&] {
                                  return promptStatusCommand(
-                                     runtime, context.revision(), name, {});
+                                     runtime, context.viewId(),
+                                     context.revision(), name, {});
                              });
                          });
         if (!label.empty()) built.label(std::move(label));
@@ -564,7 +570,8 @@ void registerPromptStatusCommands(CommandCatalog& builder,
                                        invocation) {
                             return runtime.runTransaction([&] {
                                 return promptStatusCommand(
-                                    runtime, context.revision(),
+                                    runtime, context.viewId(),
+                                    context.revision(),
                                     "status.invoke_action",
                                     invocation ? std::any{*invocation}
                                                : std::any{});
@@ -576,7 +583,8 @@ void registerPromptStatusCommands(CommandCatalog& builder,
                                    PromptValueArguments const& arguments) {
                             return runtime.runTransaction([&] {
                                 return promptStatusCommand(
-                                    runtime, context.revision(),
+                                    runtime, context.viewId(),
+                                    context.revision(),
                                     "prompt.update_value", std::any{arguments});
                             });
                         }));
@@ -586,7 +594,8 @@ void registerPromptStatusCommands(CommandCatalog& builder,
                                    PromptFocusArguments const& arguments) {
                             return runtime.runTransaction([&] {
                                 return promptStatusCommand(
-                                    runtime, context.revision(),
+                                    runtime, context.viewId(),
+                                    context.revision(),
                                     "prompt.focus_control", std::any{arguments});
                             });
                         }));
@@ -606,7 +615,8 @@ void registerShellLayoutCommands(CommandCatalog& builder,
                 .lua()
                 .handler([&runtime, name](CommandContext& context) {
                     return runtime.runTransaction([&] {
-                        auto result = shellCommand(runtime, name);
+                        auto result =
+                            shellCommand(runtime, context.viewId(), name);
                         // Moving focus between panes is the user navigating,
                         // which pauses follow-edits; splitting or closing one
                         // is not.
@@ -614,6 +624,7 @@ void registerShellLayoutCommands(CommandCatalog& builder,
                             userNavigationShellCommand(name)) {
                             runtime.recordNavigation(
                                 context.principal().clientId(),
+                                context.viewId(),
                                 NavigationClass::User);
                         }
                         return result;

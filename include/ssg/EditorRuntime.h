@@ -101,6 +101,11 @@ struct GitDiffScanResult {
     }
 };
 
+struct PumpResult {
+    bool advanced;
+    Revision revision;
+};
+
 // CONTRACT
 // EditorRuntime: resetKeymapToDefault, focusEditor, setComposedUi,
 //   primeDeferred, and the autosave-flush methods are host-only orchestration
@@ -127,6 +132,7 @@ public:
     [[nodiscard]] AttachResult attach(InvocationPrincipal principal,
                                       ViewId viewId);
     [[nodiscard]] bool detach(ClientId clientId);
+    [[nodiscard]] PumpResult pump();
     [[nodiscard]] CommandResult dispatch(ClientId clientId,
                                          ClientCommand const& command);
     [[nodiscard]] ClientInputResult input(ClientId clientId,
@@ -240,15 +246,17 @@ public:
     void reportWatcherAvailabilityForTest(bool available);
     // CONTRACT
     // EditorRuntime::snapshot: the semantic model and interaction state are never
-    //   gated on grid geometry. The dimension-taking overload adds an optional
+    //   gated on grid geometry. present() adds an optional
     //   PresentationSnapshot (viewport, style, footer prompt, shell layout,
-    //   selection scroll, tree scroll windows); the dimension-less overload
-    //   returns the identical semantic sections with presentation() == nullopt. A
+    //   selection scroll, tree scroll windows); present() updates and captures
+    //   that optional projection. snapshot() returns the identical semantic
+    //   sections with presentation() == nullopt. Neither operation pumps worker
+    //   results or advances the revision. A
     //   client that lays out the model natively obtains full semantic state
     //   without supplying, or paying for, any grid projection.
-    [[nodiscard]] std::optional<SessionSnapshot> snapshot(
+    [[nodiscard]] std::optional<SessionSnapshot> present(
         ClientId clientId, ViewportDimensions dimensions,
-        PaletteReport paletteReport = {}) const;
+        PaletteReport paletteReport = {});
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
         ClientId clientId, PaletteReport paletteReport = {}) const;
     [[nodiscard]] int gitDiffWakeDescriptor() const;

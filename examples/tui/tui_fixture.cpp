@@ -97,7 +97,7 @@ CommandResult TuiClient::submit(std::string commandId, std::any payload) {
 }
 
 void TuiClient::refresh() {
-    auto next = runtime_->snapshot(principal_.clientId(), dimensions_);
+    auto next = runtime_->present(principal_.clientId(), dimensions_);
     if (!next) {
         throw std::logic_error{"TUI runtime did not return its attached snapshot"};
     }

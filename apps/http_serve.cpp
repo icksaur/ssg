@@ -199,6 +199,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     // lays out natively, so it consumes the dimensionless snapshot (no grid).
     auto sendSnapshotLocked = [&runtime, &server, client, prevSnapshot,
                                settledId](Http::WebSocketHandle handle) {
+        (void)runtime.pump();
         auto snapshot = runtime.snapshot(client);
         if (!snapshot) {
             (void)server.send(handle, std::string{"no snapshot for client"});
@@ -216,6 +217,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     // did not, always stamping the highest settled client edit id.
     auto sendUpdateLocked = [&runtime, &server, client, prevSnapshot,
                              settledId](Http::WebSocketHandle handle) {
+        (void)runtime.pump();
         auto current = runtime.snapshot(client);
         if (!current) return;
         if (prevSnapshot->has_value() &&
@@ -337,6 +339,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                         std::string const id{payload.substr(5)};
                         std::lock_guard lock{*connectionMutex};
                         if (*attachedHandle != handle) return;
+                        (void)runtime.pump();
                         auto snapshot = runtime.snapshot(client);
                         if (snapshot && !id.empty()) {
                             auto const& palette = snapshot->sections().palette;
@@ -400,6 +403,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
                         if (*attachedHandle != handle) return;
                         auto const frame =
                             ssg::app::parse_external_pointer_frame(payload);
+                        (void)runtime.pump();
                         auto snapshot = runtime.snapshot(client);
                         if (frame && snapshot &&
                             ssg::app::external_pointer_frame_is_offered(
@@ -485,6 +489,7 @@ int run_http_server(EditorRuntime& runtime, unsigned short port) {
     auto broadcastGitUpdate = [&runtime, &server, client, prevSnapshot,
                                connectionMutex, settledId, attachedHandle]() {
         std::lock_guard lock{*connectionMutex};
+        (void)runtime.pump();
         auto current = runtime.snapshot(client);
         if (!current) return;
         // Send under the lock so delta derivation, prevSnapshot advance, and the

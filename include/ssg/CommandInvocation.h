@@ -133,6 +133,7 @@ public:
     [[nodiscard]] InvocationPrincipal const& principal() const noexcept {
         return principal_;
     }
+    [[nodiscard]] ViewId viewId() const noexcept { return viewId_; }
     [[nodiscard]] CommandServices* services() const noexcept {
         return services_;
     }
@@ -144,11 +145,15 @@ private:
     friend class CommandExecutor;
 
     CommandContext(Revision revision, InvocationPrincipal const& principal,
-                   CommandServices* services)
-        : revision_{revision}, principal_{principal}, services_{services} {}
+                   ViewId viewId, CommandServices* services)
+        : revision_{revision},
+          principal_{principal},
+          viewId_{viewId},
+          services_{services} {}
 
     Revision revision_;
     InvocationPrincipal const& principal_;
+    ViewId viewId_;
     CommandServices* services_;
     bool workspaceChanged_{false};
     WorkspaceId activeWorkspace_;

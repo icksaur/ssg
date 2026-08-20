@@ -182,8 +182,8 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
     // panel is shown).
     (void)runtime.tree.activateProvider(
         panelProviderTreeBinding(runtime.interaction.truth().selectedProvider).id);
-    if (id == "tree.select_next") { (void)runtime.tree.selectNext(); runtime.revealTreeSelection(); return success(); }
-    if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); runtime.revealTreeSelection(); return success(); }
+    if (id == "tree.select_next") { (void)runtime.tree.selectNext(); runtime.revealTreeSelection(context.viewId()); return success(); }
+    if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); runtime.revealTreeSelection(context.viewId()); return success(); }
     if (id == "tree.activate") {
         auto treeView = runtime.tree.viewState();
         auto providerKind = treeView.providers.empty()
@@ -192,7 +192,7 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
                                       treeView.providers.front().kind};
         auto selected = runtime.tree.selectedNode();
         if (!selected) return failure("no tree node is selected");
-        if (selected->expandable) { (void)runtime.tree.toggleSelected(); runtime.revealTreeSelection(); return success(); }
+        if (selected->expandable) { (void)runtime.tree.toggleSelected(); runtime.revealTreeSelection(context.viewId()); return success(); }
         if (providerKind == TreeProviderKind::Git && selected->workspacePath) {
             const auto diffView = runtime.diff.viewState();
             auto file = std::find_if(
@@ -205,7 +205,7 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
             }
             return runtime.openOrFocusLiveDiffTab(
                 *file, NavigationClass::User,
-                context.principal().clientId());
+                context.principal().clientId(), context.viewId());
         }
         if (selected->workspacePath) {
             auto result = runtime.workspace.openFile(*selected->workspacePath);
@@ -220,7 +220,7 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
         auto const* arguments = payloadAs<TreeSelectArguments>(payload);
         if (arguments == nullptr) return failure("tree.select requires a node id payload");
         if (!runtime.tree.select(arguments->nodeId)) return failure("tree node is not selectable");
-        runtime.revealTreeSelection();
+        runtime.revealTreeSelection(context.viewId());
         // Focus follows the pointer (M8-F): clicking a tree row acts on the panel,
         // so move keyboard focus there. (For a file click the app dispatches
         // tree.activate next, whose file-open focus_editor() then wins.)
@@ -230,20 +230,21 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
     if (id == "tree.scroll") {
         auto const* arguments = payloadAs<ScrollLinesArguments>(payload);
         if (arguments == nullptr) return failure("tree.scroll requires a scroll-lines payload");
-        runtime.scrollTree(arguments->rows);
+        runtime.scrollTree(context.viewId(), arguments->rows);
         return success();
     }
     if (id == "tree.scroll_to_fraction") {
         auto const* arguments = payloadAs<ScrollFractionArguments>(payload);
         if (arguments == nullptr) return failure("tree.scroll_to_fraction requires a scroll-fraction payload");
-        runtime.scrollTreeToFraction(arguments->numerator, arguments->denominator);
+        runtime.scrollTreeToFraction(context.viewId(), arguments->numerator,
+                                     arguments->denominator);
         return success();
     }
     auto const* invocation = payloadAs<TreeCommandInvocation>(payload);
     if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {
         auto toggled = runtime.tree.toggleExpanded(invocation->providerId, invocation->nodeId);
-        if (toggled) runtime.revealTreeSelection();
+        if (toggled) runtime.revealTreeSelection(context.viewId());
         return toggled ? success() : failure("tree node does not exist");
     }
     auto command = runtime.tree.invokeNodeCommand(invocation->providerId, invocation->nodeId, invocation->commandId);

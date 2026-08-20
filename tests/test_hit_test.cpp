@@ -86,7 +86,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->presentation()->shell;
@@ -185,7 +185,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->presentation()->shell;
@@ -248,7 +248,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
 
     auto caretOffsetAfterClick = [&](int column, int row) -> std::uint64_t {
-        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         if (!snapshot) return 9999;
         auto const content = snapshot->presentation()->shell.panes.front().content;
         auto hit = ssg::HitTester{*snapshot}.at( column, row);
@@ -259,14 +259,14 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
             ssg::ClientId{1},
             {"cursor.set_position", runtime->revision(),
              ssg::SelectionCommandArguments{pos, std::nullopt}});
-        auto after = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        auto after = runtime->present(ssg::ClientId{1}, {80, 24});
         if (!after) return 9999;
         return after->sections()
             .selection.primary()
             .active.byteOffset.value();
     };
 
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const content = snapshot->presentation()->shell.panes.front().content;
@@ -290,7 +290,7 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
@@ -362,7 +362,7 @@ TEST(panelRowMapsToItsTreeNodeId) {
     (void)runtime->dispatch(ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->presentation()->shell;
@@ -395,7 +395,7 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto presentation = *snapshot->presentation();
@@ -438,7 +438,7 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto presentation = *snapshot->presentation();
@@ -488,7 +488,7 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"tall.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->presentation()->shell;
@@ -547,7 +547,7 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
                                 {"file.open", runtime->revision(), name});
     }
 
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& tabs = snapshot->sections().tabs.tabs;
@@ -596,7 +596,7 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     // active tab in both directions, so tab.previous cannot strand it either.
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"tab.activate", runtime->revision(), tabs.front().id});
-    auto scrolledBack = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto scrolledBack = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(scrolledBack.has_value());
     if (!scrolledBack) return;
     bool firstIsHittable = false;
@@ -609,7 +609,7 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     // window scrolling past it into an empty bar.  This is the case the "stop at
     // the active tab" bound exists for; without it a very long filename in a
     // narrow terminal would leave nothing to click.
-    auto narrow = runtime->snapshot(ssg::ClientId{1}, {20, 24});
+    auto narrow = runtime->present(ssg::ClientId{1}, {20, 24});
     ASSERT_TRUE(narrow.has_value());
     if (!narrow) return;
     auto const& narrowHits = narrow->presentation()->shell.tabHits;
@@ -644,7 +644,7 @@ TEST(tabBarCellMapsToItsTabIndex) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"file.open", runtime->revision(), std::string{"beta.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->presentation()->shell;
@@ -679,7 +679,7 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
     scan.currentBranch = std::string{"main"};
     ASSERT_TRUE(runtime->applyGitDiffScan(std::move(scan)).accepted());
 
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->presentation()->shell;
@@ -741,7 +741,7 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
     ASSERT_TRUE(runtime->applyGitDiffScan(std::move(scan)).accepted());
 
     const auto clickField = [&](ssg::ShellNodeKind kind, std::string_view id) {
-        auto before = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        auto before = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(before.has_value());
         if (!before) return false;
         auto const* node = findNode(before->presentation()->shell, kind, id);
@@ -756,7 +756,7 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
             .accepted();
     };
     const auto panelProviderLabel = [&]() -> std::optional<std::string> {
-        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return std::nullopt;
         const auto* provider = findNode(snapshot->presentation()->shell,
@@ -766,13 +766,13 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
         return provider->content;
     };
     const auto panelVisible = [&]() -> bool {
-        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return false;
         return snapshot->presentation()->shell.panel.has_value();
     };
     const auto followMode = [&]() {
-        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return ssg::FollowMode::Paused;
         return snapshot->sections().followEdits.mode;
@@ -803,7 +803,7 @@ TEST(outOfBoundsAndChromeReturnNoTarget) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
