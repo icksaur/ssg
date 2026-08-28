@@ -41,12 +41,11 @@ TEST(requiredCatalogMinusExclusionsIsCallable) {
     auto const catalog = catalogWithLuaEligibility();
     std::vector<LuaCommand> commands;
     std::unordered_set<std::string> called;
-    std::string excluded;
+    std::size_t callableCount = 0;
     for (auto const& [id, lua] : catalog) {
         if (lua) {
             commands.push_back({id, {}});
-        } else {
-            excluded = id;
+            ++callableCount;
         }
     }
     LuaCommandHost host{options(std::move(commands)),
@@ -61,8 +60,8 @@ TEST(requiredCatalogMinusExclusionsIsCallable) {
         ASSERT_EQ(result.accepted(), lua);
         ASSERT_EQ(result.error, lua ? LuaError::None : LuaError::UnknownCommand);
     }
-    ASSERT_EQ(called.size(), catalog.size() - 1);
-    ASSERT_FALSE(excluded.empty());
+    ASSERT_EQ(called.size(), callableCount);
+    ASSERT_TRUE(callableCount < catalog.size());
 }
 
 TEST(capabilitiesAreImmutableAndCheckedBeforeDispatch) {

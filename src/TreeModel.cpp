@@ -161,6 +161,22 @@ thread_local std::uint64_t g_visibleNodesRecomputes = 0;
 
 } // namespace
 
+GitTreeAffordance gitTreeAffordance(GitTreeStatus status) {
+    switch (status) {
+    case GitTreeStatus::Added:
+        return {status, "A", SemanticRole::DiffAdded};
+    case GitTreeStatus::Modified:
+        return {status, "M", SemanticRole::DiffModified};
+    case GitTreeStatus::Deleted:
+        return {status, "D", SemanticRole::DiffRemoved};
+    case GitTreeStatus::Renamed:
+        return {status, "R", SemanticRole::DiffModified};
+    case GitTreeStatus::Untracked:
+        return {status, "U", SemanticRole::DiffAdded};
+    }
+    throw std::invalid_argument("unknown git tree status");
+}
+
 const std::vector<TreeNodeView>& TreeModel::ProviderState::visibleNodes() const {
     if (!visibleCache || visibleCache->revision != snapshot.revision() ||
         visibleCache->expandedVersion != expandedVersion) {
@@ -275,7 +291,7 @@ TreeProviderSnapshot TreeProviderSnapshot::fromGit(
                                  TreeNodeKind::GitEntry,
                                  std::nullopt,
                                  std::move(record.commands),
-                                 record.status,
+                                 gitTreeAffordance(record.status),
                                  path,
                                  std::nullopt});
     }
@@ -660,68 +676,68 @@ std::size_t TreeDelta::operationCount() const noexcept {
 TreeDelta TreeDeltaCodec::derive(const TreeViewState& base,
                                  const TreeViewState& target,
                                  std::size_t maximumOperations) const {
-    TreeDelta result{base.revision, target.revision, false, {}};
-    std::size_t baseIndex = 0;
-    std::size_t targetIndex = 0;
-    while (baseIndex < base.providers.size() ||
-           targetIndex < target.providers.size()) {
-        if (targetIndex == target.providers.size() ||
-            (baseIndex < base.providers.size() &&
-             base.providers[baseIndex].providerId <
-                 target.providers[targetIndex].providerId)) {
-            result.providers.push_back(
-                TreeProviderDelta{base.providers[baseIndex].providerId,
-                                  base.providers[baseIndex].kind, true});
-            ++baseIndex;
-            continue;
-        }
-        if (baseIndex == base.providers.size() ||
-            target.providers[targetIndex].providerId <
-                base.providers[baseIndex].providerId) {
-            const auto& added = target.providers[targetIndex];
+    TreeDelta result{base.revision, target.revision, false, {}, {}};
+    result.providerOrder.reserve(target.providers.size());
+    for (const auto& provider : target.providers) {
+        result.providerOrder.push_back(provider.providerId);
+    }
+    for (const auto& before : base.providers) {
+        const auto targetProvider = std::find_if(
+            target.providers.begin(), target.providers.end(),
+            [&](const TreeProviderView& candidate) {
+                return candidate.providerId == before.providerId;
+            });
+        if (targetProvider == target.providers.end()) {
             result.providers.push_back(TreeProviderDelta{
-                added.providerId, added.kind, false, 0, 0, added.nodes,
-                added.selected});
-            ++targetIndex;
-            continue;
+                before.providerId, before.kind, true});
         }
+    }
 
-        const auto& before = base.providers[baseIndex];
-        const auto& after = target.providers[targetIndex];
-        if (before != after) {
-            std::size_t prefix = 0;
-            while (prefix < before.nodes.size() &&
-                   prefix < after.nodes.size() &&
-                   before.nodes[prefix] == after.nodes[prefix] &&
-                   before.kind == after.kind) {
-                ++prefix;
-            }
-            std::size_t suffix = 0;
-            while (suffix < before.nodes.size() - prefix &&
-                   suffix < after.nodes.size() - prefix &&
-                   before.nodes[before.nodes.size() - 1 - suffix] ==
-                       after.nodes[after.nodes.size() - 1 - suffix] &&
-                   before.kind == after.kind) {
-                ++suffix;
-            }
+    for (const auto& after : target.providers) {
+        const auto baseProvider = std::find_if(
+            base.providers.begin(), base.providers.end(),
+            [&](const TreeProviderView& candidate) {
+                return candidate.providerId == after.providerId;
+            });
+        if (baseProvider == base.providers.end()) {
             result.providers.push_back(TreeProviderDelta{
-                after.providerId,
-                after.kind,
-                false,
-                prefix,
-                before.nodes.size() - prefix - suffix,
-                std::vector<TreeNodeView>{
-                    after.nodes.begin() + static_cast<std::ptrdiff_t>(prefix),
-                    after.nodes.end() - static_cast<std::ptrdiff_t>(suffix)},
+                after.providerId, after.kind, false, 0, 0, after.nodes,
                 after.selected});
+            continue;
         }
-        ++baseIndex;
-        ++targetIndex;
+        const auto& before = *baseProvider;
+        if (before == after) continue;
+        std::size_t prefix = 0;
+        while (prefix < before.nodes.size() &&
+               prefix < after.nodes.size() &&
+               before.nodes[prefix] == after.nodes[prefix] &&
+               before.kind == after.kind) {
+            ++prefix;
+        }
+        std::size_t suffix = 0;
+        while (suffix < before.nodes.size() - prefix &&
+               suffix < after.nodes.size() - prefix &&
+               before.nodes[before.nodes.size() - 1 - suffix] ==
+                    after.nodes[after.nodes.size() - 1 - suffix] &&
+               before.kind == after.kind) {
+            ++suffix;
+        }
+        result.providers.push_back(TreeProviderDelta{
+            after.providerId,
+            after.kind,
+            false,
+            prefix,
+            before.nodes.size() - prefix - suffix,
+            std::vector<TreeNodeView>{
+                after.nodes.begin() + static_cast<std::ptrdiff_t>(prefix),
+                after.nodes.end() - static_cast<std::ptrdiff_t>(suffix)},
+            after.selected});
     }
 
     if (result.operationCount() > maximumOperations) {
         result.snapshotRequired = true;
         result.providers.clear();
+        result.providerOrder.clear();
     }
     return result;
 }
@@ -779,6 +795,27 @@ TreeReplayResult TreeDeltaCodec::replay(const TreeViewState& base,
         provider->nodes.insert(first, change.insert.begin(), change.insert.end());
         provider->selected = change.selected;
     }
+    if (delta.providerOrder.size() != state.providers.size()) {
+        return {std::nullopt, TreeReplayError::MalformedDelta};
+    }
+    std::vector<TreeProviderView> ordered;
+    ordered.reserve(state.providers.size());
+    for (const auto& id : delta.providerOrder) {
+        const auto provider = std::find_if(
+            state.providers.begin(), state.providers.end(),
+            [&](const TreeProviderView& candidate) {
+                return candidate.providerId == id;
+            });
+        if (provider == state.providers.end() ||
+            std::any_of(ordered.begin(), ordered.end(),
+                        [&](const TreeProviderView& candidate) {
+                            return candidate.providerId == id;
+                        })) {
+            return {std::nullopt, TreeReplayError::MalformedDelta};
+        }
+        ordered.push_back(*provider);
+    }
+    state.providers = std::move(ordered);
     state.revision = delta.revision;
     return {std::move(state), TreeReplayError::None};
 }

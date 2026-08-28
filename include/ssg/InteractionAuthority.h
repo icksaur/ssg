@@ -63,6 +63,7 @@ public:
     // transition. focusPanel is honored only while the panel is present (returns whether it
     // took). While a prompt is open its capture still routes effective focus to the prompt;
     // the base change surfaces when the prompt closes.
+    void toggleDistractionFree();
     void focusEditor();
     bool focusPanel();
 
@@ -115,12 +116,6 @@ public:
     [[nodiscard]] std::optional<PickerKind> openPicker() const noexcept {
         return truth_.openPicker;
     }
-    // Advances every time a finder transition (re)opens a picker, INCLUDING a File->File
-    // reopen where openPicker is unchanged. A candidate-owning caller keys its rebuild off
-    // this epoch so reopening the file finder always refreshes, and comparing openPicker
-    // alone cannot miss a same-kind reopen.
-    [[nodiscard]] std::uint64_t pickerEpoch() const noexcept { return pickerEpoch_; }
-
     // A monotonic counter over every change to interaction routing state -- base
     // focus, the active prompt's kind/value/control focus, and picker/panel
     // transitions. A host compares it across a dispatch to learn whether the way
@@ -143,7 +138,6 @@ private:
     WholeScreenSchema schema_;
     TreeModel& tree_;
     std::uint64_t nextTreeRevision_;
-    std::uint64_t pickerEpoch_ = 0;
     std::uint64_t routingGeneration_ = 0;
     PromptSurface prompt_;
     WholeScreenTruth truth_;

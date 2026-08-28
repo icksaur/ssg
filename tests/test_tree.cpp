@@ -88,6 +88,12 @@ TEST(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys) {
     ASSERT_EQ(nodeIds(git),
               (std::vector<std::string>{"git:a.cpp", "git:z.cpp"}));
     ASSERT_EQ(git.nodes()[1].id, TreeNodeId{"git:z.cpp"});
+    ASSERT_TRUE(git.nodes()[0].gitStatus.has_value());
+    ASSERT_EQ(git.nodes()[0].gitStatus->shortLabel, std::string{"A"});
+    ASSERT_EQ(git.nodes()[0].gitStatus->role, SemanticRole::DiffAdded);
+    ASSERT_TRUE(git.nodes()[1].gitStatus.has_value());
+    ASSERT_EQ(git.nodes()[1].gitStatus->shortLabel, std::string{"M"});
+    ASSERT_EQ(git.nodes()[1].gitStatus->role, SemanticRole::DiffModified);
 
     const auto symbols = TreeProviderSnapshot::fromSymbols(
         TreeProviderId{"symbols"}, TreeRevision{8},
@@ -261,6 +267,29 @@ TEST(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase) {
     ASSERT_EQ(staleReplay.error, TreeReplayError::StaleRevision);
 }
 
+TEST(treeDeltaPreservesActiveProviderOrder) {
+    TemporaryDirectory directory;
+    TreeModel model;
+    model.replaceProvider(TreeProviderSnapshot::fromFilesystem(
+        TreeProviderId{"filesystem"}, directory.path(), TreeRevision{1}));
+    model.replaceProvider(TreeProviderSnapshot::fromGit(
+        TreeProviderId{"git"}, TreeRevision{2},
+        {{.workspacePath = "changed.txt", .label = "changed.txt",
+          .status = GitTreeStatus::Modified}}));
+    const auto base = model.viewState();
+    ASSERT_EQ(base.providers.front().providerId, TreeProviderId{"filesystem"});
+
+    ASSERT_TRUE(model.activateProvider(TreeProviderId{"git"}));
+    const auto target = model.viewState();
+    ASSERT_EQ(target.providers.front().providerId, TreeProviderId{"git"});
+
+    const auto delta = TreeDeltaCodec{}.derive(base, target, 8);
+    ASSERT_FALSE(delta.snapshotRequired);
+    const auto replay = TreeDeltaCodec{}.replay(base, delta);
+    ASSERT_TRUE(replay.accepted());
+    ASSERT_EQ(*replay.state, target);
+}
+
 TEST(overBudgetDeltaRequiresSnapshotWithoutPartialOperations) {
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
@@ -422,6 +451,7 @@ int main() {
     RUN(selectionNavigatesExpandsAndReportsSelectedNode);
     RUN(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes);
     RUN(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase);
+    RUN(treeDeltaPreservesActiveProviderOrder);
     RUN(overBudgetDeltaRequiresSnapshotWithoutPartialOperations);
     RUN(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem);
     RUN(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation);

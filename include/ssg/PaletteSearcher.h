@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -77,16 +78,19 @@ static_assert(kMaxWeightsPerScoredByte * kMaxMatcherParameterMagnitude *
 [[nodiscard]] bool matcherParametersInDomain(const MatcherParameters& params);
 
 struct PaletteViewState {
-    SearchMode mode = SearchMode::Command;
-    std::vector<PaletteCandidate> candidates;
+    PaletteViewState();
+
+    std::optional<SearchMode> activeMode;
+    std::string commandOpenCommandId;
+    std::string fileOpenCommandId;
+    std::vector<PaletteCandidate> commandCandidates;
+    std::vector<PaletteCandidate> fileCandidates;
     // The parameters a client must score `candidates` with; travels on the same
     // channel so candidates and their scoring arrive atomically.
     MatcherParameters parameters;
-    // Monotonic reopen identity: advances each time a picker (re)opens, including a
-    // same-kind reopen where presence never toggles. A client resets its local query
-    // when the received epoch differs from the last it observed. Sourced from
-    // InteractionAuthority::pickerEpoch; never derived from ApplicationId.
-    std::uint64_t pickerEpoch = 0;
+
+    [[nodiscard]] const std::vector<PaletteCandidate>* candidatesFor(
+        SearchMode mode) const noexcept;
 
     friend bool operator==(const PaletteViewState&, const PaletteViewState&) = default;
 };
@@ -98,6 +102,7 @@ struct PaletteExecuteArguments {
 };
 
 struct PickerSubmitArguments {
+    SearchMode mode = SearchMode::Command;
     std::string candidateId;
 
     friend bool operator==(const PickerSubmitArguments&,
@@ -147,7 +152,7 @@ public:
 // of domain or a candidate exceeds kMaxCandidateBytes -- the score-exactness invariant
 // cannot hold for such input, so it is refused rather than silently normalized (the
 // honest wire path never produces it; decodePalette rejects such a frame first).
-[[nodiscard]] std::vector<std::size_t> referenceRank(PaletteViewState const& state,
-                                                     std::string_view query);
+[[nodiscard]] std::vector<std::size_t> referenceRank(
+    PaletteViewState const& state, SearchMode mode, std::string_view query);
 
 }  // namespace ssg

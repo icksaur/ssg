@@ -50,10 +50,22 @@ ExternalModificationCommandSet externalModificationCommandSet() {
     return {};
 }
 
+ExternalActionAffordance externalActionAffordance(ExternalAction action) {
+    for (auto const& descriptor :
+         externalModificationCommandSet().descriptors()) {
+        if (descriptor.action == action) {
+            return {action, std::string{descriptor.label},
+                    std::string{descriptor.id}};
+        }
+    }
+    throw std::invalid_argument("unknown external action");
+}
+
 ExternalModificationDelta ExternalModificationDeltaCodec::derive(
     const ExternalModificationViewState& base,
     const ExternalModificationViewState& target) {
-    ExternalModificationDelta delta{base.revision, target.revision};
+    ExternalModificationDelta delta{base.revision, target.revision,
+                                    target.message};
     for (const auto& targetFile : target.files) {
         const auto baseFile = findFile(base.files, targetFile.id);
         if (baseFile == base.files.end() || *baseFile != targetFile) {
@@ -101,8 +113,8 @@ ExternalDeltaReplayResult ExternalModificationDeltaCodec::replay(
         findFile(files, *delta.selected) == files.end()) {
         return {std::nullopt, ExternalDeltaError::MalformedDelta};
     }
-    return {ExternalModificationViewState{delta.revision, std::move(files),
-                                          delta.selected},
+    return {ExternalModificationViewState{delta.revision, delta.message,
+                                          std::move(files), delta.selected},
             ExternalDeltaError::None};
 }
 
@@ -207,13 +219,17 @@ public:
                         : ExternalDocumentStatus::ExternallyModified,
                 removed ? "File was removed outside SSG"
                         : "File was modified outside SSG",
-                removed ? std::vector<ExternalAction>{
-                              ExternalAction::KeepBuffer,
-                              ExternalAction::OpenDiff}
-                        : std::vector<ExternalAction>{
-                              ExternalAction::Reload,
-                              ExternalAction::KeepBuffer,
-                              ExternalAction::OpenDiff}};
+                removed ? "D" : "M",
+                removed
+                    ? std::vector<ExternalActionAffordance>{
+                          externalActionAffordance(
+                              ExternalAction::KeepBuffer),
+                          externalActionAffordance(ExternalAction::OpenDiff)}
+                    : std::vector<ExternalActionAffordance>{
+                          externalActionAffordance(ExternalAction::Reload),
+                          externalActionAffordance(
+                              ExternalAction::KeepBuffer),
+                          externalActionAffordance(ExternalAction::OpenDiff)}};
             PendingChange change{std::move(view), input.diskContent};
             if (existing == stagedPending.end()) {
                 stagedPending.push_back(std::move(change));
@@ -349,6 +365,10 @@ public:
         for (const auto& pending : pending_) {
             state.files.push_back(pending.view);
         }
+        state.message = std::to_string(state.files.size()) +
+                        (state.files.size() == 1
+                             ? " file changed on disk"
+                             : " files changed on disk");
         state.selected = selected_;
         return state;
     }

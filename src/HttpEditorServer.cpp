@@ -216,13 +216,16 @@ struct HttpEditorRoute::Impl {
                     *clientId,
                     {"status.invoke_action", runtime.revision(),
                      *status.invocation});
-                if (!result.accepted()) {
-                    enqueue(handle, connection,
-                            {ProtocolCodec{}.encodeCommandResult(result), true});
-                    return;
+                std::vector<Outbound> response;
+                if (result.accepted()) {
+                    (void)runtime.pump();
+                    if (auto state = publishSession(*sessionId, handle)) {
+                        response.push_back(std::move(*state));
+                    }
                 }
-                (void)runtime.pump();
-                publishSession(*sessionId);
+                response.push_back(
+                    {ProtocolCodec{}.encodeCommandResult(result), true});
+                enqueueBatch(handle, connection, std::move(response));
             } catch (...) {
                 close(handle, connection);
             }

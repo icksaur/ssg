@@ -7,7 +7,8 @@
 //   ├─ header            (composed override, else built-in from header)
 //   ├─ body   Row Flex
 //   │  ├─ panel   Col Exact(dimensions.panelTargetWidth) [ filetree, gitstatus ]
-//   │  └─ content Col Flex                               [ tabview,  findresults ]
+//   │  └─ content Col Flex [ editor>[tabbar, document.viewport>document],
+//   │                        findresults.viewport>findresults ]
 //   └─ footer            (composed override, else built-in from footer + hint)
 //
 // This function OWNS the fallback/override rule: a ssg.chrome-composed header or footer

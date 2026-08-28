@@ -92,7 +92,8 @@ std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
             if (!node.node.workspacePath || !node.node.gitStatus) {
                 continue;
             }
-            statuses.emplace(*node.node.workspacePath, *node.node.gitStatus);
+            statuses.emplace(*node.node.workspacePath,
+                             node.node.gitStatus->status);
         }
     }
     return statuses;
@@ -324,6 +325,60 @@ TEST(gitDiffHostWorkerPublishesGitTreeProviderMatchingPorcelain) {
     fs::remove_all(stateRoot);
 }
 
+TEST(gitDiffHostPublishesFilesAlreadyDirtyAtSessionStart) {
+    ScopedGitDiffMode scopedMode{"poll"};
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    auto root =
+        fs::temp_directory_path() / ("ssg-git-initial-dirty-" + uniqueSuffix);
+    auto stateRoot = fs::temp_directory_path() /
+                     ("ssg-git-initial-dirty-state-" + uniqueSuffix);
+    fs::remove_all(root);
+    fs::remove_all(stateRoot);
+    fs::create_directories(root);
+    fs::create_directories(stateRoot / "scratch");
+    fs::create_directories(stateRoot / "recovery");
+    std::ofstream{root / "tracked.txt"} << "base\n";
+    {
+        std::ofstream large{root / "large.txt"};
+        for (std::size_t line = 0; line < 200'001; ++line) {
+            large << "a\n";
+        }
+    }
+    ASSERT_EQ(runStatus(root, "init"), 0);
+    ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
+    ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+    ASSERT_EQ(runStatus(root, "add tracked.txt"), 0);
+    ASSERT_EQ(runStatus(root, "commit -m init"), 0);
+    std::ofstream{root / "tracked.txt"} << "changed before startup\n";
+    {
+        std::ofstream large{root / "large.txt"};
+        for (std::size_t line = 0; line < 200'001; ++line) {
+            large << "b\n";
+        }
+    }
+    std::ofstream{root / "untracked.txt"} << "new before startup\n";
+    std::ofstream{root / "staged.txt"} << "staged before startup\n";
+    ASSERT_EQ(runStatus(root, "add tracked.txt staged.txt"), 0);
+    std::ofstream{root / "staged.txt"} << "changed again after staging\n";
+    const auto expected = porcelainStatuses(root);
+
+    auto created = ssg::EditorSession::create(
+        {root, stateRoot / "scratch", stateRoot / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(waitForGitTreeStatuses(runtime, expected,
+                                       std::chrono::milliseconds{3000}));
+
+    fs::remove_all(root);
+    fs::remove_all(stateRoot);
+}
+
 TEST(gitDiffHostWorkerLifecycleHasBoundedShutdownLatency) {
     const auto uniqueSuffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -390,6 +445,7 @@ int main() {
     RUN(gitDiffHostWorkerPollingAndEventRefreshProduceExpectedDiffView);
     RUN(gitDiffHostWorkerStartsFromSubdirectoryWorkspace);
     RUN(gitDiffHostWorkerPublishesGitTreeProviderMatchingPorcelain);
+    RUN(gitDiffHostPublishesFilesAlreadyDirtyAtSessionStart);
     RUN(gitDiffHostWorkerLifecycleHasBoundedShutdownLatency);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

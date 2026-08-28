@@ -20,7 +20,7 @@
 namespace ssg {
 
 // The closed set of panel providers -- the only surfaces that can occupy the side panel.
-// A dedicated domain (not ViewSurface, which also admits TabView/FindResults) makes an
+// A dedicated domain (not ViewSurface, which also admits Document/FindResults) makes an
 // out-of-domain selection unconstructable rather than silently coerced.
 enum class PanelProvider : std::uint8_t { FileTree, GitStatus, Symbols };
 
@@ -30,6 +30,8 @@ enum class PanelProvider : std::uint8_t { FileTree, GitStatus, Symbols };
 struct WholeScreenTruth {
     // Whether the side panel is shown.
     bool panelPresent = false;
+    // Whether chrome, panels, and tabs are hidden so only the document remains.
+    bool distractionFree = false;
     // The selected panel provider. Its node is present only when the panel is present;
     // the persistent last-active choice lives in the separate provider hint, not here.
     PanelProvider selectedProvider = PanelProvider::FileTree;
@@ -68,7 +70,7 @@ struct WholeScreenTruth {
 
 // Build the interaction aggregate for `schema` from `truth` and the active prompt's region.
 // Presence hides the panel and ALL its provider children when the panel is absent, else the
-// two non-selected panel providers, and whichever of tabview/findresults the open picker
+// two non-selected panel providers, and whichever editor/find-results branch the open picker
 // excludes; base focus is Editor unless the panel is present and focused. `promptRegion` is
 // DERIVED from the authority-owned PromptSurface at build time (not stored in truth, so it
 // cannot drift): when set, a single prompt-focus capture is anchored on the region's host

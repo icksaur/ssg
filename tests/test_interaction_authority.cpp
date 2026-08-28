@@ -73,7 +73,7 @@ TEST(initiallyNoPanelNoPromptTabViewShown) {
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
     ASSERT_FALSE(authority.truth().panelPresent);
     ASSERT_FALSE(authority.openPicker().has_value());
-    ASSERT_TRUE(present(authority, kTabViewNodeId));
+    ASSERT_TRUE(present(authority, kEditorNodeId));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
 }
 
@@ -87,7 +87,7 @@ TEST(applyOpenFinderRoutesThroughOneAtomicInstall) {
     ASSERT_TRUE(*authority.openPicker() == PickerKind::File);
     ASSERT_TRUE(authority.prompt().active());
     ASSERT_TRUE(present(authority, kFindResultsNodeId));
-    ASSERT_FALSE(present(authority, kTabViewNodeId));
+    ASSERT_FALSE(present(authority, kEditorNodeId));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
 }
 
@@ -125,7 +125,7 @@ TEST(genericOpenPromptFocusesFooterWithoutAPicker) {
     ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
     ASSERT_FALSE(authority.openPicker().has_value());
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
-    ASSERT_TRUE(present(authority, kTabViewNodeId));
+    ASSERT_TRUE(present(authority, kEditorNodeId));
     ASSERT_FALSE(present(authority, kFindResultsNodeId));
 }
 
@@ -139,7 +139,7 @@ TEST(genericPromptOverAPickerClearsTheStalePickerIdentity) {
     ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
     ASSERT_FALSE(authority.openPicker().has_value());
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
-    ASSERT_TRUE(present(authority, kTabViewNodeId));
+    ASSERT_TRUE(present(authority, kEditorNodeId));
 }
 
 TEST(cancelPromptReleasesFocus) {
@@ -232,25 +232,6 @@ TEST(updateCompositionWithoutStructuralChangeDoesNotAdvance) {
 }
 
 // --- Editor/panel focus -------------------------------------------------------------
-
-TEST(pickerEpochAdvancesOnEveryFinderOpenIncludingAReopen) {
-    TreeModel tree = seededTree();
-    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    const std::uint64_t start = authority.pickerEpoch();
-    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
-    const std::uint64_t afterOpen = authority.pickerEpoch();
-    ASSERT_TRUE(afterOpen > start);
-    // Reopen the SAME kind with NO close in between: openPicker stays File, yet the epoch
-    // must still advance so a candidate owner refreshes.
-    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
-    ASSERT_TRUE(*authority.openPicker() == PickerKind::File);
-    ASSERT_TRUE(authority.pickerEpoch() > afterOpen);
-    // A close-then-reopen also advances.
-    const std::uint64_t afterReopen = authority.pickerEpoch();
-    ASSERT_TRUE(authority.apply(CloseFinder{}));
-    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
-    ASSERT_TRUE(authority.pickerEpoch() > afterReopen);
-}
 
 TEST(promptOverPanelClosesBackToPanelFocus) {
     TreeModel tree = seededTree();
@@ -416,7 +397,6 @@ int main() {
     RUN(updateCompositionWithoutStructuralChangeDoesNotAdvance);
     RUN(focusPanelRequiresThePanelThenFocusEditorReturns);
     RUN(focusChangeUnderAnOpenPromptSurfacesWhenThePromptCloses);
-    RUN(pickerEpochAdvancesOnEveryFinderOpenIncludingAReopen);
     RUN(promptOverPanelClosesBackToPanelFocus);
     RUN(panelHideWhilePromptCapturedRestoresBaseUnderThePrompt);
     RUN(providerCyclingWhileHiddenAndEditorFocusedPreservesBoth);

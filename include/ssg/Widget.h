@@ -57,7 +57,7 @@ static_assert(kAllWidgetKinds.size() == kWidgetKindCount);
 // declares which surfaces it implements, so this enum, its count, and its name
 // array are bound like WidgetKind's.
 enum class ViewSurface : std::uint8_t {
-    TabView,      // the tab strip + the active document body
+    TabBar,       // the fixed tab strip
     FileTree,     // the filesystem tree provider
     GitStatus,    // the git tree provider
     FindResults,  // the finder candidate universe (client filters locally)
@@ -65,13 +65,15 @@ enum class ViewSurface : std::uint8_t {
     FooterPrompt, // the footer-region prompt's controls (semantic PromptView)
     Notice,       // the draft-conflict notice above the document (semantic NoticeView)
     ExternalModification,  // the external-modification bar above the document (7A-5b)
+    Document,     // the active document body, selection, caret, and syntax
 };
 
-inline constexpr std::size_t kViewSurfaceCount = 8;
+inline constexpr std::size_t kViewSurfaceCount = 9;
 inline constexpr std::array kAllViewSurfaces{
-    ViewSurface::TabView,      ViewSurface::FileTree,     ViewSurface::GitStatus,
+    ViewSurface::TabBar,       ViewSurface::FileTree,     ViewSurface::GitStatus,
     ViewSurface::FindResults,  ViewSurface::Symbols,      ViewSurface::FooterPrompt,
     ViewSurface::Notice,       ViewSurface::ExternalModification,
+    ViewSurface::Document,
 };
 static_assert(kAllViewSurfaces.size() == kViewSurfaceCount);
 

@@ -171,6 +171,14 @@ struct SelectionCommandArguments {
     std::vector<Selection> selections;
 };
 
+struct SelectionByteRangeArguments {
+    ByteOffset anchor;
+    ByteOffset active;
+
+    friend bool operator==(const SelectionByteRangeArguments&,
+                           const SelectionByteRangeArguments&) = default;
+};
+
 enum class SelectionNavigationError : std::uint8_t {
     None,
     MissingArgument,

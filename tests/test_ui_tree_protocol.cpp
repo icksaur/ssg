@@ -157,7 +157,7 @@ ProtocolValue rewriteScroll(const ProtocolValue& node, std::string_view targetId
     return ProtocolValue::makeObject(std::move(out));
 }
 
-TEST(scrollAxisRoundTripsAndUnknownOrAbsentDecodesToNone) {
+TEST(scrollAxisRoundTripsAndCanonicalViewportRejectsUnknownOrAbsentValues) {
     const UiSchema schema{
         Generation{1},
         ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
@@ -168,9 +168,11 @@ TEST(scrollAxisRoundTripsAndUnknownOrAbsentDecodesToNone) {
     const auto direct = decodeUiSchema(encoded);
     ASSERT_TRUE(direct.has_value());
     if (direct) {
-        const UiNode* content = findNode(direct->root, ssg::kContentNodeId);
-        ASSERT_TRUE(content != nullptr);
-        if (content) ASSERT_TRUE(containerScroll(*content) == ScrollAxis::Vertical);
+        const UiNode* viewport =
+            findNode(direct->root, ssg::kDocumentViewportNodeId);
+        ASSERT_TRUE(viewport != nullptr);
+        if (viewport)
+            ASSERT_TRUE(containerScroll(*viewport) == ScrollAxis::Vertical);
     }
 
     const auto rebuild = [&](std::optional<ProtocolValue> scroll) {
@@ -178,7 +180,8 @@ TEST(scrollAxisRoundTripsAndUnknownOrAbsentDecodesToNone) {
         for (const auto& [key, value] : *encoded.asObject()) {
             if (key == "root") {
                 top.emplace_back(
-                    key, rewriteScroll(value, ssg::kContentNodeId, std::move(scroll)));
+                    key, rewriteScroll(value, ssg::kDocumentViewportNodeId,
+                                       std::move(scroll)));
             } else {
                 top.emplace_back(key, value);
             }
@@ -187,18 +190,10 @@ TEST(scrollAxisRoundTripsAndUnknownOrAbsentDecodesToNone) {
     };
 
     const auto absent = rebuild(std::nullopt);
-    ASSERT_TRUE(absent.has_value());
-    if (absent) {
-        const UiNode* content = findNode(absent->root, ssg::kContentNodeId);
-        if (content) ASSERT_TRUE(containerScroll(*content) == ScrollAxis::None);
-    }
+    ASSERT_FALSE(absent.has_value());
 
     const auto unknown = rebuild(ProtocolValue::makeUint(99));
-    ASSERT_TRUE(unknown.has_value());
-    if (unknown) {
-        const UiNode* content = findNode(unknown->root, ssg::kContentNodeId);
-        if (content) ASSERT_TRUE(containerScroll(*content) == ScrollAxis::None);
-    }
+    ASSERT_FALSE(unknown.has_value());
 
     // A PRESENT scroll field of the wrong TYPE (not a uint) is malformed: it must
     // fail the decode, never silently degrade to None.
@@ -281,7 +276,7 @@ TEST(malformedSurfaceDecodesToNullopt) {
 
 int main() {
     RUN(uiSchemaRoundTripsThroughTheWire);
-    RUN(scrollAxisRoundTripsAndUnknownOrAbsentDecodesToNone);
+    RUN(scrollAxisRoundTripsAndCanonicalViewportRejectsUnknownOrAbsentValues);
     RUN(malformedWireDecodesToNullopt);
     RUN(malformedSurfaceDecodesToNullopt);
     return failed == 0 ? 0 : 1;

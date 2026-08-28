@@ -360,18 +360,17 @@ TEST(appliedScanCarriesBranchSoNoRedundantBranchOnlyScan) {
     ASSERT_FALSE(source.takeBranchOnlyScanIfChanged().has_value());
 }
 
-// A file the DiffModel cannot apply because it exceeds the work budget is a
-// DETERMINISTIC rejection: re-running the same content is rejected identically, so
-// the source must NOT request a rescan (that would spin the worker re-diffing the
-// same content). A transient failure (incomplete scan, invalid path) still retries
-// -- that distinction is what keeps an idle editor off the CPU over a large diff.
-TEST(overBudgetFileRejectionIsDeterministicAndDoesNotRetry) {
-    DiffModel model{DiffConfig{.maximumLineCount = 1}};
+TEST(overBudgetFileKeepsCompletePublishedScanAndModellableDiffs) {
+    DiffModel model{DiffConfig{.maximumLineCount = 2}};
     GitDiffSource source{model};
     FakeRepository repository;
     GitDiffScan overBudget{
         .baselineIdentity = "base-1",
         .files = {
+            {.id = DiffFileId{"small.cpp"},
+             .path = "small.cpp",
+             .baselineContent = "a\n",
+             .workingContent = "b\n"},
             {.id = DiffFileId{"big.cpp"},
              .path = "big.cpp",
              .baselineContent = "a\nb\nc\n",
@@ -380,10 +379,19 @@ TEST(overBudgetFileRejectionIsDeterministicAndDoesNotRetry) {
         .complete = true,
     };
     repository.fullScans.push_back(overBudget);
-    auto rejected = source.refresh(repository);
-    ASSERT_FALSE(rejected.accepted);
-    ASSERT_FALSE(rejected.applied);
-    ASSERT_FALSE(rejected.shouldRetry());  // deterministic over-budget: no retry
+    auto refreshed = source.refresh(repository);
+    ASSERT_TRUE(refreshed.accepted);
+    ASSERT_TRUE(refreshed.applied);
+    ASSERT_FALSE(refreshed.shouldRetry());
+    ASSERT_TRUE(source.latestAppliedScan().has_value());
+    if (source.latestAppliedScan()) {
+        ASSERT_EQ(source.latestAppliedScan()->files.size(), std::size_t{2});
+    }
+    const auto view = model.viewState();
+    ASSERT_EQ(view.files.size(), std::size_t{1});
+    if (!view.files.empty()) {
+        ASSERT_EQ(view.files.front().id, DiffFileId{"small.cpp"});
+    }
 }
 
 // The git-diff mode resolver: an explicit env value wins; otherwise the default
@@ -407,7 +415,7 @@ int main() {
     RUN(incompleteScanKeepsPublishedDiffSet);
     RUN(branchPublishesIndependentlyWhenDiffScanIsRejected);
     RUN(appliedScanCarriesBranchSoNoRedundantBranchOnlyScan);
-    RUN(overBudgetFileRejectionIsDeterministicAndDoesNotRetry);
+    RUN(overBudgetFileKeepsCompletePublishedScanAndModellableDiffs);
     RUN(gitDiffModeDefaultsToEventWithWatcherAndPollWithout);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 199 commands.
+There are 200 commands.
 
 ## clipboard-register
 
@@ -232,6 +232,7 @@ There are 199 commands.
 | `select.word_at_position` | Word At Position | selection | lua |
 | `view.reveal_caret` | Reveal Caret | selection | lua |
 | `view.center_caret` | Center Caret | selection | lua |
+| `select.set_byte_range` | Set Selection From Byte Offsets | selection byte range | — |
 
 ## settings-model
 
@@ -275,15 +276,15 @@ There are 199 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `tab.close` | Close Tab | none | lua |
-| `tab.close_others` | Close Other Tabs | none | lua |
-| `tab.close_all` | Close All Tabs | none | lua |
-| `tab.reopen_closed` | Reopen Closed | none | lua |
-| `tab.next` | Next Tab | none | lua |
-| `tab.previous` | Previous Tab | none | lua |
-| `tab.activate` | Activate | none | lua |
-| `tab.move_left` | Move Left | none | lua |
-| `tab.move_right` | Move Right | none | lua |
+| `tab.close` | Close Tab | tab | lua |
+| `tab.close_others` | Close Other Tabs | tab | lua |
+| `tab.close_all` | Close All Tabs | tab | lua |
+| `tab.reopen_closed` | Reopen Closed | tab | lua |
+| `tab.next` | Next Tab | tab | lua |
+| `tab.previous` | Previous Tab | tab | lua |
+| `tab.activate` | Activate | tab | lua |
+| `tab.move_left` | Move Left | tab | lua |
+| `tab.move_right` | Move Right | tab | lua |
 
 ## text-input-commands
 

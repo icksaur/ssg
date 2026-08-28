@@ -82,16 +82,27 @@ std::optional<SearchMode> decodeMode(const ProtocolValue& value) {
 }  // namespace
 
 ProtocolValue encodePalette(const PaletteViewState& palette) {
-    ProtocolValue::Array candidates;
-    candidates.reserve(palette.candidates.size());
-    for (const auto& candidate : palette.candidates)
-        candidates.push_back(encodeCandidate(candidate));
+    const auto encodeCandidates = [](const auto& source) {
+        ProtocolValue::Array candidates;
+        candidates.reserve(source.size());
+        for (const auto& candidate : source) {
+            candidates.push_back(encodeCandidate(candidate));
+        }
+        return ProtocolValue::makeArray(std::move(candidates));
+    };
     return ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(
-                      static_cast<std::uint8_t>(palette.mode))},
-         {"candidates", ProtocolValue::makeArray(std::move(candidates))},
+        {{"active_mode",
+          palette.activeMode
+              ? ProtocolValue::makeUint(
+                    static_cast<std::uint8_t>(*palette.activeMode))
+              : ProtocolValue::makeNull()},
+         {"command_candidates", encodeCandidates(palette.commandCandidates)},
+         {"command_open_command_id",
+          ProtocolValue::makeText(palette.commandOpenCommandId)},
+         {"file_candidates", encodeCandidates(palette.fileCandidates)},
+         {"file_open_command_id",
+          ProtocolValue::makeText(palette.fileOpenCommandId)},
          {"parameters", encodeParameters(palette.parameters)},
-         {"picker_epoch", ProtocolValue::makeUint(palette.pickerEpoch)},
          // The parameter magnitude domain AND the candidate byte-length bound,
          // published from the library-owned constants so a non-C++ client validates
          // against the SAME bounds the C++ decoder enforces (and can prove the score
@@ -103,16 +114,26 @@ ProtocolValue encodePalette(const PaletteViewState& palette) {
 
 std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
     if (!value.asObject()) return std::nullopt;
-    const ProtocolValue* modeField = value.field("mode");
-    const ProtocolValue* candidatesField = value.field("candidates");
+    const ProtocolValue* activeModeField = value.field("active_mode");
+    const ProtocolValue* commandCandidatesField =
+        value.field("command_candidates");
+    const ProtocolValue* commandOpenCommandIdField =
+        value.field("command_open_command_id");
+    const ProtocolValue* fileCandidatesField = value.field("file_candidates");
+    const ProtocolValue* fileOpenCommandIdField =
+        value.field("file_open_command_id");
     const ProtocolValue* parametersField = value.field("parameters");
     const ProtocolValue* magnitudeField = value.field("max_parameter_magnitude");
     const ProtocolValue* candidateBytesField = value.field("max_candidate_bytes");
-    const ProtocolValue* pickerEpochField = value.field("picker_epoch");
-    if (!modeField || !candidatesField || !candidatesField->asArray() ||
+    if (!activeModeField ||
+        (!activeModeField->asUint() &&
+         activeModeField->kind() != ProtocolValue::Kind::NullValue) ||
+        !commandOpenCommandIdField || !commandOpenCommandIdField->asText() ||
+        !commandCandidatesField || !commandCandidatesField->asArray() ||
+        !fileOpenCommandIdField || !fileOpenCommandIdField->asText() ||
+        !fileCandidatesField || !fileCandidatesField->asArray() ||
         !parametersField || !magnitudeField || !magnitudeField->asInt() ||
-        !candidateBytesField || !candidateBytesField->asInt() ||
-        (pickerEpochField && !pickerEpochField->asUint())) {
+        !candidateBytesField || !candidateBytesField->asInt()) {
         return std::nullopt;
     }
     // The published bounds must equal the library's own -- a frame claiming a different
@@ -120,19 +141,39 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
     // compiled constants, so it must not admit a frame stamped with other bounds).
     if (*magnitudeField->asInt() != kMaxMatcherParameterMagnitude) return std::nullopt;
     if (*candidateBytesField->asInt() != kMaxCandidateBytes) return std::nullopt;
-    auto mode = decodeMode(*modeField);
     auto parameters = decodeParameters(*parametersField);
-    if (!mode || !parameters) return std::nullopt;
+    if (!parameters) return std::nullopt;
 
     PaletteViewState palette;
-    palette.mode = *mode;
+    palette.commandOpenCommandId = *commandOpenCommandIdField->asText();
+    palette.fileOpenCommandId = *fileOpenCommandIdField->asText();
+    if (palette.commandOpenCommandId.empty() ||
+        palette.fileOpenCommandId.empty() ||
+        palette.commandOpenCommandId == palette.fileOpenCommandId) {
+        return std::nullopt;
+    }
+    if (activeModeField->kind() != ProtocolValue::Kind::NullValue) {
+        auto activeMode = decodeMode(*activeModeField);
+        if (!activeMode ||
+            (*activeMode != SearchMode::Command &&
+             *activeMode != SearchMode::File)) {
+            return std::nullopt;
+        }
+        palette.activeMode = *activeMode;
+    }
     palette.parameters = *parameters;
-    palette.pickerEpoch =
-        pickerEpochField ? *pickerEpochField->asUint() : std::uint64_t{0};
-    for (const auto& candidateValue : *candidatesField->asArray()) {
-        auto candidate = decodeCandidate(candidateValue);
-        if (!candidate) return std::nullopt;
-        palette.candidates.push_back(std::move(*candidate));
+    const auto decodeCandidates = [](const ProtocolValue& field,
+                                     auto& destination) {
+        for (const auto& candidateValue : *field.asArray()) {
+            auto candidate = decodeCandidate(candidateValue);
+            if (!candidate) return false;
+            destination.push_back(std::move(*candidate));
+        }
+        return true;
+    };
+    if (!decodeCandidates(*commandCandidatesField, palette.commandCandidates) ||
+        !decodeCandidates(*fileCandidatesField, palette.fileCandidates)) {
+        return std::nullopt;
     }
     return palette;
 }

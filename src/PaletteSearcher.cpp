@@ -1,4 +1,5 @@
 #include <ssg/PaletteSearcher.h>
+#include <ssg/Picker.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -7,6 +8,15 @@
 #include <stdexcept>
 
 namespace ssg {
+
+PaletteViewState::PaletteViewState() {
+    if (auto const* descriptor = pickerCatalog().find(PickerKind::Command)) {
+        commandOpenCommandId = descriptor->openCommandId;
+    }
+    if (auto const* descriptor = pickerCatalog().find(PickerKind::File)) {
+        fileOpenCommandId = descriptor->openCommandId;
+    }
+}
 namespace {
 
 // ASCII-only case fold: A-Z -> a-z, every other byte (including non-ASCII UTF-8
@@ -105,9 +115,21 @@ std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidate
 
 }  // namespace
 
+const std::vector<PaletteCandidate>* PaletteViewState::candidatesFor(
+    SearchMode mode) const noexcept {
+    if (mode == SearchMode::Command) return &commandCandidates;
+    if (mode == SearchMode::File) return &fileCandidates;
+    return nullptr;
+}
+
 std::vector<std::size_t> referenceRank(PaletteViewState const& state,
+                                       SearchMode mode,
                                        std::string_view query) {
-    return rankWith(state.candidates, query, state.parameters);
+    const auto* candidates = state.candidatesFor(mode);
+    if (candidates == nullptr) {
+        throw std::invalid_argument("search mode has no picker inventory");
+    }
+    return rankWith(*candidates, query, state.parameters);
 }
 
 bool matcherParametersInDomain(const MatcherParameters& params) {

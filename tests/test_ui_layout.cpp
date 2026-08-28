@@ -134,15 +134,11 @@ void assertRect(Rect actual, Rect expected) {
     ASSERT_EQ(actual, expected);
 }
 
-// Clear the scroll flag on the two viewport containers so the schema no longer
-// declares any region scrollable -- used to prove the TUI reserves scrollbars
-// ONLY from the tree's ScrollAxis, not hard-coded pane knowledge.
-void clearViewportScroll() {
+void clearPanelScroll() {
     UiSchema schema = gSchema->schema();
     std::function<void(UiNode&)> walk = [&](UiNode& node) {
         if (auto* c = std::get_if<UiContainer>(&node.content)) {
-            if (node.id.value() == kPanelNodeId ||
-                node.id.value() == kContentNodeId) {
+            if (node.id.value() == kPanelNodeId) {
                 c->scroll = ScrollAxis::None;
             }
             for (auto& child : c->children) walk(child);
@@ -177,6 +173,8 @@ UiInteractionState interactionFor(const PromptFixture& prompt) {
     std::vector<UiNodeId> hidden;
     const UiNodeId inputId{std::string{kHeaderPromptInputNodeId}};
     if (!prompt.active && gSchema->contains(inputId)) hidden.push_back(inputId);
+    hidden.push_back(UiNodeId{std::string{
+        prompt.active ? kEditorNodeId : kFindResultsViewportNodeId}});
     return UiInteractionState{*gSchema, std::move(hidden)};
 }
 
@@ -239,7 +237,7 @@ TEST(handAuthoredGeometryGoldens) {
               wideResult.view->panes[0].content.y);
 
     auto focused = request(20, 4);
-    state.toggleDistractionFree();
+    focused.distractionFree = true;
     auto focusedResult = layoutFor(focused, state, true, FocusTarget::Panel);
     ASSERT_TRUE(focusedResult.accepted());
     ASSERT_FALSE(focusedResult.view->header.has_value());
@@ -780,7 +778,7 @@ TEST(chromeHeightsAndGutterWidthAreHonoured) {
 
 TEST(tuiScrollRegionsAreDerivedFromTheNodeScrollAxis) {
     ShellState state;
-    // Baseline: the assembled tree marks panel + content Vertical, so the panel
+    // Baseline: the assembled tree marks panel + document viewport Vertical, so the panel
     // gutter and a per-pane scrollbar are reserved.
     auto withScroll = request(100, 24);
     auto a = layoutFor(withScroll, state, /*panelPresent=*/true,
@@ -799,17 +797,17 @@ TEST(tuiScrollRegionsAreDerivedFromTheNodeScrollAxis) {
     };
     ASSERT_TRUE(scrollbarCount(*a.view) >= 2);
 
-    // With the tree no longer declaring these regions scrollable, NO gutter and
-    // NO scrollbar node is reserved: the tree is the single scroll authority.
+    // Removing the panel's independent flag removes only its scrollbar. The
+    // canonical document viewport remains the editor scrollbar authority.
     auto req = request(100, 24);
-    clearViewportScroll();
+    clearPanelScroll();
     auto b = layoutFor(req, state, /*panelPresent=*/true, FocusTarget::Panel);
     ASSERT_TRUE(b.accepted());
     if (!b.accepted()) return;
     ASSERT_TRUE(!b.view->panelScrollbar.has_value());
-    ASSERT_EQ(scrollbarCount(*b.view), 0);
+    ASSERT_TRUE(scrollbarCount(*b.view) >= 1);
     if (!b.view->panes.empty())
-        ASSERT_EQ(b.view->panes.front().scrollbar.width, 0);
+        ASSERT_TRUE(b.view->panes.front().scrollbar.width > 0);
 }
 
 // Layout budgets are cell counts, so a label's width must be its display width.
@@ -1239,13 +1237,16 @@ std::string captureGoldenMatrix() {
     }
 
     // Distraction-free (with and without a prompt reservation, which it ignores).
-    emitCase("distraction-free", request(80, 24),
-             [](ShellState& s) { s.toggleDistractionFree(); });
+    {
+        auto req = request(80, 24);
+        req.distractionFree = true;
+        emitCase("distraction-free", req, nullptr);
+    }
     {
         auto req = request(80, 24);
         req.reservedPromptRows = 2;
-        emitCase("distraction-free-with-prompt", req,
-                 [](ShellState& s) { s.toggleDistractionFree(); });
+        req.distractionFree = true;
+        emitCase("distraction-free-with-prompt", req, nullptr);
     }
 
     // Non-default Style dimensions.

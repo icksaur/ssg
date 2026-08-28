@@ -463,7 +463,7 @@ ProtocolError toProtocolError(ValueReadStatus status) {
 }
 
 
-constexpr std::uint8_t kProtocolWireVersion = 1;
+constexpr std::uint8_t kProtocolWireVersion = 2;
 
 std::string encodeMessage(ProtocolMessageKind kind, ProtocolValue const& payload) {
     std::string out;
@@ -883,6 +883,8 @@ ProtocolValue toValue(DiffDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<DiffDelta>& out);
 ProtocolValue toValue(ExternalDocumentView const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ExternalDocumentView>& out);
+ProtocolValue toValue(ExternalActionAffordance const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalActionAffordance>& out);
 ProtocolValue toValue(ExternalModificationViewState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificationViewState>& out);
 ProtocolValue toValue(ExternalModificationDelta const& value);
@@ -901,6 +903,8 @@ ProtocolValue toValue(FollowEditsDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<FollowEditsDelta>& out);
 ProtocolValue toValue(TreeNodeCommand const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeCommand>& out);
+ProtocolValue toValue(GitTreeAffordance const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<GitTreeAffordance>& out);
 ProtocolValue toValue(TreeNode const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeNode>& out);
 ProtocolValue toValue(TreeNodeView const& value);
@@ -1020,6 +1024,9 @@ ProtocolValue toValue(PromptFocusArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptFocusArguments>& out);
 ProtocolValue toValue(SelectionCommandArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out);
+ProtocolValue toValue(SelectionByteRangeArguments const& value);
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<SelectionByteRangeArguments>& out);
 ProtocolValue toValue(ScrollLinesArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ScrollLinesArguments>& out);
 ProtocolValue toValue(ScrollPagesArguments const& value);
@@ -3311,12 +3318,33 @@ bool decodePresent(ProtocolValue const& value, std::optional<DiffDelta>& out) {
 }
 
 
+ProtocolValue toValue(ExternalActionAffordance const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("action", toValue(value.action));
+    fields.emplace_back("label", toValue(value.label));
+    fields.emplace_back("command", toValue(value.command));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<ExternalActionAffordance>& out) {
+    if (!value.asObject()) return false;
+    auto action = requireField<ExternalAction>(value.field("action"));
+    auto label = requireField<std::string>(value.field("label"));
+    auto command = requireField<std::string>(value.field("command"));
+    if (!action || !label || !command) return false;
+    auto const expected = externalActionAffordance(*action);
+    if (*label != expected.label || *command != expected.command) return false;
+    out.emplace(std::move(expected));
+    return true;
+}
+
 ProtocolValue toValue(ExternalDocumentView const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("id", toValue(value.id));
     fields.emplace_back("path", toValue(value.path));
     fields.emplace_back("status", toValue(value.status));
     fields.emplace_back("accessible_status", toValue(value.accessibleStatus));
+    fields.emplace_back("status_label", toValue(value.statusLabel));
     fields.emplace_back("actions", toValue(value.actions));
     return ProtocolValue::makeObject(std::move(fields));
 }
@@ -3327,15 +3355,20 @@ bool decodePresent(ProtocolValue const& value, std::optional<ExternalDocumentVie
     auto path = requireField<std::filesystem::path>(value.field("path"));
     auto status = requireField<ExternalDocumentStatus>(value.field("status"));
     auto accessibleStatus = requireField<std::string>(value.field("accessible_status"));
-    auto actions = requireField<std::vector<ExternalAction>>(value.field("actions"));
-    if (!id || !path || !status || !accessibleStatus || !actions) return false;
-    out.emplace(ExternalDocumentView{*id, *path, *status, *accessibleStatus, *actions});
+    auto statusLabel = requireField<std::string>(value.field("status_label"));
+    auto actions = requireField<std::vector<ExternalActionAffordance>>(
+        value.field("actions"));
+    if (!id || !path || !status || !accessibleStatus || !statusLabel ||
+        !actions) return false;
+    out.emplace(ExternalDocumentView{*id, *path, *status, *accessibleStatus,
+                                     *statusLabel, *actions});
     return true;
 }
 
 ProtocolValue toValue(ExternalModificationViewState const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("revision", toValue(value.revision));
+    fields.emplace_back("message", toValue(value.message));
     fields.emplace_back("files", toValue(value.files));
     fields.emplace_back("selected", toValue(value.selected));
     return ProtocolValue::makeObject(std::move(fields));
@@ -3344,8 +3377,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificatio
     auto const* object = value.asObject();
     if (!object) return false;
     auto revision = requireField<Revision>(value.field("revision"));
+    auto message = requireField<std::string>(value.field("message"));
     auto files = requireField<std::vector<ExternalDocumentView>>(value.field("files"));
-    if (!revision || !files) return false;
+    if (!revision || !message || !files) return false;
     std::optional<DiffFileId> selected;
     if (!decodeOptionalField(value.field("selected"), selected)) return false;
     // A present selection MUST name a file in this view -- a dangling selection is
@@ -3355,7 +3389,8 @@ bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificatio
                      [&](auto const& file) { return file.id == *selected; })) {
         return false;
     }
-    out.emplace(ExternalModificationViewState{*revision, *files, selected});
+    out.emplace(ExternalModificationViewState{*revision, *message, *files,
+                                               selected});
     return true;
 }
 
@@ -3363,6 +3398,7 @@ ProtocolValue toValue(ExternalModificationDelta const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("base_revision", toValue(value.baseRevision));
     fields.emplace_back("revision", toValue(value.revision));
+    fields.emplace_back("message", toValue(value.message));
     fields.emplace_back("upserted", toValue(value.upserted));
     fields.emplace_back("removed", toValue(value.removed));
     fields.emplace_back("selected", toValue(value.selected));
@@ -3373,12 +3409,15 @@ bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificatio
     if (!object) return false;
     auto baseRevision = requireField<Revision>(value.field("base_revision"));
     auto revision = requireField<Revision>(value.field("revision"));
+    auto message = requireField<std::string>(value.field("message"));
     auto upserted = requireField<std::vector<ExternalDocumentView>>(value.field("upserted"));
     auto removed = requireField<std::vector<DiffFileId>>(value.field("removed"));
-    if (!baseRevision || !revision || !upserted || !removed) return false;
+    if (!baseRevision || !revision || !message || !upserted || !removed)
+        return false;
     std::optional<DiffFileId> selected;
     if (!decodeOptionalField(value.field("selected"), selected)) return false;
-    out.emplace(ExternalModificationDelta{*baseRevision, *revision, *upserted, *removed, selected});
+    out.emplace(ExternalModificationDelta{*baseRevision, *revision, *message,
+                                           *upserted, *removed, selected});
     return true;
 }
 
@@ -3741,6 +3780,28 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeCommand>& o
     return true;
 }
 
+ProtocolValue toValue(GitTreeAffordance const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("status", toValue(value.status));
+    fields.emplace_back("short_label", toValue(value.shortLabel));
+    fields.emplace_back("role", toValue(value.role));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<GitTreeAffordance>& out) {
+    if (!value.asObject()) return false;
+    auto status = requireField<GitTreeStatus>(value.field("status"));
+    auto shortLabel = requireField<std::string>(value.field("short_label"));
+    auto role = requireField<SemanticRole>(value.field("role"));
+    if (!status || !shortLabel || !role) return false;
+    auto const expected = gitTreeAffordance(*status);
+    if (*shortLabel != expected.shortLabel || *role != expected.role) {
+        return false;
+    }
+    out.emplace(std::move(expected));
+    return true;
+}
+
 ProtocolValue toValue(TreeNode const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("id", toValue(value.id));
@@ -3772,7 +3833,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeNode>& out) {
     if (!decodeOptionalField(value.field("parent_id"), parentId)) return false;
     std::optional<std::string> icon;
     if (!decodeOptionalField(value.field("icon"), icon)) return false;
-    std::optional<GitTreeStatus> gitStatus;
+    std::optional<GitTreeAffordance> gitStatus;
     if (!decodeOptionalField(value.field("git_status"), gitStatus)) return false;
     std::optional<std::string> workspacePath;
     if (!decodeOptionalField(value.field("workspace_path"), workspacePath)) return false;
@@ -3897,6 +3958,7 @@ ProtocolValue toValue(TreeDelta const& value) {
     fields.emplace_back("revision", toValue(value.revision));
     fields.emplace_back("snapshot_required", toValue(value.snapshotRequired));
     fields.emplace_back("providers", toValue(value.providers));
+    fields.emplace_back("provider_order", toValue(value.providerOrder));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<TreeDelta>& out) {
@@ -3906,8 +3968,12 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeDelta>& out) {
     auto revision = requireField<TreeRevision>(value.field("revision"));
     auto snapshotRequired = requireField<bool>(value.field("snapshot_required"));
     auto providers = requireField<std::vector<TreeProviderDelta>>(value.field("providers"));
-    if (!baseRevision || !revision || !snapshotRequired || !providers) return false;
-    out.emplace(TreeDelta{*baseRevision, *revision, *snapshotRequired, *providers});
+    auto providerOrder =
+        requireField<std::vector<TreeProviderId>>(value.field("provider_order"));
+    if (!baseRevision || !revision || !snapshotRequired || !providers ||
+        !providerOrder) return false;
+    out.emplace(TreeDelta{*baseRevision, *revision, *snapshotRequired, *providers,
+                          *providerOrder});
     return true;
 }
 
@@ -4836,16 +4902,18 @@ bool decodePresent(ProtocolValue const& value, std::optional<PaletteExecuteArgum
 
 ProtocolValue toValue(PickerSubmitArguments const& value) {
     std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("mode", toValue(value.mode));
     fields.emplace_back("candidate_id", toValue(value.candidateId));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value,
                    std::optional<PickerSubmitArguments>& out) {
     if (!value.asObject()) return false;
+    auto mode = requireField<SearchMode>(value.field("mode"));
     auto candidateId =
         requireField<std::string>(value.field("candidate_id"));
-    if (!candidateId) return false;
-    out.emplace(PickerSubmitArguments{*candidateId});
+    if (!mode || !candidateId) return false;
+    out.emplace(PickerSubmitArguments{*mode, *candidateId});
     return true;
 }
 
@@ -4945,6 +5013,23 @@ bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArg
     if (!decodeOptionalField(value.field("selections"), selections)) return false;
     if (selections) result.selections = std::move(*selections);
     out.emplace(std::move(result));
+    return true;
+}
+
+ProtocolValue toValue(SelectionByteRangeArguments const& value) {
+    return ProtocolValue::makeObject(
+        {{"anchor_byte_offset", toValue(value.anchor)},
+         {"active_byte_offset", toValue(value.active)}});
+}
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<SelectionByteRangeArguments>& out) {
+    if (!value.asObject()) return false;
+    auto anchor =
+        requireField<ByteOffset>(value.field("anchor_byte_offset"));
+    auto active =
+        requireField<ByteOffset>(value.field("active_byte_offset"));
+    if (!anchor || !active) return false;
+    out.emplace(SelectionByteRangeArguments{*anchor, *active});
     return true;
 }
 
@@ -5202,6 +5287,25 @@ CommandArgumentCodec makeTypedCodec() {
         }};
 }
 
+template <typename Arguments>
+CommandArgumentCodec makeOptionalTypedCodec() {
+    return CommandArgumentCodec{
+        [](std::any const& payload) {
+            if (!payload.has_value()) return ProtocolValue::makeNull();
+            return toValue(std::any_cast<Arguments const&>(payload));
+        },
+        [](ProtocolValue const& value) -> std::optional<std::any> {
+            if (value.kind() == ProtocolValue::Kind::NullValue) {
+                return std::any{};
+            }
+            std::optional<Arguments> decoded;
+            if (!fromValue(value, decoded) || !decoded.has_value()) {
+                return std::nullopt;
+            }
+            return std::any{std::move(*decoded)};
+        }};
+}
+
 CommandArgumentCodec makeWorkspaceApplyCodec() {
     return CommandArgumentCodec{
         [](std::any const& payload) {
@@ -5240,6 +5344,7 @@ argumentCodecsByType() {
         std::unordered_map<std::type_index, CommandArgumentCodec> table;
         table.emplace(typeid(TextInputArguments), makeTypedCodec<TextInputArguments>());
         table.emplace(typeid(SelectionCommandArguments), makeTypedCodec<SelectionCommandArguments>());
+        table.emplace(typeid(SelectionByteRangeArguments), makeTypedCodec<SelectionByteRangeArguments>());
         table.emplace(typeid(ScrollLinesArguments), makeTypedCodec<ScrollLinesArguments>());
         table.emplace(typeid(ScrollPagesArguments), makeTypedCodec<ScrollPagesArguments>());
         table.emplace(typeid(ScrollFractionArguments), makeTypedCodec<ScrollFractionArguments>());
@@ -5260,6 +5365,7 @@ argumentCodecsByType() {
         table.emplace(typeid(FindQueryArguments), makeTypedCodec<FindQueryArguments>());
         table.emplace(typeid(PromptValueArguments), makeTypedCodec<PromptValueArguments>());
         table.emplace(typeid(PromptFocusArguments), makeTypedCodec<PromptFocusArguments>());
+        table.emplace(typeid(TabId), makeOptionalTypedCodec<TabId>());
         return table;
     }();
     return codecs;

@@ -9,29 +9,28 @@
 import {
   findSections, num, cssColor, byteToIndex, utf8Bytes, project, decodeMessage,
   browserInboundKind,
-  isPalettePromptOpen, matcherBoundsFromPalette, clampPaletteSelection,
-  encodePickerSubmit, applySessionDeltaSections, applyTreeDelta,
+  matcherBoundsFromPalette, clampPaletteSelection, pickerCandidatesFromPalette,
+  resolvePickerLifecycle, encodePickerSubmit,
+  encodeSelectionByteRange, encodeTabAction, markedTextByteOffset,
+  applySessionDeltaSections, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
+  webExtentCss,
+  GenerationRetainedCache, gitAffordanceFromNode,
+  preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
   encodeCommandRequest, encodeClientInput, encodeTreeActivation,
-  encodeStatusActionInvocation, shouldResetLocalQuery, pickerEpochFromPalette,
+  encodeStatusActionInvocation,
   promptViewFromSections, PROMPT_CONTROL, promptFocusPlan, encodePromptFocus,
   noticeViewFromSections,
   externalModificationFromSections, externalFocusHeld, encodeExternalAction,
-  settleInput, isCurrentGeneration, replayAttachFrame, deltaIsContiguous,
+  settleCommandResult, settleInput, isCurrentGeneration, replayAttachFrame,
+  deltaIsContiguous,
   clearUncertainInputs, reconnectDelay,
 } from '/reconcile.mjs';
 import { fuzzyRank } from '/fuzzy.mjs';
 
 const statusEl = document.getElementById('status');
-const tabsEl = document.getElementById('tabs');
-const docEl = document.getElementById('doc');
-const paletteEl = document.getElementById('palette');
-const chromeTopEl = document.getElementById('chrome-top');
-const chromeBottomEl = document.getElementById('chrome-bottom');
 const chromeErrorEl = document.getElementById('chrome-error');
-const promptEl = document.getElementById('prompt');
-const noticeEl = document.getElementById('notice');
-const externalEl = document.getElementById('external');
+const uiRootEl = document.getElementById('ui-root');
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString() : x);
@@ -41,19 +40,7 @@ const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toStr
 const ROLE = { text: 0, canvas: 1, caret: 2, selection: 3, statusWarning: 13,
                diffAdded: 19, diffRemoved: 20, diffModified: 21 };
 const FOCUS_EDITOR = 0;   // FocusTarget::Editor ordinal.
-
-// GitTreeStatus ordinals (Added, Modified, Deleted, Renamed, Untracked) surfaced
-// as a native web affordance: a short status letter and the matching Diff* theme
-// role color. Only existing theme roles are used -- the client invents no color --
-// and this is presentation the library carries as git_status, not new product
-// state. Untracked reuses the "added" role by the usual convention (new content).
-const GIT_STATUS = [
-  { letter: 'A', role: ROLE.diffAdded },
-  { letter: 'M', role: ROLE.diffModified },
-  { letter: 'D', role: ROLE.diffRemoved },
-  { letter: 'R', role: ROLE.diffModified },
-  { letter: 'U', role: ROLE.diffAdded },
-];
+const DOCUMENT_VIEWPORT_NODE_ID = 'document.viewport';
 
 // Persistent client model: the authoritative sections plus the still-unsettled
 // local predictions. Snapshots replace `sections`; deltas mutate it in place.
@@ -65,13 +52,28 @@ const state = {
   nextEditId: 1,
   // The palette/finder is a client-owned derived view: the browser owns the
   // query text and selection index, and ranks the published candidate universe locally.
-  palette: { query: '', selected: 0 },
+  palette: { mode: null, query: '', selected: 0, returnFocus: null },
 };
+const retainedNodes = new GenerationRetainedCache();
+let renderedSurfaceKinds = new Set();
+const allSurfaceKinds = Object.values(SURFACE);
+const fullRenderPlan = () => ({
+  rebuild: true,
+  reconcile: true,
+  repaintTheme: true,
+  surfaces: allSurfaceKinds,
+  localPicker: true,
+});
+const surfaceRenderPlan = (...surfaces) => ({
+  rebuild: false,
+  reconcile: false,
+  repaintTheme: false,
+  surfaces,
+  localPicker: false,
+});
 
-// Is a picker (command palette or file finder) the active prompt? The wire
-// field-name coupling lives in isPalettePromptOpen (reconcile.mjs).
 function paletteOpen() {
-  return isPalettePromptOpen(state.sections);
+  return state.palette.mode != null;
 }
 
 function applyTheme(theme) {
@@ -88,31 +90,32 @@ function applyTheme(theme) {
   return (theme && Array.isArray(theme.syntax_colors)) ? theme.syntax_colors : [];
 }
 
-function renderTabs(tabs) {
-  tabsEl.textContent = '';
-  if (!tabs || !Array.isArray(tabs.tabs)) return;
-  const activeId = idKey(tabs.active);
-  for (const t of tabs.tabs) {
-    const el = document.createElement('span');
-    el.className = 'tab' + (idKey(t.id) === activeId ? ' active' : '');
-    el.textContent = (t.dirty ? '\u25CF ' : '') + (t.label || '');
-    tabsEl.appendChild(el);
-  }
-}
-
-function appendTabs(parent, tabs) {
-  const host = document.createElement('div');
-  host.className = 'tabs';
+function renderTabsInto(host, tabs) {
+  host.textContent = '';
   if (tabs && Array.isArray(tabs.tabs)) {
     const activeId = idKey(tabs.active);
     for (const t of tabs.tabs) {
-      const el = document.createElement('span');
+      const el = document.createElement('button');
+      el.type = 'button';
       el.className = 'tab' + (idKey(t.id) === activeId ? ' active' : '');
       el.textContent = (t.dirty ? '\u25CF ' : '') + (t.label || '');
+      el.setAttribute(
+        'aria-label', (t.label || '') + (t.dirty ? ', modified' : ''));
+      if (idKey(t.id) === activeId) el.setAttribute('aria-current', 'page');
+      el.addEventListener('click', () => {
+        sendCommandFrame(encodeTabAction('tab.activate', t.id, state.revision));
+      });
+      el.addEventListener('mousedown', (event) => {
+        if (event.button === 1) event.preventDefault();
+      });
+      el.addEventListener('auxclick', (event) => {
+        if (event.button !== 1) return;
+        event.preventDefault();
+        sendCommandFrame(encodeTabAction('tab.close', t.id, state.revision));
+      });
       host.appendChild(el);
     }
   }
-  parent.appendChild(host);
 }
 
 // The color for a SemanticRole ordinal, from the live theme's role_colors table, or
@@ -128,33 +131,36 @@ function roleColor(ordinal, theme) {
 // children); a leaf becomes a span. `parentAxis` is the axis the node's own Size
 // measures along (a child sizes along its parent's main axis). Returns null for an
 // omitted node.
-function renderChromeNode(node, theme, parentAxis = AXIS.ROW, topLevel = false) {
+function reconcileChildren(parent, children) {
+  const retained = new Set(children);
+  for (const child of [...parent.childNodes]) {
+    if (!retained.has(child)) child.remove();
+  }
+  let cursor = parent.firstChild;
+  for (const child of children) {
+    if (child === cursor) {
+      cursor = cursor.nextSibling;
+    } else {
+      parent.insertBefore(child, cursor);
+    }
+  }
+}
+
+function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
   if (!node) return null;
   if (node.kind === 'container') {
-    const div = document.createElement('div');
+    const div = retainedNodes.getOrCreate(
+      node.id, () => document.createElement('div'));
     div.className = 'group';
+    div.dataset.nodeId = node.id;
     div.style.display = 'flex';
     div.style.flexDirection = node.axis === 1 ? 'column' : 'row';  // Axis: Row=0, Column=1
     // stretch: a child shares the parent's cross extent (the Row/Column contract),
     // rather than shrinking to its content on the cross axis.
     div.style.alignItems = 'stretch';
     div.style.boxSizing = 'border-box';  // inset stays inside the published extent
-    // A top-level well-known area is a native region: the browser owns its outer
-    // geometry. The grid's Exact cell heights (header/footer) are a grid contract,
-    // not a web one, so its own published Size is NOT imported as a CSS extent --
-    // applying it would clip the bar (an Exact cell height mis-axised to width:1ch
-    // once collapsed the whole header to "~"). The region fills its host width and
-    // sizes to content; the inner tree's sizes below stay authoritative.
-    if (topLevel) {
-      div.style.width = '100%';
-      // A viewport's clip only takes effect if every ancestor down to it can
-      // shrink below its content; a single missing min-height:0 in the chain lets
-      // the subtree grow instead. The top-level body region is the first link.
-      div.style.minHeight = '0';
-    } else {
-      applySize(div, node.size, parentAxis);
-      applyInset(div, node.inset, node.size, parentAxis);
-    }
+    applySize(div, node.size, parentAxis);
+    applyInset(div, node.inset, node.size, parentAxis);
     // An independent scroll viewport (the panel and content containers): clip
     // content to this node's bounded extent and scroll within it. min-height:0
     // lets this flex child shrink so overflow-y:auto actually clips rather than
@@ -162,43 +168,48 @@ function renderChromeNode(node, theme, parentAxis = AXIS.ROW, topLevel = false) 
     if (node.scroll === SCROLL.VERTICAL) {
       div.style.overflowY = 'auto';
       div.style.minHeight = '0';
-      // Tag the viewport so its client-owned scroll offset can be preserved across
-      // re-renders (the DOM is rebuilt each frame; the offset must not reset).
-      div.dataset.scrollNode = node.id;
     }
-    if (node.gap) div.style.gap = node.gap + 'ch';
-    for (const child of node.children) {
-      const el = renderChromeNode(child, theme, node.axis);
-      if (el) div.appendChild(el);
-    }
+    if (node.gap) div.style.gap = extentCss(node.gap, node.axis);
+    const children = node.children
+      .map((child) => renderChromeNode(child, theme, plan, node.axis))
+      .filter(Boolean);
+    reconcileChildren(div, children);
     return div;
   }
   // leaf
   if (node.spacer) {
-    const gap = document.createElement('span');
+    const gap = retainedNodes.getOrCreate(
+      node.id, () => document.createElement('span'));
     gap.className = 'w spacer';
     gap.style.display = 'inline-block';
     if (node.width != null) {
-      gap.style[parentAxis === AXIS.COLUMN ? 'height' : 'width'] = node.width + 'ch';
+      gap.style[parentAxis === AXIS.COLUMN ? 'height' : 'width'] =
+        extentCss(node.width, parentAxis);
       gap.style.flex = '0 0 auto';
     } else applySize(gap, node.size, parentAxis);
     return gap;
   }
   if (node.widget === WIDGET.VIEW) {
-    const el = renderSurfaceNode(node);
+    const el = renderSurfaceNode(node, plan);
     applySize(el, node.size, parentAxis);
     return el;
   }
   if (node.widget === WIDGET.STATUS_ACTIONS) {
-    const el = renderStatusActionsNode(node);
+    const el = retainedNodes.getOrCreate(
+      node.id, () => document.createElement('span'));
+    if (plan.rebuild || plan.reconcile || plan.repaintTheme) {
+      renderStatusActionsNode(el);
+    }
     applySize(el, node.size, parentAxis);
     return el;
   }
   if (node.widget === WIDGET.TEXT_INPUT) {
     // The header prompt anchor: the render node carries no server text, so the
     // browser-owned local query fills it here (no per-keystroke wire delta).
-    const el = document.createElement('span');
+    const el = retainedNodes.getOrCreate(
+      node.id, () => document.createElement('span'));
     el.className = 'w input-line';
+    el.textContent = '';
     const sigil = document.createElement('span');
     sigil.textContent = node.sigil || '';
     el.appendChild(sigil);
@@ -211,16 +222,15 @@ function renderChromeNode(node, theme, parentAxis = AXIS.ROW, topLevel = false) 
     applySize(el, node.size, parentAxis);
     return el;
   }
-  const el = document.createElement('span');
+  const el = retainedNodes.getOrCreate(
+    node.id, () => document.createElement('span'));
   el.className = 'w' + (node.command ? ' clickable' : '');
   el.textContent = (node.checked != null ? (node.checked ? '\u2611 ' : '\u2610 ') : '') + (node.text || '');
   const color = roleColor(node.role, theme);
   if (color) el.style.color = color;
   applySize(el, node.size, parentAxis);
-  if (node.command) {
-    el.title = node.command;
-    el.addEventListener('click', () => sendCommand(node.command));
-  }
+  el.title = node.command || '';
+  el.onclick = node.command ? () => sendCommand(node.command) : null;
   return el;
 }
 
@@ -236,13 +246,21 @@ function renderDocumentInto(host) {
     const shiftEnd = (o) => o > proj.predStart ? o + predBytes : o;
     const rawSpans = (s.syntax && Array.isArray(s.syntax.spans)) ? s.syntax.spans : [];
     const spans = rawSpans.map((sp) => ({ begin: shiftBegin(num(sp.begin)), end: shiftEnd(num(sp.end)), scope: num(sp.scope) }));
-    const sels = (s.selection && Array.isArray(s.selection.selections)) ? s.selection.selections : [];
     const ranges = [];
-    for (const sel of sels) {
-      const a = shiftEnd(num(sel.anchor.byte_offset)), b = shiftEnd(num(sel.active.byte_offset));
+    const preview = pointerSelection.preview;
+    if (preview && samePointerBasis(preview.basis, currentPointerBasis())) {
+      const a = shiftEnd(preview.anchor), b = shiftEnd(preview.active);
       if (a !== b) ranges.push([Math.min(a, b), Math.max(a, b)]);
+    } else {
+      const sels = (s.selection && Array.isArray(s.selection.selections))
+        ? s.selection.selections : [];
+      for (const sel of sels) {
+        const a = shiftEnd(num(sel.anchor.byte_offset));
+        const b = shiftEnd(num(sel.active.byte_offset));
+        if (a !== b) ranges.push([Math.min(a, b), Math.max(a, b)]);
+      }
     }
-    const caret = proj.caret;
+    const caret = preview ? shiftEnd(preview.active) : proj.caret;
     const total = utf8Bytes(text);
     const bounds = new Set([0, total, caret]);
     for (const sp of spans) { bounds.add(sp.begin); bounds.add(sp.end); }
@@ -254,36 +272,91 @@ function renderDocumentInto(host) {
     let html = '';
     for (let i = 0; i + 1 < cuts.length; i++) {
       const a = cuts[i], b = cuts[i + 1];
-      if (a === caret) html += '<span class="caret"></span>';
+      if (a === caret) {
+        html += '<span class="caret" data-byte-start="' + a + '"></span>';
+      }
       const ia = map.get(a), ib = map.get(b);
       if (ia === undefined || ib === undefined || ib <= ia) continue;
       const scope = scopeAt(a);
       const color = (scope >= 0 && scope < syntaxColors.length) ? cssColor(syntaxColors[scope]) : '';
       const cls = selectedAt(a) ? ' class="sel"' : '';
       const style = color ? ' style="color:' + color + '"' : '';
-      html += '<span' + cls + style + '>' + esc(text.substring(ia, ib)) + '</span>';
+      html += '<span data-byte-start="' + a + '"' + cls + style + '>' +
+        esc(text.substring(ia, ib)) + '</span>';
     }
-    if (caret >= total) html += '<span class="caret"></span>';
+    if (caret >= total) {
+      html += '<span class="caret" data-byte-start="' + total + '"></span>';
+    }
     host.innerHTML = html;
+    host._ssgProjection = {
+      predStart: proj.predStart, predEnd: proj.predEnd,
+      predBytes, authoritativeBytes: utf8Bytes(authText),
+    };
+    host.onpointerdown = (event) => beginPointerSelection(host, event);
+    host.onpointermove = (event) => updatePointerSelection(host, event);
+    host.onpointerup = (event) => endPointerSelection(host, event);
+    host.onpointercancel = cancelPointerGesture;
 }
 
-function renderSurfaceNode(node) {
-    const el = document.createElement('div');
-    el.className = 'surface surface-' + node.surface;
-    const s = state.sections || {};
-    if (node.surface === SURFACE.TABVIEW) {
-      appendTabs(el, s.tabs);
-      const pre = document.createElement('pre');
-      pre.className = 'doc-surface';
-      pre.tabIndex = 0;
-      renderDocumentInto(pre);
-      el.appendChild(pre);
-    } else if (node.surface === SURFACE.FILETREE || node.surface === SURFACE.GITSTATUS || node.surface === SURFACE.SYMBOLS) {
-      renderTreeSurface(el, node.surface, s.tree);
-    } else if (node.surface === SURFACE.FINDRESULTS) {
-      renderFindResultsSurface(el, s.palette);
+function renderSurfaceNode(node, plan) {
+    let created = false;
+    const el = retainedNodes.getOrCreate(node.id, () => {
+      created = true;
+      const value = document.createElement('div');
+      return value;
+    });
+    if (created) {
+      if (node.surface === SURFACE.DOCUMENT ||
+         node.surface === SURFACE.FINDRESULTS) {
+       el.tabIndex = 0;
+      } else if (node.surface === SURFACE.FOOTER_PROMPT) {
+       el.tabIndex = 0;
+      }
+      el.dataset.surface = String(node.surface);
+    }
+    renderedSurfaceKinds.add(node.surface);
+    if (created) el.className = 'surface surface-' + node.surface;
+    if (created || !el.isConnected || plan.surfaces.includes(node.surface)) {
+      renderSurfaceContent(el, node.surface);
     }
     return el;
+}
+
+function renderSurfaceContent(el, surface) {
+  const s = state.sections || {};
+  if (surface === SURFACE.TABBAR) {
+    el.classList.add('tabs');
+    renderTabsInto(el, s.tabs);
+  } else if (surface === SURFACE.DOCUMENT) {
+    el.classList.add('doc-surface');
+    renderDocumentInto(el);
+  } else if (surface === SURFACE.FILETREE ||
+             surface === SURFACE.GITSTATUS ||
+             surface === SURFACE.SYMBOLS) {
+    el.textContent = '';
+    renderTreeSurface(el, surface, s.tree);
+  } else if (surface === SURFACE.FINDRESULTS) {
+    el.textContent = '';
+    el.classList.add('find-results-surface');
+    renderFindResultsSurface(
+      el, s.palette,
+      s.palette && s.palette.active_mode != null
+        ? num(s.palette.active_mode)
+        : null);
+  } else if (surface === SURFACE.FOOTER_PROMPT) {
+    el.classList.add('prompt-surface');
+    renderFooterPrompt(el, s);
+  } else if (surface === SURFACE.NOTICE) {
+    el.textContent = '';
+    el.classList.add('notice-surface');
+    renderNotice(el, s);
+  } else if (surface === SURFACE.EXTERNAL_MODIFICATION) {
+    el.textContent = '';
+    el.classList.add('external-surface');
+    renderExternalModification(el, s);
+  } else {
+    throw new Error('unsupported retained surface ' + surface);
+  }
 }
 
 const TREE_KIND = { FILESYSTEM: 0, GIT: 1, SYMBOLS: 2 };
@@ -304,16 +377,13 @@ function renderTreeSurface(parent, surface, tree) {
       twisty.className = 'twisty';
       twisty.textContent = n.expandable ? (row.expanded ? '\u25be ' : '\u25b8 ') : '  ';
       div.appendChild(twisty);
-      // A git entry carries a status: show its short letter and color the row with
-      // the matching Diff* theme role (a native affordance over existing roles).
-      const git = (surface === SURFACE.GITSTATUS && n.git_status != null)
-        ? GIT_STATUS[num(n.git_status)] : null;
+      const git = surface === SURFACE.GITSTATUS ? gitAffordanceFromNode(n) : null;
       if (git) {
         const marker = document.createElement('span');
         marker.className = 'git-status';
-        marker.textContent = git.letter + ' ';
+        marker.textContent = git.shortLabel + ' ';
         div.appendChild(marker);
-        const color = roleColor(git.role, state.sections && state.sections.theme);
+        const color = roleColor(num(git.role), state.sections && state.sections.theme);
         if (color) div.style.color = color;
       }
       div.appendChild(document.createTextNode((n.icon ? n.icon + ' ' : '') + (n.label || '')));
@@ -321,23 +391,23 @@ function renderTreeSurface(parent, surface, tree) {
       // directory -- the same library commands a TUI pointer press dispatches.
       if (typeof n.id === 'string') {
         div.addEventListener('click', () =>
-          sendTyped(encodeTreeActivation(n.id, state.revision)));
+          sendCommandFrame(encodeTreeActivation(n.id, state.revision)));
       }
       parent.appendChild(div);
     }
 }
 
-function locallyRankedPaletteRows(palette) {
-    const candidates = palette && Array.isArray(palette.candidates) ? palette.candidates : [];
+function locallyRankedPaletteRows(palette, mode = state.palette.mode) {
+    const candidates = pickerCandidatesFromPalette(palette, mode);
     const { params, maxMagnitude, maxCandidateBytes } = matcherBoundsFromPalette(palette);
     const order = fuzzyRank(candidates, state.palette.query || '', params, maxMagnitude, maxCandidateBytes);
     return order.map((i) => candidates[i]);
 }
 
-function renderFindResultsSurface(parent, palette) {
+function renderFindResultsSurface(parent, palette, mode = state.palette.mode) {
     let rows = [];
     try {
-      rows = locallyRankedPaletteRows(palette);
+      rows = locallyRankedPaletteRows(palette, mode);
     } catch (err) {
       console.error('palette matcher wire error:', err);
       const notice = document.createElement('div');
@@ -356,8 +426,27 @@ function renderFindResultsSurface(parent, palette) {
     }
 }
 
-function renderStatusActionsNode(node) {
-    const el = document.createElement('span');
+function renderLocalPicker() {
+  const existing = uiRootEl.querySelector(':scope > .local-picker');
+  if (existing) existing.remove();
+  if (!paletteOpen()) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'find-results-surface local-picker';
+  overlay.tabIndex = 0;
+  const input = document.createElement('div');
+  input.className = 'input-line';
+  input.textContent = state.palette.query;
+  const caret = document.createElement('span');
+  caret.className = 'caret';
+  input.appendChild(caret);
+  overlay.appendChild(input);
+  renderFindResultsSurface(overlay, state.sections.palette, state.palette.mode);
+  uiRootEl.appendChild(overlay);
+  overlay.focus({ preventScroll: true });
+}
+
+function renderStatusActionsNode(el) {
+    el.textContent = '';
     el.className = 'status-actions';
     const status = state.sections && state.sections.prompt_status && state.sections.prompt_status.status;
     const items = status && Array.isArray(status.items) ? status.items : [];
@@ -370,12 +459,12 @@ function renderStatusActionsNode(node) {
       if (bg) button.style.backgroundColor = bg;
       if (fg) button.style.color = fg;
       button.style.borderColor = fg || 'currentColor';
-      button.addEventListener('click', () => sendTyped(encodeStatusActionInvocation({
-        statusId: item.id, actionId: action.id, generation: item.generation,
-      })));
+      button.addEventListener('click', () =>
+        sendCommandFrame(encodeStatusActionInvocation({
+          statusId: item.id, actionId: action.id, generation: item.generation,
+        })));
       el.appendChild(button);
   }
-  return el;
 }
 
 // Apply a published Size to a flex child ALONG the parent's main axis: Exact => a
@@ -383,12 +472,16 @@ function renderStatusActionsNode(node) {
 // content is CLIPPED so it truly occupies zero), Flex => grow to fill (extent is the
 // grow weight, default 1), Auto => content-sized. A Row parent measures width; a
 // Column parent measures height. SIZE ordinals mirror the C++ SizeKind enum.
+function extentCss(value, axis) {
+  return webExtentCss(value, axis);
+}
+
 function applySize(el, size, parentAxis) {
   if (!size) return;
   const dim = parentAxis === AXIS.COLUMN ? 'height' : 'width';
   if (size.kind === SIZE.EXACT) {
     el.style.flex = '0 0 auto';
-    el.style[dim] = (size.extent || 0) + 'ch';  // Exact(0) is a real zero extent
+    el.style[dim] = extentCss(size.extent || 0, parentAxis);
     el.style.overflow = 'hidden';  // content beyond the extent is clipped, not overflowed
   } else if (size.kind === SIZE.FLEX) {
     el.style.flex = (size.extent > 0 ? size.extent : 1) + ' 1 0';
@@ -397,7 +490,7 @@ function applySize(el, size, parentAxis) {
   }
 }
 
-// Apply a container Inset as padding (cells => ch). When the node has an Exact
+// Apply a container Inset as axis-aware per-side padding. When the node has an Exact
 // main-axis extent, the same-axis inset is clamped so their sum never exceeds the
 // extent -- otherwise the CSS used border-box size floors at the padding and an
 // Exact(0)+inset frame would occupy nonzero space. The cross-axis inset is not
@@ -416,20 +509,22 @@ function applyInset(el, inset, size, parentAxis) {
       if (left + right > extent) { left = Math.min(left, extent); right = Math.max(0, extent - left); }
     }
   }
-  el.style.padding = top + 'ch ' + right + 'ch ' + bottom + 'ch ' + left + 'ch';
+  el.style.paddingTop = extentCss(top, AXIS.COLUMN);
+  el.style.paddingRight = extentCss(right, AXIS.ROW);
+  el.style.paddingBottom = extentCss(bottom, AXIS.COLUMN);
+  el.style.paddingLeft = extentCss(left, AXIS.ROW);
 }
 
-// Interpret the published UI-VM schema + dynamic node state into the Top/Bottom
-// chrome, mirroring the generic tree (structure, values, roles, triggers are the
-// library's; geometry is the browser's flex layout). A schema using a primitive this
+// Interpret the entire published UI-VM tree into one generic mount. Retained View
+// elements move between rebuilt structural wrappers without leaving the connected
+// document, preserving native focus and control state within a schema generation.
+// A schema using a primitive this
 // build does not implement is a loud, visible refusal -- never a silently dropped
 // element.
-function renderChrome(sections) {
+function renderChrome(sections, plan) {
   const schema = sections.ui;
   const stateSection = sections.ui_state;
   const presenceSection = sections.ui_presence;
-  chromeTopEl.textContent = '';
-  chromeBottomEl.textContent = '';
   chromeErrorEl.textContent = '';
   if (!schema || !schema.root) return false;
 
@@ -437,55 +532,35 @@ function renderChrome(sections) {
   if (unsupported) {
     chromeErrorEl.textContent =
       'unsupported UI ' + unsupported.kind + ' ' + unsupported.ordinal +
-      ' -- this client build cannot render the composed chrome';
+      ' -- this client build cannot render the composed UI';
+    uiRootEl.textContent = '';
     return false;
   }
   const interpreted = interpretChrome(schema, stateSection, presenceSection);
   if (!interpreted || !interpreted.root) return false;  // schema/state from different frames; wait
 
-  // Scroll offset is client-owned interaction state: the body DOM is rebuilt each
-  // frame, so capture every viewport's scrollTop by node id before the rebuild and
-  // restore it after, or an ordinary snapshot/delta would jump the panel or
-  // document back to the top.
-  const savedScroll = new Map();
-  for (const vp of docEl.querySelectorAll('[data-scroll-node]')) {
-    savedScroll.set(vp.dataset.scrollNode, vp.scrollTop);
+  const generation = num(schema.generation);
+  const generationChanged = retainedNodes.begin(generation);
+  if (generationChanged) {
+    footerPromptOpen = false;
+    footerPromptActiveInput = -1;
+    savedFocusEl = null;
   }
-
-  // The root's children are the well-known areas; render each into its host by
-  // its well-known node id. Placement is the tree structure + the id, not a role.
-  const root = interpreted.root;
-  const areas = root.kind === 'container' ? root.children : [];
-  let renderedBody = false;
-  for (const area of areas) {
-    const host = area.id === 'header' ? chromeTopEl
-               : area.id === 'footer' ? chromeBottomEl
-               : area.id === 'body' ? docEl : null;
-    if (!host) continue;
-    if (area.id === 'body') {
-      host.textContent = '';
-      renderedBody = true;
-      tabsEl.textContent = '';
-    }
-    const el = renderChromeNode(area, sections.theme, AXIS.COLUMN, true);
-    if (el) {
-      // The body is the flexible region; header/footer size to their content.
-      if (area.id === 'body') el.style.flex = '1 1 auto';
-      host.appendChild(el);
-    }
+  renderedSurfaceKinds = new Set();
+  const nextRoot = renderChromeNode(
+    interpreted.root, sections.theme, plan, AXIS.COLUMN);
+  if (!nextRoot) return false;
+  if (generationChanged || nextRoot.parentElement !== uiRootEl) {
+    reconcileChildren(uiRootEl, [nextRoot]);
   }
-  // Restore each viewport's client-owned scroll offset (clamped by the browser to
-  // the new content height).
-  for (const vp of docEl.querySelectorAll('[data-scroll-node]')) {
-    const prev = savedScroll.get(vp.dataset.scrollNode);
-    if (prev != null) vp.scrollTop = prev;
+  if (!renderedSurfaceKinds.has(SURFACE.FOOTER_PROMPT)) {
+    renderFooterPrompt(null, sections);
   }
-  return renderedBody;
+  return true;
 }
 
-// The footer prompt (find, replace, goto-line/command-argument, save-path,
-// settings) renders into #prompt, a PERSISTENT container the chrome rebuild never
-// touches -- so the focused container survives every re-render and focus is moved
+// The footer prompt renders into a retained View element. The structural tree may
+// be rebuilt around it, but the focused element stays connected and focus is moved
 // only on open and on active-input change, never per message. The container holds
 // keyboard focus (tabindex=0, aria-activedescendant naming the active input); its
 // child inputs are role=textbox but non-focusable, so a screen reader tracks the
@@ -497,8 +572,8 @@ let footerPromptOpen = false;
 let footerPromptActiveInput = -1;
 let savedFocusEl = null;
 
-function buildPromptControls(pv) {
-  promptEl.textContent = '';
+function buildPromptControls(host, pv) {
+  host.textContent = '';
   let inputIndex = 0;
   for (const control of pv.controls) {
     if (control.kind === PROMPT_CONTROL.INPUT) {
@@ -520,10 +595,10 @@ function buildPromptControls(pv) {
       // keystroke still routes through the shared seam.
       el.addEventListener('mousedown', (ev) => {
         ev.preventDefault();
-        promptEl.focus({ preventScroll: true });
-        sendTyped(encodePromptFocus(index, state.revision));
+        host.focus({ preventScroll: true });
+        sendCommandFrame(encodePromptFocus(index, state.revision));
       });
-      promptEl.appendChild(el);
+      host.appendChild(el);
     } else if (control.kind === PROMPT_CONTROL.TOGGLE) {
       const el = document.createElement('span');
       el.className = 'prompt-control prompt-toggle' + (control.checked ? ' checked' : '');
@@ -537,30 +612,43 @@ function buildPromptControls(pv) {
           sendCommand(control.command);
         });
       }
-      promptEl.appendChild(el);
+      host.appendChild(el);
     } else {
       const el = document.createElement('span');
       el.className = 'prompt-control prompt-count';
       el.setAttribute('aria-label', control.label);
       el.textContent = control.value;
-      promptEl.appendChild(el);
+      host.appendChild(el);
     }
   }
 }
 
-// Reconcile #prompt against the published semantic PromptView (null when no
+// Reconcile the retained prompt surface against the published PromptView (null when no
 // footer-region prompt is open). Focus moves only on open and on active-input
 // change; closing restores the focus the prompt captured.
-function renderFooterPrompt(sections) {
-  const pv = promptViewFromSections(sections);
+function editorFocusElement() {
+  const connected = [...retainedNodes.values()].filter(
+    (el) => el.isConnected && el.dataset.surface != null);
+  const preferred = preferredKeyboardSurface(
+    connected.map((el) => Number(el.dataset.surface)));
+  const target = connected.find(
+    (el) => Number(el.dataset.surface) === preferred);
+  if (target) return target;
+  return uiRootEl;
+}
+
+function renderFooterPrompt(host, sections) {
+  const pv = host ? promptViewFromSections(sections) : null;
   const plan = promptFocusPlan(
     { open: footerPromptOpen, activeInput: footerPromptActiveInput }, pv);
   if (!pv) {
     if (plan.restoreFocus) {
-      promptEl.textContent = '';
-      promptEl.classList.remove('open');
-      promptEl.removeAttribute('aria-activedescendant');
-      const restore = (savedFocusEl && document.contains(savedFocusEl)) ? savedFocusEl : docEl;
+      if (host) {
+        host.textContent = '';
+        host.removeAttribute('aria-activedescendant');
+      }
+      const restore = (savedFocusEl && document.contains(savedFocusEl))
+        ? savedFocusEl : editorFocusElement();
       restore.focus({ preventScroll: true });
       savedFocusEl = null;
     }
@@ -569,75 +657,68 @@ function renderFooterPrompt(sections) {
     return;
   }
   if (!footerPromptOpen) savedFocusEl = document.activeElement;
-  promptEl.classList.add('open');
-  promptEl.setAttribute('role', 'group');
-  promptEl.setAttribute('aria-label', pv.label || 'prompt');
-  buildPromptControls(pv);
-  promptEl.setAttribute('aria-activedescendant', promptInputElementId(plan.activeDescendant));
-  if (plan.focusContainer) promptEl.focus({ preventScroll: true });
+  host.setAttribute('role', 'group');
+  host.setAttribute('aria-label', pv.label || 'prompt');
+  buildPromptControls(host, pv);
+  host.setAttribute('aria-activedescendant', promptInputElementId(plan.activeDescendant));
+  if (plan.focusContainer) host.focus({ preventScroll: true });
   footerPromptOpen = plan.open;
   footerPromptActiveInput = plan.activeInput;
 }
 
-// Reconcile #notice against the published semantic NoticeView (null when the
+// Reconcile the retained notice surface against the published semantic NoticeView.
 // active document raises no draft-conflict notice). The bar shows the message and
 // clickable bracketed action labels; each action dispatches its command id through
 // the shared command ingress. The notice captures no keyboard focus -- it is
 // intrinsic-height chrome above the document, not an input surface.
-function renderNotice(sections) {
+function renderNotice(host, sections) {
   const nv = noticeViewFromSections(sections);
   if (!nv) {
-    noticeEl.textContent = '';
-    noticeEl.classList.remove('open');
-    noticeEl.removeAttribute('role');
-    noticeEl.removeAttribute('aria-label');
+    host.removeAttribute('role');
+    host.removeAttribute('aria-label');
     return;
   }
-  noticeEl.textContent = '';
-  noticeEl.classList.add('open');
-  noticeEl.setAttribute('role', 'status');
-  noticeEl.setAttribute('aria-label', nv.text);
+  host.setAttribute('role', 'status');
+  host.setAttribute('aria-label', nv.text);
   const text = document.createElement('span');
   text.className = 'notice-text';
   text.textContent = nv.text;
-  noticeEl.appendChild(text);
+  host.appendChild(text);
   for (const action of nv.actions) {
     const el = document.createElement('button');
     el.className = 'notice-action';
     el.setAttribute('aria-label', action.label);
     el.textContent = '[' + action.label + ']';
     el.addEventListener('click', () => sendCommand(action.command));
-    noticeEl.appendChild(el);
+    host.appendChild(el);
   }
 }
 
-// Reconcile #external against the published external-modification section (null
+// Reconcile the retained external-modification surface against its semantic section.
 // when no file is externally changed). Renders the message plus one row per file
 // (status glyph + path + its offered action buttons), highlighting the selected
 // row. A click sends the published file/action identity through the typed route;
 // forwarded keystrokes resolve in the library's external context.
-function renderExternalModification(sections) {
+function renderExternalModification(host, sections) {
   const view = externalModificationFromSections(sections);
-  externalEl.textContent = '';
   if (!view) {
-    externalEl.classList.remove('open');
-    externalEl.removeAttribute('role');
-    externalEl.removeAttribute('aria-label');
+    host.removeAttribute('role');
+    host.removeAttribute('aria-label');
     return;
   }
-  externalEl.classList.add('open');
-  externalEl.setAttribute('role', 'status');
-  externalEl.setAttribute('aria-label', view.message);
+  host.setAttribute('role', 'status');
+  host.setAttribute('aria-label', view.message);
   const header = document.createElement('div');
   header.className = 'external-header';
   header.textContent = view.message;
-  externalEl.appendChild(header);
+  host.appendChild(header);
   for (const file of view.files) {
     const row = document.createElement('div');
     row.className = 'external-row' + (file.selected ? ' selected' : '');
     const label = document.createElement('span');
     label.className = 'external-file';
-    label.textContent = file.glyph + ' ' + file.path;
+    label.textContent = file.statusLabel + ' ' + file.path;
+    label.setAttribute('aria-label', file.accessibleStatus + ' ' + file.path);
     row.appendChild(label);
     for (const action of file.actions) {
       const el = document.createElement('button');
@@ -645,27 +726,24 @@ function renderExternalModification(sections) {
       el.setAttribute('aria-label', action.label);
       el.textContent = '[' + action.label + ']';
       el.addEventListener('click', () =>
-        sendTyped(encodeExternalAction(action.action, file.id, state.revision)));
+        sendCommandFrame(
+          encodeExternalAction(action.action, file.id, state.revision)));
       row.appendChild(el);
     }
-    externalEl.appendChild(row);
+    host.appendChild(row);
   }
 }
 
-// The legacy overlay host is kept only as a closed shell; the active picker is the
-// retained FindResults surface inside the interpreted whole-screen tree.
-function renderPalette() {
-  const open = paletteOpen();
-  paletteEl.classList.toggle('open', false);
-  if (!open) paletteEl.textContent = '';
-}
-
 function refreshFinder() {
-  render();
+  render({
+    ...surfaceRenderPlan(),
+    localPicker: true,
+  });
 }
 
 function applyDelta(d) {
   if (!state.sections || !deltaIsContiguous(state.revision, d)) return false;
+  const pointerBasis = currentPointerBasis();
   const next = structuredClone(state.sections);
   applySessionDeltaSections(next, d);
   // The tree is retained and spliced in place; only a genuinely inexpressible
@@ -675,6 +753,9 @@ function applyDelta(d) {
   if (d.tree && !applyTreeDelta(next.tree, d.tree)) return false;
   state.sections = next;
   state.revision = BigInt(d.revision);
+  if (!samePointerBasis(pointerBasis, currentPointerBasis())) {
+    invalidatePointerOffsets();
+  }
   return true;
 }
 
@@ -682,23 +763,291 @@ function applyDelta(d) {
 // caret; color each segment by its syntax scope through the theme and mark
 // selected segments and the caret. Authoritative offsets are shifted past any
 // predicted text; geometry is the browser's, only offsets are semantic.
-function render() {
+function render(plan = fullRenderPlan()) {
   const s = state.sections;
   if (!s) return;
-  applyTheme(s.theme);
-  const bodyRendered = renderChrome(s);
-  if (!bodyRendered) {
-    renderTabs(s.tabs);
-    renderDocumentInto(docEl);
+  if (plan.rebuild || plan.repaintTheme) applyTheme(s.theme);
+  if (plan.rebuild || plan.reconcile) {
+    renderChrome(s, plan);
+  } else {
+    const dirty = new Set(plan.surfaces);
+    for (const el of retainedNodes.values()) {
+      const surface = Number(el.dataset.surface);
+      if (el.isConnected && dirty.has(surface)) {
+        renderSurfaceContent(el, surface);
+      }
+    }
   }
-  renderPalette();
-  renderNotice(s);
-  renderExternalModification(s);
-  renderFooterPrompt(s);
+  if (plan.localPicker) renderLocalPicker();
+  if (plan.rebuild || plan.surfaces.includes(SURFACE.DOCUMENT)) {
+    revealDocumentCaret();
+  }
 }
 
-let wasPaletteOpen = false;
-let lastPickerEpoch = 0n;
+let lastCaretRevealKey = '';
+const pointerSelection = {
+  dragging: false,
+  pointerId: null,
+  anchor: null,
+  active: null,
+  basis: null,
+  released: false,
+  preview: null,
+  inFlight: null,
+  queued: null,
+  point: null,
+};
+let commandRequests = [];
+
+function currentPointerBasis() {
+  const sections = state.sections || {};
+  return {
+    text: sections.document ? sections.document.text : '',
+    tab: sections.tabs ? idKey(sections.tabs.active) : '',
+  };
+}
+
+function samePointerBasis(left, right) {
+  return !!left && !!right &&
+    left.text === right.text && left.tab === right.tab;
+}
+
+function renderPointerPreview() {
+  render(surfaceRenderPlan(SURFACE.DOCUMENT));
+}
+
+function clearPointerGesture() {
+  pointerSelection.dragging = false;
+  pointerSelection.pointerId = null;
+  pointerSelection.anchor = null;
+  pointerSelection.active = null;
+  pointerSelection.basis = null;
+  pointerSelection.released = false;
+  pointerSelection.point = null;
+}
+
+function cancelPointerGesture() {
+  const host = uiRootEl.querySelector('.doc-surface');
+  if (host && pointerSelection.pointerId != null &&
+      host.hasPointerCapture(pointerSelection.pointerId)) {
+    host.releasePointerCapture(pointerSelection.pointerId);
+  }
+  clearPointerGesture();
+  const retained = pointerSelection.queued || pointerSelection.inFlight;
+  pointerSelection.preview =
+    retained && samePointerBasis(retained.basis, currentPointerBasis())
+      ? retained : null;
+  renderPointerPreview();
+}
+
+function cancelPointerSelection() {
+  clearPointerGesture();
+  pointerSelection.preview = null;
+  pointerSelection.inFlight = null;
+  pointerSelection.queued = null;
+}
+
+function invalidatePointerOffsets() {
+  clearPointerGesture();
+  pointerSelection.preview = null;
+  pointerSelection.queued = null;
+}
+
+function displayByteOffsetAtPoint(host, x, y) {
+  let node = null;
+  let offset = 0;
+  if (typeof document.caretPositionFromPoint === 'function') {
+    const position = document.caretPositionFromPoint(x, y);
+    if (position) {
+      node = position.offsetNode;
+      offset = position.offset;
+    }
+  } else if (typeof document.caretRangeFromPoint === 'function') {
+    const range = document.caretRangeFromPoint(x, y);
+    if (range) {
+      node = range.startContainer;
+      offset = range.startOffset;
+    }
+  }
+  if (!node || !host.contains(node)) return null;
+  if (node.nodeType !== Node.TEXT_NODE) {
+    const after = node.childNodes[offset] || null;
+    const before = offset > 0 ? node.childNodes[offset - 1] : null;
+    const candidate = after || before;
+    if (candidate && candidate.nodeType === Node.ELEMENT_NODE) {
+      const marked = candidate.matches('[data-byte-start]')
+        ? candidate
+        : candidate.querySelector('[data-byte-start]');
+      if (marked) {
+        const start = Number(marked.dataset.byteStart);
+        return after
+          ? start
+          : markedTextByteOffset(start, marked.textContent,
+                                 marked.textContent.length);
+      }
+    }
+    return null;
+  }
+  const marked = node.parentElement &&
+    node.parentElement.closest('[data-byte-start]');
+  if (!marked || !host.contains(marked)) return null;
+  const start = Number(marked.dataset.byteStart);
+  return markedTextByteOffset(start, node.data, offset);
+}
+
+function authoritativePointerOffset(host, event) {
+  const displayed = displayByteOffsetAtPoint(
+    host, event.clientX, event.clientY);
+  if (displayed == null) return null;
+  const projection = host._ssgProjection;
+  if (!projection) return displayed;
+  if (displayed <= projection.predStart) return displayed;
+  if (displayed <= projection.predEnd) return projection.predStart;
+  return Math.min(
+    projection.authoritativeBytes, displayed - projection.predBytes);
+}
+
+function retainPointerPoint(host, event) {
+  pointerSelection.point = {
+    host, clientX: event.clientX, clientY: event.clientY,
+  };
+  flushPointerPoint();
+}
+
+function flushPointerPoint() {
+  if (!pointerSelection.point || state.inputQueue.length || state.pending.length) {
+    return;
+  }
+  let { host, clientX, clientY } = pointerSelection.point;
+  if (!host.isConnected) {
+    host = uiRootEl.querySelector('.doc-surface');
+  }
+  if (!host) return;
+  const offset = authoritativePointerOffset(
+    host, { clientX, clientY });
+  if (offset == null) return;
+  pointerSelection.point = null;
+  if (pointerSelection.anchor == null) {
+    pointerSelection.anchor = offset;
+    pointerSelection.basis = currentPointerBasis();
+  }
+  pointerSelection.active = offset;
+  pointerSelection.preview = {
+    anchor: pointerSelection.anchor,
+    active: offset,
+    basis: pointerSelection.basis,
+    retries: 0,
+  };
+  renderPointerPreview();
+  if (pointerSelection.released) finishPointerGesture();
+}
+
+function dispatchPointerRange(range) {
+  const sent = sendCommandFrame(encodeSelectionByteRange(
+    range.anchor, range.active, state.revision), 'pointer');
+  if (!sent) {
+    cancelPointerSelection();
+    return false;
+  }
+  pointerSelection.inFlight = range;
+  return true;
+}
+
+function finishPointerGesture() {
+  if (pointerSelection.anchor == null || pointerSelection.active == null ||
+      state.inputQueue.length || state.pending.length) {
+    pointerSelection.released = true;
+    return;
+  }
+  const range = {
+    anchor: pointerSelection.anchor,
+    active: pointerSelection.active,
+    basis: pointerSelection.basis,
+    retries: 0,
+  };
+  clearPointerGesture();
+  pointerSelection.preview = range;
+  if (pointerSelection.inFlight) {
+    pointerSelection.queued = range;
+  } else {
+    dispatchPointerRange(range);
+  }
+}
+
+function settlePointerRange(error) {
+  const settled = settlePointerSelection(
+    pointerSelection.inFlight, pointerSelection.queued,
+    error, currentPointerBasis());
+  pointerSelection.inFlight = null;
+  pointerSelection.queued = null;
+  pointerSelection.preview = settled.preview;
+  if (settled.dispatch) dispatchPointerRange(settled.dispatch);
+}
+
+function beginPointerSelection(host, event) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  pointerSelection.dragging = true;
+  pointerSelection.pointerId = event.pointerId;
+  pointerSelection.anchor = null;
+  pointerSelection.active = null;
+  pointerSelection.basis = null;
+  pointerSelection.released = false;
+  pointerSelection.point = null;
+  host.setPointerCapture(event.pointerId);
+  retainPointerPoint(host, event);
+}
+
+function updatePointerSelection(host, event) {
+  if (!pointerSelection.dragging ||
+      event.pointerId !== pointerSelection.pointerId) {
+    return;
+  }
+  event.preventDefault();
+  retainPointerPoint(host, event);
+}
+
+function endPointerSelection(host, event) {
+  if (!pointerSelection.dragging ||
+      event.pointerId !== pointerSelection.pointerId) {
+    return;
+  }
+  event.preventDefault();
+  retainPointerPoint(host, event);
+  if (host.hasPointerCapture(event.pointerId)) {
+    host.releasePointerCapture(event.pointerId);
+  }
+  pointerSelection.dragging = false;
+  pointerSelection.pointerId = null;
+  finishPointerGesture();
+}
+
+function revealDocumentCaret() {
+  const caret = uiRootEl.querySelector('.doc-surface .caret');
+  if (!caret) return;
+  const activeTab = state.sections && state.sections.tabs
+    ? idKey(state.sections.tabs.active)
+    : '';
+  const key = activeTab + ':' + String(state.sections.document.caret) +
+    ':' + state.pending.map((item) => item.text).join('');
+  if (key === lastCaretRevealKey) return;
+  lastCaretRevealKey = key;
+  const viewport = retainedNodes.get(DOCUMENT_VIEWPORT_NODE_ID);
+  if (!viewport) return;
+  const caretRect = caret.getBoundingClientRect();
+  const viewportRect = viewport.getBoundingClientRect();
+  if (caretRect.top < viewportRect.top) {
+    viewport.scrollTop -= viewportRect.top - caretRect.top;
+  } else if (caretRect.bottom > viewportRect.bottom) {
+    viewport.scrollTop += caretRect.bottom - viewportRect.bottom;
+  }
+  if (caretRect.left < viewportRect.left) {
+    viewport.scrollLeft -= viewportRect.left - caretRect.left;
+  } else if (caretRect.right > viewportRect.right) {
+    viewport.scrollLeft += caretRect.right - viewportRect.right;
+  }
+}
+
 let ws = null;
 let socketGeneration = 0;
 let reconnectAttempts = 0;
@@ -710,15 +1059,22 @@ function sendTyped(frame) {
   return true;
 }
 
+function sendCommandFrame(frame, owner = 'other') {
+  if (!sendTyped(frame)) return false;
+  commandRequests.push(owner);
+  return true;
+}
+
 function sendCommand(id, payload = null) {
-  return sendTyped(encodeCommandRequest(id, state.revision, payload));
+  return sendCommandFrame(
+    encodeCommandRequest(id, state.revision, payload));
 }
 
 function discardPredictions() {
   const cleared = clearUncertainInputs();
   state.pending = cleared.pending;
   state.inputQueue = cleared.inputQueue;
-  render();
+  render(surfaceRenderPlan(SURFACE.DOCUMENT));
 }
 
 function reconnect(reason) {
@@ -727,21 +1083,35 @@ function reconnect(reason) {
 }
 
 function applyProtocolFrame(buffer) {
+  frameRenderPlan = surfaceRenderPlan();
   const { kind, payload } = decodeMessage(buffer);
   const inbound = browserInboundKind(kind);
   if (inbound === 'snapshot') {
     state.sections = findSections(payload);
     state.revision = BigInt(payload.revision);
     reconnectAttempts = 0;
+    frameRenderPlan = fullRenderPlan();
+    invalidatePointerOffsets();
   } else if (inbound === 'delta') {
     if (!applyDelta(payload)) {
       reconnect('state gap');
       return false;
     }
+    frameRenderPlan = browserRenderPlan(payload);
   } else if (inbound === 'command-result') {
     if (payload.revision != null && BigInt(payload.revision) > state.revision) {
       reconnect('command result preceded state');
       return false;
+    }
+    const settled = settleCommandResult(commandRequests);
+    if (!settled) {
+      reconnect('unexpected command result');
+      return false;
+    }
+    commandRequests = settled.queue;
+    if (settled.owner === 'pointer') {
+      settlePointerRange(num(payload.error));
+      frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
     }
   } else if (inbound === 'input-result') {
     const settled = settleInput(
@@ -752,6 +1122,7 @@ function applyProtocolFrame(buffer) {
     }
     state.inputQueue = settled.inputQueue;
     state.pending = settled.pending;
+    frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
   } else {
     // Additive server messages are safe to ignore. Required incompatible
     // semantics must use a new wire version, which decodeMessage rejects.
@@ -759,6 +1130,8 @@ function applyProtocolFrame(buffer) {
   }
   return true;
 }
+
+let frameRenderPlan = fullRenderPlan();
 
 function connect() {
   const generation = ++socketGeneration;
@@ -780,31 +1153,25 @@ function connect() {
     if (!applyProtocolFrame(e.data)) return;
     if (!state.sections) { statusEl.textContent = 'no sections yet'; return; }
 
-    // Reset the browser-owned query on a fresh open: a closed->open transition, or
-    // a reopen at the same open state signalled by a bumped picker epoch.
-    const nowOpen = paletteOpen();
-    const epoch = pickerEpochFromPalette(state.sections.palette);
-    if (shouldResetLocalQuery(nowOpen, wasPaletteOpen, epoch, lastPickerEpoch)) {
-      state.palette.query = '';
-      state.palette.selected = 0;
-    }
-    wasPaletteOpen = nowOpen;
-    lastPickerEpoch = epoch;
-
-    render();
-    statusEl.textContent = 'live (' + e.data.byteLength + ' bytes)';
+    render(frameRenderPlan);
+    flushPointerPoint();
+    statusEl.textContent = '';
     // Keep the document focused for the common editor case, but never steal focus
     // from an open footer prompt: it owns the keyboard while it is up, and
     // renderFooterPrompt has already placed focus on its container.
-    if (!footerPromptOpen) docEl.focus();
+    if (!footerPromptOpen &&
+        (document.activeElement === document.body || document.activeElement === statusEl)) {
+      editorFocusElement().focus();
+    }
     } catch (err) {
-      statusEl.textContent = 'protocol error: ' + err.message;
-      reconnect('protocol error');
+      reconnect('protocol error: ' + err.message);
     }
   };
   socket.onclose = () => {
     if (!isCurrentGeneration(socketGeneration, generation)) return;
     discardPredictions();
+    commandRequests = [];
+    cancelPointerSelection();
     if (reconnectAttempts >= 8) {
       statusEl.textContent = 'connection unavailable';
       return;
@@ -821,15 +1188,18 @@ function connect() {
 }
 
 connect();
-
-docEl.addEventListener('keydown', handleKeydown);
-// The footer prompt owns keyboard focus while open, so its container needs the
-// same handler: keystrokes and Backspace round-trip through the shared typed seam
-// edits, and Tab resolves server-side to prompt.focus_next_control. Attaching to
-// the container (not document) keeps the two focus owners' handlers symmetric.
-promptEl.addEventListener('keydown', handleKeydown);
+// Device input is a client boundary, not a property of whichever retained
+// surface last held focus. Capture it once so an Alt chord remains reachable
+// after a pointer interaction moves focus to a native control.
+document.addEventListener('keydown', handleKeydown);
 
 function handleKeydown(ev) {
+  if (ev.key === 'Escape' && pointerSelection.dragging) {
+    ev.preventDefault();
+    cancelPointerGesture();
+    return;
+  }
+
   // Ctrl/Meta chords belong to the browser: ssg's keymap uses Alt as its chord
   // modifier, so the web client never claims a Ctrl/Meta combo. Letting them
   // through keeps native zoom, copy/paste, and find working -- the browser is a
@@ -838,19 +1208,70 @@ function handleKeydown(ev) {
   // Alt twin and is thus unreachable on web until the keymap grows one.)
   if (ev.ctrlKey || ev.metaKey) return;
 
+  const inputStroke = {
+    code: ev.code, control: ev.ctrlKey, alt: ev.altKey,
+    meta: ev.metaKey, shift: ev.shiftKey,
+  };
+  const promptActive = state.sections &&
+    state.sections.prompt_status &&
+    state.sections.prompt_status.active_kind != null;
+  if (!paletteOpen() && !promptActive && state.sections) {
+    const focus = externalFocusHeld(state.sections)
+      ? 'external'
+      : ['editor', 'panel', 'prompt', 'external'][num(state.sections.focus)];
+    const mode = resolvePickerLifecycle(
+      state.sections.keymap, state.sections.palette, inputStroke, focus);
+    if (mode != null) {
+      ev.preventDefault();
+      state.palette.returnFocus = document.activeElement;
+      state.palette.mode = mode;
+      state.palette.query = '';
+      state.palette.selected = 0;
+      render({ ...surfaceRenderPlan(), localPicker: true });
+      return;
+    }
+  }
+
   // When a picker is open, the browser owns its query and selection (a
   // client-owned derived view). Query edits and selection moves re-request a
   // local ranking; Enter submits the selected candidate id; Escape closes via the
   // library keymap (prompt.cancel). Nothing here touches the document.
   if (paletteOpen()) {
     const p = state.palette;
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      const returnFocus = p.returnFocus;
+      p.mode = null;
+      p.query = '';
+      p.selected = 0;
+      p.returnFocus = null;
+      render({ ...surfaceRenderPlan(), localPicker: true });
+      if (returnFocus && returnFocus.isConnected) {
+        returnFocus.focus({ preventScroll: true });
+      } else {
+        editorFocusElement().focus({ preventScroll: true });
+      }
+      return;
+    }
     if (ev.key === 'Enter') {
       ev.preventDefault();
       p.selected = clampPaletteSelection(p.selected, locallyRankedPaletteRows(state.sections && state.sections.palette).length);
       const rows = locallyRankedPaletteRows(state.sections && state.sections.palette);
       const candidate = rows[p.selected];
       if (candidate) {
-        sendTyped(encodePickerSubmit(candidate.id, state.revision));
+        sendCommandFrame(
+          encodePickerSubmit(p.mode, candidate.id, state.revision));
+        const returnFocus = p.returnFocus;
+        p.mode = null;
+        p.query = '';
+        p.selected = 0;
+        p.returnFocus = null;
+        render({ ...surfaceRenderPlan(), localPicker: true });
+        if (returnFocus && returnFocus.isConnected) {
+          returnFocus.focus({ preventScroll: true });
+        } else {
+          editorFocusElement().focus({ preventScroll: true });
+        }
       }
       return;
     }
@@ -859,7 +1280,7 @@ function handleKeydown(ev) {
       // selected is an absolute ranked index over the locally-ranked rows.
       const rows = locallyRankedPaletteRows(state.sections && state.sections.palette);
       p.selected = clampPaletteSelection(ev.key === 'ArrowDown' ? p.selected + 1 : p.selected - 1, rows.length);
-      render();
+      render({ ...surfaceRenderPlan(), localPicker: true });
       return;
     }
     if (ev.key === 'Backspace') {
@@ -876,7 +1297,9 @@ function handleKeydown(ev) {
       refreshFinder();
       return;
     }
-    // Escape and other keys fall through to the keymap (Escape -> prompt.cancel).
+    // Unhandled keys remain browser input while the local picker owns focus.
+    ev.preventDefault();
+    return;
   }
 
   // Array.from counts Unicode scalars, so a supplementary-plane character (two
@@ -912,5 +1335,8 @@ function handleKeydown(ev) {
     return;
   }
   state.inputQueue.push({ predictionId });
-  if (predictionId != null) render();
+  if (predictionId != null) {
+    invalidatePointerOffsets();
+    render(surfaceRenderPlan(SURFACE.DOCUMENT));
+  }
 }

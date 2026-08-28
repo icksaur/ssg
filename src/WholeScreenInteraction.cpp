@@ -43,10 +43,21 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
          {kFileTreeNodeId, kGitStatusNodeId, kSymbolsNodeId}) {
         if (provider != selected) hidden.push_back(nodeId(provider));
     }
-    // Content shows exactly one of tabview/findresults: findresults when a picker is open,
-    // else the document tab view.
+    if (truth.distractionFree) {
+        for (const std::string_view region :
+             {kNoticeNodeId, kExternalModNodeId, kPanelNodeId, kTabBarNodeId,
+              kFooterNodeId}) {
+            hidden.push_back(nodeId(region));
+        }
+        if (promptRegion != PromptRegion::Header)
+            hidden.push_back(nodeId(kHeaderNodeId));
+        if (promptRegion != PromptRegion::Footer)
+            hidden.push_back(nodeId(kFooterPromptNodeId));
+    }
+    // Content shows exactly one of the editor/find-results branches.
     const bool pickerOpen = truth.openPicker.has_value();
-    hidden.push_back(nodeId(pickerOpen ? kTabViewNodeId : kFindResultsNodeId));
+    hidden.push_back(
+        nodeId(pickerOpen ? kEditorNodeId : kFindResultsViewportNodeId));
 
     // The header prompt input is present only while a header-region prompt is open,
     // so a client draws its query line exactly when the picker is up. The

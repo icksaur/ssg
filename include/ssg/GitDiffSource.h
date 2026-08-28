@@ -127,11 +127,10 @@ public:
 
     // CONTRACT
     // GitDiffSource::takeBranchOnlyScanIfChanged: the current branch is published
-    //   independently of diff application. A refresh whose diff is rejected (e.g. a
-    //   file over the DiffModel work budget) still records the branch, so a large or
-    //   unmodelable working tree never suppresses the branch indicator. Returns a
-    //   revision-0 branch-only scan exactly once per branch change not already
-    //   carried by an applied full scan; nullopt when the branch is unchanged.
+    //   independently of scan application. A refresh rejected because repository
+    //   enumeration is incomplete still records the branch. Returns a revision-0
+    //   branch-only scan exactly once per branch change not already carried by an
+    //   applied full scan; nullopt when the branch is unchanged.
     [[nodiscard]] std::optional<GitDiffScan> takeBranchOnlyScanIfChanged();
 
 private:

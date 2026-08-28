@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ssg/Theme.h>
 #include <ssg/Viewport.h>
 
 #include <array>
@@ -58,6 +59,16 @@ struct TreeProviderBinding {
 
 enum class TreeNodeKind { Root, Directory, File, Symlink, GitEntry, Symbol };
 enum class GitTreeStatus { Added, Modified, Deleted, Renamed, Untracked };
+
+struct GitTreeAffordance {
+    GitTreeStatus status = GitTreeStatus::Modified;
+    std::string shortLabel;
+    SemanticRole role = SemanticRole::DiffModified;
+    bool operator==(const GitTreeAffordance&) const = default;
+};
+
+[[nodiscard]] GitTreeAffordance gitTreeAffordance(GitTreeStatus status);
+
 struct GitTreeRecord;
 struct SymbolTreeRecord;
 
@@ -74,7 +85,7 @@ struct TreeNode {
     TreeNodeKind kind;
     std::optional<std::string> icon;
     std::vector<TreeNodeCommand> commands;
-    std::optional<GitTreeStatus> gitStatus;
+    std::optional<GitTreeAffordance> gitStatus;
     std::optional<std::string> workspacePath;
     std::optional<std::uint32_t> sourceLine;
     bool expandable = false;
@@ -313,6 +324,9 @@ struct TreeDelta {
     TreeRevision revision{0};
     bool snapshotRequired = false;
     std::vector<TreeProviderDelta> providers;
+    // The complete target ordering. The active provider is first, followed by
+    // inactive providers; node splices alone cannot express that permutation.
+    std::vector<TreeProviderId> providerOrder;
 
     std::size_t operationCount() const noexcept;
     bool operator==(const TreeDelta&) const = default;

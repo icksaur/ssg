@@ -45,7 +45,8 @@ std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
         if (!node.node.workspacePath || !node.node.gitStatus) {
             continue;
         }
-        statuses.emplace(*node.node.workspacePath, *node.node.gitStatus);
+        statuses.emplace(*node.node.workspacePath,
+                         node.node.gitStatus->status);
     }
     return statuses;
 }
@@ -55,6 +56,16 @@ std::size_t countTabsOfKind(const ssg::TabViewState& tabs, ssg::TabKind kind) {
         tabs.tabs.begin(), tabs.tabs.end(), [&](const ssg::TabState& tab) {
             return tab.kind == kind;
         }));
+}
+
+std::string overDiffLineBudget(char value) {
+    std::string text;
+    text.reserve(400'002);
+    for (std::size_t line = 0; line < 200'001; ++line) {
+        text.push_back(value);
+        text.push_back('\n');
+    }
+    return text;
 }
 
 ssg::FollowMode followMode(ssg::EditorSession& runtime) {
@@ -476,6 +487,109 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
     ASSERT_EQ(secondStatuses.at("modified.txt"), ssg::GitTreeStatus::Modified);
     ASSERT_EQ(secondStatuses.at("renamed.txt"), ssg::GitTreeStatus::Renamed);
     ASSERT_TRUE(second->sections().tree.revision.value() > firstRevision);
+}
+
+TEST(gitStatusSurvivesDetailedDiffWorkLimit) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "large.txt"} << "working file\n";
+    auto created = ssg::EditorSession::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{24},
+                         .baselineIdentity = "head-limit:index-1",
+                         .files =
+                             {
+                                 {.id = ssg::DiffFileId{"large-id"},
+                                  .path = "large.txt",
+                                  .baselineContent = overDiffLineBudget('a'),
+                                  .workingContent = overDiffLineBudget('b')},
+                                 {.id = ssg::DiffFileId{"small-id"},
+                                  .path = "small.txt",
+                                  .baselineContent = std::string{"before\n"},
+                                  .workingContent = std::string{"after\n"}},
+                             }})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+
+    auto snapshot =
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto* git =
+        findProvider(snapshot->sections().tree, ssg::TreeProviderKind::Git);
+    ASSERT_TRUE(git != nullptr);
+    if (!git) return;
+    ASSERT_EQ(gitProviderStatuses(*git).size(), std::size_t{2});
+    ASSERT_EQ(snapshot->sections().diff.files.size(), std::size_t{1});
+    ASSERT_EQ(snapshot->sections().diff.files.front().id,
+              ssg::DiffFileId{"small-id"});
+    const auto liveDiffsBeforeActivation =
+        countTabsOfKind(snapshot->sections().tabs, ssg::TabKind::LiveDiff);
+
+    std::optional<ssg::TreeNodeId> largeNode;
+    for (const auto& node : git->nodes) {
+        if (node.node.workspacePath == std::optional<std::string>{"large.txt"}) {
+            largeNode = node.node.id;
+        }
+    }
+    ASSERT_TRUE(largeNode.has_value());
+    if (!largeNode) return;
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.activate_node", runtime.revision(),
+                               ssg::TreeSelectArguments{*largeNode}})
+                    .accepted());
+    auto opened =
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(opened.has_value());
+    if (!opened) return;
+    ASSERT_EQ(countTabsOfKind(opened->sections().tabs, ssg::TabKind::Document),
+              std::size_t{1});
+    ASSERT_EQ(countTabsOfKind(opened->sections().tabs, ssg::TabKind::LiveDiff),
+              liveDiffsBeforeActivation);
+    ASSERT_EQ(opened->sections().document.text, std::string{"working file\n"});
+
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{25},
+                         .baselineIdentity = "head-limit:index-2",
+                         .files =
+                             {
+                                 {.id = ssg::DiffFileId{"large-id"},
+                                  .path = "large.txt",
+                                  .baselineContent = overDiffLineBudget('a'),
+                                  .workingContent = overDiffLineBudget('b')},
+                                 {.id = ssg::DiffFileId{"small-id"},
+                                  .path = "small.txt",
+                                  .baselineContent = overDiffLineBudget('a'),
+                                  .workingContent = overDiffLineBudget('b')},
+                             }})
+                    .accepted());
+    auto transitioned =
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(transitioned.has_value());
+    if (!transitioned) return;
+    auto* transitionedGit =
+        findProvider(transitioned->sections().tree, ssg::TreeProviderKind::Git);
+    ASSERT_TRUE(transitionedGit != nullptr);
+    if (!transitionedGit) return;
+    ASSERT_EQ(gitProviderStatuses(*transitionedGit).size(), std::size_t{2});
+    ASSERT_TRUE(transitioned->sections().diff.files.empty());
+    ASSERT_EQ(
+        countTabsOfKind(transitioned->sections().tabs, ssg::TabKind::LiveDiff),
+        std::size_t{0});
 }
 
 TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
@@ -1108,13 +1222,56 @@ TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().focus, ssg::FocusTarget::Prompt);
-    ASSERT_FALSE(snapshot->sections().palette.candidates.empty());
+    ASSERT_FALSE(snapshot->sections().palette.commandCandidates.empty());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.close", runtime.revision(), {}}).accepted());
     auto closed = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(closed.has_value());
     if (!closed) return;
     ASSERT_EQ(closed->sections().focus, ssg::FocusTarget::Editor);
+}
+
+TEST(byteRangeSelectionResolvesAuthoritativeDocumentPositions) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "utf8.txt"} << "a\xC3\xA9z\n";
+    auto created = ssg::EditorSession::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"utf8.txt"}})
+                    .accepted());
+    ASSERT_TRUE(
+        runtime
+            .dispatch(ssg::ClientId{1},
+                      {"select.set_byte_range", runtime.revision(),
+                       ssg::SelectionByteRangeArguments{ssg::ByteOffset{1},
+                                                        ssg::ByteOffset{3}}})
+            .accepted());
+    auto selected =
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(selected.has_value());
+    if (!selected) return;
+    ASSERT_EQ(selected->sections().selection.items().size(), std::size_t{1});
+    if (!selected->sections().selection.items().empty()) {
+        const auto& selection = selected->sections().selection.items().front();
+        ASSERT_EQ(selection.anchor.byteOffset.value(), std::size_t{1});
+        ASSERT_EQ(selection.active.byteOffset.value(), std::size_t{3});
+    }
+    ASSERT_FALSE(
+        runtime
+            .dispatch(ssg::ClientId{1},
+                      {"select.set_byte_range", runtime.revision(),
+                       ssg::SelectionByteRangeArguments{ssg::ByteOffset{2},
+                                                        ssg::ByteOffset{3}}})
+            .accepted());
 }
 
 // The open-picker kind is derived from the prompt after every dispatch rather
@@ -1130,19 +1287,22 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
-    auto candidatesAfter = [&](std::string const& closeCommand) {
+    auto pickerStateAfter = [&](std::string const& closeCommand) {
         ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
         auto open = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(open.has_value());
-        if (open) ASSERT_FALSE(open->sections().palette.candidates.empty());
+        if (open) {
+            ASSERT_EQ(open->sections().palette.activeMode,
+                      std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
+        }
         (void)runtime.dispatch(ssg::ClientId{1}, {closeCommand, runtime.revision(), {}});
         auto shut = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(shut.has_value());
-        if (shut) ASSERT_TRUE(shut->sections().palette.candidates.empty());
+        if (shut) ASSERT_FALSE(shut->sections().palette.activeMode.has_value());
     };
 
-    candidatesAfter("palette.close");
-    candidatesAfter("prompt.cancel");
+    pickerStateAfter("palette.close");
+    pickerStateAfter("prompt.cancel");
 
     // A successful palette.execute cancels the prompt as part of executing; the
     // picker must not survive into the next open.
@@ -1152,7 +1312,7 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
         {"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"edit.undo"}});
     auto executed = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(executed.has_value());
-    if (executed) ASSERT_TRUE(executed->sections().palette.candidates.empty());
+    if (executed) ASSERT_FALSE(executed->sections().palette.activeMode.has_value());
 }
 
 // The file picker publishes paths, not command ids, so palette.execute must
@@ -1175,15 +1335,23 @@ TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
+    auto closed =
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(closed.has_value());
+    if (!closed) return;
+    ASSERT_FALSE(closed->sections().palette.activeMode.has_value());
+    ASSERT_FALSE(closed->sections().palette.fileCandidates.empty());
+
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.open", runtime.revision(), {}}).accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
     auto const& palette = snapshot->sections().palette;
-    ASSERT_TRUE(palette.mode == ssg::SearchMode::File);
+    ASSERT_EQ(palette.activeMode,
+              std::optional<ssg::SearchMode>{ssg::SearchMode::File});
     std::set<std::string> paths;
-    for (auto const& candidate : palette.candidates) paths.insert(candidate.id);
+    for (auto const& candidate : palette.fileCandidates) paths.insert(candidate.id);
     ASSERT_TRUE(paths.contains("alpha.txt"));
     ASSERT_TRUE(paths.contains("src/beta.cpp"));
 
@@ -1224,7 +1392,8 @@ TEST(togglingGitignoreRebuildsTheOpenFilePickerIndex) {
         auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         std::set<std::string> paths;
         if (snapshot) {
-            for (auto const& candidate : snapshot->sections().palette.candidates) {
+            for (auto const& candidate :
+                 snapshot->sections().palette.fileCandidates) {
                 paths.insert(candidate.id);
             }
         }
@@ -1262,7 +1431,9 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
 
     auto pickerIsOpen = [&] {
         auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-        return snapshot && !snapshot->sections().palette.candidates.empty();
+        return snapshot &&
+               snapshot->sections().palette.activeMode ==
+                   std::optional<ssg::SearchMode>{ssg::SearchMode::File};
     };
 
     // A rejected open leaves the picker up.
@@ -1271,7 +1442,7 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     auto missing = runtime.dispatch(
         ssg::ClientId{1},
         {"picker.submit", runtime.revision(),
-         ssg::PickerSubmitArguments{"gone.txt"}});
+         ssg::PickerSubmitArguments{ssg::SearchMode::File, "gone.txt"}});
     ASSERT_FALSE(missing.accepted());
     ASSERT_TRUE(pickerIsOpen());
 
@@ -1280,10 +1451,74 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
         runtime
             .dispatch(ssg::ClientId{1},
                       {"picker.submit", runtime.revision(),
-                       ssg::PickerSubmitArguments{"present.txt"}})
+                       ssg::PickerSubmitArguments{ssg::SearchMode::File,
+                                                  "present.txt"}})
             .accepted());
     ASSERT_FALSE(pickerIsOpen());
     std::filesystem::remove_all(root);
+}
+
+TEST(browserPickerSubmissionUsesExplicitInventoryWithoutClosingPrompt) {
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::ofstream{workspace / "present.txt"} << "present\n";
+    ASSERT_EQ(std::system(("git -C \"" + workspace.string() +
+                           "\" init -q >/dev/null 2>&1")
+                              .c_str()),
+              0);
+    auto created = ssg::EditorSession::create(
+        {workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket},
+                            ssg::ViewId{1})
+                    .accepted());
+
+    ASSERT_FALSE(
+        runtime
+            .dispatch(ssg::ClientId{1},
+                      {"picker.submit", runtime.revision(),
+                       ssg::PickerSubmitArguments{ssg::SearchMode::Command,
+                                                  "present.txt"}})
+            .accepted());
+    ASSERT_TRUE(
+        runtime
+            .dispatch(ssg::ClientId{1},
+                      {"picker.submit", runtime.revision(),
+                       ssg::PickerSubmitArguments{ssg::SearchMode::Command,
+                                                  "panel.toggle"}})
+            .accepted());
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"needle.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"goto.line", runtime.revision(), {}})
+                    .accepted());
+    auto prompted =
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(prompted.has_value());
+    if (!prompted) return;
+    ASSERT_TRUE(prompted->sections().promptStatus.activeKind.has_value());
+
+    ASSERT_TRUE(
+        runtime
+            .dispatch(ssg::ClientId{1},
+                      {"picker.submit", runtime.revision(),
+                       ssg::PickerSubmitArguments{ssg::SearchMode::File,
+                                                  "present.txt"}})
+            .accepted());
+    auto submitted =
+        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(submitted.has_value());
+    if (!submitted) return;
+    ASSERT_TRUE(submitted->sections().promptStatus.activeKind.has_value());
+    ASSERT_FALSE(submitted->sections().palette.activeMode.has_value());
 }
 
 TEST(paletteExecuteValidatesCandidateMembership) {
@@ -1321,7 +1556,7 @@ TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
-    const auto& candidates = snapshot->sections().palette.candidates;
+    const auto& candidates = snapshot->sections().palette.commandCandidates;
     ASSERT_FALSE(candidates.empty());
 
     const ssg::PaletteCandidate* save = nullptr;
@@ -2047,6 +2282,7 @@ int main() {
     RUN(gitDiffScanUpdatesDiffAndRejectsStaleBatches);
     RUN(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision);
     RUN(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan);
+    RUN(gitStatusSurvivesDetailedDiffWorkLimit);
     RUN(gitStatusActivationOpensLiveDiffTabAndReusesIt);
     RUN(documentAndLiveDiffTabsCloseIndependently);
     RUN(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile);
@@ -2055,11 +2291,13 @@ int main() {
     RUN(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution);
     RUN(followPauseOnEditTransitionTable);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
+    RUN(byteRangeSelectionResolvesAuthoritativeDocumentPositions);
     RUN(everyPaletteClosePathLeavesNoOpenPickerBehind);
     RUN(paletteExecuteValidatesCandidateMembership);
     RUN(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute);
     RUN(togglingGitignoreRebuildsTheOpenFilePickerIndex);
     RUN(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure);
+    RUN(browserPickerSubmissionUsesExplicitInventoryWithoutClosingPrompt);
     RUN(paletteCandidatesCarryLabelsAndKeyDetail);
     RUN(treeScrollsToKeepSelectionVisibleInAShortPanel);
     RUN(treeSelectSetsSelectionToANodeAndRejectsUnknownIds);

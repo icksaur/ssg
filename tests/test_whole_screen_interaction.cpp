@@ -113,33 +113,53 @@ TEST(exactlyTheSelectedProviderIsPresent) {
     ASSERT_FALSE(present(s, kSymbolsNodeId));
 }
 
-TEST(contentShowsTabViewXorFindResultsByFinderState) {
+TEST(contentShowsEditorXorFindResultsByFinderState) {
     WholeScreenTruth closed;
     closed.openPicker = std::nullopt;
     const auto a = buildWholeScreenInteraction(schemaOf({}), closed);
-    ASSERT_TRUE(present(a, kTabViewNodeId));
-    ASSERT_FALSE(present(a, kFindResultsNodeId));
+    ASSERT_TRUE(present(a, kEditorNodeId));
+    ASSERT_FALSE(present(a, kFindResultsViewportNodeId));
 
     WholeScreenTruth open;
     open.openPicker = PickerKind::File;
     // A file finder is a Palette prompt -> header-region prompt focus.
     const auto b = buildWholeScreenInteraction(schemaOf({}), open, PromptRegion::Header);
-    ASSERT_FALSE(present(b, kTabViewNodeId));
-    ASSERT_TRUE(present(b, kFindResultsNodeId));
+    ASSERT_FALSE(present(b, kEditorNodeId));
+    ASSERT_TRUE(present(b, kFindResultsViewportNodeId));
     // The prompt capture (anchored on the header input line) routes effective focus to the
     // prompt context; findresults is displayed content, not the focus anchor.
     ASSERT_TRUE(b.effectiveFocus() == FocusTarget::Prompt);
     ASSERT_TRUE(present(b, kHeaderNodeId));
 }
 
+TEST(distractionFreePresenceLeavesOnlyTheDocumentBranchVisible) {
+    WholeScreenTruth truth;
+    truth.panelPresent = true;
+    truth.noticePresent = true;
+    truth.externalModificationPresent = true;
+    truth.distractionFree = true;
+
+    const auto state = buildWholeScreenInteraction(schemaOf({}), truth);
+
+    ASSERT_TRUE(present(state, kEditorNodeId));
+    ASSERT_TRUE(present(state, kDocumentViewportNodeId));
+    ASSERT_TRUE(present(state, kDocumentNodeId));
+    for (const std::string_view hidden :
+         {kHeaderNodeId, kNoticeNodeId, kExternalModNodeId, kPanelNodeId,
+          kTabBarNodeId, kFindResultsViewportNodeId, kFooterPromptNodeId,
+          kFooterNodeId}) {
+        ASSERT_FALSE(present(state, hidden));
+    }
+}
+
 TEST(promptFocusAnchorsOnTheRegionHost) {
     WholeScreenTruth truth;
     // A footer-region prompt (find/replace, save-path) routes focus to the prompt without
-    // opening a picker: tabview stays, findresults stays hidden.
+    // opening a picker: the editor stays and find results stay hidden.
     const auto s = buildWholeScreenInteraction(schemaOf({}), truth, PromptRegion::Footer);
     ASSERT_TRUE(s.effectiveFocus() == FocusTarget::Prompt);
-    ASSERT_TRUE(present(s, kTabViewNodeId));
-    ASSERT_FALSE(present(s, kFindResultsNodeId));
+    ASSERT_TRUE(present(s, kEditorNodeId));
+    ASSERT_FALSE(present(s, kFindResultsViewportNodeId));
 }
 
 TEST(headerPromptRequiresTheInputLineSchemaNode) {
@@ -293,7 +313,8 @@ int main() {
     RUN(panelIsPresentOnlyWhenRequested);
     RUN(corruptSelectedProviderIsRejected);
     RUN(exactlyTheSelectedProviderIsPresent);
-    RUN(contentShowsTabViewXorFindResultsByFinderState);
+    RUN(contentShowsEditorXorFindResultsByFinderState);
+    RUN(distractionFreePresenceLeavesOnlyTheDocumentBranchVisible);
     RUN(promptFocusAnchorsOnTheRegionHost);
     RUN(headerPromptRequiresTheInputLineSchemaNode);
     RUN(footerPromptRequiresTheFooterPromptSchemaNode);

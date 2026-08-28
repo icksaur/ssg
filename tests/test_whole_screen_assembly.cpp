@@ -1,6 +1,7 @@
 // Algorithm oracle for the whole-screen tree assembly. The knowable answers: the
 // assembled tree is the canonical root>[header, body>[panel>[filetree,gitstatus],
-// content>[tabview,findresults]], footer] with extents drawn from StyleDimensions; the
+// content>[editor>[tabbar,document viewport],find-results viewport]], footer]
+// with extents drawn from StyleDimensions; the
 // STRUCTURE is stable under value/command/provider-presence change (only the STABLE
 // catalog superset shapes it); a composed ssg.chrome header/footer REPLACES the built-in
 // (override); and the whole tree passes validateUiSchema.
@@ -110,19 +111,33 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     ASSERT_TRUE(panel->size.kind() == SizeKind::Exact);
     ASSERT_EQ(panel->size.extent(), d.panelTargetWidth);
     ASSERT_TRUE(content->size.kind() == SizeKind::Flex);
+    const UiNode* editor = childById(*content, kEditorNodeId);
+    const UiNode* documentViewport =
+        editor ? childById(*editor, kDocumentViewportNodeId) : nullptr;
+    const UiNode* findResultsViewport =
+        childById(*content, kFindResultsViewportNodeId);
+    ASSERT_TRUE(editor != nullptr);
+    ASSERT_TRUE(documentViewport != nullptr);
+    ASSERT_TRUE(findResultsViewport != nullptr);
     struct Leaf { std::string_view id; const UiNode* parent; ViewSurface surface; };
     const Leaf leaves[] = {
         {kFileTreeNodeId, panel, ViewSurface::FileTree},
         {kGitStatusNodeId, panel, ViewSurface::GitStatus},
         {kSymbolsNodeId, panel, ViewSurface::Symbols},
-        {kTabViewNodeId, content, ViewSurface::TabView},
-        {kFindResultsNodeId, content, ViewSurface::FindResults},
+        {kTabBarNodeId, editor, ViewSurface::TabBar},
+        {kDocumentNodeId, documentViewport, ViewSurface::Document},
+        {kFindResultsNodeId, findResultsViewport, ViewSurface::FindResults},
     };
     for (const Leaf& leaf : leaves) {
         const UiNode* node = childById(*leaf.parent, leaf.id);
         ASSERT_TRUE(node != nullptr);
         if (!node) continue;
-        ASSERT_TRUE(node->size.kind() == SizeKind::Flex);
+        if (leaf.surface == ViewSurface::TabBar) {
+            ASSERT_TRUE(node->size.kind() == SizeKind::Exact);
+            ASSERT_EQ(node->size.extent(), dims().tabBarHeight);
+        } else {
+            ASSERT_TRUE(node->size.kind() == SizeKind::Flex);
+        }
         const auto* uiLeaf = std::get_if<UiLeaf>(&node->content);
         ASSERT_TRUE(uiLeaf != nullptr);
         if (!uiLeaf) continue;
@@ -132,7 +147,7 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     }
 }
 
-TEST(assembledPanelAndContentAreTheOnlyVerticalScrollViewports) {
+TEST(assembledTreeNamesTheIndependentVerticalScrollViewports) {
     const UiComposition comp =
         assembleWholeScreen({}, kHintCommand, dims(), kPromptSigil, std::nullopt);
     const UiNode* body = childById(comp.root, kBodyNodeId);
@@ -149,16 +164,26 @@ TEST(assembledPanelAndContentAreTheOnlyVerticalScrollViewports) {
         const auto* c = std::get_if<UiContainer>(&node->content);
         return c ? c->scroll : ScrollAxis::None;
     };
-    // The two body containers are the authoritative scroll viewports; every client
-    // derives independent scroll from exactly these nodes.
+    const UiNode* editor = content ? childById(*content, kEditorNodeId) : nullptr;
+    const UiNode* documentViewport =
+        editor ? childById(*editor, kDocumentViewportNodeId) : nullptr;
+    const UiNode* findResultsViewport =
+        content ? childById(*content, kFindResultsViewportNodeId) : nullptr;
     ASSERT_TRUE(scrollOf(panel) == ScrollAxis::Vertical);
-    ASSERT_TRUE(scrollOf(content) == ScrollAxis::Vertical);
-    // Inner view-leaves are content within a viewport, not viewports themselves.
+    ASSERT_TRUE(scrollOf(content) == ScrollAxis::None);
+    ASSERT_TRUE(scrollOf(editor) == ScrollAxis::None);
+    ASSERT_TRUE(scrollOf(documentViewport) == ScrollAxis::Vertical);
+    ASSERT_TRUE(scrollOf(findResultsViewport) == ScrollAxis::Vertical);
     if (panel) ASSERT_TRUE(scrollOf(childById(*panel, kFileTreeNodeId)) == ScrollAxis::None);
-    if (content) {
-        ASSERT_TRUE(scrollOf(childById(*content, kTabViewNodeId)) == ScrollAxis::None);
-        ASSERT_TRUE(scrollOf(childById(*content, kFindResultsNodeId)) == ScrollAxis::None);
-    }
+    if (editor)
+        ASSERT_TRUE(scrollOf(childById(*editor, kTabBarNodeId)) ==
+                    ScrollAxis::None);
+    if (documentViewport)
+        ASSERT_TRUE(scrollOf(childById(*documentViewport, kDocumentNodeId)) ==
+                    ScrollAxis::None);
+    if (findResultsViewport)
+        ASSERT_TRUE(scrollOf(childById(*findResultsViewport,
+                                      kFindResultsNodeId)) == ScrollAxis::None);
     // Chrome/notice regions never scroll.
     for (const auto id : {kHeaderNodeId, kFooterNodeId, kNoticeNodeId,
                           kFooterPromptNodeId, kExternalModNodeId, kBodyNodeId}) {
@@ -363,7 +388,7 @@ TEST(theHeaderCarriesThePromptInputRightAfterTheLeftGroup) {
 
 int main() {
     RUN(builtinHeaderFooterAreProviderBackedAndStable);
-    RUN(assembledPanelAndContentAreTheOnlyVerticalScrollViewports);
+    RUN(assembledTreeNamesTheIndependentVerticalScrollViewports);
     RUN(theCatalogSplitsByRegionDeterministically);
     RUN(composedHeaderAndFooterOverrideTheBuiltins);
     RUN(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted);

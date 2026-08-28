@@ -160,8 +160,12 @@ TEST(anOpenDocumentRemovedOnDiskPublishesRemovedStatusAndItsActions) {
     ASSERT_EQ(files.size(), 1U);
     ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
     ASSERT_EQ(files[0].actions.size(), 2U);
-    ASSERT_EQ(files[0].actions[0], ssg::ExternalAction::KeepBuffer);
-    ASSERT_EQ(files[0].actions[1], ssg::ExternalAction::OpenDiff);
+    ASSERT_EQ(files[0].statusLabel, std::string{"D"});
+    ASSERT_EQ(files[0].actions[0],
+              ssg::externalActionAffordance(
+                  ssg::ExternalAction::KeepBuffer));
+    ASSERT_EQ(files[0].actions[1],
+              ssg::externalActionAffordance(ssg::ExternalAction::OpenDiff));
 }
 
 TEST(aChangeToANonOpenFileRaisesNoExternalSection) {
@@ -969,8 +973,11 @@ TEST(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile) {
     ASSERT_EQ(files.size(), 1U);
     ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
     // A removed file offers KeepBuffer/OpenDiff but NOT Reload.
-    ASSERT_TRUE(std::find(files[0].actions.begin(), files[0].actions.end(),
-                          ssg::ExternalAction::Reload) == files[0].actions.end());
+    ASSERT_TRUE(std::none_of(
+        files[0].actions.begin(), files[0].actions.end(),
+        [](ssg::ExternalActionAffordance const& action) {
+            return action.action == ssg::ExternalAction::Reload;
+        }));
 
     ASSERT_TRUE(
         session.runtime

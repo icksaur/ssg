@@ -255,7 +255,7 @@ TEST(closeFinderClearsThePickerAndCancelsThePrompt) {
     ASSERT_TRUE(prepared.has_value());
     ASSERT_FALSE(prepared->truth().openPicker.has_value());
     ASSERT_FALSE(prepared->prompt().active());
-    ASSERT_TRUE(present(*prepared, kTabViewNodeId));
+    ASSERT_TRUE(present(*prepared, kEditorNodeId));
 }
 
 TEST(closeFinderIsRejectedWhenCancelRefuses) {

@@ -138,10 +138,15 @@ TEST(dirtyExternalEditPreservesBufferAndPublishesActions) {
     ASSERT_EQ(state.files.size(), 1U);
     ASSERT_EQ(state.files[0].status,
               ssg::ExternalDocumentStatus::ExternallyModified);
+    ASSERT_EQ(state.files[0].statusLabel, std::string{"M"});
     ASSERT_EQ(state.files[0].actions.size(), 3U);
-    ASSERT_EQ(state.files[0].actions[0], ssg::ExternalAction::Reload);
-    ASSERT_EQ(state.files[0].actions[1], ssg::ExternalAction::KeepBuffer);
-    ASSERT_EQ(state.files[0].actions[2], ssg::ExternalAction::OpenDiff);
+    ASSERT_EQ(state.files[0].actions[0],
+              ssg::externalActionAffordance(ssg::ExternalAction::Reload));
+    ASSERT_EQ(state.files[0].actions[1],
+              ssg::externalActionAffordance(
+                  ssg::ExternalAction::KeepBuffer));
+    ASSERT_EQ(state.files[0].actions[2],
+              ssg::externalActionAffordance(ssg::ExternalAction::OpenDiff));
     const auto diff = fixture.diff.file(ssg::DiffFileId{"note"});
     ASSERT_TRUE(diff.has_value());
     if (diff) {
@@ -461,14 +466,18 @@ TEST(theExternalModSelectionFollowsTheListAndSurvivesResolves) {
 TEST(aSelectionOnlyExternalDeltaReplaysToTheMovedSelection) {
     ssg::ExternalDocumentView fa{ssg::DiffFileId{"a"}, "a.txt",
                                  ssg::ExternalDocumentStatus::ExternallyModified,
-                                 "x", {ssg::ExternalAction::Reload}};
+                                 "x", "M",
+                                 {ssg::externalActionAffordance(
+                                     ssg::ExternalAction::Reload)}};
     ssg::ExternalDocumentView fb{ssg::DiffFileId{"b"}, "b.txt",
                                  ssg::ExternalDocumentStatus::ExternallyModified,
-                                 "y", {ssg::ExternalAction::Reload}};
-    ssg::ExternalModificationViewState base{ssg::Revision{5},
+                                 "y", "M",
+                                 {ssg::externalActionAffordance(
+                                     ssg::ExternalAction::Reload)}};
+    ssg::ExternalModificationViewState base{ssg::Revision{5}, "two files",
                                             {fa, fb},
                                             ssg::DiffFileId{"a"}};
-    ssg::ExternalModificationViewState target{ssg::Revision{6},
+    ssg::ExternalModificationViewState target{ssg::Revision{6}, "two files",
                                               {fa, fb},
                                               ssg::DiffFileId{"b"}};
     ssg::ExternalModificationDeltaCodec codec;

@@ -11,6 +11,7 @@
 #include <ssg/Search.h>
 #include <ssg/Selection.h>
 #include <ssg/Settings.h>
+#include <ssg/TabManager.h>
 #include <ssg/TextCodec.h>
 #include <ssg/TextInputCommands.h>
 #include <ssg/TreeModel.h>
@@ -33,6 +34,7 @@ std::unordered_map<std::type_index, std::string_view> const& argumentNames() {
     static std::unordered_map<std::type_index, std::string_view> const names{
         {typeid(TextInputArguments), "text"},
         {typeid(SelectionCommandArguments), "selection"},
+        {typeid(SelectionByteRangeArguments), "selection byte range"},
         {typeid(ScrollLinesArguments), "scroll lines"},
         {typeid(ScrollPagesArguments), "scroll pages"},
         {typeid(ScrollFractionArguments), "scroll fraction"},
@@ -53,6 +55,7 @@ std::unordered_map<std::type_index, std::string_view> const& argumentNames() {
         {typeid(FindQueryArguments), "query"},
         {typeid(PromptValueArguments), "prompt value"},
         {typeid(PromptFocusArguments), "prompt focus"},
+        {typeid(TabId), "tab"},
     };
     return names;
 }

@@ -518,26 +518,29 @@ TEST(paletteCandidatesMatchTheCommandRegistry) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
-    // Candidates are published only for the picker that is actually open, so a
-    // closed palette publishes none.
+    // The inventory is published even while no server-owned picker is open.
     auto closed = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(closed.has_value());
-    if (closed) ASSERT_TRUE(closed->sections().palette.candidates.empty());
+    if (closed) {
+        ASSERT_FALSE(closed->sections().palette.activeMode.has_value());
+        ASSERT_FALSE(closed->sections().palette.commandCandidates.empty());
+    }
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
     auto const& palette = snapshot->sections().palette;
-    ASSERT_TRUE(palette.mode == ssg::SearchMode::Command);
+    ASSERT_EQ(palette.activeMode,
+              std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
     // Every registered command appears exactly once as a candidate, compared
     // against the runtime's own catalog rather than the static table -- which
     // is only part of the catalog while commands are migrating out of it.
     auto const catalog = runtime.commandCatalog();
     auto const descriptors = catalog->commands();
-    ASSERT_EQ(palette.candidates.size(), descriptors.size());
+    ASSERT_EQ(palette.commandCandidates.size(), descriptors.size());
     std::set<std::string> candidateIds;
-    for (auto const& candidate : palette.candidates) {
+    for (auto const& candidate : palette.commandCandidates) {
         ASSERT_FALSE(candidate.label.empty());
         candidateIds.insert(candidate.id);
     }
@@ -557,7 +560,7 @@ TEST(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
 
     auto const detailOf = [](ssg::SessionSnapshot const& snap, std::string_view id) {
-        for (auto const& c : snap.sections().palette.candidates) {
+        for (auto const& c : snap.sections().palette.commandCandidates) {
             if (c.id == id) return c.detail;
         }
         return std::string{};
@@ -569,8 +572,8 @@ TEST(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange) {
     auto second = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(first.has_value() && second.has_value());
     if (!first || !second) return;
-    ASSERT_EQ(first->sections().palette.candidates,
-              second->sections().palette.candidates);
+    ASSERT_EQ(first->sections().palette.commandCandidates,
+              second->sections().palette.commandCandidates);
     ASSERT_EQ(detailOf(*first, "file.save"), std::string{"Alt+s"});
 
     // Rebinding a command must invalidate the cache: the new key hint shows up.

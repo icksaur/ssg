@@ -3,77 +3,79 @@
 <title>ssg</title>
 <style>
   html, body { height:100%; }
-  body { margin:0; font:13px/1.4 monospace; color:var(--ssg-text); background:var(--ssg-canvas);
+  body { --ssg-row:1.4em; margin:0; font:13px/1.4 monospace; color:var(--ssg-text); background:var(--ssg-canvas);
          display:flex; flex-direction:column; overflow:hidden; }
-  /* The document/panel body is the only scroll region; chrome, tabs, and the
-     prompt keep their intrinsic height so the footer is always on screen. */
-  body > *:not(#doc):not(#palette) { flex:0 0 auto; }
+  body > #status, body > #chrome-error { flex:0 0 auto; }
+  #ui-root { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; overflow:hidden; }
+  #ui-root > .group { flex:1 1 auto; min-height:0; }
   #status { padding:2px 8px; border-bottom:1px solid; opacity:.6; }
-  #tabs { display:flex; gap:1px; padding:2px 4px; border-bottom:1px solid; }
-  #tabs .tab { padding:2px 8px; opacity:.55; }
-  #tabs .tab.active { opacity:1; font-weight:bold; }
+  .tabs { display:flex; gap:1px; padding:2px 4px; border-bottom:1px solid; }
+  .tabs .tab { padding:2px 8px; opacity:.55; border:0; background:none;
+               color:inherit; font:inherit; cursor:pointer; }
+  .tabs .tab.active { opacity:1; font-weight:bold; }
   /* Library-composed header/footer chrome, interpreted from the published UI-VM
      schema + dynamic node state. Geometry is the browser's; only structure,
      values, roles, and triggers come from the library. */
-  .chrome { display:flex; align-items:center; gap:0; padding:2px 8px; min-height:1.4em; }
-  #chrome-top { border-bottom:1px solid; }
-  #chrome-bottom { border-top:1px solid; }
-  #prompt { display:none; align-items:center; gap:1ch; padding:2px 8px; border-top:1px solid; outline:none; }
-  #prompt.open { display:flex; }
-  #prompt .prompt-control { white-space:pre; }
-  #prompt .prompt-input { padding:0 2px; }
-  #prompt .prompt-input.active { background:var(--ssg-selection); }
-  #prompt .prompt-toggle { opacity:.6; cursor:pointer; text-decoration:underline dotted; }
-  #prompt .prompt-toggle.checked { opacity:1; font-weight:bold; }
-  #prompt .prompt-count { opacity:.55; margin-left:auto; }
-  #prompt .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
+  [data-node-id="header"] { border-bottom:1px solid; }
+  .prompt-surface { align-items:center; flex-direction:row; gap:1ch; padding:2px 8px; border-top:1px solid; outline:none; }
+  .prompt-surface .prompt-control { white-space:pre; }
+  .prompt-surface .prompt-input { padding:0 2px; }
+  .prompt-surface .prompt-input.active { background:var(--ssg-selection); }
+  .prompt-surface .prompt-toggle { opacity:.6; cursor:pointer; text-decoration:underline dotted; }
+  .prompt-surface .prompt-toggle.checked { opacity:1; font-weight:bold; }
+  .prompt-surface .prompt-count { opacity:.55; margin-left:auto; }
+  .prompt-surface .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
   /* The draft-conflict notice: intrinsic-height chrome above the document, painted
      with the StatusWarning role background and the Canvas foreground to mirror the
      terminal NoticeBar. Presence is server-owned; #notice.open is set only while
      the library publishes a notice_view. */
-  #notice { display:none; align-items:center; gap:1ch; padding:2px 8px;
+  .notice-surface { align-items:center; flex-direction:row; gap:1ch; padding:2px 8px;
             background:var(--ssg-status-warning); color:var(--ssg-canvas); }
-  #notice.open { display:flex; }
-  #notice .notice-action { cursor:pointer; text-decoration:underline dotted; font-weight:bold;
+  .notice-surface .notice-action { cursor:pointer; text-decoration:underline dotted; font-weight:bold;
                            background:none; border:none; color:inherit; font:inherit; padding:0; }
   /* The external-modification bar: multi-row intrinsic-height chrome above the
      document, mirroring the terminal ExternalModificationBar. Presence is
      server-owned; #external.open is set only while the section has files. The
      selected row is highlighted with the Selection role background. */
-  #external { display:none; flex-direction:column; padding:2px 8px;
+  .external-surface { flex-direction:column; padding:2px 8px;
               background:var(--ssg-status-warning); color:var(--ssg-canvas); }
-  #external.open { display:flex; }
-  #external .external-header { font-weight:bold; }
-  #external .external-row { display:flex; align-items:center; gap:1ch; }
-  #external .external-row.selected { background:var(--ssg-selection); }
-  #external .external-file { flex:1; white-space:pre; overflow:hidden; text-overflow:ellipsis; }
-  #external .external-action { cursor:pointer; text-decoration:underline dotted; font-weight:bold;
+  .external-surface .external-header { font-weight:bold; }
+  .external-surface .external-row { display:flex; align-items:center; gap:1ch; }
+  .external-surface .external-row.selected { background:var(--ssg-selection); }
+  .external-surface .external-file { flex:1; white-space:pre; overflow:hidden; text-overflow:ellipsis; }
+  .external-surface .external-action { cursor:pointer; text-decoration:underline dotted; font-weight:bold;
                                background:none; border:none; color:inherit; font:inherit; padding:0; }
-  .chrome .w { white-space:pre; }
-  .chrome .w.clickable { cursor:pointer; text-decoration:underline dotted; }
-  .chrome .w.spacer { flex:1 1 auto; }
-  .chrome .w + .w { margin-left:1ch; }
+  .w { white-space:pre; }
+  .w.clickable { cursor:pointer; text-decoration:underline dotted; }
+  .w.spacer { flex:1 1 auto; }
   #chrome-error { padding:2px 8px; color:var(--ssg-status-warning); font-weight:bold; }
   /* The body host: a bounded flex region, NOT the scroll container. Scroll is a
      per-node property (ScrollAxis) the panel and content containers each own, so
      the host only bounds their height (flex + min-height:0) and clips its own
      overflow; each viewport node scrolls independently within it. */
-  #doc { margin:0; white-space:pre-wrap; outline:none; flex:1 1 auto; min-height:0;
-         overflow:hidden; display:flex; flex-direction:column; }
   /* A surface fills its viewport container so a tall document or tree scrolls
      within the panel/content viewport rather than growing the page. */
   .surface { display:flex; flex-direction:column; min-height:0; flex:1 1 auto; }
-  .doc-surface { margin:0; padding:8px; white-space:pre-wrap; flex:1 1 auto; min-height:0; }
-  #doc .sel { background:var(--ssg-selection); }
-  #doc .caret, #chrome-top .input-line .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
-  #chrome-top .input-line { margin-left:1ch; }
-  #palette { display:none; position:fixed; top:0; left:0; right:0; border-bottom:2px solid;
-             background:var(--ssg-canvas); color:var(--ssg-text); max-height:60vh; overflow:auto; }
-  #palette.open { display:block; }
-  #palette .query { padding:4px 8px; border-bottom:1px solid; }
-  #palette .row { padding:2px 8px; display:flex; gap:8px; }
-  #palette .row.sel { background:var(--ssg-selection); }
-  #palette .row .detail { opacity:.55; margin-left:auto; }
+  .surface.tabs { flex-direction:row; }
+  .doc-surface { margin:0; padding:8px; white-space:pre-wrap; flex:1 1 auto;
+                 min-height:0; user-select:none; cursor:text; display:block;
+                 outline:none; }
+  .doc-surface .sel { background:var(--ssg-selection); }
+  .doc-surface .caret, .input-line .caret {
+    display:inline-block; position:relative; width:0; height:1em;
+    vertical-align:text-bottom; pointer-events:none;
+  }
+  .doc-surface .caret::after, .input-line .caret::after {
+    content:""; position:absolute; inset:0 auto 0 0;
+    border-left:2px solid var(--ssg-caret);
+  }
+  .input-line { margin-left:1ch; }
+  .find-results-surface {
+    background:var(--ssg-canvas); color:var(--ssg-text);
+  }
+  .find-results-surface .row { padding:2px 8px; display:flex; gap:8px; }
+  .find-results-surface .row.sel { background:var(--ssg-selection); }
+  .find-results-surface .row .detail { opacity:.55; margin-left:auto; }
   .tree-row { white-space:pre; cursor:pointer; }
   .tree-row.sel { background:var(--ssg-selection); }
   .tree-row:hover { text-decoration:underline dotted; }
@@ -81,12 +83,5 @@
 </style>
 <div id="status">connecting...</div>
 <div id="chrome-error"></div>
-<div id="chrome-top" class="chrome"></div>
-<div id="tabs"></div>
-<div id="notice"></div>
-<div id="external"></div>
-<pre id="doc" tabindex="0"></pre>
-<div id="prompt" tabindex="0" role="group"></div>
-<div id="chrome-bottom" class="chrome"></div>
-<div id="palette"></div>
+<div id="ui-root"></div>
 <script type="module" src="/client.mjs"></script>

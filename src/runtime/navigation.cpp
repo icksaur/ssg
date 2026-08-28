@@ -10,31 +10,16 @@
 namespace ssg {
 namespace {
 
-// Validates that the palette is open and that `command_id` is a member of the
-// currently published palette candidate set (the command mode's candidates,
-// which `palette_view()` publishes from `descriptors()`) and that the invoking
-// principal holds its required capabilities.  On success the target id is
-// stashed for the EditorSession dispatch wrapper to execute through the registry
-// (the session mutex is non-reentrant, so the handler cannot re-enter dispatch).
-// This keeps execution server-owned and rejects any id the palette never offered
-CommandHandlerResult validatePaletteTarget(EditorSession::Impl& runtime,
+CommandHandlerResult validatePublishedCommand(EditorSession::Impl& runtime,
                                              CommandContext& context,
                                              std::string const& commandId) {
-    bool const paletteOpen = runtime.interaction.prompt().active() &&
-                              runtime.interaction.prompt().request() &&
-                              runtime.interaction.prompt().request()->kind ==
-                                  PromptKind::Palette;
-    if (!paletteOpen) return failure("palette.execute requires the palette to be open");
-    // Every picker uses a Palette-kind prompt, so prompt kind alone no longer
-    // identifies the command palette.  Without this the file picker's
-    // candidates -- which are PATHS, not command ids -- would be submittable as
-    // commands.
-    if (runtime.interaction.openPicker() != PickerKind::Command) {
-        return failure("palette.execute requires the command palette to be open");
+    auto const palette = runtime.paletteView();
+    const auto* candidates = palette.candidatesFor(SearchMode::Command);
+    if (candidates == nullptr) {
+        return failure("command picker inventory is unavailable");
     }
-    auto const candidates = runtime.descriptors();
     bool const published =
-        std::any_of(candidates.begin(), candidates.end(),
+        std::any_of(candidates->begin(), candidates->end(),
                     [&](auto const& candidate) { return candidate.id == commandId; });
     if (!published) {
         return failure("command is not in the palette candidate set: " + commandId);
@@ -49,6 +34,24 @@ CommandHandlerResult validatePaletteTarget(EditorSession::Impl& runtime,
         }
     }
     return success();
+}
+
+CommandHandlerResult validatePaletteTarget(EditorSession::Impl& runtime,
+                                           CommandContext& context,
+                                           std::string const& commandId) {
+    bool const paletteOpen = runtime.interaction.prompt().active() &&
+                              runtime.interaction.prompt().request() &&
+                              runtime.interaction.prompt().request()->kind ==
+                                  PromptKind::Palette;
+    if (!paletteOpen) return failure("palette.execute requires the palette to be open");
+    // Every picker uses a Palette-kind prompt, so prompt kind alone no longer
+    // identifies the command palette.  Without this the file picker's
+    // candidates -- which are PATHS, not command ids -- would be submittable as
+    // commands.
+    if (runtime.interaction.openPicker() != PickerKind::Command) {
+        return failure("palette.execute requires the command palette to be open");
+    }
+    return validatePublishedCommand(runtime, context, commandId);
 }
 
 CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext& context, std::string_view id, std::any const& payload) {
@@ -69,9 +72,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext&
         auto mutation = runtime.settings.set(
             SettingScope::Workspace, SettingKey::FileFinderRespectGitignore, next);
         if (!mutation.accepted()) return failure(mutation.error->message);
-        // Toggling with the picker already open must re-walk, or the setting
-        // appears to do nothing until the picker is reopened.
-        if (runtime.interaction.openPicker() == PickerKind::File) runtime.rebuildFileCandidates();
+        runtime.rebuildFileCandidates();
     }
     else if (id == "palette.close") {
         if (!runtime.interaction.apply(CloseFinder{})) {
@@ -213,11 +214,15 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
                     return candidate.path.generic_string() == *selected->workspacePath;
                 });
             if (file == diffView.files.end()) {
-                return failure("failed to resolve git status item");
+                if (selected->gitStatus &&
+                    selected->gitStatus->status == GitTreeStatus::Deleted) {
+                    return failure("detailed view is unavailable for deleted file");
+                }
+            } else {
+                return runtime.openOrFocusLiveDiffTab(
+                    *file, NavigationClass::User,
+                    context.principal().clientId(), context.viewId());
             }
-            return runtime.openOrFocusLiveDiffTab(
-                *file, NavigationClass::User,
-                context.principal().clientId(), context.viewId());
         }
         if (selected->workspacePath) {
             auto result = runtime.workspace.openFile(*selected->workspacePath);
@@ -511,28 +516,58 @@ void registerSearchPaletteCommands(CommandCatalog& builder,
                                   PickerSubmitArguments const& arguments) {
                            return runtime.runTransaction([&] {
                                auto const palette = runtime.paletteView();
+                               auto const* candidates =
+                                   palette.candidatesFor(arguments.mode);
+                               if (candidates == nullptr) {
+                                   return failure(
+                                       "picker mode has no candidate inventory");
+                               }
                                auto const published = std::find_if(
-                                   palette.candidates.begin(),
-                                   palette.candidates.end(),
+                                   candidates->begin(),
+                                   candidates->end(),
                                    [&](auto const& candidate) {
                                        return candidate.id ==
                                               arguments.candidateId;
                                    });
-                               if (published == palette.candidates.end()) {
+                               if (published == candidates->end()) {
                                    return failure(
-                                       "candidate is not in the open picker");
+                                       "candidate is not in the picker inventory");
                                }
-                               if (palette.mode == SearchMode::Command) {
-                                   return searchCommand(
-                                       runtime, context, "palette.execute",
-                                       std::any{PaletteExecuteArguments{
-                                           arguments.candidateId}});
+                               const bool browserLocal =
+                                   context.principal().origin() ==
+                                   InvocationOrigin::Websocket;
+                               if (!browserLocal) {
+                                   auto const open = runtime.interaction.openPicker();
+                                   auto const* descriptor =
+                                       open ? pickerCatalog().find(*open)
+                                            : nullptr;
+                                   if (descriptor == nullptr ||
+                                       descriptor->wireMode != arguments.mode) {
+                                       return failure(
+                                           "picker.submit requires a matching open picker");
+                                   }
                                }
-                               if (palette.mode == SearchMode::File) {
+                               if (arguments.mode == SearchMode::Command) {
+                                   auto validation = validatePublishedCommand(
+                                       runtime, context, arguments.candidateId);
+                                   if (!validation.accepted) return validation;
+                                   if (!runtime.defer(
+                                           std::nullopt,
+                                           ClientCommand{arguments.candidateId,
+                                                         context.revision(), {}})) {
+                                       return failure(
+                                           "could not queue the selected command");
+                                   }
+                                   if (!browserLocal) {
+                                       (void)runtime.interaction.apply(CloseFinder{});
+                                   }
+                                   return success();
+                               }
+                               if (arguments.mode == SearchMode::File) {
                                    auto result = executePickerFileOpen(
                                        runtime, context.principal(),
                                        arguments.candidateId);
-                                   if (result.accepted) {
+                                   if (result.accepted && !browserLocal) {
                                        (void)runtime.interaction.apply(
                                            CloseFinder{});
                                    }

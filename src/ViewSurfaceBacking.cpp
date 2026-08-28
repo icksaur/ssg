@@ -6,8 +6,10 @@
 namespace ssg {
 
 std::span<const SnapshotSection> viewSurfaceBackingSections(ViewSurface surface) {
-    static constexpr std::array kTabView{SnapshotSection::Tabs,
-                                         SnapshotSection::Document};
+    static constexpr std::array kTabBar{SnapshotSection::Tabs};
+    static constexpr std::array kDocument{
+        SnapshotSection::Document, SnapshotSection::Selection,
+        SnapshotSection::Syntax};
     static constexpr std::array kFileTree{SnapshotSection::Tree};
     static constexpr std::array kGitStatus{SnapshotSection::Tree};
     static constexpr std::array kFindResults{SnapshotSection::Palette};
@@ -17,8 +19,8 @@ std::span<const SnapshotSection> viewSurfaceBackingSections(ViewSurface surface)
     static constexpr std::array kExternalModification{
         SnapshotSection::ExternalModification};
     switch (surface) {
-    case ViewSurface::TabView:
-        return kTabView;
+    case ViewSurface::TabBar:
+        return kTabBar;
     case ViewSurface::FileTree:
         return kFileTree;
     case ViewSurface::GitStatus:
@@ -33,6 +35,8 @@ std::span<const SnapshotSection> viewSurfaceBackingSections(ViewSurface surface)
         return kNotice;
     case ViewSurface::ExternalModification:
         return kExternalModification;
+    case ViewSurface::Document:
+        return kDocument;
     }
     // A corrupt enumerator has no backing; the contract is never-empty, so this is
     // a hard error rather than an empty span, matching viewSurfaceName.

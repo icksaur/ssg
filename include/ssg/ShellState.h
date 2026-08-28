@@ -162,6 +162,7 @@ struct TabLabel {
 
 struct ShellLayoutRequest {
     GridSize viewport;
+    bool distractionFree = false;
     std::uint8_t reservedPromptRows = 0;
     // Width in columns of the editor's left line-number gutter, or 0 when line
     // numbers are off. Carved from the LEFT of each
@@ -313,9 +314,6 @@ public:
     void previousPane() noexcept;
     [[nodiscard]] bool focusPane(PaneDirection direction,
                                   const ShellViewState& view) noexcept;
-
-    void toggleDistractionFree() noexcept;
-    [[nodiscard]] bool distractionFree() const noexcept;
 
 private:
     struct Impl;

@@ -112,7 +112,7 @@ TEST(wellFormedViewLeafValidates) {
     UiSchema schema;
     schema.root = container(
         "body",
-        {viewLeaf("tv", ssg::ViewSurface::TabView, Size::flex())});
+        {viewLeaf("tv", ssg::ViewSurface::Document, Size::flex())});
     ASSERT_TRUE(validateUiSchema(schema).ok());
 }
 
@@ -132,7 +132,7 @@ TEST(autoSizedViewLeafIsRejected) {
     UiSchema schema;
     schema.root = container(
         "body",
-        {viewLeaf("tv", ssg::ViewSurface::TabView, Size::autoSize())});
+        {viewLeaf("tv", ssg::ViewSurface::Document, Size::autoSize())});
     ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 

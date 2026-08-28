@@ -20,6 +20,8 @@ namespace ssg {
 // StatusActions widget (the selected status item, its actions, and generation).
 enum class SnapshotSection : std::uint8_t {
     Document,
+    Selection,
+    Syntax,
     Tabs,
     Tree,
     Palette,

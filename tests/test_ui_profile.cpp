@@ -116,8 +116,8 @@ TEST(fullProfileSupportsEveryViewSurface) {
 // lacks is rejected and NAMES the first unsupported surface.
 TEST(profileRejectsAndNamesTheFirstUnsupportedSurface) {
     ClientUiProfile profile;
-    profile.allowSurfaces({ssg::ViewSurface::TabView});
-    const std::vector surfaces{ssg::ViewSurface::TabView,
+    profile.allowSurfaces({ssg::ViewSurface::TabBar});
+    const std::vector surfaces{ssg::ViewSurface::TabBar,
                                ssg::ViewSurface::GitStatus};
     const std::optional<ssg::ViewSurface> rejected =
         profile.firstUnsupported(surfaces);

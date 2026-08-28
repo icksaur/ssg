@@ -1,7 +1,6 @@
 #include <ssg/InteractionAuthority.h>
 
 #include <algorithm>
-#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -42,12 +41,6 @@ std::vector<TreeProviderPresence> InteractionAuthority::presentProviders() const
 }
 
 bool InteractionAuthority::apply(const CommandTransition& transition) {
-    // Reject picker-epoch exhaustion BEFORE mutating: a wrapped epoch would make a later
-    // reopen indistinguishable from the current one.
-    const bool finder = std::holds_alternative<OpenFinder>(transition);
-    if (finder && pickerEpoch_ == std::numeric_limits<std::uint64_t>::max()) {
-        throw std::logic_error("InteractionAuthority picker epoch is exhausted");
-    }
     // Peek the revision source and prepare in one step: hiding prepare+install behind this
     // method means no allocation can occur between the peek and the consuming install.
     TransitionInputs inputs{truth_, schema_.validated(), prompt_, presentProviders(),
@@ -56,9 +49,6 @@ bool InteractionAuthority::apply(const CommandTransition& transition) {
     if (!prepared) return false;
     std::move(*prepared).installInto(truth_, interaction_, prompt_, tree_,
                                      nextTreeRevision_);
-    // A finder (re)establishes picker content; advance the epoch even on a File->File
-    // reopen (openPicker unchanged) so a candidate owner always refreshes.
-    if (finder) ++pickerEpoch_;
     ++routingGeneration_;
     return true;
 }
@@ -148,6 +138,12 @@ PromptCommandResult InteractionAuthority::focusNextPromptControl() {
     return result;
 }
 
+void InteractionAuthority::toggleDistractionFree() {
+    WholeScreenTruth next = truth_;
+    next.distractionFree = !next.distractionFree;
+    adopt(std::move(next), prompt_);
+}
+
 void InteractionAuthority::focusEditor() {
     // Build from a prospective truth, then adopt both together -- truth_ is never mutated
     // before the projection is rebuilt.
@@ -226,4 +222,3 @@ TreeRevision InteractionAuthority::allocateTreeRevision() {
 }
 
 }  // namespace ssg
-

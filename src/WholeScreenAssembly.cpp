@@ -182,15 +182,22 @@ UiComposition assembleWholeScreen(
          viewLeaf(kGitStatusNodeId, ViewSurface::GitStatus, Size::flex()),
          viewLeaf(kSymbolsNodeId, ViewSurface::Symbols, Size::flex())},
         ScrollAxis::Vertical);
-    // The panel and content containers are the two body scroll viewports: each
-    // clips its provider/document content and scrolls independently. This is the
-    // single source both clients derive scroll from (terminal scrollbar gutter,
-    // DOM overflow container); the inner view-leaves stay non-scrolling content.
+    UiNode documentViewport = container(
+        kDocumentViewportNodeId, Axis::Column, Size::flex(),
+        {viewLeaf(kDocumentNodeId, ViewSurface::Document, Size::flex())},
+        ScrollAxis::Vertical);
+    UiNode editor = container(
+        kEditorNodeId, Axis::Column, Size::flex(),
+        {viewLeaf(kTabBarNodeId, ViewSurface::TabBar,
+                  Size::exact(dimensions.tabBarHeight)),
+         std::move(documentViewport)});
+    UiNode findResultsViewport = container(
+        kFindResultsViewportNodeId, Axis::Column, Size::flex(),
+        {viewLeaf(kFindResultsNodeId, ViewSurface::FindResults, Size::flex())},
+        ScrollAxis::Vertical);
     UiNode content = container(
         kContentNodeId, Axis::Column, Size::flex(),
-        {viewLeaf(kTabViewNodeId, ViewSurface::TabView, Size::flex()),
-         viewLeaf(kFindResultsNodeId, ViewSurface::FindResults, Size::flex())},
-        ScrollAxis::Vertical);
+        {std::move(editor), std::move(findResultsViewport)});
     UiNode body = container(kBodyNodeId, Axis::Row, Size::flex(),
                             {std::move(panel), std::move(content)});
     // The draft-conflict notice's semantic surface, always assembled and hidden by

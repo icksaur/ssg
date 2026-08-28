@@ -52,8 +52,10 @@ TEST(theSurfaceBackingMappingIsTheSpecifiedContract) {
             if (s == section) return true;
         return false;
     };
-    ASSERT_TRUE(has(ViewSurface::TabView, SnapshotSection::Tabs));
-    ASSERT_TRUE(has(ViewSurface::TabView, SnapshotSection::Document));
+    ASSERT_TRUE(has(ViewSurface::TabBar, SnapshotSection::Tabs));
+    ASSERT_TRUE(has(ViewSurface::Document, SnapshotSection::Document));
+    ASSERT_TRUE(has(ViewSurface::Document, SnapshotSection::Selection));
+    ASSERT_TRUE(has(ViewSurface::Document, SnapshotSection::Syntax));
     ASSERT_TRUE(has(ViewSurface::FileTree, SnapshotSection::Tree));
     ASSERT_TRUE(has(ViewSurface::GitStatus, SnapshotSection::Tree));
     ASSERT_TRUE(has(ViewSurface::FindResults, SnapshotSection::Palette));

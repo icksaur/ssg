@@ -124,10 +124,14 @@ inline constexpr std::string_view kFooterNodeId = "footer";
 inline constexpr std::string_view kBodyNodeId = "body";
 inline constexpr std::string_view kPanelNodeId = "panel";
 inline constexpr std::string_view kContentNodeId = "content";
+inline constexpr std::string_view kEditorNodeId = "editor";
+inline constexpr std::string_view kDocumentViewportNodeId = "document.viewport";
+inline constexpr std::string_view kFindResultsViewportNodeId = "findresults.viewport";
 inline constexpr std::string_view kFileTreeNodeId = "filetree";
 inline constexpr std::string_view kGitStatusNodeId = "gitstatus";
 inline constexpr std::string_view kSymbolsNodeId = "symbols";
-inline constexpr std::string_view kTabViewNodeId = "tabview";
+inline constexpr std::string_view kTabBarNodeId = "tabbar";
+inline constexpr std::string_view kDocumentNodeId = "document";
 inline constexpr std::string_view kFindResultsNodeId = "findresults";
 // The header's single-line prompt input (command palette, file finder, ...). An
 // always-assembled TextInput leaf, trailing the header's status groups, hidden by
@@ -168,6 +172,9 @@ enum class WellKnownArea : std::uint8_t {
     Body,
     Panel,
     Content,
+    Editor,
+    DocumentViewport,
+    FindResultsViewport,
     Footer,
     FooterPrompt,
     Notice,
@@ -181,6 +188,9 @@ inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
     case WellKnownArea::Body: return kBodyNodeId;
     case WellKnownArea::Panel: return kPanelNodeId;
     case WellKnownArea::Content: return kContentNodeId;
+    case WellKnownArea::Editor: return kEditorNodeId;
+    case WellKnownArea::DocumentViewport: return kDocumentViewportNodeId;
+    case WellKnownArea::FindResultsViewport: return kFindResultsViewportNodeId;
     case WellKnownArea::Footer: return kFooterNodeId;
     case WellKnownArea::FooterPrompt: return kFooterPromptNodeId;
     case WellKnownArea::Notice: return kNoticeNodeId;

@@ -181,7 +181,7 @@ export function encodeValue(value) {
 }
 
 export function encodeMessage(kind, payload) {
-  return concat([new Uint8Array([1, kind]), encodeValue(payload)]);
+  return concat([new Uint8Array([2, kind]), encodeValue(payload)]);
 }
 
 export function decodeMessage(buffer) {
@@ -189,7 +189,7 @@ export function decodeMessage(buffer) {
   if (dv.byteLength > PROTOCOL_LIMITS.messageBytes) {
     throw new Error('protocol message length exceeded');
   }
-  if (dv.byteLength < 3 || dv.getUint8(0) !== 1) {
+  if (dv.byteLength < 3 || dv.getUint8(0) !== 2) {
     throw new Error('unsupported protocol frame');
   }
   const kind = dv.getUint8(1);
@@ -204,6 +204,11 @@ export function browserInboundKind(kind) {
   if (kind === 6) return 'command-result';
   if (kind === 8) return 'input-result';
   return 'ignore';
+}
+
+export function settleCommandResult(queue) {
+  if (!Array.isArray(queue) || queue.length === 0) return null;
+  return { owner: queue[0], queue: queue.slice(1) };
 }
 
 export function encodeCommandRequest(id, baseRevision, payload = null) {
@@ -223,9 +228,41 @@ export function encodeStatusActionInvocation({ statusId, actionId, generation })
   });
 }
 
-export const encodePickerSubmit = (candidateId, revision) =>
+export const PICKER_MODE = Object.freeze({ FILE: 0, COMMAND: 4 });
+
+export const encodePickerSubmit = (mode, candidateId, revision) =>
   encodeCommandRequest('picker.submit', revision,
-                       { candidate_id: String(candidateId) });
+                       { mode: BigInt(mode), candidate_id: String(candidateId) });
+
+export const encodeSelectionByteRange = (anchor, active, revision) =>
+  encodeCommandRequest('select.set_byte_range', revision, {
+    anchor_byte_offset: BigInt(anchor),
+    active_byte_offset: BigInt(active),
+  });
+
+export const encodeTabAction = (commandId, tabId, revision) => {
+  if (commandId !== 'tab.activate' && commandId !== 'tab.close') {
+    throw new TypeError('unsupported tab action');
+  }
+  return encodeCommandRequest(commandId, revision, BigInt(tabId));
+};
+
+export function markedTextByteOffset(byteStart, text, utf16Offset) {
+  if (!Number.isSafeInteger(byteStart) || byteStart < 0 ||
+      !Number.isSafeInteger(utf16Offset) || utf16Offset < 0 ||
+      utf16Offset > text.length) {
+    throw new TypeError('invalid marked text offset');
+  }
+  if (utf16Offset > 0 && utf16Offset < text.length) {
+    const before = text.charCodeAt(utf16Offset - 1);
+    const after = text.charCodeAt(utf16Offset);
+    if (before >= 0xd800 && before <= 0xdbff &&
+        after >= 0xdc00 && after <= 0xdfff) {
+      throw new TypeError('marked text offset splits a surrogate pair');
+    }
+  }
+  return byteStart + utf8Bytes(text.slice(0, utf16Offset));
+}
 
 export const encodeTreeActivation = (nodeId, revision) =>
   encodeCommandRequest('tree.activate_node', revision,
@@ -330,6 +367,58 @@ export function matcherBoundsFromPalette(palette) {
   return { params: matcherParametersFromWire(palette.parameters), maxMagnitude, maxCandidateBytes };
 }
 
+export function pickerCandidatesFromPalette(palette, mode) {
+  if (!palette || typeof palette !== 'object') {
+    throw new TypeError('missing palette section');
+  }
+  if (mode === PICKER_MODE.COMMAND) {
+    if (!Array.isArray(palette.command_candidates)) {
+      throw new TypeError('missing command picker inventory');
+    }
+    return palette.command_candidates;
+  }
+  if (mode === PICKER_MODE.FILE) {
+    if (!Array.isArray(palette.file_candidates)) {
+      throw new TypeError('missing file picker inventory');
+    }
+    return palette.file_candidates;
+  }
+  throw new TypeError('unsupported picker mode');
+}
+
+function sameStroke(bindingStroke, inputStroke) {
+  return bindingStroke && inputStroke &&
+    bindingStroke.code === inputStroke.code &&
+    !!bindingStroke.control === !!inputStroke.control &&
+    !!bindingStroke.alt === !!inputStroke.alt &&
+    !!bindingStroke.meta === !!inputStroke.meta &&
+    !!bindingStroke.shift === !!inputStroke.shift;
+}
+
+export function resolvePickerLifecycle(keymap, palette, inputStroke, context) {
+  if (!keymap || !Array.isArray(keymap.bindings) || !palette) return null;
+  let resolved = null;
+  for (const binding of keymap.bindings) {
+    if (!Array.isArray(binding.sequence) || binding.sequence.length !== 1 ||
+        !sameStroke(binding.sequence[0], inputStroke) ||
+        (binding.context !== '*' && binding.context !== context)) {
+      continue;
+    }
+    if (resolved == null ||
+        (binding.context === '*' && resolved.context !== '*')) {
+      resolved = binding;
+    }
+  }
+  if (resolved == null) return null;
+  if (resolved.command_id === palette.command_open_command_id) {
+    return PICKER_MODE.COMMAND;
+  }
+  if (resolved.command_id === palette.file_open_command_id) {
+    return PICKER_MODE.FILE;
+  }
+  return null;
+}
+
 // Apply a tree section delta to the retained tree, mirroring the C++
 // TreeDeltaCodec::replay (src/TreeModel.cpp): a per-provider splice (erase
 // erase_count nodes at start, insert the new views) plus provider add/remove and
@@ -384,6 +473,13 @@ export function applyTreeDelta(tree, treeDelta) {
     prov.selected = change.selected == null ? null : change.selected;
   }
   // Commit.
+  const order = Array.isArray(treeDelta.provider_order)
+    ? treeDelta.provider_order.map(key) : null;
+  if (!order || order.length !== providers.length ||
+      new Set(order).size !== providers.length) return false;
+  const byId = new Map(providers.map((provider) => [key(provider.provider_id), provider]));
+  if (order.some((id) => !byId.has(id))) return false;
+  providers.splice(0, providers.length, ...order.map((id) => byId.get(id)));
   tree.providers = providers;
   tree.revision = treeDelta.revision;
   return true;
@@ -449,14 +545,6 @@ export function applySessionDeltaSections(sections, delta) {
   return sections;
 }
 
-// FocusTarget::Prompt and PromptKind::Palette ordinals, and the wire field names
-// the decoded snapshot uses. The sections object is the decoded ProtocolValue
-// tree, so its keys are the encoder's snake_case names (prompt_status,
-// active_kind) -- NOT camelCase. This one function owns that coupling so a
-// mis-spelling cannot silently hide the palette overlay again.
-export const FOCUS_PROMPT = 2;
-export const PROMPT_PALETTE = 5;
-
 // PromptControlKind ordinals (C++ PromptControlKind).
 export const PROMPT_CONTROL = { INPUT: 0, TOGGLE: 1, COUNT: 2 };
 
@@ -519,29 +607,20 @@ export function noticeViewFromSections(sections) {
   return { text: String(nv.text == null ? '' : nv.text), actions };
 }
 
-// The ExternalAction ordinals (Reload, KeepBuffer, OpenDiff), pinned to the C++
-// enum and mapped to a short label. The status ordinals mirror
-// ExternalDocumentStatus (ExternallyModified, ExternallyRemoved).
-const EXTERNAL_ACTIONS = [
-  { action: 0, label: 'Reload' },
-  { action: 1, label: 'Keep' },
-  { action: 2, label: 'Diff' },
-];
-const EXTERNAL_STATUS_GLYPH = ['M', 'D'];
-
 // Merge an external-modification delta (base_revision/revision/upserted/removed/
-// selected) into the retained section {revision, files, selected}, mirroring the
+// selected/message) into the retained section, mirroring the
 // C++ ExternalModificationDeltaCodec.replay: removed ids drop, upserted files
 // replace-or-add by id, and the selection re-homes to the delta's value. Pure.
 export function applyExternalModificationDelta(section, delta) {
   if (!delta) return section;
   const base = section && Array.isArray(section.files)
-    ? section : { revision: 0, files: [], selected: null };
+    ? section : { revision: 0, message: '', files: [], selected: null };
   const byId = new Map(base.files.map((f) => [String(f.id), f]));
   for (const id of (delta.removed || [])) byId.delete(String(id));
   for (const f of (delta.upserted || [])) byId.set(String(f.id), f);
   return {
     revision: num(delta.revision),
+    message: typeof delta.message === 'string' ? delta.message : base.message,
     files: [...byId.values()],
     selected: delta.selected != null ? String(delta.selected) : null,
   };
@@ -549,8 +628,7 @@ export function applyExternalModificationDelta(section, delta) {
 
 // The external-modification bar's geometry-free projection for the renderer, or
 // null when no file is externally changed (the bar is absent). Owns the wire
-// coupling (ordinals -> tokens/labels/commands) so the client draws rows, the
-// selected highlight, and the per-row action buttons without re-deriving them.
+// coupling while preserving the library-published labels and command affordances.
 export function externalModificationFromSections(sections) {
   if (!sections) return null;
   const section = sections.external_modification;
@@ -558,18 +636,21 @@ export function externalModificationFromSections(sections) {
   const selectedId = section.selected != null ? String(section.selected) : null;
   const files = section.files.map((f) => {
     const id = String(f.id == null ? '' : f.id);
-    const statusOrdinal = num(f.status);
-    const glyph = EXTERNAL_STATUS_GLYPH[statusOrdinal] || '?';
-    const actions = (f.actions || []).map((a) => EXTERNAL_ACTIONS[num(a)]).filter(Boolean);
+    const actions = (f.actions || []).map((a) => ({
+      action: num(a.action),
+      label: String(a.label == null ? '' : a.label),
+      command: String(a.command == null ? '' : a.command),
+    }));
     return {
       id,
       path: String(f.path == null ? '' : f.path),
-      glyph,
+      statusLabel: String(f.status_label == null ? '' : f.status_label),
+      accessibleStatus: String(f.accessible_status == null ? '' : f.accessible_status),
       selected: id === selectedId,
       actions,
     };
   });
-  return { message: files.length + (files.length === 1 ? ' file changed on disk' : ' files changed on disk'), files };
+  return { message: String(section.message == null ? '' : section.message), files };
 }
 
 // Whether the external-modification bar holds the effective keyboard focus. The
@@ -579,38 +660,6 @@ export function externalModificationFromSections(sections) {
 // that never appears on the wire.
 export function externalFocusHeld(sections) {
   return !!(sections && num(sections.external_focus_held));
-}
-
-export function isPalettePromptOpen(sections) {
-  if (!sections) return false;
-  if (num(sections.focus) !== FOCUS_PROMPT) return false;
-  const ps = sections.prompt_status;
-  return !!ps && ps.active_kind != null && num(ps.active_kind) === PROMPT_PALETTE;
-}
-
-// The browser owns the palette query locally; it must clear that local text on a
-// FRESH open. A fresh open is either a closed->open transition OR a reopen at the
-// same open state signalled by a changed picker epoch (the server bumps the epoch
-// each time the picker is opened). Keeping this pure and separate makes the
-// reset-on-reopen rule testable without the DOM or a live socket.
-export function shouldResetLocalQuery(nowOpen, wasOpen, epoch, lastEpoch) {
-  if (!nowOpen) return false;
-  if (!wasOpen) return true;
-  return pickerEpochValue(epoch) !== pickerEpochValue(lastEpoch);
-}
-
-function pickerEpochValue(raw) {
-  if (typeof raw === 'bigint' && raw >= 0n) return raw;
-  if (typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0) return BigInt(raw);
-  throw new TypeError('malformed palette picker_epoch');
-}
-
-export function pickerEpochFromPalette(palette) {
-  if (!palette || !Object.prototype.hasOwnProperty.call(palette, 'picker_epoch') ||
-      palette.picker_epoch == null) {
-    return 0n;
-  }
-  return pickerEpochValue(palette.picker_epoch);
 }
 
 // --- UI-VM: the web interpreter over the published schema + dynamic node state ---
@@ -626,7 +675,102 @@ export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
 // a viewport"), matching the wire decoder's forward-compat rule.
 export const SCROLL = { NONE: 0, VERTICAL: 1 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
-export const SURFACE = { TABVIEW: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5, NOTICE: 6, EXTERNAL_MODIFICATION: 7 };
+export const SURFACE = { TABBAR: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5, NOTICE: 6, EXTERNAL_MODIFICATION: 7, DOCUMENT: 8 };
+const ALL_SURFACES = Object.freeze(Object.values(SURFACE));
+const TREE_SURFACES = Object.freeze([
+  SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.SYMBOLS,
+]);
+
+export function browserRenderPlan(delta) {
+  const surfaces = new Set();
+  const add = (...values) => values.forEach((value) => surfaces.add(value));
+  const replacementChanged = (value) =>
+    !!value && (value.replacement != null || !!num(value.changed));
+  const revisionChanged = (value) =>
+    !!value && BigInt(value.base_revision == null ? 0 : value.base_revision) !==
+      BigInt(value.revision == null ? 0 : value.revision);
+  if (delta.document || delta.document_caret != null ||
+      replacementChanged(delta.selection) ||
+      (delta.syntax && delta.syntax.spans != null)) {
+    add(SURFACE.DOCUMENT);
+  }
+  if (delta.tabs && delta.tabs.state != null) add(SURFACE.TABBAR);
+  if (revisionChanged(delta.tree)) add(...TREE_SURFACES);
+  if (delta.palette) add(SURFACE.FINDRESULTS);
+  if (delta.prompt_view && !!num(delta.prompt_view.changed))
+    add(SURFACE.FOOTER_PROMPT);
+  if (delta.notice_view && !!num(delta.notice_view.changed))
+    add(SURFACE.NOTICE);
+  if (revisionChanged(delta.external_modification))
+    add(SURFACE.EXTERNAL_MODIFICATION);
+  const repaintTheme =
+    !!(delta.theme && delta.theme.replacement != null);
+  if (repaintTheme) add(...ALL_SURFACES);
+  return {
+    rebuild: !!delta.ui,
+    reconcile: !!(delta.ui || delta.ui_state || delta.ui_presence ||
+                   replacementChanged(delta.prompt_status) || repaintTheme),
+    repaintTheme,
+    surfaces: [...surfaces].sort((a, b) => a - b),
+    localPicker: !!(delta.palette || repaintTheme),
+  };
+}
+
+const samePointerBasis = (left, right) =>
+  !!left && !!right && left.text === right.text && left.tab === right.tab;
+
+export function settlePointerSelection(inFlight, queued, error, currentBasis) {
+  if (queued && samePointerBasis(queued.basis, currentBasis)) {
+    return { dispatch: queued, preview: queued };
+  }
+  if (error === 3 && inFlight && inFlight.retries === 0 &&
+      samePointerBasis(inFlight.basis, currentBasis)) {
+    const retry = { ...inFlight, retries: 1 };
+    return { dispatch: retry, preview: retry };
+  }
+  return { dispatch: null, preview: null };
+}
+
+export function webExtentCss(value, axis) {
+  return axis === AXIS.COLUMN
+    ? `calc(${value} * var(--ssg-row))`
+    : `${value}ch`;
+}
+
+export class GenerationRetainedCache {
+  constructor() {
+    this.generation = null;
+    this.entries = new Map();
+  }
+  begin(generation) {
+    if (this.generation === generation) return false;
+    this.generation = generation;
+    this.entries.clear();
+    return true;
+  }
+  getOrCreate(id, create) {
+    if (!this.entries.has(id)) this.entries.set(id, create());
+    return this.entries.get(id);
+  }
+  get(id) { return this.entries.get(id); }
+  values() { return this.entries.values(); }
+}
+
+export function gitAffordanceFromNode(node) {
+  const value = node && node.git_status;
+  if (!value) return null;
+  return {
+    shortLabel: String(value.short_label == null ? '' : value.short_label),
+    role: num(value.role),
+  };
+}
+
+export function preferredKeyboardSurface(surfaces) {
+  const present = new Set(surfaces || []);
+  if (present.has(SURFACE.FINDRESULTS)) return SURFACE.FINDRESULTS;
+  if (present.has(SURFACE.DOCUMENT)) return SURFACE.DOCUMENT;
+  return null;
+}
 const STRUCTURAL_ROLE = { prompt: 16 };
 const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL_ROLE, name)
   ? STRUCTURAL_ROLE[name] : null;
@@ -637,7 +781,7 @@ const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL
 // tree structure + well-known node ids, so there is no region-role set.
 export const WEB_UI_PROFILE = {
   widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.TEXT_INPUT, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
-  surfaces: new Set([SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION]),
+  surfaces: new Set([SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT]),
 };
 
 // The first schema primitive `profile` does not support, as

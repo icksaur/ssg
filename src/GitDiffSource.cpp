@@ -87,6 +87,8 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
 
     std::set<DiffFileId> seen;
     for (const auto& file : scan.files) {
+        seen.insert(file.id);
+        stagedFiles.insert_or_assign(file.id, file);
         auto result = stagedDiff.updateGitFile(
             GitDiffFile{
                 .id = file.id,
@@ -98,18 +100,21 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
             },
             nextMutationRevision());
         if (!result.accepted()) {
-            // A file over the DiffModel work budget is a DETERMINISTIC rejection:
-            // re-diffing the same unchanged content will be rejected identically, so
-            // it must NOT request a rescan (that would spin the worker re-running the
-            // whole diff every retry). A watch event on the file's content is what
-            // re-triggers a scan. Any OTHER rejection is transient and does retry.
-            return {.applied = false,
-                    .requestedRescan =
-                        result.error != DiffError::WorkLimitExceeded,
-                    .accepted = false};
+            if (result.error == DiffError::WorkLimitExceeded) {
+                auto removed =
+                    stagedDiff.removeFile(file.id, nextMutationRevision());
+                if (!removed.accepted() &&
+                    removed.error != DiffError::UnknownFile) {
+                    return {.applied = false,
+                            .requestedRescan = true,
+                            .accepted = false};
+                }
+            } else {
+                return {.applied = false,
+                        .requestedRescan = true,
+                        .accepted = false};
+            }
         }
-        seen.insert(file.id);
-        stagedFiles.insert_or_assign(file.id, file);
         if (file.previousPath) {
             if (auto previous = pathIdentity(*file.previousPath);
                 previous && *previous != file.id) {
@@ -192,6 +197,8 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
 
     std::set<DiffFileId> present;
     for (const auto& file : scan.files) {
+        present.insert(file.id);
+        stagedFiles.insert_or_assign(file.id, file);
         auto result = stagedDiff.updateGitFile(
             GitDiffFile{
                 .id = file.id,
@@ -203,15 +210,21 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
             },
             nextMutationRevision());
         if (!result.accepted()) {
-            // Deterministic over-budget rejection does not retry (see applyFullScan);
-            // a watch event on the content re-triggers the scan.
-            return {.applied = false,
-                    .requestedRescan =
-                        result.error != DiffError::WorkLimitExceeded,
-                    .accepted = false};
+            if (result.error == DiffError::WorkLimitExceeded) {
+                auto removed =
+                    stagedDiff.removeFile(file.id, nextMutationRevision());
+                if (!removed.accepted() &&
+                    removed.error != DiffError::UnknownFile) {
+                    return {.applied = false,
+                            .requestedRescan = true,
+                            .accepted = false};
+                }
+            } else {
+                return {.applied = false,
+                        .requestedRescan = true,
+                        .accepted = false};
+            }
         }
-        present.insert(file.id);
-        stagedFiles.insert_or_assign(file.id, file);
         if (file.previousPath) {
             if (auto previous = pathIdentity(*file.previousPath);
                 previous && *previous != file.id) {

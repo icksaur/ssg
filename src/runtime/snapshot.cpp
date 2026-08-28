@@ -262,45 +262,17 @@ ShellViewState EditorSession::Impl::shellView(ViewportDimensions dimensions,
     // its offered actions, plus the ABSOLUTE selected index. computeShellLayout
     // windows and bounds it; an empty section reserves zero rows.
     if (auto externalView = external.viewState(); !externalView.files.empty()) {
-        auto actionLabel = [](ExternalAction action) -> std::string {
-            switch (action) {
-            case ExternalAction::Reload:
-                return "Reload";
-            case ExternalAction::KeepBuffer:
-                return "Keep";
-            case ExternalAction::OpenDiff:
-                return "Diff";
-            }
-            return {};
-        };
-        auto actionCommand = [](ExternalAction action) -> std::string {
-            switch (action) {
-            case ExternalAction::Reload:
-                return "external.reload";
-            case ExternalAction::KeepBuffer:
-                return "external.keep_buffer";
-            case ExternalAction::OpenDiff:
-                return "external.open_diff";
-            }
-            return {};
-        };
         ShellExternalBar bar;
         for (auto const& file : externalView.files) {
-            const char* glyph =
-                file.status == ExternalDocumentStatus::ExternallyRemoved ? "D"
-                                                                         : "M";
             ShellExternalRow row;
             row.fileId = file.id.value();
-            row.text = std::string{glyph} + " " + file.path.string();
+            row.text = file.statusLabel + " " + file.path.string();
             for (auto const& action : file.actions) {
-                row.actions.push_back(
-                    {actionLabel(action), actionCommand(action)});
+                row.actions.push_back({action.label, action.command});
             }
             bar.rows.push_back(std::move(row));
         }
-        bar.message = std::to_string(externalView.files.size()) +
-                      (externalView.files.size() == 1 ? " file changed on disk"
-                                                      : " files changed on disk");
+        bar.message = externalView.message;
         if (externalView.selected) {
             for (std::size_t i = 0; i < externalView.files.size(); ++i) {
                 if (externalView.files[i].id == *externalView.selected) {
@@ -314,6 +286,7 @@ ShellViewState EditorSession::Impl::shellView(ViewportDimensions dimensions,
     request.emptyState = activeDocument() == nullptr;
     request.panelProviderLabel = std::string{panelProviderLabel(interaction.truth().selectedProvider)};
     request.panelPresent = interaction.truth().panelPresent;
+    request.distractionFree = interaction.truth().distractionFree;
     request.focus = interaction.effectiveFocus();
     auto promptStatus = promptStatusView();
     request.chromeProviderResolver = chromeResolverFor(
@@ -357,12 +330,17 @@ ShellViewState EditorSession::Impl::shellView(ViewportDimensions dimensions,
         PaletteReport seeded;
         PaletteReport const* source = &paletteReport;
         if (paletteReport.rows.empty() && paletteReport.query.empty()) {
-            auto candidates = paletteView().candidates;
-            if (!candidates.empty()) {
+            auto const palette = paletteView();
+            auto const open = interaction.openPicker();
+            auto const* descriptor =
+                open ? pickerCatalog().find(*open) : nullptr;
+            auto const* candidates =
+                descriptor ? palette.candidatesFor(descriptor->wireMode) : nullptr;
+            if (candidates != nullptr && !candidates->empty()) {
                 PaletteWindowState window;
                 window.paneRows = static_cast<std::uint32_t>(
                     std::max(view.panes.front().content.height, 1));
-                seeded = PaletteSearcher{}.report(candidates, window);
+                seeded = PaletteSearcher{}.report(*candidates, window);
                 source = &seeded;
             }
         }
@@ -534,50 +512,35 @@ void EditorSession::Impl::scrollTree(ViewId viewId, std::int64_t rows) {
     viewPresentation.treeFirstVisible = offset.firstVisible();
 }
 
-// Publishes the candidate set of whichever picker is open.  The mode and the
-// candidate source both come from the picker descriptor, so a new picker adds a
-// case here rather than a second hardcoded view.
 PaletteViewState EditorSession::Impl::paletteView() const {
     PaletteViewState view;
-    if (!interaction.openPicker()) return view;
-    auto const* picker = pickerCatalog().find(*interaction.openPicker());
-    if (picker == nullptr) return view;
-    view.mode = picker->wireMode;
-    view.pickerEpoch = interaction.pickerEpoch();
-    switch (*interaction.openPicker()) {
-    case PickerKind::Command:
-        // Every registered command is a palette candidate, read from the live
-        // catalog rather than a static list: a command registered by a plugin
-        // is findable the moment it exists.  Resolving each command's key hint
-        // is O(bindings x commands), so the result is cached and reused until
-        // the catalog or keymap changes -- otherwise this ran every frame the
-        // palette was open.
-        {
-            auto const catalogRevision = session->catalog()->revision();
-            if (!commandCandidateCacheValid ||
-                catalogRevision != commandCandidateCatalogRevision ||
-                keymap != commandCandidateKeymap) {
-                commandCandidateCache.clear();
-                for (auto const* command : session->catalog()->commands()) {
-                    std::string detail;
-                    if (auto sequence =
-                            KeymapMatcher{keymap}.preferredBinding(command->id)) {
-                        detail = KeyCodec{}.formatSequence(*sequence);
-                    }
-                    commandCandidateCache.push_back(
-                        {command->id, command->displayLabel(), std::move(detail)});
-                }
-                commandCandidateCatalogRevision = catalogRevision;
-                commandCandidateKeymap = keymap;
-                commandCandidateCacheValid = true;
-            }
-            view.candidates = commandCandidateCache;
+    if (auto open = interaction.openPicker()) {
+        if (auto const* descriptor = pickerCatalog().find(*open)) {
+            view.activeMode = descriptor->wireMode;
         }
-        break;
-    case PickerKind::File:
-        view.candidates = fileCandidates;
-        break;
     }
+    // Every registered command is published continuously. Resolving each key hint
+    // is O(bindings x commands), so cache until the catalog or keymap changes.
+    auto const catalogRevision = session->catalog()->revision();
+    if (!commandCandidateCacheValid ||
+        catalogRevision != commandCandidateCatalogRevision ||
+        keymap != commandCandidateKeymap) {
+        commandCandidateCache.clear();
+        for (auto const* command : session->catalog()->commands()) {
+            std::string detail;
+            if (auto sequence =
+                    KeymapMatcher{keymap}.preferredBinding(command->id)) {
+                detail = KeyCodec{}.formatSequence(*sequence);
+                }
+            commandCandidateCache.push_back(
+                {command->id, command->displayLabel(), std::move(detail)});
+        }
+        commandCandidateCatalogRevision = catalogRevision;
+        commandCandidateKeymap = keymap;
+        commandCandidateCacheValid = true;
+    }
+    view.commandCandidates = commandCandidateCache;
+    view.fileCandidates = fileCandidates;
     return view;
 }
 

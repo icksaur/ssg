@@ -10,8 +10,11 @@ import assert from 'node:assert/strict';
 import {
   applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput,
   decodeMessage, browserInboundKind, encodeClientInput, encodeCommandRequest,
-  isPalettePromptOpen, matcherParametersFromWire, matcherBoundsFromPalette,
-  clampPaletteSelection, encodePickerSubmit, encodeTreeActivation, applyTreeDelta,
+  settleCommandResult,
+  matcherParametersFromWire, matcherBoundsFromPalette,
+  clampPaletteSelection, pickerCandidatesFromPalette, resolvePickerLifecycle,
+  PICKER_MODE, encodePickerSubmit, encodeSelectionByteRange, encodeTabAction,
+  markedTextByteOffset, encodeTreeActivation, applyTreeDelta,
   applySessionDeltaSections,
   encodeStatusActionInvocation, encodePromptFocus,
   externalModificationFromSections, externalFocusHeld, encodeExternalAction,
@@ -118,17 +121,17 @@ check('typed raw input and command requests round-trip through ProtocolValue', (
 
   check('browser protocol decoding rejects malformed and over-bound values', () => {
     assert.throws(() => decodeMessage(
-      new Uint8Array([2, 9, 0]).buffer), /unsupported protocol frame/);
+      new Uint8Array([1, 9, 0]).buffer), /unsupported protocol frame/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([1, 1, 1, 2]).buffer), /malformed protocol bool/);
+      new Uint8Array([2, 1, 1, 2]).buffer), /malformed protocol bool/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([1, 1, 4, 4, 0, 0, 0, 65]).buffer), /truncated/);
+      new Uint8Array([2, 1, 4, 4, 0, 0, 0, 65]).buffer), /truncated/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([1, 1, 6, 1, 0, 1, 0]).buffer), /collection length/);
+      new Uint8Array([2, 1, 6, 1, 0, 1, 0]).buffer), /collection length/);
   });
 
   check('browser ignores additive message kinds without weakening wire versions', () => {
-    const decoded = decodeMessage(new Uint8Array([1, 9, 0]).buffer);
+    const decoded = decodeMessage(new Uint8Array([2, 9, 0]).buffer);
     assert.equal(browserInboundKind(decoded.kind), 'ignore');
     assert.equal(browserInboundKind(1), 'snapshot');
     assert.equal(browserInboundKind(8), 'input-result');
@@ -155,7 +158,7 @@ check('typed raw input and command requests round-trip through ProtocolValue', (
 check('encodeStatusActionInvocation emits the exact StatusActionInvocation wire frame', () => {
   const actual = encodeStatusActionInvocation({ statusId: 7, actionId: 'dismiss', generation: 3 });
   const expected = new Uint8Array([
-    1, 5,
+    2, 5,
     7, 3, 0, 0, 0,
     9, 0, 0, 0, 115, 116, 97, 116, 117, 115, 95, 105, 100,
     3, 7, 0, 0, 0, 0, 0, 0, 0,
@@ -165,6 +168,14 @@ check('encodeStatusActionInvocation emits the exact StatusActionInvocation wire 
     3, 3, 0, 0, 0, 0, 0, 0, 0,
   ]);
   assert.deepEqual(actual, expected);
+});
+
+check('command results settle direct command owners in send order', () => {
+  const first = settleCommandResult(['other', 'pointer']);
+  assert.deepEqual(first, { owner: 'other', queue: ['pointer'] });
+  assert.deepEqual(settleCommandResult(first.queue),
+                   { owner: 'pointer', queue: [] });
+  assert.equal(settleCommandResult([]), null);
 });
 
 check('matcherParametersFromWire maps decoded snake_case matcher fields', () => {
@@ -207,12 +218,36 @@ check('clampPaletteSelection keeps the persisted selection inside local rows', (
 });
 
 check('compound interaction commands carry published identities and revision', () => {
-  assert.deepEqual(decodeMessage(encodePickerSubmit('command.open', 5n).buffer).payload,
+  assert.deepEqual(
+    decodeMessage(
+      encodePickerSubmit(PICKER_MODE.COMMAND, 'command.open', 5n).buffer).payload,
     { id: 'picker.submit', base_revision: 5n,
-      payload: { candidate_id: 'command.open' } });
+      payload: { mode: 4n, candidate_id: 'command.open' } });
+  assert.deepEqual(
+    decodeMessage(encodeSelectionByteRange(2, 7, 6n).buffer).payload,
+    { id: 'select.set_byte_range', base_revision: 6n,
+      payload: { anchor_byte_offset: 2n, active_byte_offset: 7n } });
   assert.deepEqual(decodeMessage(encodeTreeActivation('tree:src', 6n).buffer).payload,
     { id: 'tree.activate_node', base_revision: 6n,
       payload: { node_id: 'tree:src' } });
+  assert.deepEqual(
+    decodeMessage(encodeTabAction('tab.activate', 17n, 6n).buffer).payload,
+    { id: 'tab.activate', base_revision: 6n, payload: 17n });
+  assert.deepEqual(
+    decodeMessage(encodeTabAction('tab.close', 17n, 6n).buffer).payload,
+    { id: 'tab.close', base_revision: 6n, payload: 17n });
+  assert.throws(
+    () => encodeTabAction('tab.close_all', 17n, 6n),
+    /unsupported tab action/);
+});
+
+check('marked text offsets convert UTF-16 positions to authoritative UTF-8 bytes', () => {
+  assert.equal(markedTextByteOffset(10, 'a\u00e9\u{1f642}z', 0), 10);
+  assert.equal(markedTextByteOffset(10, 'a\u00e9\u{1f642}z', 2), 13);
+  assert.equal(markedTextByteOffset(10, 'a\u00e9\u{1f642}z', 4), 17);
+  assert.throws(
+    () => markedTextByteOffset(10, 'a\u{1f642}z', 2),
+    /surrogate pair/);
 });
 
 check('applyTreeDelta splices the retained tree and resyncs only when inexpressible', () => {
@@ -222,6 +257,7 @@ check('applyTreeDelta splices the retained tree and resyncs only when inexpressi
   // A splice erases node x and inserts b, advancing the retained revision.
   let t = tree();
   assert.equal(applyTreeDelta(t, { base_revision: 1, revision: 2, snapshot_required: false,
+    provider_order: ['fs'],
     providers: [{ provider_id: 'fs', kind: 0, start: 1, erase_count: 1,
       insert: [{ node: { id: 'b' }, depth: 0 }], selected: 'b' }] }), true);
   assert.equal(t.revision, 2);
@@ -229,7 +265,8 @@ check('applyTreeDelta splices the retained tree and resyncs only when inexpressi
   assert.equal(t.providers[0].selected, 'b');
   // A no-op delta (revision equals base) applies cleanly and stays current.
   t = tree();
-  assert.equal(applyTreeDelta(t, { base_revision: 1, revision: 1, snapshot_required: false, providers: [] }), true);
+  assert.equal(applyTreeDelta(t, { base_revision: 1, revision: 1, snapshot_required: false,
+    provider_order: ['fs'], providers: [] }), true);
   assert.equal(t.revision, 1);
   // A base revision that does not match the retained tree means a missed delta:
   // the client cannot splice and must resync from a snapshot.
@@ -242,9 +279,10 @@ check('applyTreeDelta splices the retained tree and resyncs only when inexpressi
   // A brand-new provider inserts at its sorted position, carrying only inserts.
   t = tree();
   assert.equal(applyTreeDelta(t, { base_revision: 1, revision: 2, snapshot_required: false,
+    provider_order: ['git', 'fs'],
     providers: [{ provider_id: 'git', kind: 1, start: 0, erase_count: 0,
       insert: [{ node: { id: 'g' }, depth: 0 }], selected: null }] }), true);
-  assert.deepEqual(t.providers.map((p) => p.provider_id), ['fs', 'git']);
+  assert.deepEqual(t.providers.map((p) => p.provider_id), ['git', 'fs']);
   // No tree object at all: nothing to do, stays current.
   assert.equal(applyTreeDelta(tree(), undefined), true);
   // Two changes for one provider are malformed (matches C++ replay's reject).
@@ -266,27 +304,12 @@ check('applyTreeDelta splices the retained tree and resyncs only when inexpressi
   assert.deepEqual(t.providers[0].nodes.map((r) => r.node.id), ['a', 'x']);
 });
 
-check('palette-prompt detection reads the wire snake_case field names', () => {
-  // The decoded sections object uses the encoder's names: prompt_status and
-  // active_kind, NOT camelCase. A regression here silently hides the overlay
-  // (the picker captures input but nothing renders), which is why it is pinned.
-  const editor = { focus: 0, prompt_status: { active_kind: null } };
-  assert.equal(isPalettePromptOpen(editor), false);
-  // Focus on prompt with the palette kind (5) -> open.
-  const palette = { focus: 2, prompt_status: { active_kind: 5 } };
-  assert.equal(isPalettePromptOpen(palette), true);
-  // BigInt ordinals (as the wire decoder yields) are handled.
-  assert.equal(isPalettePromptOpen({ focus: 2n, prompt_status: { active_kind: 5n } }), true);
-  // A camelCase object (the old bug) must NOT be seen as open.
-  assert.equal(isPalettePromptOpen({ focus: 2, promptStatus: { activeKind: 5 } }), false);
-  // Prompt focus but a non-palette prompt kind (e.g. a path prompt) -> closed.
-  assert.equal(isPalettePromptOpen({ focus: 2, prompt_status: { active_kind: 1 } }), false);
-});
-
 // --- UI-VM: profile rejection + schema/state interpretation ---
 import {
   firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, SIZE, SURFACE, SCROLL,
-  shouldResetLocalQuery, pickerEpochFromPalette,
+  webExtentCss,
+  GenerationRetainedCache, gitAffordanceFromNode,
+  preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
 } from '../../apps/web/reconcile.mjs';
 
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
@@ -361,15 +384,18 @@ check('firstUnsupportedPrimitive accepts StatusActions by default and rejects it
 });
 
 check('interpretChrome carries a node ScrollAxis so a client derives independent scroll, and degrades an unknown axis to none', () => {
-  // The panel and content viewports carry scroll:Vertical(1); their inner leaves
-  // and a chrome row carry none. A future/unknown axis (99) must degrade to none
-  // so an old client renders it as "not a viewport" rather than mis-scrolling.
   const scrollContainer = (id, scroll, children) =>
     ({ id, size: {}, container: { axis: 1, gap: 0, scroll, children } });
+  const document = leafNode(
+    'document', WIDGET.VIEW, { surface: SURFACE.DOCUMENT });
+  const editor = scrollContainer('editor', SCROLL.NONE, [
+    leafNode('tabbar', WIDGET.VIEW, { surface: SURFACE.TABBAR }),
+    scrollContainer('document.viewport', SCROLL.VERTICAL, [document]),
+  ]);
   const root = { id: 'root', size: {}, container: { axis: 1, gap: 0, children: [
     rowNode('body', [
       scrollContainer('panel', SCROLL.VERTICAL, [leafNode('filetree', WIDGET.VIEW, { surface: SURFACE.FILETREE })]),
-      scrollContainer('content', SCROLL.VERTICAL, [leafNode('tabview', WIDGET.VIEW, { surface: SURFACE.TABVIEW })]),
+      scrollContainer('content', SCROLL.NONE, [editor]),
     ]),
     scrollContainer('future', 99, [leafNode('x', WIDGET.VIEW, { surface: SURFACE.NOTICE })]),
   ] } };
@@ -382,9 +408,14 @@ check('interpretChrome carries a node ScrollAxis so a client derives independent
   const walk = (n) => { byId[n.id] = n; if (n.kind === 'container') n.children.forEach(walk); };
   walk(out.root);
   assert.equal(byId.panel.scroll, SCROLL.VERTICAL);
-  assert.equal(byId.content.scroll, SCROLL.VERTICAL);
+  assert.equal(byId.content.scroll, SCROLL.NONE);
+  assert.equal(byId.editor.scroll, SCROLL.NONE);
+  assert.equal(byId['document.viewport'].scroll, SCROLL.VERTICAL);
+  assert.deepEqual(
+    byId['document.viewport'].children.map((child) => child.id),
+    ['document']);
   assert.equal(byId.filetree.scroll ?? SCROLL.NONE, SCROLL.NONE);
-  assert.equal(byId.tabview.scroll ?? SCROLL.NONE, SCROLL.NONE);
+  assert.equal(byId.document.scroll ?? SCROLL.NONE, SCROLL.NONE);
   assert.equal(byId.body.scroll, SCROLL.NONE);
   assert.equal(byId.future.scroll, SCROLL.NONE);  // unknown axis -> none
 });
@@ -395,7 +426,7 @@ check('interpretChrome rejects a container whose scroll field is null or the wro
   // and rejects the frame.
   for (const bad of ['vertical', null]) {
     const root = { id: 'root', size: {}, container: { axis: 1, gap: 0, scroll: bad, children: [
-      leafNode('a', WIDGET.VIEW, { surface: SURFACE.TABVIEW }),
+      leafNode('a', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
     ] } };
     const nodes = [st('root'), st('a')];
     assert.equal(interpretChrome(schemaOf(21, root), { generation: 21, nodes }, presenceForSchema(21, root)), null);
@@ -431,7 +462,11 @@ check('interpretChrome applies the per-kind render gate', () => {
 });
 
 check('interpretChrome produces View leaves for every widened surface', () => {
-  const surfaces = [SURFACE.TABVIEW, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS];
+  const surfaces = [
+    SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS,
+    SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT, SURFACE.NOTICE,
+    SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
+  ];
   const root = rowNode('root', surfaces.map((surface) => leafNode('surface-' + surface, WIDGET.VIEW, { surface })));
   const state = { generation: 8, nodes: [st('root'), ...surfaces.map((surface) => st('surface-' + surface))] };
   const out = interpretChrome(schemaOf(8, root), state, presenceForSchema(8, root));
@@ -439,6 +474,127 @@ check('interpretChrome produces View leaves for every widened surface', () => {
   const items = drawnLeaves(out.root);
   assert.deepEqual(items.map((i) => i.surface), surfaces);
   assert.deepEqual(items.map((i) => i.widget), surfaces.map(() => WIDGET.VIEW));
+});
+
+check('the complete interpreted root preserves every present child in published order', () => {
+  const ids = ['header', 'notice', 'external', 'body', 'footer-prompt', 'footer'];
+  const surfaces = [
+    SURFACE.DOCUMENT, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION,
+    SURFACE.DOCUMENT, SURFACE.FOOTER_PROMPT, SURFACE.DOCUMENT,
+  ];
+  const root = rowNode(
+    'root', ids.map((id, i) => leafNode(id, WIDGET.VIEW, { surface: surfaces[i] })));
+  const states = { generation: 12, nodes: [st('root'), ...ids.map((id) => st(id))] };
+  const out = interpretChrome(schemaOf(12, root), states, presenceForSchema(12, root));
+  assert.deepEqual(out.root.children.map((child) => child.id), ids);
+});
+
+check('web extents use columns horizontally and row height vertically', () => {
+  assert.equal(webExtentCss(3, 0), '3ch');
+  assert.equal(webExtentCss(3, 1), 'calc(3 * var(--ssg-row))');
+});
+
+check('retained surfaces preserve identity within one generation only', () => {
+  const cache = new GenerationRetainedCache();
+  assert.equal(cache.begin(4), true);
+  const first = cache.getOrCreate('prompt', () => ({ version: 1 }));
+  const viewport =
+    cache.getOrCreate('document.viewport', () => ({ scrollTop: 7 }));
+  assert.equal(cache.get('document.viewport'), viewport);
+  assert.equal(cache.getOrCreate('prompt', () => ({ version: 2 })), first);
+  // Detaching a surface does not touch the cache; reattachment finds the same object.
+  assert.equal(cache.getOrCreate('prompt', () => ({ version: 3 })), first);
+  assert.equal(cache.begin(4), false);
+  assert.equal(cache.begin(5), true);
+  assert.notEqual(cache.getOrCreate('prompt', () => ({ version: 4 })), first);
+});
+
+check('session deltas dirty only their dependent browser surfaces', () => {
+  assert.deepEqual(browserRenderPlan({
+    selection: { changed: false, replacement: null },
+    tabs: { state: null },
+    tree: { base_revision: 4n, revision: 4n },
+    palette: null,
+    prompt_view: { changed: false, replacement: null },
+    notice_view: { changed: false, replacement: null },
+    external_modification: { base_revision: 5n, revision: 5n },
+    theme: { replacement: null },
+    ui: null,
+    ui_state: null,
+    ui_presence: null,
+    prompt_status: { changed: false, replacement: null },
+    syntax: { spans: null },
+  }), {
+    rebuild: false, reconcile: false, repaintTheme: false,
+    surfaces: [], localPicker: false,
+  });
+  assert.deepEqual(browserRenderPlan({ selection: { replacement: {} } }), {
+    rebuild: false, reconcile: false, repaintTheme: false,
+    surfaces: [SURFACE.DOCUMENT], localPicker: false,
+  });
+  assert.deepEqual(browserRenderPlan({
+    tree: { base_revision: 1n, revision: 2n, providers: [] },
+  }), {
+    rebuild: false, reconcile: false, repaintTheme: false,
+    surfaces: [SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.SYMBOLS],
+    localPicker: false,
+  });
+  assert.deepEqual(browserRenderPlan({ ui_presence: { nodes: [] } }), {
+    rebuild: false, reconcile: true, repaintTheme: false,
+    surfaces: [], localPicker: false,
+  });
+  assert.deepEqual(browserRenderPlan({ palette: {} }), {
+    rebuild: false, reconcile: false, repaintTheme: false,
+    surfaces: [SURFACE.FINDRESULTS], localPicker: true,
+  });
+  assert.deepEqual(browserRenderPlan({ theme: { replacement: {} } }), {
+    rebuild: false, reconcile: true, repaintTheme: true,
+    surfaces: [
+      SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS,
+      SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT,
+      SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
+    ],
+    localPicker: true,
+  });
+});
+
+check('pointer settlement coalesces, retries once, and rejects a stale basis', () => {
+  const basis = { text: 'abc', tab: 'tab-a' };
+  const first = { anchor: 0, active: 1, basis, retries: 0 };
+  const newer = { anchor: 2, active: 3, basis, retries: 0 };
+  assert.deepEqual(
+    settlePointerSelection(first, newer, 0, basis),
+    { dispatch: newer, preview: newer });
+  assert.deepEqual(
+    settlePointerSelection(first, null, 3, basis),
+    {
+      dispatch: { ...first, retries: 1 },
+      preview: { ...first, retries: 1 },
+    });
+  assert.deepEqual(
+    settlePointerSelection({ ...first, retries: 1 }, null, 3, basis),
+    { dispatch: null, preview: null });
+  assert.deepEqual(
+    settlePointerSelection(first, null, 3, { text: 'abcd', tab: 'tab-a' }),
+    { dispatch: null, preview: null });
+});
+
+check('the locally owned finder becomes keyboard owner while it replaces the document', () => {
+  assert.equal(
+    preferredKeyboardSurface([SURFACE.DOCUMENT]), SURFACE.DOCUMENT);
+  assert.equal(
+    preferredKeyboardSurface([SURFACE.DOCUMENT, SURFACE.FINDRESULTS]),
+    SURFACE.FINDRESULTS);
+  assert.equal(
+    preferredKeyboardSurface([SURFACE.FINDRESULTS]), SURFACE.FINDRESULTS);
+  assert.equal(preferredKeyboardSurface([SURFACE.FILETREE]), null);
+});
+
+check('git affordance projection preserves deliberately varied published facts', () => {
+  assert.deepEqual(
+    gitAffordanceFromNode({ git_status: { status: 1, short_label: 'changed!', role: 20 } }),
+    { shortLabel: 'changed!', role: 20 });
+  assert.equal(gitAffordanceFromNode({ git_status: null }), null);
 });
 
 check('interpretChrome produces a StatusActions leaf under the default profile', () => {
@@ -454,13 +610,13 @@ check('interpretChrome produces a StatusActions leaf under the default profile',
 
 check('interpretChrome rejects View or StatusActions leaves with leaf state', () => {
   const root = rowNode('root', [
-    leafNode('view', WIDGET.VIEW, { surface: SURFACE.TABVIEW }),
+    leafNode('view', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
     leafNode('actions', WIDGET.STATUS_ACTIONS),
   ]);
   const profile = {
     ...WEB_UI_PROFILE,
     widgets: new Set([...WEB_UI_PROFILE.widgets, WIDGET.STATUS_ACTIONS]),
-    surfaces: new Set([SURFACE.TABVIEW]),
+    surfaces: new Set([SURFACE.DOCUMENT]),
   };
   assert.equal(interpretChrome(schemaOf(10, root), { generation: 10, nodes: [
     st('root'), st('view', { value: 'x' }), st('actions'),
@@ -583,28 +739,39 @@ check('interpretChrome Never draws a prompt TextInput that carries server leaf s
   assert.equal(interpretChrome(schemaOf(12, root), state, presenceForSchema(12, root)), null);
 });
 
-check('shouldResetLocalQuery clears the query on a fresh open and a same-state reopen, not while staying open', () => {
-  // Closed -> open: reset.
-  assert.equal(shouldResetLocalQuery(true, false, 1n, 0n), true);
-  // Open -> still open, same epoch: keep the local query.
-  assert.equal(shouldResetLocalQuery(true, true, 1n, 1n), false);
-  // Open -> still open, bumped epoch (reopen without a closed frame): reset.
-  assert.equal(shouldResetLocalQuery(true, true, 2n, 1n), true);
-  // Distinct uint64 epochs above Number.MAX_SAFE_INTEGER must not collapse.
-  const high = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
-  assert.equal(shouldResetLocalQuery(true, true, high + 1n, high), true);
-  // Not open: never reset.
-  assert.equal(shouldResetLocalQuery(false, true, 5n, 1n), false);
+check('picker inventories are selected only by their published mode', () => {
+  const palette = {
+    command_candidates: [{ id: 'edit.undo' }],
+    file_candidates: [{ id: 'src/main.cpp' }],
+  };
+  assert.equal(
+    pickerCandidatesFromPalette(palette, PICKER_MODE.COMMAND)[0].id,
+    'edit.undo');
+  assert.equal(
+    pickerCandidatesFromPalette(palette, PICKER_MODE.FILE)[0].id,
+    'src/main.cpp');
+  assert.throws(() => pickerCandidatesFromPalette(palette, 3), /unsupported/);
 });
 
-check('pickerEpochFromPalette treats absent as zero and rejects malformed present values', () => {
-  assert.equal(pickerEpochFromPalette(null), 0n);
-  assert.equal(pickerEpochFromPalette({}), 0n);
-  assert.equal(pickerEpochFromPalette({ picker_epoch: 0n }), 0n);
-  assert.equal(pickerEpochFromPalette({ picker_epoch: 9 }), 9n);
-  assert.throws(() => pickerEpochFromPalette({ picker_epoch: '9' }), /picker_epoch/);
-  assert.throws(() => pickerEpochFromPalette({ picker_epoch: -1 }), /picker_epoch/);
-  assert.throws(() => pickerEpochFromPalette({ picker_epoch: Number.MAX_SAFE_INTEGER + 1 }), /picker_epoch/);
+check('picker lifecycle resolves published keymap commands with global precedence', () => {
+  const stroke = {
+    code: 'KeyP', control: false, alt: true, meta: false, shift: false,
+  };
+  const palette = {
+    command_open_command_id: 'commands.show',
+    file_open_command_id: 'files.show',
+  };
+  const keymap = { bindings: [
+    { sequence: [stroke], command_id: 'commands.show', context: 'editor' },
+    { sequence: [stroke], command_id: 'files.show', context: '*' },
+  ] };
+  assert.equal(
+    resolvePickerLifecycle(keymap, palette, stroke, 'editor'),
+    PICKER_MODE.FILE);
+  assert.equal(
+    resolvePickerLifecycle(keymap, palette,
+      { ...stroke, shift: true }, 'editor'),
+    null);
 });
 
 // --- Footer prompt: semantic PromptView projection, delta, focus plan, ingress ---
@@ -732,12 +899,22 @@ function externalSection() {
   return {
     external_modification: {
       revision: 3,
+      message: '2 files changed on disk',
       selected: 'external:src/a:b.cpp',
       files: [
         { id: 'external:src/a:b.cpp', path: 'src/a:b.cpp', status: 0,
-          actions: [0, 1, 2] },
+          accessible_status: 'modified on disk', status_label: 'Δ',
+          actions: [
+            { action: 0, label: 'Load disk!', command: 'published.reload' },
+            { action: 1, label: 'Preserve mine!', command: 'published.keep' },
+            { action: 2, label: 'Compare now!', command: 'published.diff' },
+          ] },
         { id: 'external:src/removed.cpp', path: 'src/removed.cpp', status: 1,
-          actions: [0, 2] },
+          accessible_status: 'removed elsewhere', status_label: 'gone',
+          actions: [
+            { action: 0, label: 'Reload', command: 'external.reload' },
+            { action: 2, label: 'Diff', command: 'external.diff' },
+          ] },
       ],
     },
   };
@@ -753,10 +930,16 @@ check('externalModificationFromSections renders one row per file with the select
   // The selected row is the one whose id matches section.selected; the other is not.
   assert.equal(bar.files[0].selected, true);
   assert.equal(bar.files[1].selected, false);
-  // Status glyph + offered action labels come from the wire ordinals.
-  assert.equal(bar.files[0].glyph, 'M');
-  assert.equal(bar.files[1].glyph, 'D');
-  assert.deepEqual(bar.files[0].actions.map((a) => a.label), ['Reload', 'Keep', 'Diff']);
+  // Status labels + offered action affordances pass through from the wire.
+  assert.equal(bar.files[0].statusLabel, 'Δ');
+  assert.equal(bar.files[1].statusLabel, 'gone');
+  assert.deepEqual(
+    bar.files[0].actions.map((a) => [a.label, a.command]),
+    [
+      ['Load disk!', 'published.reload'],
+      ['Preserve mine!', 'published.keep'],
+      ['Compare now!', 'published.diff'],
+    ]);
   assert.deepEqual(bar.files[1].actions.map((a) => a.action), [0, 2]);
 });
 
@@ -783,8 +966,13 @@ check('applyExternalModificationDelta merges upserts, removes, and re-homes the 
   const section = externalSection().external_modification;
   const merged = applyExternalModificationDelta(section, {
     revision: 4,
+    message: '2 files changed on disk',
     removed: ['external:src/removed.cpp'],
-    upserted: [{ id: 'external:src/new.cpp', path: 'src/new.cpp', status: 0, actions: [0] }],
+    upserted: [{
+      id: 'external:src/new.cpp', path: 'src/new.cpp', status: 0,
+      accessible_status: 'modified', status_label: 'M',
+      actions: [{ action: 0, label: 'Reload', command: 'external.reload' }],
+    }],
     selected: 'external:src/new.cpp',
   });
   const ids = merged.files.map((f) => String(f.id));

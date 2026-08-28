@@ -21,14 +21,38 @@ using namespace ssg;
 
 PaletteViewState sample() {
     PaletteViewState state;
-    state.mode = SearchMode::Command;
-    state.pickerEpoch = 7;
-    state.candidates = {
+    state.activeMode = SearchMode::Command;
+    state.commandCandidates = {
         {"edit.undo", "Undo", "Ctrl+Z"},
         {"file.save", "Save File", ""},
         {"vue.open", "Open \xC3\xA9\x63lair", "non-ascii detail"},
     };
+    state.fileCandidates = {
+        {"src/main.cpp", "src/main.cpp", ""},
+    };
     return state;
+}
+
+ProtocolValue paletteWire(
+    ProtocolValue commandCandidates = ProtocolValue::makeArray({}),
+    ProtocolValue fileCandidates = ProtocolValue::makeArray({}),
+    ProtocolValue parameters =
+        *encodePalette(PaletteViewState{}).field("parameters"),
+    ProtocolValue activeMode = ProtocolValue::makeNull(),
+    ProtocolValue magnitude =
+        ProtocolValue::makeInt(kMaxMatcherParameterMagnitude),
+    ProtocolValue candidateBytes =
+        ProtocolValue::makeInt(kMaxCandidateBytes)) {
+    return ProtocolValue::makeObject(
+        {{"active_mode", std::move(activeMode)},
+         {"command_open_command_id", ProtocolValue::makeText("palette.open")},
+         {"command_candidates", std::move(commandCandidates)},
+         {"file_open_command_id",
+          ProtocolValue::makeText("file_finder.open")},
+         {"file_candidates", std::move(fileCandidates)},
+         {"parameters", std::move(parameters)},
+         {"max_parameter_magnitude", std::move(magnitude)},
+         {"max_candidate_bytes", std::move(candidateBytes)}});
 }
 
 TEST(encodeDecodeRoundTripsExactly) {
@@ -38,38 +62,32 @@ TEST(encodeDecodeRoundTripsExactly) {
     if (decoded) ASSERT_TRUE(*decoded == state);
 }
 
-TEST(pickerEpochRoundTripsAndDistinguishesReopens) {
-    // The reopen identity survives the wire so a client can reset its local query
-    // when a same-kind picker reopens (the epoch advances while presence never
-    // toggles). Two states differing ONLY in epoch decode as distinct.
+TEST(activeModeRoundTripsWithoutChangingInventories) {
     PaletteViewState first = sample();
-    first.pickerEpoch = 41;
     PaletteViewState second = sample();
-    second.pickerEpoch = 42;
+    second.activeMode = SearchMode::File;
     const auto a = decodePalette(encodePalette(first));
     const auto b = decodePalette(encodePalette(second));
     ASSERT_TRUE(a.has_value() && b.has_value());
     if (a && b) {
-        ASSERT_EQ(a->pickerEpoch, 41u);
-        ASSERT_EQ(b->pickerEpoch, 42u);
+        ASSERT_EQ(a->activeMode, std::optional<SearchMode>{SearchMode::Command});
+        ASSERT_EQ(b->activeMode, std::optional<SearchMode>{SearchMode::File});
+        ASSERT_EQ(a->commandCandidates, b->commandCandidates);
+        ASSERT_EQ(a->fileCandidates, b->fileCandidates);
         ASSERT_FALSE(*a == *b);
     }
 }
 
-TEST(decodeMissingPickerEpochAsZero) {
-    // picker_epoch is additive for version-1 compatibility: old frames without it
-    // decode as the initial epoch while new frames still round-trip a real reopen
-    // identity.
-    ProtocolValue value = ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(4)},
-         {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
-         {"max_parameter_magnitude",
-          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
-         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
-    const auto decoded = decodePalette(value);
+TEST(closedPickerStillCarriesBothInventories) {
+    auto state = sample();
+    state.activeMode.reset();
+    const auto decoded = decodePalette(encodePalette(state));
     ASSERT_TRUE(decoded.has_value());
-    if (decoded) ASSERT_EQ(decoded->pickerEpoch, std::uint64_t{0});
+    if (decoded) {
+        ASSERT_FALSE(decoded->activeMode.has_value());
+        ASSERT_FALSE(decoded->commandCandidates.empty());
+        ASSERT_FALSE(decoded->fileCandidates.empty());
+    }
 }
 
 TEST(publishedParametersAreTheLibraryDefaults) {
@@ -85,15 +103,10 @@ TEST(decodeRejectsCandidateMissingAField) {
     candidates.push_back(ProtocolValue::makeObject(
         {{"id", ProtocolValue::makeText("x")},
          {"label", ProtocolValue::makeText("X")}}));  // no detail
-    ProtocolValue value = ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(4)},
-         {"candidates", ProtocolValue::makeArray(std::move(candidates))},
-         {"parameters", encodePalette(PaletteViewState{}).field("parameters")
-                            ? *encodePalette(PaletteViewState{}).field("parameters")
-                            : ProtocolValue::makeNull()},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
-         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
-    ASSERT_FALSE(decodePalette(value).has_value());
+    ASSERT_FALSE(
+        decodePalette(
+           paletteWire(ProtocolValue::makeArray(std::move(candidates))))
+           .has_value());
 }
 
 TEST(decodeRejectsParametersMissingAField) {
@@ -102,33 +115,35 @@ TEST(decodeRejectsParametersMissingAField) {
          {"word_boundary_bonus", ProtocolValue::makeInt(8)},
          {"contiguity_bonus", ProtocolValue::makeInt(6)},
          {"exact_case_bonus", ProtocolValue::makeInt(1)}});  // no length_cap
-    ProtocolValue value = ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(4)},
-         {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", parameters},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
-         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
-    ASSERT_FALSE(decodePalette(value).has_value());
+    ASSERT_FALSE(
+        decodePalette(paletteWire(ProtocolValue::makeArray({}),
+                                  ProtocolValue::makeArray({}),
+                                  std::move(parameters)))
+            .has_value());
 }
 
 TEST(decodeRejectsOutOfRangeMode) {
-    ProtocolValue value = ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(99)},
-         {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
-         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
-    ASSERT_FALSE(decodePalette(value).has_value());
+    ASSERT_FALSE(
+        decodePalette(paletteWire(
+                          ProtocolValue::makeArray({}),
+                          ProtocolValue::makeArray({}),
+                          *encodePalette(PaletteViewState{}).field("parameters"),
+                          ProtocolValue::makeUint(99)))
+            .has_value());
+    ASSERT_FALSE(
+        decodePalette(paletteWire(
+                          ProtocolValue::makeArray({}),
+                          ProtocolValue::makeArray({}),
+                          *encodePalette(PaletteViewState{}).field("parameters"),
+                          ProtocolValue::makeUint(
+                              static_cast<std::uint8_t>(SearchMode::Text))))
+            .has_value());
 }
 
 TEST(decodeRejectsNonArrayCandidates) {
-    ProtocolValue value = ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(4)},
-         {"candidates", ProtocolValue::makeText("not an array")},
-         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
-         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
-    ASSERT_FALSE(decodePalette(value).has_value());
+    ASSERT_FALSE(
+        decodePalette(paletteWire(ProtocolValue::makeText("not an array")))
+            .has_value());
 }
 
 TEST(decodeRejectsOutOfDomainParameter) {
@@ -142,13 +157,11 @@ TEST(decodeRejectsOutOfDomainParameter) {
          {"contiguity_bonus", ProtocolValue::makeInt(6)},
          {"exact_case_bonus", ProtocolValue::makeInt(1)},
          {"length_cap", ProtocolValue::makeInt(100)}});
-    ProtocolValue value = ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(4)},
-         {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", parameters},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
-         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
-    ASSERT_FALSE(decodePalette(value).has_value());
+    ASSERT_FALSE(
+        decodePalette(paletteWire(ProtocolValue::makeArray({}),
+                                  ProtocolValue::makeArray({}),
+                                  std::move(parameters)))
+            .has_value());
 }
 
 TEST(decodeRejectsParameterOutsideIntRange) {
@@ -159,21 +172,24 @@ TEST(decodeRejectsParameterOutsideIntRange) {
          {"contiguity_bonus", ProtocolValue::makeInt(6)},
          {"exact_case_bonus", ProtocolValue::makeInt(1)},
          {"length_cap", ProtocolValue::makeInt(100)}});
-    ProtocolValue value = ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(4)},
-         {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", parameters},
-         {"max_parameter_magnitude", ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
-         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
-    ASSERT_FALSE(decodePalette(value).has_value());
+    ASSERT_FALSE(
+        decodePalette(paletteWire(ProtocolValue::makeArray({}),
+                                  ProtocolValue::makeArray({}),
+                                  std::move(parameters)))
+            .has_value());
 }
 
 TEST(decodeRejectsMissingMagnitude) {
-    // The published domain bound must be present; a frame without it is malformed.
+    auto valid = PaletteViewState{};
     ProtocolValue value = ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(4)},
-         {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")}});
+        {{"active_mode", ProtocolValue::makeNull()},
+         {"command_open_command_id", ProtocolValue::makeText("palette.open")},
+         {"command_candidates", ProtocolValue::makeArray({})},
+         {"file_open_command_id",
+          ProtocolValue::makeText("file_finder.open")},
+         {"file_candidates", ProtocolValue::makeArray({})},
+         {"parameters", *encodePalette(valid).field("parameters")},
+         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
     ASSERT_FALSE(decodePalette(value).has_value());
 }
 
@@ -181,14 +197,15 @@ TEST(decodeRejectsMismatchedMagnitude) {
     // A frame stamped with a domain bound other than the library's own is refused --
     // the C++ authority scores with its compiled constant and must not admit a frame
     // claiming a different bound.
-    ProtocolValue value = ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(4)},
-         {"candidates", ProtocolValue::makeArray({})},
-         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
-         {"max_parameter_magnitude",
-          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude - 1)},
-         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
-    ASSERT_FALSE(decodePalette(value).has_value());
+    ASSERT_FALSE(
+        decodePalette(paletteWire(
+                          ProtocolValue::makeArray({}),
+                          ProtocolValue::makeArray({}),
+                          *encodePalette(PaletteViewState{}).field("parameters"),
+                          ProtocolValue::makeNull(),
+                          ProtocolValue::makeInt(
+                              kMaxMatcherParameterMagnitude - 1)))
+            .has_value());
 }
 
 TEST(decodeRejectsOversizedCandidate) {
@@ -200,22 +217,18 @@ TEST(decodeRejectsOversizedCandidate) {
                     std::string(static_cast<std::size_t>(kMaxCandidateBytes) + 1, 'a'))},
          {"label", ProtocolValue::makeText("ok")},
          {"detail", ProtocolValue::makeText("")}}));
-    ProtocolValue value = ProtocolValue::makeObject(
-        {{"mode", ProtocolValue::makeUint(4)},
-         {"candidates", ProtocolValue::makeArray(std::move(candidates))},
-         {"parameters", *encodePalette(PaletteViewState{}).field("parameters")},
-         {"max_parameter_magnitude",
-          ProtocolValue::makeInt(kMaxMatcherParameterMagnitude)},
-         {"max_candidate_bytes", ProtocolValue::makeInt(kMaxCandidateBytes)}});
-    ASSERT_FALSE(decodePalette(value).has_value());
+    ASSERT_FALSE(
+        decodePalette(
+            paletteWire(ProtocolValue::makeArray(std::move(candidates))))
+            .has_value());
 }
 
 }  // namespace
 
 int main() {
     RUN(encodeDecodeRoundTripsExactly);
-    RUN(pickerEpochRoundTripsAndDistinguishesReopens);
-    RUN(decodeMissingPickerEpochAsZero);
+    RUN(activeModeRoundTripsWithoutChangingInventories);
+    RUN(closedPickerStillCarriesBothInventories);
     RUN(publishedParametersAreTheLibraryDefaults);
     RUN(decodeRejectsCandidateMissingAField);
     RUN(decodeRejectsParametersMissingAField);

@@ -220,7 +220,6 @@ struct ShellState::Impl {
         std::make_unique<PaneNode>(PaneNode{PaneId{1}});
     PaneId active{1};
     std::uint32_t nextId = 2;
-    bool distractionFree = false;
 };
 
 ShellState::ShellState() : impl_(std::make_unique<Impl>()) {}
@@ -303,14 +302,6 @@ bool ShellState::focusPane(PaneDirection direction,
     return true;
 }
 
-void ShellState::toggleDistractionFree() noexcept {
-    impl_->distractionFree = !impl_->distractionFree;
-}
-
-bool ShellState::distractionFree() const noexcept {
-    return impl_->distractionFree;
-}
-
 ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                                        const ShellState& state,
                                        const UiInteractionState& interaction,
@@ -331,26 +322,23 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
 
     ShellViewState view;
     view.viewport = request.viewport;
-    const bool distractionFree = state.impl_->distractionFree;
+    const bool distractionFree = request.distractionFree;
     const int gutterWidth = request.style.dimensions.scrollbarGutterWidth;
-    // The tree is the single authority for which regions scroll: the panel and
-    // content viewports reserve a scrollbar gutter only when their node declares
-    // ScrollAxis::Vertical. The builder marks both, so this reproduces the prior
-    // geometry exactly; a node without the flag reserves no gutter.
+    // The tree is the single authority for which regions scroll.
     const bool panelScrolls =
         nodeScrollsVertically(schema.schema(), kPanelNodeId);
-    const bool contentScrolls =
-        nodeScrollsVertically(schema.schema(), kContentNodeId);
-    const int contentGutter = contentScrolls ? gutterWidth : 0;
+    const bool documentScrolls =
+        nodeScrollsVertically(schema.schema(), kDocumentViewportNodeId);
+    const int contentGutter = documentScrolls ? gutterWidth : 0;
     const int headerHeight = request.style.dimensions.headerHeight;
     const int footerHeight = request.style.dimensions.footerHeight;
     const int tabBarHeight = request.style.dimensions.tabBarHeight;
-    // The header prompt input is visible exactly when presence marks it present --
-    // the single authority for whether a picker is open on this client. A picker is
-    // not a document view, so it covers the tab bar rather than sitting below it.
+    // Tab-bar presence comes from the same published tree the web client renders.
     const bool inputVisible = interaction.presence().isPresent(
         UiNodeId{std::string{kHeaderPromptInputNodeId}});
-    const bool showTabBar = !inputVisible;
+    const bool showTabBar =
+        interaction.presence().isPresent(UiNodeId{std::string{kEditorNodeId}}) &&
+        interaction.presence().isPresent(UiNodeId{std::string{kTabBarNodeId}});
 
     // Region geometry comes from the box-tree solver.
     // Sizing POLICY stays here: the panel width is decided with the same rule as
@@ -703,7 +691,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         const auto suffix = std::to_string(pane.id.value());
         addNode(view, ShellNodeKind::Pane, "pane." + suffix,
                  "Editor pane " + suffix, pane.frame, SemanticRole::Canvas);
-        if (contentScrolls) {
+        if (documentScrolls) {
             addNode(view, ShellNodeKind::Scrollbar, "pane." + suffix + ".scrollbar",
                      "Scrollbar for editor pane " + suffix, pane.scrollbar,
                      SemanticRole::ScrollbarTrack);

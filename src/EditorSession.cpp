@@ -51,24 +51,22 @@ bool setNonBlocking(int descriptor) {
     return ::fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-GitTreeStatus gitTreeStatusForDiffStatus(DiffFileStatus status) {
-    switch (status) {
-        case DiffFileStatus::Added: return GitTreeStatus::Added;
-        case DiffFileStatus::Modified: return GitTreeStatus::Modified;
-        case DiffFileStatus::Deleted: return GitTreeStatus::Deleted;
-        case DiffFileStatus::Renamed: return GitTreeStatus::Renamed;
-    }
-    throw std::logic_error("unknown diff file status");
+GitTreeStatus gitTreeStatusForScanFile(const GitDiffScanFile& file) {
+    if (file.previousPath) return GitTreeStatus::Renamed;
+    if (!file.workingContent) return GitTreeStatus::Deleted;
+    if (!file.baselineContent) return GitTreeStatus::Added;
+    return GitTreeStatus::Modified;
 }
 
-std::vector<GitTreeRecord> gitTreeRecordsFromDiff(const DiffViewState& diffView) {
+std::vector<GitTreeRecord> gitTreeRecordsFromScan(
+    const std::vector<GitDiffScanFile>& files) {
     std::vector<GitTreeRecord> records;
-    records.reserve(diffView.files.size());
-    for (const auto& file : diffView.files) {
+    records.reserve(files.size());
+    for (const auto& file : files) {
         records.push_back(
             {.workspacePath = file.path.generic_string(),
              .label = file.path.generic_string(),
-             .status = gitTreeStatusForDiffStatus(file.status),
+             .status = gitTreeStatusForScanFile(file),
              .commands = {}});
     }
     return records;
@@ -661,9 +659,8 @@ void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
                 (void)::write(worker->wakeWriteFd, &byte, 1);
             }
         };
-        // The branch is published independently of the diff: a refresh whose diff is
-        // rejected (a file over the work budget) still records the branch, so a large
-        // working tree never hides the branch indicator.
+        // The branch is published independently of the diff so an incomplete
+        // repository scan never hides the branch indicator.
         const auto queueBranchScan = [&]() {
             auto scan = worker->source.takeBranchOnlyScanIfChanged();
             if (!scan) {
@@ -690,10 +687,6 @@ void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
             }
             // Retry (or fall back a path scan to a full refresh) ONLY when the source
             // asked for a rescan -- a transient failure (incomplete scan, index.lock).
-            // A deterministic rejection (a file over the work budget) reports
-            // accepted=false WITHOUT requesting a rescan, and must not schedule a
-            // retry: re-running the diff would burn a core re-rejecting the same
-            // unchanged content. A content change (watch event) re-triggers the scan.
             if (refreshed.shouldRetry()) {
                 if (!fullRefresh) {
                     auto full = maybeRefreshAll();
@@ -963,11 +956,20 @@ bool EditorSession::Impl::drainGitDiffScans() {
     if (!events.empty()) {
         reconcileExternalWatchEvents(
             std::vector<WatchEvent>{events.begin(), events.end()});
+        const bool inventoryChanged = std::any_of(
+            events.begin(), events.end(), [](const WatchEvent& event) {
+                return event.kind != WatchEventKind::Modify ||
+                       event.path.filename() == ".gitignore";
+            });
+        if (inventoryChanged) {
+            refreshTree();
+        }
     }
     // After ordinary ingress, recover any events the watcher dropped on overflow by
     // re-scanning every open document against disk (a full external resync).
     if (fullReconcile) {
         reconcileAllOpenDocumentsAgainstDisk();
+        refreshTree();
     }
     return accepted;
 }
@@ -2419,6 +2421,7 @@ void EditorSession::Impl::refreshTree() {
     ++treeScanCount;
     tree.replaceProvider(TreeProviderSnapshot::fromFilesystem(
         TreeProviderId{"filesystem"}, root, interaction.allocateTreeRevision()));
+    rebuildFileCandidates();
 }
 
 void EditorSession::Impl::rebuildInteractionSchema(
@@ -2430,9 +2433,6 @@ void EditorSession::Impl::rebuildInteractionSchema(
                             promptSigil, composed));
 }
 
-// Opens a picker through the authority: apply(OpenFinder) atomically opens the Palette
-// prompt, sets the picker identity, and advances the picker epoch. File candidates are
-// refreshed by reconcilePickerCandidates() off that epoch, not here.
 bool EditorSession::Impl::openPickerPrompt(PickerKind kind) {
     return interaction.apply(OpenFinder{kind});
 }
@@ -2447,21 +2447,6 @@ void EditorSession::Impl::rebuildFileCandidates() {
         boolSetting(settings, SettingKey::FileFinderRespectGitignore, true);
     fileCandidates =
         std::move(WorkspaceFileIndex{}.build(root, *matcher, options).candidates);
-}
-
-// The file picker's candidate lifecycle, keyed off the authority's picker epoch (which
-// advances on every finder open, INCLUDING a File->File reopen). A newly (re)opened File
-// picker rebuilds its candidates synchronously before the next snapshot; any other picker
-// state clears them, so a closed or replaced picker never publishes a stale walk. Replaces
-// the old reconcileOpenPicker, which derived openPicker from the prompt.
-void EditorSession::Impl::reconcilePickerCandidates() {
-    const auto epoch = interaction.pickerEpoch();
-    if (interaction.openPicker() == PickerKind::File) {
-        if (epoch != lastPickerEpoch) rebuildFileCandidates();
-    } else {
-        fileCandidates.clear();
-    }
-    lastPickerEpoch = epoch;
 }
 
 void EditorSession::Impl::reconcileFindDocument() {
@@ -2747,17 +2732,41 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
         return {GitDiffScanError::DiffRejected};
     }
     currentGitBranch = scan.currentBranch;
+    auto gitRecords = gitTreeRecordsFromScan(scan.files);
     auto stagedDiff = diff;
     auto stagedFollow = follow;
     std::vector<FollowDiffChange> followChanges;
     followChanges.reserve(scan.files.size() + stagedDiff.viewState().files.size());
     bool mutated = false;
+    std::vector<DiffFileId> statusOnlyIds;
 
     Revision nextRevision = Revision{stagedDiff.viewState().revision.value() + 1};
     const auto nextMutationRevision = [&nextRevision]() {
         auto current = nextRevision;
         nextRevision = Revision{nextRevision.value() + 1};
         return current;
+    };
+    const auto removeDetailedFile =
+        [&](const DiffFileId& id) -> GitDiffScanResult {
+        const auto prior = stagedDiff.file(id);
+        if (!prior || !stagedDiff.isGitFile(id)) {
+            return {};
+        }
+        auto removedFile = prior->get();
+        auto priorHunks = removedFile.hunks;
+        const auto revision = nextMutationRevision();
+        const auto removed = stagedDiff.removeFile(id, revision);
+        if (!removed.accepted()) {
+            return {GitDiffScanError::DiffRejected};
+        }
+        mutated = true;
+        removedFile.deleted = true;
+        removedFile.currentContent.clear();
+        removedFile.hunks.clear();
+        removedFile.changedLines.clear();
+        followChanges.push_back(
+            {std::move(removedFile), std::move(priorHunks), revision});
+        return {};
     };
 
     std::vector<DiffFileId> scannedIds;
@@ -2778,7 +2787,15 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
              .baselineIdentity = scan.baselineIdentity},
             revision);
         if (!applied.accepted()) {
-            return {GitDiffScanError::DiffRejected};
+            if (applied.error != DiffError::WorkLimitExceeded) {
+                return {GitDiffScanError::DiffRejected};
+            }
+            statusOnlyIds.push_back(file.id);
+            if (auto removed = removeDetailedFile(file.id);
+                !removed.accepted()) {
+                return removed;
+            }
+            continue;
         }
         const auto changedFile = stagedDiff.file(file.id);
         if (!changedFile) {
@@ -2802,24 +2819,9 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
         if (!stagedDiff.isGitFile(file.id)) {
             continue;
         }
-        const auto prior = stagedDiff.file(file.id);
-        if (!prior) {
-            continue;
+        if (auto removed = removeDetailedFile(file.id); !removed.accepted()) {
+            return removed;
         }
-        auto removedFile = prior->get();
-        auto priorHunks = removedFile.hunks;
-        const auto revision = nextMutationRevision();
-        const auto removed = stagedDiff.removeFile(file.id, revision);
-        if (!removed.accepted()) {
-            return {GitDiffScanError::DiffRejected};
-        }
-        mutated = true;
-        removedFile.deleted = true;
-        removedFile.currentContent.clear();
-        removedFile.hunks.clear();
-        removedFile.changedLines.clear();
-        followChanges.push_back(
-            {std::move(removedFile), std::move(priorHunks), revision});
     }
 
     if (mutated) {
@@ -2832,6 +2834,19 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
         const auto previousTarget = follow.viewState().activeTarget;
         diff = std::move(stagedDiff);
         follow = std::move(stagedFollow);
+        for (const auto& id : statusOnlyIds) {
+            std::optional<TabId> liveTab;
+            for (const auto& tab : tabs.viewState().tabs) {
+                if (tab.kind == TabKind::LiveDiff &&
+                    tab.contentIdentity == id.value()) {
+                    liveTab = tab.id;
+                    break;
+                }
+            }
+            if (liveTab) {
+                (void)tabs.close(*liveTab, std::chrono::milliseconds{100});
+            }
+        }
         refreshLiveDiffDocuments(diff.viewState());
         const auto next = follow.viewState();
         if (next.mode == FollowMode::Following && next.activeTarget &&
@@ -2841,7 +2856,7 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
     }
     tree.replaceProvider(TreeProviderSnapshot::fromGit(
         TreeProviderId{"git"}, interaction.allocateTreeRevision(),
-        gitTreeRecordsFromDiff(mutated ? diff.viewState() : stagedDiff.viewState())));
+        std::move(gitRecords)));
     lastGitScanRevision = scan.revision;
     if (session) {
         session->advanceRevision();
@@ -3300,7 +3315,6 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
         const auto revisionsBefore = documentRevisions(impl_->workspace);
         auto result = impl_->session->dispatch(as, dispatched);
         impl_->reconcileFindDocument();
-        impl_->reconcilePickerCandidates();
         // The draft-conflict notice's presence lives in per-document runtime state,
         // outside the prompt/panel transitions, so reconcile it into the interaction
         // authority here where every state change (open, reopen, tab switch, discard,
@@ -3366,7 +3380,6 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
     if (result.accepted() && impl_->interaction.openPicker() == PickerKind::File &&
         command.id == "file.open") {
         (void)impl_->interaction.cancelPrompt();
-        impl_->reconcilePickerCandidates();
     }
     return withEffects(std::move(result));
 }

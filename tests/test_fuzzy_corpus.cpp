@@ -61,7 +61,7 @@ Corpus loadCorpus() {
         auto fields = splitTabs(line);
         if (fields[0] == "C") {
             // C \t id \t label \t detail
-            corpus.state.candidates.push_back(
+            corpus.state.commandCandidates.push_back(
                 {fields.at(1), fields.at(2), fields.size() > 3 ? fields[3] : ""});
         } else if (fields[0] == "Q") {
             // Q \t query \t comma-separated-expected-ids
@@ -75,12 +75,14 @@ Corpus loadCorpus() {
 
 TEST(referenceRankReproducesTheCorpusOrdering) {
     const auto corpus = loadCorpus();
-    ASSERT_TRUE(!corpus.state.candidates.empty());
+    ASSERT_TRUE(!corpus.state.commandCandidates.empty());
     ASSERT_TRUE(!corpus.queries.empty());
     for (const auto& query : corpus.queries) {
-        auto order = referenceRank(corpus.state, query.query);
+        auto order =
+            referenceRank(corpus.state, SearchMode::Command, query.query);
         std::vector<std::string> ids;
-        for (auto index : order) ids.push_back(corpus.state.candidates[index].id);
+        for (auto index : order)
+            ids.push_back(corpus.state.commandCandidates[index].id);
         ASSERT_EQ(ids, query.expected);
     }
 }
@@ -92,16 +94,18 @@ TEST(referenceRankReproducesTheCorpusOrdering) {
 TEST(referenceRankRejectsOutOfDomainParametersAtTheBoundary) {
     PaletteViewState state;
     state.parameters.baseScore = kMaxMatcherParameterMagnitude * 1000;  // out of domain
-    state.candidates = {{"edit.undo", "Undo", ""}};
-    ASSERT_THROWS(referenceRank(state, "u"), std::invalid_argument);
+    state.commandCandidates = {{"edit.undo", "Undo", ""}};
+    ASSERT_THROWS(referenceRank(state, SearchMode::Command, "u"),
+                  std::invalid_argument);
 }
 
 TEST(referenceRankRejectsAnOversizedCandidateAtTheBoundary) {
     PaletteViewState state;
-    state.candidates = {
+    state.commandCandidates = {
         {"huge", std::string(static_cast<std::size_t>(kMaxCandidateBytes) + 1, 'u'),
          ""}};
-    ASSERT_THROWS(referenceRank(state, "u"), std::invalid_argument);
+    ASSERT_THROWS(referenceRank(state, SearchMode::Command, "u"),
+                  std::invalid_argument);
 }
 
 }  // namespace

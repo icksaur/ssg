@@ -425,8 +425,10 @@ void registerExternalModificationCommands(CommandCatalog& builder,
             // The selection always names a file (the flow keeps it valid), but an
             // action the selected file does not offer is a no-op, never applied.
             if (selected == view.files.end() ||
-                std::find(selected->actions.begin(), selected->actions.end(),
-                          action) == selected->actions.end()) {
+                std::none_of(selected->actions.begin(), selected->actions.end(),
+                             [&](ExternalActionAffordance const& offered) {
+                                 return offered.action == action;
+                             })) {
                 return success();
             }
             if (action == ExternalAction::Reload) {
@@ -692,7 +694,7 @@ void registerTabCommands(CommandCatalog& builder,
                 .summary(std::move(summary))
                 .mutates()
                 .lua()
-                .optionalInProcessHandler<TabId>(
+                .optionalHandler<TabId>(
                     [&runtime, command](CommandContext& context,
                                         std::optional<TabId> const& tab) {
                         return runtime.runTransaction([&] {

@@ -212,14 +212,42 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
         return err;
 
     const UiContainer* content = nullptr;
-    constexpr std::array contentIds{kTabViewNodeId, kFindResultsNodeId};
+    constexpr std::array contentIds{kEditorNodeId, kFindResultsViewportNodeId};
     if (auto err =
             requireChildren(bodyContainer->children[1], "content", contentIds, content))
         return err;
-    if (auto err = requireViewLeaf(content->children[0], kTabViewNodeId,
-                                   ViewSurface::TabView))
+    if (content->scroll != ScrollAxis::None) {
+        return std::string{"content: must not be a scroll viewport"};
+    }
+    const UiContainer* editor = nullptr;
+    constexpr std::array editorIds{kTabBarNodeId, kDocumentViewportNodeId};
+    if (auto err =
+            requireChildren(content->children[0], "editor", editorIds, editor))
         return err;
-    if (auto err = requireViewLeaf(content->children[1], kFindResultsNodeId,
+    if (auto err = requireViewLeaf(editor->children[0], kTabBarNodeId,
+                                   ViewSurface::TabBar))
+        return err;
+    const UiContainer* documentViewport = nullptr;
+    constexpr std::array documentIds{kDocumentNodeId};
+    if (auto err = requireChildren(editor->children[1], "document viewport",
+                                   documentIds, documentViewport))
+        return err;
+    if (documentViewport->scroll != ScrollAxis::Vertical) {
+        return std::string{"document viewport: must scroll vertically"};
+    }
+    if (auto err = requireViewLeaf(documentViewport->children[0], kDocumentNodeId,
+                                   ViewSurface::Document))
+        return err;
+    const UiContainer* findResultsViewport = nullptr;
+    constexpr std::array findResultsIds{kFindResultsNodeId};
+    if (auto err = requireChildren(content->children[1], "find-results viewport",
+                                   findResultsIds, findResultsViewport))
+        return err;
+    if (findResultsViewport->scroll != ScrollAxis::Vertical) {
+        return std::string{"find-results viewport: must scroll vertically"};
+    }
+    if (auto err = requireViewLeaf(findResultsViewport->children[0],
+                                   kFindResultsNodeId,
                                    ViewSurface::FindResults))
         return err;
     // The FooterPrompt and Notice surfaces are each bound to their canonical node; a

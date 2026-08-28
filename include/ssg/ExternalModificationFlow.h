@@ -37,6 +37,7 @@ enum class ExternalDocumentStatus : std::uint8_t {
 struct ExternalModificationCommandDescriptor {
     std::string_view id;
     ExternalAction action;
+    std::string_view label;
     friend bool operator==(const ExternalModificationCommandDescriptor&,
                            const ExternalModificationCommandDescriptor&) =
         default;
@@ -52,14 +53,26 @@ public:
 
 private:
     const std::array<ExternalModificationCommandDescriptor, 3> descriptors_{{
-        {"external.reload", ExternalAction::Reload},
-        {"external.keep_buffer", ExternalAction::KeepBuffer},
-        {"external.open_diff", ExternalAction::OpenDiff},
+        {"external.reload", ExternalAction::Reload, "Reload"},
+        {"external.keep_buffer", ExternalAction::KeepBuffer, "Keep"},
+        {"external.open_diff", ExternalAction::OpenDiff, "Diff"},
     }};
 };
 
 [[nodiscard]] ExternalModificationCommandSet
 externalModificationCommandSet();
+
+struct ExternalActionAffordance {
+    ExternalAction action = ExternalAction::Reload;
+    std::string label;
+    std::string command;
+
+    friend bool operator==(const ExternalActionAffordance&,
+                           const ExternalActionAffordance&) = default;
+};
+
+[[nodiscard]] ExternalActionAffordance
+externalActionAffordance(ExternalAction action);
 
 struct ExternalDocumentView {
     DiffFileId id;
@@ -67,7 +80,8 @@ struct ExternalDocumentView {
     ExternalDocumentStatus status =
         ExternalDocumentStatus::ExternallyModified;
     std::string accessibleStatus;
-    std::vector<ExternalAction> actions;
+    std::string statusLabel;
+    std::vector<ExternalActionAffordance> actions;
 
     friend bool operator==(const ExternalDocumentView&,
                            const ExternalDocumentView&) = default;
@@ -75,6 +89,7 @@ struct ExternalDocumentView {
 
 struct ExternalModificationViewState {
     Revision revision{0};
+    std::string message;
     std::vector<ExternalDocumentView> files;
     // The library-owned selection, mirroring TreeProviderView::selected. An id is
     // stable across list mutation where an index is not. Invariant the flow
@@ -89,6 +104,7 @@ struct ExternalModificationViewState {
 struct ExternalModificationDelta {
     Revision baseRevision{0};
     Revision revision{0};
+    std::string message;
     std::vector<ExternalDocumentView> upserted;
     std::vector<DiffFileId> removed;
     // The target's selection (a selection-only move is a real delta: files

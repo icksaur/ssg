@@ -267,7 +267,7 @@ TEST(commandRequestRoundTripsCompoundBrowserActions) {
     {
         ssg::ClientCommand const command{
             "picker.submit", ssg::Revision{4},
-            ssg::PickerSubmitArguments{"src/main.cpp"}};
+            ssg::PickerSubmitArguments{ssg::SearchMode::File, "src/main.cpp"}};
         auto decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
             ssg::ProtocolCodec{}.encodeCommandRequest(command, registry),
             registry);
@@ -276,7 +276,26 @@ TEST(commandRequestRoundTripsCompoundBrowserActions) {
             std::any_cast<ssg::PickerSubmitArguments>(
                 &decoded.command->payload);
         ASSERT_TRUE(arguments != nullptr);
+        ASSERT_EQ(arguments->mode, ssg::SearchMode::File);
         ASSERT_EQ(arguments->candidateId, std::string{"src/main.cpp"});
+    }
+    {
+        ssg::ClientCommand const command{
+            "select.set_byte_range", ssg::Revision{5},
+            ssg::SelectionByteRangeArguments{ssg::ByteOffset{2},
+                                             ssg::ByteOffset{7}}};
+        auto decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
+            ssg::ProtocolCodec{}.encodeCommandRequest(command, registry),
+            registry);
+        ASSERT_TRUE(decoded.accepted());
+        auto const* arguments =
+            std::any_cast<ssg::SelectionByteRangeArguments>(
+                &decoded.command->payload);
+        ASSERT_TRUE(arguments != nullptr);
+        if (arguments) {
+            ASSERT_EQ(arguments->anchor.value(), std::size_t{2});
+            ASSERT_EQ(arguments->active.value(), std::size_t{7});
+        }
     }
     {
         ssg::ClientCommand const command{
@@ -382,6 +401,30 @@ TEST(commandRequestRoundTripsWithNoPayload) {
     ASSERT_EQ(decoded.command->id, command.id);
     ASSERT_EQ(decoded.command->baseRevision, command.baseRevision);
     ASSERT_FALSE(decoded.command->payload.has_value());
+}
+
+TEST(tabCommandsRoundTripOptionalTabIdentity) {
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
+    for (std::string const id : {"tab.activate", "tab.close"}) {
+        for (std::any const payload : {std::any{}, std::any{ssg::TabId{17}}}) {
+            ssg::ClientCommand const command{id, ssg::Revision{6}, payload};
+            auto const bytes =
+                ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+            auto const decoded =
+                ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
+            ASSERT_TRUE(decoded.accepted());
+            ASSERT_TRUE(decoded.command.has_value());
+            ASSERT_EQ(decoded.command->id, id);
+            if (payload.has_value()) {
+                auto const* tab =
+                    std::any_cast<ssg::TabId>(&decoded.command->payload);
+                ASSERT_TRUE(tab != nullptr);
+                if (tab) ASSERT_TRUE(*tab == ssg::TabId{17});
+            } else {
+                ASSERT_FALSE(decoded.command->payload.has_value());
+            }
+        }
+    }
 }
 
 TEST(commandRequestRoundTripsWithTextInputArguments) {
@@ -564,7 +607,7 @@ std::string buildCommandRequestMessage(std::string const& id,
     appendNullValue(body);
 
     std::string message;
-    message += wireU8(1);
+    message += wireU8(2);
     message += wireU8(
         static_cast<std::uint8_t>(ssg::ProtocolMessageKind::CommandRequest));
     message += body;
@@ -590,7 +633,7 @@ std::string buildInvalidScrollFractionMessage() {
     appendFieldKey(body, "payload");
     body += payload;
 
-    return wireU8(1) +
+    return wireU8(2) +
            wireU8(static_cast<std::uint8_t>(
                ssg::ProtocolMessageKind::CommandRequest)) +
            body;
@@ -652,9 +695,12 @@ TEST(anAbsentSelectedExternalIdDecodesAsNone) {
     auto sect = sections(ssg::Revision{4}, "alpha");
     sect.externalModification = {
         ssg::Revision{4},
+        "one file changed on disk",
         {{ssg::DiffFileId{"a"}, "a.txt",
           ssg::ExternalDocumentStatus::ExternallyModified, "x",
-          {ssg::ExternalAction::Reload}}},
+          "M",
+          {ssg::externalActionAffordance(
+              ssg::ExternalAction::Reload)}}},
         std::nullopt};
     auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
@@ -676,15 +722,59 @@ TEST(aSelectedExternalIdMustNameAFileOrTheSnapshotDecodeFailsLoud) {
     auto sect = sections(ssg::Revision{4}, "alpha");
     sect.externalModification = {
         ssg::Revision{4},
+        "one file changed on disk",
         {{ssg::DiffFileId{"a"}, "a.txt",
           ssg::ExternalDocumentStatus::ExternallyModified, "x",
-          {ssg::ExternalAction::Reload}}},
+          "M",
+          {ssg::externalActionAffordance(
+              ssg::ExternalAction::Reload)}}},
         ssg::DiffFileId{"ghost"}};
     auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, clientView(3), std::move(sect));
+    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    ASSERT_FALSE(decoded.accepted());
+}
+
+TEST(externalActionAffordanceMustMatchItsAuthoritativeIdentity) {
+    auto sect = sections(ssg::Revision{4}, "alpha");
+    sect.externalModification = ssg::ExternalModificationViewState{
+        ssg::Revision{4},
+        "one file changed on disk",
+        {{ssg::DiffFileId{"a"}, "a.txt",
+          ssg::ExternalDocumentStatus::ExternallyModified, "modified", "M",
+          {{ssg::ExternalAction::Reload, "not reload",
+            "external.reload"}}}},
+        std::nullopt};
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), std::move(sect));
+    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    ASSERT_FALSE(decoded.accepted());
+}
+
+TEST(gitTreeAffordanceMustMatchItsAuthoritativeIdentity) {
+    auto sect = sections(ssg::Revision{4}, "alpha");
+    ssg::TreeNode node{ssg::TreeNodeId{"git:a"}, std::nullopt, "a.txt",
+                       ssg::TreeNodeKind::File};
+    node.gitStatus = ssg::GitTreeAffordance{
+        ssg::GitTreeStatus::Modified, "not modified",
+        ssg::SemanticRole::DiffAdded};
+    sect.tree = ssg::TreeViewState{
+        ssg::TreeRevision{7},
+        {{ssg::TreeProviderId{"git"}, ssg::TreeProviderKind::Git,
+          {ssg::TreeNodeView{node, 0, false}}, node.id}}};
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3), std::move(sect));
     auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
         ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
@@ -839,8 +929,8 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
 TEST(sessionDeltaCarriesThePaletteSection) {
     auto beforeSections = sections(ssg::Revision{4}, "alpha");
     auto afterSections = sections(ssg::Revision{5}, "alpha");
-    afterSections.palette.mode = ssg::SearchMode::Command;
-    afterSections.palette.candidates = {
+    afterSections.palette.activeMode = ssg::SearchMode::Command;
+    afterSections.palette.commandCandidates = {
         {"edit.undo", "Undo", ""}, {"file.save", "Save File", ""}};
     auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
@@ -1588,6 +1678,27 @@ void writeFixtureHex(std::string const& name, std::string const& bytes) {
 // goldens: `SSG_REGEN_PROTOCOL_FIXTURES=1 ./build/test_protocol`.
 TEST(regenerateCanonicalFixtures) {
     if (std::getenv("SSG_REGEN_PROTOCOL_FIXTURES") == nullptr) return;
+    auto const registry =
+        ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
+    writeFixtureHex(
+        "command_request_no_payload.hex",
+        ssg::ProtocolCodec{}.encodeCommandRequest(
+            {"edit.undo", ssg::Revision{3}, {}}, registry));
+    writeFixtureHex(
+        "command_request_text_input.hex",
+        ssg::ProtocolCodec{}.encodeCommandRequest(
+            {"text.insert", ssg::Revision{3},
+             ssg::TextInputArguments{"hello"}},
+            registry));
+    writeFixtureHex(
+        "command_result.hex",
+        ssg::ProtocolCodec{}.encodeCommandResult(
+            {ssg::CommandError::StaleRevision, ssg::Revision{17},
+             "base revision is stale"}));
+    writeFixtureHex(
+        "status_action_invocation.hex",
+        ssg::ProtocolCodec{}.encodeStatusActionInvocation(
+            {ssg::StatusId{9}, "dismiss", 3}));
     auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
@@ -1845,6 +1956,7 @@ int main() {
     RUN(registryCoversEveryP0CommandAndRejectsUnknownIds);
     RUN(everySettingKeyRoundTripsThroughTheCommandCodec);
     RUN(commandRequestRoundTripsWithNoPayload);
+    RUN(tabCommandsRoundTripOptionalTabIdentity);
     RUN(commandRequestRoundTripsWithPaletteExecuteArguments);
     RUN(commandRequestRoundTripsCompoundBrowserActions);
     RUN(commandRequestRoundTripsWithFindQueryArguments);
@@ -1869,6 +1981,8 @@ int main() {
     RUN(sessionSnapshotRoundTripsThroughTheWire);
     RUN(anAbsentSelectedExternalIdDecodesAsNone);
     RUN(aSelectedExternalIdMustNameAFileOrTheSnapshotDecodeFailsLoud);
+    RUN(externalActionAffordanceMustMatchItsAuthoritativeIdentity);
+    RUN(gitTreeAffordanceMustMatchItsAuthoritativeIdentity);
     RUN(externalFocusHeldIsAdditiveAbsentDecodesFalse);
     RUN(externalFocusHeldFlipIsADeltaThatRoundTrips);
     RUN(sessionSnapshotRoundTripsANonDefaultStyle);

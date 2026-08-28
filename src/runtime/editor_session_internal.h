@@ -340,13 +340,8 @@ struct EditorSession::Impl final : CommandServices,
     // either fails.
     [[nodiscard]] bool defer(std::optional<ClientId> as, ClientCommand command);
     // The open file picker's candidate set, built when the picker opens and
-    // discarded when it closes: the walk stays off the per-keystroke and
-    // per-frame paths, at the cost of not reflecting files created while the
-    // picker is open (reopening picks them up).
+    // Published continuously and rebuilt with the workspace tree.
     std::vector<PaletteCandidate> fileCandidates;
-    // The picker epoch the file candidates were last built for, so the candidate refresh
-    // rebuilds only when a finder (re)opens, not every frame the File picker stays open.
-    std::uint64_t lastPickerEpoch = 0;
     // Command-mode palette candidates are the whole catalog with each command's
     // key hint resolved -- O(bindings x commands) -- so they are cached and
     // rebuilt only when the catalog or keymap changes, keeping the palette off
@@ -629,9 +624,6 @@ struct EditorSession::Impl final : CommandServices,
                                   const std::optional<ValidatedComposition>& composed);
     // Refresh the file picker's candidates off the authority's picker epoch: a newly
     // (re)opened File picker rebuilds synchronously, any other picker state clears.
-    void reconcilePickerCandidates();
-    // Opens a picker through the authority (apply(OpenFinder)); the epoch it advances is
-    // what reconcilePickerCandidates keys the candidate refresh off.
     [[nodiscard]] bool openPickerPrompt(PickerKind kind);
     // Walks the workspace into `fileCandidates`, honoring the gitignore setting.
     void rebuildFileCandidates();

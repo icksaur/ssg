@@ -121,7 +121,8 @@ CommandHandlerResult shellCommand(EditorSession::Impl& runtime, ViewId viewId,
             return failure("previous tree provider is unavailable");
         }
     }
-    else if (id == "view.toggle_distraction_free") runtime.shell.toggleDistractionFree();
+    else if (id == "view.toggle_distraction_free")
+        runtime.interaction.toggleDistractionFree();
     else return failure("unknown shell command");
     return success();
 }

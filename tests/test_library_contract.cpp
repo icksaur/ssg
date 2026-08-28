@@ -118,7 +118,7 @@ std::vector<ssg::PaletteCandidate> publishedCandidates(
                     .accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return {};
-    return snapshot->sections().palette.candidates;
+    return snapshot->sections().palette.commandCandidates;
 }
 
 // Reconstruct grid row `row` as a plain string (continuation cells contribute no

@@ -1089,8 +1089,14 @@ int main(int argc, char** argv) {
         auto snapshot = runtime.present(client, terminalSize(), buildReport());
         if (snapshot) {
             focus = effectiveFocusFromSections(snapshot->sections());
-            candidates = snapshot->sections().palette.candidates;
-            pickerMode = snapshot->sections().palette.mode;
+            pickerMode = snapshot->sections().palette.activeMode.value_or(
+                ssg::SearchMode::Command);
+            if (auto const* published =
+                    snapshot->sections().palette.candidatesFor(pickerMode)) {
+                candidates = *published;
+            } else {
+                candidates.clear();
+            }
             // Cache the palette pane height for the next window computation: the
             // palette pane is the editor pane, so this is populated every frame,
             // including before the palette opens (no cold start). The window is
