@@ -73,7 +73,10 @@
   .find-results-surface {
     background:var(--ssg-canvas); color:var(--ssg-text);
   }
-  .find-results-surface .row { padding:2px 8px; display:flex; gap:8px; }
+  .find-results-surface .row {
+    width:100%; padding:2px 8px; display:flex; gap:8px; cursor:pointer;
+    border:0; background:none; color:inherit; font:inherit; text-align:left;
+  }
   .find-results-surface .row.sel { background:var(--ssg-selection); }
   .find-results-surface .row .detail { opacity:.55; margin-left:auto; }
   .tree-row { white-space:pre; cursor:pointer; }

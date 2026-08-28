@@ -30,6 +30,10 @@ PaletteViewState sample() {
     state.fileCandidates = {
         {"src/main.cpp", "src/main.cpp", ""},
     };
+    state.presenceOverlay = {
+        Generation{7},
+        {{PalettePresenceOpKind::Show, UiNodeId{"input_line"}},
+         {PalettePresenceOpKind::Hide, UiNodeId{"editor"}}}};
     return state;
 }
 
@@ -42,7 +46,9 @@ ProtocolValue paletteWire(
     ProtocolValue magnitude =
         ProtocolValue::makeInt(kMaxMatcherParameterMagnitude),
     ProtocolValue candidateBytes =
-        ProtocolValue::makeInt(kMaxCandidateBytes)) {
+        ProtocolValue::makeInt(kMaxCandidateBytes),
+    ProtocolValue presenceOverlay =
+        *encodePalette(PaletteViewState{}).field("presence_overlay")) {
     return ProtocolValue::makeObject(
         {{"active_mode", std::move(activeMode)},
          {"command_open_command_id", ProtocolValue::makeText("palette.open")},
@@ -50,6 +56,7 @@ ProtocolValue paletteWire(
          {"file_open_command_id",
           ProtocolValue::makeText("file_finder.open")},
          {"file_candidates", std::move(fileCandidates)},
+         {"presence_overlay", std::move(presenceOverlay)},
          {"parameters", std::move(parameters)},
          {"max_parameter_magnitude", std::move(magnitude)},
          {"max_candidate_bytes", std::move(candidateBytes)}});
@@ -223,6 +230,26 @@ TEST(decodeRejectsOversizedCandidate) {
             .has_value());
 }
 
+TEST(decodeRejectsInvalidPresenceOverlay) {
+    const auto invalid = ProtocolValue::makeObject(
+        {{"generation", ProtocolValue::makeUint(1)},
+         {"ops", ProtocolValue::makeArray(
+                     {ProtocolValue::makeObject(
+                         {{"kind", ProtocolValue::makeUint(2)},
+                          {"target", ProtocolValue::makeText("editor")}})})}});
+    ASSERT_FALSE(decodePalette(paletteWire(
+                                  ProtocolValue::makeArray({}),
+                                  ProtocolValue::makeArray({}),
+                                  *encodePalette(PaletteViewState{})
+                                       .field("parameters"),
+                                  ProtocolValue::makeNull(),
+                                  ProtocolValue::makeInt(
+                                      kMaxMatcherParameterMagnitude),
+                                  ProtocolValue::makeInt(kMaxCandidateBytes),
+                                  invalid))
+                     .has_value());
+}
+
 }  // namespace
 
 int main() {
@@ -239,5 +266,6 @@ int main() {
     RUN(decodeRejectsMissingMagnitude);
     RUN(decodeRejectsMismatchedMagnitude);
     RUN(decodeRejectsOversizedCandidate);
+    RUN(decodeRejectsInvalidPresenceOverlay);
     return failed;
 }

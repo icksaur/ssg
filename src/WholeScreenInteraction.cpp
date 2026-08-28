@@ -143,4 +143,30 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     return state;
 }
 
+PalettePresenceOverlay derivePickerPresenceOverlay(
+    const ValidatedSchema& schema, const WholeScreenTruth& truth) {
+    WholeScreenTruth closed = truth;
+    closed.openPicker.reset();
+    WholeScreenTruth open = closed;
+    open.openPicker = PickerKind::Command;
+
+    const auto closedState =
+        buildWholeScreenInteraction(schema, closed, std::nullopt);
+    const auto openState =
+        buildWholeScreenInteraction(schema, open, PromptRegion::Header);
+
+    PalettePresenceOverlay overlay;
+    overlay.generation = schema.generation();
+    for (const UiNodeId& id : schema.nodeIds()) {
+        const bool before = closedState.presence().isPresent(id);
+        const bool after = openState.presence().isPresent(id);
+        if (before == after) continue;
+        overlay.ops.push_back(
+            {after ? PalettePresenceOpKind::Show
+                   : PalettePresenceOpKind::Hide,
+             id});
+    }
+    return overlay;
+}
+
 }  // namespace ssg

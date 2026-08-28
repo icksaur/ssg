@@ -152,6 +152,58 @@ TEST(distractionFreePresenceLeavesOnlyTheDocumentBranchVisible) {
     }
 }
 
+TEST(pickerPresenceOverlayMatchesEveryAuthoritativeOpenProjection) {
+    const auto schema = schemaOf({});
+    for (const bool panelPresent : {false, true}) {
+        for (const PanelProvider provider :
+             {PanelProvider::FileTree, PanelProvider::GitStatus,
+              PanelProvider::Symbols}) {
+            for (const bool noticePresent : {false, true}) {
+                for (const bool externalPresent : {false, true}) {
+                    for (const bool distractionFree : {false, true}) {
+                        WholeScreenTruth closed;
+                        closed.panelPresent = panelPresent;
+                        closed.selectedProvider = provider;
+                        closed.noticePresent = noticePresent;
+                        closed.externalModificationPresent = externalPresent;
+                        closed.distractionFree = distractionFree;
+                        const auto baseline =
+                            buildWholeScreenInteraction(schema, closed);
+                        const auto overlay =
+                            derivePickerPresenceOverlay(schema, closed);
+                        ASSERT_TRUE(overlay.generation ==
+                                    schema.generation());
+
+                        for (const PickerKind kind :
+                             {PickerKind::Command, PickerKind::File}) {
+                            WholeScreenTruth open = closed;
+                            open.openPicker = kind;
+                            const auto expected =
+                                buildWholeScreenInteraction(
+                                    schema, open, PromptRegion::Header);
+                            for (const UiNodeId& id : schema.nodeIds()) {
+                                bool actual =
+                                    baseline.presence().isPresent(id);
+                                for (const PalettePresenceOp& op :
+                                     overlay.ops) {
+                                    if (op.target == id) {
+                                        actual =
+                                            op.kind ==
+                                            PalettePresenceOpKind::Show;
+                                    }
+                                }
+                                ASSERT_EQ(
+                                    actual,
+                                    expected.presence().isPresent(id));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 TEST(promptFocusAnchorsOnTheRegionHost) {
     WholeScreenTruth truth;
     // A footer-region prompt (find/replace, save-path) routes focus to the prompt without
@@ -315,6 +367,7 @@ int main() {
     RUN(exactlyTheSelectedProviderIsPresent);
     RUN(contentShowsEditorXorFindResultsByFinderState);
     RUN(distractionFreePresenceLeavesOnlyTheDocumentBranchVisible);
+    RUN(pickerPresenceOverlayMatchesEveryAuthoritativeOpenProjection);
     RUN(promptFocusAnchorsOnTheRegionHost);
     RUN(headerPromptRequiresTheInputLineSchemaNode);
     RUN(footerPromptRequiresTheFooterPromptSchemaNode);

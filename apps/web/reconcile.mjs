@@ -386,6 +386,12 @@ export function pickerCandidatesFromPalette(palette, mode) {
   throw new TypeError('unsupported picker mode');
 }
 
+export function effectivePickerMode(palette, localMode) {
+  return palette && palette.active_mode != null
+    ? num(palette.active_mode)
+    : localMode;
+}
+
 function sameStroke(bindingStroke, inputStroke) {
   return bindingStroke && inputStroke &&
     bindingStroke.code === inputStroke.code &&
@@ -676,6 +682,7 @@ export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
 export const SCROLL = { NONE: 0, VERTICAL: 1 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
 export const SURFACE = { TABBAR: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5, NOTICE: 6, EXTERNAL_MODIFICATION: 7, DOCUMENT: 8 };
+export const PALETTE_PRESENCE_OP = { SHOW: 0, HIDE: 1 };
 const ALL_SURFACES = Object.freeze(Object.values(SURFACE));
 const TREE_SURFACES = Object.freeze([
   SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.SYMBOLS,
@@ -712,7 +719,68 @@ export function browserRenderPlan(delta) {
                    replacementChanged(delta.prompt_status) || repaintTheme),
     repaintTheme,
     surfaces: [...surfaces].sort((a, b) => a - b),
-    localPicker: !!(delta.palette || repaintTheme),
+  };
+}
+
+export function applyPalettePresenceOverlay(schema, presence, overlay) {
+  if (!schema || !schema.root || !presence || !overlay) {
+    return { presence, error: 'missing picker presence overlay', stale: false };
+  }
+  if (num(schema.generation) !== num(overlay.generation)) {
+    return { presence, error: null, stale: true };
+  }
+
+  const parentById = new Map();
+  const schemaIds = new Set();
+  const collect = (node, parent = null) => {
+    if (!node || schemaIds.has(node.id)) return false;
+    schemaIds.add(node.id);
+    parentById.set(node.id, parent);
+    for (const child of (node.container && node.container.children) || []) {
+      if (!collect(child, node.id)) return false;
+    }
+    return true;
+  };
+  if (!collect(schema.root)) {
+    return { presence, error: 'invalid picker schema', stale: false };
+  }
+
+  const records = new Map(
+    (presence.nodes || []).map((record) => [record.id, record]));
+  const overrides = new Map();
+  for (const op of (overlay.ops || [])) {
+    const kind = num(op.kind);
+    if (!schemaIds.has(op.target) || !records.has(op.target) ||
+        overrides.has(op.target) ||
+        (kind !== PALETTE_PRESENCE_OP.SHOW &&
+         kind !== PALETTE_PRESENCE_OP.HIDE)) {
+      return { presence, error: 'invalid picker presence overlay', stale: false };
+    }
+    overrides.set(op.target, kind === PALETTE_PRESENCE_OP.SHOW);
+  }
+  for (const [target, shown] of overrides) {
+    if (!shown) continue;
+    for (let parent = parentById.get(target); parent != null;
+         parent = parentById.get(parent)) {
+      if (overrides.get(parent) === false) {
+        return {
+          presence, error: 'contradictory picker presence overlay',
+          stale: false,
+        };
+      }
+    }
+  }
+
+  return {
+    presence: {
+      ...presence,
+      nodes: (presence.nodes || []).map((record) =>
+        overrides.has(record.id)
+          ? { ...record, present: overrides.get(record.id) }
+          : record),
+    },
+    error: null,
+    stale: false,
   };
 }
 

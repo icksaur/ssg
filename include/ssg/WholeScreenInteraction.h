@@ -15,6 +15,7 @@
 #include <ssg/InteractionState.h>  // UiInteractionState
 #include <ssg/KeyboardFocus.h>     // BaseFocus
 #include <ssg/Picker.h>            // PickerKind
+#include <ssg/PaletteSearcher.h>   // PalettePresenceOverlay
 #include <ssg/PromptSurface.h>     // PromptRegion
 
 namespace ssg {
@@ -80,5 +81,10 @@ struct WholeScreenTruth {
 [[nodiscard]] UiInteractionState buildWholeScreenInteraction(
     ValidatedSchema schema, const WholeScreenTruth& truth,
     std::optional<PromptRegion> promptRegion = std::nullopt);
+
+// Derive the local picker layer from the same closed/open projections used by
+// authoritative interaction, preserving every non-picker semantic input.
+[[nodiscard]] PalettePresenceOverlay derivePickerPresenceOverlay(
+    const ValidatedSchema& schema, const WholeScreenTruth& truth);
 
 }  // namespace ssg

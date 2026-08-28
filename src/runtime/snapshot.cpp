@@ -514,6 +514,8 @@ void EditorSession::Impl::scrollTree(ViewId viewId, std::int64_t rows) {
 
 PaletteViewState EditorSession::Impl::paletteView() const {
     PaletteViewState view;
+    view.presenceOverlay = derivePickerPresenceOverlay(
+        interaction.interaction().schema(), interaction.truth());
     if (auto open = interaction.openPicker()) {
         if (auto const* descriptor = pickerCatalog().find(*open)) {
             view.activeMode = descriptor->wireMode;

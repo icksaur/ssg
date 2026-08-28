@@ -10,13 +10,14 @@ import {
   findSections, num, cssColor, byteToIndex, utf8Bytes, project, decodeMessage,
   browserInboundKind,
   matcherBoundsFromPalette, clampPaletteSelection, pickerCandidatesFromPalette,
-  resolvePickerLifecycle, encodePickerSubmit,
+  resolvePickerLifecycle, effectivePickerMode, encodePickerSubmit,
   encodeSelectionByteRange, encodeTabAction, markedTextByteOffset,
   applySessionDeltaSections, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
   webExtentCss,
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
+  applyPalettePresenceOverlay,
   encodeCommandRequest, encodeClientInput, encodeTreeActivation,
   encodeStatusActionInvocation,
   promptViewFromSections, PROMPT_CONTROL, promptFocusPlan, encodePromptFocus,
@@ -56,20 +57,19 @@ const state = {
 };
 const retainedNodes = new GenerationRetainedCache();
 let renderedSurfaceKinds = new Set();
+let pickerInputElement = null;
 const allSurfaceKinds = Object.values(SURFACE);
 const fullRenderPlan = () => ({
   rebuild: true,
   reconcile: true,
   repaintTheme: true,
   surfaces: allSurfaceKinds,
-  localPicker: true,
 });
 const surfaceRenderPlan = (...surfaces) => ({
   rebuild: false,
   reconcile: false,
   repaintTheme: false,
   surfaces,
-  localPicker: false,
 });
 
 function paletteOpen() {
@@ -116,6 +116,18 @@ function renderTabsInto(host, tabs) {
       host.appendChild(el);
     }
   }
+}
+
+function renderPickerInput(el, sigil) {
+  el.className = 'w input-line';
+  el.textContent = '';
+  const marker = document.createElement('span');
+  marker.textContent = sigil || '';
+  el.appendChild(marker);
+  el.appendChild(document.createTextNode(state.palette.query || ''));
+  const caret = document.createElement('span');
+  caret.className = 'caret';
+  el.appendChild(caret);
 }
 
 // The color for a SemanticRole ordinal, from the live theme's role_colors table, or
@@ -208,15 +220,9 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
     // browser-owned local query fills it here (no per-keystroke wire delta).
     const el = retainedNodes.getOrCreate(
       node.id, () => document.createElement('span'));
-    el.className = 'w input-line';
-    el.textContent = '';
-    const sigil = document.createElement('span');
-    sigil.textContent = node.sigil || '';
-    el.appendChild(sigil);
-    el.appendChild(document.createTextNode(state.palette.query || ''));
-    const caret = document.createElement('span');
-    caret.className = 'caret';
-    el.appendChild(caret);
+    pickerInputElement = el;
+    el._ssgPickerSigil = node.sigil || '';
+    renderPickerInput(el, el._ssgPickerSigil);
     const color = roleColor(node.role, theme);
     if (color) el.style.color = color;
     applySize(el, node.size, parentAxis);
@@ -339,10 +345,7 @@ function renderSurfaceContent(el, surface) {
     el.textContent = '';
     el.classList.add('find-results-surface');
     renderFindResultsSurface(
-      el, s.palette,
-      s.palette && s.palette.active_mode != null
-        ? num(s.palette.active_mode)
-        : null);
+      el, s.palette, effectivePickerMode(s.palette, state.palette.mode));
   } else if (surface === SURFACE.FOOTER_PROMPT) {
     el.classList.add('prompt-surface');
     renderFooterPrompt(el, s);
@@ -404,6 +407,23 @@ function locallyRankedPaletteRows(palette, mode = state.palette.mode) {
     return order.map((i) => candidates[i]);
 }
 
+function submitPaletteCandidate(mode, candidate) {
+    if (!candidate) return;
+    sendCommandFrame(
+      encodePickerSubmit(mode, candidate.id, state.revision));
+    const returnFocus = state.palette.returnFocus;
+    state.palette.mode = null;
+    state.palette.query = '';
+    state.palette.selected = 0;
+    state.palette.returnFocus = null;
+    render({ ...surfaceRenderPlan(), reconcile: true });
+    if (returnFocus && returnFocus.isConnected) {
+      returnFocus.focus({ preventScroll: true });
+    } else {
+      editorFocusElement().focus({ preventScroll: true });
+    }
+}
+
 function renderFindResultsSurface(parent, palette, mode = state.palette.mode) {
     let rows = [];
     try {
@@ -418,31 +438,14 @@ function renderFindResultsSurface(parent, palette, mode = state.palette.mode) {
     }
     state.palette.selected = clampPaletteSelection(state.palette.selected, rows.length);
     for (let i = 0; i < rows.length; i++) {
-      const div = document.createElement('div');
-      div.className = 'row' + (i === state.palette.selected ? ' sel' : '');
-      div.innerHTML = '<span class="label">' + esc(rows[i].label || '') +
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'row' + (i === state.palette.selected ? ' sel' : '');
+      button.innerHTML = '<span class="label">' + esc(rows[i].label || '') +
         '</span><span class="detail">' + esc(rows[i].detail || '') + '</span>';
-      parent.appendChild(div);
+      button.addEventListener('click', () => submitPaletteCandidate(mode, rows[i]));
+      parent.appendChild(button);
     }
-}
-
-function renderLocalPicker() {
-  const existing = uiRootEl.querySelector(':scope > .local-picker');
-  if (existing) existing.remove();
-  if (!paletteOpen()) return;
-  const overlay = document.createElement('div');
-  overlay.className = 'find-results-surface local-picker';
-  overlay.tabIndex = 0;
-  const input = document.createElement('div');
-  input.className = 'input-line';
-  input.textContent = state.palette.query;
-  const caret = document.createElement('span');
-  caret.className = 'caret';
-  input.appendChild(caret);
-  overlay.appendChild(input);
-  renderFindResultsSurface(overlay, state.sections.palette, state.palette.mode);
-  uiRootEl.appendChild(overlay);
-  overlay.focus({ preventScroll: true });
 }
 
 function renderStatusActionsNode(el) {
@@ -524,7 +527,8 @@ function applyInset(el, inset, size, parentAxis) {
 function renderChrome(sections, plan) {
   const schema = sections.ui;
   const stateSection = sections.ui_state;
-  const presenceSection = sections.ui_presence;
+  let presenceSection = sections.ui_presence;
+  let overlayFailureFocus = null;
   chromeErrorEl.textContent = '';
   if (!schema || !schema.root) return false;
 
@@ -536,6 +540,21 @@ function renderChrome(sections, plan) {
     uiRootEl.textContent = '';
     return false;
   }
+  if (paletteOpen()) {
+    const applied = applyPalettePresenceOverlay(
+      schema, presenceSection,
+      sections.palette && sections.palette.presence_overlay);
+    if (applied.error) {
+      chromeErrorEl.textContent = applied.error;
+      overlayFailureFocus = state.palette.returnFocus;
+      state.palette.mode = null;
+      state.palette.query = '';
+      state.palette.selected = 0;
+      state.palette.returnFocus = null;
+    } else if (!applied.stale) {
+      presenceSection = applied.presence;
+    }
+  }
   const interpreted = interpretChrome(schema, stateSection, presenceSection);
   if (!interpreted || !interpreted.root) return false;  // schema/state from different frames; wait
 
@@ -545,6 +564,7 @@ function renderChrome(sections, plan) {
     footerPromptOpen = false;
     footerPromptActiveInput = -1;
     savedFocusEl = null;
+    pickerInputElement = null;
   }
   renderedSurfaceKinds = new Set();
   const nextRoot = renderChromeNode(
@@ -555,6 +575,13 @@ function renderChrome(sections, plan) {
   }
   if (!renderedSurfaceKinds.has(SURFACE.FOOTER_PROMPT)) {
     renderFooterPrompt(null, sections);
+  }
+  if (overlayFailureFocus !== null) {
+    const target =
+      overlayFailureFocus.isConnected
+        ? overlayFailureFocus
+        : editorFocusElement();
+    target.focus({ preventScroll: true });
   }
   return true;
 }
@@ -735,10 +762,11 @@ function renderExternalModification(host, sections) {
 }
 
 function refreshFinder() {
-  render({
-    ...surfaceRenderPlan(),
-    localPicker: true,
-  });
+  if (pickerInputElement && pickerInputElement.isConnected) {
+    renderPickerInput(
+      pickerInputElement, pickerInputElement._ssgPickerSigil);
+  }
+  render(surfaceRenderPlan(SURFACE.FINDRESULTS));
 }
 
 function applyDelta(d) {
@@ -778,7 +806,6 @@ function render(plan = fullRenderPlan()) {
       }
     }
   }
-  if (plan.localPicker) renderLocalPicker();
   if (plan.rebuild || plan.surfaces.includes(SURFACE.DOCUMENT)) {
     revealDocumentCaret();
   }
@@ -1227,7 +1254,11 @@ function handleKeydown(ev) {
       state.palette.mode = mode;
       state.palette.query = '';
       state.palette.selected = 0;
-      render({ ...surfaceRenderPlan(), localPicker: true });
+      render({
+        ...surfaceRenderPlan(SURFACE.FINDRESULTS),
+        reconcile: true,
+      });
+      editorFocusElement().focus({ preventScroll: true });
       return;
     }
   }
@@ -1245,7 +1276,7 @@ function handleKeydown(ev) {
       p.query = '';
       p.selected = 0;
       p.returnFocus = null;
-      render({ ...surfaceRenderPlan(), localPicker: true });
+      render({ ...surfaceRenderPlan(), reconcile: true });
       if (returnFocus && returnFocus.isConnected) {
         returnFocus.focus({ preventScroll: true });
       } else {
@@ -1258,21 +1289,7 @@ function handleKeydown(ev) {
       p.selected = clampPaletteSelection(p.selected, locallyRankedPaletteRows(state.sections && state.sections.palette).length);
       const rows = locallyRankedPaletteRows(state.sections && state.sections.palette);
       const candidate = rows[p.selected];
-      if (candidate) {
-        sendCommandFrame(
-          encodePickerSubmit(p.mode, candidate.id, state.revision));
-        const returnFocus = p.returnFocus;
-        p.mode = null;
-        p.query = '';
-        p.selected = 0;
-        p.returnFocus = null;
-        render({ ...surfaceRenderPlan(), localPicker: true });
-        if (returnFocus && returnFocus.isConnected) {
-          returnFocus.focus({ preventScroll: true });
-        } else {
-          editorFocusElement().focus({ preventScroll: true });
-        }
-      }
+      submitPaletteCandidate(p.mode, candidate);
       return;
     }
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
@@ -1280,7 +1297,7 @@ function handleKeydown(ev) {
       // selected is an absolute ranked index over the locally-ranked rows.
       const rows = locallyRankedPaletteRows(state.sections && state.sections.palette);
       p.selected = clampPaletteSelection(ev.key === 'ArrowDown' ? p.selected + 1 : p.selected - 1, rows.length);
-      render({ ...surfaceRenderPlan(), localPicker: true });
+      render(surfaceRenderPlan(SURFACE.FINDRESULTS));
       return;
     }
     if (ev.key === 'Backspace') {

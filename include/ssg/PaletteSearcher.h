@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ssg/Search.h>
+#include <ssg/UiTree.h>
 #include <ssg/Viewport.h>
 
 #include <cstddef>
@@ -19,6 +20,26 @@ struct PaletteCandidate {
     std::string detail;
 
     friend bool operator==(const PaletteCandidate&, const PaletteCandidate&) = default;
+};
+
+enum class PalettePresenceOpKind : std::uint8_t { Show, Hide };
+
+struct PalettePresenceOp {
+    PalettePresenceOpKind kind = PalettePresenceOpKind::Show;
+    UiNodeId target;
+
+    friend bool operator==(const PalettePresenceOp&,
+                           const PalettePresenceOp&) = default;
+};
+
+// A browser-local derived presence layer. Unlike MutationPatch, this does not
+// advance an authoritative basis and carries no prediction acknowledgment.
+struct PalettePresenceOverlay {
+    Generation generation{0};
+    std::vector<PalettePresenceOp> ops;
+
+    friend bool operator==(const PalettePresenceOverlay&,
+                           const PalettePresenceOverlay&) = default;
 };
 
 // The fuzzy-match scoring weights and length cap, published with the candidate
@@ -85,6 +106,7 @@ struct PaletteViewState {
     std::string fileOpenCommandId;
     std::vector<PaletteCandidate> commandCandidates;
     std::vector<PaletteCandidate> fileCandidates;
+    PalettePresenceOverlay presenceOverlay;
     // The parameters a client must score `candidates` with; travels on the same
     // channel so candidates and their scoring arrive atomically.
     MatcherParameters parameters;

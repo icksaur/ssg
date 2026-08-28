@@ -79,6 +79,56 @@ std::optional<SearchMode> decodeMode(const ProtocolValue& value) {
     return std::nullopt;
 }
 
+ProtocolValue encodePresenceOverlay(const PalettePresenceOverlay& overlay) {
+    ProtocolValue::Array ops;
+    ops.reserve(overlay.ops.size());
+    for (const PalettePresenceOp& op : overlay.ops) {
+        ops.push_back(ProtocolValue::makeObject(
+            {{"kind", ProtocolValue::makeUint(
+                          static_cast<std::uint8_t>(op.kind))},
+             {"target", ProtocolValue::makeText(op.target.value())}}));
+    }
+    return ProtocolValue::makeObject(
+        {{"generation", ProtocolValue::makeUint(overlay.generation.value())},
+         {"ops", ProtocolValue::makeArray(std::move(ops))}});
+}
+
+std::optional<PalettePresenceOverlay> decodePresenceOverlay(
+    const ProtocolValue& value) {
+    const ProtocolValue* generation = value.field("generation");
+    const ProtocolValue* ops = value.field("ops");
+    if (!value.asObject() || !generation || !generation->asUint() || !ops ||
+        !ops->asArray()) {
+        return std::nullopt;
+    }
+    PalettePresenceOverlay overlay;
+    overlay.generation = Generation{*generation->asUint()};
+    std::set<std::string> targets;
+    for (const ProtocolValue& encoded : *ops->asArray()) {
+        const ProtocolValue* kind = encoded.field("kind");
+        const ProtocolValue* target = encoded.field("target");
+        if (!encoded.asObject() || !kind || !kind->asUint() || !target ||
+            !target->asText() || target->asText()->empty() ||
+            !targets.insert(*target->asText()).second) {
+            return std::nullopt;
+        }
+        PalettePresenceOpKind decodedKind;
+        switch (*kind->asUint()) {
+        case static_cast<std::uint8_t>(PalettePresenceOpKind::Show):
+            decodedKind = PalettePresenceOpKind::Show;
+            break;
+        case static_cast<std::uint8_t>(PalettePresenceOpKind::Hide):
+            decodedKind = PalettePresenceOpKind::Hide;
+            break;
+        default:
+            return std::nullopt;
+        }
+        overlay.ops.push_back(
+            {decodedKind, UiNodeId{*target->asText()}});
+    }
+    return overlay;
+}
+
 }  // namespace
 
 ProtocolValue encodePalette(const PaletteViewState& palette) {
@@ -102,6 +152,8 @@ ProtocolValue encodePalette(const PaletteViewState& palette) {
          {"file_candidates", encodeCandidates(palette.fileCandidates)},
          {"file_open_command_id",
           ProtocolValue::makeText(palette.fileOpenCommandId)},
+         {"presence_overlay",
+          encodePresenceOverlay(palette.presenceOverlay)},
          {"parameters", encodeParameters(palette.parameters)},
          // The parameter magnitude domain AND the candidate byte-length bound,
          // published from the library-owned constants so a non-C++ client validates
@@ -123,6 +175,8 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
     const ProtocolValue* fileOpenCommandIdField =
         value.field("file_open_command_id");
     const ProtocolValue* parametersField = value.field("parameters");
+    const ProtocolValue* presenceOverlayField =
+        value.field("presence_overlay");
     const ProtocolValue* magnitudeField = value.field("max_parameter_magnitude");
     const ProtocolValue* candidateBytesField = value.field("max_candidate_bytes");
     if (!activeModeField ||
@@ -132,7 +186,8 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
         !commandCandidatesField || !commandCandidatesField->asArray() ||
         !fileOpenCommandIdField || !fileOpenCommandIdField->asText() ||
         !fileCandidatesField || !fileCandidatesField->asArray() ||
-        !parametersField || !magnitudeField || !magnitudeField->asInt() ||
+        !parametersField || !presenceOverlayField || !magnitudeField ||
+        !magnitudeField->asInt() ||
         !candidateBytesField || !candidateBytesField->asInt()) {
         return std::nullopt;
     }
@@ -142,7 +197,8 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
     if (*magnitudeField->asInt() != kMaxMatcherParameterMagnitude) return std::nullopt;
     if (*candidateBytesField->asInt() != kMaxCandidateBytes) return std::nullopt;
     auto parameters = decodeParameters(*parametersField);
-    if (!parameters) return std::nullopt;
+    auto presenceOverlay = decodePresenceOverlay(*presenceOverlayField);
+    if (!parameters || !presenceOverlay) return std::nullopt;
 
     PaletteViewState palette;
     palette.commandOpenCommandId = *commandOpenCommandIdField->asText();
@@ -162,6 +218,7 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
         palette.activeMode = *activeMode;
     }
     palette.parameters = *parameters;
+    palette.presenceOverlay = std::move(*presenceOverlay);
     const auto decodeCandidates = [](const ProtocolValue& field,
                                      auto& destination) {
         for (const auto& candidateValue : *field.asArray()) {

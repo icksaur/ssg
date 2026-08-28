@@ -13,6 +13,7 @@ import {
   settleCommandResult,
   matcherParametersFromWire, matcherBoundsFromPalette,
   clampPaletteSelection, pickerCandidatesFromPalette, resolvePickerLifecycle,
+  effectivePickerMode,
   PICKER_MODE, encodePickerSubmit, encodeSelectionByteRange, encodeTabAction,
   markedTextByteOffset, encodeTreeActivation, applyTreeDelta,
   applySessionDeltaSections,
@@ -217,6 +218,15 @@ check('clampPaletteSelection keeps the persisted selection inside local rows', (
   assert.equal(clampPaletteSelection(2, 0), 0);
 });
 
+check('browser-local picker mode backs a null authoritative mode', () => {
+  assert.equal(effectivePickerMode({ active_mode: null }, PICKER_MODE.FILE),
+               PICKER_MODE.FILE);
+  assert.equal(effectivePickerMode(
+                 { active_mode: BigInt(PICKER_MODE.COMMAND) },
+                 PICKER_MODE.FILE),
+               PICKER_MODE.COMMAND);
+});
+
 check('compound interaction commands carry published identities and revision', () => {
   assert.deepEqual(
     decodeMessage(
@@ -310,6 +320,7 @@ import {
   webExtentCss,
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
+  applyPalettePresenceOverlay, PALETTE_PRESENCE_OP,
 } from '../../apps/web/reconcile.mjs';
 
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
@@ -420,6 +431,96 @@ check('interpretChrome carries a node ScrollAxis so a client derives independent
   assert.equal(byId.future.scroll, SCROLL.NONE);  // unknown axis -> none
 });
 
+check('picker presence overlay preserves header siblings and panel while replacing editor content', () => {
+  const input = leafNode('input_line', WIDGET.TEXT_INPUT);
+  const header = rowNode('header', [
+    leafNode('path', WIDGET.FIELD), input, leafNode('branch', WIDGET.FIELD),
+  ]);
+  const panel = rowNode('panel', [
+    leafNode('filetree', WIDGET.VIEW, { surface: SURFACE.FILETREE }),
+  ]);
+  const editor = rowNode('editor', [
+    leafNode('tabbar', WIDGET.VIEW, { surface: SURFACE.TABBAR }),
+    leafNode('document', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
+  ]);
+  const results = rowNode('findresults.viewport', [
+    leafNode('findresults', WIDGET.VIEW, { surface: SURFACE.FINDRESULTS }),
+  ]);
+  const content = rowNode('content', [editor, results]);
+  const root = rowNode('root', [header, rowNode('body', [panel, content])]);
+  const schema = schemaOf(9, root);
+  const authoritative = presenceForSchema(
+    9, root, ['input_line', 'findresults.viewport']);
+  const overlay = {
+    generation: 9,
+    ops: [
+      { kind: PALETTE_PRESENCE_OP.SHOW, target: 'input_line' },
+      { kind: PALETTE_PRESENCE_OP.HIDE, target: 'editor' },
+      { kind: PALETTE_PRESENCE_OP.SHOW, target: 'findresults.viewport' },
+    ],
+  };
+  const applied = applyPalettePresenceOverlay(
+    schema, authoritative, overlay);
+  assert.equal(applied.error, null);
+  assert.equal(applied.stale, false);
+  assert.notEqual(applied.presence, authoritative);
+  assert.equal(
+    authoritative.nodes.find((record) => record.id === 'input_line').present,
+    0);
+
+  const nodes = [];
+  const collect = (node) => {
+    const resolved =
+      node.id === 'path' || node.id === 'branch'
+        ? { value: node.id, label: node.id }
+        : null;
+    nodes.push(st(node.id, resolved));
+    if (node.container) node.container.children.forEach(collect);
+  };
+  collect(root);
+  const rendered = interpretChrome(
+    schema, { generation: 9, nodes }, applied.presence);
+  const ids = drawnLeaves(rendered.root).map((node) => node.id);
+  assert.deepEqual(ids, ['path', 'input_line', 'branch', 'filetree', 'findresults']);
+
+  const twice = applyPalettePresenceOverlay(
+    schema, applied.presence, overlay);
+  assert.deepEqual(twice.presence, applied.presence);
+  assert.equal(
+    applyPalettePresenceOverlay(
+      schema, authoritative, { ...overlay, generation: 10 }).stale,
+    true);
+  assert.match(
+    applyPalettePresenceOverlay(schema, authoritative, {
+      ...overlay,
+      ops: [{ kind: PALETTE_PRESENCE_OP.SHOW, target: 'missing' }],
+    }).error,
+    /invalid/);
+  assert.match(
+    applyPalettePresenceOverlay(schema, authoritative, {
+      ...overlay,
+      ops: [
+        { kind: PALETTE_PRESENCE_OP.SHOW, target: 'input_line' },
+        { kind: PALETTE_PRESENCE_OP.HIDE, target: 'input_line' },
+      ],
+    }).error,
+    /invalid/);
+  assert.match(
+    applyPalettePresenceOverlay(schema, authoritative, {
+      ...overlay, ops: [{ kind: 99, target: 'input_line' }],
+    }).error,
+    /invalid/);
+  assert.match(
+    applyPalettePresenceOverlay(schema, authoritative, {
+      ...overlay,
+      ops: [
+        { kind: PALETTE_PRESENCE_OP.HIDE, target: 'header' },
+        { kind: PALETTE_PRESENCE_OP.SHOW, target: 'input_line' },
+      ],
+    }).error,
+    /contradictory/);
+});
+
 check('interpretChrome rejects a container whose scroll field is null or the wrong type', () => {
   // Symmetry with the C++ wire decoder: absence (undefined) and an unknown numeric
   // ordinal degrade to none, but a present null or non-numeric scroll is malformed
@@ -526,26 +627,25 @@ check('session deltas dirty only their dependent browser surfaces', () => {
     syntax: { spans: null },
   }), {
     rebuild: false, reconcile: false, repaintTheme: false,
-    surfaces: [], localPicker: false,
+    surfaces: [],
   });
   assert.deepEqual(browserRenderPlan({ selection: { replacement: {} } }), {
     rebuild: false, reconcile: false, repaintTheme: false,
-    surfaces: [SURFACE.DOCUMENT], localPicker: false,
+    surfaces: [SURFACE.DOCUMENT],
   });
   assert.deepEqual(browserRenderPlan({
     tree: { base_revision: 1n, revision: 2n, providers: [] },
   }), {
     rebuild: false, reconcile: false, repaintTheme: false,
     surfaces: [SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.SYMBOLS],
-    localPicker: false,
   });
   assert.deepEqual(browserRenderPlan({ ui_presence: { nodes: [] } }), {
     rebuild: false, reconcile: true, repaintTheme: false,
-    surfaces: [], localPicker: false,
+    surfaces: [],
   });
   assert.deepEqual(browserRenderPlan({ palette: {} }), {
     rebuild: false, reconcile: false, repaintTheme: false,
-    surfaces: [SURFACE.FINDRESULTS], localPicker: true,
+    surfaces: [SURFACE.FINDRESULTS],
   });
   assert.deepEqual(browserRenderPlan({ theme: { replacement: {} } }), {
     rebuild: false, reconcile: true, repaintTheme: true,
@@ -554,7 +654,6 @@ check('session deltas dirty only their dependent browser surfaces', () => {
       SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT,
       SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
     ],
-    localPicker: true,
   });
 });
 
