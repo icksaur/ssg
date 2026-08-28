@@ -18,6 +18,7 @@ import {
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
   applyPalettePresenceOverlay,
+  BrowserKeyDispatchTracker,
   encodeCommandRequest, encodeClientInput, encodeTreeActivation,
   encodeStatusActionInvocation,
   promptViewFromSections, PROMPT_CONTROL, promptFocusPlan, encodePromptFocus,
@@ -1216,9 +1217,23 @@ function connect() {
 
 connect();
 // Device input is a client boundary, not a property of whichever retained
-// surface last held focus. Capture it once so an Alt chord remains reachable
-// after a pointer interaction moves focus to a native control.
-document.addEventListener('keydown', handleKeydown);
+// surface last held focus. Browser accelerators may consume an Alt keydown after
+// delivering its keyup, so the adapter falls back to that keyup only when no
+// matching keydown reached the page.
+const browserKeys = new BrowserKeyDispatchTracker();
+window.addEventListener('keydown', (ev) => {
+  if (ev.code === 'AltLeft' || ev.code === 'AltRight') {
+    ev.preventDefault();
+  }
+  if (browserKeys.keydown(ev.code)) handleKeydown(ev);
+}, { capture: true });
+window.addEventListener('keyup', (ev) => {
+  if (ev.code === 'AltLeft' || ev.code === 'AltRight') {
+    ev.preventDefault();
+  }
+  if (browserKeys.keyup(ev.code, ev.altKey)) handleKeydown(ev);
+}, { capture: true });
+window.addEventListener('blur', () => browserKeys.clear());
 
 function handleKeydown(ev) {
   if (ev.key === 'Escape' && pointerSelection.dragging) {

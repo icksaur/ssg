@@ -221,6 +221,40 @@ export function encodeClientInput({ code = '', control = false, alt = false,
   return encodeMessage(7, { stroke, committed_text: text });
 }
 
+const MODIFIER_CODES = new Set([
+  'AltLeft', 'AltRight', 'ControlLeft', 'ControlRight',
+  'MetaLeft', 'MetaRight', 'ShiftLeft', 'ShiftRight',
+]);
+
+export class BrowserKeyDispatchTracker {
+  constructor() {
+    this.observedKeydowns = new Set();
+    this.altDown = false;
+  }
+
+  keydown(code) {
+    if (code === 'AltLeft' || code === 'AltRight') this.altDown = true;
+    if (MODIFIER_CODES.has(code)) return false;
+    this.observedKeydowns.add(code);
+    return true;
+  }
+
+  keyup(code, alt) {
+    if (code === 'AltLeft' || code === 'AltRight') {
+      this.altDown = false;
+      return false;
+    }
+    if (MODIFIER_CODES.has(code)) return false;
+    const observed = this.observedKeydowns.delete(code);
+    return !observed && alt && this.altDown;
+  }
+
+  clear() {
+    this.observedKeydowns.clear();
+    this.altDown = false;
+  }
+}
+
 export function encodeStatusActionInvocation({ statusId, actionId, generation }) {
   return encodeMessage(5, {
     status_id: BigInt(statusId), action_id: actionId,

@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import {
   applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput,
   decodeMessage, browserInboundKind, encodeClientInput, encodeCommandRequest,
+  BrowserKeyDispatchTracker,
   settleCommandResult,
   matcherParametersFromWire, matcherBoundsFromPalette,
   clampPaletteSelection, pickerCandidatesFromPalette, resolvePickerLifecycle,
@@ -154,6 +155,19 @@ check('typed raw input and command requests round-trip through ProtocolValue', (
     kind: 0,
     payload: { id: 'buffer.undo', base_revision: 9n, payload: null },
   });
+});
+
+check('browser key tracker falls back only when an Alt keydown was consumed', () => {
+  const keys = new BrowserKeyDispatchTracker();
+  assert.equal(keys.keydown('AltLeft'), false);
+  assert.equal(keys.keyup('KeyB', true), true);
+  assert.equal(keys.keyup('KeyB', true), true);
+  assert.equal(keys.keydown('KeyJ'), true);
+  assert.equal(keys.keyup('KeyJ', true), false);
+  keys.keydown('KeyK');
+  keys.clear();
+  assert.equal(keys.keyup('KeyK', true), false);
+  assert.equal(keys.keyup('ShiftLeft', true), false);
 });
 
 check('encodeStatusActionInvocation emits the exact StatusActionInvocation wire frame', () => {
