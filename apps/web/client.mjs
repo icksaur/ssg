@@ -14,7 +14,8 @@ import {
   encodeSelectionByteRange, encodeTabAction, markedTextByteOffset,
   applySessionDeltaSections, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
-  webExtentCss,
+  webExtentCss, applyNodeSemanticStyle, getOrCreateStyledNode,
+  firstMalformedNodeStyle, roleColor,
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
   applyPalettePresenceOverlay,
@@ -40,6 +41,8 @@ const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toStr
 // Role ordinals the renderer maps to CSS custom properties; pinned by
 // test_theme's role-ordinal contract so a reorder cannot silently mis-color.
 const ROLE = { text: 0, canvas: 1, caret: 2, selection: 3, statusWarning: 13,
+               tabActive: 6, tabInactive: 7, statusInfo: 12,
+               scrollbarTrack: 17, scrollbarThumb: 18,
                diffAdded: 19, diffRemoved: 20, diffModified: 21 };
 const FOCUS_EDITOR = 0;   // FocusTarget::Editor ordinal.
 const DOCUMENT_VIEWPORT_NODE_ID = 'document.viewport';
@@ -88,10 +91,12 @@ function applyTheme(theme) {
   set('--ssg-caret', ROLE.caret);
   set('--ssg-selection', ROLE.selection);
   set('--ssg-status-warning', ROLE.statusWarning);
+  set('--ssg-scrollbar-track', ROLE.scrollbarTrack);
+  set('--ssg-scrollbar-thumb', ROLE.scrollbarThumb);
   return (theme && Array.isArray(theme.syntax_colors)) ? theme.syntax_colors : [];
 }
 
-function renderTabsInto(host, tabs) {
+function renderTabsInto(host, tabs, theme) {
   host.textContent = '';
   if (tabs && Array.isArray(tabs.tabs)) {
     const activeId = idKey(tabs.active);
@@ -99,6 +104,8 @@ function renderTabsInto(host, tabs) {
       const el = document.createElement('button');
       el.type = 'button';
       el.className = 'tab' + (idKey(t.id) === activeId ? ' active' : '');
+      el.style.color = roleColor(
+        idKey(t.id) === activeId ? ROLE.tabActive : ROLE.tabInactive, theme);
       el.textContent = (t.dirty ? '\u25CF ' : '') + (t.label || '');
       el.setAttribute(
         'aria-label', (t.label || '') + (t.dirty ? ', modified' : ''));
@@ -131,14 +138,6 @@ function renderPickerInput(el, sigil) {
   el.appendChild(caret);
 }
 
-// The color for a SemanticRole ordinal, from the live theme's role_colors table, or
-// '' to inherit. Every chrome color comes through the theme this way; the client never
-// invents one.
-function roleColor(ordinal, theme) {
-  const rc = (theme && Array.isArray(theme.role_colors)) ? theme.role_colors : [];
-  return ordinal != null && ordinal >= 0 && ordinal < rc.length ? cssColor(rc[ordinal]) : '';
-}
-
 // Build the DOM for one interpreted render node, mirroring the generic tree: a
 // container becomes a flex div on its axis (a Flex node grows, a gap spaces its
 // children); a leaf becomes a span. `parentAxis` is the axis the node's own Size
@@ -162,8 +161,8 @@ function reconcileChildren(parent, children) {
 function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
   if (!node) return null;
   if (node.kind === 'container') {
-    const div = retainedNodes.getOrCreate(
-      node.id, () => document.createElement('div'));
+    const div = getOrCreateStyledNode(
+      retainedNodes, node, theme, () => document.createElement('div'));
     div.className = 'group';
     div.dataset.nodeId = node.id;
     div.style.display = 'flex';
@@ -195,6 +194,7 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
       node.id, () => document.createElement('span'));
     gap.className = 'w spacer';
     gap.style.display = 'inline-block';
+    applyNodeSemanticStyle(gap.style, node, theme);
     if (node.width != null) {
       gap.style[parentAxis === AXIS.COLUMN ? 'height' : 'width'] =
         extentCss(node.width, parentAxis);
@@ -204,6 +204,7 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
   }
   if (node.widget === WIDGET.VIEW) {
     const el = renderSurfaceNode(node, plan);
+    applyNodeSemanticStyle(el.style, node, theme);
     applySize(el, node.size, parentAxis);
     return el;
   }
@@ -211,8 +212,9 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
     const el = retainedNodes.getOrCreate(
       node.id, () => document.createElement('span'));
     if (plan.rebuild || plan.reconcile || plan.repaintTheme) {
-      renderStatusActionsNode(el);
+      renderStatusActionsNode(el, theme);
     }
+    applyNodeSemanticStyle(el.style, node, theme);
     applySize(el, node.size, parentAxis);
     return el;
   }
@@ -224,8 +226,7 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
     pickerInputElement = el;
     el._ssgPickerSigil = node.sigil || '';
     renderPickerInput(el, el._ssgPickerSigil);
-    const color = roleColor(node.role, theme);
-    if (color) el.style.color = color;
+    applyNodeSemanticStyle(el.style, node, theme);
     applySize(el, node.size, parentAxis);
     return el;
   }
@@ -233,8 +234,7 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
     node.id, () => document.createElement('span'));
   el.className = 'w' + (node.command ? ' clickable' : '');
   el.textContent = (node.checked != null ? (node.checked ? '\u2611 ' : '\u2610 ') : '') + (node.text || '');
-  const color = roleColor(node.role, theme);
-  if (color) el.style.color = color;
+  applyNodeSemanticStyle(el.style, node, theme);
   applySize(el, node.size, parentAxis);
   el.title = node.command || '';
   el.onclick = node.command ? () => sendCommand(node.command) : null;
@@ -333,7 +333,7 @@ function renderSurfaceContent(el, surface) {
   const s = state.sections || {};
   if (surface === SURFACE.TABBAR) {
     el.classList.add('tabs');
-    renderTabsInto(el, s.tabs);
+    renderTabsInto(el, s.tabs, s.theme);
   } else if (surface === SURFACE.DOCUMENT) {
     el.classList.add('doc-surface');
     renderDocumentInto(el);
@@ -449,7 +449,7 @@ function renderFindResultsSurface(parent, palette, mode = state.palette.mode) {
     }
 }
 
-function renderStatusActionsNode(el) {
+function renderStatusActionsNode(el, theme) {
     el.textContent = '';
     el.className = 'status-actions';
     const status = state.sections && state.sections.prompt_status && state.sections.prompt_status.status;
@@ -458,11 +458,7 @@ function renderStatusActionsNode(el) {
     for (const action of (item && Array.isArray(item.actions) ? item.actions : [])) {
       const button = document.createElement('button');
       button.textContent = action.accessible_label || action.accessibleLabel || action.id || '';
-      const bg = roleColor(ROLE.canvas, state.sections && state.sections.theme);
-      const fg = roleColor(ROLE.text, state.sections && state.sections.theme);
-      if (bg) button.style.backgroundColor = bg;
-      if (fg) button.style.color = fg;
-      button.style.borderColor = fg || 'currentColor';
+      button.style.color = roleColor(ROLE.statusInfo, theme);
       button.addEventListener('click', () =>
         sendCommandFrame(encodeStatusActionInvocation({
           statusId: item.id, actionId: action.id, generation: item.generation,
@@ -533,6 +529,14 @@ function renderChrome(sections, plan) {
   chromeErrorEl.textContent = '';
   if (!schema || !schema.root) return false;
 
+  const malformedStyle = firstMalformedNodeStyle(schema);
+  if (malformedStyle) {
+    chromeErrorEl.textContent =
+      'unsupported UI style on ' + malformedStyle.id +
+      ' -- this client build cannot render the composed UI';
+    uiRootEl.textContent = '';
+    return false;
+  }
   const unsupported = firstUnsupportedPrimitive(schema);
   if (unsupported) {
     chromeErrorEl.textContent =

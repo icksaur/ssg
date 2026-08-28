@@ -18,7 +18,8 @@
 // keeps it immutable within a generation.
 
 #include <ssg/LayoutConstraints.h>   // Axis, Size, Inset
-#include <ssg/UiWidget.h>            // WidgetDescriptor, ValueSource
+#include <ssg/Theme.h>              // SemanticRole
+#include <ssg/UiWidget.h>           // WidgetDescriptor, ValueSource
 
 #include <cstdint>
 #include <optional>
@@ -93,6 +94,15 @@ struct UiLeaf {
     friend bool operator==(const UiLeaf&, const UiLeaf&) = default;
 };
 
+// CONTRACT: UI nodes carry semantic role identities only. ThemeSnapshot remains
+// the sole owner of concrete colors.
+struct UiNodeStyle {
+    std::optional<SemanticRole> foreground;
+    std::optional<SemanticRole> background;
+
+    friend bool operator==(const UiNodeStyle&, const UiNodeStyle&) = default;
+};
+
 // One node: an identity, a size within its parent, and either a container or a
 // leaf. The variant makes "a node is exactly one of container/leaf" a type fact,
 // not a pair of optionals that could both be set or both be empty.
@@ -100,6 +110,7 @@ struct UiNode {
     UiNodeId id;
     Size size;
     std::variant<UiContainer, UiLeaf> content;
+    UiNodeStyle style;
 
     [[nodiscard]] bool isContainer() const noexcept {
         return std::holds_alternative<UiContainer>(content);
@@ -212,6 +223,20 @@ struct UiSchema {
 
     friend bool operator==(const UiSchema&, const UiSchema&) = default;
 };
+
+struct ResolvedUiNodeStyle {
+    std::optional<SemanticRole> foreground;
+    std::optional<SemanticRole> background;
+
+    friend bool operator==(const ResolvedUiNodeStyle&,
+                           const ResolvedUiNodeStyle&) = default;
+};
+
+// CONTRACT: each channel resolves independently to the nearest
+// ancestor-or-self assignment in the static schema. Presence never changes the
+// cascade.
+[[nodiscard]] std::optional<ResolvedUiNodeStyle> resolveUiNodeStyle(
+    const UiSchema& schema, std::string_view nodeId);
 
 // A generationless root tree: what the chrome decoder produces and the runtime OWNS
 // as composed input. It carries no Generation because a generation belongs to one

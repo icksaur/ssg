@@ -35,6 +35,16 @@ const UiNode* childById(const UiNode& node, std::string_view id) {
     return nullptr;
 }
 
+const UiNode* findById(const UiNode& node, std::string_view id) {
+    if (node.id.value() == id) return &node;
+    if (const auto* c = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& childNode : c->children) {
+            if (const auto* found = findById(childNode, id)) return found;
+        }
+    }
+    return nullptr;
+}
+
 StatusFieldCatalogEntry entry(std::string id, StatusFieldRegion region,
                               std::uint8_t rank = 0) {
     StatusFieldCatalogEntry e;
@@ -188,6 +198,38 @@ TEST(assembledTreeNamesTheIndependentVerticalScrollViewports) {
     for (const auto id : {kHeaderNodeId, kFooterNodeId, kNoticeNodeId,
                           kFooterPromptNodeId, kExternalModNodeId, kBodyNodeId}) {
         ASSERT_TRUE(scrollOf(childById(comp.root, id)) == ScrollAxis::None);
+    }
+}
+
+TEST(assembledTreeAssignsCanonicalSemanticStyles) {
+    const UiComposition comp =
+        assembleWholeScreen({}, kHintCommand, dims(), kPromptSigil, std::nullopt);
+    struct Expected {
+        std::string_view id;
+        SemanticRole foreground;
+        SemanticRole background;
+    };
+    const Expected expected[] = {
+        {kRootNodeId, SemanticRole::Text, SemanticRole::Canvas},
+        {kHeaderNodeId, SemanticRole::Header, SemanticRole::HeaderBackground},
+        {kFooterNodeId, SemanticRole::Footer, SemanticRole::FooterBackground},
+        {kPanelNodeId, SemanticRole::PanelInactive,
+         SemanticRole::TreeBackground},
+        {kTabBarNodeId, SemanticRole::TabInactive,
+         SemanticRole::TabInactiveBackground},
+        {kDocumentNodeId, SemanticRole::Text, SemanticRole::Canvas},
+        {kFindResultsNodeId, SemanticRole::Text, SemanticRole::Canvas},
+        {kFooterPromptNodeId, SemanticRole::Prompt, SemanticRole::Canvas},
+        {kNoticeNodeId, SemanticRole::Canvas, SemanticRole::StatusWarning},
+        {kExternalModNodeId, SemanticRole::Canvas,
+         SemanticRole::StatusWarning},
+    };
+    for (const auto& item : expected) {
+        const UiNode* node = findById(comp.root, item.id);
+        ASSERT_TRUE(node != nullptr);
+        if (!node) continue;
+        ASSERT_TRUE(node->style.foreground == item.foreground);
+        ASSERT_TRUE(node->style.background == item.background);
     }
 }
 
@@ -389,6 +431,7 @@ TEST(theHeaderCarriesThePromptInputRightAfterTheLeftGroup) {
 int main() {
     RUN(builtinHeaderFooterAreProviderBackedAndStable);
     RUN(assembledTreeNamesTheIndependentVerticalScrollViewports);
+    RUN(assembledTreeAssignsCanonicalSemanticStyles);
     RUN(theCatalogSplitsByRegionDeterministically);
     RUN(composedHeaderAndFooterOverrideTheBuiltins);
     RUN(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted);

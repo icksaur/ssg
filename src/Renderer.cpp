@@ -17,6 +17,44 @@ namespace {
 
 thread_local std::uint64_t gRenderSegmentationCalls = 0;
 
+SemanticRole nodeForeground(const UiSchema& schema, std::string_view nodeId,
+                            SemanticRole fallback) {
+    const auto style = resolveUiNodeStyle(schema, nodeId);
+    return style && style->foreground ? *style->foreground : fallback;
+}
+
+SemanticRole nodeBackground(const UiSchema& schema, std::string_view nodeId,
+                            SemanticRole fallback) {
+    const auto style = resolveUiNodeStyle(schema, nodeId);
+    return style && style->background ? *style->background : fallback;
+}
+
+const UiNode* findUiNode(const UiNode& node, std::string_view nodeId) {
+    if (node.id.value() == nodeId) return &node;
+    if (const auto* leaf = std::get_if<UiLeaf>(&node.content);
+        leaf && leaf->widget.id == nodeId) {
+        return &node;
+    }
+    const auto* container = std::get_if<UiContainer>(&node.content);
+    if (!container) return nullptr;
+    for (const auto& child : container->children) {
+        if (const auto* found = findUiNode(child, nodeId)) return found;
+    }
+    return nullptr;
+}
+
+SemanticRole chromeGlyphForeground(const UiSchema& schema,
+                                   std::string_view nodeId,
+                                   SemanticRole resolvedWidgetRole) {
+    const auto* node = findUiNode(schema.root, nodeId);
+    if (!node) return resolvedWidgetRole;
+    const auto* leaf = std::get_if<UiLeaf>(&node->content);
+    if (leaf && leaf->widget.role) return resolvedWidgetRole;
+    const auto style = resolveUiNodeStyle(schema, node->id.value());
+    return style && style->foreground ? *style->foreground
+                                      : resolvedWidgetRole;
+}
+
 // A cell stores a uint8 index into CellGrid.colors, which is the theme's role
 // colors (slots 0..kSemanticRoleCount-1) followed by its scope colors. A role
 // or scope IS its own slot, so these are a trivial identity/offset -- the shared
@@ -381,14 +419,28 @@ std::optional<GridPosition> inputLineCaret(ShellViewState const& shell) {
 }
 
 void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
-                        ThemeSnapshot const& theme, std::uint8_t background,
-                        std::uint8_t panelBackground, Style const& style) {
-    auto const headerBackground =
-        semanticIndex(theme, SemanticRole::HeaderBackground);
-    auto const footerBackground =
-        semanticIndex(theme, SemanticRole::FooterBackground);
-    auto const tabInactiveBackground =
-        semanticIndex(theme, SemanticRole::TabInactiveBackground);
+                        ThemeSnapshot const& theme, const UiSchema& ui,
+                        std::uint8_t background, std::uint8_t panelBackground,
+                        std::uint8_t documentBackground, Style const& style) {
+    auto const headerBackground = semanticIndex(
+        theme,
+        nodeBackground(ui, kHeaderNodeId, SemanticRole::HeaderBackground));
+    auto const footerBackground = semanticIndex(
+        theme,
+        nodeBackground(ui, kFooterNodeId, SemanticRole::FooterBackground));
+    auto const tabInactiveBackground = semanticIndex(
+        theme, nodeBackground(ui, kTabBarNodeId,
+                              SemanticRole::TabInactiveBackground));
+    auto const noticeFg = semanticIndex(
+        theme, nodeForeground(ui, kNoticeNodeId, SemanticRole::Canvas));
+    auto const noticeBg = semanticIndex(
+        theme,
+        nodeBackground(ui, kNoticeNodeId, SemanticRole::StatusWarning));
+    auto const externalFg = semanticIndex(
+        theme, nodeForeground(ui, kExternalModNodeId, SemanticRole::Canvas));
+    auto const externalBg = semanticIndex(
+        theme,
+        nodeBackground(ui, kExternalModNodeId, SemanticRole::StatusWarning));
     for (auto const& node : shell.accessibilityNodes) {
         std::uint8_t nodeBackground = background;
         switch (node.kind) {
@@ -415,23 +467,28 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                        node.kind == ShellNodeKind::TabSeparator) {
                 nodeBackground = node.role == SemanticRole::TabInactive
                                      ? tabInactiveBackground
-                                     : background;
+                                     : documentBackground;
                 // Fill the whole chip so the background reads as a solid tab, not
                 // just behind the text; the separator fills its gap the same way.
                 fillRect(grid, node.rect, semanticIndex(theme, node.role),
                          nodeBackground, node.role);
             }
             if (!node.content.empty()) {
+                auto foregroundRole = node.role;
+                if (node.kind == ShellNodeKind::HeaderField ||
+                    node.kind == ShellNodeKind::FooterField ||
+                    node.kind == ShellNodeKind::FooterHint) {
+                    foregroundRole =
+                        chromeGlyphForeground(ui, node.id, node.role);
+                }
                 paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
-                           node.content, semanticIndex(theme, node.role),
-                           nodeBackground, node.role, style);
+                           node.content, semanticIndex(theme, foregroundRole),
+                           nodeBackground, foregroundRole, style);
             }
             break;
         case ShellNodeKind::NoticeBar: {
             // A full-width yellow bar (StatusWarning bg, dark text) painted
             // before its action nodes so their bracketed labels sit on top.
-            auto const noticeBg = semanticIndex(theme, SemanticRole::StatusWarning);
-            auto const noticeFg = semanticIndex(theme, SemanticRole::Canvas);
             fillRect(grid, node.rect, noticeFg, noticeBg,
                      SemanticRole::StatusWarning);
             if (!node.content.empty()) {
@@ -442,8 +499,6 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
             break;
         }
         case ShellNodeKind::NoticeAction: {
-            auto const noticeBg = semanticIndex(theme, SemanticRole::StatusWarning);
-            auto const noticeFg = semanticIndex(theme, SemanticRole::Canvas);
             paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
                        node.content, noticeFg, noticeBg,
                        SemanticRole::StatusWarning, style);
@@ -457,22 +512,20 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
             // top, painted after (their nodes follow this one).
             auto const bg = node.role == SemanticRole::Selection
                                 ? semanticIndex(theme, SemanticRole::Selection)
-                                : semanticIndex(theme, SemanticRole::StatusWarning);
-            auto const fg = semanticIndex(theme, SemanticRole::Canvas);
-            fillRect(grid, node.rect, fg, bg, node.role);
+                                : externalBg;
+            fillRect(grid, node.rect, externalFg, bg, node.role);
             if (!node.content.empty()) {
                 paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
-                           node.content, fg, bg, node.role, style);
+                           node.content, externalFg, bg, node.role, style);
             }
             break;
         }
         case ShellNodeKind::ExternalModificationAction: {
             auto const bg = node.role == SemanticRole::Selection
                                 ? semanticIndex(theme, SemanticRole::Selection)
-                                : semanticIndex(theme, SemanticRole::StatusWarning);
-            auto const fg = semanticIndex(theme, SemanticRole::Canvas);
+                                : externalBg;
             paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
-                       node.content, fg, bg, node.role, style);
+                       node.content, externalFg, bg, node.role, style);
             break;
         }
         default:
@@ -1068,10 +1121,11 @@ void paintLineNumbers(CellGrid& grid, SessionSnapshot const& snapshot,
 std::optional<GridPosition> paintPrompt(CellGrid& grid,
                                          PromptViewState const& prompt,
                                          ThemeSnapshot const& theme,
-                                         std::uint8_t background,
+                                         SemanticRole foregroundRole,
+                                         SemanticRole backgroundRole,
                                          Style const& style) {
-    auto const promptFg = semanticIndex(theme, SemanticRole::Prompt);
-    auto const promptBg = semanticIndex(theme, SemanticRole::Canvas);
+    auto const promptFg = semanticIndex(theme, foregroundRole);
+    auto const promptBg = semanticIndex(theme, backgroundRole);
     std::optional<GridPosition> caret;
     for (auto const& control : prompt.controls) {
         std::string text;
@@ -1206,8 +1260,17 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot,
             theme, style);
     }
 
-    auto const foreground = semanticIndex(theme, SemanticRole::Text);
-    auto const background = semanticIndex(theme, SemanticRole::Canvas);
+    const auto& ui = snapshot.sections().ui;
+    const auto rootForeground =
+        nodeForeground(ui, kRootNodeId, SemanticRole::Text);
+    const auto rootBackground =
+        nodeBackground(ui, kRootNodeId, SemanticRole::Canvas);
+    const auto documentBackgroundRole =
+        nodeBackground(ui, kDocumentNodeId, SemanticRole::Canvas);
+    auto const foreground = semanticIndex(theme, rootForeground);
+    auto const background = semanticIndex(theme, rootBackground);
+    auto const documentBackground =
+        semanticIndex(theme, documentBackgroundRole);
     CellGrid grid{
         shell.viewport, themeColorTable(theme),
         std::vector<CellGridCell>(
@@ -1219,11 +1282,15 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot,
     grid.selectionFill = theme.color(SemanticRole::Selection);
 
     auto const panelBackground =
-        shell.panel ? semanticIndex(theme, SemanticRole::TreeBackground)
+        shell.panel ? semanticIndex(
+                          theme, nodeBackground(ui, kPanelNodeId,
+                                                SemanticRole::TreeBackground))
                     : background;
     if (shell.panel) {
+        const auto panelBackgroundRole =
+            nodeBackground(ui, kPanelNodeId, SemanticRole::TreeBackground);
         fillRect(grid, *shell.panel, foreground, panelBackground,
-                  SemanticRole::TreeBackground);
+                  panelBackgroundRole);
     }
 
     // The header and footer are solid chrome bands distinct from the document,
@@ -1231,14 +1298,16 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot,
     // the gaps between fields carry the band colour rather than the document
     // background.
     if (shell.header) {
+        const auto role =
+            nodeBackground(ui, kHeaderNodeId, SemanticRole::HeaderBackground);
         fillRect(grid, *shell.header, foreground,
-                 semanticIndex(theme, SemanticRole::HeaderBackground),
-                 SemanticRole::HeaderBackground);
+                 semanticIndex(theme, role), role);
     }
     if (shell.footer) {
+        const auto role =
+            nodeBackground(ui, kFooterNodeId, SemanticRole::FooterBackground);
         fillRect(grid, *shell.footer, foreground,
-                 semanticIndex(theme, SemanticRole::FooterBackground),
-                 SemanticRole::FooterBackground);
+                 semanticIndex(theme, role), role);
     }
     // The tab bar shares the inactive-tab background across its whole width, so
     // its empty region (past the last tab) reads as inactive chrome rather than
@@ -1246,12 +1315,15 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot,
     // blends into this band; the active tab cuts a Background-coloured notch that
     // merges with the document.
     if (shell.tabBar) {
+        const auto role =
+            nodeBackground(ui, kTabBarNodeId,
+                           SemanticRole::TabInactiveBackground);
         fillRect(grid, *shell.tabBar, foreground,
-                 semanticIndex(theme, SemanticRole::TabInactiveBackground),
-                 SemanticRole::TabInactiveBackground);
+                 semanticIndex(theme, role), role);
     }
 
-    paintShellLeaves(grid, shell, theme, background, panelBackground, style);
+    paintShellLeaves(grid, shell, theme, ui, background, panelBackground,
+                     documentBackground, style);
 
     if (shell.panel) {
         // The tree window (grid projection) lives in presentation; it holds the
@@ -1266,25 +1338,37 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot,
                          style);
     }
     if (!shell.panes.empty()) {
+        fillRect(grid, shell.panes.front().content, foreground,
+                 documentBackground, documentBackgroundRole);
         if (shell.palette) {
-            paintPalette(grid, *shell.palette, theme, background, style);
+            const auto paletteBackground = semanticIndex(
+                theme, nodeBackground(ui, kFindResultsNodeId,
+                                      SemanticRole::Canvas));
+            paintPalette(grid, *shell.palette, theme, paletteBackground, style);
         } else {
             paintDocument(grid, snapshot, shell.panes.front().content, theme,
-                           background, style, lineCache);
+                           documentBackground, style, lineCache);
             // After the document: a diagnostic underlines whatever the cell
             // already shows rather than replacing it.
             paintDiagnostics(grid, snapshot, shell.panes.front().content);
             paintHyperlinks(grid, snapshot, shell.panes.front().content);
             paintLineNumbers(grid, snapshot, shell.panes.front(), theme);
             paintScrollbar(grid, shell.panes.front(), snapshot.presentation()->viewport,
-                            theme, background, style);
+                            theme, documentBackground, style);
 
             // Paint the reserved prompt rows (find/replace/settings) and place
             // the hardware cursor at the query when the prompt is focused.
             auto const& prompt = snapshot.presentation()->prompt;
             if (prompt) {
+                const auto promptForegroundRole =
+                    nodeForeground(ui, kFooterPromptNodeId,
+                                   SemanticRole::Prompt);
+                const auto promptBackgroundRole =
+                    nodeBackground(ui, kFooterPromptNodeId,
+                                   SemanticRole::Canvas);
                 auto promptCaret =
-                    paintPrompt(grid, *prompt, theme, background, style);
+                    paintPrompt(grid, *prompt, theme, promptForegroundRole,
+                                promptBackgroundRole, style);
                 if (snapshot.sections().focus == FocusTarget::Prompt && promptCaret) {
                     grid.caret = *promptCaret;
                 }

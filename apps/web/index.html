@@ -8,16 +8,15 @@
   body > #status, body > #chrome-error { flex:0 0 auto; }
   #ui-root { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; overflow:hidden; }
   #ui-root > .group { flex:1 1 auto; min-height:0; }
-  #status { padding:2px 8px; border-bottom:1px solid; opacity:.6; }
-  .tabs { display:flex; gap:1px; padding:2px 4px; border-bottom:1px solid; }
+  #status { padding:2px 8px; opacity:.6; }
+  .tabs { display:flex; gap:1px; padding:2px 4px; }
   .tabs .tab { padding:2px 8px; opacity:.55; border:0; background:none;
                color:inherit; font:inherit; cursor:pointer; }
-  .tabs .tab.active { opacity:1; font-weight:bold; }
+  .tabs .tab.active { opacity:1; font-weight:bold; background:var(--ssg-canvas); }
   /* Library-composed header/footer chrome, interpreted from the published UI-VM
      schema + dynamic node state. Geometry is the browser's; only structure,
      values, roles, and triggers come from the library. */
-  [data-node-id="header"] { border-bottom:1px solid; }
-  .prompt-surface { align-items:center; flex-direction:row; gap:1ch; padding:2px 8px; border-top:1px solid; outline:none; }
+  .prompt-surface { align-items:center; flex-direction:row; gap:1ch; padding:2px 8px; outline:none; }
   .prompt-surface .prompt-control { white-space:pre; }
   .prompt-surface .prompt-input { padding:0 2px; }
   .prompt-surface .prompt-input.active { background:var(--ssg-selection); }
@@ -25,20 +24,14 @@
   .prompt-surface .prompt-toggle.checked { opacity:1; font-weight:bold; }
   .prompt-surface .prompt-count { opacity:.55; margin-left:auto; }
   .prompt-surface .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
-  /* The draft-conflict notice: intrinsic-height chrome above the document, painted
-     with the StatusWarning role background and the Canvas foreground to mirror the
-     terminal NoticeBar. Presence is server-owned; #notice.open is set only while
-     the library publishes a notice_view. */
-  .notice-surface { align-items:center; flex-direction:row; gap:1ch; padding:2px 8px;
-            background:var(--ssg-status-warning); color:var(--ssg-canvas); }
+  .notice-surface { align-items:center; flex-direction:row; gap:1ch; padding:2px 8px; }
   .notice-surface .notice-action { cursor:pointer; text-decoration:underline dotted; font-weight:bold;
                            background:none; border:none; color:inherit; font:inherit; padding:0; }
   /* The external-modification bar: multi-row intrinsic-height chrome above the
      document, mirroring the terminal ExternalModificationBar. Presence is
      server-owned; #external.open is set only while the section has files. The
      selected row is highlighted with the Selection role background. */
-  .external-surface { flex-direction:column; padding:2px 8px;
-              background:var(--ssg-status-warning); color:var(--ssg-canvas); }
+  .external-surface { flex-direction:column; padding:2px 8px; }
   .external-surface .external-header { font-weight:bold; }
   .external-surface .external-row { display:flex; align-items:center; gap:1ch; }
   .external-surface .external-row.selected { background:var(--ssg-selection); }
@@ -48,6 +41,8 @@
   .w { white-space:pre; }
   .w.clickable { cursor:pointer; text-decoration:underline dotted; }
   .w.spacer { flex:1 1 auto; }
+  .status-actions button { background:none; border:1px solid currentColor;
+                           color:inherit; font:inherit; }
   #chrome-error { padding:2px 8px; color:var(--ssg-status-warning); font-weight:bold; }
   /* The body host: a bounded flex region, NOT the scroll container. Scroll is a
      per-node property (ScrollAxis) the panel and content containers each own, so
@@ -56,6 +51,7 @@
   /* A surface fills its viewport container so a tall document or tree scrolls
      within the panel/content viewport rather than growing the page. */
   .surface { display:flex; flex-direction:column; min-height:0; flex:1 1 auto; }
+  .group { scrollbar-color:var(--ssg-scrollbar-thumb) var(--ssg-scrollbar-track); }
   .surface.tabs { flex-direction:row; }
   .doc-surface { margin:0; padding:8px; white-space:pre-wrap; flex:1 1 auto;
                  min-height:0; user-select:none; cursor:text; display:block;
@@ -70,9 +66,6 @@
     border-left:2px solid var(--ssg-caret);
   }
   .input-line { margin-left:1ch; }
-  .find-results-surface {
-    background:var(--ssg-canvas); color:var(--ssg-text);
-  }
   .find-results-surface .row {
     width:100%; padding:2px 8px; display:flex; gap:8px; cursor:pointer;
     border:0; background:none; color:inherit; font:inherit; text-align:left;

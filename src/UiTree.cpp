@@ -10,6 +10,22 @@ namespace ssg {
 
 namespace {
 
+std::optional<ResolvedUiNodeStyle> resolveStyle(
+    const UiNode& node, std::string_view target,
+    ResolvedUiNodeStyle inherited) {
+    if (node.style.foreground) inherited.foreground = node.style.foreground;
+    if (node.style.background) inherited.background = node.style.background;
+    if (node.id.value() == target) return inherited;
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            if (auto resolved = resolveStyle(child, target, inherited)) {
+                return resolved;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
 // Walks the tree under `node`, appending its path segment, checking each id is
 // non-empty and not already seen. Sets `error` and stops on the first violation.
 void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
@@ -89,6 +105,11 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
 }
 
 }  // namespace
+
+std::optional<ResolvedUiNodeStyle> resolveUiNodeStyle(
+    const UiSchema& schema, std::string_view nodeId) {
+    return resolveStyle(schema.root, nodeId, {});
+}
 
 namespace {
 

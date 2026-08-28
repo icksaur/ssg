@@ -107,6 +107,36 @@ TEST(nodeIsExactlyContainerOrLeaf) {
     ASSERT_TRUE(!l.isContainer());
 }
 
+TEST(nodeStyleResolvesEachChannelFromTheNearestAssignment) {
+    UiSchema schema;
+    schema.root = container(
+        "root",
+        {container("branch", {leaf("inherited"), leaf("overridden")}),
+         leaf("sibling")});
+    schema.root.style.foreground = ssg::SemanticRole::Text;
+    auto& root = std::get<UiContainer>(schema.root.content);
+    root.children[0].style.background = ssg::SemanticRole::HeaderBackground;
+    auto& branch = std::get<UiContainer>(root.children[0].content);
+    branch.children[1].style.foreground = ssg::SemanticRole::StatusWarning;
+    root.children[1].style.background = ssg::SemanticRole::FooterBackground;
+
+    const auto inherited = ssg::resolveUiNodeStyle(schema, "inherited");
+    ASSERT_TRUE(inherited.has_value());
+    ASSERT_TRUE(inherited->foreground == ssg::SemanticRole::Text);
+    ASSERT_TRUE(inherited->background == ssg::SemanticRole::HeaderBackground);
+
+    const auto overridden = ssg::resolveUiNodeStyle(schema, "overridden");
+    ASSERT_TRUE(overridden.has_value());
+    ASSERT_TRUE(overridden->foreground == ssg::SemanticRole::StatusWarning);
+    ASSERT_TRUE(overridden->background == ssg::SemanticRole::HeaderBackground);
+
+    const auto sibling = ssg::resolveUiNodeStyle(schema, "sibling");
+    ASSERT_TRUE(sibling.has_value());
+    ASSERT_TRUE(sibling->foreground == ssg::SemanticRole::Text);
+    ASSERT_TRUE(sibling->background == ssg::SemanticRole::FooterBackground);
+    ASSERT_FALSE(ssg::resolveUiNodeStyle(schema, "missing").has_value());
+}
+
 // A View leaf names a client-rendered surface and is sized Exact or Flex.
 TEST(wellFormedViewLeafValidates) {
     UiSchema schema;
@@ -243,6 +273,7 @@ int main() {
     RUN(emptyNodeIdIsRejected);
     RUN(minimalRootValidates);
     RUN(nodeIsExactlyContainerOrLeaf);
+    RUN(nodeStyleResolvesEachChannelFromTheNearestAssignment);
     RUN(wellFormedViewLeafValidates);
     RUN(viewLeafWithoutSurfaceIsRejected);
     RUN(autoSizedViewLeafIsRejected);

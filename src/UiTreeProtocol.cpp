@@ -235,6 +235,33 @@ std::optional<WidgetDescriptor> decodeWidget(const ProtocolValue& value) {
 
 ProtocolValue encodeNode(const UiNode& node);
 
+ProtocolValue encodeStyle(const UiNodeStyle& style) {
+    ProtocolValue::Object fields;
+    if (style.foreground) {
+        fields.emplace_back("foreground", enumValue(*style.foreground));
+    }
+    if (style.background) {
+        fields.emplace_back("background", enumValue(*style.background));
+    }
+    return ProtocolValue::makeObject(std::move(fields));
+}
+
+std::optional<UiNodeStyle> decodeStyle(const ProtocolValue& value) {
+    if (!value.asObject()) return std::nullopt;
+    UiNodeStyle style;
+    if (value.field("foreground")) {
+        style.foreground = decodeEnumIn(uintField(value, "foreground"),
+                                        kAllSemanticRoles);
+        if (!style.foreground) return std::nullopt;
+    }
+    if (value.field("background")) {
+        style.background = decodeEnumIn(uintField(value, "background"),
+                                        kAllSemanticRoles);
+        if (!style.background) return std::nullopt;
+    }
+    return style;
+}
+
 ProtocolValue encodeContainer(const UiContainer& container) {
     std::vector<ProtocolValue> children;
     children.reserve(container.children.size());
@@ -259,6 +286,9 @@ ProtocolValue encodeNode(const UiNode& node) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("id", ProtocolValue::makeText(node.id.value()));
     fields.emplace_back("size", encodeSize(node.size));
+    if (node.style.foreground || node.style.background) {
+        fields.emplace_back("style", encodeStyle(node.style));
+    }
     if (const auto* container = std::get_if<UiContainer>(&node.content)) {
         fields.emplace_back("container", encodeContainer(*container));
     } else {
@@ -279,6 +309,11 @@ std::optional<UiNode> decodeNode(const ProtocolValue& value) {
     UiNode node;
     node.id = UiNodeId{*id};
     node.size = *size;
+    if (const ProtocolValue* styleField = value.field("style")) {
+        auto style = decodeStyle(*styleField);
+        if (!style) return std::nullopt;
+        node.style = std::move(*style);
+    }
     const ProtocolValue* containerField = value.field("container");
     const ProtocolValue* leafField = value.field("leaf");
     const bool hasContainer = containerField && !isNull(containerField);

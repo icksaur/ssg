@@ -242,6 +242,8 @@ TEST(theWebRendererRoleOrdinalsMatchTheSemanticRoleEnum) {
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Canvas), 1);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Caret), 2);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Selection), 3);
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::TabActive), 6);
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::TabInactive), 7);
     // The web chrome interpreter colors a composed widget by the effective role the
     // SERVER resolves and publishes as a SemanticRole ordinal (reconcile.mjs indexes
     // theme.role_colors by it); these ordinals pin that wire contract.
@@ -249,6 +251,8 @@ TEST(theWebRendererRoleOrdinalsMatchTheSemanticRoleEnum) {
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Footer), 11);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::StatusInfo), 12);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::StatusWarning), 13);
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::ScrollbarTrack), 17);
+    ASSERT_EQ(static_cast<int>(ssg::SemanticRole::ScrollbarThumb), 18);
 }
 
 } // namespace

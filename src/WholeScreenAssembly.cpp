@@ -108,6 +108,13 @@ UiNode withSize(UiNode node, Size size) {
     return node;
 }
 
+UiNode withStyle(UiNode node, SemanticRole foreground,
+                 SemanticRole background) {
+    node.style.foreground = foreground;
+    node.style.background = background;
+    return node;
+}
+
 // The always-assembled header prompt input: a TextInput leaf carrying only its
 // stable identity and role. Its query/ghost never ride the schema (a client owns
 // the prediction locally); the grid lowers it to input_line.query/.ghost nodes
@@ -173,27 +180,38 @@ UiComposition assembleWholeScreen(
                         ? *composedFooter
                         : builtinRegion(kFooterNodeId, footerEntries,
                                         std::move(footerRight));
-    header = withSize(std::move(header), Size::exact(dimensions.headerHeight));
-    footer = withSize(std::move(footer), Size::exact(dimensions.footerHeight));
+    header = withStyle(
+        withSize(std::move(header), Size::exact(dimensions.headerHeight)),
+        SemanticRole::Header, SemanticRole::HeaderBackground);
+    footer = withStyle(
+        withSize(std::move(footer), Size::exact(dimensions.footerHeight)),
+        SemanticRole::Footer, SemanticRole::FooterBackground);
     insertPromptInput(header, promptSigil);
-    UiNode panel = container(
-        kPanelNodeId, Axis::Column, Size::exact(dimensions.panelTargetWidth),
-        {viewLeaf(kFileTreeNodeId, ViewSurface::FileTree, Size::flex()),
-         viewLeaf(kGitStatusNodeId, ViewSurface::GitStatus, Size::flex()),
-         viewLeaf(kSymbolsNodeId, ViewSurface::Symbols, Size::flex())},
-        ScrollAxis::Vertical);
+    UiNode panel = withStyle(
+        container(
+            kPanelNodeId, Axis::Column, Size::exact(dimensions.panelTargetWidth),
+            {viewLeaf(kFileTreeNodeId, ViewSurface::FileTree, Size::flex()),
+             viewLeaf(kGitStatusNodeId, ViewSurface::GitStatus, Size::flex()),
+             viewLeaf(kSymbolsNodeId, ViewSurface::Symbols, Size::flex())},
+            ScrollAxis::Vertical),
+        SemanticRole::PanelInactive, SemanticRole::TreeBackground);
     UiNode documentViewport = container(
         kDocumentViewportNodeId, Axis::Column, Size::flex(),
-        {viewLeaf(kDocumentNodeId, ViewSurface::Document, Size::flex())},
+        {withStyle(viewLeaf(kDocumentNodeId, ViewSurface::Document, Size::flex()),
+                   SemanticRole::Text, SemanticRole::Canvas)},
         ScrollAxis::Vertical);
     UiNode editor = container(
         kEditorNodeId, Axis::Column, Size::flex(),
-        {viewLeaf(kTabBarNodeId, ViewSurface::TabBar,
-                  Size::exact(dimensions.tabBarHeight)),
+        {withStyle(viewLeaf(kTabBarNodeId, ViewSurface::TabBar,
+                            Size::exact(dimensions.tabBarHeight)),
+                   SemanticRole::TabInactive,
+                   SemanticRole::TabInactiveBackground),
          std::move(documentViewport)});
     UiNode findResultsViewport = container(
         kFindResultsViewportNodeId, Axis::Column, Size::flex(),
-        {viewLeaf(kFindResultsNodeId, ViewSurface::FindResults, Size::flex())},
+        {withStyle(viewLeaf(kFindResultsNodeId, ViewSurface::FindResults,
+                            Size::flex()),
+                   SemanticRole::Text, SemanticRole::Canvas)},
         ScrollAxis::Vertical);
     UiNode content = container(
         kContentNodeId, Axis::Column, Size::flex(),
@@ -204,29 +222,34 @@ UiComposition assembleWholeScreen(
     // presence (WholeScreenInteraction). Auto-sized so its footprint is the runtime's
     // reserved chrome row above the document; the grid host ignores it and renders
     // ShellNotice with rects.
-    UiNode notice =
-        viewLeaf(kNoticeNodeId, ViewSurface::Notice, Size::autoSize());
+    UiNode notice = withStyle(
+        viewLeaf(kNoticeNodeId, ViewSurface::Notice, Size::autoSize()),
+        SemanticRole::Canvas, SemanticRole::StatusWarning);
     // The external-modification bar's semantic surface, always assembled and
     // hidden by presence (WholeScreenInteraction). Auto-sized so its footprint is
     // the runtime's reserved chrome rows above the document (adjacent to the
     // notice, fixed order); the grid host ignores it and renders the bounded
     // ShellExternalBar with rects. 5b-1 left it a bare container to anchor the
     // external-focus capture; 5b-2 gives it the rendered View leaf.
-    UiNode externalMod = viewLeaf(kExternalModNodeId,
-                                  ViewSurface::ExternalModification,
-                                  Size::autoSize());
+    UiNode externalMod = withStyle(
+        viewLeaf(kExternalModNodeId, ViewSurface::ExternalModification,
+                 Size::autoSize()),
+        SemanticRole::Canvas, SemanticRole::StatusWarning);
     // The footer-region prompt's semantic surface, always assembled and hidden by
     // presence (WholeScreenInteraction). Auto-sized so its footprint is the
     // runtime's reservation, intrinsic and not varied here by prompt kind; the
     // grid host ignores it and renders PresentationSnapshot::prompt with rects.
-    UiNode footerPrompt =
-        viewLeaf(kFooterPromptNodeId, ViewSurface::FooterPrompt, Size::autoSize());
+    UiNode footerPrompt = withStyle(
+        viewLeaf(kFooterPromptNodeId, ViewSurface::FooterPrompt, Size::autoSize()),
+        SemanticRole::Prompt, SemanticRole::Canvas);
 
     UiComposition out;
-    out.root = container(kRootNodeId, Axis::Column, Size::flex(),
-                         {std::move(header), std::move(notice),
-                          std::move(externalMod), std::move(body),
-                          std::move(footerPrompt), std::move(footer)});
+    out.root = withStyle(
+        container(kRootNodeId, Axis::Column, Size::flex(),
+                  {std::move(header), std::move(notice),
+                   std::move(externalMod), std::move(body),
+                   std::move(footerPrompt), std::move(footer)}),
+        SemanticRole::Text, SemanticRole::Canvas);
     return out;
 }
 

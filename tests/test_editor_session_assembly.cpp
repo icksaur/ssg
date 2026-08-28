@@ -178,6 +178,32 @@ TEST(nonDocumentTransitionReplaysAndRejectsADifferentClient) {
     ASSERT_FALSE(ssg::SessionSnapshotCodec{}.replay(otherClient, delta).accepted());
 }
 
+TEST(themeOnlyTransitionDoesNotReplaceTheUiSchema) {
+    auto oldSections = sections(ssg::Revision{4}, "same");
+    auto newSections = oldSections;
+    auto& changedColor = newSections.theme.roleColors[static_cast<std::size_t>(
+        ssg::SemanticRole::HeaderBackground)];
+    ++changedColor.red;
+
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(oldSections));
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(newSections));
+
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    ASSERT_TRUE(delta.theme().replacement.has_value());
+    ASSERT_FALSE(delta.ui().replacement.has_value());
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_EQ(*replayed.snapshot, after);
+}
+
 TEST(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay) {
     auto oldSections = sections(ssg::Revision{4}, "same");
     oldSections.document.diffFileIdentity = std::string{"a.cpp"};
@@ -319,6 +345,7 @@ int main() {
     RUN(executorThreadsServicesThroughTheCommonDispatchPath);
     RUN(fullSnapshotMatchesReplayedAggregateDelta);
     RUN(nonDocumentTransitionReplaysAndRejectsADifferentClient);
+    RUN(themeOnlyTransitionDoesNotReplaceTheUiSchema);
     RUN(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay);
     RUN(aDocumentTextChangeWithoutARevisionAdvanceIsInexpressibleAsADelta);
     RUN(perClientCapabilitiesAndViewportsAreIsolated);

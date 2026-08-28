@@ -76,6 +76,64 @@ ssg::SessionSnapshot withStyle(ssg::SessionSnapshot const& base,
                                 std::move(presentation)};
 }
 
+ssg::UiNode* mutableUiNode(ssg::UiNode& node, std::string_view id) {
+    if (node.id.value() == id) return &node;
+    if (auto* container = std::get_if<ssg::UiContainer>(&node.content)) {
+        for (auto& child : container->children) {
+            if (auto* found = mutableUiNode(child, id)) return found;
+        }
+    }
+    return nullptr;
+}
+
+ssg::UiNode* mutableUiNodeForWidget(ssg::UiNode& node,
+                                    std::string_view widgetId) {
+    if (auto* leaf = std::get_if<ssg::UiLeaf>(&node.content);
+        leaf && leaf->widget.id == widgetId) {
+        return &node;
+    }
+    if (auto* container = std::get_if<ssg::UiContainer>(&node.content)) {
+        for (auto& child : container->children) {
+            if (auto* found = mutableUiNodeForWidget(child, widgetId))
+                return found;
+        }
+    }
+    return nullptr;
+}
+
+ssg::SessionSnapshot withUiBackgrounds(
+    ssg::SessionSnapshot const& base,
+    std::initializer_list<std::pair<std::string_view, ssg::SemanticRole>>
+        backgrounds) {
+    auto sections = base.sections();
+    for (const auto& [id, role] : backgrounds) {
+        auto* node = mutableUiNode(sections.ui.root, id);
+        if (node) node->style.background = role;
+    }
+    return ssg::SessionSnapshot{base.revision(), base.topology(), base.client(),
+                                std::move(sections), *base.presentation()};
+}
+
+ssg::SessionSnapshot withUiForeground(ssg::SessionSnapshot const& base,
+                                      std::string_view id,
+                                      ssg::SemanticRole foreground) {
+    auto sections = base.sections();
+    auto* node = mutableUiNode(sections.ui.root, id);
+    if (node) node->style.foreground = foreground;
+    return ssg::SessionSnapshot{base.revision(), base.topology(), base.client(),
+                                std::move(sections), *base.presentation()};
+}
+
+ssg::SessionSnapshot withUiWidgetRole(ssg::SessionSnapshot const& base,
+                                      std::string_view widgetId,
+                                      std::string role) {
+    auto sections = base.sections();
+    auto* node = mutableUiNodeForWidget(sections.ui.root, widgetId);
+    if (node) std::get<ssg::UiLeaf>(node->content).widget.role = std::move(role);
+    return ssg::SessionSnapshot{base.revision(), base.topology(), base.client(),
+                                std::move(sections), *base.presentation()};
+}
+
 }  // namespace
 
 TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
@@ -140,6 +198,83 @@ TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
     if (activeTabX >= 0) {
         ASSERT_EQ(colorOf(activeTabX, shell.tabBar->y), docColor);
     }
+}
+
+TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "alpha.txt"} << "one\n";
+    std::ofstream{root / "beta.txt"} << "two\n";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"file.open", runtime->revision(),
+                             std::string{"alpha.txt"}});
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"file.open", runtime->revision(),
+                             std::string{"beta.txt"}});
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"panel.toggle", runtime->revision(), {}});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {60, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto styled = withUiBackgrounds(
+        *snapshot,
+        {{ssg::kHeaderNodeId, ssg::SemanticRole::Selection},
+         {ssg::kFooterNodeId, ssg::SemanticRole::SearchMatch},
+         {ssg::kPanelNodeId,
+          ssg::SemanticRole::CurrentLineNumberBackground},
+         {ssg::kTabBarNodeId, ssg::SemanticRole::LineNumberBackground},
+         {ssg::kDocumentNodeId, ssg::SemanticRole::FooterBackground}});
+    styled = withUiForeground(styled, ssg::kHeaderNodeId,
+                             ssg::SemanticRole::CurrentLineNumber);
+    const auto grid = ssg::Renderer{}.render(styled);
+    const auto& shell = styled.presentation()->shell;
+    const auto colorAt = [&](int x, int y) {
+        return grid.colors[grid.at(x, y).background];
+    };
+    ASSERT_EQ(colorAt(shell.header->right() - 1, shell.header->y),
+              styled.sections().theme.color(ssg::SemanticRole::Selection));
+    ASSERT_EQ(colorAt(shell.footer->x, shell.footer->y),
+              styled.sections().theme.color(ssg::SemanticRole::SearchMatch));
+    ASSERT_EQ(colorAt(shell.panel->x, shell.panel->bottom() - 1),
+              styled.sections().theme.color(
+                  ssg::SemanticRole::CurrentLineNumberBackground));
+    ASSERT_EQ(colorAt(shell.tabBar->right() - 1, shell.tabBar->y),
+              styled.sections().theme.color(
+                  ssg::SemanticRole::LineNumberBackground));
+    ASSERT_EQ(colorAt(shell.panes.front().content.right() - 1,
+                      shell.panes.front().content.bottom() - 1),
+              styled.sections().theme.color(
+                  ssg::SemanticRole::FooterBackground));
+    const auto headerGlyph = std::find_if(
+        shell.accessibilityNodes.begin(), shell.accessibilityNodes.end(),
+        [](const ssg::AccessibilityNode& node) {
+            return node.kind == ssg::ShellNodeKind::HeaderField &&
+                   !node.content.empty();
+        });
+    ASSERT_TRUE(headerGlyph != shell.accessibilityNodes.end());
+    if (headerGlyph != shell.accessibilityNodes.end()) {
+        ASSERT_EQ(grid.colors[grid.at(headerGlyph->rect.x,
+                                      headerGlyph->rect.y)
+                                  .foreground],
+                  styled.sections().theme.color(
+                      ssg::SemanticRole::CurrentLineNumber));
+        const auto overridden =
+            withUiWidgetRole(styled, headerGlyph->id, "header");
+        const auto overriddenGrid = ssg::Renderer{}.render(overridden);
+        ASSERT_EQ(overriddenGrid.colors[
+                      overriddenGrid
+                          .at(headerGlyph->rect.x, headerGlyph->rect.y)
+                          .foreground],
+                  styled.sections().theme.color(ssg::SemanticRole::Header));
+        ASSERT_EQ(overriddenGrid.colors[
+                      overriddenGrid
+                          .at(headerGlyph->rect.x, headerGlyph->rect.y)
+                          .background],
+                  styled.sections().theme.color(ssg::SemanticRole::Selection));
+    }
+    fs::remove_all(root);
 }
 
 TEST(renderPaintsContentNotAccessibilityLabels) {
@@ -1722,6 +1857,7 @@ TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
 int main() {
     RUN(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer);
     RUN(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument);
+    RUN(rendererGetsRegionBackgroundsFromTheUiTree);
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine);
     RUN(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary);

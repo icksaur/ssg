@@ -110,6 +110,26 @@ export const num = (v) => typeof v === 'bigint' ? Number(v) : v;
 export const hex2 = (n) => (n & 255).toString(16).padStart(2, '0');
 export const cssColor = (c) => c ? ('#' + hex2(num(c.red)) + hex2(num(c.green)) + hex2(num(c.blue))) : '';
 
+export function roleColor(ordinal, theme) {
+  const rc = (theme && Array.isArray(theme.role_colors)) ? theme.role_colors : [];
+  return ordinal != null && ordinal >= 0 && ordinal < rc.length
+    ? cssColor(rc[ordinal])
+    : '';
+}
+
+export function applyNodeSemanticStyle(target, node, theme) {
+  const style = node && node.style ? node.style : {};
+  const foreground = node && node.role != null ? node.role : style.foreground;
+  target.color = roleColor(foreground, theme);
+  target.backgroundColor = roleColor(style.background, theme);
+}
+
+export function getOrCreateStyledNode(cache, node, theme, create) {
+  const element = cache.getOrCreate(node.id, create);
+  applyNodeSemanticStyle(element.style, node, theme);
+  return element;
+}
+
 // UTF-8 byte length of a single code point's encoding.
 export function utf8Len(cp) {
   return cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
@@ -915,6 +935,37 @@ export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
   return walk(schema.root);
 }
 
+const semanticRoleCount = 28;
+const validSemanticRole = (value) =>
+  (typeof value === 'number' || typeof value === 'bigint') &&
+  Number.isInteger(num(value)) && num(value) >= 0 &&
+  num(value) < semanticRoleCount;
+
+export function firstMalformedNodeStyle(schema) {
+  if (!schema || !schema.root) return null;
+  const walk = (node) => {
+    if (!node) return null;
+    if (node.style !== undefined) {
+      if (!node.style || typeof node.style !== 'object' ||
+          Array.isArray(node.style)) return { kind: 'style', id: node.id };
+      for (const channel of ['foreground', 'background']) {
+        if (node.style[channel] !== undefined &&
+            !validSemanticRole(node.style[channel])) {
+          return { kind: 'style', id: node.id };
+        }
+      }
+    }
+    if (node.container && Array.isArray(node.container.children)) {
+      for (const child of node.container.children) {
+        const bad = walk(child);
+        if (bad) return bad;
+      }
+    }
+    return null;
+  };
+  return walk(schema.root);
+}
+
 // Interpret the schema (a single root node) + dynamic state (resolved values/presence)
 // into a RENDER TREE (rooted at `root`) the DOM builder mirrors 1:1 -- the generic
 // container tree is preserved (axis, gap, the left/middle/right grouping, and the FULL
@@ -987,7 +1038,22 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     if (typeof raw !== 'number' && typeof raw !== 'bigint') return null;  // null/wrong type -> malformed
     return num(raw) === SCROLL.VERTICAL ? SCROLL.VERTICAL : SCROLL.NONE;
   };
-  const build = (node) => {
+  const styleOf = (node, inherited) => {
+    if (node.style === undefined) return { ...inherited };
+    if (!node.style || typeof node.style !== 'object' ||
+        Array.isArray(node.style)) return null;
+    const resolved = { ...inherited };
+    for (const channel of ['foreground', 'background']) {
+      if (node.style[channel] === undefined) continue;
+      const value = node.style[channel];
+      if (!validSemanticRole(value)) return null;
+      resolved[channel] = num(value);
+    }
+    return resolved;
+  };
+  const build = (node, inheritedStyle = {}) => {
+    const style = styleOf(node, inheritedStyle);
+    if (style === null) { shapeOk = false; return null; }
     const st = stateById.get(node.id);
     const hasLeafState = st.leaf != null && typeof st.leaf === 'object';
     const isContainer = node.container != null && typeof node.container === 'object';
@@ -998,13 +1064,13 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
       if (scroll === null) { shapeOk = false; return null; }  // malformed scroll type
       const children = [];
       for (const c of (node.container.children || [])) {
-        const built = build(c);
+        const built = build(c, style);
         if (built) children.push(built);
       }
       if (!presentById.get(node.id)) return null;  // hidden subtree not drawn
       return { id: node.id, kind: 'container', axis: num(node.container.axis),
                gap: num(node.container.gap) || 0, size: sizeOf(node),
-               scroll, inset: insetOf(node.container), children };
+               scroll, inset: insetOf(node.container), style, children };
     }
     if (!node.leaf || typeof node.leaf !== 'object') { shapeOk = false; return null; }
     const wk = num(node.leaf.kind);
@@ -1022,31 +1088,40 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     if (!presentById.get(node.id)) return null;  // hidden leaf not drawn
     if (wk === WIDGET.SPACER) {
       const w = node.leaf.width != null ? num(node.leaf.width) : null;
-      return { id: node.id, kind: 'leaf', widget: wk, spacer: true, width: w, size: sizeOf(node) };
+      return { id: node.id, kind: 'leaf', widget: wk, spacer: true,
+               width: w, size: sizeOf(node), style };
     }
     if (wk === WIDGET.VIEW) {
       return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
-               surface: num(node.leaf.surface) };
+               surface: num(node.leaf.surface), style };
     }
     if (wk === WIDGET.STATUS_ACTIONS) {
-      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node), actions: [] };
+      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+               actions: [], style };
     }
     if (wk === WIDGET.TEXT_INPUT) {
       // The prompt query anchor: no server text (the browser owns the query
       // locally), so no per-keystroke tree delta is ever produced.
       return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
-               role: structuralRole(node.leaf.role), sigil: node.leaf.sigil || '' };
+               role: structuralRole(node.leaf.role),
+               sigil: node.leaf.sigil || '', style };
     }
     if (wk === WIDGET.CHECKBOX) {
-      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node), role: num(st.leaf.role),
+      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+               role: node.leaf.role != null || style.foreground == null
+                 ? num(st.leaf.role) : null,
                text: st.leaf.value || '', checked: !!num(st.leaf.checked),
-               command: st.leaf.command != null ? st.leaf.command : null };
+               command: st.leaf.command != null ? st.leaf.command : null,
+               style };
     }
     // Label/Field: no leaf state is the resolved drop (not drawn, not an error).
     if (!hasLeafState) return null;
-    return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node), role: num(st.leaf.role),
+    return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+             role: node.leaf.role != null || style.foreground == null
+               ? num(st.leaf.role) : null,
              text: st.leaf.value || '',
-             command: st.leaf.command != null ? st.leaf.command : null };
+             command: st.leaf.command != null ? st.leaf.command : null,
+             style };
   };
 
   const rootNode = build(schema.root);

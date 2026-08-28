@@ -92,8 +92,68 @@ TEST(uiSchemaRoundTripsThroughTheWire) {
         const ProtocolValue encoded = encodeUiSchema(schema);
         const auto decoded = decodeUiSchema(encoded);
         ASSERT_TRUE(decoded.has_value());
-        ASSERT_TRUE(*decoded == schema);
+        if (decoded) ASSERT_TRUE(*decoded == schema);
     }
+}
+
+ProtocolValue withRootField(const ProtocolValue& encoded, std::string key,
+                            ProtocolValue replacement) {
+    ProtocolValue::Object top;
+    for (const auto& [topKey, topValue] : *encoded.asObject()) {
+        if (topKey != "root") {
+            top.emplace_back(topKey, topValue);
+            continue;
+        }
+        ProtocolValue::Object root;
+        for (const auto& [nodeKey, nodeValue] : *topValue.asObject()) {
+            if (nodeKey != key) root.emplace_back(nodeKey, nodeValue);
+        }
+        root.emplace_back(std::move(key), std::move(replacement));
+        top.emplace_back(topKey, ProtocolValue::makeObject(std::move(root)));
+    }
+    return ProtocolValue::makeObject(std::move(top));
+}
+
+TEST(nodeStyleRoundTripsAndFieldAdditionRemainsCompatible) {
+    UiSchema schema = corpus().back();
+    schema.root.style.foreground = ssg::SemanticRole::Text;
+    schema.root.style.background = ssg::SemanticRole::Canvas;
+
+    const ProtocolValue encoded = encodeUiSchema(schema);
+    const auto decoded = decodeUiSchema(encoded);
+    ASSERT_TRUE(decoded.has_value());
+    if (decoded) ASSERT_TRUE(*decoded == schema);
+
+    const ProtocolValue future =
+        withRootField(encoded, "future_node_property",
+                      ProtocolValue::makeText("ignored"));
+    const auto futureDecoded = decodeUiSchema(future);
+    ASSERT_TRUE(futureDecoded.has_value());
+    if (futureDecoded) ASSERT_TRUE(*futureDecoded == schema);
+
+    UiSchema unstyled = schema;
+    unstyled.root.style = {};
+    const ProtocolValue unstyledEncoded = encodeUiSchema(unstyled);
+    ASSERT_TRUE(unstyledEncoded.field("root")->field("style") == nullptr);
+    ASSERT_TRUE(decodeUiSchema(unstyledEncoded) == unstyled);
+}
+
+TEST(malformedOrUnknownNodeStyleRejectsTheWholeSchema) {
+    UiSchema schema = corpus().back();
+    const ProtocolValue encoded = encodeUiSchema(schema);
+    const auto style = [](ProtocolValue foreground) {
+        return ProtocolValue::makeObject(
+            {{"foreground", std::move(foreground)}});
+    };
+
+    ASSERT_FALSE(decodeUiSchema(
+        withRootField(encoded, "style",
+                      style(ProtocolValue::makeText("text"))))
+                     .has_value());
+    ASSERT_FALSE(decodeUiSchema(
+        withRootField(encoded, "style",
+                      style(ProtocolValue::makeUint(255))))
+                     .has_value());
 }
 
 // The scroll viewport property round-trips (proven by the corpus above, whose
@@ -276,6 +336,8 @@ TEST(malformedSurfaceDecodesToNullopt) {
 
 int main() {
     RUN(uiSchemaRoundTripsThroughTheWire);
+    RUN(nodeStyleRoundTripsAndFieldAdditionRemainsCompatible);
+    RUN(malformedOrUnknownNodeStyleRejectsTheWholeSchema);
     RUN(scrollAxisRoundTripsAndCanonicalViewportRejectsUnknownOrAbsentValues);
     RUN(malformedWireDecodesToNullopt);
     RUN(malformedSurfaceDecodesToNullopt);

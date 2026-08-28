@@ -8,7 +8,7 @@
 
 import assert from 'node:assert/strict';
 import {
-  applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput,
+  applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput, cssColor,
   decodeMessage, browserInboundKind, encodeClientInput, encodeCommandRequest,
   BrowserKeyDispatchTracker,
   settleCommandResult,
@@ -331,7 +331,8 @@ check('applyTreeDelta splices the retained tree and resyncs only when inexpressi
 // --- UI-VM: profile rejection + schema/state interpretation ---
 import {
   firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, SIZE, SURFACE, SCROLL,
-  webExtentCss,
+  webExtentCss, applyNodeSemanticStyle, firstMalformedNodeStyle,
+  getOrCreateStyledNode,
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
   applyPalettePresenceOverlay, PALETTE_PRESENCE_OP,
@@ -443,6 +444,96 @@ check('interpretChrome carries a node ScrollAxis so a client derives independent
   assert.equal(byId.document.scroll ?? SCROLL.NONE, SCROLL.NONE);
   assert.equal(byId.body.scroll, SCROLL.NONE);
   assert.equal(byId.future.scroll, SCROLL.NONE);  // unknown axis -> none
+});
+
+check('interpretChrome resolves semantic style per channel and preserves widget foreground precedence', () => {
+  const inherited = leafNode('inherited', WIDGET.FIELD);
+  const overridden = leafNode(
+    'overridden', WIDGET.FIELD, { role: 'footer' });
+  const group = rowNode('group', [inherited, overridden]);
+  const root = rowNode('root', [group]);
+  root.style = { foreground: 10, background: 1 };
+  group.style = { background: 4 };
+  const state = {
+    generation: 22,
+    nodes: [
+      st('root'),
+      st('group'),
+      st('inherited', { value: 'base', label: 'base', role: 11 }),
+      st('overridden', { value: 'override', label: 'override', role: 11 }),
+    ],
+  };
+
+  const out = interpretChrome(
+    schemaOf(22, root), state, presenceForSchema(22, root));
+  assert.ok(out);
+  assert.deepEqual(out.root.style, { foreground: 10, background: 1 });
+  assert.deepEqual(out.root.children[0].style,
+    { foreground: 10, background: 4 });
+  assert.deepEqual(out.root.children[0].children[0].style,
+    { foreground: 10, background: 4 });
+  assert.equal(out.root.children[0].children[0].role, null);
+  assert.equal(out.root.children[0].children[1].role, 11);
+});
+
+check('node semantic style uses widget foreground and clears removed retained channels', () => {
+  const colors = Array.from({ length: 28 }, (_, i) => ({
+    red: i, green: i + 1, blue: i + 2,
+  }));
+  const target = { color: 'stale', backgroundColor: 'stale' };
+
+  applyNodeSemanticStyle(target, {
+    style: { foreground: 10, background: 4 },
+    role: 11,
+  }, { role_colors: colors });
+  assert.equal(target.color, cssColor(colors[11]));
+  assert.equal(target.backgroundColor, cssColor(colors[4]));
+
+  applyNodeSemanticStyle(target, { style: {} }, { role_colors: colors });
+  assert.equal(target.color, '');
+  assert.equal(target.backgroundColor, '');
+});
+
+check('schema style replacement clears channels on the retained render node', () => {
+  const colors = Array.from({ length: 28 }, (_, i) => ({
+    red: i, green: i + 1, blue: i + 2,
+  }));
+  const theme = { role_colors: colors };
+  const styledRoot = rowNode('root', []);
+  styledRoot.style = { foreground: 10, background: 4 };
+  const plainRoot = rowNode('root', []);
+  const state = { generation: 23, nodes: [st('root')] };
+  const cache = new GenerationRetainedCache();
+  cache.begin(23);
+
+  const first = interpretChrome(
+    schemaOf(23, styledRoot), state, presenceForSchema(23, styledRoot));
+  const element = getOrCreateStyledNode(
+    cache, first.root, theme, () => ({ style: {} }));
+  assert.equal(element.style.color, cssColor(colors[10]));
+  assert.equal(element.style.backgroundColor, cssColor(colors[4]));
+
+  const second = interpretChrome(
+    schemaOf(23, plainRoot), state, presenceForSchema(23, plainRoot));
+  const retained = getOrCreateStyledNode(
+    cache, second.root, theme, () => ({ style: {} }));
+  assert.equal(retained, element);
+  assert.equal(retained.style.color, '');
+  assert.equal(retained.style.backgroundColor, '');
+});
+
+check('malformed node style is identified separately from a stale frame', () => {
+  for (const style of [null, 'bad', { foreground: 28 },
+                       { background: 'canvas' }]) {
+    const root = rowNode('root', []);
+    root.style = style;
+    assert.deepEqual(firstMalformedNodeStyle(schemaOf(24, root)), {
+      kind: 'style', id: 'root',
+    });
+  }
+  const valid = rowNode('root', []);
+  valid.style = { foreground: 0, background: 27 };
+  assert.equal(firstMalformedNodeStyle(schemaOf(24, valid)), null);
 });
 
 check('picker presence overlay preserves header siblings and panel while replacing editor content', () => {
