@@ -1,5 +1,7 @@
 #include "ssg/TreeModel.h"
 
+#include "tree_model_detail.h"
+
 #include <algorithm>
 #include <functional>
 #include <map>
@@ -177,6 +179,41 @@ GitTreeAffordance gitTreeAffordance(GitTreeStatus status) {
     throw std::invalid_argument("unknown git tree status");
 }
 
+bool detail::filesystemTreeEntryDisappeared(
+    const std::error_code& error) noexcept {
+    return error == std::errc::no_such_file_or_directory;
+}
+
+std::optional<TreeNode> detail::inspectFilesystemTreeEntry(
+    const TreeProviderId& providerId, const std::filesystem::path& root,
+    const std::filesystem::directory_entry& entry) {
+    std::error_code error;
+    const auto status = entry.symlink_status(error);
+    if (filesystemTreeEntryDisappeared(error)) return std::nullopt;
+    if (error) {
+        throw std::runtime_error(
+            "failed to inspect filesystem tree entry: " + error.message());
+    }
+
+    const auto relative =
+        entry.path().lexically_relative(root).generic_string();
+    const bool symlink = std::filesystem::is_symlink(status);
+    const bool directory = std::filesystem::is_directory(status);
+    const auto parentPath =
+        std::filesystem::path{relative}.parent_path().generic_string();
+    return TreeNode{
+        nodeId(providerId, relative),
+        nodeId(providerId, parentPath.empty() ? "." : parentPath),
+        entry.path().filename().string(),
+        symlink ? TreeNodeKind::Symlink
+                : (directory ? TreeNodeKind::Directory : TreeNodeKind::File),
+        std::nullopt,
+        {},
+        std::nullopt,
+        relative,
+        std::nullopt};
+}
+
 const std::vector<TreeNodeView>& TreeModel::ProviderState::visibleNodes() const {
     if (!visibleCache || visibleCache->revision != snapshot.revision() ||
         visibleCache->expandedVersion != expandedVersion) {
@@ -237,34 +274,21 @@ TreeProviderSnapshot TreeProviderSnapshot::fromFilesystem(
     std::filesystem::recursive_directory_iterator iterator{
         root, std::filesystem::directory_options::skip_permission_denied, error};
     const std::filesystem::recursive_directory_iterator end;
+    // The root was validated immediately above; ENOENT here means it disappeared
+    // in the narrow window before enumeration began.
+    if (detail::filesystemTreeEntryDisappeared(error)) error.clear();
     while (!error && iterator != end) {
         const auto entry = *iterator;
-        const auto relative = entry.path().lexically_relative(root).generic_string();
-        const auto status = entry.symlink_status(error);
-        if (error) {
-            throw std::runtime_error(
-                "failed to inspect filesystem tree entry: " + error.message());
-        }
-        const bool symlink = std::filesystem::is_symlink(status);
-        const bool directory = std::filesystem::is_directory(status);
-        if (symlink) {
+        auto node = detail::inspectFilesystemTreeEntry(providerId, root, entry);
+        if (!node || node->kind == TreeNodeKind::Symlink) {
             iterator.disable_recursion_pending();
         }
-
-        const auto parentPath =
-            std::filesystem::path{relative}.parent_path().generic_string();
-        nodes.push_back(TreeNode{
-            nodeId(providerId, relative),
-            nodeId(providerId, parentPath.empty() ? "." : parentPath),
-            entry.path().filename().string(),
-            symlink ? TreeNodeKind::Symlink
-                    : (directory ? TreeNodeKind::Directory : TreeNodeKind::File),
-            std::nullopt,
-            {},
-            std::nullopt,
-            relative,
-            std::nullopt});
+        if (node) nodes.push_back(std::move(*node));
         iterator.increment(error);
+        if (detail::filesystemTreeEntryDisappeared(error)) {
+            error.clear();
+            break;
+        }
     }
     if (error) {
         throw std::runtime_error("failed to scan filesystem tree: " +

@@ -1,6 +1,8 @@
 #include "ssg/TreeModel.h"
 #include "test_helpers.h"
 
+#include "../src/tree_model_detail.h"
+
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -76,6 +78,22 @@ TEST(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks) {
     ASSERT_TRUE(std::find(secondIds.begin(), secondIds.end(),
                           "files:renamed.txt") != secondIds.end());
     ASSERT_EQ(first.nodes().front().id, second.nodes().front().id);
+}
+
+TEST(filesystemSnapshotIgnoresAnEntryThatDisappearsDuringInspection) {
+    TemporaryDirectory temporary;
+    const auto transient = temporary.path() / "transient.txt";
+    std::ofstream(transient) << "temporary";
+    const std::filesystem::directory_entry entry{transient};
+    std::filesystem::remove(transient);
+
+    ASSERT_FALSE(ssg::detail::inspectFilesystemTreeEntry(
+                     TreeProviderId{"files"}, temporary.path(), entry)
+                     .has_value());
+    ASSERT_TRUE(ssg::detail::filesystemTreeEntryDisappeared(
+        std::make_error_code(std::errc::no_such_file_or_directory)));
+    ASSERT_FALSE(ssg::detail::filesystemTreeEntryDisappeared(
+        std::make_error_code(std::errc::permission_denied)));
 }
 
 TEST(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys) {
@@ -445,6 +463,7 @@ TEST(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation) {
 
 int main() {
     RUN(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks);
+    RUN(filesystemSnapshotIgnoresAnEntryThatDisappearsDuringInspection);
     RUN(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys);
     RUN(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned);
     RUN(commandSetIsExactAndInvocationIsProviderDataOnly);
