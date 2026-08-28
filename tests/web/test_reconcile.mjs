@@ -22,6 +22,9 @@ import {
   externalModificationFromSections, externalFocusHeld, encodeExternalAction,
   applyExternalModificationDelta, isCurrentGeneration, replayAttachFrame,
   deltaIsContiguous, clearUncertainInputs, reconnectDelay,
+  predictPromptValue,
+  settlePromptPrediction,
+  settlePromptPresentation, deferPromptDocumentSurface,
 } from '../../apps/web/reconcile.mjs';
 
 let checks = 0;
@@ -47,6 +50,56 @@ check('applyDocumentDelta inserts and replaces on byte offsets', () => {
   assert.equal(applyDocumentDelta('a\u00e9b', { start: 1, erased_bytes: 2, inserted_text: 'X' }), 'aXb');
   // Delete the astral char (4 bytes at offset 0).
   assert.equal(applyDocumentDelta('\u{1f600}z', { start: 0, erased_bytes: 4, inserted_text: '' }), 'z');
+});
+
+check('prompt prediction appends and deletes one grapheme immediately', () => {
+  assert.equal(predictPromptValue('nee', 'x', false), 'neex');
+  assert.equal(predictPromptValue('a\u0301b', 'Backspace', false), 'a\u0301');
+  assert.equal(predictPromptValue('a\u0301', 'Backspace', false), '');
+  assert.equal(predictPromptValue('', 'Backspace', false), null);
+  assert.equal(predictPromptValue('', 'Escape', false), null);
+  assert.equal(predictPromptValue('two words', 'Backspace', true), null);
+});
+
+check('prompt prediction remains until its last serialized input settles', () => {
+  const prediction = { controlId: 'find.query', value: 'abc' };
+  assert.equal(
+    settlePromptPrediction(prediction,
+                           [{ promptPrediction: true, promptInput: true }],
+                           { promptPrediction: true }),
+    prediction);
+  assert.equal(
+    settlePromptPrediction(prediction,
+                           [{ promptPrediction: false, promptInput: true }],
+                           { promptPrediction: true }),
+    prediction);
+  assert.equal(
+    settlePromptPrediction(prediction, [], { promptPrediction: true }), null);
+  assert.equal(
+    settlePromptPrediction(prediction, [], { promptPrediction: false }),
+    null);
+  assert.equal(
+    settlePromptPrediction(prediction,
+                           [{ promptPrediction: false, promptInput: false }],
+                           { promptPrediction: false }),
+    null);
+});
+
+check('pending prompt search defers document rendering and honors user scroll', () => {
+  assert.deepEqual(deferPromptDocumentSurface([8, 1], true), [1]);
+  assert.deepEqual(deferPromptDocumentSurface([8, 1], false), [8, 1]);
+  assert.deepEqual(
+    settlePromptPresentation(
+      { controlId: 'find.query', value: 'abc' },
+      [{ promptPrediction: true, promptInput: true }],
+      { promptPrediction: true }, true),
+    { prediction: { controlId: 'find.query', value: 'abc' },
+      renderDocument: false, revealDocument: false });
+  assert.deepEqual(
+    settlePromptPresentation(
+      { controlId: 'find.query', value: 'abc' },
+      [], { promptPrediction: true }, true),
+    { prediction: null, renderDocument: true, revealDocument: false });
 });
 
 check('settleInput is FIFO and waits for the result revision', () => {

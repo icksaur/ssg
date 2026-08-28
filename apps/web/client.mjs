@@ -28,6 +28,8 @@ import {
   settleCommandResult, settleInput, isCurrentGeneration, replayAttachFrame,
   deltaIsContiguous,
   clearUncertainInputs, reconnectDelay,
+  predictPromptValue,
+  settlePromptPresentation, deferPromptDocumentSurface,
 } from '/reconcile.mjs';
 import { fuzzyRank } from '/fuzzy.mjs';
 
@@ -55,6 +57,9 @@ const state = {
   pending: [],
   inputQueue: [],
   nextEditId: 1,
+  promptPrediction: null,
+  promptScrollOverride: false,
+  skipNextCaretReveal: false,
   // The palette/finder is a client-owned derived view: the browser owns the
   // query text and selection index, and ranks the published candidate universe locally.
   palette: { mode: null, query: '', selected: 0, returnFocus: null },
@@ -190,6 +195,13 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
       div.style.overflowY = 'auto';
       div.style.minHeight = '0';
     }
+    if (node.id === DOCUMENT_VIEWPORT_NODE_ID) {
+      const noteUserScroll = () => {
+        if (state.promptPrediction) state.promptScrollOverride = true;
+      };
+      div.onwheel = noteUserScroll;
+      div.onpointerdown = noteUserScroll;
+    }
     if (node.gap) div.style.gap = extentCss(node.gap, node.axis);
     const children = node.children
       .map((child) => renderChromeNode(
@@ -232,12 +244,15 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
     const el = retainedNodes.getOrCreate(
       node.id, () => document.createElement('span'));
     if (node.active != null) {
+      const predicted = state.promptPrediction &&
+        state.promptPrediction.controlId === node.controlId
+          ? state.promptPrediction.value : null;
       el.className = 'prompt-control prompt-input' +
         (node.active ? ' active' : '');
       el.id = 'prompt-input-' + node.controlId;
       el.setAttribute('role', 'textbox');
       el.setAttribute('aria-label', node.label || '');
-      el.textContent = node.text || '';
+      el.textContent = predicted == null ? (node.text || '') : predicted;
       if (node.active) {
         el.appendChild(document.createElement('span')).className = 'caret';
         renderedFooterPromptActiveId = node.controlId;
@@ -772,11 +787,15 @@ function applyDelta(d) {
 function render(plan = fullRenderPlan()) {
   const s = state.sections;
   if (!s) return;
-  if (plan.rebuild || plan.repaintTheme) applyTheme(s.theme);
-  if (plan.rebuild || plan.reconcile) {
-    renderChrome(s, plan);
+  const effectivePlan = state.promptPrediction && !plan.rebuild
+    ? { ...plan,
+        surfaces: deferPromptDocumentSurface(plan.surfaces, true) }
+    : plan;
+  if (effectivePlan.rebuild || effectivePlan.repaintTheme) applyTheme(s.theme);
+  if (effectivePlan.rebuild || effectivePlan.reconcile) {
+    renderChrome(s, effectivePlan);
   } else {
-    const dirty = new Set(plan.surfaces);
+    const dirty = new Set(effectivePlan.surfaces);
     for (const el of retainedNodes.values()) {
       const surface = Number(el.dataset.surface);
       if (el.isConnected && dirty.has(surface)) {
@@ -784,7 +803,8 @@ function render(plan = fullRenderPlan()) {
       }
     }
   }
-  if (plan.rebuild || plan.surfaces.includes(SURFACE.DOCUMENT)) {
+  if (effectivePlan.rebuild ||
+      effectivePlan.surfaces.includes(SURFACE.DOCUMENT)) {
     revealDocumentCaret();
   }
 }
@@ -1028,13 +1048,18 @@ function endPointerSelection(host, event) {
 }
 
 function revealDocumentCaret() {
-  const caret = uiRootEl.querySelector('.doc-surface .caret');
-  if (!caret) return;
   const activeTab = state.sections && state.sections.tabs
     ? idKey(state.sections.tabs.active)
     : '';
   const key = activeTab + ':' + String(state.sections.document.caret) +
     ':' + state.pending.map((item) => item.text).join('');
+  if (state.skipNextCaretReveal) {
+    state.skipNextCaretReveal = false;
+    lastCaretRevealKey = key;
+    return;
+  }
+  const caret = uiRootEl.querySelector('.doc-surface .caret');
+  if (!caret) return;
   if (key === lastCaretRevealKey) return;
   lastCaretRevealKey = key;
   const viewport = retainedNodes.get(DOCUMENT_VIEWPORT_NODE_ID);
@@ -1079,7 +1104,13 @@ function discardPredictions() {
   const cleared = clearUncertainInputs();
   state.pending = cleared.pending;
   state.inputQueue = cleared.inputQueue;
-  render(surfaceRenderPlan(SURFACE.DOCUMENT));
+  state.promptPrediction = null;
+  state.promptScrollOverride = false;
+  state.skipNextCaretReveal = true;
+  render({
+    ...surfaceRenderPlan(SURFACE.DOCUMENT),
+    reconcile: true,
+  });
 }
 
 function reconnect(reason) {
@@ -1119,6 +1150,7 @@ function applyProtocolFrame(buffer) {
       frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
     }
   } else if (inbound === 'input-result') {
+    const completedInput = state.inputQueue[0];
     const settled = settleInput(
       state.inputQueue, state.pending, payload, state.revision);
     if (!settled) {
@@ -1127,7 +1159,24 @@ function applyProtocolFrame(buffer) {
     }
     state.inputQueue = settled.inputQueue;
     state.pending = settled.pending;
-    frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
+    if (state.promptPrediction) {
+      const promptPresentation = settlePromptPresentation(
+        state.promptPrediction, state.inputQueue, completedInput,
+        state.promptScrollOverride);
+      state.promptPrediction = promptPresentation.prediction;
+      if (promptPresentation.renderDocument) {
+        state.skipNextCaretReveal = !promptPresentation.revealDocument;
+        state.promptScrollOverride = false;
+      }
+      frameRenderPlan = {
+        ...(promptPresentation.renderDocument
+          ? surfaceRenderPlan(SURFACE.DOCUMENT)
+          : surfaceRenderPlan()),
+        reconcile: true,
+      };
+    } else {
+      frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
+    }
   } else {
     // Additive server messages are safe to ignore. Required incompatible
     // semantics must use a new wire version, which decodeMessage rejects.
@@ -1166,7 +1215,7 @@ function connect() {
     // renderFooterPrompt has already placed focus on its container.
     if (!footerPromptOpen &&
         (document.activeElement === document.body || document.activeElement === statusEl)) {
-      editorFocusElement().focus();
+      editorFocusElement().focus({ preventScroll: true });
     }
     } catch (err) {
       reconnect('protocol error: ' + err.message);
@@ -1216,7 +1265,6 @@ function handleKeydown(ev) {
   if (ev.key === 'Escape' && pointerSelection.dragging) {
     ev.preventDefault();
     cancelPointerGesture();
-    return;
   }
 
   // Ctrl/Meta chords belong to the browser: ssg's keymap uses Alt as its chord
@@ -1323,6 +1371,8 @@ function handleKeydown(ev) {
   // a document insert); the char shows this frame and the host's settlement
   // re-bases it. Everything else round-trips without echo.
   let predictionId = null;
+  const priorPromptPrediction = state.promptPrediction;
+  let promptPrediction = null;
   const focus = state.sections ? num(state.sections.focus) : -1;
   // Suppress local echo when the external-modification bar is the effective focus:
   // the wire `focus` field never carries ExternalModification (it is legacy-
@@ -1334,6 +1384,23 @@ function handleKeydown(ev) {
     state.pending.push({ id, text });
     predictionId = id;
   }
+  if (promptActive && renderedFooterPromptActiveId != null) {
+    const activeElement = document.getElementById(
+      'prompt-input-' + renderedFooterPromptActiveId);
+    const currentValue =
+      state.promptPrediction &&
+      state.promptPrediction.controlId === renderedFooterPromptActiveId
+        ? state.promptPrediction.value
+        : (activeElement ? activeElement.textContent : '');
+    const predictedValue =
+      predictPromptValue(currentValue, ev.key, ev.altKey);
+    if (predictedValue != null) {
+      promptPrediction = {
+        controlId: renderedFooterPromptActiveId,
+        value: predictedValue,
+      };
+    }
+  }
   const sent = sendTyped(encodeClientInput({
     code: ev.code, alt: ev.altKey, shift: ev.shiftKey, text,
   }));
@@ -1341,11 +1408,21 @@ function handleKeydown(ev) {
     if (predictionId != null) {
       state.pending = state.pending.filter((item) => item.id !== predictionId);
     }
+    state.promptPrediction = priorPromptPrediction;
     return;
   }
-  state.inputQueue.push({ predictionId });
+  state.inputQueue.push({
+    predictionId,
+    promptPrediction: promptPrediction != null,
+    promptInput: promptActive,
+  });
   if (predictionId != null) {
     invalidatePointerOffsets();
     render(surfaceRenderPlan(SURFACE.DOCUMENT));
+  }
+  if (promptPrediction != null) {
+    if (state.promptPrediction == null) state.promptScrollOverride = false;
+    state.promptPrediction = promptPrediction;
+    render({ ...surfaceRenderPlan(), reconcile: true });
   }
 }

@@ -341,6 +341,44 @@ export function settleInput(inputQueue, pending, result, appliedRevision) {
   return { inputQueue: remainingInputs, pending: remainingPending };
 }
 
+export function predictPromptValue(value, key, alt) {
+  if (key === 'Backspace') {
+    if (alt) return null;
+    const segments = [...new Intl.Segmenter(
+      undefined, { granularity: 'grapheme' }).segment(value)];
+    return segments.length === 0
+      ? null
+      : value.slice(0, segments[segments.length - 1].index);
+  }
+
+  return Array.from(key).length === 1 && !alt ? value + key : null;
+}
+
+export function settlePromptPrediction(prediction, remainingInputs,
+                                       completedInput) {
+  if (!prediction || !completedInput) return prediction;
+  return remainingInputs.some((input) => input.promptInput)
+    ? prediction : null;
+}
+
+export function settlePromptPresentation(prediction, remainingInputs,
+                                         completedInput, userScrolled) {
+  const next = settlePromptPrediction(
+    prediction, remainingInputs, completedInput);
+  const settled = prediction != null && next == null;
+  return {
+    prediction: next,
+    renderDocument: settled,
+    revealDocument: settled && !userScrolled,
+  };
+}
+
+export function deferPromptDocumentSurface(surfaces, pending) {
+  return pending
+    ? surfaces.filter((surface) => surface !== SURFACE.DOCUMENT)
+    : surfaces;
+}
+
 export const isCurrentGeneration = (current, callbackGeneration) =>
   current === callbackGeneration;
 
