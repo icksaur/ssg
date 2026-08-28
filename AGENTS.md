@@ -1,117 +1,244 @@
 # SSG
 
-SSG is a C++20 editor library with terminal and web clients. The library owns
-editor behavior and authoritative product state. Each client owns presentation,
-native layout, and device I/O. The library may provide optional presentation
-services, but no client-specific representation is the product contract.
+SSG: a C++20 library that is the authoritative source of a terminal text
+editor — documents, editing, workspaces, commands, themes, and view models. The
+`ssg` terminal app and the WebSocket server adapter are thin hosts over it. The
+library owns the truth; a host captures input and renders a server-described
+grid.
 
-The code is the truth. Temporary design documents help ship uncertain work; they
-are not the maintained description of a stable feature.
+The code is the truth. Specs are scaffolding — useful while a decision is being
+made, mud once it is. What survives a change is the type that makes the bug
+unrepresentable, the test that pins the behavior, and — only when neither can —
+a CONTRACT line. Everything else belongs in git history, not the working tree.
 
-## Code not to write
+## Where a contract lives — strongest first
 
-- Do not implement editor behavior, product policy, or defaults in a client,
-  transport, renderer, or platform adapter.
-- Do not create a second behavior path for another client. All client input must
-  converge on the same typed authoritative transitions.
-- Do not make cells, pixels, resolved rectangles, terminal capabilities, browser
-  APIs, or transport framing part of the editor-core contract.
-- Do not add a feature-specific transport verb or client/server side channel
-  when the typed client API can carry the same command, state, or update.
-- Do not duplicate an inventory, mapping, default, label, or semantic conversion
-  across the library and clients. Publish the fact or generate its consumers.
-- Do not use a generic property bag where named typed fields can express the
-  supported vocabulary.
-- Do not let client input establish identity, capabilities, or authorization.
-  The host supplies those from policy.
-- Do not make pointer input the only route to an action. User-visible actions
-  must remain keyboard reachable through the authoritative keymap.
-- Do not add blocking confirmation UI. Destructive actions are immediate and
-  recoverable through recovery, reopen, backup, or a compensating command.
-- Do not invent colors outside the theme's semantic roles. Medium-specific color
-  conversion belongs at the presentation edge.
-- Do not introduce platform behavior outside an adapter boundary. Linux and
-  Windows are required targets.
-- Do not keep an old and a replacement path without a named compatibility
-  requirement and a removal condition.
+Push every promise to the strongest bucket that can hold it. Move down only when
+the bucket above genuinely cannot express it.
 
-If a proposed abstraction makes a client reproduce product knowledge, round-trip
-routine interaction that it can resolve from published data, or consume another
-client's geometry, the abstraction is wrong.
+1. **The type system and language.** C++ can enforce far more than a comment can
+   assert. A private member no caller can touch, a move-only owner, a `const`
+   method, a scoped enum, a strong domain type, a constructor that admits no
+   invalid object — these *are* the contract, checked at every build. Prefer
+   making an invalid state unrepresentable over documenting that it is invalid.
+   This bucket is why SSG needs fewer CONTRACT lines than a Go project would:
+   most of what prose would promise, a type here proves.
+2. **A unit test.** When the promise is a behavior — a state transition, a
+   boundary rejection, a wire byte, an ordering — a test named for the rule
+   holds it. The test's name is the contract; see below.
+3. **A `// CONTRACT` comment.** Only for a promise that no type can encode and no
+   test name can carry. This is the small residue, not the default.
 
-## Where contracts live
+## Triaging a comment
 
-Put each promise in the strongest executable form that can hold it:
+Before writing a comment, spend it upward:
 
-1. **Types and ownership.** Prefer valid construction, strong domain types,
-   private mutation, RAII, move-only ownership, and closed enums.
-2. **Tests.** Pin observable behavior, boundary rejection, ordering, wire bytes,
-   persistence, and independently knowable results.
-3. **`// CONTRACT` comments.** Use only for a required prohibition, external
-   constraint, rejected alternative, or non-local obligation that neither a type
-   nor a focused test can communicate.
+1. **Turn it into a name.** A comment describing *what* the code does means the
+   names are too weak. Rename the file, type, function, or variable until the
+   comment is redundant, then delete it. Most comments die here.
+2. **Keep it only as a "why".** An external constraint, a non-local coupling, a
+   rejected alternative, a deliberate refusal — knowledge not visible in the
+   code itself. If the "why" is a load-bearing promise, it is a CONTRACT line.
 
-Attach a CONTRACT comment to the public type or function that owns the promise.
-Name symbols rather than file locations or numeric values. Do not restate code,
-types, or tests in prose.
+Do not narrate code. Do not restate what a type already guarantees.
 
-## Specifications
+## When to write a spec
 
-Read the relevant code before deciding that design work is needed.
+First read the relevant code. Not knowing where something lives, or how it
+currently works, is never a reason to write a spec — it is a reason to read.
+Orient first, then answer both questions.
 
-Write a temporary spec when the change has a meaningful unresolved design
-choice, changes a public or wire contract, changes ownership or authority,
-crosses several established seams, or can lose user data. Do not write one for
-mechanical work, a local bug fix, or an implementation that follows an existing
-typed seam.
+1. Is there a real design choice here — two or more workable approaches whose
+   consequences differ, which reading the code cannot settle because the answer
+   does not exist yet and must be decided?
+2. Does the change leave every existing CONTRACT line still true?
 
-Keep an active spec at `doc/specs/<slug>.md`. Review it once, implement it, and
-promote the durable result into types, tests, and the small residue of CONTRACT
-comments. Delete the spec when the feature is stable. Git retains the decision
-history.
+If no to 1 and yes to 2: **write no spec.** Read the CONTRACT lines at the site,
+change the code and its tests, run the gates, request one code review.
 
-Plans, review transcripts, investigation logs, and status diaries are working
-artifacts, not maintained project documentation. Keep them out of the repository
-unless they have a continuing reader and the user explicitly wants them kept.
+If yes to 1 or no to 2: **write a spec** at `doc/specs/<slug>.md`. Get one review
+covering design and plan together, implement it, promote the durable residue
+into types, tests, and CONTRACT lines, then delete the spec file in the same
+commit. Git keeps the record permanently; the working tree keeps only documents
+with a live reader.
 
-## Documentation
+In a clean tree, `doc/specs/` is empty. A spec exists only between the start of
+design and the merge of the feature it describes. Nothing survives it except the
+code, its types, its tests, and any CONTRACT line — its plan and file list are in
+git, and its exposition had no reader after the review. If part of a finished
+spec fits none of those destinations, that is evidence it was never load-bearing.
 
-Maintained documentation must serve a current reader:
+The same rule governs plans, task lists, roadmaps, and milestone logs: they are
+scaffolding, not tracked artifacts. The project keeps no durable `plan.md`,
+`tasks/` directory, or spec corpus — a plan for in-flight work lives in your
+scratch space or a session, and lands in git history as the commits that
+delivered it, never as a standing document in the tree. If you need to track
+multi-step work, do it out of tree; do not add a planning document the next
+session must read.
 
-- user and configuration guides;
-- public embedding and protocol contracts not fully expressed by headers;
-- project-wide engineering constraints that cannot be compiled;
-- short records of durable external or operational knowledge.
+Recover a deleted spec:
+`git log --all --diff-filter=D --name-only -- 'doc/specs/*<slug>*'`
+then `git show <sha>^:<path>`.
 
-Do not maintain prose descriptions of internal architecture that can drift from
-the code. Prefer a public header that exposes the seam and a test that exercises
-it.
+Question 1 is about design uncertainty, not familiarity. A spec earns its cost
+when the decision has options and the options have consequences: fitting a new
+technique into an existing pipeline under a budget, a concern coordinated across
+many call sites, a mechanism with a plausible alternative worth recording as
+rejected. If reading the code makes the change obvious, it is transcription — go
+write it.
 
-## Tests
+Question 2 asks whether the change alters a promise something else relies on: the
+shape or meaning of a wire message, who owns or may mutate a piece of state, the
+lifetime of a value a caller holds, an ordering or concurrency rule, or a
+documented refusal. Changing a value, adding a case, or restructuring code behind
+an unchanged promise is not such a change. If a CONTRACT line becomes wrong
+because of your change, that is the signal.
 
-- Test each behavior once at the narrowest stable seam that owns it.
-- Use an independent oracle only when the expected answer exists independently
-  of the implementation, such as Unicode, encoding, protocol bytes, recovery,
-  atomic file operations, or a reproduced bug.
-- Do not golden presentation taste, internal structure, inventories, or counts.
-- A behavior-preserving refactor needs no new test when an existing focused test
-  would fail on regression.
-- Do not add a test framework; tests are standalone executables using
-  `tests/test_helpers.h`.
+## CONTRACT lines
 
-## Orientation and workflow
+A test states that behavior holds. It cannot state that the behavior is
+*required* — a red test looks the same whether you broke a promise or outgrew a
+fixture, and an agent under pressure will edit it either way. A CONTRACT line
+exists to supply that missing authority, and nothing else.
 
-Start with the public headers in `include/ssg`, then follow their implementations
-and focused tests. Read `cpp-values.md` for public C++ value design and
-`code-quality.md` for the implementation bar.
+Write one only when all four are true:
 
-Use the smallest gate that covers the change:
+1. No type already enforces it. If a private member, a `const`, a move, or a
+   stronger domain type would make the violation not compile, do that instead.
+2. No test name already says it. A test named for the rule it enforces is the
+   contract; restating it in prose adds a second copy that can rot.
+3. No better name says it. If renaming a symbol would carry the meaning, rename
+   the symbol.
+4. Something would plausibly do the wrong thing without it.
 
-```sh
-scripts/check.sh
-scripts/check.sh push
+That leaves a small set: a deliberate refusal that looks like an unimplemented
+feature, a prohibition on code nobody has written yet, a rejected alternative, an
+external constraint invisible in the tree, an emergent property no single
+function implies. **The library/app boundary is the richest source of these** —
+what a host may assume about the library, what the library refuses to do on a
+host's behalf, who owns a buffer's lifetime across the seam. Capture those on the
+public header that owns the seam.
+
+```cpp
+// CONTRACT
+// HttpEditorSessionHost: the host is the sole authority for a connection's
+//   principal and capabilities; it never derives them from client-supplied
+//   input. A credential-less attach is deliberate, not an omission.
 ```
 
-Run the fast gate for ordinary changes. Use the push tier and targeted
-performance, sanitizer, platform, or protocol checks when the changed risk
-requires them. Request one code review after the relevant gates pass.
+- Every line starts with the artifact name, so a truncated read is still true.
+- Attach to a party — something with behavior that can keep or break a promise.
+  A constant or a plain struct field cannot; the contract belongs on the function
+  or class that enforces it.
+- An invariant spanning two values is a test, never a comment. Prose cannot hold
+  an inequality, and no single artifact owns it.
+- No values in prose. Name the symbol, never the number.
+- No file paths and no line numbers. Symbol names survive edits; locations do not.
+- Do not write "enforced by test". Either the test's name says the rule, in which
+  case the line is redundant, or it does not, in which case fix the name.
+- Whole-repo budget: 150 lines. `rg '^// CONTRACT' -A 20` must fit in context.
+
+Name a test for the rule it enforces, not the area it covers. `Never`, `Only`,
+and `Always` are load-bearing words: a test named for a broken-promise failure
+tells a reader that a red bar means a contract broke, not a fixture drifted.
+
+## Global rules
+
+Rules with many consumers and no owning artifact. **This list is a defect list.**
+Each entry is knowledge that could not find a home in a type, a test, or a
+CONTRACT line, so it must be carried in prose and read by everyone. Burn it down:
+when a type, a chokepoint, or a test can own a rule, move it there and delete the
+entry.
+
+Do not add, reword, or remove an entry on your own initiative — ask the user
+first. A change here alters what every future session is told.
+
+- The library owns semantic editor, workspace, command, theme-role, and
+  view-model state and editing behavior; each client owns presentation. A host
+  invents no product behavior, state, or default, and never changes semantics or
+  behavior — but presents the semantic model in its native idiom (cells for a
+  terminal, DOM/CSS for the web, native toolkit or GL for desktop). → wants the
+  seam narrow enough that a host can restyle but not redefine the product.
+- The library offers a monospace grid-layout service (`Renderer`, `Viewport`,
+  `GraphemeLayout`, `Style`) that grid clients such as the TUI may use; geometry
+  is not a cross-client contract. A client that lays out natively ignores it. →
+  wants the grid to be an optional service, not a universal authority.
+- Every interaction enters through the typed client API, and the authoritative
+  semantic model and interaction state leave through a snapshot or delta on it;
+  there is no out-of-band UI, filesystem, clipboard, or control channel. Grid
+  presentation sections are optional and client-requested (by supplying viewport
+  dimensions), not part of the semantic channel. A WebSocket host carries the
+  whole product over one ordered connection. → wants a chokepoint on the API
+  surface.
+- The theme is the single source of color as semantic roles with sRGB values;
+  each client maps a role to its medium (CSS custom property, terminal palette,
+  native color). The 16-indexed-color palette is a terminal capability, not a
+  cross-client wire law. No client, plugin, syntax definition, or adapter invents
+  a color outside the role set. → wants a lint over the render path.
+- A connection's identity and capabilities come only from the host's policy,
+  never from a client-supplied field. → wants a chokepoint at the attach seam.
+- Every client calls the same command implementation and consumes the same
+  semantic-model and interaction snapshot/delta channel; grid-presentation
+  sections are explicitly client-requested and optional. There is one behavior
+  path. → wants the duplicate path to be impossible to write, not merely absent.
+- Linux and Windows are required; platform services use adapters with parity
+  tests on both. → wants the adapter seam to be the only platform-specific site.
+- SSG is keyboard-first: every user-visible action is operable through
+  browser-deliverable keyboard input via the authoritative keymap, and every
+  client exposes the server-owned configuration input through a global binding
+  that works in every client state. Pointer input may supplement, never replace.
+  → wants a test that every action has a keyboard route.
+- Every UI element the grid service produces occupies server-described cells on
+  the monospace grid; a grid client may restyle for readability but never change
+  geometry, semantics, or behavior. This binds grid clients only; a native-layout
+  client owns its own geometry. → wants the grid to be the only geometry authority
+  for clients that opt into it.
+- No blocking dialog or confirmation modal. A command takes effect immediately,
+  reports through the view model, and makes a destructive action reversible
+  through recovery, reopen, backup, or a compensating command. → wants the
+  absence of a modal primitive to make one impossible to add.
+- Every user-visible action is registered in the command registry and callable
+  through the versioned Lua API, except lifecycle, raw platform I/O, and
+  capability-grant decisions. → wants registration to be the only path to a
+  user-visible action.
+- The feature set is library-defined and every target client — terminal, web,
+  desktop — can drive it through the typed API; the web is a first-class client,
+  not a constrained mirror. A client may add native presentation affordances
+  (scrollbars, touch, IME) on top without changing the product. → wants the
+  feasibility check at the API seam.
+- Values and budgets live in code; prose names symbols, never numbers. → wants a
+  lint over CONTRACT lines and Markdown.
+
+## Orientation
+
+`rg '^// CONTRACT' -A 20` enumerates what this repository promises. That output
+is the map; it cannot go stale, because it is the thing itself. Start there, then
+`ls include/ssg` for the public library surface and `ls apps` for the hosts over
+it — the boundary between them is where the load-bearing contracts live.
+
+`cpp-values.md` states the C++ value system (RAII, caller-owned lifetime,
+move-only owners, valid construction, strong domain types, scoped enums,
+configuration separated from operation). `code-quality.md` is the short bar.
+Read them before changing SSG; they are the standing "how", not per-feature specs.
+
+## Gates
+
+```
+scripts/check.sh          # build + fast unit tests — the edit-test loop
+scripts/check.sh push     # adds the correctness oracle + embed-consumer build
+```
+
+Run the fast gate for ordinary changes; run the `push` tier before pushing, and
+`perf`, sanitizer, or platform gates only when the changed risk requires them.
+Before review, build the affected target, run its focused suite, and make
+`rg '^// CONTRACT'` still true.
+
+Every test file declares its kind in a header comment — **contract** (external
+truth: wire bytes, Unicode, encodings, platform), **algorithm** (an independently
+knowable answer), **seam** (an architectural rule), or **smoke** (production
+composition works at all) — and is a standalone executable using
+`tests/test_helpers.h`. Do not add a test framework. Write an independent oracle
+before implementation only where the answer is knowable independently of the
+code: Unicode/layout math, history and selection state machines, encoding and
+protocol bytes, recovery, atomic file operations, or a reproduced bug. Do not
+golden presentation taste, structure, or counts.
