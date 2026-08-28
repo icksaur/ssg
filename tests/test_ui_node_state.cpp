@@ -10,6 +10,7 @@
 #include "chrome_authoring.h"
 #include "ssg/Style.h"
 #include "ssg/UiNodeState.h"
+#include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
 #include <optional>
@@ -230,6 +231,47 @@ TEST(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord) {
     ASSERT_EQ(section.nodes.size(), uiSchemaNodeIds(schema).size());
 }
 
+TEST(footerTextInputIsStatefulWhileHeaderPickerInputRemainsLocal) {
+            PromptRequest request;
+            request.kind = PromptKind::Find;
+            request.accessibleLabel = "Find";
+            request.inputs.push_back({"find.query", "Find text", "needle"});
+            request.toggles.push_back({"find.toggle_case", "Case", false, 6});
+            request.matchCount = PromptMatchCount{"find.matches", "Matches", "1/3"};
+            PromptSurface prompt;
+            ASSERT_TRUE(prompt.open(request).accepted());
+
+            const auto composition = withFooterPrompt(
+                assembleWholeScreen({}, "help.open", StyleDimensions{}, "> ",
+                                    std::nullopt),
+                prompt);
+            const auto schema = UiSchema{Generation{3}, composition.root};
+            const auto resolver = resolverFrom(
+                {{"find.query",
+                  {"needle", "Find text",
+                   std::optional<std::string>{"find.update_query"},
+                   std::optional<bool>{true}}},
+                 {"find.toggle_case", {"false", "Case", std::nullopt}},
+                 {"find.matches", {"1/3", "Matches", std::nullopt}}});
+            const auto section =
+                resolveUiState(ValidatedSchema::validate(schema).takeSchema(), resolver);
+
+            const auto* footerInput =
+                stateFor(section, UiNodeId{"footer.prompt.control.find.query"});
+            ASSERT_TRUE(footerInput != nullptr && footerInput->leaf.has_value());
+            if (footerInput && footerInput->leaf) {
+                ASSERT_EQ(footerInput->leaf->value, std::string{"needle"});
+                ASSERT_TRUE(footerInput->leaf->active.has_value() &&
+                            *footerInput->leaf->active);
+                ASSERT_FALSE(footerInput->leaf->checked.has_value());
+            }
+
+            const auto* headerInput =
+                stateFor(section, UiNodeId{std::string{kHeaderPromptInputNodeId}});
+            ASSERT_TRUE(headerInput != nullptr);
+            if (headerInput) ASSERT_FALSE(headerInput->leaf.has_value());
+}
+
 }  // namespace
 
 int main() {
@@ -237,5 +279,6 @@ int main() {
     RUN(explicitRoleOverridesRegionDefault);
     RUN(checkboxStateMatchesIndependentExpectation);
     RUN(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord);
+    RUN(footerTextInputIsStatefulWhileHeaderPickerInputRemainsLocal);
     return 0;
 }

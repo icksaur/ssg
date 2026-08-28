@@ -1,7 +1,9 @@
 #include "ssg/PromptSurface.h"
 
 #include "ssg/Layout.h"
+#include "ssg/WholeScreenAssembly.h"
 
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -20,6 +22,7 @@ bool validRequest(const PromptRequest& request) {
     if (request.accessibleLabel.empty()) {
         return false;
     }
+
     const std::size_t expectedInputs =
         request.kind == PromptKind::Replace ? 2U : 1U;
     if (request.inputs.size() != expectedInputs) {
@@ -70,6 +73,32 @@ bool validRequest(const PromptRequest& request) {
     return true;
 }
 
+LayoutNode layoutNodeFor(const UiNode& node) {
+    LayoutNode layout{node.id.value(), std::nullopt, node.size};
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        layout.axis = container->axis;
+        layout.inset = container->inset;
+        layout.children.reserve(container->children.size());
+        for (const auto& child : container->children) {
+            layout.children.push_back(layoutNodeFor(child));
+        }
+    }
+    return layout;
+}
+
+const UiNode* controlNode(const UiNode& node, std::string_view controlId) {
+    if (const auto* leaf = std::get_if<UiLeaf>(&node.content);
+        leaf && leaf->widget.id == controlId) {
+        return &node;
+    }
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            if (const auto* found = controlNode(child, controlId)) return found;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace
 
 std::uint8_t promptRowCount(PromptKind kind) noexcept {
@@ -98,16 +127,22 @@ PromptCommandResult PromptSurface::open(PromptRequest request) {
     return {};
 }
 
-PromptCommandResult PromptSurface::focusInput(std::size_t index) {
+PromptCommandResult PromptSurface::focusInput(std::string_view controlId) {
     if (!request_) {
         return failure(PromptErrorCode::NoActivePrompt,
                        "no active prompt to focus");
     }
-    if (index >= request_->inputs.size()) {
+    const auto input =
+        std::find_if(request_->inputs.begin(), request_->inputs.end(),
+                     [&](const PromptInput& candidate) {
+                         return candidate.id == controlId;
+                     });
+    if (input == request_->inputs.end()) {
         return failure(PromptErrorCode::UnknownInput,
-                       "focus index does not address an input");
+                       "focus id does not address an input");
     }
-    activeInput_ = index;
+    activeInput_ = static_cast<std::size_t>(
+        std::distance(request_->inputs.begin(), input));
     return {};
 }
 
@@ -198,7 +233,14 @@ std::vector<PromptControl> resolvePromptControls(const PromptRequest& request) {
 }
 
 PromptLayoutResult computePromptLayout(const PromptSurface& surface,
-                                         Rect reservation) {
+                                       Rect reservation) {
+    return computePromptLayout(surface, assembleFooterPrompt(surface),
+                               reservation);
+}
+
+PromptLayoutResult computePromptLayout(const PromptSurface& surface,
+                                       const UiNode& promptTree,
+                                       Rect reservation) {
     if (!surface.request()) {
         return {PromptError{PromptErrorCode::NoActivePrompt,
                             "no active prompt to lay out"},
@@ -212,36 +254,10 @@ PromptLayoutResult computePromptLayout(const PromptSurface& surface,
                 std::nullopt};
     }
 
-    PromptViewState view{request.kind, request.accessibleLabel, reservation, {}};
+    PromptViewState view{request.kind, request.accessibleLabel, reservation, {},
+                         surface.activeInput()};
 
-    // The prompt is a widget Container: a Column of
-    // full-width input rows, plus -- for find/replace -- a trailing options Row
-    // of fixed-width toggles (Checkbox widgets) and a flex match-count Label. The
-    // box solver assigns every rect and fails loud when the toggles overflow the
-    // options row, which is exactly the "controls exceed reservation width" the
-    // procedural placement reported. Reading rects back by control id is safe
-    // because validRequest enforces control-id distinctness and the structural
-    // containers carry empty ids (so they can never shadow a control).
-    const auto leaf = [](std::string id, Size size) {
-        return LayoutNode{std::move(id), std::nullopt, size, Axis::Row, {}, {}};
-    };
-    std::vector<LayoutNode> rows;
-    rows.reserve(request.inputs.size() + 1);
-    for (const auto& input : request.inputs)
-        rows.push_back(leaf(input.id, Size::exact(1)));  // full width, one row
-
-    if (request.matchCount) {
-        std::vector<LayoutNode> options;
-        options.reserve(request.toggles.size() + 1);
-        for (const auto& toggle : request.toggles)
-            options.push_back(leaf(toggle.id, Size::exact(toggle.width)));
-        options.push_back(leaf(request.matchCount->id, Size::flex()));
-        rows.push_back(LayoutNode{"", std::nullopt, Size::exact(1),
-                                  Axis::Row, {}, std::move(options)});
-    }
-
-    LayoutNode root{"", std::nullopt, Size::flex(), Axis::Column, {},
-                    std::move(rows)};
+    const LayoutNode root = layoutNodeFor(promptTree);
     const auto solved = solveLayout(root, reservation);
     if (!solved) {
         return {PromptError{PromptErrorCode::InvalidReservation,
@@ -252,7 +268,14 @@ PromptLayoutResult computePromptLayout(const PromptSurface& surface,
     // The grid controls are the ONE resolver's controls plus a Rect each, in the
     // same order -- never a second content resolution.
     for (const auto& control : resolvePromptControls(request)) {
-        const Rect rect = solved->find(control.id)->rect;
+        const UiNode* node = controlNode(promptTree, control.id);
+        const SolvedBox* box = node ? solved->find(node->id.value()) : nullptr;
+        if (!box) {
+            return {PromptError{PromptErrorCode::InvalidReservation,
+                                "prompt tree does not contain a control"},
+                    std::nullopt};
+        }
+        const Rect rect = box->rect;
         if (control.kind == PromptControlKind::Count && rect.width <= 0) {
             return {PromptError{PromptErrorCode::InvalidReservation,
                                 "prompt count has no visible width"},

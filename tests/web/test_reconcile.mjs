@@ -667,10 +667,10 @@ check('interpretChrome applies the per-kind render gate', () => {
   assert.equal(items[2].text, 'case');
 });
 
-check('interpretChrome produces View leaves for every widened surface', () => {
+check('interpretChrome produces View leaves for every supported surface', () => {
   const surfaces = [
     SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS,
-    SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT, SURFACE.NOTICE,
+    SURFACE.SYMBOLS, SURFACE.NOTICE,
     SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
   ];
   const root = rowNode('root', surfaces.map((surface) => leafNode('surface-' + surface, WIDGET.VIEW, { surface })));
@@ -686,10 +686,12 @@ check('the complete interpreted root preserves every present child in published 
   const ids = ['header', 'notice', 'external', 'body', 'footer-prompt', 'footer'];
   const surfaces = [
     SURFACE.DOCUMENT, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION,
-    SURFACE.DOCUMENT, SURFACE.FOOTER_PROMPT, SURFACE.DOCUMENT,
+    SURFACE.DOCUMENT, null, SURFACE.DOCUMENT,
   ];
   const root = rowNode(
-    'root', ids.map((id, i) => leafNode(id, WIDGET.VIEW, { surface: surfaces[i] })));
+    'root', ids.map((id, i) => surfaces[i] == null
+      ? rowNode(id, [])
+      : leafNode(id, WIDGET.VIEW, { surface: surfaces[i] })));
   const states = { generation: 12, nodes: [st('root'), ...ids.map((id) => st(id))] };
   const out = interpretChrome(schemaOf(12, root), states, presenceForSchema(12, root));
   assert.deepEqual(out.root.children.map((child) => child.id), ids);
@@ -756,7 +758,7 @@ check('session deltas dirty only their dependent browser surfaces', () => {
     rebuild: false, reconcile: true, repaintTheme: true,
     surfaces: [
       SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS,
-      SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT,
+      SURFACE.FINDRESULTS, SURFACE.SYMBOLS,
       SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
     ],
   });
@@ -935,12 +937,47 @@ check('interpretChrome renders the prompt TextInput as a bare anchor carrying no
   assert.equal(anchor.text, undefined);  // no server-published query text
 });
 
-check('interpretChrome Never draws a prompt TextInput that carries server leaf state', () => {
+check('interpretChrome rejects a stateful TextInput without typed active state', () => {
   const root = rowNode('root', [leafNode('input_line', WIDGET.TEXT_INPUT)]);
-  // A TextInput must NOT carry leaf state (the query is browser-owned) -- a frame
-  // that publishes one is malformed and never partially drawn.
   const state = { generation: 12, nodes: [st('root'), st('input_line', { value: 'leaked' })] };
   assert.equal(interpretChrome(schemaOf(12, root), state, presenceForSchema(12, root)), null);
+});
+
+check('interpretChrome preserves footer prompt column and options row', () => {
+  const input = leafNode('footer.prompt.control.query', WIDGET.TEXT_INPUT,
+    { id: 'find.query', role: 'prompt' });
+  const toggle = leafNode('footer.prompt.control.case', WIDGET.CHECKBOX,
+    { id: 'find.toggle_case', role: 'prompt' });
+  const count = leafNode('footer.prompt.control.matches', WIDGET.LABEL,
+    { id: 'find.matches', role: 'prompt' });
+  const options = {
+    id: 'footer.prompt.options', size: { kind: SIZE.EXACT, extent: 1 },
+    container: { axis: 0, gap: 0, children: [toggle, count] },
+  };
+  const root = {
+    id: 'footer.prompt', size: { kind: SIZE.AUTO },
+    container: { axis: 1, gap: 0, children: [input, options] },
+  };
+  const state = { generation: 13, nodes: [
+    st('footer.prompt'),
+    st('footer.prompt.control.query',
+      { value: 'needle', label: 'Find text', active: true, role: 16 }),
+    st('footer.prompt.options'),
+    st('footer.prompt.control.case',
+      { value: 'Case', label: 'Case', checked: false, role: 16 }),
+    st('footer.prompt.control.matches',
+      { value: '1/3', label: 'Matches', role: 16 }),
+  ] };
+  const out = interpretChrome(
+    schemaOf(13, root), state, presenceForSchema(13, root));
+  assert.ok(out);
+  assert.equal(out.root.axis, 1);
+  assert.equal(out.root.children[1].axis, 0);
+  assert.deepEqual(out.root.children[1].children.map((node) => node.id),
+                   ['footer.prompt.control.case',
+                    'footer.prompt.control.matches']);
+  assert.equal(out.root.children[0].controlId, 'find.query');
+  assert.equal(out.root.children[0].active, true);
 });
 
 check('picker inventories are selected only by their published mode', () => {
@@ -978,43 +1015,14 @@ check('picker lifecycle resolves published keymap commands with global precedenc
     null);
 });
 
-// --- Footer prompt: semantic PromptView projection, delta, focus plan, ingress ---
-import {
-  promptViewFromSections, promptFocusPlan, PROMPT_CONTROL,
-} from '../../apps/web/reconcile.mjs';
-
-// A decoded semantic PromptView section, using the encoder's snake_case names.
-const findSection = (activeInput = 0) => ({
-  prompt_view: {
-    kind: 1, accessible_label: 'Find', active_input: activeInput, controls: [
-      { kind: PROMPT_CONTROL.INPUT, id: 'find.query', accessible_label: 'Find', value: 'ab', checked: false, command: 'find.update_query' },
-      { kind: PROMPT_CONTROL.TOGGLE, id: 'find.case', accessible_label: 'Case', value: '', checked: true, command: 'find.toggle_case' },
-      { kind: PROMPT_CONTROL.COUNT, id: 'find.count', accessible_label: 'Matches', value: '3', checked: false, command: '' },
-    ],
-  },
-});
-
-check('promptViewFromSections renders controls from the section, null when closed', () => {
-  assert.equal(promptViewFromSections(null), null);
-  assert.equal(promptViewFromSections({}), null);
-  assert.equal(promptViewFromSections({ prompt_view: null }), null);
-  const pv = promptViewFromSections(findSection(0));
-  assert.equal(pv.kind, 1);
-  assert.equal(pv.label, 'Find');
-  assert.equal(pv.activeInput, 0);
-  assert.deepEqual(pv.controls.map((c) => c.kind), [PROMPT_CONTROL.INPUT, PROMPT_CONTROL.TOGGLE, PROMPT_CONTROL.COUNT]);
-  assert.equal(pv.controls[0].value, 'ab');
-  assert.equal(pv.controls[0].command, 'find.update_query');   // per-control command, not hardcoded
-  assert.equal(pv.controls[1].checked, true);
-  assert.equal(pv.controls[2].value, '3');
-});
-
 check('applySessionDeltaSections opens, changes, and CLOSES the footer prompt view', () => {
   const sections = { document: { text: '' }, prompt_view: null };
+  const promptView = { kind: 1, active_input: 0, controls: [] };
   // changed=true with a replacement opens/updates it.
-  applySessionDeltaSections(sections, { prompt_view: { changed: 1, replacement: findSection(0).prompt_view } });
+  applySessionDeltaSections(
+    sections, { prompt_view: { changed: 1, replacement: promptView } });
   assert.ok(sections.prompt_view);
-  assert.equal(promptViewFromSections(sections).activeInput, 0);
+  assert.equal(sections.prompt_view.active_input, 0);
   // changed=false leaves the prior view intact (no spurious close).
   applySessionDeltaSections(sections, { prompt_view: { changed: 0 } });
   assert.ok(sections.prompt_view);
@@ -1022,33 +1030,13 @@ check('applySessionDeltaSections opens, changes, and CLOSES the footer prompt vi
   // guard would wrongly keep it -- this is why the delta is changed-flagged).
   applySessionDeltaSections(sections, { prompt_view: { changed: 1, replacement: null } });
   assert.equal(sections.prompt_view, null);
-  assert.equal(promptViewFromSections(sections), null);
-});
-
-check('promptFocusPlan focuses only on open and active-input change, never per message', () => {
-  const closed = { open: false, activeInput: -1 };
-  const pv0 = promptViewFromSections(findSection(0));
-  const pv1 = promptViewFromSections(findSection(1));
-  // Open: capture and focus the container.
-  const opened = promptFocusPlan(closed, pv0);
-  assert.deepEqual(opened, { open: true, activeInput: 0, focusContainer: true, restoreFocus: false, activeDescendant: 0 });
-  // Re-render at the same active input: NO focus move (survives re-render; an
-  // unrelated server frame cannot steal deliberate external focus).
-  assert.equal(promptFocusPlan({ open: true, activeInput: 0 }, pv0).focusContainer, false);
-  // Active-input change: focus the container and point aria at the new input.
-  const moved = promptFocusPlan({ open: true, activeInput: 0 }, pv1);
-  assert.equal(moved.focusContainer, true);
-  assert.equal(moved.activeDescendant, 1);
-  // Close: restore the captured focus, drop the container.
-  const closedPlan = promptFocusPlan({ open: true, activeInput: 1 }, null);
-  assert.deepEqual(closedPlan, { open: false, activeInput: -1, focusContainer: false, restoreFocus: true, activeDescendant: null });
-  // Already closed: nothing to restore.
-  assert.equal(promptFocusPlan(closed, null).restoreFocus, false);
 });
 
 check('prompt focus uses a typed revision-checked compound command', () => {
-  assert.deepEqual(decodeMessage(encodePromptFocus(2, 7n).buffer).payload,
-    { id: 'prompt.focus_control', base_revision: 7n, payload: { index: 2n } });
+  assert.deepEqual(
+    decodeMessage(encodePromptFocus('replace.replacement', 7n).buffer).payload,
+    { id: 'prompt.focus_control', base_revision: 7n,
+      payload: { control_id: 'replace.replacement' } });
 });
 
 // --- Draft-conflict notice: semantic NoticeView projection, delta, action ingress ---

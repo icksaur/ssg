@@ -54,9 +54,9 @@ public:
     PromptCommandResult cancelPrompt();
     PromptCommandResult updatePromptValue(std::size_t index, std::string value);
     // Move keyboard authority among the active prompt's inputs. focusPromptControl
-    // rejects an index that does not address an input (UnknownInput); both leave
+    // rejects an id that does not address an input (UnknownInput); both leave
     // prompt + projection consistent.
-    PromptCommandResult focusPromptControl(std::size_t index);
+    PromptCommandResult focusPromptControl(std::string_view controlId);
     PromptCommandResult focusNextPromptControl();
 
     // Simple base-focus changes -- editor/panel focus that touch only the aggregate, not a
@@ -135,6 +135,7 @@ private:
 
     [[nodiscard]] std::vector<TreeProviderPresence> presentProviders() const;
 
+    UiComposition baseComposition_;
     WholeScreenSchema schema_;
     TreeModel& tree_;
     std::uint64_t nextTreeRevision_;

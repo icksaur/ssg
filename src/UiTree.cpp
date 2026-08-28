@@ -144,6 +144,58 @@ std::optional<std::string> requireViewLeaf(const UiNode& node, std::string_view 
     return std::nullopt;
 }
 
+std::optional<std::string> requireFooterPrompt(const UiNode& node) {
+    if (node.id.value() != kFooterPromptNodeId) {
+        return std::string{kFooterPromptNodeId} +
+               ": child order must be canonical";
+    }
+    const auto* column = std::get_if<UiContainer>(&node.content);
+    if (!column || column->axis != Axis::Column ||
+        node.size.kind() != SizeKind::Auto) {
+        return std::string{kFooterPromptNodeId} +
+               ": must be an Auto-sized Column container";
+    }
+    for (std::size_t index = 0; index < column->children.size(); ++index) {
+        const UiNode& child = column->children[index];
+        if (child.id.value() == kFooterPromptOptionsNodeId) {
+            if (index + 1 != column->children.size()) {
+                return std::string{kFooterPromptOptionsNodeId} +
+                       ": must be the final prompt row";
+            }
+            const auto* options = std::get_if<UiContainer>(&child.content);
+            if (!options || options->axis != Axis::Row ||
+                child.size.kind() != SizeKind::Exact ||
+                options->children.empty()) {
+                return std::string{kFooterPromptOptionsNodeId} +
+                       ": must be an Exact-sized non-empty Row";
+            }
+            for (std::size_t option = 0; option < options->children.size();
+                 ++option) {
+                const UiNode& item = options->children[option];
+                const auto* leaf = std::get_if<UiLeaf>(&item.content);
+                const bool count = option + 1 == options->children.size();
+                if (!leaf ||
+                    leaf->widget.kind !=
+                        (count ? WidgetKind::Label : WidgetKind::Checkbox) ||
+                    item.size.kind() !=
+                        (count ? SizeKind::Flex : SizeKind::Exact)) {
+                    return std::string{kFooterPromptOptionsNodeId} +
+                           ": must contain exact Checkboxes followed by a "
+                           "flexible Label";
+                }
+            }
+            continue;
+        }
+        const auto* leaf = std::get_if<UiLeaf>(&child.content);
+        if (!leaf || leaf->widget.kind != WidgetKind::TextInput ||
+            child.size.kind() != SizeKind::Exact) {
+            return std::string{kFooterPromptNodeId} +
+                   ": input rows must be exact TextInput leaves";
+        }
+    }
+    return std::nullopt;
+}
+
 // The whole-screen well-known-area contract: the complete canonical topology the
 // assembler publishes, including required containers, View leaves, surfaces,
 // parentage, and sibling order.
@@ -201,12 +253,9 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
                                    ViewSurface::ExternalModification))
         return err;
     const UiNode& body = root->children[3];
-    // The footer prompt sits between the body and the footer: a View leaf naming
-    // ViewSurface::FooterPrompt, always assembled and hidden by presence. It is
-    // the sole node permitted to carry an Auto-sized FooterPrompt View; a stray
-    // FooterPrompt View anywhere else is rejected below.
-    if (auto err = requireViewLeaf(root->children[4], kFooterPromptNodeId,
-                                   ViewSurface::FooterPrompt))
+    // The footer prompt sits between the body and footer as the authoritative
+    // control-layout subtree and is hidden by presence while inactive.
+    if (auto err = requireFooterPrompt(root->children[4]))
         return err;
     const UiNode& footer = root->children[5];
     if (footer.id.value() != wellKnownAreaId(WellKnownArea::Footer) ||

@@ -22,7 +22,7 @@ import {
   BrowserKeyDispatchTracker,
   encodeCommandRequest, encodeClientInput, encodeTreeActivation,
   encodeStatusActionInvocation,
-  promptViewFromSections, PROMPT_CONTROL, promptFocusPlan, encodePromptFocus,
+  encodePromptFocus,
   noticeViewFromSections,
   externalModificationFromSections, externalFocusHeld, encodeExternalAction,
   settleCommandResult, settleInput, isCurrentGeneration, replayAttachFrame,
@@ -61,6 +61,8 @@ const state = {
 };
 const retainedNodes = new GenerationRetainedCache();
 let renderedSurfaceKinds = new Set();
+let renderedFooterPromptHost = null;
+let renderedFooterPromptActiveId = null;
 let pickerInputElement = null;
 const allSurfaceKinds = Object.values(SURFACE);
 const fullRenderPlan = () => ({
@@ -158,12 +160,19 @@ function reconcileChildren(parent, children) {
   }
 }
 
-function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
+function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
+                          inFooterPrompt = false) {
   if (!node) return null;
   if (node.kind === 'container') {
     const div = getOrCreateStyledNode(
       retainedNodes, node, theme, () => document.createElement('div'));
-    div.className = 'group';
+    const isFooterPrompt = node.id === 'footer.prompt';
+    div.className = 'group' + (isFooterPrompt ? ' prompt-surface' : '');
+    if (isFooterPrompt) {
+      div.tabIndex = 0;
+      div.setAttribute('role', 'group');
+      renderedFooterPromptHost = div;
+    }
     div.dataset.nodeId = node.id;
     div.style.display = 'flex';
     div.style.flexDirection = node.axis === 1 ? 'column' : 'row';  // Axis: Row=0, Column=1
@@ -183,7 +192,8 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
     }
     if (node.gap) div.style.gap = extentCss(node.gap, node.axis);
     const children = node.children
-      .map((child) => renderChromeNode(child, theme, plan, node.axis))
+      .map((child) => renderChromeNode(
+        child, theme, plan, node.axis, inFooterPrompt || isFooterPrompt))
       .filter(Boolean);
     reconcileChildren(div, children);
     return div;
@@ -219,25 +229,52 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW) {
     return el;
   }
   if (node.widget === WIDGET.TEXT_INPUT) {
-    // The header prompt anchor: the render node carries no server text, so the
-    // browser-owned local query fills it here (no per-keystroke wire delta).
     const el = retainedNodes.getOrCreate(
       node.id, () => document.createElement('span'));
-    pickerInputElement = el;
-    el._ssgPickerSigil = node.sigil || '';
-    renderPickerInput(el, el._ssgPickerSigil);
+    if (node.active != null) {
+      el.className = 'prompt-control prompt-input' +
+        (node.active ? ' active' : '');
+      el.id = 'prompt-input-' + node.controlId;
+      el.setAttribute('role', 'textbox');
+      el.setAttribute('aria-label', node.label || '');
+      el.textContent = node.text || '';
+      if (node.active) {
+        el.appendChild(document.createElement('span')).className = 'caret';
+        renderedFooterPromptActiveId = node.controlId;
+      }
+      el.onmousedown = (event) => {
+        event.preventDefault();
+        if (renderedFooterPromptHost) {
+          renderedFooterPromptHost.focus({ preventScroll: true });
+        }
+        sendCommandFrame(encodePromptFocus(node.controlId, state.revision));
+      };
+    } else {
+      pickerInputElement = el;
+      el._ssgPickerSigil = node.sigil || '';
+      renderPickerInput(el, el._ssgPickerSigil);
+    }
     applyNodeSemanticStyle(el.style, node, theme);
     applySize(el, node.size, parentAxis);
     return el;
   }
   const el = retainedNodes.getOrCreate(
     node.id, () => document.createElement('span'));
-  el.className = 'w' + (node.command ? ' clickable' : '');
+  el.className = inFooterPrompt
+    ? 'prompt-control' +
+      (node.checked != null ? ' prompt-toggle' : ' prompt-count') +
+      (node.checked ? ' checked' : '')
+    : 'w' + (node.command ? ' clickable' : '');
   el.textContent = (node.checked != null ? (node.checked ? '\u2611 ' : '\u2610 ') : '') + (node.text || '');
   applyNodeSemanticStyle(el.style, node, theme);
   applySize(el, node.size, parentAxis);
   el.title = node.command || '';
   el.onclick = node.command ? () => sendCommand(node.command) : null;
+  if (inFooterPrompt && node.checked != null) {
+    el.setAttribute('role', 'checkbox');
+    el.setAttribute('aria-checked', node.checked ? 'true' : 'false');
+  }
+  if (inFooterPrompt && node.label) el.setAttribute('aria-label', node.label);
   return el;
 }
 
@@ -316,8 +353,6 @@ function renderSurfaceNode(node, plan) {
       if (node.surface === SURFACE.DOCUMENT ||
          node.surface === SURFACE.FINDRESULTS) {
        el.tabIndex = 0;
-      } else if (node.surface === SURFACE.FOOTER_PROMPT) {
-       el.tabIndex = 0;
       }
       el.dataset.surface = String(node.surface);
     }
@@ -347,9 +382,6 @@ function renderSurfaceContent(el, surface) {
     el.classList.add('find-results-surface');
     renderFindResultsSurface(
       el, s.palette, effectivePickerMode(s.palette, state.palette.mode));
-  } else if (surface === SURFACE.FOOTER_PROMPT) {
-    el.classList.add('prompt-surface');
-    renderFooterPrompt(el, s);
   } else if (surface === SURFACE.NOTICE) {
     el.textContent = '';
     el.classList.add('notice-surface');
@@ -566,21 +598,20 @@ function renderChrome(sections, plan) {
   const generation = num(schema.generation);
   const generationChanged = retainedNodes.begin(generation);
   if (generationChanged) {
-    footerPromptOpen = false;
-    footerPromptActiveInput = -1;
-    savedFocusEl = null;
     pickerInputElement = null;
   }
   renderedSurfaceKinds = new Set();
+  renderedFooterPromptHost = null;
+  renderedFooterPromptActiveId = null;
   const nextRoot = renderChromeNode(
     interpreted.root, sections.theme, plan, AXIS.COLUMN);
   if (!nextRoot) return false;
   if (generationChanged || nextRoot.parentElement !== uiRootEl) {
     reconcileChildren(uiRootEl, [nextRoot]);
   }
-  if (!renderedSurfaceKinds.has(SURFACE.FOOTER_PROMPT)) {
-    renderFooterPrompt(null, sections);
-  }
+  reconcileFooterPromptFocus(renderedFooterPromptHost,
+                             renderedFooterPromptActiveId,
+                             generationChanged);
   if (overlayFailureFocus !== null) {
     const target =
       overlayFailureFocus.isConnected
@@ -598,66 +629,10 @@ function renderChrome(sections, plan) {
 // child inputs are role=textbox but non-focusable, so a screen reader tracks the
 // active input without the browser moving focus into it. The container is a
 // role=group so it can own aria-activedescendant across every prompt kind.
-const promptInputElementId = (index) => 'prompt-input-' + index;
-
 let footerPromptOpen = false;
-let footerPromptActiveInput = -1;
+let footerPromptActiveInput = null;
 let savedFocusEl = null;
 
-function buildPromptControls(host, pv) {
-  host.textContent = '';
-  let inputIndex = 0;
-  for (const control of pv.controls) {
-    if (control.kind === PROMPT_CONTROL.INPUT) {
-      const index = inputIndex++;
-      const active = index === pv.activeInput;
-      const el = document.createElement('span');
-      el.className = 'prompt-control prompt-input' + (active ? ' active' : '');
-      el.id = promptInputElementId(index);
-      el.setAttribute('role', 'textbox');
-      el.setAttribute('aria-label', control.label);
-      el.textContent = control.value;
-      if (active) {
-        // Server edits append-only, so the caret sits at the input's end; the
-        // client draws it rather than round-tripping a caret offset.
-        el.appendChild(document.createElement('span')).className = 'caret';
-      }
-      // A pointer press focuses this input via the library command; preventDefault
-      // keeps focus on the container (the input is non-focusable) so the next
-      // keystroke still routes through the shared seam.
-      el.addEventListener('mousedown', (ev) => {
-        ev.preventDefault();
-        host.focus({ preventScroll: true });
-        sendCommandFrame(encodePromptFocus(index, state.revision));
-      });
-      host.appendChild(el);
-    } else if (control.kind === PROMPT_CONTROL.TOGGLE) {
-      const el = document.createElement('span');
-      el.className = 'prompt-control prompt-toggle' + (control.checked ? ' checked' : '');
-      el.setAttribute('role', 'checkbox');
-      el.setAttribute('aria-checked', control.checked ? 'true' : 'false');
-      el.setAttribute('aria-label', control.label);
-      el.textContent = control.label;
-      if (control.command) {
-        el.addEventListener('mousedown', (ev) => {
-          ev.preventDefault();
-          sendCommand(control.command);
-        });
-      }
-      host.appendChild(el);
-    } else {
-      const el = document.createElement('span');
-      el.className = 'prompt-control prompt-count';
-      el.setAttribute('aria-label', control.label);
-      el.textContent = control.value;
-      host.appendChild(el);
-    }
-  }
-}
-
-// Reconcile the retained prompt surface against the published PromptView (null when no
-// footer-region prompt is open). Focus moves only on open and on active-input
-// change; closing restores the focus the prompt captured.
 function editorFocusElement() {
   const connected = [...retainedNodes.values()].filter(
     (el) => el.isConnected && el.dataset.surface != null);
@@ -669,33 +644,31 @@ function editorFocusElement() {
   return uiRootEl;
 }
 
-function renderFooterPrompt(host, sections) {
-  const pv = host ? promptViewFromSections(sections) : null;
-  const plan = promptFocusPlan(
-    { open: footerPromptOpen, activeInput: footerPromptActiveInput }, pv);
-  if (!pv) {
-    if (plan.restoreFocus) {
-      if (host) {
-        host.textContent = '';
-        host.removeAttribute('aria-activedescendant');
-      }
+function reconcileFooterPromptFocus(host, activeInput, forceFocus = false) {
+  if (!host) {
+    if (footerPromptOpen) {
       const restore = (savedFocusEl && document.contains(savedFocusEl))
         ? savedFocusEl : editorFocusElement();
       restore.focus({ preventScroll: true });
       savedFocusEl = null;
     }
-    footerPromptOpen = plan.open;
-    footerPromptActiveInput = plan.activeInput;
+    footerPromptOpen = false;
+    footerPromptActiveInput = null;
     return;
   }
   if (!footerPromptOpen) savedFocusEl = document.activeElement;
-  host.setAttribute('role', 'group');
-  host.setAttribute('aria-label', pv.label || 'prompt');
-  buildPromptControls(host, pv);
-  host.setAttribute('aria-activedescendant', promptInputElementId(plan.activeDescendant));
-  if (plan.focusContainer) host.focus({ preventScroll: true });
-  footerPromptOpen = plan.open;
-  footerPromptActiveInput = plan.activeInput;
+  if (activeInput != null) {
+    host.setAttribute('aria-activedescendant',
+                      'prompt-input-' + activeInput);
+  } else {
+    host.removeAttribute('aria-activedescendant');
+  }
+  if (forceFocus || !footerPromptOpen ||
+      activeInput !== footerPromptActiveInput) {
+    host.focus({ preventScroll: true });
+  }
+  footerPromptOpen = true;
+  footerPromptActiveInput = activeInput;
 }
 
 // Reconcile the retained notice surface against the published semantic NoticeView.

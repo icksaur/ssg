@@ -172,6 +172,51 @@ TEST(valueEditKeepsPromptFocusAndUpdatesTheInput) {
               std::string{"src/main.cpp"});
 }
 
+TEST(footerPromptStructureAdvancesOnlyWhenItsShapeChanges) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    const auto initial = authority.interaction().schema().generation();
+    ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
+    const auto pathGeneration = authority.interaction().schema().generation();
+    ASSERT_NE(pathGeneration, initial);
+
+    ASSERT_TRUE(authority.updatePromptValue(0, "changed").accepted());
+    ASSERT_TRUE(authority.focusPromptControl("path").accepted());
+    ASSERT_EQ(authority.interaction().schema().generation(), pathGeneration);
+    ASSERT_TRUE(authority.cancelPrompt().accepted());
+    ASSERT_EQ(authority.interaction().schema().generation(), pathGeneration);
+
+    auto sameShape = footerPrompt();
+    sameShape.inputs[0].value = "different";
+    ASSERT_TRUE(authority.openPrompt(std::move(sameShape)).accepted());
+    ASSERT_EQ(authority.interaction().schema().generation(), pathGeneration);
+
+    PromptRequest replace{
+        PromptKind::Replace,
+        "Replace",
+        {{"find.query", "Find", ""}, {"replace.replacement", "Replace", ""}},
+        {{"find.case", "Case", false, 8}},
+        PromptMatchCount{"find.count", "Matches", "0"}};
+    ASSERT_TRUE(authority.openPrompt(std::move(replace)).accepted());
+    ASSERT_NE(authority.interaction().schema().generation(), pathGeneration);
+}
+
+TEST(promptFocusUsesControlIdentityAndRejectsNonInputs) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    PromptRequest find{
+        PromptKind::Find,
+        "Find",
+        {{"find.query", "Find", ""}},
+        {{"find.case", "Case", false, 8}},
+        PromptMatchCount{"find.count", "Matches", "0"}};
+    ASSERT_TRUE(authority.openPrompt(std::move(find)).accepted());
+    ASSERT_TRUE(authority.focusPromptControl("find.query").accepted());
+    ASSERT_FALSE(authority.focusPromptControl("find.case").accepted());
+    ASSERT_FALSE(authority.focusPromptControl("find.count").accepted());
+    ASSERT_FALSE(authority.focusPromptControl("missing").accepted());
+}
+
 // --- Revision source ----------------------------------------------------------------
 
 TEST(allocateTreeRevisionIsMonotonic) {
@@ -390,6 +435,8 @@ int main() {
     RUN(cancelPromptReleasesFocus);
     RUN(openPromptRejectsAPalettePromptSoOnlyAFinderMakesAPicker);
     RUN(valueEditKeepsPromptFocusAndUpdatesTheInput);
+    RUN(footerPromptStructureAdvancesOnlyWhenItsShapeChanges);
+    RUN(promptFocusUsesControlIdentityAndRejectsNonInputs);
     RUN(allocateTreeRevisionIsMonotonic);
     RUN(allocateTreeRevisionRejectsExhaustion);
     RUN(constructionRejectsARevisionSourceBehindAProvider);

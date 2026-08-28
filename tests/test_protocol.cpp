@@ -354,6 +354,23 @@ TEST(commandRequestRoundTripsWithPromptValueArguments) {
               std::any_cast<ssg::PromptValueArguments>(command.payload));
 }
 
+TEST(commandRequestRoundTripsWithPromptFocusIdentity) {
+    const auto registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
+    const ssg::ClientCommand command{
+        "prompt.focus_control", ssg::Revision{12},
+        ssg::PromptFocusArguments{"replace.replacement"}};
+    const auto bytes =
+        ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    const auto decoded =
+        ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
+    ASSERT_TRUE(decoded.accepted());
+    const auto* arguments =
+        std::any_cast<ssg::PromptFocusArguments>(&decoded.command->payload);
+    ASSERT_TRUE(arguments != nullptr);
+    if (arguments) ASSERT_EQ(arguments->controlId,
+                             std::string{"replace.replacement"});
+}
+
 
 // A payload-bearing command reaching the WRONG codec entry (or none) is
 // invisible to the registry's exhaustiveness check, which only proves an entry
@@ -1961,6 +1978,7 @@ int main() {
     RUN(commandRequestRoundTripsCompoundBrowserActions);
     RUN(commandRequestRoundTripsWithFindQueryArguments);
     RUN(commandRequestRoundTripsWithPromptValueArguments);
+    RUN(commandRequestRoundTripsWithPromptFocusIdentity);
     RUN(commandRequestRoundTripsWithTreeScrollToFraction);
     RUN(commandRequestRoundTripsWithTreeSelectArguments);
     RUN(viewportFirstVisualColumnSurvivesTheWire);

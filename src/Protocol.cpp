@@ -2167,6 +2167,8 @@ ProtocolValue toValue(PromptViewState const& value) {
     fields.emplace_back("accessible_label", toValue(value.accessibleLabel));
     fields.emplace_back("rect", toValue(value.rect));
     fields.emplace_back("controls", toValue(value.controls));
+    fields.emplace_back("active_input",
+                        toValue(static_cast<std::uint64_t>(value.activeInput)));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<PromptViewState>& out) {
@@ -2176,8 +2178,13 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptViewState>& o
     auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
     auto rect = requireField<Rect>(value.field("rect"));
     auto controls = requireField<std::vector<PromptControlView>>(value.field("controls"));
-    if (!kind || !accessibleLabel || !rect || !controls) return false;
-    out.emplace(PromptViewState{*kind, *accessibleLabel, *rect, *controls});
+    auto activeInput =
+        requireField<std::uint64_t>(value.field("active_input"));
+    if (!kind || !accessibleLabel || !rect || !controls || !activeInput) {
+        return false;
+    }
+    out.emplace(PromptViewState{*kind, *accessibleLabel, *rect, *controls,
+                                static_cast<std::size_t>(*activeInput)});
     return true;
 }
 
@@ -4984,15 +4991,15 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptValueArgument
 
 ProtocolValue toValue(PromptFocusArguments const& value) {
     std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("index", toValue(static_cast<std::uint64_t>(value.index)));
+    fields.emplace_back("control_id", toValue(value.controlId));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<PromptFocusArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto index = requireField<std::uint64_t>(value.field("index"));
-    if (!index) return false;
-    out.emplace(PromptFocusArguments{static_cast<std::size_t>(*index)});
+    auto controlId = requireField<std::string>(value.field("control_id"));
+    if (!controlId || controlId->empty()) return false;
+    out.emplace(PromptFocusArguments{std::move(*controlId)});
     return true;
 }
 

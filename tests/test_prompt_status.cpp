@@ -1,7 +1,9 @@
 #include "ssg/PromptSurface.h"
 #include "ssg/StatusQueue.h"
+#include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -184,14 +186,14 @@ TEST(promptOpenResetsTheActiveInputPerKindAndOnTransition) {
 TEST(promptFocusOnlyAddressesAnInputNeverAToggleOrCount) {
     PromptSurface surface;
     ASSERT_TRUE(surface.open(request(PromptKind::Replace)).accepted());
-    // Two inputs (query 0, replacement 1); focusing either is accepted.
-    ASSERT_TRUE(surface.focusInput(0).accepted());
+    // Both authored input identities can receive focus.
+    ASSERT_TRUE(surface.focusInput("find").accepted());
     ASSERT_EQ(surface.activeInput(), std::size_t{0});
-    ASSERT_TRUE(surface.focusInput(1).accepted());
+    ASSERT_TRUE(surface.focusInput("replace").accepted());
     ASSERT_EQ(surface.activeInput(), std::size_t{1});
-    // An index past the inputs (a toggle or the match count can never take
+    // A non-input id (a toggle or the match count can never take
     // focus) is rejected as UnknownInput and leaves the active input unchanged.
-    const auto rejected = surface.focusInput(2);
+    const auto rejected = surface.focusInput("case");
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.error->code, PromptErrorCode::UnknownInput);
     ASSERT_EQ(surface.activeInput(), std::size_t{1});
@@ -200,6 +202,29 @@ TEST(promptFocusOnlyAddressesAnInputNeverAToggleOrCount) {
     ASSERT_EQ(surface.activeInput(), std::size_t{0});
     ASSERT_TRUE(surface.focusNextInput().accepted());
     ASSERT_EQ(surface.activeInput(), std::size_t{1});
+}
+
+TEST(gridPromptGeometryLowersThePublishedPromptTree) {
+    PromptSurface surface;
+    ASSERT_TRUE(surface.open(request(PromptKind::Find)).accepted());
+    UiNode tree = assembleFooterPrompt(surface);
+    auto& rows = std::get<UiContainer>(tree.content).children;
+    auto& options = std::get<UiContainer>(rows.back().content).children;
+    options.front().size = Size::exact(10);
+
+    const auto layout =
+        computePromptLayout(surface, tree, Rect{0, 0, 40, 2});
+    ASSERT_TRUE(layout.accepted());
+    if (!layout.view) return;
+    const auto control = std::find_if(
+        layout.view->controls.begin(), layout.view->controls.end(),
+        [](const PromptControlView& candidate) {
+            return candidate.id == "case";
+        });
+    ASSERT_TRUE(control != layout.view->controls.end());
+    if (control != layout.view->controls.end()) {
+        ASSERT_EQ(control->rect.width, 10);
+    }
 }
 
 TEST(theSemanticAndGridControlsComeFromTheOneResolver) {
@@ -375,6 +400,7 @@ int main() {
     RUN(promptSubmitAndCancelAreNonModal);
     RUN(promptOpenResetsTheActiveInputPerKindAndOnTransition);
     RUN(promptFocusOnlyAddressesAnInputNeverAToggleOrCount);
+    RUN(gridPromptGeometryLowersThePublishedPromptTree);
     RUN(theSemanticAndGridControlsComeFromTheOneResolver);
     RUN(statusPriorityAndNavigationTransitionTable);
     RUN(statusCapacityAdmissionAndEvictionTable);

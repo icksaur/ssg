@@ -61,6 +61,7 @@ struct ResolvedProvider {
     std::string value;
     std::string accessibleLabel;
     std::optional<std::string> commandId;
+    std::optional<bool> active;
 };
 
 using ChromeProviderResolver =

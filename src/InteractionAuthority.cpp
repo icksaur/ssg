@@ -1,4 +1,5 @@
 #include <ssg/InteractionAuthority.h>
+#include <ssg/WholeScreenAssembly.h>
 
 #include <algorithm>
 #include <stdexcept>
@@ -24,7 +25,8 @@ std::uint64_t requireSourceAheadOfProviders(std::uint64_t source, const TreeMode
 
 InteractionAuthority::InteractionAuthority(UiComposition initialAssembly, TreeModel& tree,
                                            std::uint64_t firstTreeRevision)
-    : schema_{std::move(initialAssembly)},
+    : baseComposition_{std::move(initialAssembly)},
+      schema_{baseComposition_},
       tree_{tree},
       nextTreeRevision_{requireSourceAheadOfProviders(firstTreeRevision, tree)},
       prompt_{},
@@ -84,7 +86,19 @@ PromptCommandResult InteractionAuthority::openPrompt(PromptRequest request) {
     }
     PromptSurface copy = prompt_;
     PromptCommandResult result = copy.open(std::move(request));
-    if (result.accepted()) adopt(truth_, std::move(copy));
+    if (result.accepted()) {
+        WholeScreenSchema candidate = schema_;
+        candidate.update(withFooterPrompt(baseComposition_, copy));
+        WholeScreenTruth next = truth_;
+        next.openPicker.reset();
+        UiInteractionState projection = buildWholeScreenInteraction(
+            candidate.validated(), next, activePromptRegion(copy));
+        schema_ = std::move(candidate);
+        prompt_ = std::move(copy);
+        truth_ = std::move(next);
+        interaction_ = std::move(projection);
+        ++routingGeneration_;
+    }
     return result;
 }
 
@@ -115,12 +129,13 @@ PromptCommandResult InteractionAuthority::updatePromptValue(std::size_t index,
     return result;
 }
 
-PromptCommandResult InteractionAuthority::focusPromptControl(std::size_t index) {
+PromptCommandResult InteractionAuthority::focusPromptControl(
+    std::string_view controlId) {
     // Which input owns the keyboard changes the semantic prompt view but not the
     // tree topology, presence, or the footer.prompt focus-capture anchor -- swap
     // only the prompt, no rebuild.
     PromptSurface copy = prompt_;
-    PromptCommandResult result = copy.focusInput(index);
+    PromptCommandResult result = copy.focusInput(controlId);
     if (result.accepted()) {
         prompt_ = std::move(copy);
         ++routingGeneration_;
@@ -206,10 +221,17 @@ bool InteractionAuthority::updateComposition(UiComposition assembly) {    // Pre
     // the projection over it, then adopt both together, so a rebuild failure cannot leave a
     // new schema paired with the old interaction.
     WholeScreenSchema candidate = schema_;
-    if (!candidate.update(std::move(assembly))) return false;
+    UiComposition projected = prompt_.active()
+                                  ? withFooterPrompt(assembly, prompt_)
+                                  : assembly;
+    if (!candidate.update(std::move(projected))) {
+        baseComposition_ = std::move(assembly);
+        return false;
+    }
     UiInteractionState projection = buildWholeScreenInteraction(
         candidate.validated(), truth_, activePromptRegion(prompt_));
     schema_ = std::move(candidate);
+    baseComposition_ = std::move(assembly);
     interaction_ = std::move(projection);
     return true;
 }

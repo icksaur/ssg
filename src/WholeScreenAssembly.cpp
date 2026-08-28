@@ -4,6 +4,7 @@
 #include <ssg/Widget.h>  // ViewSurface, Overflow
 
 #include <string>
+#include <stdexcept>
 #include <utility>
 #include <variant>
 
@@ -129,6 +130,44 @@ UiNode promptInputLeaf(std::string_view promptSigil) {
                   UiLeaf{widget}};
 }
 
+std::string promptControlNodeId(std::string_view controlId) {
+    return std::string{kFooterPromptNodeId} + ".control." +
+           std::string{controlId};
+}
+
+UiNode footerPromptInput(const PromptControl& control) {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::TextInput;
+    widget.id = control.id;
+    widget.value = ValueSource{true, "", control.id};
+    widget.command = control.command;
+    widget.role = "prompt";
+    return UiNode{UiNodeId{promptControlNodeId(control.id)}, Size::exact(1),
+                  UiLeaf{std::move(widget)}};
+}
+
+UiNode footerPromptToggle(const PromptControl& control, int width) {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::Checkbox;
+    widget.id = control.id;
+    widget.value = ValueSource{false, control.accessibleLabel, ""};
+    widget.checked = ValueSource{true, "", control.id};
+    widget.command = control.command;
+    widget.role = "prompt";
+    return UiNode{UiNodeId{promptControlNodeId(control.id)}, Size::exact(width),
+                  UiLeaf{std::move(widget)}};
+}
+
+UiNode footerPromptCount(const PromptControl& control) {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::Label;
+    widget.id = control.id;
+    widget.value = ValueSource{true, "", control.id};
+    widget.role = "prompt";
+    return UiNode{UiNodeId{promptControlNodeId(control.id)}, Size::flex(),
+                  UiLeaf{std::move(widget)}};
+}
+
 // Insert the prompt input right after the header's left group (the status
 // fields), so tree order matches the visual order the query line occupies: a
 // client that lays out in tree order renders it immediately after the fields and
@@ -235,12 +274,10 @@ UiComposition assembleWholeScreen(
         viewLeaf(kExternalModNodeId, ViewSurface::ExternalModification,
                  Size::autoSize()),
         SemanticRole::Canvas, SemanticRole::StatusWarning);
-    // The footer-region prompt's semantic surface, always assembled and hidden by
-    // presence (WholeScreenInteraction). Auto-sized so its footprint is the
-    // runtime's reservation, intrinsic and not varied here by prompt kind; the
-    // grid host ignores it and renders PresentationSnapshot::prompt with rects.
+    // The footer prompt starts as an empty, hidden container. An accepted prompt
+    // request overlays its controls before the schema owner publishes it.
     UiNode footerPrompt = withStyle(
-        viewLeaf(kFooterPromptNodeId, ViewSurface::FooterPrompt, Size::autoSize()),
+        container(kFooterPromptNodeId, Axis::Column, Size::autoSize(), {}),
         SemanticRole::Prompt, SemanticRole::Canvas);
 
     UiComposition out;
@@ -251,6 +288,67 @@ UiComposition assembleWholeScreen(
                    std::move(footerPrompt), std::move(footer)}),
         SemanticRole::Text, SemanticRole::Canvas);
     return out;
+}
+
+UiComposition withFooterPrompt(UiComposition base,
+                               const PromptSurface& prompt) {
+    if (!prompt.request() ||
+        promptFocusRegion(prompt.request()->kind) != PromptRegion::Footer) {
+        return base;
+    }
+
+    UiNode* promptNode = nullptr;
+    if (auto* root = std::get_if<UiContainer>(&base.root.content)) {
+        for (auto& child : root->children) {
+            if (child.id.value() == kFooterPromptNodeId) {
+                promptNode = &child;
+                break;
+            }
+        }
+    }
+    if (!promptNode) {
+        throw std::logic_error(
+            "whole-screen composition has no footer.prompt container");
+    }
+
+    if (!std::holds_alternative<UiContainer>(promptNode->content)) {
+        throw std::logic_error("footer.prompt must be a container");
+    }
+    *promptNode = assembleFooterPrompt(prompt);
+    return base;
+}
+
+UiNode assembleFooterPrompt(const PromptSurface& prompt) {
+    UiNode promptNode = withStyle(
+        container(kFooterPromptNodeId, Axis::Column, Size::autoSize(), {}),
+        SemanticRole::Prompt, SemanticRole::Canvas);
+    if (!prompt.request() ||
+        promptFocusRegion(prompt.request()->kind) != PromptRegion::Footer) {
+        return promptNode;
+    }
+
+    auto& column = std::get<UiContainer>(promptNode.content);
+    const auto controls = resolvePromptControls(*prompt.request());
+    std::size_t controlIndex = 0;
+    for (; controlIndex < controls.size() &&
+           controls[controlIndex].kind == PromptControlKind::Input;
+         ++controlIndex) {
+        column.children.push_back(footerPromptInput(controls[controlIndex]));
+    }
+    if (controlIndex < controls.size()) {
+        std::vector<UiNode> options;
+        for (const auto& toggle : prompt.request()->toggles) {
+            options.push_back(
+                footerPromptToggle(controls[controlIndex++], toggle.width));
+        }
+        if (controlIndex < controls.size()) {
+            options.push_back(footerPromptCount(controls[controlIndex]));
+        }
+        column.children.push_back(
+            container(kFooterPromptOptionsNodeId, Axis::Row, Size::exact(1),
+                      std::move(options)));
+    }
+    return promptNode;
 }
 
 }  // namespace ssg

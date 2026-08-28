@@ -44,6 +44,7 @@ struct Sources {
     std::string value;
     std::string providerLabel;
     std::optional<std::string> inheritedCommand;
+    std::optional<bool> active;
     bool fromProvider = false;
 };
 
@@ -57,6 +58,7 @@ Sources resolveSources(const WidgetDescriptor& w,
                 s.value = resolved->value;
                 s.providerLabel = resolved->accessibleLabel;
                 s.inheritedCommand = resolved->commandId;
+                s.active = resolved->active;
             }
         } else {
             s.value = w.value->literal;
@@ -146,6 +148,10 @@ std::optional<UiLeafState> semanticLeafState(
     case WidgetKind::Checkbox:
         return UiLeafState{s.value, label, command,
                            resolveChecked(w, resolveProvider), role};
+    case WidgetKind::TextInput:
+        if (!s.fromProvider || label.empty()) return std::nullopt;
+        return UiLeafState{s.value, label, command, std::nullopt, role,
+                           s.active};
     default:
         return std::nullopt;  // Spacer/Container carry no leaf state
     }

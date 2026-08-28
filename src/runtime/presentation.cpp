@@ -207,7 +207,8 @@ CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
         if (arguments == nullptr) {
             return failure("prompt.focus_control requires a focus payload");
         }
-        auto result = runtime.interaction.focusPromptControl(arguments->index);
+        auto result =
+            runtime.interaction.focusPromptControl(arguments->controlId);
         return result.accepted() ? success() : failure(result.error->message);
     }
     if (id == "prompt.focus_next_control") {

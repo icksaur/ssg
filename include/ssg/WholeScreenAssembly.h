@@ -37,6 +37,7 @@
 #include <ssg/ChromeDecode.h>   // ValidatedComposition
 #include <ssg/StatusFields.h>   // StatusFieldCatalogEntry
 #include <ssg/Style.h>          // StyleDimensions
+#include <ssg/PromptSurface.h>  // PromptRequest
 #include <ssg/UiTree.h>         // UiComposition
 
 #include <optional>
@@ -59,14 +60,22 @@ namespace ssg {
 //   matches the visual order (a tree-order client renders it after the fields, not
 //   past the flex middle); it is presence-gated (visible only for a header-region
 //   prompt) rather than added or removed, so the schema stays generation-stable. This
-//   is deliberately the ONLY TextInput the tree carries: an ssg.chrome author cannot
-//   contribute one (the decoder refuses text_input), so the query anchor is
-//   library-owned, never client-authored.
+//   is the only state-free TextInput the tree carries: footer prompt inputs are
+//   request-derived, provider-backed leaves. An ssg.chrome author cannot contribute
+//   either form (the decoder refuses text_input).
 [[nodiscard]] UiComposition assembleWholeScreen(
     const std::vector<StatusFieldCatalogEntry>& catalog,
     std::string_view hintCommandId,
     const StyleDimensions& dimensions,
     std::string_view promptSigil,
     const std::optional<ValidatedComposition>& composedOverride);
+
+[[nodiscard]] UiComposition withFooterPrompt(UiComposition base,
+                                             const PromptSurface& prompt);
+
+// Build the authoritative footer.prompt subtree for the active footer request.
+// This is the single source consumed by whole-screen schema overlay and grid
+// prompt layout; client code must not regroup controls by PromptKind.
+[[nodiscard]] UiNode assembleFooterPrompt(const PromptSurface& prompt);
 
 }  // namespace ssg

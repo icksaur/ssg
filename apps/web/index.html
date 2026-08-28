@@ -16,13 +16,12 @@
   /* Library-composed header/footer chrome, interpreted from the published UI-VM
      schema + dynamic node state. Geometry is the browser's; only structure,
      values, roles, and triggers come from the library. */
-  .prompt-surface { align-items:center; flex-direction:row; gap:1ch; padding:2px 8px; outline:none; }
+  .prompt-surface { outline:none; }
   .prompt-surface .prompt-control { white-space:pre; }
-  .prompt-surface .prompt-input { padding:0 2px; }
   .prompt-surface .prompt-input.active { background:var(--ssg-selection); }
   .prompt-surface .prompt-toggle { opacity:.6; cursor:pointer; text-decoration:underline dotted; }
   .prompt-surface .prompt-toggle.checked { opacity:1; font-weight:bold; }
-  .prompt-surface .prompt-count { opacity:.55; margin-left:auto; }
+  .prompt-surface .prompt-count { opacity:.55; }
   .prompt-surface .caret { border-left:2px solid var(--ssg-caret); margin-left:-1px; }
   .notice-surface { align-items:center; flex-direction:row; gap:1ch; padding:2px 8px; }
   .notice-surface .notice-action { cursor:pointer; text-decoration:underline dotted; font-weight:bold;

@@ -55,9 +55,10 @@ void applyFindReplaceValues(std::vector<Control>& controls, PromptKind kind,
 // provider widget resolves to the same values on either path.
 ChromeProviderResolver chromeResolverFor(std::vector<StatusField> header,
                                          std::vector<StatusField> footer,
-                                         std::string helpLabel) {
+                                         std::string helpLabel,
+                                         std::optional<PromptView> prompt = std::nullopt) {
     return [header = std::move(header), footer = std::move(footer),
-            helpLabel = std::move(helpLabel)](
+            helpLabel = std::move(helpLabel), prompt = std::move(prompt)](
                std::string_view id) -> std::optional<ResolvedProvider> {
         if (id == "footer.hint") {
             return ResolvedProvider{helpLabel, helpLabel, std::string{"help.open"}};
@@ -68,6 +69,28 @@ ChromeProviderResolver chromeResolverFor(std::vector<StatusField> header,
                     return ResolvedProvider{field.value, field.accessibleLabel,
                                             field.commandId};
                 }
+            }
+        }
+        if (prompt) {
+            std::size_t inputIndex = 0;
+            for (const auto& control : prompt->controls) {
+                if (control.id == id) {
+                    const bool isInput =
+                        control.kind == PromptControlKind::Input;
+                    const std::string value =
+                        control.kind == PromptControlKind::Toggle
+                            ? (control.checked ? "true" : "false")
+                            : control.value;
+                    return ResolvedProvider{
+                        value, control.accessibleLabel,
+                        control.command.empty()
+                            ? std::nullopt
+                            : std::optional<std::string>{control.command},
+                        isInput ? std::optional<bool>{
+                                      inputIndex == prompt->activeInput}
+                                : std::nullopt};
+                }
+                if (control.kind == PromptControlKind::Input) ++inputIndex;
             }
         }
         return std::nullopt;
@@ -110,6 +133,16 @@ void bindStatusFieldCommands(std::vector<StatusField>& fields,
     for (auto& field : fields) {
         field.commandId = statusFieldCommandId(field.id, followProjection);
     }
+}
+
+const UiNode* uiNodeById(const UiNode& node, std::string_view id) {
+    if (node.id.value() == id) return &node;
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            if (const auto* found = uiNodeById(child, id)) return found;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace
@@ -161,7 +194,15 @@ std::optional<PromptViewState> EditorSession::Impl::promptProjection(
         promptReservation.value_or(
             Rect{0, static_cast<int>(dimensions.rows > rows ? dimensions.rows - rows : 0),
                  static_cast<int>(dimensions.columns), static_cast<int>(rows)});
-    auto promptLayout = computePromptLayout(interaction.prompt(), reservation);
+    const UiNode* promptTree = uiNodeById(
+        interaction.interaction().schema().schema().root,
+        kFooterPromptNodeId);
+    if (!promptTree) {
+        throw std::logic_error(
+            "active footer prompt has no authoritative UI subtree");
+    }
+    auto promptLayout =
+        computePromptLayout(interaction.prompt(), *promptTree, reservation);
     if (!promptLayout.accepted()) return std::nullopt;
     auto view = promptLayout.view;
     projectFindReplacePrompt(*view);
@@ -383,7 +424,8 @@ SessionSnapshotSections EditorSession::Impl::sections(
         return resolveUiState(
             validatedSchema, chromeResolverFor(std::move(fields.header),
                                                std::move(fields.footer),
-                                               helpHintLabel(keymap)));
+                                               helpHintLabel(keymap),
+                                               promptView()));
     }();
     UiPresenceSection uiPresence =
         buildPresenceSection(validatedSchema, interactionState.presence());

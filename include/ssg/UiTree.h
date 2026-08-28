@@ -149,13 +149,12 @@ inline constexpr std::string_view kFindResultsNodeId = "findresults";
 // presence unless a header-region prompt is open. The grid host derives the caret
 // from its emitted geometry; a client owns the query prediction locally.
 inline constexpr std::string_view kHeaderPromptInputNodeId = "input_line";
-// The footer-region prompt's semantic surface: a View leaf naming
-// ViewSurface::FooterPrompt, placed between the body and the footer, hidden by
-// presence unless a footer-region prompt (find/replace/goto/save-path/settings)
-// is open. A native client renders and drives the prompt from the semantic
-// PromptView section; the grid host ignores it and renders the parallel
-// PresentationSnapshot::prompt with rects.
+// CONTRACT: Footer prompt axis, grouping, order, and sizing live only in this
+// request-derived container subtree. Clients lower these nodes directly and
+// never reconstruct prompt layout from PromptKind or PromptView.
 inline constexpr std::string_view kFooterPromptNodeId = "footer.prompt";
+inline constexpr std::string_view kFooterPromptOptionsNodeId =
+    "footer.prompt.options";
 // The draft-conflict notice's semantic surface: a View leaf naming
 // ViewSurface::Notice, placed between the header and the body (one reserved chrome
 // row above the document, M15), hidden by presence unless the active document has an

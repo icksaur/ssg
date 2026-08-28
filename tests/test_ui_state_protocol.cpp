@@ -29,6 +29,11 @@ UiStateSection sample() {
         UiNodeId{"c"},
         UiLeafState{"case", "case", std::nullopt, std::optional<bool>{true},
                     SemanticRole::StatusWarning}});
+    section.nodes.push_back(UiNodeState{
+        UiNodeId{"input"},
+        UiLeafState{"needle", "Find text", std::optional<std::string>{"find.update_query"},
+                    std::nullopt, SemanticRole::Prompt,
+                    std::optional<bool>{true}}});
     section.nodes.push_back(UiNodeState{UiNodeId{"sp"}, std::nullopt});
     return section;
 }
@@ -69,7 +74,7 @@ TEST(duplicateNodeIdDecodesToNullopt) {
     ASSERT_FALSE(decodeUiState(value).has_value());
 }
 
-// A leaf whose `checked` is not a boolean, or `command` not a string, is malformed.
+// A leaf whose boolean state is not boolean, or `command` not a string, is malformed.
 TEST(malformedLeafFieldTypeDecodesToNullopt) {
     const auto sectionWithLeaf = [](ProtocolValue leaf) {
         return ProtocolValue::makeObject(
@@ -85,6 +90,15 @@ TEST(malformedLeafFieldTypeDecodesToNullopt) {
                                     {"command", ProtocolValue::makeNull()},
                                     {"role", ProtocolValue::makeUint(0)},
                                     {"checked", ProtocolValue::makeText("yes")}})))
+                     .has_value());
+    // active is a string, not a bool.
+    ASSERT_FALSE(decodeUiState(sectionWithLeaf(ProtocolValue::makeObject(
+                                  {{"value", ProtocolValue::makeText("v")},
+                                   {"label", ProtocolValue::makeText("l")},
+                                   {"command", ProtocolValue::makeNull()},
+                                   {"role", ProtocolValue::makeUint(0)},
+                                   {"checked", ProtocolValue::makeNull()},
+                                   {"active", ProtocolValue::makeText("yes")}})))
                      .has_value());
     // command is a bool, not a string.
     ASSERT_FALSE(decodeUiState(sectionWithLeaf(ProtocolValue::makeObject(

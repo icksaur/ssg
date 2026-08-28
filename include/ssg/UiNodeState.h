@@ -14,8 +14,9 @@
 // providers change while presence advances only through a mutation patch. A
 // Label/Field whose resolution is empty is a node with no leaf state (the semantic
 // form of the built-in/TUI drop); a checkbox always carries leaf state; a spacer and
-// a container carry none. The content is SEMANTIC -- a checkbox's `checked` bool and
-// bare caption, never the TUI's composed glyph.
+// a container carry none. A provider-backed TextInput carries authoritative value
+// and active state; a state-free TextInput carries none. The content is SEMANTIC --
+// a checkbox's `checked` bool and bare caption, never the TUI's composed glyph.
 
 #include <ssg/Theme.h>   // SemanticRole
 #include <ssg/UiTree.h>  // UiNodeId, Generation
@@ -31,19 +32,22 @@ namespace ssg {
 // `checked` is present only for a checkbox; `role` is the effective SemanticRole
 // the library resolved (the widget's own role, or the region's default), so a
 // client colors the widget by a semantic role ordinal and never re-derives role
-// names.
+// names. `active` is present only for a stateful TextInput; its absence keeps
+// browser-local inputs, such as the header picker query, entirely client-owned.
 struct UiLeafState {
     std::string value;
     std::string label;
     std::optional<std::string> command;
     std::optional<bool> checked;
     SemanticRole role = SemanticRole::Text;
+    std::optional<bool> active;
 
     friend bool operator==(const UiLeafState&, const UiLeafState&) = default;
 };
 
 // One schema node's dynamic state: for a renderable leaf, its resolved leaf state.
-// A container, a spacer, and an empty-resolved Label/Field carry no leaf state.
+// A container, spacer, local TextInput, and empty-resolved Label/Field carry no
+// leaf state.
 // Presence is NOT here -- it is the separate basis-stamped UiPresenceSection.
 struct UiNodeState {
     UiNodeId id;

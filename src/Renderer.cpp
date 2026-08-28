@@ -1127,6 +1127,7 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
     auto const promptFg = semanticIndex(theme, foregroundRole);
     auto const promptBg = semanticIndex(theme, backgroundRole);
     std::optional<GridPosition> caret;
+    std::size_t inputIndex = 0;
     for (auto const& control : prompt.controls) {
         std::string text;
         switch (control.kind) {
@@ -1150,13 +1151,9 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
         }
         paintText(grid, control.rect.x, control.rect.y, control.rect.right(),
                    text, promptFg, promptBg, SemanticRole::Prompt, style);
-        // Place the hardware cursor on the editable input: the replacement row
-        // for a replace prompt (its query row is display-only), otherwise the
-        // first input.
-        bool const activeInput =
-            prompt.kind == PromptKind::Replace
-                ? control.id == "replace.replacement"
-                : !caret;
+        const bool activeInput =
+            control.kind == PromptControlKind::Input &&
+            inputIndex == prompt.activeInput;
         if (control.kind == PromptControlKind::Input && activeInput && !caret) {
             auto const labelWidth =
                 static_cast<int>(GraphemeLayout{}
@@ -1171,6 +1168,7 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                          control.rect.right() - 1);
             caret = GridPosition{cursorColumn, control.rect.y};
         }
+        if (control.kind == PromptControlKind::Input) ++inputIndex;
     }
     return caret;
 }

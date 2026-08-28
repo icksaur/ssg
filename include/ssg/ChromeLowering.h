@@ -63,14 +63,14 @@ struct PromptInputProjection {
 
 // Resolve the dynamic node state for a VALIDATED composed schema: one UiNodeState
 // per node (every node present), each leaf resolved to its semantic
-// (value, label, command, checked) through the same source resolution the TUI
+// (value, label, command, checked, active) through the same source resolution the TUI
 // lowering uses, but GEOMETRY-INDEPENDENT and PRESENTATION-FREE -- no width-based
 // collapse or fit, no TUI glyph composition, and no Style glyph (the caller passes a
 // resolver whose values carry no cwd prefix). A ValidatedSchema is required so the
 // one-record-per-node correspondence rests on unique node ids as a type fact, not a
 // runtime hope. A Label/Field whose value or label resolves empty gets no leaf state
-// (the semantic drop); a checkbox always gets leaf state; a spacer and a container
-// get none.
+// (the semantic drop); a checkbox and provider-backed TextInput get leaf state;
+// a local TextInput, spacer, and container get none.
 [[nodiscard]] UiStateSection resolveUiState(
     const ValidatedSchema& schema, const ChromeProviderResolver& resolveProvider);
 

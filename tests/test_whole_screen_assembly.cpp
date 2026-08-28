@@ -94,19 +94,17 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
                 ASSERT_TRUE(*nLeaf->widget.surface == ViewSurface::Notice);
         }
     }
-    // The footer prompt is an always-assembled Auto-sized View naming FooterPrompt,
-    // between the body and the footer; presence (not assembly) hides it.
+    // The footer prompt is an always-assembled Auto-sized container between the
+    // body and footer; presence hides it while inactive.
     const UiNode* footerPrompt = childById(comp.root, kFooterPromptNodeId);
     ASSERT_TRUE(footerPrompt != nullptr);
     if (footerPrompt) {
         ASSERT_TRUE(footerPrompt->size.kind() == SizeKind::Auto);
-        const auto* fpLeaf = std::get_if<UiLeaf>(&footerPrompt->content);
-        ASSERT_TRUE(fpLeaf != nullptr);
-        if (fpLeaf) {
-            ASSERT_TRUE(fpLeaf->widget.kind == WidgetKind::View);
-            ASSERT_TRUE(fpLeaf->widget.surface.has_value());
-            if (fpLeaf->widget.surface)
-                ASSERT_TRUE(*fpLeaf->widget.surface == ViewSurface::FooterPrompt);
+        const auto* fp = std::get_if<UiContainer>(&footerPrompt->content);
+        ASSERT_TRUE(fp != nullptr);
+        if (fp) {
+            ASSERT_TRUE(fp->axis == Axis::Column);
+            ASSERT_TRUE(fp->children.empty());
         }
     }
     ASSERT_TRUE(header->size.kind() == SizeKind::Exact);
@@ -231,6 +229,59 @@ TEST(assembledTreeAssignsCanonicalSemanticStyles) {
         ASSERT_TRUE(node->style.foreground == item.foreground);
         ASSERT_TRUE(node->style.background == item.background);
     }
+}
+
+TEST(footerPromptAssemblyPublishesInputRowsAndAHorizontalOptionsRow) {
+        PromptRequest request;
+        request.kind = PromptKind::Replace;
+        request.accessibleLabel = "Replace";
+        request.inputs = {{"find.query", "Find text", "needle"},
+                          {"replace.replacement", "Replacement text", "value"}};
+        request.toggles = {{"find.case", "Case", true, 8},
+                           {"find.regex", "Regex", false, 9}};
+        request.matchCount = PromptMatchCount{"find.count", "Matches", "3"};
+
+        const auto base =
+            assembleWholeScreen({}, kHintCommand, dims(), kPromptSigil, std::nullopt);
+        PromptSurface surface;
+        ASSERT_TRUE(surface.open(request).accepted());
+        const auto composed = withFooterPrompt(base, surface);
+        const UiNode* prompt = childById(composed.root, kFooterPromptNodeId);
+        ASSERT_TRUE(prompt != nullptr);
+        if (!prompt) return;
+        const auto* column = std::get_if<UiContainer>(&prompt->content);
+        ASSERT_TRUE(column != nullptr);
+        if (!column) return;
+        ASSERT_TRUE(column->axis == Axis::Column);
+        ASSERT_EQ(column->children.size(), std::size_t{3});
+        for (std::size_t index = 0; index < request.inputs.size(); ++index) {
+            const auto& node = column->children[index];
+            const auto& leaf = std::get<UiLeaf>(node.content);
+            ASSERT_TRUE(node.size.kind() == SizeKind::Exact);
+            ASSERT_EQ(node.size.extent(), 1);
+            ASSERT_TRUE(leaf.widget.kind == WidgetKind::TextInput);
+            ASSERT_EQ(leaf.widget.id, request.inputs[index].id);
+            ASSERT_TRUE(leaf.widget.value.has_value());
+            ASSERT_TRUE(leaf.widget.value->isProvider);
+            ASSERT_EQ(leaf.widget.value->provider, request.inputs[index].id);
+        }
+        const auto& optionsNode = column->children.back();
+        ASSERT_EQ(optionsNode.id.value(), std::string{kFooterPromptOptionsNodeId});
+        const auto& options = std::get<UiContainer>(optionsNode.content);
+        ASSERT_TRUE(options.axis == Axis::Row);
+        ASSERT_EQ(options.children.size(), request.toggles.size() + 1);
+        for (std::size_t index = 0; index < request.toggles.size(); ++index) {
+            const auto& node = options.children[index];
+            const auto& leaf = std::get<UiLeaf>(node.content);
+            ASSERT_TRUE(leaf.widget.kind == WidgetKind::Checkbox);
+            ASSERT_TRUE(node.size.kind() == SizeKind::Exact);
+            ASSERT_EQ(node.size.extent(), request.toggles[index].width);
+            ASSERT_EQ(leaf.widget.id, request.toggles[index].id);
+        }
+        const auto& count = options.children.back();
+        ASSERT_TRUE(count.size.kind() == SizeKind::Flex);
+        ASSERT_TRUE(std::get<UiLeaf>(count.content).widget.kind == WidgetKind::Label);
+        ASSERT_TRUE(validateWellKnownAreas(UiSchema{Generation{1}, composed.root}).ok());
 }
 
 TEST(builtinHeaderFooterAreProviderBackedAndStable) {
@@ -432,6 +483,7 @@ int main() {
     RUN(builtinHeaderFooterAreProviderBackedAndStable);
     RUN(assembledTreeNamesTheIndependentVerticalScrollViewports);
     RUN(assembledTreeAssignsCanonicalSemanticStyles);
+    RUN(footerPromptAssemblyPublishesInputRowsAndAHorizontalOptionsRow);
     RUN(theCatalogSplitsByRegionDeterministically);
     RUN(composedHeaderAndFooterOverrideTheBuiltins);
     RUN(aComposedHeaderKeepsTheBuiltinFooterWhenFooterIsOmitted);

@@ -322,9 +322,9 @@ export const encodeTreeActivation = (nodeId, revision) =>
   encodeCommandRequest('tree.activate_node', revision,
                        { node_id: String(nodeId) });
 
-export const encodePromptFocus = (index, revision) =>
+export const encodePromptFocus = (controlId, revision) =>
   encodeCommandRequest('prompt.focus_control', revision,
-                       { index: BigInt(index) });
+                       { control_id: String(controlId) });
 
 export const encodeExternalAction = (action, fileId, revision) =>
   encodeCommandRequest('external.invoke_action', revision,
@@ -605,52 +605,6 @@ export function applySessionDeltaSections(sections, delta) {
   return sections;
 }
 
-// PromptControlKind ordinals (C++ PromptControlKind).
-export const PROMPT_CONTROL = { INPUT: 0, TOGGLE: 1, COUNT: 2 };
-
-// Decide how the persistent footer-prompt container moves keyboard focus as the
-// published PromptView changes, without a DOM so the rule is testable: focus the
-// container ONLY on open and on active-input change (never per message, so an
-// unrelated frame cannot steal deliberate focus and a re-render preserves focus +
-// aria-activedescendant), and restore the captured focus on close. `prev` is
-// { open, activeInput }; `pv` is the promptViewFromSections result (null when
-// closed). Returns { open, activeInput, focusContainer, restoreFocus,
-// activeDescendant }.
-export function promptFocusPlan(prev, pv) {
-  const was = prev || { open: false, activeInput: -1 };
-  if (!pv) {
-    return { open: false, activeInput: -1, focusContainer: false,
-             restoreFocus: !!was.open, activeDescendant: null };
-  }
-  const focusContainer = !was.open || was.activeInput !== pv.activeInput;
-  return { open: true, activeInput: pv.activeInput, focusContainer,
-           restoreFocus: false, activeDescendant: pv.activeInput };
-}
-
-
-// The active footer prompt's geometry-free semantic projection normalized for the
-// renderer, or null when no footer-region prompt is open. Owns the snake_case wire
-// coupling (accessible_label, active_input) so the client draws controls without
-// re-deriving field names. `activeInput` indexes the INPUT controls only.
-export function promptViewFromSections(sections) {
-  if (!sections) return null;
-  const pv = sections.prompt_view;
-  if (pv == null) return null;
-  const controls = (pv.controls || []).map((c) => ({
-    kind: num(c.kind),
-    id: String(c.id == null ? '' : c.id),
-    label: String(c.accessible_label == null ? '' : c.accessible_label),
-    value: String(c.value == null ? '' : c.value),
-    checked: !!c.checked,
-    command: String(c.command == null ? '' : c.command),
-  }));
-  return {
-    kind: num(pv.kind),
-    label: String(pv.accessible_label == null ? '' : pv.accessible_label),
-    controls,
-    activeInput: num(pv.active_input),
-  };
-}
 // The draft-conflict notice's geometry-free semantic projection normalized for the
 // renderer, or null when the active document raises no notice. Owns the snake_case
 // wire coupling (command) so the client draws the notice bar and its clickable
@@ -737,7 +691,8 @@ export const SCROLL = { NONE: 0, VERTICAL: 1 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
 export const SURFACE = { TABBAR: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5, NOTICE: 6, EXTERNAL_MODIFICATION: 7, DOCUMENT: 8 };
 export const PALETTE_PRESENCE_OP = { SHOW: 0, HIDE: 1 };
-const ALL_SURFACES = Object.freeze(Object.values(SURFACE));
+const ALL_SURFACES = Object.freeze(
+  Object.values(SURFACE).filter((surface) => surface !== SURFACE.FOOTER_PROMPT));
 const TREE_SURFACES = Object.freeze([
   SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.SYMBOLS,
 ]);
@@ -758,8 +713,6 @@ export function browserRenderPlan(delta) {
   if (delta.tabs && delta.tabs.state != null) add(SURFACE.TABBAR);
   if (revisionChanged(delta.tree)) add(...TREE_SURFACES);
   if (delta.palette) add(SURFACE.FINDRESULTS);
-  if (delta.prompt_view && !!num(delta.prompt_view.changed))
-    add(SURFACE.FOOTER_PROMPT);
   if (delta.notice_view && !!num(delta.notice_view.changed))
     add(SURFACE.NOTICE);
   if (revisionChanged(delta.external_modification))
@@ -897,13 +850,12 @@ const STRUCTURAL_ROLE = { prompt: 16 };
 const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL_ROLE, name)
   ? STRUCTURAL_ROLE[name] : null;
 
-// The primitives THIS web build's interpreter can draw. The built-in prompt
-// TextInput (the header query anchor) carries no server leaf state -- the browser
-// owns the query text locally -- so it renders as a bare anchor node. Placement is
-// tree structure + well-known node ids, so there is no region-role set.
+// The primitives THIS web build's interpreter can draw. Header prompt TextInput
+// state is browser-local; footer prompt TextInputs resolve through UiState.
+// Placement is tree structure + well-known node ids, so there is no region-role set.
 export const WEB_UI_PROFILE = {
   widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.TEXT_INPUT, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
-  surfaces: new Set([SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.FOOTER_PROMPT, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT]),
+  surfaces: new Set([SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT]),
 };
 
 // The first schema primitive `profile` does not support, as
@@ -1074,16 +1026,27 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     }
     if (!node.leaf || typeof node.leaf !== 'object') { shapeOk = false; return null; }
     const wk = num(node.leaf.kind);
-    if ((wk === WIDGET.SPACER || wk === WIDGET.VIEW || wk === WIDGET.STATUS_ACTIONS ||
-         wk === WIDGET.TEXT_INPUT) && hasLeafState) {
+    if ((wk === WIDGET.SPACER || wk === WIDGET.VIEW ||
+         wk === WIDGET.STATUS_ACTIONS) && hasLeafState) {
       shapeOk = false; return null;
     }
     if (wk === WIDGET.CHECKBOX) {
       // A checkbox must carry leaf state AND a resolved `checked`.
-      if (!hasLeafState || st.leaf.checked == null) { shapeOk = false; return null; }
+      if (!hasLeafState || st.leaf.checked == null ||
+          st.leaf.active != null) { shapeOk = false; return null; }
     } else if (wk === WIDGET.LABEL || wk === WIDGET.FIELD) {
       // A Label/Field must NOT carry `checked` -- that field is a checkbox's alone.
-      if (hasLeafState && st.leaf.checked != null) { shapeOk = false; return null; }
+      if (hasLeafState &&
+          (st.leaf.checked != null || st.leaf.active != null)) {
+        shapeOk = false; return null;
+      }
+    } else if (wk === WIDGET.TEXT_INPUT) {
+      // Header picker input is state-free and browser-local. A footer input is
+      // stateful and explicitly names whether it owns prompt keyboard input.
+      if (hasLeafState &&
+          (st.leaf.checked != null || st.leaf.active == null)) {
+        shapeOk = false; return null;
+      }
     }
     if (!presentById.get(node.id)) return null;  // hidden leaf not drawn
     if (wk === WIDGET.SPACER) {
@@ -1100,8 +1063,17 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
                actions: [], style };
     }
     if (wk === WIDGET.TEXT_INPUT) {
-      // The prompt query anchor: no server text (the browser owns the query
-      // locally), so no per-keystroke tree delta is ever produced.
+      if (hasLeafState) {
+        return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+                 controlId: node.leaf.id, text: st.leaf.value || '',
+                 label: st.leaf.label || '', active: !!num(st.leaf.active),
+                 command: st.leaf.command != null ? st.leaf.command : null,
+                 role: node.leaf.role != null || style.foreground == null
+                   ? num(st.leaf.role) : null,
+                 style };
+      }
+      // The header query anchor remains state-free: browser-owned local text
+      // produces no per-keystroke tree delta.
       return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
                role: structuralRole(node.leaf.role),
                sigil: node.leaf.sigil || '', style };

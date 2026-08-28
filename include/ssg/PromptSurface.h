@@ -98,10 +98,10 @@ struct PromptValueArguments {
 };
 
 // Payload for `prompt.focus_control`: which input of the active prompt takes the
-// keyboard. Indexes the prompt's inputs; a value not addressing an input is
+// keyboard. Names the prompt input; an id not addressing an input is
 // rejected, so a toggle or the match count can never receive focus.
 struct PromptFocusArguments {
-    std::size_t index = 0;
+    std::string controlId;
     friend bool operator==(const PromptFocusArguments&,
                            const PromptFocusArguments&) = default;
 };
@@ -169,6 +169,7 @@ struct PromptViewState {
     std::string accessibleLabel;
     Rect rect;
     std::vector<PromptControlView> controls;
+    std::size_t activeInput = 0;
     friend bool operator==(const PromptViewState&,
                            const PromptViewState&) = default;
 };
@@ -187,10 +188,10 @@ public:
     [[nodiscard]] PromptCommandResult open(PromptRequest request);
     [[nodiscard]] PromptCommandResult updateValue(std::size_t index,
                                                   std::string value);
-    // Focus the input at `index` (indexing the prompt's inputs only). Rejected
-    // with UnknownInput when the index does not address an input, so a toggle or
+    // Focus the input named by `controlId`. Rejected with UnknownInput when the
+    // id does not address an input, so a toggle or
     // the match count can never own the keyboard.
-    [[nodiscard]] PromptCommandResult focusInput(std::size_t index);
+    [[nodiscard]] PromptCommandResult focusInput(std::string_view controlId);
     // Advance the active input to the next input, wrapping. A single-input prompt
     // stays on its one input.
     [[nodiscard]] PromptCommandResult focusNextInput();
@@ -222,5 +223,7 @@ private:
 [[nodiscard]] std::uint8_t promptRowCount(PromptKind kind) noexcept;
 [[nodiscard]] PromptLayoutResult computePromptLayout(
     const PromptSurface& surface, Rect reservation);
+[[nodiscard]] PromptLayoutResult computePromptLayout(
+    const PromptSurface& surface, const UiNode& promptTree, Rect reservation);
 
 } // namespace ssg
