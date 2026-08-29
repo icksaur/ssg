@@ -267,7 +267,9 @@ TEST(commandRequestRoundTripsCompoundBrowserActions) {
     {
         ssg::ClientCommand const command{
             "picker.submit", ssg::Revision{4},
-            ssg::PickerSubmitArguments{ssg::SearchMode::File, "src/main.cpp"}};
+            ssg::PickerSubmitArguments{
+                {ssg::SearchMode::File, ssg::PickerActivationId{12}},
+                "src/main.cpp"}};
         auto decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
             ssg::ProtocolCodec{}.encodeCommandRequest(command, registry),
             registry);
@@ -276,7 +278,9 @@ TEST(commandRequestRoundTripsCompoundBrowserActions) {
             std::any_cast<ssg::PickerSubmitArguments>(
                 &decoded.command->payload);
         ASSERT_TRUE(arguments != nullptr);
-        ASSERT_EQ(arguments->mode, ssg::SearchMode::File);
+        ASSERT_EQ(arguments->activation,
+                  (ssg::PickerActivation{ssg::SearchMode::File,
+                                         ssg::PickerActivationId{12}}));
         ASSERT_EQ(arguments->candidateId, std::string{"src/main.cpp"});
     }
     {
@@ -624,7 +628,7 @@ std::string buildCommandRequestMessage(std::string const& id,
     appendNullValue(body);
 
     std::string message;
-    message += wireU8(2);
+    message += wireU8(3);
     message += wireU8(
         static_cast<std::uint8_t>(ssg::ProtocolMessageKind::CommandRequest));
     message += body;
@@ -650,7 +654,7 @@ std::string buildInvalidScrollFractionMessage() {
     appendFieldKey(body, "payload");
     body += payload;
 
-    return wireU8(2) +
+    return wireU8(3) +
            wireU8(static_cast<std::uint8_t>(
                ssg::ProtocolMessageKind::CommandRequest)) +
            body;
@@ -946,7 +950,8 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
 TEST(sessionDeltaCarriesThePaletteSection) {
     auto beforeSections = sections(ssg::Revision{4}, "alpha");
     auto afterSections = sections(ssg::Revision{5}, "alpha");
-    afterSections.palette.activeMode = ssg::SearchMode::Command;
+    afterSections.palette.activePicker = ssg::PickerActivation{
+        ssg::SearchMode::Command, ssg::PickerActivationId{3}};
     afterSections.palette.commandCandidates = {
         {"edit.undo", "Undo", ""}, {"file.save", "Save File", ""}};
     auto before = ssg::SessionSnapshotCodec{}.assemble(
@@ -1474,7 +1479,9 @@ TEST(clientInputAndResultRoundTripThroughTheWire) {
                                ssg::Revision{9}, ""};
     command.effects.routingChanged = true;
     ssg::ClientInputResult const result{
-        ssg::ClientInputOutcome::Dispatched, std::nullopt, command};
+        ssg::ClientInputOutcome::Dispatched, std::nullopt, command,
+        ssg::PickerActivation{ssg::SearchMode::File,
+                              ssg::PickerActivationId{17}}};
     auto const decodedResult =
         ssg::ProtocolCodec{}.decodeClientInputResult(
             ssg::ProtocolCodec{}.encodeClientInputResult(result));
@@ -1486,6 +1493,8 @@ TEST(clientInputAndResultRoundTripThroughTheWire) {
     ASSERT_EQ(decodedResult.result->command->revision, command.revision);
     ASSERT_TRUE(
         decodedResult.result->command->effects.routingChanged);
+    ASSERT_EQ(decodedResult.result->pickerActivation,
+              result.pickerActivation);
 
     ssg::ClientInputResult const owned{
         ssg::ClientInputOutcome::ClientOwned,
@@ -1500,6 +1509,7 @@ TEST(clientInputAndResultRoundTripThroughTheWire) {
               ssg::ClientOwnedInputKind::AppendText);
     ASSERT_EQ(decodedOwned.result->clientOwned->text, std::string{"q"});
     ASSERT_FALSE(decodedOwned.result->command.has_value());
+    ASSERT_FALSE(decodedOwned.result->pickerActivation.has_value());
 }
 
 

@@ -176,13 +176,13 @@ There are 200 commands.
 | `palette.open` | Command Palette | none | lua |
 | `file_finder.open` | Open | none | lua |
 | `file_finder.toggle_gitignore` | Toggle Gitignore | none | lua |
-| `palette.close` | Close | none | lua |
 | `palette.next` | Next | none | lua |
 | `palette.previous` | Previous | none | lua |
 | `goto.back` | Back | none | lua |
 | `goto.forward` | Forward | none | lua |
 | `search.results_next` | Results Next | none | lua |
 | `search.results_previous` | Results Previous | none | lua |
+| `palette.close` | Close | none | lua |
 | `palette.execute` | Execute | palette selection | lua |
 | `picker.submit` | Submit Picker Candidate | picker candidate | lua |
 | `search.workspace` | Workspace | none | lua |

@@ -201,7 +201,7 @@ export function encodeValue(value) {
 }
 
 export function encodeMessage(kind, payload) {
-  return concat([new Uint8Array([2, kind]), encodeValue(payload)]);
+  return concat([new Uint8Array([3, kind]), encodeValue(payload)]);
 }
 
 export function decodeMessage(buffer) {
@@ -209,7 +209,7 @@ export function decodeMessage(buffer) {
   if (dv.byteLength > PROTOCOL_LIMITS.messageBytes) {
     throw new Error('protocol message length exceeded');
   }
-  if (dv.byteLength < 3 || dv.getUint8(0) !== 2) {
+  if (dv.byteLength < 3 || dv.getUint8(0) !== 3) {
     throw new Error('unsupported protocol frame');
   }
   const kind = dv.getUint8(1);
@@ -284,9 +284,13 @@ export function encodeStatusActionInvocation({ statusId, actionId, generation })
 
 export const PICKER_MODE = Object.freeze({ FILE: 0, COMMAND: 4 });
 
-export const encodePickerSubmit = (mode, candidateId, revision) =>
+export const encodePickerSubmit = (activation, candidateId, revision) =>
   encodeCommandRequest('picker.submit', revision,
-                       { mode: BigInt(mode), candidate_id: String(candidateId) });
+                       {
+                         mode: BigInt(activation.mode),
+                         activation_id: BigInt(activation.id),
+                         candidate_id: String(candidateId),
+                       });
 
 export const encodeSelectionByteRange = (anchor, active, revision) =>
   encodeCommandRequest('select.set_byte_range', revision, {
@@ -485,26 +489,71 @@ export function effectivePickerMode(palette, localMode) {
 }
 
 export function queuePickerSubmit(
-    mode, candidateId, authoritativeMode, openingPending, queued) {
+    intent, authoritativeActivation, openingPending, queued) {
   if (queued) return { send: null, queued };
-  const submit = { mode, candidateId };
-  if (authoritativeMode === mode) return { send: submit, queued: null };
-  return openingPending
-    ? { send: null, queued: submit }
-    : { send: null, queued: null };
+  if (openingPending) return { send: null, queued: intent };
+  const submit = authoritativeActivation &&
+      authoritativeActivation.mode === intent.mode
+    ? {
+        activation: authoritativeActivation,
+        candidateId: intent.candidateId,
+      }
+    : null;
+  if (submit) return { send: submit, queued: null };
+  return { send: null, queued: null };
 }
 
 export function settlePickerLifecycle(
-    completedInput, authoritativeMode, queuedSubmit) {
-  const mode = authoritativeMode == null ? null : authoritativeMode;
+    completedInput, authoritativeActivation, completedActivation, queuedSubmit) {
   if (!completedInput || completedInput.pickerOpenMode == null) {
-    return { mode, submit: null };
+    return {
+      activation: authoritativeActivation, submit: null,
+      preservePresentation: false,
+    };
   }
+
   const expected = completedInput.pickerOpenMode;
-  const submit = mode === expected && queuedSubmit &&
+  const matchingOpening = authoritativeActivation && completedActivation &&
+      authoritativeActivation.mode === expected &&
+      completedActivation.mode === expected &&
+      authoritativeActivation.id === completedActivation.id;
+  const submit = matchingOpening && queuedSubmit &&
       queuedSubmit.mode === expected
-    ? queuedSubmit : null;
-  return { mode, submit };
+    ? {
+        activation: completedActivation,
+        candidateId: queuedSubmit.candidateId,
+      }
+    : null;
+  return {
+    activation: authoritativeActivation, submit,
+    preservePresentation: Boolean(matchingOpening),
+  };
+}
+
+export function pickerPresentationFromSubmit(
+    error, authoritativeActivation, previous) {
+  const sameActivation = authoritativeActivation &&
+    previous &&
+    previous.mode === authoritativeActivation.mode &&
+    previous.activationId === authoritativeActivation.id;
+  if (sameActivation) {
+    return {
+      mode: previous.mode,
+      activationId: previous.activationId,
+      query: previous.query,
+      selected: previous.selected,
+      pendingSubmit: null,
+    };
+  }
+  return {
+    mode: authoritativeActivation == null
+      ? null : authoritativeActivation.mode,
+    activationId: authoritativeActivation == null
+      ? null : authoritativeActivation.id,
+    query: '',
+    selected: 0,
+    pendingSubmit: null,
+  };
 }
 
 function sameStroke(bindingStroke, inputStroke) {
@@ -908,6 +957,14 @@ export function preferredKeyboardSurface(surfaces) {
   return null;
 }
 
+export function predictedFocusCapture({
+  localMode,
+  authoritativeActivation,
+}) {
+  return localMode != null && authoritativeActivation == null
+    ? 'input_line' : null;
+}
+
 export function resolveUiFocusPath(schema, state, presence, predictedNode = null) {
   if (!schema || !state || !presence ||
       num(schema.generation) !== num(state.generation) ||
@@ -937,16 +994,21 @@ export function resolveUiFocusPath(schema, state, presence, predictedNode = null
       state.focus_path[0] !== 'panel') {
     return null;
   }
-  const authoritativeTop = state.focus_path[state.focus_path.length - 1];
-  if (!present.get(authoritativeTop)) return null;
   if (predictedNode != null &&
       (!schemaIds.has(predictedNode) || !present.get(predictedNode))) {
     return null;
   }
+  const effectivePath = [...state.focus_path];
+  if (predictedNode != null &&
+      effectivePath[effectivePath.length - 1] !== predictedNode) {
+    effectivePath.push(predictedNode);
+  }
+  const effective = effectivePath[effectivePath.length - 1];
+  if (!present.get(effective)) return null;
   return {
-    path: [...state.focus_path],
-    effective: predictedNode == null ? authoritativeTop : predictedNode,
-    captured: state.focus_path.length > 1 || predictedNode != null,
+    path: effectivePath,
+    effective,
+    captured: effectivePath.length > 1,
   };
 }
 

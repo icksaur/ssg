@@ -878,6 +878,7 @@ int main(int argc, char** argv) {
     // Which picker the open prompt is, adopted from the snapshot rather than
     // invented locally, so submit routes to that picker's command.
     ssg::SearchMode pickerMode = ssg::SearchMode::Command;
+    std::optional<ssg::PickerActivation> pickerActivation;
     // One value, not four parallel locals: the library's own window type carries
     // query, selection, scroll offset and pane height together, so a second
     // picker cannot introduce a drifting copy of half of them.
@@ -1034,7 +1035,10 @@ int main(int argc, char** argv) {
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
         if (order.empty() || picker.selected >= order.size()) return;
         auto const& id = candidates[order[picker.selected]].id;
-        if (auto const submit = ssg::paletteSubmitCommand(pickerMode, id)) {
+        if (pickerActivation) {
+            auto const submit =
+                ssg::paletteSubmitCommand(*pickerActivation, id);
+            if (!submit) return;
             dispatch(submit->command.name(), submit->payload);
         }
     };
@@ -1089,8 +1093,10 @@ int main(int argc, char** argv) {
         auto snapshot = runtime.present(client, terminalSize(), buildReport());
         if (snapshot) {
             focus = effectiveFocusFromSections(snapshot->sections());
-            pickerMode = snapshot->sections().palette.activeMode.value_or(
-                ssg::SearchMode::Command);
+            pickerActivation = snapshot->sections().palette.activePicker;
+            pickerMode = pickerActivation
+                             ? pickerActivation->mode
+                             : ssg::SearchMode::Command;
             if (auto const* published =
                     snapshot->sections().palette.candidatesFor(pickerMode)) {
                 candidates = *published;
@@ -1498,7 +1504,7 @@ int main(int argc, char** argv) {
                         if (hit.itemIndex < order.size()) {
                             targets.picker_candidate_id =
                                 candidates[order[hit.itemIndex]].id;
-                            targets.picker_mode = pickerMode;
+                            targets.picker_activation = pickerActivation;
                         }
                     } else if (hit.region == ssg::HitRegion::HeaderField ||
                                hit.region == ssg::HitRegion::FooterField ||

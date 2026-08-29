@@ -463,7 +463,7 @@ ProtocolError toProtocolError(ValueReadStatus status) {
 }
 
 
-constexpr std::uint8_t kProtocolWireVersion = 2;
+constexpr std::uint8_t kProtocolWireVersion = 3;
 
 std::string encodeMessage(ProtocolMessageKind kind, ProtocolValue const& payload) {
     std::string out;
@@ -4909,7 +4909,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<PaletteExecuteArgum
 
 ProtocolValue toValue(PickerSubmitArguments const& value) {
     std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("mode", toValue(value.mode));
+    fields.emplace_back("mode", toValue(value.activation.mode));
+    fields.emplace_back("activation_id",
+                        toValue(value.activation.id.value()));
     fields.emplace_back("candidate_id", toValue(value.candidateId));
     return ProtocolValue::makeObject(std::move(fields));
 }
@@ -4917,10 +4919,16 @@ bool decodePresent(ProtocolValue const& value,
                    std::optional<PickerSubmitArguments>& out) {
     if (!value.asObject()) return false;
     auto mode = requireField<SearchMode>(value.field("mode"));
+    auto activationId =
+        requireField<std::uint64_t>(value.field("activation_id"));
     auto candidateId =
         requireField<std::string>(value.field("candidate_id"));
-    if (!mode || !candidateId) return false;
-    out.emplace(PickerSubmitArguments{*mode, *candidateId});
+    if (!mode || !activationId || *activationId == 0 || !candidateId) {
+        return false;
+    }
+    out.emplace(PickerSubmitArguments{
+        PickerActivation{*mode, PickerActivationId{*activationId}},
+        *candidateId});
     return true;
 }
 
@@ -5624,6 +5632,18 @@ std::string ProtocolCodec::encodeClientInputResult(
     fields.emplace_back(
         "command", result.command ? commandResultValue(*result.command)
                                    : ProtocolValue::makeNull());
+    if (result.pickerActivation) {
+        fields.emplace_back(
+            "picker_activation",
+            ProtocolValue::makeObject(
+                {{"mode", ProtocolValue::makeUint(static_cast<std::uint8_t>(
+                              result.pickerActivation->mode))},
+                 {"activation_id",
+                  ProtocolValue::makeUint(
+                      result.pickerActivation->id.value())}}));
+    } else {
+        fields.emplace_back("picker_activation", ProtocolValue::makeNull());
+    }
     return encodeMessage(ProtocolMessageKind::ClientInputResult,
                          ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5643,7 +5663,7 @@ DecodeClientInputResultResult ProtocolCodec::decodeClientInputResult(
                 "client input result payload is malformed"};
     }
     ClientInputResult result{static_cast<ClientInputOutcome>(*outcome),
-                             std::nullopt, std::nullopt};
+                             std::nullopt, std::nullopt, std::nullopt};
     auto const* ownedField = payload.field("client_owned");
     if (ownedField == nullptr) {
         return {ProtocolError::MalformedMessage, std::nullopt,
@@ -5660,6 +5680,23 @@ DecodeClientInputResultResult ProtocolCodec::decodeClientInputResult(
         }
         result.clientOwned = ClientOwnedInput{
             static_cast<ClientOwnedInputKind>(*kind), std::move(*text)};
+    }
+    auto const* activationField = payload.field("picker_activation");
+    if (activationField == nullptr) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "client input result is missing picker_activation"};
+    }
+    if (activationField->kind() != ProtocolValue::Kind::NullValue) {
+        auto mode = requireField<SearchMode>(activationField->field("mode"));
+        auto id =
+            requireField<std::uint64_t>(activationField->field("activation_id"));
+        if (!activationField->asObject() || !mode || !id || *id == 0 ||
+            (*mode != SearchMode::Command && *mode != SearchMode::File)) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client input result picker activation is malformed"};
+        }
+        result.pickerActivation =
+            PickerActivation{*mode, PickerActivationId{*id}};
     }
     auto const* commandField = payload.field("command");
     if (commandField == nullptr) {

@@ -127,8 +127,8 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
     ASSERT_TRUE(finderOpen.command->accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_TRUE(snapshot->sections().palette.activeMode.has_value());
-    ASSERT_EQ(*snapshot->sections().palette.activeMode,
+    ASSERT_TRUE(snapshot->sections().palette.activePicker.has_value());
+    ASSERT_EQ(snapshot->sections().palette.activePicker->mode,
               ssg::SearchMode::File);
 
     ssg::KeyStroke escape;
@@ -541,7 +541,7 @@ TEST(paletteCandidatesMatchTheCommandRegistry) {
     auto closed = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(closed.has_value());
     if (closed) {
-        ASSERT_FALSE(closed->sections().palette.activeMode.has_value());
+        ASSERT_FALSE(closed->sections().palette.activePicker.has_value());
         ASSERT_FALSE(closed->sections().palette.commandCandidates.empty());
     }
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
@@ -550,8 +550,8 @@ TEST(paletteCandidatesMatchTheCommandRegistry) {
     if (!snapshot) return;
 
     auto const& palette = snapshot->sections().palette;
-    ASSERT_EQ(palette.activeMode,
-              std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
+    ASSERT_TRUE(palette.activePicker.has_value());
+    ASSERT_EQ(palette.activePicker->mode, ssg::SearchMode::Command);
     // Every registered command appears exactly once as a candidate, compared
     // against the runtime's own catalog rather than the static table -- which
     // is only part of the catalog while commands are migrating out of it.

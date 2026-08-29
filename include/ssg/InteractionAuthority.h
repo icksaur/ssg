@@ -40,7 +40,9 @@ public:
     // Seed from the initial whole-screen assembly at generation 0, over the caller-owned
     // TreeModel, with the first tree revision the source will hand out.
     InteractionAuthority(UiComposition initialAssembly, TreeModel& tree,
-                         std::uint64_t firstTreeRevision = 1);
+                         std::uint64_t firstTreeRevision = 1,
+                         PickerActivationId firstPickerActivation =
+                             PickerActivationId{1});
 
     // Apply a transition atomically: prepare against current truth/prompt/tree and, on a
     // non-null preflight, install as one consuming owner swap. Returns whether it applied;
@@ -116,6 +118,10 @@ public:
     [[nodiscard]] std::optional<PickerKind> openPicker() const noexcept {
         return truth_.openPicker;
     }
+    [[nodiscard]] const std::optional<PickerActivation>&
+    openPickerActivation() const noexcept {
+        return openPickerActivation_;
+    }
     // A monotonic counter over every change to interaction routing state -- base
     // focus, the active prompt's kind/value/control focus, and picker/panel
     // transitions. A host compares it across a dispatch to learn whether the way
@@ -139,6 +145,8 @@ private:
     WholeScreenSchema schema_;
     TreeModel& tree_;
     std::uint64_t nextTreeRevision_;
+    PickerActivationId nextPickerActivation_;
+    std::optional<PickerActivation> openPickerActivation_;
     std::uint64_t routingGeneration_ = 0;
     PromptSurface prompt_;
     WholeScreenTruth truth_;

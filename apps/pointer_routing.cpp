@@ -4,6 +4,7 @@
 
 #include <ssg/Keymap.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/PaletteSubmit.h>
 #include <ssg/TreeModel.h>
 
 namespace ssg::app {
@@ -163,25 +164,13 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                 dispatch.commands.push_back({"tab.activate", *targets.tab_id});
                 return dispatch;
             }
-            if (hit.region == ssg::HitRegion::Palette && targets.picker_candidate_id) {
-                // Same dispatch decision as a keyboard submit, and it must stay
-                // that way: a click and an Enter on the same row mean the same
-                // thing.
-                switch (targets.picker_mode) {
-                case ssg::SearchMode::Command:
+            if (hit.region == ssg::HitRegion::Palette &&
+                targets.picker_candidate_id && targets.picker_activation) {
+                if (auto const submit = ssg::paletteSubmitCommand(
+                        *targets.picker_activation,
+                        *targets.picker_candidate_id)) {
                     dispatch.commands.push_back(
-                        {"palette.execute",
-                         ssg::PaletteExecuteArguments{*targets.picker_candidate_id}});
-                    break;
-                case ssg::SearchMode::File:
-                    // Just the open: the server dismisses the picker when it
-                    // succeeds, so click and Enter behave identically on both
-                    // the success and the failure path.
-                    dispatch.commands.push_back(
-                        {"file.open", *targets.picker_candidate_id});
-                    break;
-                default:
-                    break;
+                        {std::string{submit->command.name()}, submit->payload});
                 }
                 return dispatch;
             }

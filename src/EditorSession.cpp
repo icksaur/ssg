@@ -504,7 +504,7 @@ EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
     workspace.setSaveObserver([this](const std::filesystem::path& relativePath) {
         registerExternalSaveExpectation(relativePath);
     });
-    refreshTree();
+    (void)refreshTree();
     refreshSyntax();
     startGitDiffWorker(enableGitDiffWorker, enableFilesystemWatcher);
     lastPublishedWatcherAvailable =
@@ -920,6 +920,7 @@ void EditorSession::Impl::stopGitDiffWorker() {
 }
 
 bool EditorSession::Impl::drainGitDiffScans() {
+    const auto drainEntryRevision = session->revision();
     auto const availabilityBefore = lastPublishedWatcherAvailable;
     drainWatcherAvailability();
     bool accepted = availabilityBefore != lastPublishedWatcherAvailable;
@@ -962,14 +963,14 @@ bool EditorSession::Impl::drainGitDiffScans() {
                        event.path.filename() == ".gitignore";
             });
         if (inventoryChanged) {
-            refreshTree();
+            refreshTreeForPublication(drainEntryRevision);
         }
     }
     // After ordinary ingress, recover any events the watcher dropped on overflow by
     // re-scanning every open document against disk (a full external resync).
     if (fullReconcile) {
         reconcileAllOpenDocumentsAgainstDisk();
-        refreshTree();
+        refreshTreeForPublication(drainEntryRevision);
     }
     return accepted;
 }
@@ -2413,15 +2414,24 @@ ViewportViewState EditorSession::Impl::viewport(
         presentation.requestedFirstVisualColumn);
 }
 
-void EditorSession::Impl::refreshTree() {
+bool EditorSession::Impl::refreshTree() {
     if (deferringEnrichment) {
         pendingTreeRefresh = true;
-        return;
+        return false;
     }
     ++treeScanCount;
     tree.replaceProvider(TreeProviderSnapshot::fromFilesystem(
         TreeProviderId{"filesystem"}, root, interaction.allocateTreeRevision()));
     rebuildFileCandidates();
+    return true;
+}
+
+void EditorSession::Impl::refreshTreeForPublication(
+    Revision drainEntryRevision) {
+    if (refreshTree() && session &&
+        session->revision() == drainEntryRevision) {
+        session->advanceRevision();
+    }
 }
 
 void EditorSession::Impl::rebuildInteractionSchema(
@@ -2508,7 +2518,7 @@ void EditorSession::Impl::primeDeferred() {
     bool ran = false;
     if (pendingTreeRefresh) {
         pendingTreeRefresh = false;
-        refreshTree();
+        (void)refreshTree();
         ran = true;
     }
     if (pendingSyntaxRefresh) {
@@ -3121,6 +3131,12 @@ void EditorSession::reportWatcherAvailabilityForTest(bool available) {
     impl_->drainWatcherAvailability();
 }
 
+void EditorSession::refreshFilesystemForTest() {
+    std::lock_guard operationLock{impl_->operationMutex};
+    const auto before = impl_->session->revision();
+    impl_->refreshTreeForPublication(before);
+}
+
 bool EditorSession::dispatchInProgress() const noexcept {
     return impl_->session->activeDispatchRevision().has_value();
 }
@@ -3155,7 +3171,11 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
             impl_, clientId,
             {std::move(command), impl_->session->revision(),
              std::move(payload)});
-        return {ClientInputOutcome::Dispatched, std::nullopt, std::move(result)};
+        const auto activation = result.accepted()
+                                    ? impl_->interaction.openPickerActivation()
+                                    : std::nullopt;
+        return {ClientInputOutcome::Dispatched, std::nullopt,
+                std::move(result), activation};
     };
     auto clientOwned = [](ClientOwnedInputKind kind,
                           std::string text = {}) -> ClientInputResult {

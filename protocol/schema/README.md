@@ -38,7 +38,7 @@ Every message kind shares one envelope:
 [u8 wire_version][u8 message_kind][tagged ProtocolValue payload]
 ```
 
-`wire_version` is currently always `2`; a mismatch reports
+`wire_version` is currently always `3`; a mismatch reports
 `ProtocolError::unsupported_version`. `message_kind` matches
 `ProtocolMessageKind` (`command_request = 0`, `session_snapshot = 1`,
 `session_delta = 2` (3 and 4 are retired clipboard kinds, permanently

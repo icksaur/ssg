@@ -11,7 +11,7 @@ import {
   browserInboundKind,
   matcherBoundsFromPalette, clampPaletteSelection, pickerCandidatesFromPalette,
   resolvePickerLifecycle, effectivePickerMode, encodePickerSubmit,
-  queuePickerSubmit, settlePickerLifecycle,
+  queuePickerSubmit, settlePickerLifecycle, pickerPresentationFromSubmit,
   encodeSelectionByteRange, encodeTabAction, markedTextByteOffset,
   applySessionDeltaSections, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
@@ -19,7 +19,7 @@ import {
   firstMalformedNodeStyle, roleColor,
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
-  resolveUiFocusPath, focusUiNode,
+  predictedFocusCapture, resolveUiFocusPath, focusUiNode,
   applyPalettePresenceOverlay,
   BrowserKeyDispatchTracker,
   encodeCommandRequest, encodeClientInput, encodeTreeActivation,
@@ -62,11 +62,11 @@ const state = {
   promptPrediction: null,
   promptScrollOverride: false,
   skipNextCaretReveal: false,
-  focusOverlay: null,
   // The palette/finder is a client-owned derived view: the browser owns the
   // query text and selection index, and ranks the published candidate universe locally.
   palette: {
-    mode: null, query: '', selected: 0, pendingSubmit: null,
+    mode: null, activationId: null, query: '', selected: 0,
+    pendingSubmit: null, error: '',
   },
 };
 const retainedNodes = new GenerationRetainedCache();
@@ -465,18 +465,24 @@ function submitPaletteCandidate(mode, candidate) {
     if (!candidate) return;
     const openingPending = state.inputQueue.some(
       (input) => input.pickerOpenMode === mode);
+    const intent = {
+      mode, candidateId: candidate.id,
+      query: state.palette.query, selected: state.palette.selected,
+    };
     const disposition = queuePickerSubmit(
-      mode, candidate.id, authoritativePickerMode(), openingPending,
+      intent, authoritativePickerActivation(), openingPending,
       state.palette.pendingSubmit);
     if (!disposition.send && !disposition.queued) return;
     if (disposition.send &&
         !sendCommandFrame(
           encodePickerSubmit(
-            disposition.send.mode, disposition.send.candidateId, state.revision),
+            disposition.send.activation, disposition.send.candidateId,
+            state.revision),
           'picker-submit')) {
       return;
     }
-    state.palette.pendingSubmit = disposition.queued;
+    state.palette.pendingSubmit = disposition.send || disposition.queued;
+    state.palette.error = '';
     render({ ...surfaceRenderPlan(), reconcile: true });
 }
 
@@ -580,7 +586,7 @@ function renderChrome(sections, plan) {
   const schema = sections.ui;
   const stateSection = sections.ui_state;
   let presenceSection = sections.ui_presence;
-  chromeErrorEl.textContent = '';
+  chromeErrorEl.textContent = state.palette.error || '';
   if (!schema || !schema.root) return false;
 
   const malformedStyle = firstMalformedNodeStyle(schema);
@@ -609,15 +615,18 @@ function renderChrome(sections, plan) {
       state.palette.query = '';
       state.palette.selected = 0;
       state.palette.pendingSubmit = null;
-      state.focusOverlay = null;
     } else if (!applied.stale) {
       presenceSection = applied.presence;
     }
   }
   const interpreted = interpretChrome(schema, stateSection, presenceSection);
   if (!interpreted || !interpreted.root) return false;  // schema/state from different frames; wait
+  const predictedCapture = predictedFocusCapture({
+    localMode: state.palette.mode,
+    authoritativeActivation: authoritativePickerActivation(),
+  });
   const focusPath = resolveUiFocusPath(
-    schema, stateSection, presenceSection, state.focusOverlay);
+    schema, stateSection, presenceSection, predictedCapture);
   if (focusPath === null && stateSection.focus_path != null) {
     chromeErrorEl.textContent =
       'malformed UI focus path -- this client cannot reconcile keyboard focus';
@@ -1102,10 +1111,17 @@ function sendCommandFrame(frame, owner = 'other') {
   return true;
 }
 
+function authoritativePickerActivation() {
+  const palette = state.sections && state.sections.palette;
+  if (!palette || palette.active_mode == null ||
+      palette.activation_id == null) {
+    return null;
+  }
+  return { mode: num(palette.active_mode), id: BigInt(palette.activation_id) };
+}
+
 function authoritativePickerMode() {
-  const mode = state.sections && state.sections.palette &&
-    state.sections.palette.active_mode;
-  return mode == null ? null : num(mode);
+  return authoritativePickerActivation()?.mode ?? null;
 }
 
 function pickerTransitionPending() {
@@ -1116,13 +1132,15 @@ function pickerTransitionPending() {
 
 function syncPickerFromAuthority() {
   if (pickerTransitionPending()) return;
-  const mode = authoritativePickerMode();
-  if (state.palette.mode === mode) return;
-  state.palette.mode = mode;
+  const activation = authoritativePickerActivation();
+  if (state.palette.mode === (activation?.mode ?? null) &&
+      state.palette.activationId === (activation?.id ?? null)) return;
+  state.palette.mode = activation?.mode ?? null;
+  state.palette.activationId = activation?.id ?? null;
   state.palette.query = '';
   state.palette.selected = 0;
   state.palette.pendingSubmit = null;
-  state.focusOverlay = null;
+  state.palette.error = '';
 }
 
 function sendCommand(id, payload = null) {
@@ -1138,10 +1156,11 @@ function discardPredictions() {
   state.promptScrollOverride = false;
   state.skipNextCaretReveal = true;
   state.palette.mode = null;
+  state.palette.activationId = null;
   state.palette.query = '';
   state.palette.selected = 0;
   state.palette.pendingSubmit = null;
-  state.focusOverlay = null;
+  state.palette.error = '';
   render({
     ...surfaceRenderPlan(SURFACE.DOCUMENT),
     reconcile: true,
@@ -1186,11 +1205,16 @@ function applyProtocolFrame(buffer) {
       settlePointerRange(num(payload.error));
       frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
     } else if (settled.owner === 'picker-submit') {
-      state.palette.mode = authoritativePickerMode();
-      state.palette.query = '';
-      state.palette.selected = 0;
-      state.palette.pendingSubmit = null;
-      state.focusOverlay = null;
+      const presentation =
+        pickerPresentationFromSubmit(
+          num(payload.error), authoritativePickerActivation(), state.palette);
+      state.palette.mode = presentation.mode;
+      state.palette.activationId = presentation.activationId;
+      state.palette.query = presentation.query;
+      state.palette.selected = presentation.selected;
+      state.palette.pendingSubmit = presentation.pendingSubmit;
+      state.palette.error = num(payload.error) === 0
+        ? '' : String(payload.message || 'picker activation failed');
       frameRenderPlan = { ...surfaceRenderPlan(), reconcile: true };
     }
   } else if (inbound === 'input-result') {
@@ -1207,16 +1231,29 @@ function applyProtocolFrame(buffer) {
       (completedInput.pickerOpenMode != null || completedInput.pickerClose);
     if (pickerLifecycleCompleted) {
       const picker = settlePickerLifecycle(
-        completedInput, authoritativePickerMode(), state.palette.pendingSubmit);
-      state.palette.pendingSubmit = null;
-      state.focusOverlay = null;
-      state.palette.mode = picker.mode;
+        completedInput, authoritativePickerActivation(),
+        payload.picker_activation == null
+          ? null
+          : {
+              mode: num(payload.picker_activation.mode),
+              id: BigInt(payload.picker_activation.activation_id),
+            },
+        state.palette.pendingSubmit);
+      if (!picker.preservePresentation) {
+        state.palette.query = '';
+        state.palette.selected = 0;
+        state.palette.error = '';
+      }
+      state.palette.mode = picker.activation?.mode ?? null;
+      state.palette.activationId = picker.activation?.id ?? null;
+      state.palette.pendingSubmit = picker.submit;
       if (picker.submit &&
           !sendCommandFrame(
             encodePickerSubmit(
-              picker.submit.mode, picker.submit.candidateId, state.revision),
+              picker.submit.activation, picker.submit.candidateId,
+              state.revision),
             'picker-submit')) {
-        state.palette.mode = picker.mode;
+        state.palette.pendingSubmit = null;
       }
       frameRenderPlan = { ...surfaceRenderPlan(), reconcile: true };
     } else if (state.promptPrediction) {
@@ -1359,10 +1396,11 @@ function handleKeydown(ev) {
         pickerOpenMode: mode,
       });
       state.palette.mode = mode;
+      state.palette.activationId = null;
       state.palette.query = '';
       state.palette.selected = 0;
       state.palette.pendingSubmit = null;
-      state.focusOverlay = 'input_line';
+      state.palette.error = '';
       render({
         ...surfaceRenderPlan(SURFACE.FINDRESULTS),
         reconcile: true,
@@ -1390,10 +1428,11 @@ function handleKeydown(ev) {
         pickerClose: true,
       });
       p.mode = null;
+      p.activationId = null;
       p.query = '';
       p.selected = 0;
       p.pendingSubmit = null;
-      state.focusOverlay = null;
+      p.error = '';
       render({ ...surfaceRenderPlan(), reconcile: true });
       return;
     }
@@ -1417,6 +1456,7 @@ function handleKeydown(ev) {
       ev.preventDefault();
       p.query = Array.from(p.query).slice(0, -1).join('');
       p.selected = 0;
+      p.error = '';
       refreshFinder();
       return;
     }
@@ -1424,6 +1464,7 @@ function handleKeydown(ev) {
       ev.preventDefault();
       p.query += ev.key;
       p.selected = 0;
+      p.error = '';
       refreshFinder();
       return;
     }

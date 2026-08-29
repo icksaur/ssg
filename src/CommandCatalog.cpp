@@ -74,6 +74,7 @@ struct CommandCatalog::ValidatedSpec {
     std::string label;
     std::string summary;
     CommandEffect effect;
+    CommandRevisionPolicy revisionPolicy;
     std::vector<CapabilityId> requiredCapabilities;
     bool luaApi;
     bool initScript;
@@ -93,7 +94,10 @@ CommandCatalog::ValidatedSpec CommandCatalog::validate(
     requireField(!spec.owner_.empty(), spec.id_, "owner");
     requireField(!spec.summary_.empty(), spec.id_, "summary");
     requireField(spec.effect_.has_value(), spec.id_,
-                 "effect (call mutates() or observes())");
+                 "effect (call mutates(), observes(), or "
+                 "stateValidatedMutation())");
+    requireField(spec.revisionPolicy_.has_value(), spec.id_,
+                 "revision policy");
     requireField(static_cast<bool>(spec.handler_), spec.id_, "handler");
 
     // A name the same batch is retiring counts as free: re-registering its own
@@ -126,7 +130,8 @@ CommandCatalog::ValidatedSpec CommandCatalog::validate(
 
     return ValidatedSpec{std::move(spec.id_),      std::move(spec.owner_),
                          std::move(spec.label_),   std::move(spec.summary_),
-                         *spec.effect_,            std::move(capabilities),
+                         *spec.effect_,            *spec.revisionPolicy_,
+                         std::move(capabilities),
                          spec.luaApi_,             spec.initScript_,
                          spec.argument_,           std::move(spec.handler_)};
 }
@@ -135,7 +140,7 @@ CommandHandle CommandCatalog::appendValidated(ValidatedSpec spec) {
     auto const index = entries_.size();
     entries_.push_back(CommandEntry{
         std::move(spec.id), std::move(spec.owner), std::move(spec.label),
-        std::move(spec.summary), spec.effect,
+        std::move(spec.summary), spec.effect, spec.revisionPolicy,
         std::move(spec.requiredCapabilities), spec.luaApi, spec.initScript,
         spec.argument, std::move(spec.handler), false});
     byId_.emplace(entries_[index].id, index);

@@ -127,9 +127,6 @@ void bindRuntimePresentation(CommandCatalog& catalog, EditorSession::Impl& runti
 void bindRuntimeNavigation(CommandCatalog& catalog, EditorSession::Impl& runtime);
 void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorSession::Impl& runtime);
 void bindRuntimeHelp(CommandCatalog& catalog, EditorSession::Impl& runtime);
-[[nodiscard]] CommandHandlerResult executePickerFileOpen(
-    EditorSession::Impl& runtime, InvocationPrincipal const& principal,
-    std::string const& path);
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
     EditorSession::Impl& runtime, ViewId viewId, Revision revision,
     FindReplaceCommand command, std::any const& payload);
@@ -309,6 +306,12 @@ struct EditorSession::Impl final : CommandServices,
         static constexpr std::size_t kMaximum = 64;
 
         [[nodiscard]] bool empty() const noexcept { return commands_.empty(); }
+        [[nodiscard]] bool contains(std::string_view commandId) const noexcept {
+            for (const auto& deferred : commands_) {
+                if (deferred.command.id == commandId) return true;
+            }
+            return false;
+        }
         [[nodiscard]] DeferredCommand takeFront() {
             auto front = std::move(commands_.front());
             commands_.erase(commands_.begin());
@@ -614,7 +617,8 @@ struct EditorSession::Impl final : CommandServices,
         const FollowTarget& target, NavigationClass classification);
     void recordNavigation(ClientId client, ViewId viewId,
                           NavigationClass classification);
-    void refreshTree();
+    [[nodiscard]] bool refreshTree();
+    void refreshTreeForPublication(Revision drainEntryRevision);
     // Re-assemble the authority-owned whole-screen schema from the given chrome inputs and
     // migrate the interaction over it. Takes the inputs as parameters (not members) so a
     // caller can build+migrate BEFORE adopting the new style/composition, keeping chrome

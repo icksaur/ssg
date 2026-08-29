@@ -21,7 +21,8 @@ using namespace ssg;
 
 PaletteViewState sample() {
     PaletteViewState state;
-    state.activeMode = SearchMode::Command;
+    state.activePicker =
+        PickerActivation{SearchMode::Command, PickerActivationId{9}};
     state.commandCandidates = {
         {"edit.undo", "Undo", "Ctrl+Z"},
         {"file.save", "Save File", ""},
@@ -48,9 +49,11 @@ ProtocolValue paletteWire(
     ProtocolValue candidateBytes =
         ProtocolValue::makeInt(kMaxCandidateBytes),
     ProtocolValue presenceOverlay =
-        *encodePalette(PaletteViewState{}).field("presence_overlay")) {
+        *encodePalette(PaletteViewState{}).field("presence_overlay"),
+    ProtocolValue activationId = ProtocolValue::makeNull()) {
     return ProtocolValue::makeObject(
         {{"active_mode", std::move(activeMode)},
+         {"activation_id", std::move(activationId)},
          {"command_open_command_id", ProtocolValue::makeText("palette.open")},
          {"command_candidates", std::move(commandCandidates)},
          {"file_open_command_id",
@@ -60,6 +63,18 @@ ProtocolValue paletteWire(
          {"parameters", std::move(parameters)},
          {"max_parameter_magnitude", std::move(magnitude)},
          {"max_candidate_bytes", std::move(candidateBytes)}});
+}
+
+ProtocolValue paletteActivationWire(ProtocolValue activeMode,
+                                    ProtocolValue activationId) {
+    const auto empty = PaletteViewState{};
+    return paletteWire(
+        ProtocolValue::makeArray({}), ProtocolValue::makeArray({}),
+        *encodePalette(empty).field("parameters"), std::move(activeMode),
+        ProtocolValue::makeInt(kMaxMatcherParameterMagnitude),
+        ProtocolValue::makeInt(kMaxCandidateBytes),
+        *encodePalette(empty).field("presence_overlay"),
+        std::move(activationId));
 }
 
 TEST(encodeDecodeRoundTripsExactly) {
@@ -72,13 +87,18 @@ TEST(encodeDecodeRoundTripsExactly) {
 TEST(activeModeRoundTripsWithoutChangingInventories) {
     PaletteViewState first = sample();
     PaletteViewState second = sample();
-    second.activeMode = SearchMode::File;
+    second.activePicker =
+        PickerActivation{SearchMode::File, PickerActivationId{10}};
     const auto a = decodePalette(encodePalette(first));
     const auto b = decodePalette(encodePalette(second));
     ASSERT_TRUE(a.has_value() && b.has_value());
     if (a && b) {
-        ASSERT_EQ(a->activeMode, std::optional<SearchMode>{SearchMode::Command});
-        ASSERT_EQ(b->activeMode, std::optional<SearchMode>{SearchMode::File});
+        const auto expectedCommand = std::optional<PickerActivation>{
+            PickerActivation{SearchMode::Command, PickerActivationId{9}}};
+        const auto expectedFile = std::optional<PickerActivation>{
+            PickerActivation{SearchMode::File, PickerActivationId{10}}};
+        ASSERT_EQ(a->activePicker, expectedCommand);
+        ASSERT_EQ(b->activePicker, expectedFile);
         ASSERT_EQ(a->commandCandidates, b->commandCandidates);
         ASSERT_EQ(a->fileCandidates, b->fileCandidates);
         ASSERT_FALSE(*a == *b);
@@ -87,14 +107,34 @@ TEST(activeModeRoundTripsWithoutChangingInventories) {
 
 TEST(closedPickerStillCarriesBothInventories) {
     auto state = sample();
-    state.activeMode.reset();
+    state.activePicker.reset();
     const auto decoded = decodePalette(encodePalette(state));
     ASSERT_TRUE(decoded.has_value());
     if (decoded) {
-        ASSERT_FALSE(decoded->activeMode.has_value());
+        ASSERT_FALSE(decoded->activePicker.has_value());
         ASSERT_FALSE(decoded->commandCandidates.empty());
         ASSERT_FALSE(decoded->fileCandidates.empty());
     }
+}
+
+TEST(decodeRejectsUnpairedOrInvalidActivationIdentity) {
+    ASSERT_FALSE(
+        decodePalette(paletteActivationWire(
+                          ProtocolValue::makeUint(static_cast<std::uint8_t>(
+                              SearchMode::Command)),
+                          ProtocolValue::makeNull()))
+            .has_value());
+    ASSERT_FALSE(
+        decodePalette(paletteActivationWire(
+                          ProtocolValue::makeNull(),
+                          ProtocolValue::makeUint(4)))
+            .has_value());
+    ASSERT_FALSE(
+        decodePalette(paletteActivationWire(
+                          ProtocolValue::makeUint(static_cast<std::uint8_t>(
+                              SearchMode::Command)),
+                          ProtocolValue::makeUint(0)))
+            .has_value());
 }
 
 TEST(publishedParametersAreTheLibraryDefaults) {
@@ -256,6 +296,7 @@ int main() {
     RUN(encodeDecodeRoundTripsExactly);
     RUN(activeModeRoundTripsWithoutChangingInventories);
     RUN(closedPickerStillCarriesBothInventories);
+    RUN(decodeRejectsUnpairedOrInvalidActivationIdentity);
     RUN(publishedParametersAreTheLibraryDefaults);
     RUN(decodeRejectsCandidateMissingAField);
     RUN(decodeRejectsParametersMissingAField);

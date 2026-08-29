@@ -244,6 +244,9 @@ public:
     // revision advances and delta clients observe the change). Test-only;
     // production transitions arrive via the worker's wake drain.
     void reportWatcherAvailabilityForTest(bool available);
+    // Drives the synchronous worker-side filesystem refresh and its publication
+    // revision without relying on platform watcher timing.
+    void refreshFilesystemForTest();
     // CONTRACT
     // EditorSession::snapshot: the semantic model and interaction state are never
     //   gated on grid geometry. present() adds an optional

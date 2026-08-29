@@ -91,6 +91,36 @@ TEST(applyOpenFinderRoutesThroughOneAtomicInstall) {
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
 }
 
+TEST(eachSuccessfulFinderOpenMintsANewActivation) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
+    const auto first = authority.openPickerActivation();
+    ASSERT_TRUE(first.has_value());
+    if (!first) return;
+    ASSERT_TRUE(first->id.valid());
+    ASSERT_TRUE(first->mode == SearchMode::File);
+
+    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
+    const auto second = authority.openPickerActivation();
+    ASSERT_TRUE(second.has_value());
+    if (!second) return;
+    ASSERT_TRUE(second->mode == SearchMode::File);
+    ASSERT_FALSE(second->id == first->id);
+}
+
+TEST(exhaustedPickerActivationSourceRejectsOpenAtomically) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{
+        assemble(StyleDimensions{}), tree, 1,
+        PickerActivationId{std::numeric_limits<std::uint64_t>::max()}};
+    const auto before = authority.truth();
+    ASSERT_FALSE(authority.apply(OpenFinder{PickerKind::Command}));
+    ASSERT_TRUE(authority.truth() == before);
+    ASSERT_FALSE(authority.openPickerActivation().has_value());
+    ASSERT_FALSE(authority.prompt().active());
+}
+
 TEST(applyShowProviderCreatesTreeBackingFromTheOwnedSource) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree, 5};
@@ -124,6 +154,7 @@ TEST(genericOpenPromptFocusesFooterWithoutAPicker) {
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
     ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
     ASSERT_FALSE(authority.openPicker().has_value());
+    ASSERT_FALSE(authority.openPickerActivation().has_value());
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
     ASSERT_TRUE(present(authority, kEditorNodeId));
     ASSERT_FALSE(present(authority, kFindResultsNodeId));
@@ -428,6 +459,8 @@ TEST(theExternalCaptureAndAPromptCoexistWithLifoActiveContext) {
 int main() {
     RUN(initiallyNoPanelNoPromptTabViewShown);
     RUN(applyOpenFinderRoutesThroughOneAtomicInstall);
+    RUN(eachSuccessfulFinderOpenMintsANewActivation);
+    RUN(exhaustedPickerActivationSourceRejectsOpenAtomically);
     RUN(applyShowProviderCreatesTreeBackingFromTheOwnedSource);
     RUN(applyRejectionMutatesNothing);
     RUN(genericOpenPromptFocusesFooterWithoutAPicker);

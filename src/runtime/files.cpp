@@ -119,7 +119,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             // Same housekeeping as at startup: opening a different workspace
             // means a different archive to expire.
             pruneArchiveReportingFailures(runtime);
-            runtime.refreshTree();
+            (void)runtime.refreshTree();
             return success();
         }
         case FileCommand::Create: {
@@ -191,7 +191,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             if (!path) return failure("file.save_as requires a path payload");
             result = runtime.workspace.saveAs(*id, *path);
             if (!result.accepted()) return failure(workspaceMessage(result));
-            runtime.refreshTree();
+            (void)runtime.refreshTree();
             return runtime.updateTabsFor(*id);
         }
         case FileCommand::Reload: {
@@ -210,7 +210,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             if (!path) return failure("file.rename requires a path payload");
             result = runtime.workspace.renameFile(*id, *path);
             if (!result.accepted()) return failure(workspaceMessage(result));
-            runtime.refreshTree();
+            (void)runtime.refreshTree();
             return runtime.updateTabsFor(*id);
         }
         case FileCommand::Remove: {
@@ -228,7 +228,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             // reach again.
             (void)runtime.tabs.dropDocument(*id);
             runtime.discardDocumentRuntimeState(*id);
-            runtime.refreshTree();
+            (void)runtime.refreshTree();
             return success();
         }
         case FileCommand::NewDirectory: {
@@ -236,7 +236,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             if (!path) return failure("file.new_directory requires a path payload");
             result = runtime.workspace.newDirectory(*path);
             if (!result.accepted()) return failure(workspaceMessage(result));
-            runtime.refreshTree();
+            (void)runtime.refreshTree();
             return success();
         }
     }
@@ -402,12 +402,6 @@ CommandHandlerResult EditorSession::Impl::activateDocument(FileDocumentId docume
 // runtime-resolved id and so stays in-process (that id means nothing to a remote
 // client); the payload-less commands are the keyboard route, reachable in the
 // external focus context.
-CommandHandlerResult executePickerFileOpen(
-    EditorSession::Impl& runtime, InvocationPrincipal const& principal,
-    std::string const& path) {
-    return bindFile(runtime, principal, FileCommand::Open, std::any{path});
-}
-
 void registerExternalModificationCommands(CommandCatalog& builder,
                                           EditorSession::Impl& runtime) {
     auto applyAction = [&runtime](

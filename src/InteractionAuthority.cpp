@@ -2,6 +2,7 @@
 #include <ssg/WholeScreenAssembly.h>
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -24,15 +25,22 @@ std::uint64_t requireSourceAheadOfProviders(std::uint64_t source, const TreeMode
 }  // namespace
 
 InteractionAuthority::InteractionAuthority(UiComposition initialAssembly, TreeModel& tree,
-                                           std::uint64_t firstTreeRevision)
+                                           std::uint64_t firstTreeRevision,
+                                           PickerActivationId firstPickerActivation)
     : baseComposition_{std::move(initialAssembly)},
       schema_{baseComposition_},
       tree_{tree},
       nextTreeRevision_{requireSourceAheadOfProviders(firstTreeRevision, tree)},
+      nextPickerActivation_{firstPickerActivation},
       prompt_{},
       truth_{},
       interaction_{buildWholeScreenInteraction(schema_.validated(), truth_,
-                                               std::nullopt)} {}
+                                               std::nullopt)} {
+    if (!nextPickerActivation_.valid()) {
+        throw std::invalid_argument(
+            "InteractionAuthority picker activation source must be valid");
+    }
+}
 
 std::vector<TreeProviderPresence> InteractionAuthority::presentProviders() const {
     std::vector<TreeProviderPresence> present;
@@ -43,6 +51,15 @@ std::vector<TreeProviderPresence> InteractionAuthority::presentProviders() const
 }
 
 bool InteractionAuthority::apply(const CommandTransition& transition) {
+    const auto* opening = std::get_if<OpenFinder>(&transition);
+    const auto* openingDescriptor =
+        opening != nullptr ? pickerCatalog().find(opening->picker) : nullptr;
+    if (opening != nullptr && openingDescriptor == nullptr) return false;
+    if (opening != nullptr &&
+        nextPickerActivation_.value() ==
+            std::numeric_limits<std::uint64_t>::max()) {
+        return false;
+    }
     // Peek the revision source and prepare in one step: hiding prepare+install behind this
     // method means no allocation can occur between the peek and the consuming install.
     TransitionInputs inputs{truth_, schema_.validated(), prompt_, presentProviders(),
@@ -51,6 +68,14 @@ bool InteractionAuthority::apply(const CommandTransition& transition) {
     if (!prepared) return false;
     std::move(*prepared).installInto(truth_, interaction_, prompt_, tree_,
                                      nextTreeRevision_);
+    if (opening != nullptr) {
+        openPickerActivation_ =
+            PickerActivation{openingDescriptor->wireMode, nextPickerActivation_};
+        nextPickerActivation_ =
+            PickerActivationId{nextPickerActivation_.value() + 1};
+    } else if (!truth_.openPicker) {
+        openPickerActivation_.reset();
+    }
     ++routingGeneration_;
     return true;
 }
@@ -67,6 +92,7 @@ void InteractionAuthority::adopt(WholeScreenTruth next, PromptSurface prompt) {
 
     prompt_ = std::move(prompt);
     truth_ = std::move(next);
+    if (!truth_.openPicker) openPickerActivation_.reset();
     interaction_ = std::move(projection);
     // adopt is the single owner-swap for prompt/focus/presence, so every routing
     // change that flows through it (open/submit/cancel prompt, focusEditor/Panel,
@@ -96,6 +122,7 @@ PromptCommandResult InteractionAuthority::openPrompt(PromptRequest request) {
         schema_ = std::move(candidate);
         prompt_ = std::move(copy);
         truth_ = std::move(next);
+        openPickerActivation_.reset();
         interaction_ = std::move(projection);
         ++routingGeneration_;
     }

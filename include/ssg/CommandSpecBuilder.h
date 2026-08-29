@@ -29,6 +29,7 @@
 #include <any>
 #include <functional>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <typeindex>
 #include <utility>
@@ -66,11 +67,16 @@ public:
         return *this;
     }
     CommandSpecBuilder& mutates() {
-        effect_ = CommandEffect::Mutation;
+        setEffect(CommandEffect::Mutation, CommandRevisionPolicy::Exact);
         return *this;
     }
     CommandSpecBuilder& observes() {
-        effect_ = CommandEffect::Observation;
+        setEffect(CommandEffect::Observation, CommandRevisionPolicy::Exact);
+        return *this;
+    }
+    CommandSpecBuilder& stateValidatedMutation() {
+        setEffect(CommandEffect::Mutation,
+                  CommandRevisionPolicy::StateValidated);
         return *this;
     }
     CommandSpecBuilder& capability(std::string capability) {
@@ -182,6 +188,16 @@ public:
     }
 
 private:
+    void setEffect(CommandEffect effect, CommandRevisionPolicy policy) {
+        if (effect_ &&
+            (*effect_ != effect || *revisionPolicy_ != policy)) {
+            throw std::logic_error(
+                "command effect and revision policy conflict");
+        }
+        effect_ = effect;
+        revisionPolicy_ = policy;
+    }
+
     friend class CommandCatalog;
 
     // Refuses a payload of the wrong type, and a missing one: the command said
@@ -226,6 +242,7 @@ private:
     std::string label_;
     std::string summary_;
     std::optional<CommandEffect> effect_;
+    std::optional<CommandRevisionPolicy> revisionPolicy_;
     std::vector<std::string> capabilities_;
     bool luaApi_ = false;
     bool initScript_ = false;

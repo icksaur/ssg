@@ -487,7 +487,7 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
             auto result = WorkspaceReplacer{}.apply(runtime, *preview, runtime);
             if (!result.accepted()) return failure(result.message);
             runtime.workspaceReplacePreview.reset();
-            runtime.refreshTree();
+            (void)runtime.refreshTree();
             return success();
         }
     }

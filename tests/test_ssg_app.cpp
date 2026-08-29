@@ -2937,18 +2937,22 @@ TEST(routePointerPalettePressExecutesTheCandidate) {
     hit.itemIndex = 4;
     ssg::app::PointerTargets targets;
     targets.picker_candidate_id = std::string{"view.split"};
-    targets.picker_mode = ssg::SearchMode::Command;
+    targets.picker_activation = ssg::PickerActivation{
+        ssg::SearchMode::Command, ssg::PickerActivationId{5}};
 
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::press, false, false,
                                         std::nullopt, targets);
     ASSERT_EQ(plan.commands.size(), std::size_t{1});
     if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"palette.execute"});
-        auto const* args = std::any_cast<ssg::PaletteExecuteArguments>(
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"picker.submit"});
+        auto const* args = std::any_cast<ssg::PickerSubmitArguments>(
             &plan.commands[0].payload);
         ASSERT_TRUE(args != nullptr);
-        if (args) ASSERT_EQ(args->commandId, std::string{"view.split"});
+        if (args) {
+            ASSERT_TRUE(args->activation == *targets.picker_activation);
+            ASSERT_EQ(args->candidateId, std::string{"view.split"});
+        }
     }
     ASSERT_FALSE(plan.begins_drag);
 
@@ -2961,28 +2965,31 @@ TEST(routePointerPalettePressExecutesTheCandidate) {
 }
 
 // Clicking a row must mean the same as pressing Enter on it.  A file
-// candidate's id is a PATH, so routing it to palette.execute would both be
-// rejected by the server guard and be nonsense; this is the pointer half of the
-// mode-dispatched submit.
-TEST(routePointerFilePickerPressOpensTheFileRatherThanExecutingIt) {
+// candidate's id is a PATH, so its typed picker.submit mode must remain File;
+// this is the pointer half of the same mode-dispatched submit used by Enter.
+TEST(routePointerFilePickerPressUsesTheGenericPickerSubmit) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Palette;
     hit.itemIndex = 2;
     ssg::app::PointerTargets targets;
     targets.picker_candidate_id = std::string{"src/runtime/snapshot.cpp"};
-    targets.picker_mode = ssg::SearchMode::File;
+    targets.picker_activation = ssg::PickerActivation{
+        ssg::SearchMode::File, ssg::PickerActivationId{6}};
 
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::press, false, false,
                                         std::nullopt, targets);
     ASSERT_EQ(plan.commands.size(), std::size_t{1});
     if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"file.open"});
-        ASSERT_TRUE(std::any_cast<ssg::PaletteExecuteArguments>(
-                        &plan.commands[0].payload) == nullptr);
-        auto const* path = std::any_cast<std::string>(&plan.commands[0].payload);
-        ASSERT_TRUE(path != nullptr);
-        if (path) ASSERT_EQ(*path, std::string{"src/runtime/snapshot.cpp"});
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"picker.submit"});
+        auto const* args = std::any_cast<ssg::PickerSubmitArguments>(
+            &plan.commands[0].payload);
+        ASSERT_TRUE(args != nullptr);
+        if (args) {
+            ASSERT_TRUE(args->activation == *targets.picker_activation);
+            ASSERT_EQ(args->candidateId,
+                      std::string{"src/runtime/snapshot.cpp"});
+        }
     }
     ASSERT_FALSE(plan.begins_drag);
 }
@@ -3389,7 +3396,7 @@ int main() {
     RUN(scrollbarGrabOffsetHoldsTheThumbUnderTheCursor);
     RUN(gutterFractionTracksTheGrabbedPointAndClamps);
     RUN(routePointerPalettePressExecutesTheCandidate);
-    RUN(routePointerFilePickerPressOpensTheFileRatherThanExecutingIt);
+    RUN(routePointerFilePickerPressUsesTheGenericPickerSubmit);
     RUN(routePointerPanelPressSelectsAndActivatesTheNode);
     RUN(routeWheelMapsRegionToScrollTarget);
     RUN(edgeScrollDecidesDirectionAtTheContentEdges);

@@ -15,35 +15,49 @@ namespace {
 
 using namespace ssg;
 
-TEST(commandModeSubmitsPaletteExecuteWithTheCandidateId) {
-    auto const submit = paletteSubmitCommand(SearchMode::Command, "view.split");
+TEST(commandModeSubmitsThroughTheGenericPickerCommand) {
+    const PickerActivation activation{SearchMode::Command,
+                                      PickerActivationId{7}};
+    auto const submit = paletteSubmitCommand(activation, "view.split");
     ASSERT_TRUE(submit.has_value());
-    ASSERT_TRUE(submit->command == CommandName{"palette.execute"});
-    auto const* args = std::any_cast<PaletteExecuteArguments>(&submit->payload);
+    ASSERT_TRUE(submit->command == CommandName{"picker.submit"});
+    auto const* args = std::any_cast<PickerSubmitArguments>(&submit->payload);
     ASSERT_TRUE(args != nullptr);
-    ASSERT_EQ(args->commandId, std::string{"view.split"});
+    if (!args) return;
+    ASSERT_TRUE(args->activation == activation);
+    ASSERT_EQ(args->candidateId, std::string{"view.split"});
 }
 
-TEST(fileModeSubmitsFileOpenWithTheCandidateIdAsAString) {
-    auto const submit = paletteSubmitCommand(SearchMode::File, "src/main.cpp");
+TEST(fileModeSubmitsThroughTheGenericPickerCommand) {
+    const PickerActivation activation{SearchMode::File,
+                                      PickerActivationId{8}};
+    auto const submit = paletteSubmitCommand(activation, "src/main.cpp");
     ASSERT_TRUE(submit.has_value());
-    ASSERT_TRUE(submit->command == CommandName{"file.open"});
-    auto const* path = std::any_cast<std::string>(&submit->payload);
-    ASSERT_TRUE(path != nullptr);
-    ASSERT_EQ(*path, std::string{"src/main.cpp"});
+    ASSERT_TRUE(submit->command == CommandName{"picker.submit"});
+    auto const* args = std::any_cast<PickerSubmitArguments>(&submit->payload);
+    ASSERT_TRUE(args != nullptr);
+    if (!args) return;
+    ASSERT_TRUE(args->activation == activation);
+    ASSERT_EQ(args->candidateId, std::string{"src/main.cpp"});
 }
 
 TEST(modesWithoutASubmitActionResolveToNothing) {
-    ASSERT_FALSE(paletteSubmitCommand(SearchMode::Line, "x").has_value());
-    ASSERT_FALSE(paletteSubmitCommand(SearchMode::Symbol, "x").has_value());
-    ASSERT_FALSE(paletteSubmitCommand(SearchMode::Text, "x").has_value());
+    ASSERT_FALSE(paletteSubmitCommand(
+                     {SearchMode::Line, PickerActivationId{1}}, "x")
+                     .has_value());
+    ASSERT_FALSE(paletteSubmitCommand(
+                     {SearchMode::Symbol, PickerActivationId{1}}, "x")
+                     .has_value());
+    ASSERT_FALSE(paletteSubmitCommand(
+                     {SearchMode::Text, PickerActivationId{1}}, "x")
+                     .has_value());
 }
 
 }  // namespace
 
 int main() {
-    RUN(commandModeSubmitsPaletteExecuteWithTheCandidateId);
-    RUN(fileModeSubmitsFileOpenWithTheCandidateIdAsAString);
+    RUN(commandModeSubmitsThroughTheGenericPickerCommand);
+    RUN(fileModeSubmitsThroughTheGenericPickerCommand);
     RUN(modesWithoutASubmitActionResolveToNothing);
     return 0;
 }

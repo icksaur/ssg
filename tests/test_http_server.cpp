@@ -374,6 +374,65 @@ TEST(acceptedNoChangeCommandStillReceivesAResult) {
     server.stop();
 }
 
+TEST(deferredFailurePublishesAdvancedStateBeforeRejectedResult) {
+    Fixture fixture;
+    auto inner = fixture.runtime->registerCommand(
+        ssg::CommandSpecBuilder{"test.deferred_failure"}
+            .owner("test")
+            .summary("Deferred failure")
+            .mutates()
+            .handler([](ssg::CommandContext&) {
+                return ssg::CommandHandlerResult::failure("expected failure");
+            }));
+    ASSERT_TRUE(inner.valid());
+    auto outer = fixture.runtime->registerCommand(
+        ssg::CommandSpecBuilder{"test.defer_then_fail"}
+            .owner("test")
+            .summary("Defer then fail")
+            .mutates()
+            .handler([&fixture](ssg::CommandContext& context) {
+                if (!fixture.runtime->deferDispatch(
+                        ssg::ClientId{11},
+                        {"test.deferred_failure", context.revision(), {}})) {
+                    return ssg::CommandHandlerResult::failure(
+                        "failed to queue deferred command");
+                }
+                return ssg::CommandHandlerResult::success();
+            }));
+    ASSERT_TRUE(outer.valid());
+
+    constexpr std::uint16_t port = 18788;
+    ssg::HttpEditorServer server{
+        *fixture.runtime,
+        *fixture.policy, {port, "/session", 8, 8, 250ms}};
+    server.start();
+    std::this_thread::sleep_for(20ms);
+    auto socket = connectWebsocket(port);
+    FrameReader reader{socket.socket};
+    attach(socket.socket);
+    auto initial = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        reader.next().payload);
+    ASSERT_TRUE(initial.accepted());
+
+    auto registry = ssg::CommandArgumentCodecRegistry{
+        fixture.runtime->commandCatalog()};
+    sendAll(socket.socket,
+            maskedFrame(
+                0x2, ssg::ProtocolCodec{}.encodeCommandRequest(
+                         {"test.defer_then_fail",
+                          initial.snapshot->revision(), {}},
+                         registry)));
+    auto delta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        reader.next().payload);
+    ASSERT_TRUE(delta.accepted());
+    auto completion = ssg::ProtocolCodec{}.decodeCommandResult(
+        reader.next().payload);
+    ASSERT_TRUE(completion.accepted());
+    ASSERT_FALSE(completion.result->accepted());
+    ASSERT_EQ(completion.result->revision, delta.delta->revision());
+    server.stop();
+}
+
 TEST(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess) {
     Fixture fixture;
     constexpr std::uint16_t port = 18775;
@@ -736,6 +795,7 @@ int main() {
     RUN(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess);
     RUN(typedClientInputPublishesStateBeforeItsResult);
     RUN(acceptedNoChangeCommandStillReceivesAResult);
+    RUN(deferredFailurePublishesAdvancedStateBeforeRejectedResult);
     RUN(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot);
     RUN(statusAndDroppedContentUseAggregateCommands);
     RUN(replayLargerThanTheOutboundQueueFallsBackToSnapshot);

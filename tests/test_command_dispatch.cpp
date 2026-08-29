@@ -117,6 +117,39 @@ TEST(revisionAdvancesExactlyOncePerAcceptedMutation) {
     fs::remove_all(root);
 }
 
+TEST(stateValidatedMutationUsesCurrentRevisionWhenClientBasisIsStale) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+
+    ssg::Revision handledAt;
+    runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.state_validated"}
+            .owner("test-oracle")
+            .summary("validates current domain state")
+            .stateValidatedMutation()
+            .handler([&handledAt](ssg::CommandContext& context) {
+                handledAt = context.revision();
+                return ssg::CommandHandlerResult::success();
+            }));
+
+    const auto stale = runtime->revision();
+    ASSERT_TRUE(
+        runtime
+            ->dispatch(ssg::ClientId{1},
+                       {"panel.toggle", runtime->revision(), {}})
+            .accepted());
+    const auto current = runtime->revision();
+    ASSERT_TRUE(current != stale);
+
+    const auto result = runtime->dispatch(
+        ssg::ClientId{1}, {"oracle.state_validated", stale, {}});
+    ASSERT_TRUE(result.accepted());
+    ASSERT_EQ(handledAt, current);
+    ASSERT_EQ(result.revision.value(), current.value() + 1);
+    fs::remove_all(root);
+}
+
 // The same property across a NESTED chain: a deferred command that itself
 // queues more.  Depth must not collapse revision steps either.
 TEST(revisionAdvancesOncePerMutationAcrossANestedChain) {
@@ -427,6 +460,7 @@ TEST(aggregateOperationHidesIntermediateDeferredRevisions) {
 
 int main() {
     RUN(revisionAdvancesExactlyOncePerAcceptedMutation);
+    RUN(stateValidatedMutationUsesCurrentRevisionWhenClientBasisIsStale);
     RUN(revisionAdvancesOncePerMutationAcrossANestedChain);
     RUN(anObservingCommandLeavesTheRevisionAlone);
     RUN(aFailedChainAdvancesTheRevisionOnlyForCommandsThatRan);

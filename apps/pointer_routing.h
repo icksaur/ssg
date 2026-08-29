@@ -142,7 +142,7 @@ struct PointerTargets {
     // file picker a workspace-relative path, and submitting one as the other
     // either fails the server guard or is nonsense.
     std::optional<std::string> picker_candidate_id;
-    ssg::SearchMode picker_mode = ssg::SearchMode::Command;
+    std::optional<ssg::PickerActivation> picker_activation;
     std::optional<std::string> field_command_id;    // a header/footer field command
     std::optional<ssg::StatusActionInvocation> status_invocation;
     // An external-modification action hit (7A-5b): the runtime-minted file id to

@@ -75,6 +75,20 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext&
         runtime.rebuildFileCandidates();
     }
     else if (id == "palette.close") {
+        if (auto const* expected = payloadAs<PickerActivation>(payload)) {
+            if (!runtime.deferredCommands.empty()) {
+                if (!runtime.defer(
+                        std::nullopt,
+                        ClientCommand{"palette.close", context.revision(),
+                                      *expected})) {
+                    return failure("could not defer the picker close");
+                }
+                return success();
+            }
+            if (runtime.interaction.openPickerActivation() != *expected) {
+                return success();
+            }
+        }
         if (!runtime.interaction.apply(CloseFinder{})) {
             return failure("no palette to close");
         }
@@ -489,13 +503,27 @@ void registerSearchPaletteCommands(CommandCatalog& builder,
     bare("palette.open", "Command Palette", "Command Palette");
     bare("file_finder.open", "", "Open");
     bare("file_finder.toggle_gitignore", "", "Toggle Gitignore");
-    bare("palette.close", "", "Close");
     bare("palette.next", "", "Next");
     bare("palette.previous", "", "Previous");
     bare("goto.back", "", "Back");
     bare("goto.forward", "", "Forward");
     bare("search.results_next", "", "Results Next");
     bare("search.results_previous", "", "Results Previous");
+
+    // Direct clients close unconditionally with no payload. The internal
+    // post-submit close carries the activation it is allowed to dismiss, so a
+    // selected command that replaced the picker cannot have its new UI canceled.
+    builder.add(
+        spec("palette.close", "Close")
+            .optionalInProcessHandler<PickerActivation>(
+                [&runtime](CommandContext& context,
+                           std::optional<PickerActivation> expected) {
+                    return runtime.runTransaction([&] {
+                        return searchCommand(
+                            runtime, context, "palette.close",
+                            expected ? std::any{*expected} : std::any{});
+                    });
+                }));
 
     // Names the command to run, so it is the one search command a remote client
     // may send an argument for.
@@ -510,14 +538,19 @@ void registerSearchPaletteCommands(CommandCatalog& builder,
                             });
                         }));
 
-    builder.add(spec("picker.submit", "Submit Picker Candidate")
+    builder.add(CommandSpecBuilder{"picker.submit"}
+                    .owner("search-palette")
+                    .summary("Submit Picker Candidate")
+                    .stateValidatedMutation()
+                    .lua()
                     .handler<PickerSubmitArguments>(
                         [&runtime](CommandContext& context,
                                   PickerSubmitArguments const& arguments) {
                            return runtime.runTransaction([&] {
                                auto const palette = runtime.paletteView();
                                auto const* candidates =
-                                   palette.candidatesFor(arguments.mode);
+                                   palette.candidatesFor(
+                                       arguments.activation.mode);
                                if (candidates == nullptr) {
                                    return failure(
                                        "picker mode has no candidate inventory");
@@ -533,48 +566,48 @@ void registerSearchPaletteCommands(CommandCatalog& builder,
                                    return failure(
                                        "candidate is not in the picker inventory");
                                }
-                               const bool browserLocal =
-                                   context.principal().origin() ==
-                                   InvocationOrigin::Websocket;
-                               if (!browserLocal) {
-                                   auto const open = runtime.interaction.openPicker();
-                                   auto const* descriptor =
-                                       open ? pickerCatalog().find(*open)
-                                            : nullptr;
-                                   if (descriptor == nullptr ||
-                                       descriptor->wireMode != arguments.mode) {
-                                       return failure(
-                                           "picker.submit requires a matching open picker");
-                                   }
+                               if (runtime.interaction.openPickerActivation() !=
+                                   arguments.activation) {
+                                   return failure(
+                                       "picker.submit requires a matching open picker");
                                }
-                               if (arguments.mode == SearchMode::Command) {
+                               ClientCommand selected;
+                               if (arguments.activation.mode ==
+                                   SearchMode::Command) {
                                    auto validation = validatePublishedCommand(
                                        runtime, context, arguments.candidateId);
                                    if (!validation.accepted) return validation;
-                                   if (!runtime.defer(
-                                           std::nullopt,
-                                           ClientCommand{arguments.candidateId,
-                                                         context.revision(), {}})) {
-                                       return failure(
-                                           "could not queue the selected command");
-                                   }
-                                   if (!browserLocal) {
-                                       (void)runtime.interaction.apply(CloseFinder{});
-                                   }
-                                   return success();
+                                   selected = ClientCommand{
+                                       arguments.candidateId,
+                                       context.revision(), {}};
+                               } else if (arguments.activation.mode ==
+                                          SearchMode::File) {
+                                   selected = ClientCommand{
+                                       "file.open", context.revision(),
+                                       arguments.candidateId};
+                               } else {
+                                   return failure(
+                                       "open picker has no submit action");
                                }
-                               if (arguments.mode == SearchMode::File) {
-                                   auto result = executePickerFileOpen(
-                                       runtime, context.principal(),
-                                       arguments.candidateId);
-                                   if (result.accepted && !browserLocal) {
-                                       (void)runtime.interaction.apply(
-                                           CloseFinder{});
-                                   }
-                                   return result;
+                               if (runtime.deferredCommands.contains(
+                                       "palette.close")) {
+                                   return failure(
+                                       "another picker submission is pending");
                                }
-                               return failure(
-                                   "open picker has no submit action");
+                               if (!runtime.defer(std::nullopt,
+                                                  std::move(selected))) {
+                                   return failure(
+                                       "could not queue the selected command");
+                               }
+                               if (!runtime.defer(
+                                       std::nullopt,
+                                       ClientCommand{"palette.close",
+                                                     context.revision(),
+                                                     arguments.activation})) {
+                                   return failure(
+                                       "could not queue the picker close");
+                               }
+                               return success();
                            });
                         }));
 

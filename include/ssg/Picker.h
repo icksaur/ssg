@@ -9,6 +9,19 @@
 
 namespace ssg {
 
+struct PickerActivationId {
+    explicit constexpr PickerActivationId(std::uint64_t value = 0) noexcept
+        : value_{value} {}
+    [[nodiscard]] constexpr std::uint64_t value() const noexcept {
+        return value_;
+    }
+    [[nodiscard]] constexpr bool valid() const noexcept { return value_ != 0; }
+    constexpr auto operator<=>(const PickerActivationId&) const noexcept = default;
+
+private:
+    std::uint64_t value_;
+};
+
 // Which picker a `PromptKind::Palette` prompt belongs to.
 //
 // A dedicated enum rather than reusing `SearchMode` as the discriminator:
@@ -17,6 +30,14 @@ namespace ssg {
 // exhaustiveness check in tests/test_picker.cpp into a mostly-inapplicable
 // loop.  The wire mode a picker publishes is carried by its descriptor.
 enum class PickerKind : std::uint8_t { Command, File };
+
+struct PickerActivation {
+    SearchMode mode = SearchMode::Command;
+    PickerActivationId id;
+
+    friend bool operator==(const PickerActivation&,
+                           const PickerActivation&) = default;
+};
 
 inline constexpr std::array<PickerKind, 2> kAllPickerKinds{
     PickerKind::Command,

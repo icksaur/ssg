@@ -91,6 +91,28 @@ TEST(addRejectsEachMissingRequiredField) {
                              .summary("s").observes().handler(handler)));
 }
 
+TEST(builderRejectsConflictingRevisionPolicies) {
+    bool mutatingConflict = false;
+    try {
+        (void)ssg::CommandSpecBuilder{"conflict.mutating"}
+            .stateValidatedMutation()
+            .mutates();
+    } catch (const std::logic_error&) {
+        mutatingConflict = true;
+    }
+    ASSERT_TRUE(mutatingConflict);
+
+    bool observingConflict = false;
+    try {
+        (void)ssg::CommandSpecBuilder{"conflict.observing"}
+            .observes()
+            .stateValidatedMutation();
+    } catch (const std::logic_error&) {
+        observingConflict = true;
+    }
+    ASSERT_TRUE(observingConflict);
+}
+
 // The catalog is append-only and its storage is stable, so a reference taken
 // early survives every later registration.  This is what lets callers hold a
 // CommandEntry const* with no lifetime discipline (R4).
@@ -457,6 +479,7 @@ int main() {
     RUN(addIssuesAHandleThatResolvesBackToItsCommand);
     RUN(addRejectsADuplicateIdAndNamesBothOwners);
     RUN(addRejectsEachMissingRequiredField);
+    RUN(builderRejectsConflictingRevisionPolicies);
     RUN(referencesAndHandlesSurviveLaterRegistrations);
     RUN(revisionAdvancesOnEveryRegistration);
     RUN(commandsAreEnumeratedInRegistrationOrderAndGroupedByOwner);

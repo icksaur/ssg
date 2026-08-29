@@ -166,6 +166,11 @@ enum class CommandEffect : std::uint8_t {
     Mutation,
 };
 
+enum class CommandRevisionPolicy : std::uint8_t {
+    Exact,
+    StateValidated,
+};
+
 struct CommandHandlerResult {
     bool accepted;
     std::string message;

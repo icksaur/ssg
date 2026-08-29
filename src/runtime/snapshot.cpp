@@ -561,7 +561,7 @@ PaletteViewState EditorSession::Impl::paletteView() const {
         interaction.interaction().schema(), interaction.truth());
     if (auto open = interaction.openPicker()) {
         if (auto const* descriptor = pickerCatalog().find(*open)) {
-            view.activeMode = descriptor->wireMode;
+            view.activePicker = interaction.openPickerActivation();
         }
     }
     // Every registered command is published continuously. Resolving each key hint

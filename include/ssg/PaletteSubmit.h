@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ssg/CommandHandle.h>
+#include <ssg/Picker.h>
 #include <ssg/Search.h>
 
 #include <any>
@@ -9,11 +10,9 @@
 
 namespace ssg {
 
-// The command a palette/finder submit resolves to for a given picker mode and
-// selected candidate id. Submitting the selected row means different things per
-// picker -- a command id for the command palette, a path for the file finder --
-// so this decision lives once, called by every client, rather than duplicated in
-// each client's submit handler.
+// The generic picker command and typed payload for a selected candidate. Every
+// client routes through this seam so validation, action dispatch, and the
+// authoritative close transition cannot diverge by transport.
 struct PaletteSubmitCommand {
     CommandName command;
     std::any payload;
@@ -22,6 +21,6 @@ struct PaletteSubmitCommand {
 // nullopt for a mode with no submit action (Line/Symbol/Text have no picker
 // submit today), so a caller neither dispatches nor guesses.
 [[nodiscard]] std::optional<PaletteSubmitCommand> paletteSubmitCommand(
-    SearchMode mode, std::string candidateId);
+    PickerActivation activation, std::string candidateId);
 
 }  // namespace ssg

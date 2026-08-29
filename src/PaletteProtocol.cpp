@@ -142,9 +142,13 @@ ProtocolValue encodePalette(const PaletteViewState& palette) {
     };
     return ProtocolValue::makeObject(
         {{"active_mode",
-          palette.activeMode
+          palette.activePicker
               ? ProtocolValue::makeUint(
-                    static_cast<std::uint8_t>(*palette.activeMode))
+                    static_cast<std::uint8_t>(palette.activePicker->mode))
+              : ProtocolValue::makeNull()},
+         {"activation_id",
+          palette.activePicker
+              ? ProtocolValue::makeUint(palette.activePicker->id.value())
               : ProtocolValue::makeNull()},
          {"command_candidates", encodeCandidates(palette.commandCandidates)},
          {"command_open_command_id",
@@ -167,6 +171,7 @@ ProtocolValue encodePalette(const PaletteViewState& palette) {
 std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
     if (!value.asObject()) return std::nullopt;
     const ProtocolValue* activeModeField = value.field("active_mode");
+    const ProtocolValue* activationIdField = value.field("activation_id");
     const ProtocolValue* commandCandidatesField =
         value.field("command_candidates");
     const ProtocolValue* commandOpenCommandIdField =
@@ -179,9 +184,11 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
         value.field("presence_overlay");
     const ProtocolValue* magnitudeField = value.field("max_parameter_magnitude");
     const ProtocolValue* candidateBytesField = value.field("max_candidate_bytes");
-    if (!activeModeField ||
+    if (!activeModeField || !activationIdField ||
         (!activeModeField->asUint() &&
          activeModeField->kind() != ProtocolValue::Kind::NullValue) ||
+        (!activationIdField->asUint() &&
+         activationIdField->kind() != ProtocolValue::Kind::NullValue) ||
         !commandOpenCommandIdField || !commandOpenCommandIdField->asText() ||
         !commandCandidatesField || !commandCandidatesField->asArray() ||
         !fileOpenCommandIdField || !fileOpenCommandIdField->asText() ||
@@ -208,14 +215,22 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
         palette.commandOpenCommandId == palette.fileOpenCommandId) {
         return std::nullopt;
     }
-    if (activeModeField->kind() != ProtocolValue::Kind::NullValue) {
+    const bool hasMode =
+        activeModeField->kind() != ProtocolValue::Kind::NullValue;
+    const bool hasActivation =
+        activationIdField->kind() != ProtocolValue::Kind::NullValue;
+    if (hasMode != hasActivation) return std::nullopt;
+    if (hasMode) {
         auto activeMode = decodeMode(*activeModeField);
+        auto const activationValue = activationIdField->asUint();
         if (!activeMode ||
             (*activeMode != SearchMode::Command &&
-             *activeMode != SearchMode::File)) {
+             *activeMode != SearchMode::File) ||
+            !activationValue || *activationValue == 0) {
             return std::nullopt;
         }
-        palette.activeMode = *activeMode;
+        palette.activePicker = PickerActivation{
+            *activeMode, PickerActivationId{*activationValue}};
     }
     palette.parameters = *parameters;
     palette.presenceOverlay = std::move(*presenceOverlay);

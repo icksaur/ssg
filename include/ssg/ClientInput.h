@@ -2,6 +2,7 @@
 
 #include <ssg/EditorClient.h>
 #include <ssg/Keymap.h>
+#include <ssg/Picker.h>
 
 #include <optional>
 #include <string>
@@ -38,6 +39,7 @@ struct ClientInputResult {
     ClientInputOutcome outcome;
     std::optional<ClientOwnedInput> clientOwned;
     std::optional<CommandResult> command;
+    std::optional<PickerActivation> pickerActivation;
 };
 
 }  // namespace ssg

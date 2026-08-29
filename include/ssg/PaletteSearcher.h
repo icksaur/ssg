@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ssg/Search.h>
+#include <ssg/Picker.h>
 #include <ssg/UiTree.h>
 #include <ssg/Viewport.h>
 
@@ -101,7 +102,7 @@ static_assert(kMaxWeightsPerScoredByte * kMaxMatcherParameterMagnitude *
 struct PaletteViewState {
     PaletteViewState();
 
-    std::optional<SearchMode> activeMode;
+    std::optional<PickerActivation> activePicker;
     std::string commandOpenCommandId;
     std::string fileOpenCommandId;
     std::vector<PaletteCandidate> commandCandidates;
@@ -124,7 +125,7 @@ struct PaletteExecuteArguments {
 };
 
 struct PickerSubmitArguments {
-    SearchMode mode = SearchMode::Command;
+    PickerActivation activation;
     std::string candidateId;
 
     friend bool operator==(const PickerSubmitArguments&,

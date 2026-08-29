@@ -15,6 +15,7 @@ import {
   matcherParametersFromWire, matcherBoundsFromPalette,
   clampPaletteSelection, pickerCandidatesFromPalette, resolvePickerLifecycle,
   effectivePickerMode, queuePickerSubmit, settlePickerLifecycle,
+  pickerPresentationFromSubmit,
   PICKER_MODE, encodePickerSubmit, encodeSelectionByteRange, encodeTabAction,
   markedTextByteOffset, encodeTreeActivation, applyTreeDelta,
   applySessionDeltaSections,
@@ -86,34 +87,144 @@ check('prompt prediction remains until its last serialized input settles', () =>
 });
 
 check('picker submit waits for its authoritative open and dispatches once', () => {
-  const candidate = { mode: PICKER_MODE.FILE, candidateId: 'src/main.cpp' };
+  const candidate = {
+    mode: PICKER_MODE.FILE, candidateId: 'src/main.cpp',
+    query: 'main', selected: 2,
+  };
+  const activation = { mode: PICKER_MODE.FILE, id: 17n };
   assert.deepEqual(
-    queuePickerSubmit(PICKER_MODE.FILE, candidate.candidateId, null, true, null),
+    queuePickerSubmit(candidate, null, true, null),
     { send: null, queued: candidate });
   assert.deepEqual(
-    queuePickerSubmit(
-      PICKER_MODE.FILE, 'other.cpp', null, true, candidate),
+    queuePickerSubmit(candidate, activation, true, null),
+    { send: null, queued: candidate });
+  assert.deepEqual(
+    queuePickerSubmit({ ...candidate, candidateId: 'other.cpp' },
+                      null, true, candidate),
     { send: null, queued: candidate });
   assert.deepEqual(
     settlePickerLifecycle(
-      { pickerOpenMode: PICKER_MODE.FILE }, PICKER_MODE.FILE, candidate),
-    { mode: PICKER_MODE.FILE, submit: candidate });
+      { pickerOpenMode: PICKER_MODE.FILE }, activation, activation, candidate),
+    {
+      activation,
+      submit: { activation, candidateId: 'src/main.cpp' },
+      preservePresentation: true,
 });
+  assert.deepEqual(
+    settlePickerLifecycle(
+      { pickerOpenMode: PICKER_MODE.FILE }, activation, activation, null),
+    {
+      activation, submit: null, preservePresentation: true,
+    });
 
 check('picker submit cancels when authoritative open fails or changes mode', () => {
-  const candidate = { mode: PICKER_MODE.FILE, candidateId: 'src/main.cpp' };
+  const candidate = {
+    mode: PICKER_MODE.FILE, candidateId: 'src/main.cpp',
+    query: 'main', selected: 0,
+  };
+  const fileActivation = { mode: PICKER_MODE.FILE, id: 21n };
+  const commandActivation = { mode: PICKER_MODE.COMMAND, id: 22n };
   assert.deepEqual(
     settlePickerLifecycle(
-      { pickerOpenMode: PICKER_MODE.FILE }, null, candidate),
-    { mode: null, submit: null });
+      { pickerOpenMode: PICKER_MODE.FILE }, null, null, candidate),
+    { activation: null, submit: null, preservePresentation: false });
   assert.deepEqual(
     settlePickerLifecycle(
-      { pickerOpenMode: PICKER_MODE.FILE }, PICKER_MODE.COMMAND, candidate),
-    { mode: PICKER_MODE.COMMAND, submit: null });
+      { pickerOpenMode: PICKER_MODE.FILE }, commandActivation,
+      fileActivation, candidate),
+    {
+      activation: commandActivation, submit: null,
+      preservePresentation: false,
+    });
   assert.deepEqual(
-    queuePickerSubmit(
-      PICKER_MODE.FILE, candidate.candidateId, PICKER_MODE.FILE, false, null),
-    { send: candidate, queued: null });
+    queuePickerSubmit(candidate, fileActivation, false, null),
+    {
+      send: { activation: fileActivation, candidateId: candidate.candidateId },
+      queued: null,
+    });
+
+});
+
+check('queued picker submit never retargets to a later same-mode activation', () => {
+  const intended = { mode: PICKER_MODE.FILE, id: 41n };
+  const replacement = { mode: PICKER_MODE.FILE, id: 42n };
+  const candidate = {
+    mode: PICKER_MODE.FILE, candidateId: 'src/main.cpp',
+    query: 'main', selected: 0,
+  };
+  assert.deepEqual(
+    settlePickerLifecycle(
+      { pickerOpenMode: PICKER_MODE.FILE }, replacement, intended, candidate),
+    {
+      activation: replacement, submit: null,
+      preservePresentation: false,
+    });
+});
+
+check('picker submit settlement adopts success and preserves rejected intent', () => {
+  const activation = { mode: PICKER_MODE.COMMAND, id: 31n };
+  const previous = {
+    mode: PICKER_MODE.COMMAND,
+    activationId: 31n,
+    query: 'tog',
+    selected: 3,
+    pendingSubmit: { activation, candidateId: 'panel.toggle' },
+  };
+  assert.deepEqual(pickerPresentationFromSubmit(0, null, previous), {
+    mode: null,
+    activationId: null,
+    query: '',
+    selected: 0,
+    pendingSubmit: null,
+  });
+  assert.deepEqual(pickerPresentationFromSubmit(1, activation, previous), {
+    mode: PICKER_MODE.COMMAND,
+    activationId: 31n,
+    query: 'tog',
+    selected: 3,
+    pendingSubmit: null,
+  });
+  assert.deepEqual(
+    pickerPresentationFromSubmit(
+      1, { mode: PICKER_MODE.COMMAND, id: 32n }, previous),
+    {
+      mode: PICKER_MODE.COMMAND,
+      activationId: 32n,
+      query: '',
+      selected: 0,
+      pendingSubmit: null,
+    });
+});
+
+check('picker submit wire payload carries authoritative activation identity', () => {
+  const decoded = decodeMessage(
+    encodePickerSubmit(
+      { mode: PICKER_MODE.FILE, id: 41n }, 'src/main.cpp', 9n).buffer);
+  assert.equal(decoded.payload.id, 'picker.submit');
+  assert.equal(decoded.payload.payload.mode, BigInt(PICKER_MODE.FILE));
+  assert.equal(decoded.payload.payload.activation_id, 41n);
+  assert.equal(decoded.payload.payload.candidate_id, 'src/main.cpp');
+});
+
+check('picker query lifetime follows activation identity', () => {
+  const previous = {
+    mode: PICKER_MODE.FILE,
+    activationId: 51n,
+    query: 'main',
+    selected: 1,
+    pendingSubmit: null,
+  };
+  assert.deepEqual(
+    pickerPresentationFromSubmit(
+      1, { mode: PICKER_MODE.FILE, id: 52n }, previous),
+    {
+      mode: PICKER_MODE.FILE,
+      activationId: 52n,
+      query: '',
+      selected: 0,
+      pendingSubmit: null,
+    });
+  });
 });
 
 check('pending prompt search defers document rendering and honors user scroll', () => {
@@ -209,15 +320,15 @@ check('typed raw input and command requests round-trip through ProtocolValue', (
     assert.throws(() => decodeMessage(
       new Uint8Array([1, 9, 0]).buffer), /unsupported protocol frame/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([2, 1, 1, 2]).buffer), /malformed protocol bool/);
+      new Uint8Array([3, 1, 1, 2]).buffer), /malformed protocol bool/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([2, 1, 4, 4, 0, 0, 0, 65]).buffer), /truncated/);
+      new Uint8Array([3, 1, 4, 4, 0, 0, 0, 65]).buffer), /truncated/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([2, 1, 6, 1, 0, 1, 0]).buffer), /collection length/);
+      new Uint8Array([3, 1, 6, 1, 0, 1, 0]).buffer), /collection length/);
   });
 
   check('browser ignores additive message kinds without weakening wire versions', () => {
-    const decoded = decodeMessage(new Uint8Array([2, 9, 0]).buffer);
+    const decoded = decodeMessage(new Uint8Array([3, 9, 0]).buffer);
     assert.equal(browserInboundKind(decoded.kind), 'ignore');
     assert.equal(browserInboundKind(1), 'snapshot');
     assert.equal(browserInboundKind(8), 'input-result');
@@ -257,7 +368,7 @@ check('browser key tracker falls back only when an Alt keydown was consumed', ()
 check('encodeStatusActionInvocation emits the exact StatusActionInvocation wire frame', () => {
   const actual = encodeStatusActionInvocation({ statusId: 7, actionId: 'dismiss', generation: 3 });
   const expected = new Uint8Array([
-    2, 5,
+    3, 5,
     7, 3, 0, 0, 0,
     9, 0, 0, 0, 115, 116, 97, 116, 117, 115, 95, 105, 100,
     3, 7, 0, 0, 0, 0, 0, 0, 0,
@@ -328,9 +439,13 @@ check('browser-local picker mode backs a null authoritative mode', () => {
 check('compound interaction commands carry published identities and revision', () => {
   assert.deepEqual(
     decodeMessage(
-      encodePickerSubmit(PICKER_MODE.COMMAND, 'command.open', 5n).buffer).payload,
+      encodePickerSubmit(
+        { mode: PICKER_MODE.COMMAND, id: 13n },
+        'command.open', 5n).buffer).payload,
     { id: 'picker.submit', base_revision: 5n,
-      payload: { mode: 4n, candidate_id: 'command.open' } });
+      payload: {
+        mode: 4n, activation_id: 13n, candidate_id: 'command.open',
+      } });
   assert.deepEqual(
     decodeMessage(encodeSelectionByteRange(2, 7, 6n).buffer).payload,
     { id: 'select.set_byte_range', base_revision: 6n,
@@ -420,7 +535,7 @@ import {
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
   applyPalettePresenceOverlay, PALETTE_PRESENCE_OP,
-  resolveUiFocusPath, focusUiNode,
+  predictedFocusCapture, resolveUiFocusPath, focusUiNode,
 } from '../../apps/web/reconcile.mjs';
 
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
@@ -471,22 +586,27 @@ check('predicted picker focus is a disposable overlay on the authoritative path'
       leafNode('input_line', WIDGET.TEXT_INPUT),
     ]);
     const schema = schemaOf(22, root);
-    const presence = presenceForSchema(22, root);
+    const presence = presenceForSchema(22, root, ['editor']);
     const state = {
       generation: 22,
       nodes: [st('root'), st('editor'), st('input_line')],
       focus_path: ['editor'],
     };
-    assert.deepEqual(resolveUiFocusPath(schema, state, presence, 'input_line'), {
-      path: ['editor'],
+    const predicted = predictedFocusCapture({
+      localMode: PICKER_MODE.FILE,
+      authoritativeActivation: null,
+    });
+    assert.equal(predicted, 'input_line');
+    assert.deepEqual(resolveUiFocusPath(schema, state, presence, predicted), {
+      path: ['editor', 'input_line'],
       effective: 'input_line',
       captured: true,
     });
-    assert.deepEqual(resolveUiFocusPath(schema, state, presence), {
-      path: ['editor'],
-      effective: 'editor',
-      captured: false,
-    });
+    assert.equal(resolveUiFocusPath(schema, state, presence), null);
+    assert.equal(predictedFocusCapture({
+      localMode: PICKER_MODE.FILE,
+      authoritativeActivation: { mode: PICKER_MODE.FILE, id: 1n },
+    }), null);
 });
 
 check('focus path rejects missing nodes and a hidden effective node', () => {

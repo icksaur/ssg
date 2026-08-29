@@ -147,7 +147,9 @@ ExecutorResult CommandExecutor::dispatch(ClientId clientId,
     }
 
     bool const mutates = command_->effect == CommandEffect::Mutation;
-    if (mutates && command.baseRevision != currentRevision) {
+    if (mutates &&
+        command_->revisionPolicy == CommandRevisionPolicy::Exact &&
+        command.baseRevision != currentRevision) {
         return rejected(CommandError::StaleRevision, currentRevision,
                         "mutation base revision does not match session revision");
     }
