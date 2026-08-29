@@ -3,6 +3,7 @@
 #include <ssg/CommandCatalog.h>
 #include <ssg/DraftReopenClassifier.h>
 #include <ssg/FilesystemWatcher.h>
+#include <ssg/GitMetadataWatcher.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Style.h>
 #include <ssg/WholeScreenAssembly.h>
@@ -35,13 +36,14 @@ namespace {
 // deferred until primeDeferred().
 constexpr std::size_t kEagerSyntaxMaxBytes = 2 * 1024 * 1024;
 constexpr auto kGitDiffPollInterval = std::chrono::milliseconds{250};
+constexpr auto kGitMetadataWatchPollInterval = std::chrono::milliseconds{100};
 constexpr auto kGitDiffRetryDelay = std::chrono::milliseconds{1000};
 // Event mode refreshes instantly on watch events; this long-interval full-refresh
 // backstop bounds the staleness of anything the watcher cannot observe -- external
 // git operations, a linked worktree's metadata outside the tree, dropped events on
 // a network filesystem -- without re-scanning at the Poll cadence. Much larger than
 // kGitDiffPollInterval so idle CPU is a small fraction of Poll's.
-constexpr auto kGitDiffBackstopInterval = std::chrono::seconds{3};
+constexpr auto kGitDiffEventRecoveryInterval = std::chrono::minutes{1};
 
 bool setNonBlocking(int descriptor) {
     const int flags = ::fcntl(descriptor, F_GETFL, 0);
@@ -413,6 +415,8 @@ struct GitDiffRefreshWorkerState {
     DiffModel sourceModel;
     GitDiffSource source;
     std::unique_ptr<FilesystemWatcher> watcher;
+    std::unique_ptr<GitMetadataWatcher> metadataWatcher;
+    std::vector<std::filesystem::path> metadataDirectories;
     GitDiffMode mode = GitDiffMode::Poll;
     bool watcherAvailable = false;
     // Test hook: shortens the Event-mode backstop so its full refresh is
@@ -439,6 +443,7 @@ struct GitDiffRefreshWorkerState {
     // to the watcher on the worker thread so registration never races poll().
     std::deque<SaveExpectation> pendingSaveRegistrations;
     std::thread thread;
+    std::atomic<std::uint64_t> fullRefreshCount{0};
 
     int wakeReadFd = -1;
     int wakeWriteFd = -1;
@@ -585,6 +590,16 @@ void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
             const char byte = 'g';
             (void)::write(worker->wakeWriteFd, &byte, 1);
         }
+        if (gitUsable && worker->watcher) {
+            try {
+                worker->metadataDirectories =
+                    worker->repository->metadataDirectories();
+                worker->metadataWatcher = makePlatformGitMetadataWatcher(
+                    worker->metadataDirectories);
+            } catch (const std::exception&) {
+                worker->mode = GitDiffMode::Poll;
+            }
+        }
         worker->watcherAvailable = worker->watcher != nullptr;
         // Nothing to serve: no usable git repository to scan and no watcher to
         // observe. External modification is simply not observed.
@@ -600,7 +615,15 @@ void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
                 return std::nullopt;
             }
             try {
+                ++worker->fullRefreshCount;
                 auto refreshed = worker->source.refresh(*worker->repository);
+                const auto directories = worker->repository->metadataDirectories();
+                if (worker->metadataWatcher &&
+                    (directories != worker->metadataDirectories ||
+                     !worker->metadataWatcher->healthy())) {
+                    worker->metadataWatcher->replaceDirectories(directories);
+                    worker->metadataDirectories = directories;
+                }
                 if (shouldStop()) {
                     return std::nullopt;
                 }
@@ -745,16 +768,16 @@ void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
         // bounds the staleness of anything the watcher cannot observe (Decision:
         // external git ops, worktree metadata outside the tree, dropped events).
         auto nextBackstop =
-            std::chrono::steady_clock::now() + kGitDiffBackstopInterval;
+            std::chrono::steady_clock::now() + kGitDiffEventRecoveryInterval;
         // A test hook can shorten the backstop so it is deterministically triggerable.
         const auto backstopInterval = worker->backstopIntervalOverride
                                           ? *worker->backstopIntervalOverride
-                                          : kGitDiffBackstopInterval;
+                                          : kGitDiffEventRecoveryInterval;
         nextBackstop = std::chrono::steady_clock::now() + backstopInterval;
         while (!shouldStop()) {
             applyPendingSaveRegistrations();
             const auto now = std::chrono::steady_clock::now();
-            auto wakeAt = now + kGitDiffPollInterval;
+            auto wakeAt = now + kGitMetadataWatchPollInterval;
             {
                 std::lock_guard lock(worker->mutex);
                 if (gitUsable && worker->mode == GitDiffMode::Poll) {
@@ -781,7 +804,9 @@ void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
                     // durable capability flips to unavailable and a wake byte makes
                     // the runtime-thread drain observe the transition (Decision 13).
                     worker->watcher.reset();
+                    worker->metadataWatcher.reset();
                     watcherAvailable.store(false, std::memory_order_relaxed);
+                    worker->mode = GitDiffMode::Poll;
                     {
                         const char byte = 'g';
                         (void)::write(worker->wakeWriteFd, &byte, 1);
@@ -802,8 +827,26 @@ void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
                         break;
                     }
                 }
+                std::vector<WatchEvent> workspaceEvents;
                 if (!overflowed && !events.empty()) {
-                    queueWatchEvents(events);
+                    workspaceEvents.reserve(events.size());
+                    bool metadataDirty = false;
+                    for (auto& event : events) {
+                        if (!event.path.empty() &&
+                            *event.path.begin() == ".git") {
+                            metadataDirty = true;
+                        } else {
+                            workspaceEvents.push_back(std::move(event));
+                        }
+                    }
+                    if (!workspaceEvents.empty()) {
+                        queueWatchEvents(workspaceEvents);
+                    }
+                    if (metadataDirty && gitUsable) {
+                        auto full = maybeRefreshAll();
+                        if (!full) break;
+                        handleResult(*full, true);
+                    }
                 }
                 if (overflowed) {
                     // The watcher lost events: the external flow must resynchronize
@@ -830,10 +873,10 @@ void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
                             break;
                         }
                         handleResult(*full, true);
-                    } else if (!events.empty()) {
+                    } else if (!workspaceEvents.empty()) {
                         std::vector<std::filesystem::path> paths;
-                        paths.reserve(events.size() * 2);
-                        for (const auto& event : events) {
+                        paths.reserve(workspaceEvents.size() * 2);
+                        for (const auto& event : workspaceEvents) {
                             paths.push_back(event.path);
                             if (event.previousPath) {
                                 paths.push_back(*event.previousPath);
@@ -860,6 +903,20 @@ void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher)
 
             const auto afterWait = std::chrono::steady_clock::now();
             if (gitUsable) {
+                if (worker->mode == GitDiffMode::Event &&
+                    worker->metadataWatcher) {
+                    try {
+                        if (worker->metadataWatcher->poll(
+                                std::chrono::milliseconds{0})) {
+                            auto full = maybeRefreshAll();
+                            if (!full) break;
+                            handleResult(*full, true);
+                        }
+                    } catch (const std::exception&) {
+                        worker->metadataWatcher.reset();
+                        worker->mode = GitDiffMode::Poll;
+                    }
+                }
                 bool retryDue = false;
                 {
                     std::lock_guard lock(worker->mutex);
@@ -3476,6 +3533,15 @@ Revision EditorSession::revision() const {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->session->revision();
 }
+
+std::uint64_t EditorSession::gitFullRefreshCountForTest() const {
+    std::lock_guard operationLock{impl_->operationMutex};
+    return impl_->gitDiffWorker
+               ? impl_->gitDiffWorker->fullRefreshCount.load(
+                     std::memory_order_relaxed)
+               : 0;
+}
+
 std::filesystem::path const& EditorSession::workspaceRoot() const noexcept { return impl_->root; }
 ExternalDiffBurstResult EditorSession::applyExternalDiffBurst(
     std::vector<ExternalDiffRevision> changes) {

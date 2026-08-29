@@ -1,4 +1,5 @@
 #include "ssg/FilesystemWatcher.h"
+#include "ssg/GitMetadataWatcher.h"
 #include "test_helpers.h"
 
 #include <chrono>
@@ -514,6 +515,26 @@ TEST(platformPollTimeoutIsFinite) {
         const auto elapsed = std::chrono::steady_clock::now() - before;
         ASSERT_TRUE(elapsed < 500ms);
     }
+
+    std::filesystem::remove_all(root);
+}
+
+TEST(platformGitMetadataWatcherIgnoresObjectsAndReportsGitStateChanges) {
+    const auto root = uniqueTempDirectory();
+    const auto metadata = root / "metadata";
+    std::filesystem::create_directories(metadata / "refs" / "heads");
+    std::ofstream{metadata / "HEAD"} << "ref: refs/heads/main\n";
+    std::ofstream{metadata / "index"} << "index";
+    {
+        auto watcher = ssg::makePlatformGitMetadataWatcher({metadata});
+        std::filesystem::create_directories(metadata / "objects");
+        std::ofstream{metadata / "objects" / "pack"} << "object";
+        ASSERT_FALSE(watcher->poll(50ms));
+
+        std::ofstream{metadata / "refs" / "heads" / "main"} << "ref";
+        ASSERT_TRUE(watcher->poll(2s));
+        ASSERT_FALSE(watcher->poll(50ms));
+    }
     std::filesystem::remove_all(root);
 }
 
@@ -543,6 +564,7 @@ int main() {
     RUN(invalidBoundsAreRejectedAtConstruction);
     RUN(platformAdapterReportsRecursiveNormalizedEvents);
     RUN(platformPollTimeoutIsFinite);
+    RUN(platformGitMetadataWatcherIgnoresObjectsAndReportsGitStateChanges);
     std::cout << "Passed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

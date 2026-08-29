@@ -149,6 +149,20 @@ bool waitForGitTreeStatuses(ssg::EditorSession& runtime,
         if (gitProviderStatuses(runtime) == expected) {
             return true;
         }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    }
+    return false;
+}
+
+bool waitForFullRefreshCount(ssg::EditorSession& runtime, std::uint64_t minimum,
+                             std::chrono::milliseconds timeout) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        (void)runtime.pump();
+        if (runtime.gitFullRefreshCountForTest() >= minimum) {
+            return true;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds{20});
     }
     return false;
@@ -173,6 +187,7 @@ TEST(gitDiffHostWorkerPollingAndEventRefreshProduceExpectedDiffView) {
         ASSERT_EQ(runStatus(root, "init"), 0);
         ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
         ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+        std::ofstream{root / "tracked.txt"} << "staged\n";
         ASSERT_EQ(runStatus(root, "add tracked.txt"), 0);
         ASSERT_EQ(runStatus(root, "commit -m init"), 0);
 
@@ -421,6 +436,7 @@ TEST(gitDiffHostWorkerLifecycleHasBoundedShutdownLatency) {
                     high = !high;
                     std::this_thread::sleep_for(std::chrono::milliseconds{20});
                 }
+
             });
             std::this_thread::sleep_for(std::chrono::milliseconds{200});
 
@@ -439,6 +455,49 @@ TEST(gitDiffHostWorkerLifecycleHasBoundedShutdownLatency) {
     fs::remove_all(root);
 }
 
+TEST(eventModeRefreshesGitMetadataWithoutIdleFullScans) {
+    ScopedGitDiffMode scopedMode{"event"};
+    const auto suffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto root = fs::temp_directory_path() / ("ssg-git-event-idle-" + suffix);
+    const auto stateRoot =
+        fs::temp_directory_path() / ("ssg-git-event-idle-state-" + suffix);
+    fs::remove_all(root);
+    fs::remove_all(stateRoot);
+    fs::create_directories(root);
+    fs::create_directories(stateRoot / "scratch");
+    fs::create_directories(stateRoot / "recovery");
+    std::ofstream{root / "tracked.txt"} << "base\n";
+    ASSERT_EQ(runStatus(root, "init"), 0);
+    ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
+    ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+    ASSERT_EQ(runStatus(root, "add tracked.txt"), 0);
+    ASSERT_EQ(runStatus(root, "commit -m init"), 0);
+
+    auto created = ssg::EditorSession::create(
+        {root, stateRoot / "scratch", stateRoot / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(waitForFullRefreshCount(
+        runtime, 1, std::chrono::seconds{3}));
+    const auto idleCount = runtime.gitFullRefreshCountForTest();
+    std::this_thread::sleep_for(std::chrono::milliseconds{3500});
+    (void)runtime.pump();
+    ASSERT_EQ(runtime.gitFullRefreshCountForTest(), idleCount);
+
+    std::ofstream{root / "tracked.txt"} << "staged\n";
+    ASSERT_EQ(runStatus(root, "add tracked.txt"), 0);
+    ASSERT_TRUE(waitForFullRefreshCount(
+        runtime, idleCount + 1, std::chrono::seconds{3}));
+    fs::remove_all(root);
+    fs::remove_all(stateRoot);
+}
+
 }  // namespace
 
 int main() {
@@ -447,6 +506,7 @@ int main() {
     RUN(gitDiffHostWorkerPublishesGitTreeProviderMatchingPorcelain);
     RUN(gitDiffHostPublishesFilesAlreadyDirtyAtSessionStart);
     RUN(gitDiffHostWorkerLifecycleHasBoundedShutdownLatency);
+    RUN(eventModeRefreshesGitMetadataWithoutIdleFullScans);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -5,10 +5,12 @@ target_sources(ssg PRIVATE
 if(WIN32)
     target_sources(ssg PRIVATE
         ${SSG_SOURCE_DIR}/src/platform/windows_watcher.cpp
+        ${SSG_SOURCE_DIR}/src/platform/windows_git_metadata_watcher.cpp
     )
 else()
     target_sources(ssg PRIVATE
         ${SSG_SOURCE_DIR}/src/platform/linux_watcher.cpp
+        ${SSG_SOURCE_DIR}/src/platform/linux_git_metadata_watcher.cpp
     )
 endif()
 

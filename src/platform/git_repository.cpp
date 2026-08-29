@@ -9,6 +9,7 @@
 #include <fstream>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -294,6 +295,35 @@ public:
         return std::optional<std::string>{shorthand};
     }
 
+    std::vector<std::filesystem::path> metadataDirectories() override {
+        std::vector<std::filesystem::path> directories;
+        if (!available_) {
+            return directories;
+        }
+        git_repository* repository = nullptr;
+        if (git_repository_open_ext(&repository, root_.c_str(), 0, nullptr) != 0) {
+            return directories;
+        }
+        auto repositoryGuard =
+            std::unique_ptr<git_repository, decltype(&git_repository_free)>(
+                repository, &git_repository_free);
+        std::set<std::filesystem::path> unique;
+        for (const char* raw : {git_repository_path(repository),
+                                git_repository_commondir(repository)}) {
+            if (raw == nullptr) {
+                continue;
+            }
+            std::error_code error;
+            auto directory = std::filesystem::canonical(raw, error);
+            if (!error && std::filesystem::is_directory(directory, error) &&
+                !error) {
+                unique.insert(std::move(directory));
+            }
+        }
+        directories.assign(unique.begin(), unique.end());
+        return directories;
+    }
+
 private:
     std::filesystem::path root_;
     bool available_ = false;
@@ -384,6 +414,9 @@ public:
         return scan;
     }
     std::optional<std::string> currentBranch() override { return std::nullopt; }
+    std::vector<std::filesystem::path> metadataDirectories() override {
+        return {};
+    }
 };
 
 }  // namespace

@@ -263,6 +263,7 @@ public:
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
         ClientId clientId, PaletteReport paletteReport = {}) const;
     [[nodiscard]] int gitDiffWakeDescriptor() const;
+    [[nodiscard]] std::uint64_t gitFullRefreshCountForTest() const;
     [[nodiscard]] std::string activeDocumentText() const;
 
     // The reopen outcome of the active document's recovered draft (single-file

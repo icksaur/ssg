@@ -51,6 +51,9 @@ public:
     }
 
     std::optional<std::string> currentBranch() override { return branch; }
+    std::vector<std::filesystem::path> metadataDirectories() override {
+        return {};
+    }
 };
 
 using OracleState = std::map<std::string, GitDiffScanFile>;

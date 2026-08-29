@@ -74,6 +74,11 @@ std::set<std::string> scanCurrentPaths(const GitDiffScan& scan) {
     return paths;
 }
 
+std::set<fs::path> metadataDirectories(GitRepository& repository) {
+    const auto directories = repository.metadataDirectories();
+    return {directories.begin(), directories.end()};
+}
+
 DiffFileStatus statusFromPorcelainLine(std::string_view line) {
     if (line.size() >= 2 && line[0] == '?' && line[1] == '?') {
         return DiffFileStatus::Added;
@@ -199,6 +204,7 @@ TEST(platformRepositoryMatchesGitStatusAcrossWorkflow) {
         if (file.path == fs::path{"renamed.txt"}) {
             sawRename = file.previousPath == std::optional<fs::path>{"a.txt"};
         }
+
     }
     ASSERT_TRUE(sawRename);
 
@@ -226,6 +232,44 @@ TEST(platformRepositoryMatchesGitStatusAcrossWorkflow) {
     ASSERT_TRUE(restored.complete);
     ASSERT_EQ(scanCurrentPaths(restored), porcelainCurrentPaths(root));
     fs::remove_all(root);
+}
+
+TEST(platformRepositoryResolvesNormalNestedAndLinkedWorktreeMetadata) {
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto root =
+        fs::temp_directory_path() / ("ssg-git-metadata-" + uniqueSuffix);
+    const auto nested = root / "nested" / "workspace";
+    const auto linked = root.parent_path() / ("ssg-git-linked-" + uniqueSuffix);
+    fs::remove_all(root);
+    fs::remove_all(linked);
+    fs::create_directories(nested);
+    std::ofstream{root / "tracked.txt"} << "base\n";
+    ASSERT_EQ(runStatus(root, "init"), 0);
+    ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
+    ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+    ASSERT_EQ(runStatus(root, "add tracked.txt"), 0);
+    ASSERT_EQ(runStatus(root, "commit -m init"), 0);
+
+    auto rootRepository = makePlatformGitRepository(root);
+    const auto rootDirectories = metadataDirectories(*rootRepository);
+    ASSERT_FALSE(rootDirectories.empty());
+    ASSERT_TRUE(rootDirectories.contains(fs::canonical(root / ".git")));
+
+    auto nestedRepository = makePlatformGitRepository(nested);
+    ASSERT_EQ(metadataDirectories(*nestedRepository), rootDirectories);
+
+    ASSERT_EQ(runStatus(root, "worktree add -b linked-branch \"" +
+                              linked.string() + "\""),
+              0);
+    auto linkedRepository = makePlatformGitRepository(linked);
+    const auto linkedDirectories = metadataDirectories(*linkedRepository);
+    ASSERT_TRUE(linkedDirectories.contains(
+        fs::canonical(root / ".git" / "worktrees" / linked.filename())));
+    ASSERT_TRUE(linkedDirectories.contains(fs::canonical(root / ".git")));
+    ASSERT_NE(linkedDirectories, rootDirectories);
+    fs::remove_all(root);
+    fs::remove_all(linked);
 }
 
 TEST(platformRepositoryStatusClassificationMatchesGitPorcelain) {
@@ -440,6 +484,7 @@ TEST(ignoreMatcherIsUnusableAndNeverIgnoresOutsideARepository) {
 
 int main() {
     RUN(platformRepositoryMatchesGitStatusAcrossWorkflow);
+    RUN(platformRepositoryResolvesNormalNestedAndLinkedWorktreeMetadata);
     RUN(platformRepositoryStatusClassificationMatchesGitPorcelain);
     RUN(platformRepositoryOpenFailureIsIncomplete);
     RUN(platformRepositoryCurrentBranchMatchesGitBranchAndDetachedHead);

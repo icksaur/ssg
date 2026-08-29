@@ -84,6 +84,13 @@ public:
         const std::vector<std::filesystem::path>& paths,
         const GitDiffConfig& config) = 0;
     [[nodiscard]] virtual std::optional<std::string> currentBranch() = 0;
+    // CONTRACT
+    // GitRepository::metadataDirectories: only the repository adapter may
+    // resolve Git metadata roots. Callers must not infer a `.git` path from
+    // their workspace because linked worktrees and nested workspaces can put
+    // metadata elsewhere.
+    [[nodiscard]] virtual std::vector<std::filesystem::path>
+    metadataDirectories() = 0;
 };
 
 [[nodiscard]] std::unique_ptr<GitRepository> makePlatformGitRepository(
