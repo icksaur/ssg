@@ -1,5 +1,6 @@
 #include <ssg/UiStateProtocol.h>
 
+#include <cassert>
 #include <set>
 #include <string>
 #include <utility>
@@ -38,6 +39,18 @@ ProtocolValue encodeNode(const UiNodeState& node) {
         {{"id", ProtocolValue::makeText(node.id.value())},
          {"leaf",
           node.leaf ? encodeLeaf(*node.leaf) : ProtocolValue::makeNull()}});
+}
+
+ProtocolValue encodeFocusPath(
+    const std::optional<std::vector<UiNodeId>>& focusPath) {
+    if (!focusPath) return ProtocolValue::makeNull();
+    assert(!focusPath->empty());
+    ProtocolValue::Array path;
+    path.reserve(focusPath->size());
+    for (const UiNodeId& id : *focusPath) {
+        path.push_back(ProtocolValue::makeText(id.value()));
+    }
+    return ProtocolValue::makeArray(std::move(path));
 }
 
 // Decode a leaf record; nullopt on a malformed field TYPE (value/label not a
@@ -101,7 +114,8 @@ ProtocolValue encodeUiState(const UiStateSection& section) {
     return ProtocolValue::makeObject(
         {{"generation",
           ProtocolValue::makeUint(section.generation.value())},
-         {"nodes", ProtocolValue::makeArray(std::move(nodes))}});
+         {"nodes", ProtocolValue::makeArray(std::move(nodes))},
+         {"focus_path", encodeFocusPath(section.focusPath)}});
 }
 
 std::optional<UiStateSection> decodeUiState(const ProtocolValue& value) {
@@ -121,6 +135,19 @@ std::optional<UiStateSection> decodeUiState(const ProtocolValue& value) {
             return std::nullopt;  // a duplicate node id is malformed
         }
         section.nodes.push_back(std::move(*node));
+    }
+    if (const ProtocolValue* focusPath = value.field("focus_path");
+        focusPath && !isNull(focusPath)) {
+        const auto* path = focusPath->asArray();
+        if (!path || path->empty()) return std::nullopt;
+        std::vector<UiNodeId> decodedPath;
+        decodedPath.reserve(path->size());
+        for (const ProtocolValue& idValue : *path) {
+            const auto* id = idValue.asText();
+            if (!id || id->empty()) return std::nullopt;
+            decodedPath.emplace_back(*id);
+        }
+        section.focusPath = std::move(decodedPath);
     }
     return section;
 }

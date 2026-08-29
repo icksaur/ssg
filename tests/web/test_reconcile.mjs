@@ -14,7 +14,7 @@ import {
   settleCommandResult,
   matcherParametersFromWire, matcherBoundsFromPalette,
   clampPaletteSelection, pickerCandidatesFromPalette, resolvePickerLifecycle,
-  effectivePickerMode,
+  effectivePickerMode, queuePickerSubmit, settlePickerLifecycle,
   PICKER_MODE, encodePickerSubmit, encodeSelectionByteRange, encodeTabAction,
   markedTextByteOffset, encodeTreeActivation, applyTreeDelta,
   applySessionDeltaSections,
@@ -83,6 +83,37 @@ check('prompt prediction remains until its last serialized input settles', () =>
                            [{ promptPrediction: false, promptInput: false }],
                            { promptPrediction: false }),
     null);
+});
+
+check('picker submit waits for its authoritative open and dispatches once', () => {
+  const candidate = { mode: PICKER_MODE.FILE, candidateId: 'src/main.cpp' };
+  assert.deepEqual(
+    queuePickerSubmit(PICKER_MODE.FILE, candidate.candidateId, null, true, null),
+    { send: null, queued: candidate });
+  assert.deepEqual(
+    queuePickerSubmit(
+      PICKER_MODE.FILE, 'other.cpp', null, true, candidate),
+    { send: null, queued: candidate });
+  assert.deepEqual(
+    settlePickerLifecycle(
+      { pickerOpenMode: PICKER_MODE.FILE }, PICKER_MODE.FILE, candidate),
+    { mode: PICKER_MODE.FILE, submit: candidate });
+});
+
+check('picker submit cancels when authoritative open fails or changes mode', () => {
+  const candidate = { mode: PICKER_MODE.FILE, candidateId: 'src/main.cpp' };
+  assert.deepEqual(
+    settlePickerLifecycle(
+      { pickerOpenMode: PICKER_MODE.FILE }, null, candidate),
+    { mode: null, submit: null });
+  assert.deepEqual(
+    settlePickerLifecycle(
+      { pickerOpenMode: PICKER_MODE.FILE }, PICKER_MODE.COMMAND, candidate),
+    { mode: PICKER_MODE.COMMAND, submit: null });
+  assert.deepEqual(
+    queuePickerSubmit(
+      PICKER_MODE.FILE, candidate.candidateId, PICKER_MODE.FILE, false, null),
+    { send: candidate, queued: null });
 });
 
 check('pending prompt search defers document rendering and honors user scroll', () => {
@@ -389,6 +420,7 @@ import {
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
   applyPalettePresenceOverlay, PALETTE_PRESENCE_OP,
+  resolveUiFocusPath, focusUiNode,
 } from '../../apps/web/reconcile.mjs';
 
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
@@ -413,6 +445,81 @@ const presenceForSchema = (generation, root, hidden = []) => {
   walk(root);
   return { generation, basis: 0, nodes };
 };
+
+check('focus path resolves the present top while allowing a hidden base', () => {
+    const root = rowNode('root', [
+      leafNode('editor', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
+      leafNode('input_line', WIDGET.TEXT_INPUT),
+    ]);
+    const schema = schemaOf(21, root);
+    const presence = presenceForSchema(21, root, ['editor']);
+    const state = {
+      generation: 21,
+      nodes: [st('root'), st('editor'), st('input_line')],
+      focus_path: ['editor', 'input_line'],
+    };
+    assert.deepEqual(resolveUiFocusPath(schema, state, presence), {
+      path: ['editor', 'input_line'],
+      effective: 'input_line',
+      captured: true,
+    });
+});
+
+check('predicted picker focus is a disposable overlay on the authoritative path', () => {
+    const root = rowNode('root', [
+      leafNode('editor', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
+      leafNode('input_line', WIDGET.TEXT_INPUT),
+    ]);
+    const schema = schemaOf(22, root);
+    const presence = presenceForSchema(22, root);
+    const state = {
+      generation: 22,
+      nodes: [st('root'), st('editor'), st('input_line')],
+      focus_path: ['editor'],
+    };
+    assert.deepEqual(resolveUiFocusPath(schema, state, presence, 'input_line'), {
+      path: ['editor'],
+      effective: 'input_line',
+      captured: true,
+    });
+    assert.deepEqual(resolveUiFocusPath(schema, state, presence), {
+      path: ['editor'],
+      effective: 'editor',
+      captured: false,
+    });
+});
+
+check('focus path rejects missing nodes and a hidden effective node', () => {
+    const root = rowNode('root', [
+      leafNode('editor', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
+      leafNode('input_line', WIDGET.TEXT_INPUT),
+    ]);
+    const schema = schemaOf(23, root);
+    const state = {
+      generation: 23,
+      nodes: [st('root'), st('editor'), st('input_line')],
+      focus_path: ['editor', 'missing'],
+    };
+    assert.equal(
+      resolveUiFocusPath(schema, state, presenceForSchema(23, root)), null);
+    state.focus_path = ['editor', 'input_line'];
+    assert.equal(
+      resolveUiFocusPath(
+        schema, state, presenceForSchema(23, root, ['input_line'])), null);
+});
+
+check('focusUiNode always prevents scroll', () => {
+    let options = null;
+    const node = {
+      tabIndex: 0,
+      focus(value) { options = value; },
+    };
+    assert.equal(focusUiNode('input_line', (id) =>
+      id === 'input_line' ? node : null), true);
+    assert.deepEqual(options, { preventScroll: true });
+    assert.equal(node.tabIndex, -1);
+    assert.equal(focusUiNode('missing', () => null), false);
+});
 
 // Flatten a render tree to its drawn leaves in order (the DOM builder mirrors this).
 function drawnLeaves(node, out = []) {

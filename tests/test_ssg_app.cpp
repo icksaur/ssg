@@ -1303,6 +1303,19 @@ TEST(decodeInputCoalescesMetaPrefixIntoAltStrokes) {
     ASSERT_EQ(std::string{ssg::keyCodeName(escEsc.stroke.code)}, std::string{"Escape"});
 }
 
+TEST(altQRequestsApplicationQuitBeforeEditorRouting) {
+    ssg::KeyStroke quit;
+    quit.code = ssg::KeyCode::KeyQ;
+    quit.alt = true;
+    ASSERT_TRUE(ssg::app::application_quit_requested(quit));
+
+    quit.control = true;
+    ASSERT_FALSE(ssg::app::application_quit_requested(quit));
+    quit.control = false;
+    quit.alt = false;
+    ASSERT_FALSE(ssg::app::application_quit_requested(quit));
+}
+
 // Drain `bytes` through the decoder the way the main loop does, returning every
 // committed text fragment.  `incomplete` ends the drain, leaving the remainder
 // reported as held.
@@ -3382,6 +3395,7 @@ int main() {
     RUN(edgeScrollDecidesDirectionAtTheContentEdges);
     RUN(decodeInputEscapeBoundaryIsBounded);
     RUN(decodeInputCoalescesMetaPrefixIntoAltStrokes);
+    RUN(altQRequestsApplicationQuitBeforeEditorRouting);
     RUN(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

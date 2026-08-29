@@ -1,12 +1,13 @@
 #pragma once
 
 // The generation-scoped dynamic node state: the resolved, geometry-independent
-// state a client needs to PRESENT a schema node it cannot resolve itself. The
+// state a client needs to PRESENT and focus a schema node it cannot resolve itself. The
 // published `ui` schema carries value SOURCES (a literal or a provider id); a
 // non-grid client (the web) has no status-field registry and cannot resolve a
 // provider id. So the runtime resolves each leaf's source here and publishes the
 // result, in exact correspondence with the schema it names: one record per schema
-// node, keyed by the node's UiNodeId, at the schema's generation.
+// node plus the authoritative ordered focus path, all keyed to the schema's
+// generation.
 //
 // Presence and renderability are distinct AND separately published. This section
 // carries only a leaf's resolved semantic state; a node's authoritative presence is
@@ -63,6 +64,9 @@ struct UiNodeState {
 struct UiStateSection {
     Generation generation{0};
     std::vector<UiNodeState> nodes;
+    // The authoritative base-to-top keyboard focus path for this generation.
+    // Absent only when decoding a frame from a host that predates this field.
+    std::optional<std::vector<UiNodeId>> focusPath;
 
     friend bool operator==(const UiStateSection&, const UiStateSection&) = default;
 };

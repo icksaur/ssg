@@ -35,6 +35,8 @@ UiStateSection sample() {
                     std::nullopt, SemanticRole::Prompt,
                     std::optional<bool>{true}}});
     section.nodes.push_back(UiNodeState{UiNodeId{"sp"}, std::nullopt});
+    section.focusPath =
+        std::vector<UiNodeId>{UiNodeId{"editor"}, UiNodeId{"input"}};
     return section;
 }
 
@@ -59,6 +61,42 @@ TEST(missingGenerationDecodesToNullopt) {
     const ProtocolValue value =
         ProtocolValue::makeObject({{"nodes", ProtocolValue::makeArray({})}});
     ASSERT_FALSE(decodeUiState(value).has_value());
+}
+
+TEST(absentOrNullFocusPathDecodesAsCompatibilityState) {
+    const ProtocolValue absent = ProtocolValue::makeObject(
+        {{"generation", ProtocolValue::makeUint(1)},
+         {"nodes", ProtocolValue::makeArray({})}});
+    auto decodedAbsent = decodeUiState(absent);
+    ASSERT_TRUE(decodedAbsent.has_value());
+    ASSERT_TRUE(decodedAbsent && !decodedAbsent->focusPath.has_value());
+
+    const ProtocolValue nullPath = ProtocolValue::makeObject(
+        {{"generation", ProtocolValue::makeUint(1)},
+         {"nodes", ProtocolValue::makeArray({})},
+         {"focus_path", ProtocolValue::makeNull()}});
+    auto decodedNull = decodeUiState(nullPath);
+    ASSERT_TRUE(decodedNull.has_value());
+    ASSERT_TRUE(decodedNull && !decodedNull->focusPath.has_value());
+}
+
+TEST(malformedPresentFocusPathDecodesToNullopt) {
+    const auto section = [](ProtocolValue path) {
+        return ProtocolValue::makeObject(
+            {{"generation", ProtocolValue::makeUint(1)},
+             {"nodes", ProtocolValue::makeArray({})},
+             {"focus_path", std::move(path)}});
+    };
+    ASSERT_FALSE(
+        decodeUiState(section(ProtocolValue::makeText("editor"))).has_value());
+    ASSERT_FALSE(
+        decodeUiState(section(ProtocolValue::makeArray({}))).has_value());
+    ASSERT_FALSE(decodeUiState(section(ProtocolValue::makeArray(
+                                   {ProtocolValue::makeText("")})))
+                     .has_value());
+    ASSERT_FALSE(decodeUiState(section(ProtocolValue::makeArray(
+                                   {ProtocolValue::makeUint(1)})))
+                     .has_value());
 }
 
 // A duplicate node id is malformed (the section must be one record per node).
@@ -135,7 +173,9 @@ int main() {
     RUN(encodeDecodeRoundTripsExactly);
     RUN(emptySectionRoundTrips);
     RUN(missingGenerationDecodesToNullopt);
+    RUN(absentOrNullFocusPathDecodesAsCompatibilityState);
+    RUN(malformedPresentFocusPathDecodesToNullopt);
     RUN(duplicateNodeIdDecodesToNullopt);
     RUN(malformedLeafFieldTypeDecodesToNullopt);
-    return 0;
+    return failed == 0 ? 0 : 1;
 }

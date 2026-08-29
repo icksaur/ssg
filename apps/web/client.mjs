@@ -11,6 +11,7 @@ import {
   browserInboundKind,
   matcherBoundsFromPalette, clampPaletteSelection, pickerCandidatesFromPalette,
   resolvePickerLifecycle, effectivePickerMode, encodePickerSubmit,
+  queuePickerSubmit, settlePickerLifecycle,
   encodeSelectionByteRange, encodeTabAction, markedTextByteOffset,
   applySessionDeltaSections, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
@@ -18,6 +19,7 @@ import {
   firstMalformedNodeStyle, roleColor,
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
+  resolveUiFocusPath, focusUiNode,
   applyPalettePresenceOverlay,
   BrowserKeyDispatchTracker,
   encodeCommandRequest, encodeClientInput, encodeTreeActivation,
@@ -60,15 +62,19 @@ const state = {
   promptPrediction: null,
   promptScrollOverride: false,
   skipNextCaretReveal: false,
+  focusOverlay: null,
   // The palette/finder is a client-owned derived view: the browser owns the
   // query text and selection index, and ranks the published candidate universe locally.
-  palette: { mode: null, query: '', selected: 0, returnFocus: null },
+  palette: {
+    mode: null, query: '', selected: 0, pendingSubmit: null,
+  },
 };
 const retainedNodes = new GenerationRetainedCache();
 let renderedSurfaceKinds = new Set();
 let renderedFooterPromptHost = null;
 let renderedFooterPromptActiveId = null;
 let pickerInputElement = null;
+let lastAppliedFocusNode = null;
 const allSurfaceKinds = Object.values(SURFACE);
 const fullRenderPlan = () => ({
   rebuild: true,
@@ -457,19 +463,21 @@ function locallyRankedPaletteRows(palette, mode = state.palette.mode) {
 
 function submitPaletteCandidate(mode, candidate) {
     if (!candidate) return;
-    sendCommandFrame(
-      encodePickerSubmit(mode, candidate.id, state.revision));
-    const returnFocus = state.palette.returnFocus;
-    state.palette.mode = null;
-    state.palette.query = '';
-    state.palette.selected = 0;
-    state.palette.returnFocus = null;
-    render({ ...surfaceRenderPlan(), reconcile: true });
-    if (returnFocus && returnFocus.isConnected) {
-      returnFocus.focus({ preventScroll: true });
-    } else {
-      editorFocusElement().focus({ preventScroll: true });
+    const openingPending = state.inputQueue.some(
+      (input) => input.pickerOpenMode === mode);
+    const disposition = queuePickerSubmit(
+      mode, candidate.id, authoritativePickerMode(), openingPending,
+      state.palette.pendingSubmit);
+    if (!disposition.send && !disposition.queued) return;
+    if (disposition.send &&
+        !sendCommandFrame(
+          encodePickerSubmit(
+            disposition.send.mode, disposition.send.candidateId, state.revision),
+          'picker-submit')) {
+      return;
     }
+    state.palette.pendingSubmit = disposition.queued;
+    render({ ...surfaceRenderPlan(), reconcile: true });
 }
 
 function renderFindResultsSurface(parent, palette, mode = state.palette.mode) {
@@ -572,7 +580,6 @@ function renderChrome(sections, plan) {
   const schema = sections.ui;
   const stateSection = sections.ui_state;
   let presenceSection = sections.ui_presence;
-  let overlayFailureFocus = null;
   chromeErrorEl.textContent = '';
   if (!schema || !schema.root) return false;
 
@@ -598,17 +605,25 @@ function renderChrome(sections, plan) {
       sections.palette && sections.palette.presence_overlay);
     if (applied.error) {
       chromeErrorEl.textContent = applied.error;
-      overlayFailureFocus = state.palette.returnFocus;
       state.palette.mode = null;
       state.palette.query = '';
       state.palette.selected = 0;
-      state.palette.returnFocus = null;
+      state.palette.pendingSubmit = null;
+      state.focusOverlay = null;
     } else if (!applied.stale) {
       presenceSection = applied.presence;
     }
   }
   const interpreted = interpretChrome(schema, stateSection, presenceSection);
   if (!interpreted || !interpreted.root) return false;  // schema/state from different frames; wait
+  const focusPath = resolveUiFocusPath(
+    schema, stateSection, presenceSection, state.focusOverlay);
+  if (focusPath === null && stateSection.focus_path != null) {
+    chromeErrorEl.textContent =
+      'malformed UI focus path -- this client cannot reconcile keyboard focus';
+    uiRootEl.textContent = '';
+    return false;
+  }
 
   const generation = num(schema.generation);
   const generationChanged = retainedNodes.begin(generation);
@@ -624,29 +639,38 @@ function renderChrome(sections, plan) {
   if (generationChanged || nextRoot.parentElement !== uiRootEl) {
     reconcileChildren(uiRootEl, [nextRoot]);
   }
-  reconcileFooterPromptFocus(renderedFooterPromptHost,
-                             renderedFooterPromptActiveId,
-                             generationChanged);
-  if (overlayFailureFocus !== null) {
-    const target =
-      overlayFailureFocus.isConnected
-        ? overlayFailureFocus
-        : editorFocusElement();
-    target.focus({ preventScroll: true });
+  reconcileFooterPromptAria(renderedFooterPromptHost,
+                            renderedFooterPromptActiveId);
+  if (focusPath) {
+    const current = document.activeElement;
+    const target = retainedNodes.get(focusPath.effective);
+    if (current !== target &&
+        !focusUiNode(focusPath.effective, (id) => retainedNodes.get(id))) {
+      chromeErrorEl.textContent =
+        'UI focus target is not renderable -- this client cannot reconcile keyboard focus';
+      return false;
+    }
+    lastAppliedFocusNode = focusPath.effective;
+  } else {
+    const legacyFocus = num(sections.focus);
+    const legacyTarget = legacyFocus === 1
+      ? 'panel'
+      : legacyFocus === 2
+        ? (effectivePickerMode(sections.palette, state.palette.mode) != null
+            ? 'input_line' : 'footer.prompt')
+        : 'editor';
+    const current = document.activeElement;
+    const target = retainedNodes.get(legacyTarget);
+    const shouldFocus = legacyFocus === 2 ||
+      legacyTarget !== lastAppliedFocusNode ||
+      current === document.body || current === statusEl || !current.isConnected;
+    if (shouldFocus && current !== target) {
+      focusUiNode(legacyTarget, (id) => retainedNodes.get(id));
+    }
+    lastAppliedFocusNode = legacyTarget;
   }
   return true;
 }
-
-// The footer prompt renders into a retained View element. The structural tree may
-// be rebuilt around it, but the focused element stays connected and focus is moved
-// only on open and on active-input change, never per message. The container holds
-// keyboard focus (tabindex=0, aria-activedescendant naming the active input); its
-// child inputs are role=textbox but non-focusable, so a screen reader tracks the
-// active input without the browser moving focus into it. The container is a
-// role=group so it can own aria-activedescendant across every prompt kind.
-let footerPromptOpen = false;
-let footerPromptActiveInput = null;
-let savedFocusEl = null;
 
 function editorFocusElement() {
   const connected = [...retainedNodes.values()].filter(
@@ -659,31 +683,14 @@ function editorFocusElement() {
   return uiRootEl;
 }
 
-function reconcileFooterPromptFocus(host, activeInput, forceFocus = false) {
-  if (!host) {
-    if (footerPromptOpen) {
-      const restore = (savedFocusEl && document.contains(savedFocusEl))
-        ? savedFocusEl : editorFocusElement();
-      restore.focus({ preventScroll: true });
-      savedFocusEl = null;
-    }
-    footerPromptOpen = false;
-    footerPromptActiveInput = null;
-    return;
-  }
-  if (!footerPromptOpen) savedFocusEl = document.activeElement;
+function reconcileFooterPromptAria(host, activeInput) {
+  if (!host) return;
   if (activeInput != null) {
     host.setAttribute('aria-activedescendant',
                       'prompt-input-' + activeInput);
   } else {
     host.removeAttribute('aria-activedescendant');
   }
-  if (forceFocus || !footerPromptOpen ||
-      activeInput !== footerPromptActiveInput) {
-    host.focus({ preventScroll: true });
-  }
-  footerPromptOpen = true;
-  footerPromptActiveInput = activeInput;
 }
 
 // Reconcile the retained notice surface against the published semantic NoticeView.
@@ -1095,6 +1102,29 @@ function sendCommandFrame(frame, owner = 'other') {
   return true;
 }
 
+function authoritativePickerMode() {
+  const mode = state.sections && state.sections.palette &&
+    state.sections.palette.active_mode;
+  return mode == null ? null : num(mode);
+}
+
+function pickerTransitionPending() {
+  return state.inputQueue.some(
+    (input) => input.pickerOpenMode != null || input.pickerClose) ||
+    commandRequests.includes('picker-submit');
+}
+
+function syncPickerFromAuthority() {
+  if (pickerTransitionPending()) return;
+  const mode = authoritativePickerMode();
+  if (state.palette.mode === mode) return;
+  state.palette.mode = mode;
+  state.palette.query = '';
+  state.palette.selected = 0;
+  state.palette.pendingSubmit = null;
+  state.focusOverlay = null;
+}
+
 function sendCommand(id, payload = null) {
   return sendCommandFrame(
     encodeCommandRequest(id, state.revision, payload));
@@ -1107,6 +1137,11 @@ function discardPredictions() {
   state.promptPrediction = null;
   state.promptScrollOverride = false;
   state.skipNextCaretReveal = true;
+  state.palette.mode = null;
+  state.palette.query = '';
+  state.palette.selected = 0;
+  state.palette.pendingSubmit = null;
+  state.focusOverlay = null;
   render({
     ...surfaceRenderPlan(SURFACE.DOCUMENT),
     reconcile: true,
@@ -1128,12 +1163,14 @@ function applyProtocolFrame(buffer) {
     reconnectAttempts = 0;
     frameRenderPlan = fullRenderPlan();
     invalidatePointerOffsets();
+    syncPickerFromAuthority();
   } else if (inbound === 'delta') {
     if (!applyDelta(payload)) {
       reconnect('state gap');
       return false;
     }
     frameRenderPlan = browserRenderPlan(payload);
+    syncPickerFromAuthority();
   } else if (inbound === 'command-result') {
     if (payload.revision != null && BigInt(payload.revision) > state.revision) {
       reconnect('command result preceded state');
@@ -1148,6 +1185,13 @@ function applyProtocolFrame(buffer) {
     if (settled.owner === 'pointer') {
       settlePointerRange(num(payload.error));
       frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
+    } else if (settled.owner === 'picker-submit') {
+      state.palette.mode = authoritativePickerMode();
+      state.palette.query = '';
+      state.palette.selected = 0;
+      state.palette.pendingSubmit = null;
+      state.focusOverlay = null;
+      frameRenderPlan = { ...surfaceRenderPlan(), reconcile: true };
     }
   } else if (inbound === 'input-result') {
     const completedInput = state.inputQueue[0];
@@ -1159,7 +1203,23 @@ function applyProtocolFrame(buffer) {
     }
     state.inputQueue = settled.inputQueue;
     state.pending = settled.pending;
-    if (state.promptPrediction) {
+    const pickerLifecycleCompleted = completedInput &&
+      (completedInput.pickerOpenMode != null || completedInput.pickerClose);
+    if (pickerLifecycleCompleted) {
+      const picker = settlePickerLifecycle(
+        completedInput, authoritativePickerMode(), state.palette.pendingSubmit);
+      state.palette.pendingSubmit = null;
+      state.focusOverlay = null;
+      state.palette.mode = picker.mode;
+      if (picker.submit &&
+          !sendCommandFrame(
+            encodePickerSubmit(
+              picker.submit.mode, picker.submit.candidateId, state.revision),
+            'picker-submit')) {
+        state.palette.mode = picker.mode;
+      }
+      frameRenderPlan = { ...surfaceRenderPlan(), reconcile: true };
+    } else if (state.promptPrediction) {
       const promptPresentation = settlePromptPresentation(
         state.promptPrediction, state.inputQueue, completedInput,
         state.promptScrollOverride);
@@ -1210,13 +1270,6 @@ function connect() {
     render(frameRenderPlan);
     flushPointerPoint();
     statusEl.textContent = '';
-    // Keep the document focused for the common editor case, but never steal focus
-    // from an open footer prompt: it owns the keyboard while it is up, and
-    // renderFooterPrompt has already placed focus on its container.
-    if (!footerPromptOpen &&
-        (document.activeElement === document.body || document.activeElement === statusEl)) {
-      editorFocusElement().focus({ preventScroll: true });
-    }
     } catch (err) {
       reconnect('protocol error: ' + err.message);
     }
@@ -1274,6 +1327,11 @@ function handleKeydown(ev) {
   // reachable only via Ctrl+Shift+Home/End, select-to-document-extreme, has no
   // Alt twin and is thus unreachable on web until the keymap grows one.)
   if (ev.ctrlKey || ev.metaKey) return;
+  if (state.palette.pendingSubmit ||
+      commandRequests.includes('picker-submit')) {
+    ev.preventDefault();
+    return;
+  }
 
   const inputStroke = {
     code: ev.code, control: ev.ctrlKey, alt: ev.altKey,
@@ -1290,15 +1348,25 @@ function handleKeydown(ev) {
       state.sections.keymap, state.sections.palette, inputStroke, focus);
     if (mode != null) {
       ev.preventDefault();
-      state.palette.returnFocus = document.activeElement;
+      const sent = sendTyped(encodeClientInput({
+        code: ev.code, alt: ev.altKey, shift: ev.shiftKey, text: '',
+      }));
+      if (!sent) return;
+      state.inputQueue.push({
+        predictionId: null,
+        promptPrediction: false,
+        promptInput: false,
+        pickerOpenMode: mode,
+      });
       state.palette.mode = mode;
       state.palette.query = '';
       state.palette.selected = 0;
+      state.palette.pendingSubmit = null;
+      state.focusOverlay = 'input_line';
       render({
         ...surfaceRenderPlan(SURFACE.FINDRESULTS),
         reconcile: true,
       });
-      editorFocusElement().focus({ preventScroll: true });
       return;
     }
   }
@@ -1311,17 +1379,22 @@ function handleKeydown(ev) {
     const p = state.palette;
     if (ev.key === 'Escape') {
       ev.preventDefault();
-      const returnFocus = p.returnFocus;
+      const sent = sendTyped(encodeClientInput({
+        code: ev.code, alt: ev.altKey, shift: ev.shiftKey, text: '',
+      }));
+      if (!sent) return;
+      state.inputQueue.push({
+        predictionId: null,
+        promptPrediction: false,
+        promptInput: false,
+        pickerClose: true,
+      });
       p.mode = null;
       p.query = '';
       p.selected = 0;
-      p.returnFocus = null;
+      p.pendingSubmit = null;
+      state.focusOverlay = null;
       render({ ...surfaceRenderPlan(), reconcile: true });
-      if (returnFocus && returnFocus.isConnected) {
-        returnFocus.focus({ preventScroll: true });
-      } else {
-        editorFocusElement().focus({ preventScroll: true });
-      }
       return;
     }
     if (ev.key === 'Enter') {

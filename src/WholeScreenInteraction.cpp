@@ -117,8 +117,10 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
 
     // Base focus never strands on an absent panel: Panel is honored only when present.
     state.setBaseFocus(
-        truth.baseFocus == BaseFocus::Panel && truth.panelPresent ? BaseFocus::Panel
-                                                                  : BaseFocus::Editor);
+        truth.baseFocus == BaseFocus::Panel && truth.panelPresent &&
+                !truth.distractionFree
+            ? BaseFocus::Panel
+            : BaseFocus::Editor);
 
     // A prompt anchors its focus capture on the node keystrokes route to: the header
     // input line itself for a Palette prompt (so the capture addresses the query

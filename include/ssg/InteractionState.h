@@ -43,6 +43,34 @@ public:
     [[nodiscard]] FocusTarget legacyEffectiveFocus() const noexcept {
         return focus_.legacyEffectiveTarget();
     }
+    // CONTRACT: The path is ordered base-to-top, contains only nodes from this
+    // schema, and ends at a present node. The base may be temporarily hidden by
+    // the transient surface that captured focus above it.
+    [[nodiscard]] std::vector<UiNodeId> focusPath() const {
+        UiNodeId base{std::string{focus_.base() == BaseFocus::Editor
+                                      ? kEditorNodeId
+                                      : kPanelNodeId}};
+        if (!schema_.contains(base)) {
+            throw std::logic_error(
+                "UiInteractionState: base focus host is outside the schema");
+        }
+        std::vector<UiNodeId> path;
+        path.reserve(focus_.captures().size() + 1);
+        path.push_back(std::move(base));
+        for (const FocusCapture& capture : focus_.captures()) {
+            if (!schema_.contains(capture.node) ||
+                !presence_.isPresent(capture.node)) {
+                throw std::logic_error(
+                    "UiInteractionState: focus capture host is absent");
+            }
+            path.push_back(capture.node);
+        }
+        if (!presence_.isPresent(path.back())) {
+            throw std::logic_error(
+                "UiInteractionState: effective focus host is absent");
+        }
+        return path;
+    }
 
     void setBaseFocus(BaseFocus base) noexcept { focus_.setBase(base); }
 

@@ -24,6 +24,13 @@
 
 namespace ssg::app {
 
+// Process lifecycle remains a terminal-application concern and is consumed
+// before editor input routing, so committed text on the same stroke cannot hide it.
+[[nodiscard]] inline bool application_quit_requested(
+    KeyStroke const& stroke) noexcept {
+    return stroke.code == KeyCode::KeyQ && stroke.alt && !stroke.control;
+}
+
 // M9-W signal-event wakeup.  Terminating and resize signals cannot do work in
 // async-signal context, so their handlers only write one tag byte per signal to
 // a self-pipe the event loop selects on.  The tag byte IS the signal number

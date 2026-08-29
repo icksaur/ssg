@@ -117,6 +117,27 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->sections().document.text, std::string{"hello"});
 
+    ssg::KeyStroke fileFinder;
+    fileFinder.code = ssg::KeyCode::KeyP;
+    fileFinder.alt = true;
+    auto finderOpen =
+        runtime.input(ssg::ClientId{1}, {fileFinder, {}});
+    ASSERT_EQ(finderOpen.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_TRUE(finderOpen.command.has_value());
+    ASSERT_TRUE(finderOpen.command->accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_TRUE(snapshot->sections().palette.activeMode.has_value());
+    ASSERT_EQ(*snapshot->sections().palette.activeMode,
+              ssg::SearchMode::File);
+
+    ssg::KeyStroke escape;
+    escape.code = ssg::KeyCode::Escape;
+    auto finderEscape = runtime.input(ssg::ClientId{1}, {escape, {}});
+    ASSERT_EQ(finderEscape.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_TRUE(finderEscape.command.has_value());
+    ASSERT_TRUE(finderEscape.command->accepted());
+
     ASSERT_TRUE(runtime
                     .dispatch(ssg::ClientId{1},
                               {"palette.open", runtime.revision(), {}})
@@ -140,8 +161,6 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
               ssg::ClientOwnedInputKind::SelectNext);
     ASSERT_EQ(runtime.revision(), before);
 
-    ssg::KeyStroke escape;
-    escape.code = ssg::KeyCode::Escape;
     auto paletteEscape = runtime.input(ssg::ClientId{1}, {escape, {}});
     ASSERT_EQ(paletteEscape.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_TRUE(paletteEscape.command.has_value());
@@ -1294,6 +1313,10 @@ TEST(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot) {
     if (!shown) return;
     ASSERT_TRUE(shown->presentation()->shell.panel.has_value());
     ASSERT_TRUE(shown->sections().focus == ssg::FocusTarget::Panel);
+    ASSERT_TRUE(shown->sections().uiState.focusPath.has_value());
+    ASSERT_TRUE(*shown->sections().uiState.focusPath ==
+                std::vector<ssg::UiNodeId>{
+                    ssg::UiNodeId{std::string{ssg::kPanelNodeId}}});
 
     // Opening the command palette routes focus to the prompt and opens the picker.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -1304,6 +1327,12 @@ TEST(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot) {
     if (!open) return;
     ASSERT_TRUE(open->sections().focus == ssg::FocusTarget::Prompt);
     ASSERT_TRUE(open->presentation()->shell.palette.has_value());
+    ASSERT_TRUE(open->sections().uiState.focusPath.has_value());
+    ASSERT_TRUE((*open->sections().uiState.focusPath ==
+                 std::vector<ssg::UiNodeId>{
+                     ssg::UiNodeId{std::string{ssg::kPanelNodeId}},
+                     ssg::UiNodeId{
+                         std::string{ssg::kHeaderPromptInputNodeId}}}));
 
     // Closing it returns focus to the panel underneath and drops the picker.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -1314,6 +1343,10 @@ TEST(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot) {
     if (!closed) return;
     ASSERT_TRUE(closed->sections().focus == ssg::FocusTarget::Panel);
     ASSERT_FALSE(closed->presentation()->shell.palette.has_value());
+    ASSERT_TRUE(closed->sections().uiState.focusPath.has_value());
+    ASSERT_TRUE(*closed->sections().uiState.focusPath ==
+                std::vector<ssg::UiNodeId>{
+                    ssg::UiNodeId{std::string{ssg::kPanelNodeId}}});
 }
 
 TEST(aRejectedFinderCloseIsReportedAndMutatesNothing) {

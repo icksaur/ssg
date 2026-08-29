@@ -8,9 +8,11 @@
 // `ui_state` section alongside the `ui` schema.
 //
 // encodeUiState/decodeUiState round-trip exactly. decode returns nullopt on
-// malformed input (no generation, a duplicate node id, or a malformed leaf field
-// type), never a partial. The schema-relative checks a UiStateSection cannot carry
-// on its own (node-id set matching the schema, container/leaf shape agreement) are
+// malformed input (no generation, a duplicate node id, a malformed leaf field
+// type, or a present malformed focus path), never a partial. An absent/null focus
+// path is the compatibility representation of a frame from an older host. The
+// schema-relative checks a UiStateSection cannot carry on its own (node-id set
+// matching the schema, container/leaf shape agreement, focus-path membership) are
 // a client's reconciliation concern, not this codec's.
 
 #include <ssg/Protocol.h>

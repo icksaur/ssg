@@ -49,7 +49,9 @@ UiNode container(std::string id, std::vector<UiNode> children) {
 ValidatedSchema validated() {
     UiSchema s;
     s.generation = Generation{1};
-    s.root = container("group", {container("overlay", {leaf("palette")})});
+    s.root = container(
+        "group", {leaf(std::string{ssg::kEditorNodeId}),
+                  container("overlay", {leaf("palette")})});
     auto r = ValidatedSchema::validate(s);
     if (!r.ok()) throw std::logic_error("schema must validate");
     return r.takeSchema();
@@ -70,6 +72,19 @@ TEST(captureOnAnAbsentNodeIsRejected) {
     } catch (const std::logic_error&) {
         threw = true;
     }
+
+    ASSERT_TRUE(threw);
+}
+
+TEST(focusPathRejectsAnAbsentEffectiveBase) {
+    UiInteractionState state{
+        validated(), {UiNodeId{std::string{ssg::kEditorNodeId}}}};
+    bool threw = false;
+    try {
+        (void)state.focusPath();
+    } catch (const std::logic_error&) {
+        threw = true;
+    }
     ASSERT_TRUE(threw);
 }
 
@@ -80,6 +95,10 @@ TEST(applyingAHideThatHidesTheFocusPopsItAtomically) {
     UiInteractionState state{validated()};
     state.captureFocus(FocusCapture{UiNodeId{"palette"}, FocusTarget::Prompt});
     ASSERT_TRUE(state.effectiveFocus() == FocusTarget::Prompt);
+    ASSERT_TRUE((
+        state.focusPath() ==
+        std::vector<UiNodeId>{UiNodeId{std::string{ssg::kEditorNodeId}},
+                              UiNodeId{"palette"}}));
 
     // Hiding the overlay hides its subtree (palette), and the same apply reconciles
     // focus back to the base.
@@ -88,6 +107,9 @@ TEST(applyingAHideThatHidesTheFocusPopsItAtomically) {
     ASSERT_TRUE(!error.has_value());
     ASSERT_TRUE(!state.focus().hasCapture());
     ASSERT_TRUE(state.effectiveFocus() == FocusTarget::Editor);
+    ASSERT_TRUE(
+        state.focusPath() ==
+        std::vector<UiNodeId>{UiNodeId{std::string{ssg::kEditorNodeId}}});
 }
 
 // A rejected patch leaves state unchanged (atomic: whole or nothing).
@@ -106,6 +128,7 @@ TEST(aRejectedPatchLeavesStateUnchanged) {
 
 int main() {
     RUN(captureOnAnAbsentNodeIsRejected);
+    RUN(focusPathRejectsAnAbsentEffectiveBase);
     RUN(applyingAHideThatHidesTheFocusPopsItAtomically);
     RUN(aRejectedPatchLeavesStateUnchanged);
     return failed == 0 ? 0 : 1;

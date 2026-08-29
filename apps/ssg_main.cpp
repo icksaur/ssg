@@ -1656,15 +1656,13 @@ int main(int argc, char** argv) {
                 continue;
             }
 
-            auto const outcome = routeInput(decoded.stroke, decoded.text);
-            if (outcome == ssg::ClientInputOutcome::Unhandled) {
-                // Quit is process lifecycle, not editor behavior.
-                auto const& stroke = decoded.stroke;
-                if (stroke.code == ssg::KeyCode::KeyQ && stroke.alt &&
-                    !stroke.control) {
-                    quit = true;
-                }
+            // Quit is process lifecycle, not editor behavior. Consume it before
+            // committed text routing, which can otherwise accept the same `q`.
+            if (ssg::app::application_quit_requested(decoded.stroke)) {
+                quit = true;
+                continue;
             }
+            (void)routeInput(decoded.stroke, decoded.text);
         }
     }
     } catch (std::exception const& error) {

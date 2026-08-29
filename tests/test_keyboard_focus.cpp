@@ -37,7 +37,10 @@ TEST(captureOverridesBaseAndPopRestoresIt) {
     focus.setBase(BaseFocus::Editor);
     focus.pushCapture(prompt("palette"));
     ASSERT_TRUE(focus.effectiveTarget() == FocusTarget::Prompt);
+    ASSERT_TRUE(focus.captures().size() == 1);
+    ASSERT_TRUE(focus.captures().front().node == UiNodeId{"palette"});
     focus.popCapture();
+    ASSERT_TRUE(focus.captures().empty());
     ASSERT_TRUE(focus.effectiveTarget() == FocusTarget::Editor);
 }
 

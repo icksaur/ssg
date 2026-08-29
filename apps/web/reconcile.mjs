@@ -484,6 +484,29 @@ export function effectivePickerMode(palette, localMode) {
     : localMode;
 }
 
+export function queuePickerSubmit(
+    mode, candidateId, authoritativeMode, openingPending, queued) {
+  if (queued) return { send: null, queued };
+  const submit = { mode, candidateId };
+  if (authoritativeMode === mode) return { send: submit, queued: null };
+  return openingPending
+    ? { send: null, queued: submit }
+    : { send: null, queued: null };
+}
+
+export function settlePickerLifecycle(
+    completedInput, authoritativeMode, queuedSubmit) {
+  const mode = authoritativeMode == null ? null : authoritativeMode;
+  if (!completedInput || completedInput.pickerOpenMode == null) {
+    return { mode, submit: null };
+  }
+  const expected = completedInput.pickerOpenMode;
+  const submit = mode === expected && queuedSubmit &&
+      queuedSubmit.mode === expected
+    ? queuedSubmit : null;
+  return { mode, submit };
+}
+
 function sameStroke(bindingStroke, inputStroke) {
   return bindingStroke && inputStroke &&
     bindingStroke.code === inputStroke.code &&
@@ -884,6 +907,58 @@ export function preferredKeyboardSurface(surfaces) {
   if (present.has(SURFACE.DOCUMENT)) return SURFACE.DOCUMENT;
   return null;
 }
+
+export function resolveUiFocusPath(schema, state, presence, predictedNode = null) {
+  if (!schema || !state || !presence ||
+      num(schema.generation) !== num(state.generation) ||
+      num(schema.generation) !== num(presence.generation)) {
+    return null;
+  }
+  if (state.focus_path == null) return undefined;
+  if (!Array.isArray(state.focus_path) || state.focus_path.length === 0) {
+    return null;
+  }
+  const schemaIds = new Set();
+  const collect = (node) => {
+    if (!node || typeof node.id !== 'string') return;
+    schemaIds.add(node.id);
+    for (const child of (node.container && node.container.children) || []) {
+      collect(child);
+    }
+  };
+  collect(schema.root);
+  const present = new Map(
+    (presence.nodes || []).map((node) => [node.id, !!num(node.present)]));
+  if (state.focus_path.some(
+        (id) => typeof id !== 'string' || !schemaIds.has(id))) {
+    return null;
+  }
+  if (state.focus_path[0] !== 'editor' &&
+      state.focus_path[0] !== 'panel') {
+    return null;
+  }
+  const authoritativeTop = state.focus_path[state.focus_path.length - 1];
+  if (!present.get(authoritativeTop)) return null;
+  if (predictedNode != null &&
+      (!schemaIds.has(predictedNode) || !present.get(predictedNode))) {
+    return null;
+  }
+  return {
+    path: [...state.focus_path],
+    effective: predictedNode == null ? authoritativeTop : predictedNode,
+    captured: state.focus_path.length > 1 || predictedNode != null,
+  };
+}
+
+export function focusUiNode(nodeId, findNode) {
+  if (nodeId == null) return false;
+  const node = findNode(nodeId);
+  if (!node) return false;
+  node.tabIndex = -1;
+  node.focus({ preventScroll: true });
+  return true;
+}
+
 const STRUCTURAL_ROLE = { prompt: 16 };
 const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL_ROLE, name)
   ? STRUCTURAL_ROLE[name] : null;

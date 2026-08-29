@@ -73,6 +73,9 @@ public:
     [[nodiscard]] const FocusCapture* top() const noexcept {
         return captures_.empty() ? nullptr : &captures_.back();
     }
+    [[nodiscard]] const std::vector<FocusCapture>& captures() const noexcept {
+        return captures_;
+    }
 
     // The single FocusTarget keymap routing consumes: the top capture's context,
     // else the base context. This is the ONE authority for the effective focus.

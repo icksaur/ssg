@@ -283,6 +283,13 @@ TEST(baseFocusNeverStrandsOnAnAbsentPanel) {
     truth.panelPresent = true;
     const auto t = buildWholeScreenInteraction(schemaOf({}), truth);
     ASSERT_TRUE(t.effectiveFocus() == FocusTarget::Panel);
+
+    truth.distractionFree = true;
+    const auto distractionFree =
+        buildWholeScreenInteraction(schemaOf({}), truth);
+    ASSERT_TRUE(distractionFree.effectiveFocus() == FocusTarget::Editor);
+    ASSERT_TRUE(distractionFree.focusPath().back() ==
+                UiNodeId{std::string{kEditorNodeId}});
 }
 
 // --- Migration: rebuild from the same truth over a new generation -------------------

@@ -427,6 +427,7 @@ SessionSnapshotSections EditorSession::Impl::sections(
                                                helpHintLabel(keymap),
                                                promptView()));
     }();
+    uiState.focusPath = interactionState.focusPath();
     UiPresenceSection uiPresence =
         buildPresenceSection(validatedSchema, interactionState.presence());
     return {documentView(),
