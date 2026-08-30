@@ -543,6 +543,7 @@ struct EditorSession::Impl final : CommandServices,
     // caret instead of leaving the user typing off-screen. The plain-caret
     // analog of reveal_active_find_match.
     void revealPrimaryCaret(ViewId viewId);
+    void revealPrimaryCaret(ViewPresentationState& presentation) const;
     [[nodiscard]] TextEncodingViewState textEncodingView() const;
     [[nodiscard]] DocumentViewState documentView() const;
     [[nodiscard]] CommandHandlerResult updateTabsFor(FileDocumentId document);

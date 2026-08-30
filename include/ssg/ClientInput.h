@@ -37,6 +37,7 @@ enum class ClientInputKind : std::uint8_t {
     Document,
     ScrollLines,
     ScrollFraction,
+    ViewNavigation,
 };
 
 enum class InputPointerButton : std::uint8_t {
@@ -183,13 +184,23 @@ struct ScrollFractionInput {
                            const ScrollFractionInput&) = default;
 };
 
+struct ViewNavigationInput {
+    // CONTRACT: observedRevision identifies the active document as well as its
+    // state because every active-document switch advances EditorSession's
+    // revision; exact revision validation must precede the follow transition.
+    SemanticInputBasis basis;
+
+    friend bool operator==(const ViewNavigationInput&,
+                           const ViewNavigationInput&) = default;
+};
+
 using ClientInput =
     std::variant<ClientKeyInput, TabPointerInput, TreePointerInput,
                  PickerPointerInput, PromptControlPointerInput,
                  ExternalActionPointerInput, StatusActionPointerInput,
                  PublishedUiActionPointerInput, NoticeActionPointerInput,
                  DocumentPointerInput, ScrollLinesInput,
-                 ScrollFractionInput>;
+                 ScrollFractionInput, ViewNavigationInput>;
 
 enum class ClientOwnedInputKind : std::uint8_t {
     AppendText,

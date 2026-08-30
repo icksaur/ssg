@@ -248,6 +248,13 @@ export function encodeClientInput({ code = '', control = false, alt = false,
   return encodeMessage(7, { kind: 0n, stroke, committed_text: text });
 }
 
+export function encodeViewNavigationInput(observedRevision) {
+  return encodeMessage(7, {
+    kind: 12n,
+    basis_revision: BigInt(observedRevision),
+  });
+}
+
 const MODIFIER_CODES = new Set([
   'AltLeft', 'AltRight', 'ControlLeft', 'ControlRight',
   'MetaLeft', 'MetaRight', 'ShiftLeft', 'ShiftRight',

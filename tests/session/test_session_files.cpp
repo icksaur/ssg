@@ -1,4 +1,5 @@
 #include "../test_helpers.h"
+#include "../grid_test_view.h"
 
 #include <ssg/EditorSession.h>
 #include <ssg/FileCommands.h>
@@ -927,14 +928,15 @@ TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
     auto firstRow = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = grid.present(runtime);
         return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
 
     // Open A and scroll far down (free scroll leaves the caret off-screen above).
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
     ASSERT_EQ(firstRow(), 50U);
 
     // Opening B resets the view so B's caret (its document start) is visible: the
@@ -1122,14 +1124,15 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
     auto firstRow = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = grid.present(runtime);
         return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
     // B is active; scroll it far down (free scroll leaves B's caret off-screen).
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
     ASSERT_EQ(firstRow(), 50U);
 
     // Switch to A (previous tab): its caret (top) is revealed, not B's stale 50.
@@ -1139,7 +1142,7 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     // Moving a tab keeps the SAME active document and must NOT snap the scroll:
     // switch back to B, scroll away, move the tab, and the offset stays put.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.next", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
     ASSERT_EQ(firstRow(), 50U);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.move_left", runtime.revision(), {}}).accepted());
     ASSERT_EQ(firstRow(), 50U);  // same document -> no reveal snap

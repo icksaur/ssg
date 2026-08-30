@@ -11,6 +11,7 @@
 #include <ssg/session_snapshot.h>
 
 #include "session_snapshot_builder.h"
+#include "grid_test_view.h"
 #include "test_helpers.h"
 
 #include <cstdio>
@@ -452,14 +453,16 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
         {"file.open", runtime->revision(), std::string{"long.txt"}});
 
     ssg::ViewportDimensions const dims{40, 8};
-    (void)runtime->present(ssg::ClientId{1}, dims);  // prime the pane cache
+    ssg::test::GridTestView gridView{
+        ssg::ClientId{1}, ssg::ViewId{1}, dims};
+    (void)gridView.present(*runtime);  // prime the pane cache
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"cursor.line_end", runtime->revision(), {}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, dims);
+    auto snapshot = gridView.present(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_TRUE(snapshot->presentation()->viewport.firstVisualColumn > 0);
-    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     // The end of the line is on screen; the start has scrolled off.
     ASSERT_TRUE(gridContains(grid, "ENDmarker"));
@@ -987,18 +990,20 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     // Expand the workspace root, then drive the selection to the bottom.
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
+    ssg::test::GridTestView gridView{
+        ssg::ClientId{1}, ssg::ViewId{1}, {80, 12}};
     // Prime the cached panel height (the command-path keep-visible reads it).
-    (void)runtime->present(ssg::ClientId{1}, {80, 12});
+    (void)gridView.present(*runtime);
     for (int i = 0; i < 60; ++i) {
         (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
     }
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 12});
+    auto snapshot = gridView.present(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->presentation()->shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
-    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     // A thumb (the default thumb glyph) is drawn in the reserved gutter column.
     int const gx = shell.panelScrollbar->x;

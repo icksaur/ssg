@@ -3389,13 +3389,15 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                 };
                 if constexpr (!std::same_as<Input, DocumentPointerInput> &&
                               !std::same_as<Input, ScrollLinesInput> &&
-                              !std::same_as<Input, ScrollFractionInput>) {
+                              !std::same_as<Input, ScrollFractionInput> &&
+                              !std::same_as<Input, ViewNavigationInput>) {
                     if (semantic.phase != InputPointerPhase::Press) {
                         return unhandled();
                     }
                 }
                 if constexpr (!std::same_as<Input, ScrollLinesInput> &&
-                              !std::same_as<Input, ScrollFractionInput>) {
+                              !std::same_as<Input, ScrollFractionInput> &&
+                              !std::same_as<Input, ViewNavigationInput>) {
                     if (semantic.button != InputPointerButton::Primary &&
                         !std::same_as<Input, TabPointerInput>) {
                         return unhandled();
@@ -3467,6 +3469,13 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                                             fraction);
                     }
                     return rejectTarget("fraction-scroll target is invalid");
+                } else if constexpr (std::same_as<Input,
+                                                  ViewNavigationInput>) {
+                    if (impl_->follow.viewState().mode ==
+                        FollowMode::Paused) {
+                        return unhandled();
+                    }
+                    return dispatch("follow_edits.pause", std::any{});
                 } else if constexpr (std::same_as<Input,
                                                   DocumentPointerInput>) {
                     const auto handled = [&] {
@@ -3960,7 +3969,9 @@ GitDiffScanResult EditorSession::applyGitDiffScan(GitDiffScan scan) {
 std::optional<SessionSnapshot>
 EditorSession::projectForBridgedPresenterDeprecated(
     ClientId clientId, ViewportDimensions dimensions,
-    PaletteReport paletteReport, std::optional<ViewId> expectedView) {
+    PaletteReport paletteReport, std::optional<ViewId> expectedView,
+    SelectionNavigation navigation, std::uint32_t treeFirstVisible,
+    bool revealPrimarySelection) {
     if (impl_->session->activeDispatchRevision()) {
         throw std::logic_error{"a view cannot be presented during dispatch"};
     }
@@ -3968,8 +3979,20 @@ EditorSession::projectForBridgedPresenterDeprecated(
     auto client = impl_->session->attachedClient(clientId);
     if (!client || (expectedView && client->viewId != *expectedView))
         return std::nullopt;
-    auto& presentation = impl_->presentation(client->viewId);
+    auto& cachedPresentation = impl_->presentation(client->viewId);
+    EditorSession::Impl::ViewPresentationState presentation;
+    presentation.paneContentRows = cachedPresentation.paneContentRows;
+    presentation.paneContentColumns = cachedPresentation.paneContentColumns;
+    presentation.reservedPromptRows =
+        cachedPresentation.reservedPromptRows;
+    presentation.panelContentRows = cachedPresentation.panelContentRows;
+    presentation.viewportLineCache =
+        std::move(cachedPresentation.viewportLineCache);
     presentation.dimensions = dimensions;
+    presentation.requestedFirstVisualRow = navigation.firstVisualRow;
+    presentation.requestedFirstVisualColumn = navigation.firstVisualColumn;
+    presentation.desiredCell = navigation.desiredCell;
+    presentation.treeFirstVisible = treeFirstVisible;
     // Sections FIRST, then the viewport: computing the shell layout is what
     // caches the pane content height the viewport scrolls against.  As
     // arguments to one call their evaluation order would be unspecified, so the
@@ -3995,6 +4018,14 @@ EditorSession::projectForBridgedPresenterDeprecated(
         shell.panel ? static_cast<std::uint32_t>(
                           std::max(shell.panel->height - 1, 0))
                     : 0;
+    if (revealPrimarySelection) {
+        impl_->revealPrimaryCaret(presentation);
+    }
+    cachedPresentation.dimensions = presentation.dimensions;
+    cachedPresentation.paneContentRows = presentation.paneContentRows;
+    cachedPresentation.paneContentColumns = presentation.paneContentColumns;
+    cachedPresentation.reservedPromptRows = presentation.reservedPromptRows;
+    cachedPresentation.panelContentRows = presentation.panelContentRows;
     auto sections = impl_->sections(paletteReport);
     auto viewport = impl_->viewport(presentation);
     auto promptView = impl_->promptProjection(dimensions, shell.prompt);
@@ -4002,6 +4033,8 @@ EditorSession::projectForBridgedPresenterDeprecated(
         presentation.requestedFirstVisualRow,
         presentation.requestedFirstVisualColumn, presentation.desiredCell};
     auto treeWindows = impl_->treeWindows(presentation);
+    cachedPresentation.viewportLineCache =
+        std::move(presentation.viewportLineCache);
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
                                      std::move(viewport), std::move(sections),
@@ -4013,8 +4046,10 @@ EditorSession::projectForBridgedPresenterDeprecated(
 std::optional<SessionSnapshot> EditorSession::present(
     ClientId clientId, ViewportDimensions dimensions,
     PaletteReport paletteReport) {
+    SelectionNavigation navigation;
     return projectForBridgedPresenterDeprecated(
-        clientId, dimensions, std::move(paletteReport));
+        clientId, dimensions, std::move(paletteReport), std::nullopt,
+        navigation, 0, true);
 }
 
 std::optional<SessionSnapshot> EditorSession::snapshot(ClientId clientId,

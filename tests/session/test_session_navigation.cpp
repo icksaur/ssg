@@ -1,3 +1,4 @@
+#include "../grid_test_view.h"
 #include "../test_helpers.h"
 
 #include <ssg/EditorSession.h>
@@ -73,6 +74,10 @@ std::vector<std::string_view> keyboardRoutes(
     std::type_identity<ssg::ScrollFractionInput>) {
     return {"cursor.document_start", "cursor.document_end",
             "tree.select_next", "tree.select_previous"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::ViewNavigationInput>) {
+    return {};
 }
 
 template <std::size_t... Index>
@@ -288,16 +293,20 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
 TEST(attachedClientsShareFollowPauseQueueAndResumeState) {
     auto runtime = followPauseRuntime("alpha\nbeta\n");
     if (!runtime) return;
+    ssg::test::GridTestView firstGrid{
+        ssg::ClientId{1}, ssg::ViewId{1}, {80, 20}};
+    ssg::test::GridTestView secondGrid{
+        ssg::ClientId{2}, ssg::ViewId{1}, {80, 20}};
 
-    ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"view.scroll_lines", runtime->revision(),
-                                ssg::ScrollLinesArguments{3}})
+    ASSERT_TRUE(firstGrid
+                    .dispatch(*runtime,
+                              {"view.scroll_lines", runtime->revision(),
+                               ssg::ScrollLinesArguments{3}})
                     .accepted());
-    ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{2},
-                               {"view.scroll_lines", runtime->revision(),
-                                ssg::ScrollLinesArguments{10}})
+    ASSERT_TRUE(secondGrid
+                    .dispatch(*runtime,
+                              {"view.scroll_lines", runtime->revision(),
+                               ssg::ScrollLinesArguments{10}})
                     .accepted());
 
     auto paused = runtime->present(ssg::ClientId{1},
@@ -1283,10 +1292,12 @@ TEST(followPauseOnEditTransitionTable) {
         auto runtime = followPauseRuntime("alpha needle omega\n");
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
-        ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"view.scroll_lines", runtime->revision(),
-                                    ssg::ScrollLinesArguments{1}})
+        ssg::test::GridTestView grid{
+            ssg::ClientId{1}, ssg::ViewId{1}, {80, 20}};
+        ASSERT_TRUE(grid
+                        .dispatch(*runtime,
+                                  {"view.scroll_lines", runtime->revision(),
+                                   ssg::ScrollLinesArguments{1}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -2101,6 +2112,7 @@ TEST(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     const ssg::ClientId client{1};
+    ssg::test::GridTestView grid{client, ssg::ViewId{1}, {20, 4}};
     ASSERT_TRUE(runtime
                     .attach({client, ssg::InvocationOrigin::InProcess},
                             ssg::ViewId{1})
@@ -2109,7 +2121,7 @@ TEST(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition) {
                     .dispatch(client, {"file.open", runtime.revision(),
                                        std::string{"lines.txt"}})
                     .accepted());
-    ASSERT_TRUE(runtime.present(client, {20, 4}).has_value());
+    ASSERT_TRUE(grid.present(runtime).has_value());
     ASSERT_TRUE(runtime
                     .input(client, ssg::DocumentPointerInput{
                                        {runtime.revision()},
@@ -2125,7 +2137,7 @@ TEST(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition) {
                         ssg::InputPointerPhase::Move,
                         ssg::DocumentPointerEdge::After});
         ASSERT_TRUE(edge.command.has_value() && edge.command->accepted());
-        auto snapshot = runtime.present(client, {20, 4});
+        auto snapshot = grid.present(runtime);
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
@@ -2133,7 +2145,7 @@ TEST(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition) {
         ASSERT_EQ(snapshot->sections().selection.primary().active.byteOffset,
                   expected);
     }
-    auto snapshot = runtime.present(client, {20, 4});
+    auto snapshot = grid.present(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
         ASSERT_TRUE(
@@ -2521,11 +2533,12 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
     const ssg::ViewportDimensions dims{80, 12};
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
 
     // Baseline: selection at the top (root), window pinned to the top with a live
     // thumb.
     {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = grid.present(runtime);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         auto const& p = snap->sections().tree.providers.front();
@@ -2545,7 +2558,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
     }
     std::uint32_t deepFirst = 0;
     {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = grid.present(runtime);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         auto const& p = snap->sections().tree.providers.front();
@@ -2574,7 +2587,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
         ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_previous", runtime.revision(), {}}).accepted());
     }
     {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = grid.present(runtime);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         ASSERT_EQ(snap->presentation()->treeWindows.front().firstVisible, std::uint32_t{0});
@@ -2723,9 +2736,13 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
     const ssg::ViewportDimensions dims{80, 12};
+    ssg::test::GridTestView firstGrid{
+        ssg::ClientId{1}, ssg::ViewId{1}, dims};
+    ssg::test::GridTestView secondGrid{
+        ssg::ClientId{2}, ssg::ViewId{2}, dims};
 
-    auto baseline = runtime.present(ssg::ClientId{1}, dims);
-    auto otherView = runtime.present(ssg::ClientId{2}, dims);
+    auto baseline = firstGrid.present(runtime);
+    auto otherView = secondGrid.present(runtime);
     ASSERT_TRUE(baseline.has_value());
     ASSERT_TRUE(otherView.has_value());
     if (!baseline || !otherView) return;
@@ -2736,15 +2753,15 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     auto const selectedBefore = p0.selected;
 
     // Wheel down: the viewport offset advances, but the selection does not move.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"tree.scroll", runtime.revision(),
-                                  ssg::ScrollLinesArguments{3}}).accepted());
-    auto scrolled = runtime.present(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(firstGrid.dispatch(runtime,
+                                   {"tree.scroll", runtime.revision(),
+                                    ssg::ScrollLinesArguments{3}}).accepted());
+    auto scrolled = firstGrid.present(runtime);
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
     auto const& p1 = scrolled->sections().tree.providers.front();
     ASSERT_EQ(scrolled->presentation()->treeWindows.front().firstVisible, std::uint32_t{3});
-    otherView = runtime.present(ssg::ClientId{2}, dims);
+    otherView = secondGrid.present(runtime);
     ASSERT_TRUE(otherView.has_value());
     if (!otherView) return;
     ASSERT_EQ(otherView->presentation()->treeWindows.front().firstVisible,
@@ -2752,19 +2769,19 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_EQ(p1.selected, selectedBefore);  // selection unchanged
 
     // Wheel up past the top clamps at 0.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"tree.scroll", runtime.revision(),
-                                  ssg::ScrollLinesArguments{-99}}).accepted());
-    auto topped = runtime.present(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(firstGrid.dispatch(runtime,
+                                   {"tree.scroll", runtime.revision(),
+                                    ssg::ScrollLinesArguments{-99}}).accepted());
+    auto topped = firstGrid.present(runtime);
     ASSERT_TRUE(topped.has_value());
     if (!topped) return;
     ASSERT_EQ(topped->presentation()->treeWindows.front().firstVisible, std::uint32_t{0});
 
     // Wheel down past the bottom clamps at maximum_first_row.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"tree.scroll", runtime.revision(),
-                                  ssg::ScrollLinesArguments{999}}).accepted());
-    auto bottomed = runtime.present(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(firstGrid.dispatch(runtime,
+                                   {"tree.scroll", runtime.revision(),
+                                    ssg::ScrollLinesArguments{999}}).accepted());
+    auto bottomed = firstGrid.present(runtime);
     ASSERT_TRUE(bottomed.has_value());
     if (!bottomed) return;
     auto const& w3 = bottomed->presentation()->treeWindows.front();
@@ -2803,8 +2820,9 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
                                   std::string{"long.txt"}}).accepted());
 
     ssg::ViewportDimensions const dims{24, 6};
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
     // Prime the pane-size cache the reveal path reads.
-    auto primed = runtime.present(ssg::ClientId{1}, dims);
+    auto primed = grid.present(runtime);
     ASSERT_TRUE(primed.has_value());
     if (!primed) return;
     ASSERT_EQ(primed->presentation()->viewport.firstVisualColumn, std::uint32_t{0});
@@ -2814,7 +2832,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"cursor.line_end", runtime.revision(), {}})
                     .accepted());
-    auto scrolled = runtime.present(ssg::ClientId{1}, dims);
+    auto scrolled = grid.present(runtime);
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
     auto const offset = scrolled->presentation()->viewport.firstVisualColumn;
@@ -2827,7 +2845,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"cursor.line_start", runtime.revision(), {}})
                     .accepted());
-    auto reset = runtime.present(ssg::ClientId{1}, dims);
+    auto reset = grid.present(runtime);
     ASSERT_TRUE(reset.has_value());
     if (!reset) return;
     ASSERT_EQ(reset->presentation()->viewport.firstVisualColumn, std::uint32_t{0});

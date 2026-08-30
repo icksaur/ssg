@@ -1079,13 +1079,6 @@ int main(int argc, char** argv) {
             break;
         }
     };
-    auto routeInput = [&](ssg::KeyStroke stroke, std::string text) {
-        auto result = runtime.input(
-            client, ssg::ClientKeyInput{stroke, std::move(text)});
-        if (result.clientOwned) applyClientOwnedInput(*result.clientOwned);
-        return result.outcome;
-    };
-
     auto buildReport = [&] {
         ssg::PaletteReport report;
         if (pickerOpen) {
@@ -1187,6 +1180,36 @@ int main(int argc, char** argv) {
         }
         return snapshot;
     };
+    std::optional<ssg::GridFrame> activeSnapshot;
+    auto handleInputResult = [&](ssg::ClientInputResult result) {
+        if (result.command) noteEffects(result.command->effects);
+        if (result.clientOwned) {
+            applyClientOwnedInput(*result.clientOwned);
+        }
+        if (result.outcome != ssg::ClientInputOutcome::ViewOwned ||
+            !result.command || !result.command->viewAction) {
+            return result.outcome;
+        }
+        if (!activeSnapshot) activeSnapshot = refresh();
+        if (!activeSnapshot) return ssg::ClientInputOutcome::Rejected;
+        auto applied = gridPresenter.apply(*result.command->viewAction,
+                                           *activeSnapshot);
+        if (!applied.accepted()) return ssg::ClientInputOutcome::Rejected;
+        if (applied.transition) {
+            auto transition = runtime.input(client, *applied.transition);
+            if (transition.command) noteEffects(transition.command->effects);
+            if (transition.outcome == ssg::ClientInputOutcome::Rejected) {
+                return transition.outcome;
+            }
+        }
+        noteEffects({false, true});
+        activeSnapshot.reset();
+        return result.outcome;
+    };
+    auto routeInput = [&](ssg::KeyStroke stroke, std::string text) {
+        return handleInputResult(runtime.input(
+            client, ssg::ClientKeyInput{stroke, std::move(text)}));
+    };
 
     // Top-level boundary (M9-X): an exception escaping the loop is not portably
     // guaranteed to unwind `mode` once past main, so restore the terminal here
@@ -1213,7 +1236,8 @@ int main(int argc, char** argv) {
                 }
             }
             lastFrameAt = std::chrono::steady_clock::now();
-            auto snapshot = refresh();
+            activeSnapshot = refresh();
+            auto& snapshot = activeSnapshot;
             // The loop-top snapshot is fresh, so nothing is dirty until an event
             // in this drain mutates state.
             coalescer.noteRefreshed();
@@ -1566,11 +1590,8 @@ int main(int argc, char** argv) {
                               hit, decoded.pointer.button, decoded.pointer.kind,
                               effectiveAlt, dragging, dragAnchor, targets);
                 if (plan.semantic_input) {
-                    auto const pointerResult =
-                        runtime.input(client, *plan.semantic_input);
-                    if (pointerResult.command) {
-                        noteEffects(pointerResult.command->effects);
-                    }
+                    (void)handleInputResult(
+                        runtime.input(client, *plan.semantic_input));
                 }
                 // A gutter gesture on a client-owned surface has no command to
                 // dispatch (the picker's offset must not round-trip), so the
@@ -1633,26 +1654,20 @@ int main(int argc, char** argv) {
                 }
                 switch (ssg::app::route_wheel(region)) {
                     case ssg::app::WheelTarget::editor:
-                        if (auto result = runtime.input(
-                                client,
-                                ssg::ScrollLinesInput{
-                                    {runtime.revision()},
-                                    ssg::SemanticScrollTarget::Document,
-                                    decoded.scroll});
-                            result.command) {
-                            noteEffects(result.command->effects);
-                        }
+                        (void)handleInputResult(runtime.input(
+                            client,
+                            ssg::ScrollLinesInput{
+                                {runtime.revision()},
+                                ssg::SemanticScrollTarget::Document,
+                                decoded.scroll}));
                         break;
                     case ssg::app::WheelTarget::tree:
-                        if (auto result = runtime.input(
-                                client,
-                                ssg::ScrollLinesInput{
-                                    {runtime.revision()},
-                                    ssg::SemanticScrollTarget::Tree,
-                                    decoded.scroll});
-                            result.command) {
-                            noteEffects(result.command->effects);
-                        }
+                        (void)handleInputResult(runtime.input(
+                            client,
+                            ssg::ScrollLinesInput{
+                                {runtime.revision()},
+                                ssg::SemanticScrollTarget::Tree,
+                                decoded.scroll}));
                         break;
                     case ssg::app::WheelTarget::palette:
                         scrollPalette(decoded.scroll);

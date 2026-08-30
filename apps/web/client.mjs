@@ -25,7 +25,8 @@ import {
   predictedFocusCapture, resolveUiFocusPath, focusUiNode,
   applyPalettePresenceOverlay,
   BrowserKeyDispatchTracker,
-  encodeCommandRequest, encodeClientInput, encodeTreePointerInput,
+  encodeCommandRequest, encodeClientInput, encodeViewNavigationInput,
+  encodeTreePointerInput,
   encodeStatusActionPointerInput,
   encodePromptControlPointerInput,
   encodePublishedUiActionPointerInput, encodeNoticeActionPointerInput,
@@ -55,6 +56,15 @@ const ROLE = { text: 0, canvas: 1, caret: 2, selection: 3, statusWarning: 13,
                diffAdded: 19, diffRemoved: 20, diffModified: 21 };
 const FOCUS_EDITOR = 0;   // FocusTarget::Editor ordinal.
 const DOCUMENT_VIEWPORT_NODE_ID = 'document.viewport';
+const PANEL_NODE_ID = 'panel';
+const VIEW_ACTION = {
+  SCROLL_LINES: 0,
+  SCROLL_PAGES: 1,
+  SCROLL_FRACTION: 2,
+  REVEAL_SELECTION: 4,
+  CENTER_SELECTION: 5,
+};
+const VIEW_SCROLL_TARGET = { DOCUMENT: 0, TREE: 1 };
 
 // Persistent client model: the authoritative sections plus the still-unsettled
 // local predictions. Snapshots replace `sections`; deltas mutate it in place.
@@ -1218,6 +1228,7 @@ function revealDocumentCaret() {
     lastCaretRevealKey = key;
     return;
   }
+
   const caret = uiRootEl.querySelector('.doc-surface .caret');
   if (!caret) return;
   if (key === lastCaretRevealKey) return;
@@ -1236,6 +1247,75 @@ function revealDocumentCaret() {
   } else if (caretRect.right > viewportRect.right) {
     viewport.scrollLeft += caretRect.right - viewportRect.right;
   }
+}
+
+function viewScrollContainer(target) {
+  return target === VIEW_SCROLL_TARGET.TREE
+    ? retainedNodes.get(PANEL_NODE_ID)
+    : retainedNodes.get(DOCUMENT_VIEWPORT_NODE_ID);
+}
+
+function scrollLineHeight(target, viewport) {
+  const sample = target === VIEW_SCROLL_TARGET.TREE
+    ? viewport.querySelector('.tree-row')
+    : viewport.querySelector('.doc-surface');
+  if (!sample) return 1;
+  const style = getComputedStyle(sample);
+  const lineHeight = Number.parseFloat(style.lineHeight);
+  if (Number.isFinite(lineHeight)) return lineHeight;
+  const fontSize = Number.parseFloat(style.fontSize);
+  return Number.isFinite(fontSize) ? fontSize * 1.2 : 1;
+}
+
+function applyViewAction(request) {
+  if (!request || BigInt(request.semantic_revision) !== state.revision) {
+    return false;
+  }
+  const action = request.action;
+  const kind = num(action && action.kind);
+  const target = kind === VIEW_ACTION.SCROLL_PAGES ||
+      kind === VIEW_ACTION.REVEAL_SELECTION ||
+      kind === VIEW_ACTION.CENTER_SELECTION
+    ? VIEW_SCROLL_TARGET.DOCUMENT
+    : num(action && action.target);
+  const viewport = viewScrollContainer(target);
+  if (!viewport) return false;
+
+  if (kind === VIEW_ACTION.SCROLL_LINES) {
+    viewport.scrollTop += num(action.rows) * scrollLineHeight(target, viewport);
+  } else if (kind === VIEW_ACTION.SCROLL_PAGES) {
+    viewport.scrollTop += num(action.pages) * viewport.clientHeight;
+  } else if (kind === VIEW_ACTION.SCROLL_FRACTION) {
+    const denominator = num(action.denominator);
+    const numerator = num(action.numerator);
+    if (denominator <= 0 || numerator < 0 || numerator > denominator) return false;
+    viewport.scrollTop =
+      Math.max(0, viewport.scrollHeight - viewport.clientHeight) *
+      numerator / denominator;
+  } else if (kind === VIEW_ACTION.REVEAL_SELECTION) {
+    lastCaretRevealKey = '';
+    revealDocumentCaret();
+  } else if (kind === VIEW_ACTION.CENTER_SELECTION) {
+    const caret = uiRootEl.querySelector('.doc-surface .caret');
+    if (!caret) return false;
+    const caretRect = caret.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+    viewport.scrollTop +=
+      (caretRect.top + caretRect.bottom - viewportRect.top - viewportRect.bottom) / 2;
+  } else {
+    return false;
+  }
+
+  const documentNavigation =
+    target === VIEW_SCROLL_TARGET.DOCUMENT &&
+    state.sections?.follow_edits &&
+    num(state.sections.follow_edits.mode) === 0;
+  if (documentNavigation) {
+    sendInputFrame(encodeViewNavigationInput(request.semantic_revision), {
+      viewNavigation: true,
+    });
+  }
+  return true;
 }
 
 let ws = null;
@@ -1350,6 +1430,10 @@ function applyProtocolFrame(buffer) {
       reconnect('command result preceded state');
       return false;
     }
+    if (payload.view_action && !applyViewAction(payload.view_action)) {
+      reconnect('unsupported or stale view action');
+      return false;
+    }
     const settled = settleCommandResult(commandRequests);
     if (!settled) {
       reconnect('unexpected command result');
@@ -1358,6 +1442,11 @@ function applyProtocolFrame(buffer) {
     commandRequests = settled.queue;
   } else if (inbound === 'input-result') {
     const completedInput = state.inputQueue[0];
+    if (payload.command?.view_action &&
+        !applyViewAction(payload.command.view_action)) {
+      reconnect('unsupported or stale view action');
+      return false;
+    }
     const settled = settleInput(
       state.inputQueue, state.pending, payload, state.revision);
     if (!settled) {

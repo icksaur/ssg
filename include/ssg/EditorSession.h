@@ -259,7 +259,9 @@ public:
     //   client that lays out the model natively obtains full semantic state
     //   without supplying, or paying for, any grid projection.
     //   present() is a compatibility surface until Plan 6 removes
-    //   SessionSnapshot::presentation(); new grid consumers use GridPresenter.
+    //   SessionSnapshot::presentation(). It projects presenter-owned navigation
+    //   from fixed defaults and ignores unresolved view actions; callers that
+    //   require persistent grid navigation own a GridPresenter.
     [[nodiscard]] std::optional<SessionSnapshot> present(
         ClientId clientId, ViewportDimensions dimensions,
         PaletteReport paletteReport = {});
@@ -287,7 +289,10 @@ private:
     projectForBridgedPresenterDeprecated(
         ClientId clientId, ViewportDimensions dimensions,
         PaletteReport paletteReport,
-        std::optional<ViewId> expectedView = std::nullopt);
+        std::optional<ViewId> expectedView,
+        SelectionNavigation navigation,
+        std::uint32_t treeFirstVisible,
+        bool revealPrimarySelection);
     explicit EditorSession(std::unique_ptr<Impl> implementation) noexcept;
 
     std::unique_ptr<Impl> impl_;

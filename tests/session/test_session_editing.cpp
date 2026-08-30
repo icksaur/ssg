@@ -1,4 +1,5 @@
 #include "../test_helpers.h"
+#include "../grid_test_view.h"
 
 #include <ssg/EditorSession.h>
 #include <ssg/FindReplace.h>
@@ -720,12 +721,13 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
 
     const ssg::ViewportDimensions dims{80, 24};
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
     auto firstRow = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = grid.present(runtime);
         return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
     auto maximum = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = grid.present(runtime);
         return snap ? snap->presentation()->viewport.scrollbar.maximumFirstRow : 0U;
     };
     // Snapshot once to populate the pane-height cache; the caret is at the top.
@@ -734,7 +736,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     ASSERT_TRUE(maxFirst > 0);  // the document is scrollable
 
     // Free scroll DOWN with no edit: the offset moves and does NOT snap back.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
     ASSERT_EQ(firstRow(), 40U);   // caret (line 0) is now off-screen above
     ASSERT_EQ(firstRow(), 40U);   // a second read without an edit stays put
 
@@ -748,7 +750,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     auto endPos = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size())});
     ASSERT_TRUE(endPos.has_value());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{endPos, std::nullopt}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-200}}).accepted());
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-200}}).accepted());
     ASSERT_EQ(firstRow(), 0U);
     // An edit at the bottom caret reveals it to the maximum offset (last line shown).
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"y"}}).accepted());
@@ -764,7 +766,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{top, std::nullopt}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.add_range", runtime.revision(), ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{*bottomLineStart, *bottomLineStart}}}).accepted());
     // Free-scroll to the top so the primary (bottom) caret is off-screen below.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-200}}).accepted());
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-200}}).accepted());
     ASSERT_EQ(firstRow(), 0U);
     // A multi-cursor insert reveals the PRIMARY caret (bottom), not the secondary
     // (top): the offset jumps down far enough to show it, rather than staying at 0.
@@ -777,7 +779,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     // and the assertion passed for the wrong reason -- masking the very bug that
     // left the last rows of every document unreachable.
     {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = grid.present(runtime);
         ASSERT_TRUE(snap.has_value());
         auto const& view = snap->presentation()->viewport;
         auto const caretLine =
@@ -805,15 +807,16 @@ TEST(undoAndPasteRevealTheCaret) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
     auto firstRow = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = grid.present(runtime);
         return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
     ASSERT_EQ(firstRow(), 0U);
 
     // Type a character (caret at top), then scroll away and UNDO: undo reveals.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"x"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
     ASSERT_EQ(firstRow(), 40U);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"edit.undo", runtime.revision(), {}}).accepted());
     ASSERT_EQ(firstRow(), 0U);
@@ -825,7 +828,7 @@ TEST(undoAndPasteRevealTheCaret) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.line_down", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"clipboard.copy", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{0}), std::nullopt}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
     ASSERT_EQ(firstRow(), 40U);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"clipboard.paste", runtime.revision(), {}}).accepted());
     // The pasted "a\n" pushes the caret to line 1; revealing from row 40 scrolls
@@ -960,8 +963,9 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"t.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
     auto firstRow = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = grid.present(runtime);
         return snap ? snap->presentation()->viewport.firstVisualRow : 0U;
     };
     ASSERT_EQ(firstRow(), 0U);  // caret at top; the match is off-screen far below

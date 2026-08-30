@@ -1,4 +1,5 @@
 #include "command_cases.h"
+#include "../grid_test_view.h"
 #include "../test_helpers.h"
 
 #include <ssg/EditorSession.h>
@@ -121,6 +122,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
     runtime.focusEditor();
 
     const ssg::ViewportDimensions dims{80, 24};
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
     // Walk the caret to the very last line.  The viewport must scroll against
     // the rows the editor PAINTS, not the terminal height: sized to the whole
     // terminal it stops short by the header, tab bar and footer, and the final
@@ -129,7 +131,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
     // painting ended, which is the footer.
     std::uint32_t lastVisibleLine = 0;
     for (int step = 0; step < 80; ++step) {
-        auto snapshot = runtime.present(ssg::ClientId{1}, dims);
+        auto snapshot = grid.present(runtime);
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         auto const& view = snapshot->presentation()->viewport;
@@ -143,17 +145,17 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
                                {"cursor.line_down", runtime.revision(), {}});
     }
     // The last line of the document was reached, not merely approached.
-    auto final = runtime.present(ssg::ClientId{1}, dims);
+    auto final = grid.present(runtime);
     ASSERT_TRUE(final.has_value());
     if (!final) return;
     ASSERT_EQ(lastVisibleLine, final->presentation()->viewport.totalVisualRows - 1);
 
     // Scrolling to the maximum offset shows the final line, so no row is
     // stranded past the end of the scroll range.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"view.scroll_lines", runtime.revision(),
-                                  ssg::ScrollLinesArguments{500}}).accepted());
-    auto bottom = runtime.present(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(grid.dispatch(runtime,
+                              {"view.scroll_lines", runtime.revision(),
+                               ssg::ScrollLinesArguments{500}}).accepted());
+    auto bottom = grid.present(runtime);
     ASSERT_TRUE(bottom.has_value());
     if (!bottom) return;
     auto const& view = bottom->presentation()->viewport;
@@ -746,6 +748,58 @@ TEST(gridPresenterCannotChangeOrReassembleSemanticState) {
               nextFrame->basis().presentationGeneration + 1);
 }
 
+TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
+    auto root = uniqueRoot("grid_presenter_scroll");
+    {
+        std::ofstream file{root / "workspace" / "long.txt"};
+        for (int line = 0; line < 80; ++line) file << "line\n";
+    }
+    auto created = ssg::EditorSession::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId client{1};
+    const ssg::ViewId view{3};
+    ASSERT_TRUE(runtime
+                    .attach({client, ssg::InvocationOrigin::InProcess}, view)
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client, {"file.open", runtime.revision(),
+                                       std::string{"long.txt"}})
+                    .accepted());
+
+    ssg::GridPresenter presenter{view};
+    auto frame = presenter.project(runtime, client, {{80, 12}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    const auto revision = runtime.revision();
+    auto command = runtime.dispatch(
+        client, {"view.scroll_lines", revision,
+                 ssg::ScrollLinesArguments{5}});
+    ASSERT_EQ(command.outcome(),
+              ssg::CommandResult::Outcome::ViewActionRequired);
+    ASSERT_TRUE(command.viewAction.has_value());
+    ASSERT_EQ(runtime.revision(), revision);
+    if (!command.viewAction) return;
+
+    auto applied = presenter.apply(*command.viewAction, *frame);
+    ASSERT_TRUE(applied.accepted());
+    ASSERT_EQ(runtime.revision(), revision);
+    auto stale = presenter.apply(*command.viewAction, *frame);
+    ASSERT_FALSE(stale.accepted());
+
+    auto scrolled = presenter.project(runtime, client, {{80, 12}, {}});
+    ASSERT_TRUE(scrolled.has_value());
+    if (!scrolled) return;
+    ASSERT_EQ(scrolled->presentation()->viewport.firstVisualRow, 5U);
+
+    auto compatibility = runtime.present(client, {80, 12});
+    ASSERT_TRUE(compatibility.has_value());
+    if (compatibility) {
+        ASSERT_EQ(compatibility->presentation()->viewport.firstVisualRow, 0U);
+    }
+}
+
 } // namespace
 
 int main() {
@@ -766,6 +820,7 @@ int main() {
     RUN(settingsOpenFocusesASettingsPrompt);
     RUN(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection);
     RUN(gridPresenterCannotChangeOrReassembleSemanticState);
+    RUN(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput, cssColor,
-  decodeMessage, browserInboundKind, encodeClientInput, encodeCommandRequest,
+  decodeMessage, browserInboundKind, encodeClientInput,
+  encodeViewNavigationInput, encodeCommandRequest,
   BrowserKeyDispatchTracker,
   settleCommandResult,
   matcherParametersFromWire, matcherBoundsFromPalette,
@@ -323,6 +324,24 @@ check('a rejected input completion removes its prediction', () => {
   assert.equal(project('', 0, settled.pending).text, '');
 });
 
+check('a view-owned result settles without a semantic revision advance', () => {
+  const settled = settleInput(
+    [{ predictionId: null }], [],
+    {
+      outcome: 4n,
+      command: {
+        revision: 7n,
+        view_action: {
+          view_id: 1n,
+          semantic_revision: 7n,
+          action: { kind: 0n, target: 0n, rows: 1n },
+        },
+      },
+    },
+    7n);
+  assert.deepEqual(settled, { inputQueue: [], pending: [] });
+});
+
 check('typed raw input and command requests round-trip through ProtocolValue', () => {
   assert.deepEqual(decodeMessage(encodeClientInput({
     code: 'KeyA', alt: true, shift: false, text: 'a',
@@ -333,6 +352,10 @@ check('typed raw input and command requests round-trip through ProtocolValue', (
       stroke: { code: 'KeyA', control: false, alt: true, meta: false, shift: false },
       committed_text: 'a',
     },
+  });
+  assert.deepEqual(decodeMessage(encodeViewNavigationInput(9n).buffer), {
+    kind: 7,
+    payload: { kind: 12n, basis_revision: 9n },
   });
 
   check('browser protocol decoding rejects malformed and over-bound values', () => {

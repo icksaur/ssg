@@ -42,9 +42,10 @@ client-local inputs to `GridPresentationRequest`, not view actions.
 the view-owned distinction. Callers must branch on the outcome rather than
 treating `accepted()` as proof that an action finished.
 
-`GridPresenter::apply` takes only a `ViewActionRequest` and the `GridBasis` of
-the frame from which the action arose. It produces at most one optional
-`ClientInput` and never invokes the session. The host submits that input once
+`GridPresenter::apply` takes only a `ViewActionRequest` and the `GridFrame`
+from which the action arose. Its closed result distinguishes applied,
+transition-required, and rejected outcomes and carries at most one optional
+`ClientInput`; it never invokes the session. The host submits that input once
 through `EditorSession::input` before considering the action complete. A
 rejected submission is dropped without retrying presenter application; another
 apply requires a fresh host-driven action. After the deprecated projection
@@ -58,7 +59,7 @@ supplies one, while a host without a layout owner reports the named
 `view_action_unavailable` script error and does not claim command completion.
 Client input never establishes whether a layout owner exists.
 The sink is the typed callback
-`std::optional<ClientInput>(ViewActionRequest const&)`; the TUI implementation
+`GridActionResult(ViewActionRequest const&)`; the TUI implementation
 captures its currently adopted `GridBasis` and delegates directly to
 `GridPresenter::apply`. It does not define a script-specific action shape or
 resolution path.

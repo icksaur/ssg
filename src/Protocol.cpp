@@ -1415,7 +1415,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<ClientInputKind>& o
         ClientInputKind::ExternalAction, ClientInputKind::StatusAction,
         ClientInputKind::PublishedUiAction, ClientInputKind::NoticeAction,
         ClientInputKind::Document, ClientInputKind::ScrollLines,
-        ClientInputKind::ScrollFraction};
+        ClientInputKind::ScrollFraction, ClientInputKind::ViewNavigation};
     return decodeEnum(value, out, values);
 }
 
@@ -5830,6 +5830,12 @@ std::string ProtocolCodec::encodeClientInput(
                 fields.emplace_back("numerator", toValue(semantic.numerator));
                 fields.emplace_back("denominator",
                                     toValue(semantic.denominator));
+            } else if constexpr (std::same_as<Input,
+                                              ViewNavigationInput>) {
+                fields.emplace_back("kind",
+                                    toValue(ClientInputKind::ViewNavigation));
+                fields.emplace_back("basis_revision",
+                                    toValue(semantic.basis.observedRevision));
             } else {
                 auto addPointer = [&](ClientInputKind kind) {
                     fields.emplace_back("kind", toValue(kind));
@@ -6000,6 +6006,20 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
             ClientInput{ScrollFractionInput{
                 {*basis}, *target, *numerator, *denominator}},
             {}};
+    }
+    if (*kind == ClientInputKind::ViewNavigation) {
+        if (!hasExactly({"kind", "basis_revision"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client view-navigation input fields are malformed"};
+        }
+        auto basis =
+            requireField<Revision>(payload.field("basis_revision"));
+        if (!basis) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client view-navigation input is malformed"};
+        }
+        return {ProtocolError::None,
+                ClientInput{ViewNavigationInput{{*basis}}}, {}};
     }
     auto button =
         requireField<InputPointerButton>(payload.field("button"));

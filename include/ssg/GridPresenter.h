@@ -2,6 +2,7 @@
 
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Viewport.h>
+#include <ssg/ClientInput.h>
 #include <ssg/session_snapshot.h>
 
 #include <cstdint>
@@ -23,6 +24,22 @@ struct GridBasis {
 struct GridPresentationRequest {
     ViewportDimensions dimensions;
     PaletteReport palette;
+};
+
+enum class GridActionStatus : std::uint8_t {
+    Applied,
+    TransitionRequired,
+    Rejected,
+};
+
+struct GridActionResult {
+    GridActionStatus status = GridActionStatus::Rejected;
+    std::optional<ClientInput> transition;
+    std::string message;
+
+    [[nodiscard]] bool accepted() const noexcept {
+        return status != GridActionStatus::Rejected;
+    }
 };
 
 class GridFrame {
@@ -71,11 +88,20 @@ public:
     [[nodiscard]] std::optional<GridFrame> project(
         EditorSession& session, ClientId client,
         GridPresentationRequest request);
+    [[nodiscard]] GridActionResult apply(
+        ViewActionRequest const& request, GridFrame const& frame);
 
 private:
     ViewId viewId_;
     std::optional<Revision> adoptedRevision_;
     std::uint64_t generation_ = 0;
+    SelectionNavigation navigation_;
+    std::uint32_t treeFirstVisible_ = 0;
+    std::optional<Revision> documentRevision_;
+    std::optional<std::uint64_t> findGeneration_;
+    std::optional<TabId> activeTab_;
+    std::optional<DocumentPosition> primarySelection_;
+    std::optional<TreeNodeId> treeSelection_;
 };
 
 }  // namespace ssg

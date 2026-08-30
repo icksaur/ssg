@@ -1,4 +1,5 @@
 #include "../test_helpers.h"
+#include "../grid_test_view.h"
 
 #include "../chrome_authoring.h"
 
@@ -259,14 +260,16 @@ TEST(viewportShellSettingsAndThemeAreLiveSections) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"long.txt"}}).accepted());
 
-    auto before = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ssg::test::GridTestView grid{
+        ssg::ClientId{1}, ssg::ViewId{1}, {80, 12}};
+    auto before = grid.present(runtime);
     ASSERT_TRUE(before.has_value());
     ASSERT_EQ(before->presentation()->viewport.firstVisualRow, 0U);
     ASSERT_EQ(before->sections().theme.roleColors.size(), ssg::kSemanticRoleCount);
 
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{5}}).accepted());
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{5}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
-    auto after = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto after = grid.present(runtime);
     ASSERT_TRUE(after.has_value());
     ASSERT_EQ(after->presentation()->viewport.firstVisualRow, 5U);
     ASSERT_TRUE(after->presentation()->shell.panel.has_value());
@@ -415,15 +418,16 @@ TEST(wheelScrollDownPastTheEndHasNoDeadZone) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"long.txt"}}).accepted());
 
     const ssg::ViewportDimensions dims{80, 12};
-    auto primed = runtime.present(ssg::ClientId{1}, dims);  // caches the real pane height
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
+    auto primed = grid.present(runtime);  // caches the real pane height
     ASSERT_TRUE(primed.has_value());
     if (!primed) return;
     auto const maxRow = primed->presentation()->viewport.scrollbar.maximumFirstRow;
     ASSERT_TRUE(maxRow > 1U);  // the document is taller than the pane
 
     // Over-scroll far below the last line. The displayed top clamps to the max...
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{5000}}).accepted());
-    auto bottom = runtime.present(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{5000}}).accepted());
+    auto bottom = grid.present(runtime);
     ASSERT_TRUE(bottom.has_value());
     if (!bottom) return;
     ASSERT_EQ(bottom->presentation()->viewport.firstVisualRow, maxRow);
@@ -433,8 +437,8 @@ TEST(wheelScrollDownPastTheEndHasNoDeadZone) {
     // trimmed invisible slack and the view stayed pinned at the bottom -- the
     // wheel dead zone.  The stored request is now clamped to the real range, so
     // there is no slack to burn through.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-1}}).accepted());
-    auto up = runtime.present(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-1}}).accepted());
+    auto up = grid.present(runtime);
     ASSERT_TRUE(up.has_value());
     if (!up) return;
     ASSERT_EQ(up->presentation()->viewport.firstVisualRow, maxRow - 1U);
@@ -509,23 +513,24 @@ TEST(editorScrollUsesTheRealPaneHeightNotAHardcoded24) {
 
     // A 40-row terminal (NOT 24): a page is the real pane content height.
     const ssg::ViewportDimensions dims{80, 40};
-    auto snap0 = runtime.present(ssg::ClientId{1}, dims);  // populate the cache
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
+    auto snap0 = grid.present(runtime);  // populate the cache
     ASSERT_TRUE(snap0.has_value());
     if (!snap0) return;
     auto const paneRows = static_cast<std::uint32_t>(snap0->presentation()->shell.panes.front().content.height);
     ASSERT_TRUE(paneRows != 24);  // the whole point: not the hardcoded value
 
     // PageDown advances by the real pane height, not 24.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_pages", runtime.revision(), ssg::ScrollPagesArguments{1}}).accepted());
-    auto afterPage = runtime.present(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_pages", runtime.revision(), ssg::ScrollPagesArguments{1}}).accepted());
+    auto afterPage = grid.present(runtime);
     ASSERT_TRUE(afterPage.has_value());
     if (!afterPage) return;
     ASSERT_EQ(afterPage->presentation()->viewport.firstVisualRow, paneRows);
 
     // Scroll-to-fraction(1/1) reaches the REAL maximum for this terminal (the last
     // line becomes visible), not the 24-row-derived maximum.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_to_fraction", runtime.revision(), ssg::ScrollFractionArguments{1, 1}}).accepted());
-    auto afterBottom = runtime.present(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(grid.dispatch(runtime, {"view.scroll_to_fraction", runtime.revision(), ssg::ScrollFractionArguments{1, 1}}).accepted());
+    auto afterBottom = grid.present(runtime);
     ASSERT_TRUE(afterBottom.has_value());
     if (!afterBottom) return;
     ASSERT_EQ(afterBottom->presentation()->viewport.firstVisualRow,
@@ -1457,10 +1462,12 @@ TEST(distinctViewsRetainIndependentPageScrollGeometry) {
                                std::string{"long.txt"}})
                     .accepted());
 
-    auto first = runtime.present(
-        ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
-    auto second = runtime.present(
-        ssg::ClientId{2}, ssg::ViewportDimensions{80, 30});
+    ssg::test::GridTestView firstGrid{
+        ssg::ClientId{1}, ssg::ViewId{1}, {80, 12}};
+    ssg::test::GridTestView secondGrid{
+        ssg::ClientId{2}, ssg::ViewId{2}, {80, 30}};
+    auto first = firstGrid.present(runtime);
+    auto second = secondGrid.present(runtime);
     ASSERT_TRUE(first.has_value());
     ASSERT_TRUE(second.has_value());
     if (!first || !second) return;
@@ -1469,15 +1476,13 @@ TEST(distinctViewsRetainIndependentPageScrollGeometry) {
         second->presentation()->shell.panes.front().content.height;
     ASSERT_TRUE(firstRows != secondRows);
 
-    ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
+    ASSERT_TRUE(firstGrid
+                    .dispatch(runtime,
                               {"view.scroll_pages", runtime.revision(),
                                ssg::ScrollPagesArguments{1}})
                     .accepted());
-    first = runtime.present(ssg::ClientId{1},
-                            ssg::ViewportDimensions{80, 12});
-    second = runtime.present(ssg::ClientId{2},
-                             ssg::ViewportDimensions{80, 30});
+    first = firstGrid.present(runtime);
+    second = secondGrid.present(runtime);
     ASSERT_TRUE(first.has_value());
     ASSERT_TRUE(second.has_value());
     if (!first || !second) return;

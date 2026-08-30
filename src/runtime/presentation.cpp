@@ -32,60 +32,6 @@ CommandHandlerResult setLineNumbers(EditorSession::Impl& runtime) {
     return success();
 }
 
-CommandHandlerResult scrollLines(EditorSession::Impl& runtime, ViewId viewId,
-                                 std::any const& payload) {
-    auto const* arguments = payloadAs<ScrollLinesArguments>(payload);
-    if (arguments == nullptr) return failure("view.scroll_lines requires scroll-lines payload");
-    // Clamp the STORED request to the real scroll range. Leaving it unbounded
-    // below the last line lets it drift arbitrarily far, so an upward notch first
-    // burns off invisible slack while the view stays pinned at the bottom -- the
-    // wheel "dead zone". The maximum needs the document's total visual row count,
-    // resolved against the pane the last snapshot cached, the same viewport
-    // scroll_to_fraction bounds against. Word wrap off (the default) makes this
-    // O(visible rows); the drag path already pays the wrapped cost per notch.
-    auto& presentation = runtime.presentation(viewId);
-    auto const view = runtime.computeEditorViewport(presentation, 0, 0);
-    auto offset = ScrollOffset{presentation.requestedFirstVisualRow};
-    offset.byLines(arguments->rows, view.totalVisualRows,
-                   presentation.paneContentRows);
-    presentation.requestedFirstVisualRow = offset.firstVisible();
-    return success();
-}
-
-CommandHandlerResult scrollPages(EditorSession::Impl& runtime, ViewId viewId,
-                                 std::any const& payload) {
-    auto const* arguments = payloadAs<ScrollPagesArguments>(payload);
-    if (arguments == nullptr) return failure("view.scroll_pages requires scroll-pages payload");
-    // Same range clamp as scroll_lines above: a page is the real pane height, and
-    // byPages saturates the multiply before bounding, so paging past the end
-    // pins at the last line instead of accumulating slack.
-    auto& presentation = runtime.presentation(viewId);
-    auto const view = runtime.computeEditorViewport(presentation, 0, 0);
-    auto offset = ScrollOffset{presentation.requestedFirstVisualRow};
-    offset.byPages(arguments->pages, view.totalVisualRows,
-                   presentation.paneContentRows);
-    presentation.requestedFirstVisualRow = offset.firstVisible();
-    return success();
-}
-
-CommandHandlerResult scrollFraction(EditorSession::Impl& runtime, ViewId viewId,
-                                    std::any const& payload) {
-    auto const* arguments = payloadAs<ScrollFractionArguments>(payload);
-    if (arguments == nullptr) return failure("view.scroll_to_fraction requires scroll-fraction payload");
-    // Resolve maximum_first_row against the REAL pane cached from the last
-    // snapshot, so a scrollbar drag to the bottom reaches the true last line on a
-    // terminal that is not 24 rows tall. Route through
-    // the same wrap-gated viewport the snapshot uses so the drag maps to the same
-    // total the scrollbar thumb was drawn from (M12).
-    auto& presentation = runtime.presentation(viewId);
-    auto view = runtime.computeEditorViewport(presentation, 0, 0);
-    auto offset = ScrollOffset{presentation.requestedFirstVisualRow};
-    offset.toFraction(arguments->numerator, arguments->denominator,
-                      view.totalVisualRows, presentation.paneContentRows);
-    presentation.requestedFirstVisualRow = offset.firstVisible();
-    return success();
-}
-
 CommandHandlerResult shellCommand(EditorSession::Impl& runtime, ViewId viewId,
                                   std::string_view id) {
     if (id == "pane.split_horizontal") runtime.shell.splitActive(SplitAxis::Horizontal);
@@ -422,57 +368,33 @@ void registerViewportCommands(CommandCatalog& builder,
         return CommandSpecBuilder{std::move(id)}
             .owner("viewport-wrap-scrollbar")
             .summary(std::move(summary))
-            .mutates()
+            .viewAction()
             .lua();
     };
     builder.add(scroll("view.scroll_lines", "Scroll Lines")
                     .handler<ScrollLinesArguments>(
-                        [&runtime](CommandContext& context,
-                                   ScrollLinesArguments const& arguments) {
-                            return runtime.runTransaction([&] {
-                                auto result = scrollLines(runtime, context.viewId(),
-                                                          std::any{arguments});
-                                if (result.accepted) {
-                                    runtime.recordNavigation(
-                                        context.principal().clientId(),
-                                        context.viewId(),
-                                        NavigationClass::User);
-                                }
-                                return result;
-                            });
+                        [](CommandContext&,
+                           ScrollLinesArguments const& arguments) {
+                            return CommandHandlerResult::requireView(
+                                ViewScrollLines{ViewScrollTarget::Document,
+                                                arguments.rows});
                         }));
     builder.add(scroll("view.scroll_pages", "Scroll Pages")
                     .handler<ScrollPagesArguments>(
-                        [&runtime](CommandContext& context,
-                                   ScrollPagesArguments const& arguments) {
-                            return runtime.runTransaction([&] {
-                                auto result = scrollPages(runtime, context.viewId(),
-                                                          std::any{arguments});
-                                if (result.accepted) {
-                                    runtime.recordNavigation(
-                                        context.principal().clientId(),
-                                        context.viewId(),
-                                        NavigationClass::User);
-                                }
-                                return result;
-                            });
+                        [](CommandContext&,
+                           ScrollPagesArguments const& arguments) {
+                            return CommandHandlerResult::requireView(
+                                ViewScrollPages{arguments.pages});
                         }));
     builder.add(scroll("view.scroll_to_fraction", "Scroll To Fraction")
                     .handler<ScrollFractionArguments>(
-                        [&runtime](CommandContext& context,
-                                   ScrollFractionArguments const& arguments) {
-                            return runtime.runTransaction([&] {
-                                auto result =
-                                    scrollFraction(runtime, context.viewId(),
-                                                   std::any{arguments});
-                                if (result.accepted) {
-                                    runtime.recordNavigation(
-                                        context.principal().clientId(),
-                                        context.viewId(),
-                                        NavigationClass::User);
-                                }
-                                return result;
-                            });
+                        [](CommandContext&,
+                           ScrollFractionArguments const& arguments) {
+                            return CommandHandlerResult::requireView(
+                                ViewScrollFraction{
+                                    ViewScrollTarget::Document,
+                                    arguments.numerator,
+                                    arguments.denominator});
                         }));
 }
 

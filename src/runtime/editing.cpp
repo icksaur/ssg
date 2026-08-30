@@ -486,6 +486,7 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
                 ? runtime.findReplace.replaceCurrent(*document, runtime.historyFor(*id), before, after, replacement, 0)
                 : runtime.findReplace.replaceAll(*document, runtime.historyFor(*id), before, after, replacement, 0);
             if (!result.accepted()) return failure(result.message);
+            runtime.clampSelectionsToActiveDocument();
             runtime.refreshSyntax();
             auto tabsResult = runtime.updateTabsFor(*id);
             revealActiveFindMatch(runtime, viewId);
@@ -554,7 +555,11 @@ void EditorSession::Impl::revealPrimaryCaret(ViewId viewId) {
     // adjustment is needed (unlike reveal_active_find_match, which runs while the
     // find prompt is open). The offset is re-clamped in compute_viewport, so a
     // one-frame-stale cache can never place it out of range.
-    auto& view = presentation(viewId);
+    revealPrimaryCaret(presentation(viewId));
+}
+
+void EditorSession::Impl::revealPrimaryCaret(
+    ViewPresentationState& view) const {
     ViewportDimensions revealViewport{
         std::max<std::uint32_t>(view.paneContentColumns, 1),
         std::max<std::uint32_t>(view.paneContentRows, 1)};
@@ -826,6 +831,25 @@ void registerSelectionCommands(CommandCatalog& builder,
     auto const motions = selectionNavigationCommandSet();
     for (auto const& descriptor : motions.descriptors()) {
         auto const command = descriptor.command;
+        if (command == SelectionCommand::ViewRevealCaret ||
+            command == SelectionCommand::ViewCenterCaret) {
+            builder.add(
+                CommandSpecBuilder{std::string{descriptor.id}}
+                    .owner("selection-navigation")
+                    .summary(summaryOf(descriptor.id))
+                    .viewAction()
+                    .lua()
+                    .optionalHandler<SelectionCommandArguments>(
+                        [command](
+                            CommandContext&,
+                            std::optional<SelectionCommandArguments> const&) {
+                            return CommandHandlerResult::requireView(
+                                command == SelectionCommand::ViewRevealCaret
+                                    ? ViewAction{RevealSelection{}}
+                                    : ViewAction{CenterSelection{}});
+                        }));
+            continue;
+        }
         builder.add(
             CommandSpecBuilder{std::string{descriptor.id}}
                 .owner("selection-navigation")

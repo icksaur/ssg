@@ -258,19 +258,6 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
         (void)runtime.interaction.focusPanel();
         return success();
     }
-    if (id == "tree.scroll") {
-        auto const* arguments = payloadAs<ScrollLinesArguments>(payload);
-        if (arguments == nullptr) return failure("tree.scroll requires a scroll-lines payload");
-        runtime.scrollTree(context.viewId(), arguments->rows);
-        return success();
-    }
-    if (id == "tree.scroll_to_fraction") {
-        auto const* arguments = payloadAs<ScrollFractionArguments>(payload);
-        if (arguments == nullptr) return failure("tree.scroll_to_fraction requires a scroll-fraction payload");
-        runtime.scrollTreeToFraction(context.viewId(), arguments->numerator,
-                                     arguments->denominator);
-        return success();
-    }
     auto const* invocation = payloadAs<TreeCommandInvocation>(payload);
     if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {
@@ -387,8 +374,8 @@ void registerDiffAndFollowCommands(CommandCatalog& builder,
 
 // Moving around and acting on whichever tree the panel shows.
 //
-// All eight share one handler, which branches on the id, so each declaration
-// only has to say what the command is called and what it carries.
+// Semantic tree actions share one handler. Scroll actions resolve to the
+// attached view owner instead of mutating session presentation state.
 void registerTreeCommands(CommandCatalog& builder,
                           EditorSession::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
@@ -455,25 +442,31 @@ void registerTreeCommands(CommandCatalog& builder,
                                                    std::any{arguments});
                             });
                         }));
-    builder.add(spec("tree.scroll", "Scroll")
+    builder.add(CommandSpecBuilder{"tree.scroll"}
+                    .owner("tree-providers")
+                    .summary("Scroll")
+                    .viewAction()
+                    .lua()
                     .handler<ScrollLinesArguments>(
-                        [&runtime](CommandContext& context,
-                                   ScrollLinesArguments const& arguments) {
-                            return runtime.runTransaction([&] {
-                                return treeCommand(runtime, context,
-                                                   "tree.scroll",
-                                                   std::any{arguments});
-                            });
+                        [](CommandContext&,
+                           ScrollLinesArguments const& arguments) {
+                            return CommandHandlerResult::requireView(
+                                ViewScrollLines{ViewScrollTarget::Tree,
+                                                arguments.rows});
                         }));
-    builder.add(spec("tree.scroll_to_fraction", "Scroll To Fraction")
+    builder.add(CommandSpecBuilder{"tree.scroll_to_fraction"}
+                    .owner("tree-providers")
+                    .summary("Scroll To Fraction")
+                    .viewAction()
+                    .lua()
                     .handler<ScrollFractionArguments>(
-                        [&runtime](CommandContext& context,
-                                   ScrollFractionArguments const& arguments) {
-                            return runtime.runTransaction([&] {
-                                return treeCommand(runtime, context,
-                                                   "tree.scroll_to_fraction",
-                                                   std::any{arguments});
-                            });
+                        [](CommandContext&,
+                           ScrollFractionArguments const& arguments) {
+                            return CommandHandlerResult::requireView(
+                                ViewScrollFraction{
+                                    ViewScrollTarget::Tree,
+                                    arguments.numerator,
+                                    arguments.denominator});
                         }));
 }
 
