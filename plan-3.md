@@ -58,10 +58,18 @@ supplies one, while a host without a layout owner reports the named
 `view_action_unavailable` script error and does not claim command completion.
 Client input never establishes whether a layout owner exists.
 The sink is the typed callback
-`GridActionResult(ViewActionRequest const&)`; the TUI implementation captures
-its currently adopted `GridBasis` and delegates directly to
+`std::optional<ClientInput>(ViewActionRequest const&)`; the TUI implementation
+captures its currently adopted `GridBasis` and delegates directly to
 `GridPresenter::apply`. It does not define a script-specific action shape or
 resolution path.
+
+The deprecated `EditorSession::present()` bridge does not resolve or remember
+view actions once their state moves to a presenter. It projects moved fields
+from fixed defaults. A wrapper-only caller that ignores `ViewActionRequired`
+therefore observes no scroll; callers requiring persistent view behavior must
+own a presenter. This intentional compatibility narrowing prevents hidden
+auto-application or a second presentation mutation path. The semantic HTTP
+path already uses `snapshot()` and is unaffected.
 
 Selection and focus changes resolved from layout re-enter through named
 `ClientInput` variants. The session validates their semantic revision, active
@@ -153,10 +161,10 @@ inferred from semantic change alone.
 |---|------|-------|--------|------------|
 | 1 | Introduce the semantic-frame and per-view grid-projection ownership seam | `include/ssg/session_snapshot.h`, `include/ssg/EditorSession.h`, new/existing grid presenter headers | invariant: dimensionless frame is complete | FRAME-1, FRAME-3 |
 | 2 | Add closed view-action command results and validated semantic re-entry | `include/ssg/ClientInput.h`, `include/ssg/EditorClient.h`, `include/ssg/CommandInvocation.h`, command execution and protocol codecs | command-resolution parity; malformed/stale resolved-input rejection | FRAME-5, FRAME-6 |
-| 3 | Move explicit scroll, visual selection, and pane operations onto view actions | `src/runtime/presentation.cpp`, `src/runtime/editing.cpp`, `src/EditorSession.cpp`, focused navigation/input tests | equal action payload/outcome across command ingress; existing real-pane navigation cases | FRAME-3, FRAME-5, FRAME-6 |
-| 4 | Move grid-only state and caches out of `EditorSession::Impl` into single-owner presenters | `src/runtime/editor_session_internal.h`, `src/runtime/snapshot.cpp`, grid presentation sources, follow-edits model | concurrent session changes appear only at snapshot revision boundaries; per-view isolation | FRAME-3, FRAME-4 |
+| 3 | Move document/tree scroll, reveal, and center state/actions into presenters; make the deprecated wrapper project those fields from defaults | `include/ssg/GridPresenter.h`, `include/ssg/EditorSession.h`, `src/GridPresenter.cpp`, `src/runtime/presentation.cpp`, `src/runtime/navigation.cpp`, `src/runtime/snapshot.cpp`, `src/EditorSession.cpp`, TUI/web action handlers and focused scroll tests | presenter-not-session scroll ownership with unchanged semantic revision; stale-basis rejection; equal action payload/outcome across ingress; wrapper `present()` projects moved fields at fixed defaults after ignored view actions | FRAME-3, FRAME-4, FRAME-5 |
+| 4 | Move pane state, visual selection movement, remaining grid caches, and projection out of `EditorSession::Impl` as one atomic ownership cut | `src/runtime/editor_session_internal.h`, `src/runtime/editing.cpp`, `src/runtime/snapshot.cpp`, grid presentation sources, follow-edits model | concurrent session changes appear only at snapshot revision boundaries; per-view pane/selection isolation | FRAME-3, FRAME-4, FRAME-6 |
 | 5 | Move pointer-edge resolution onto presenter actions using the extracted projection state | `src/EditorSession.cpp`, grid presentation sources, document gesture tests | edge continuation parity and stale-basis rejection | FRAME-3, FRAME-6 |
-| 6 | Rewire TUI action application and presentation configuration through the adapter | `apps/ssg_main.cpp`, script host, terminal/render integration files | terminal cells, hits, scripted actions, and startup parity | FRAME-3, FRAME-5, FRAME-6 |
+| 6 | Complete TUI action application and presentation configuration through the adapter | `apps/ssg_main.cpp`, script host, terminal/render integration files | terminal cells, hits, scripted actions, and startup parity | FRAME-3, FRAME-5, FRAME-6 |
 | 7 | Isolate the old presentation projection as a deprecated compatibility envelope outside semantic state | snapshot/protocol manifest, runtime and tests | semantic clients never read bridge fields; frozen bridge fixture round-trip | FRAME-1, FRAME-2 |
 | 8 | Hand the bridge removal inventory to Plans 4 and 6 | `plan-4.md` surface inventory and Plan 1 wire manifest | every bridge consumer has an assigned migration/removal step | FRAME-2 |
 
