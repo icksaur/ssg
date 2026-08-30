@@ -174,7 +174,7 @@ enum class ProtocolMessageKind : std::uint8_t {
     // a client acknowledged clipboard operations.  Both are retired: the
     // register holds the text either way, so a local paste works regardless of
     // what a system clipboard did, and a client had nothing useful to report.
-    StatusActionInvocation = 5,
+    // 5 was status_action_invocation. Status actions now use ClientInput.
     CommandResult = 6,
     ClientInput = 7,
     ClientInputResult = 8,
@@ -244,16 +244,6 @@ struct DecodeSessionDeltaResult {
     }
 };
 
-struct DecodeStatusActionInvocationResult {
-    ProtocolError error;
-    std::optional<StatusActionInvocation> invocation;
-    std::string message;
-
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::None;
-    }
-};
-
 class ProtocolCodec {
 public:
     [[nodiscard]] std::string encodeCommandRequest(
@@ -281,11 +271,6 @@ public:
     [[nodiscard]] std::string encodeSessionDelta(SessionDelta const& delta) const;
     [[nodiscard]] DecodeSessionDeltaResult decodeSessionDelta(
         std::string_view bytes, ProtocolLimits limits = {}) const;
-    [[nodiscard]] std::string encodeStatusActionInvocation(
-        StatusActionInvocation const& invocation) const;
-    [[nodiscard]] DecodeStatusActionInvocationResult
-    decodeStatusActionInvocation(std::string_view bytes,
-                                 ProtocolLimits limits = {}) const;
 };
 
 // Introspection for the style.define key-parity guard: the field names the

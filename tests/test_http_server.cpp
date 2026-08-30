@@ -590,7 +590,7 @@ TEST(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot) {
     server.stop();
 }
 
-TEST(statusAndDroppedContentUseAggregateCommands) {
+TEST(statusUsesTypedInputAndDroppedContentUsesAggregateCommand) {
     Fixture fixture{/*remote=*/true};
     constexpr std::uint16_t port = 18777;
     ssg::HttpEditorServer server{
@@ -603,14 +603,17 @@ TEST(statusAndDroppedContentUseAggregateCommands) {
     attach(socket.socket);
     ASSERT_TRUE(ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload).accepted());
 
-    auto const status = ssg::ProtocolCodec{}.encodeStatusActionInvocation(
-        {ssg::StatusId{3}, "run", 1});
-    ASSERT_TRUE(ssg::ProtocolCodec{}.decodeStatusActionInvocation(status).accepted());
+    auto const status = ssg::ProtocolCodec{}.encodeClientInput(
+        ssg::StatusActionPointerInput{
+            {fixture.runtime->revision()},
+            {ssg::StatusId{3}, "run", 1}});
+    ASSERT_TRUE(ssg::ProtocolCodec{}.decodeClientInput(status).accepted());
     sendAll(socket.socket, maskedFrame(0x2, status));
     auto statusResult =
-        ssg::ProtocolCodec{}.decodeCommandResult(reader.next().payload);
+        ssg::ProtocolCodec{}.decodeClientInputResult(reader.next().payload);
     ASSERT_TRUE(statusResult.accepted());
-    ASSERT_FALSE(statusResult.result->accepted());
+    ASSERT_TRUE(statusResult.result->command.has_value());
+    ASSERT_FALSE(statusResult.result->command->accepted());
 
     auto registry = ssg::CommandArgumentCodecRegistry{
         fixture.runtime->commandCatalog()};
@@ -864,7 +867,7 @@ int main() {
     RUN(acceptedNoChangeCommandStillReceivesAResult);
     RUN(deferredFailurePublishesAdvancedStateBeforeRejectedResult);
     RUN(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot);
-    RUN(statusAndDroppedContentUseAggregateCommands);
+    RUN(statusUsesTypedInputAndDroppedContentUsesAggregateCommand);
     RUN(replayLargerThanTheOutboundQueueFallsBackToSnapshot);
     RUN(attachRequestNeverCarriesAClientGrantedCapability);
     RUN(attachRejectsAForeignPreambleWithoutAPartialRequest);

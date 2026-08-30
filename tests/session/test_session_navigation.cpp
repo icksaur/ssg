@@ -5,6 +5,7 @@
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Keymap.h>
 #include <ssg/PromptSurface.h>
+#include <ssg/StatusQueue.h>
 #include <ssg/TextInputCommands.h>
 
 #include <algorithm>
@@ -14,8 +15,80 @@
 #include <set>
 #include <map>
 #include <string>
+#include <string_view>
+#include <type_traits>
 
 namespace {
+
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::ClientKeyInput>) {
+    return {};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::TabPointerInput>) {
+    return {"tab.next", "tab.previous", "tab.close"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::TreePointerInput>) {
+    return {"panel.focus", "tree.activate"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::PickerPointerInput>) {
+    return {"prompt.submit"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::PromptControlPointerInput>) {
+    return {"prompt.focus_next_control"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::ExternalActionPointerInput>) {
+    return {"external.focus", "external.reload", "external.keep_buffer",
+            "external.open_diff"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::StatusActionPointerInput>) {
+    return {"palette.open"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::PublishedUiActionPointerInput>) {
+    return {"palette.open"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::NoticeActionPointerInput>) {
+    return {"draft.discard"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::DocumentPointerInput>) {
+    return {"cursor.left", "cursor.right", "cursor.line_up",
+            "cursor.line_down", "select.left", "select.right",
+            "select.line_up", "select.line_down", "select.add_cursor_up",
+            "select.add_cursor_down"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::ScrollLinesInput>) {
+    return {"cursor.page_up", "cursor.page_down", "tree.select_next",
+            "tree.select_previous"};
+}
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::ScrollFractionInput>) {
+    return {"cursor.document_start", "cursor.document_end",
+            "tree.select_next", "tree.select_previous"};
+}
+
+template <std::size_t... Index>
+std::vector<std::string_view> allKeyboardRoutes(
+    std::index_sequence<Index...>) {
+    std::vector<std::string_view> routes;
+    const auto append = [&](auto type) {
+        auto variantRoutes = keyboardRoutes(type);
+        routes.insert(routes.end(), variantRoutes.begin(),
+                      variantRoutes.end());
+    };
+    (append(std::type_identity<
+            std::variant_alternative_t<Index, ssg::ClientInput>>{}),
+     ...);
+    return routes;
+}
 
 std::filesystem::path uniqueRoot() {
     auto root = std::filesystem::current_path() / "runtime_navigation";
@@ -2068,6 +2141,93 @@ TEST(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition) {
     }
 }
 
+TEST(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorSession::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId client{1};
+    ASSERT_TRUE(runtime
+                    .attach({client, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    auto snapshot = runtime.snapshot(client);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    std::set<std::string> bound;
+    for (const auto& binding : snapshot->sections().keymap.bindings) {
+        bound.insert(binding.commandId);
+    }
+    const auto routes = allKeyboardRoutes(std::make_index_sequence<
+                                          std::variant_size_v<
+                                              ssg::ClientInput>>{});
+    for (const auto command : routes) {
+        if (!bound.contains(std::string{command})) {
+            std::cerr << "  pointer route has no keyboard path: " << command
+                      << '\n';
+        }
+        ASSERT_TRUE(bound.contains(std::string{command}));
+    }
+
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"palette.open", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.present(client, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    std::map<std::string, std::string> paletteCandidates;
+    for (const auto& candidate :
+         snapshot->sections().palette.commandCandidates) {
+        paletteCandidates.emplace(candidate.id, candidate.label);
+    }
+
+    ssg::StatusQueue status;
+    auto enqueued = status.enqueue(
+        {ssg::StatusId{1}, ssg::StatusPriority::Information, "Help available",
+         {{"sort", "Sort lines", "edit.sort_lines"}}});
+    ASSERT_TRUE(enqueued.accepted);
+    const auto statusActions = status.viewState().items.front().actions;
+    ASSERT_EQ(statusActions.size(), std::size_t{1});
+    for (const auto& action : statusActions) {
+        const auto candidate = paletteCandidates.find(action.commandId);
+        if (candidate == paletteCandidates.end()) {
+            std::cerr << "  status action is not a palette candidate: "
+                      << action.commandId << " (" << paletteCandidates.size()
+                      << " candidates)\n";
+        }
+        ASSERT_TRUE(candidate != paletteCandidates.end());
+        if (candidate != paletteCandidates.end()) {
+            ASSERT_FALSE(candidate->second.empty());
+        }
+    }
+
+    std::size_t publishedActions = 0;
+    const auto inspectNode = [&](const auto& self,
+                                 const ssg::UiNode& node) -> void {
+        if (const auto* leaf = std::get_if<ssg::UiLeaf>(&node.content)) {
+            if (leaf->widget.command) {
+                ++publishedActions;
+                const auto& command = *leaf->widget.command;
+                const auto candidate = paletteCandidates.find(command);
+                ASSERT_TRUE(bound.contains(command) ||
+                            (candidate != paletteCandidates.end() &&
+                             !candidate->second.empty()));
+            }
+            return;
+        }
+        for (const auto& child :
+             std::get<ssg::UiContainer>(node.content).children) {
+            self(self, child);
+        }
+    };
+    inspectNode(inspectNode, snapshot->sections().ui.root);
+    ASSERT_TRUE(publishedActions > 0);
+}
+
 TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
     for (auto const origin : {ssg::InvocationOrigin::InProcess,
                               ssg::InvocationOrigin::Websocket}) {
@@ -3054,6 +3214,7 @@ int main() {
     RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
     RUN(documentPointerInputOwnsSelectionGesturePolicy);
     RUN(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition);
+    RUN(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath);
     RUN(failedSelectedCommandLeavesPickerOpenForEveryOrigin);
     RUN(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker);
     RUN(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation);

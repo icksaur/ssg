@@ -6388,27 +6388,6 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
             {}};
 }
 
-std::string ProtocolCodec::encodeStatusActionInvocation(
-    StatusActionInvocation const& invocation) const {
-    return encodeMessage(ProtocolMessageKind::StatusActionInvocation,
-                          toValue(invocation));
-}
-
-DecodeStatusActionInvocationResult ProtocolCodec::decodeStatusActionInvocation(
-    std::string_view bytes, ProtocolLimits limits) const {
-    auto decoded = decodeMessage(
-        bytes, ProtocolMessageKind::StatusActionInvocation, limits);
-    if (decoded.error != ProtocolError::None) {
-        return {decoded.error, std::nullopt, decoded.message};
-    }
-    std::optional<StatusActionInvocation> invocation;
-    if (!fromValue(*decoded.payload, invocation) || !invocation.has_value()) {
-        return {ProtocolError::MalformedMessage, std::nullopt,
-                "status action invocation payload is malformed"};
-    }
-    return {ProtocolError::None, std::move(invocation), {}};
-}
-
 std::vector<std::string> styleWireFieldNames() {
     auto const encoded = toValue(Style{});
     std::vector<std::string> names;

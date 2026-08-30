@@ -1729,24 +1729,6 @@ TEST(semanticClientInputVariantsRejectMalformedAndAmbiguousShapes) {
     ASSERT_EQ(codec.decodeClientInput(externalWithExtra).error,
               ssg::ProtocolError::MalformedMessage);
 
-    std::string statusWithExtra = wireU8(7);
-    appendU32(statusWithExtra, 4);
-    appendFieldKey(statusWithExtra, "status_id");
-    appendUintValue(statusWithExtra, 1);
-    appendFieldKey(statusWithExtra, "action_id");
-    appendTextValue(statusWithExtra, "dismiss");
-    appendFieldKey(statusWithExtra, "generation");
-    appendUintValue(statusWithExtra, 2);
-    appendFieldKey(statusWithExtra, "extra");
-    appendNullValue(statusWithExtra);
-    statusWithExtra =
-        wireU8(ssg::kProtocolWireVersion) +
-        wireU8(static_cast<std::uint8_t>(
-            ssg::ProtocolMessageKind::StatusActionInvocation)) +
-        statusWithExtra;
-    ASSERT_EQ(codec.decodeStatusActionInvocation(statusWithExtra).error,
-              ssg::ProtocolError::MalformedMessage);
-
     auto missingDocumentTarget = codec.encodeClientInput(
         ssg::DocumentPointerInput{basis, std::nullopt});
     ASSERT_EQ(codec.decodeClientInput(missingDocumentTarget).error,
@@ -1792,30 +1774,20 @@ TEST(semanticClientInputVariantsRejectMalformedAndAmbiguousShapes) {
 }
 
 
-TEST(statusActionInvocationRoundTripsThroughTheWire) {
-    ssg::StatusActionInvocation const invocation{ssg::StatusId{9}, "dismiss", 3};
-    auto const bytes = ssg::ProtocolCodec{}.encodeStatusActionInvocation(invocation);
-    auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(bytes);
-    ASSERT_TRUE(decoded.accepted());
-    ASSERT_TRUE(decoded.invocation.has_value());
-    ASSERT_EQ(decoded.invocation->statusId, invocation.statusId);
-    ASSERT_EQ(decoded.invocation->actionId, invocation.actionId);
-    ASSERT_EQ(decoded.invocation->generation, invocation.generation);
-}
-
 // ---------------------------------------------------------------------------
 // Malformed / truncated / oversized / unknown-version / unknown-kind corpus,
-// exercised against a representative message from each of the six kinds.
+// exercised against a representative typed client input.
 
 TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
-    ssg::StatusActionInvocation const invocation{ssg::StatusId{1}, "x", 1};
-    auto const canonical =
-        ssg::ProtocolCodec{}.encodeStatusActionInvocation(invocation);
+    auto const canonical = ssg::ProtocolCodec{}.encodeClientInput(
+        ssg::StatusActionPointerInput{
+            {ssg::Revision{1}}, {ssg::StatusId{1}, "x", 1}});
     ASSERT_TRUE(canonical.size() > 3);
 
     // Empty buffer: missing version byte.
     {
-        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(std::string_view{});
+        auto const decoded =
+            ssg::ProtocolCodec{}.decodeClientInput(std::string_view{});
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
@@ -1823,7 +1795,7 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     // Single byte: missing kind byte.
     {
         auto const decoded =
-            ssg::ProtocolCodec{}.decodeStatusActionInvocation(canonical.substr(0, 1));
+            ssg::ProtocolCodec{}.decodeClientInput(canonical.substr(0, 1));
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
@@ -1832,7 +1804,7 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     {
         auto corrupted = canonical;
         corrupted[0] = static_cast<char>(0xFF);
-        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(corrupted);
+        auto const decoded = ssg::ProtocolCodec{}.decodeClientInput(corrupted);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedVersion);
     }
@@ -1848,14 +1820,15 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     {
         ssg::ProtocolLimits limits;
         limits.maxMessageBytes = canonical.size() - 1;
-        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(canonical, limits);
+        auto const decoded =
+            ssg::ProtocolCodec{}.decodeClientInput(canonical, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::MessageTooLarge);
     }
 
     // Truncated payload: valid header, body cut short.
     {
-        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(
+        auto const decoded = ssg::ProtocolCodec{}.decodeClientInput(
             canonical.substr(0, canonical.size() - 2));
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
@@ -1865,13 +1838,13 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     {
         auto padded = canonical;
         padded.push_back('\x7f');
-        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(padded);
+        auto const decoded = ssg::ProtocolCodec{}.decodeClientInput(padded);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
     }
 }
 
-// Kinds 3 and 4 were clipboard_request/clipboard_response and are retired.  The
+// Kinds 3 and 4 were clipboard messages and kind 5 was status action input. The
 // ordinal is what goes on the wire, so their slots must stay dead rather than be
 // reclaimed: a peer built against the old numbering must be told the kind is
 // unsupported, never handed a message that now means something else.
@@ -1886,28 +1859,27 @@ TEST(protocolMessageKindOrdinalsAreNeverRenumbered) {
     ASSERT_EQ(static_cast<int>(Kind::CommandRequest), 0);
     ASSERT_EQ(static_cast<int>(Kind::SessionSnapshot), 1);
     ASSERT_EQ(static_cast<int>(Kind::SessionDelta), 2);
-    ASSERT_EQ(static_cast<int>(Kind::StatusActionInvocation), 5);
     ASSERT_EQ(static_cast<int>(Kind::CommandResult), 6);
     ASSERT_EQ(static_cast<int>(Kind::ClientInput), 7);
     ASSERT_EQ(static_cast<int>(Kind::ClientInputResult), 8);
 
     for (auto const kind : {Kind::CommandRequest, Kind::SessionSnapshot,
-                            Kind::SessionDelta, Kind::StatusActionInvocation,
-                            Kind::CommandResult, Kind::ClientInput,
+                            Kind::SessionDelta, Kind::CommandResult, Kind::ClientInput,
                             Kind::ClientInputResult}) {
         ASSERT_NE(static_cast<int>(kind), 3);
         ASSERT_NE(static_cast<int>(kind), 4);
+        ASSERT_NE(static_cast<int>(kind), 5);
     }
 }
 
 TEST(retiredWireKindsAreNeverReclaimed) {
-    ssg::StatusActionInvocation const invocation{ssg::StatusId{1}, "a", 1};
-    auto const canonical =
-        ssg::ProtocolCodec{}.encodeStatusActionInvocation(invocation);
-    for (char const kind : {char{3}, char{4}}) {
+    auto const canonical = ssg::ProtocolCodec{}.encodeClientInput(
+        ssg::StatusActionPointerInput{
+            {ssg::Revision{1}}, {ssg::StatusId{1}, "a", 1}});
+    for (char const kind : {char{3}, char{4}, char{5}}) {
         auto retired = canonical;
         retired[1] = kind;
-        ASSERT_EQ(ssg::ProtocolCodec{}.decodeStatusActionInvocation(retired).error,
+        ASSERT_EQ(ssg::ProtocolCodec{}.decodeClientInput(retired).error,
                   ssg::ProtocolError::UnsupportedMessageKind);
         ASSERT_EQ(ssg::ProtocolCodec{}.decodeSessionSnapshot(retired).error,
                   ssg::ProtocolError::UnsupportedMessageKind);
@@ -1917,27 +1889,28 @@ TEST(retiredWireKindsAreNeverReclaimed) {
 }
 
 TEST(valueBoundsAreEnforcedOnDecode) {
-    ssg::StatusActionInvocation const invocation{ssg::StatusId{1}, "a", 1};
-    auto const bytes = ssg::ProtocolCodec{}.encodeStatusActionInvocation(invocation);
+    auto const bytes = ssg::ProtocolCodec{}.encodeClientInput(
+        ssg::StatusActionPointerInput{
+            {ssg::Revision{1}}, {ssg::StatusId{1}, "a", 1}});
 
     {
         ssg::ProtocolLimits limits;
         limits.maxCollectionLength = 0;
-        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(bytes, limits);
+        auto const decoded = ssg::ProtocolCodec{}.decodeClientInput(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
     {
         ssg::ProtocolLimits limits;
         limits.maxTextBytes = 0;
-        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(bytes, limits);
+        auto const decoded = ssg::ProtocolCodec{}.decodeClientInput(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
     {
         ssg::ProtocolLimits limits;
         limits.maxValueDepth = 0;
-        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(bytes, limits);
+        auto const decoded = ssg::ProtocolCodec{}.decodeClientInput(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
@@ -2112,10 +2085,6 @@ TEST(regenerateCanonicalFixtures) {
         ssg::ProtocolCodec{}.encodeCommandResult(
             {ssg::CommandError::StaleRevision, ssg::Revision{17},
              "base revision is stale"}));
-    writeFixtureHex(
-        "status_action_invocation.hex",
-        ssg::ProtocolCodec{}.encodeStatusActionInvocation(
-            {ssg::StatusId{9}, "dismiss", 3}));
     auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
@@ -2232,13 +2201,6 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
         ASSERT_EQ(decoded.delta->baseRevision(), ssg::Revision{4});
         ASSERT_EQ(decoded.delta->revision(), ssg::Revision{5});
         ASSERT_EQ(decoded.delta->clientId(), ssg::ClientId{7});
-    }
-    {
-        auto decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(
-            readFixtureBytes("status_action_invocation.hex"));
-        ASSERT_TRUE(decoded.accepted());
-        ASSERT_EQ(decoded.invocation->statusId, ssg::StatusId{9});
-        ASSERT_EQ(decoded.invocation->actionId, std::string{"dismiss"});
     }
 }
 
@@ -2457,7 +2419,6 @@ int main() {
     RUN(clientInputAndResultRoundTripThroughTheWire);
     RUN(semanticClientInputVariantsRoundTripThroughTheWire);
     RUN(semanticClientInputVariantsRejectMalformedAndAmbiguousShapes);
-    RUN(statusActionInvocationRoundTripsThroughTheWire);
     RUN(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus);
     RUN(retiredWireKindsAreNeverReclaimed);
     RUN(protocolMessageKindOrdinalsAreNeverRenumbered);

@@ -217,32 +217,6 @@ struct HttpEditorRoute::Impl {
             return;
         }
 
-        auto status = ProtocolCodec{}.decodeStatusActionInvocation(message.data,
-                                                       config.protocolLimits);
-        if (status.accepted()) {
-            try {
-                auto const revisionBefore = runtime.revision();
-                auto const result = runtime.dispatch(
-                    *clientId,
-                    {"status.invoke_action", runtime.revision(),
-                     *status.invocation});
-                std::vector<Outbound> response;
-                if (result.accepted()) {
-                    (void)runtime.pump();
-                }
-                if (result.accepted() || result.revision != revisionBefore) {
-                    if (auto state = publishSession(*sessionId, handle)) {
-                        response.push_back(std::move(*state));
-                    }
-                }
-                response.push_back(
-                    {ProtocolCodec{}.encodeCommandResult(result), true});
-                enqueueBatch(handle, connection, std::move(response));
-            } catch (...) {
-                close(handle, connection);
-            }
-            return;
-        }
         close(handle, connection);
     }
 

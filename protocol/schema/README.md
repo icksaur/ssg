@@ -38,12 +38,12 @@ Every message kind shares one envelope:
 [u8 wire_version][u8 message_kind][tagged ProtocolValue payload]
 ```
 
-`wire_version` is currently always `3`; a mismatch reports
+`wire_version` is currently always `4`; a mismatch reports
 `ProtocolError::unsupported_version`. `message_kind` matches
 `ProtocolMessageKind` (`command_request = 0`, `session_snapshot = 1`,
-`session_delta = 2` (3 and 4 are retired clipboard kinds, permanently
+`session_delta = 2` (3 through 5 are retired kinds, permanently
 reserved so surviving kinds keep their wire values),
-`status_action_invocation = 5`, `command_result = 6`, `client_input = 7`,
+`command_result = 6`, `client_input = 7`,
 `client_input_result = 8`); decoding with the wrong `decode_*` function
 for a message reports `ProtocolError::unsupported_message_kind`. Trailing
 bytes after a fully-decoded payload are rejected as
@@ -72,7 +72,6 @@ Payload shapes (object field names, all required unless noted optional):
   aggregate via the `decode_wire_session_delta` friend factory declared in
   `session_snapshot.h`, so this is the only construction path outside
   `derive_session_delta`.
-- `status_action_invocation`: encodes `StatusActionInvocation` directly
   (`status_id`, `action_id`, `generation`).
 - `client_input`: `{stroke, committed_text}`. `stroke` is either null or a
   `{code, control, alt, meta, shift}` object. The key code is its stable name.

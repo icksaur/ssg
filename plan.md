@@ -127,7 +127,7 @@ Completion: all semantic fields have cross-language replay oracles and both
 required platforms compile their adapters. This phase should not redesign a
 contract.
 
-### 1. Route all interactions through one typed ingress
+### 1. Route all interactions through one typed ingress (complete)
 
 - Define semantic pointer targets and gestures in the existing typed client
   input seam. Move tab close, tree activation, external actions, multi-cursor,
@@ -142,7 +142,10 @@ Completion: TUI and web submit identical semantic input for identical user
 intent; client pointer routers contain device translation but no editor command
 sequencing or product policy.
 
-This changes public input and wire contracts and requires a reviewed spec.
+Implemented with a closed typed client-input vocabulary, authoritative
+document/picker/action transitions, cross-language wire fixtures, and an
+exhaustive keyboard-reachability oracle. Obsolete feature-specific status and
+selection wire paths were removed.
 
 ### 2. Separate semantic session state from grid presentation
 
