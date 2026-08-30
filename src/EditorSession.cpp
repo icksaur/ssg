@@ -485,7 +485,6 @@ EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
       selection{initialSelection()},
       clipboard{4},
-      shell{},
       tabs{*this},
       external{recovery, diff},
       syntaxParser{std::move(parser)},
@@ -2944,6 +2943,7 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
 
 bool EditorSession::Impl::revealCurrentDiffTarget(
     const FollowTarget& target, NavigationClass classification) {
+    (void)classification;
     const auto& text = activeText();
     const auto offset = lineStartOffset(text, target.newestHunkLine);
     const auto position =
@@ -2953,26 +2953,6 @@ bool EditorSession::Impl::revealCurrentDiffTarget(
     }
     selection.selections =
         SelectionSet{std::vector<Selection>{Selection{*position, *position}}};
-    std::optional<std::uint32_t> targetRow;
-    if (const auto file = diff.file(target.id)) {
-        const auto projection =
-            Viewport{}.rowProjectionUnwrapped(text, file->get());
-        targetRow = projection.visualRowForBufferLine(
-            static_cast<std::uint32_t>(std::min<std::size_t>(
-                target.newestHunkLine,
-                std::numeric_limits<std::uint32_t>::max())));
-    }
-    for (const auto& client : follow.viewState().clients) {
-        if (auto attached = clientViews.find(client.client);
-            attached != clientViews.end()) {
-            auto& view = presentation(attached->second);
-            if (targetRow) {
-                view.requestedFirstVisualRow = *targetRow;
-            }
-            revealPrimaryCaret(attached->second);
-            recordNavigation(client.client, attached->second, classification);
-        }
-    }
     interaction.focusEditor();
     return true;
 }
@@ -2992,12 +2972,9 @@ bool EditorSession::Impl::revealDiffTarget(
 
 void EditorSession::Impl::recordNavigation(
     ClientId client, ViewId viewId, NavigationClass classification) {
-    auto const& view = presentation(viewId);
+    (void)viewId;
     (void)follow.applyNavigation(
-        {.client = client,
-         .classification = classification,
-         .offset = FollowScrollOffset{view.requestedFirstVisualRow,
-                                      view.requestedFirstVisualColumn}});
+        {.client = client, .classification = classification});
 }
 
 EditorSession::EditorSession(std::unique_ptr<Impl> implementation) noexcept
@@ -3103,8 +3080,7 @@ AttachResult EditorSession::attach(InvocationPrincipal principal, ViewId viewId)
             impl_->viewPresentations.try_emplace(viewId);
         }
         impl_->clientViews.emplace(clientId, viewId);
-        (void)impl_->follow.attachClient(
-            clientId, impl_->presentation(viewId).dimensions);
+        (void)impl_->follow.attachClient(clientId);
     }
     return result;
 }
@@ -3390,14 +3366,18 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                 if constexpr (!std::same_as<Input, DocumentPointerInput> &&
                               !std::same_as<Input, ScrollLinesInput> &&
                               !std::same_as<Input, ScrollFractionInput> &&
-                              !std::same_as<Input, ViewNavigationInput>) {
+                              !std::same_as<Input, ViewNavigationInput> &&
+                              !std::same_as<Input,
+                                            ResolvedPaneFocusInput>) {
                     if (semantic.phase != InputPointerPhase::Press) {
                         return unhandled();
                     }
                 }
                 if constexpr (!std::same_as<Input, ScrollLinesInput> &&
                               !std::same_as<Input, ScrollFractionInput> &&
-                              !std::same_as<Input, ViewNavigationInput>) {
+                              !std::same_as<Input, ViewNavigationInput> &&
+                              !std::same_as<Input,
+                                            ResolvedPaneFocusInput>) {
                     if (semantic.button != InputPointerButton::Primary &&
                         !std::same_as<Input, TabPointerInput>) {
                         return unhandled();
@@ -3476,6 +3456,25 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                         return unhandled();
                     }
                     return dispatch("follow_edits.pause", std::any{});
+                } else if constexpr (std::same_as<
+                                         Input, ResolvedPaneFocusInput>) {
+                    const bool focusChanged =
+                        impl_->interaction.effectiveFocus() !=
+                        FocusTarget::Editor;
+                    const bool followChanged =
+                        impl_->follow.viewState().mode ==
+                        FollowMode::Following;
+                    if (focusChanged) impl_->interaction.focusEditor();
+                    impl_->recordNavigation(
+                        clientId, impl_->clientViews.at(clientId),
+                        NavigationClass::User);
+                    impl_->session->advanceRevision();
+                    return {
+                        ClientInputOutcome::Dispatched, std::nullopt,
+                        CommandResult{
+                            CommandError::None, impl_->session->revision(), {},
+                            {/*routingChanged=*/focusChanged,
+                             /*geometryChanged=*/false}}};
                 } else if constexpr (std::same_as<Input,
                                                   DocumentPointerInput>) {
                     const auto handled = [&] {
@@ -3971,7 +3970,7 @@ EditorSession::projectForBridgedPresenterDeprecated(
     ClientId clientId, ViewportDimensions dimensions,
     PaletteReport paletteReport, std::optional<ViewId> expectedView,
     SelectionNavigation navigation, std::uint32_t treeFirstVisible,
-    bool revealPrimarySelection) {
+    bool revealPrimarySelection, const ShellState& shellState) {
     if (impl_->session->activeDispatchRevision()) {
         throw std::logic_error{"a view cannot be presented during dispatch"};
     }
@@ -4001,7 +4000,7 @@ EditorSession::projectForBridgedPresenterDeprecated(
     // The shell layout is computed FIRST: it caches the panel content height that
     // treeView() (inside sections) and viewport() resolve their scroll against.
     // Its geometry is the presentation's shell projection; its focus is semantic.
-    auto shell = impl_->shellView(dimensions, paletteReport);
+    auto shell = impl_->shellView(dimensions, shellState, paletteReport);
     if (!shell.panes.empty()) {
         auto const& content = shell.panes.front().content;
         presentation.paneContentRows =
@@ -4047,9 +4046,10 @@ std::optional<SessionSnapshot> EditorSession::present(
     ClientId clientId, ViewportDimensions dimensions,
     PaletteReport paletteReport) {
     SelectionNavigation navigation;
+    ShellState shell;
     return projectForBridgedPresenterDeprecated(
         clientId, dimensions, std::move(paletteReport), std::nullopt,
-        navigation, 0, true);
+        navigation, 0, true, shell);
 }
 
 std::optional<SessionSnapshot> EditorSession::snapshot(ClientId clientId,

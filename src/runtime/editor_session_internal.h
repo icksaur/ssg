@@ -178,7 +178,6 @@ struct EditorSession::Impl final : CommandServices,
     // must be dismissed (see reconcile_find_document).
     std::optional<FileDocumentId> findDocumentId;
     StatusQueue status;
-    ShellState shell;
     TabManager tabs;
     DiffModel diff;
     ExternalModificationFlow external;
@@ -508,8 +507,9 @@ struct EditorSession::Impl final : CommandServices,
     // document identity or revision no longer matches what it evaluated against,
     // so stale matches are never navigable or projected.
     void reconcileFindDocument();
-    [[nodiscard]] ShellViewState shellView(ViewportDimensions dimensions,
-                                            PaletteReport const& paletteReport = {}) const;
+    [[nodiscard]] ShellViewState shellView(
+        ViewportDimensions dimensions, const ShellState& shell,
+        PaletteReport const& paletteReport = {}) const;
     // The projected + command-bound header/footer status fields the composed chrome
     // resolves its provider widgets against. Shared by shellView (built-in fields +
     // the grid resolver) and sections (the semantic dynamic-state resolver), so the

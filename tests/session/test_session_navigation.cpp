@@ -79,6 +79,10 @@ std::vector<std::string_view> keyboardRoutes(
     std::type_identity<ssg::ViewNavigationInput>) {
     return {};
 }
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::ResolvedPaneFocusInput>) {
+    return {};
+}
 
 template <std::size_t... Index>
 std::vector<std::string_view> allKeyboardRoutes(
@@ -1282,9 +1286,11 @@ TEST(followPauseOnEditTransitionTable) {
         auto runtime = followPauseRuntime("alpha needle omega\n");
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
-        ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"pane.next", runtime->revision(), {}})
+        ssg::test::GridTestView grid{
+            ssg::ClientId{1}, ssg::ViewId{1}, {80, 20}};
+        ASSERT_TRUE(grid
+                        .dispatch(*runtime,
+                                  {"pane.next", runtime->revision(), {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }

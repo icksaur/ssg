@@ -1674,6 +1674,8 @@ TEST(semanticClientInputVariantsRoundTripThroughTheWire) {
             basis, ssg::SemanticScrollTarget::Tree, -3},
         ssg::ScrollFractionInput{
             basis, ssg::SemanticScrollTarget::Document, 2, 7},
+        ssg::ViewNavigationInput{basis},
+        ssg::ResolvedPaneFocusInput{basis},
     };
     for (auto const& input : inputs) {
         auto const decoded = ssg::ProtocolCodec{}.decodeClientInput(
@@ -1722,6 +1724,35 @@ TEST(semanticClientInputVariantsRejectMalformedAndAmbiguousShapes) {
     renameField(missingBasis, "basis_revision", "bogus_revision");
     ASSERT_EQ(codec.decodeClientInput(missingBasis).error,
               ssg::ProtocolError::MalformedMessage);
+
+    auto paneFocusWithExtra = codec.encodeClientInput(
+        ssg::ResolvedPaneFocusInput{basis});
+    renameField(paneFocusWithExtra, "basis_revision", "bogus_revision");
+    ASSERT_EQ(codec.decodeClientInput(paneFocusWithExtra).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto negativePaneFocus = codec.encodeClientInput(
+        ssg::ResolvedPaneFocusInput{basis});
+    std::string encodedBasisKey;
+    appendFieldKey(encodedBasisKey, "basis_revision");
+    const auto basisKey = negativePaneFocus.find(encodedBasisKey);
+    ASSERT_NE(basisKey, std::string::npos);
+    if (basisKey != std::string::npos) {
+        const auto value = basisKey + encodedBasisKey.size();
+        negativePaneFocus[value] = static_cast<char>(2);
+        std::fill_n(negativePaneFocus.begin() +
+                        static_cast<std::ptrdiff_t>(value + 1),
+                    8, static_cast<char>(0xff));
+    }
+    ASSERT_EQ(codec.decodeClientInput(negativePaneFocus).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto boundedPaneFocus = codec.encodeClientInput(
+        ssg::ResolvedPaneFocusInput{basis});
+    ssg::ProtocolLimits paneFocusLimits;
+    paneFocusLimits.maxMessageBytes = boundedPaneFocus.size() - 1;
+    ASSERT_EQ(codec.decodeClientInput(boundedPaneFocus, paneFocusLimits).error,
+              ssg::ProtocolError::MessageTooLarge);
 
     auto zeroActivation = codec.encodeClientInput(
         ssg::PickerPointerInput{

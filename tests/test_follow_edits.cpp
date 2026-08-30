@@ -31,7 +31,7 @@ DiffFileView changedFile(std::string id, std::filesystem::path path,
     return view;
 }
 
-TEST(followOffsetCountsPhantomRowsThroughViewportProjection) {
+TEST(followClientsPublishFixedCompatibilityGeometry) {
     DiffFileView file{DiffFileId{"phantom"}};
     file.path = "phantom.txt";
     file.currentContent = "zero\none\ntwo\nthree";
@@ -41,11 +41,11 @@ TEST(followOffsetCountsPhantomRowsThroughViewportProjection) {
                           .targetLines = {}});
 
     FollowEditsModel model;
-    ASSERT_TRUE(
-        model.attachClient(ClientId{1}, ViewportDimensions{20, 2}).accepted());
+    ASSERT_TRUE(model.attachClient(ClientId{1}).accepted());
     ASSERT_TRUE(model.acceptExternalChange(file, Revision{1}).accepted());
-    ASSERT_EQ(model.viewState().clients.front().offset.firstRow,
-              std::uint64_t{2});
+    const auto client = model.viewState().clients.front();
+    ASSERT_EQ(client.dimensions, ViewportDimensions(80, 24));
+    ASSERT_EQ(client.offset, FollowScrollOffset{});
 }
 
 TEST(newestIntroducedHunkWinsWhenPriorBottomHunkRemains) {
@@ -108,20 +108,17 @@ TEST(burstDoesNotRevealEarlierFileWhenLastFileHasNoNewHunk) {
 
 TEST(programmaticRevealDoesNotPauseButUserNavigationDoes) {
     FollowEditsModel model;
-    ASSERT_TRUE(
-        model.attachClient(ClientId{1}, ViewportDimensions{20, 2}).accepted());
+    ASSERT_TRUE(model.attachClient(ClientId{1}).accepted());
     ASSERT_TRUE(model
                     .applyNavigation(
                         {.client = ClientId{1},
-                         .classification = NavigationClass::Programmatic,
-                         .offset = FollowScrollOffset{3, 0}})
+                         .classification = NavigationClass::Programmatic})
                     .accepted());
     ASSERT_EQ(model.viewState().mode, FollowMode::Following);
     ASSERT_TRUE(model
                     .applyNavigation(
                         {.client = ClientId{1},
-                         .classification = NavigationClass::User,
-                         .offset = FollowScrollOffset{4, 0}})
+                         .classification = NavigationClass::User})
                     .accepted());
     ASSERT_EQ(model.viewState().mode, FollowMode::Paused);
 }
@@ -198,10 +195,7 @@ TEST(independentTransitionTableCoversSharedFollowPolicy) {
         const auto& operation = fields[0];
         if (operation == "attach") {
             ASSERT_TRUE(model.attachClient(
-                                 ClientId{std::stoull(fields[1])},
-                                 ViewportDimensions{80,
-                                     static_cast<std::uint32_t>(
-                                         std::stoul(fields[2]))})
+                                 ClientId{std::stoull(fields[1])})
                             .accepted());
         } else if (operation == "change") {
             const auto separator = fields[1].find(':');
@@ -225,9 +219,7 @@ TEST(independentTransitionTableCoversSharedFollowPolicy) {
             ASSERT_TRUE(model
                             .applyNavigation(
                                 {.client = ClientId{std::stoull(fields[1])},
-                                 .classification = classification,
-                                 .offset = FollowScrollOffset{
-                                     std::stoull(fields[2]), 0}})
+                                 .classification = classification})
                             .accepted());
         } else if (operation == "resume") {
             ASSERT_TRUE(model
@@ -377,8 +369,7 @@ TEST(staleChangesAndInvalidClientsAreFailureAtomic) {
     ASSERT_EQ(model
                   .applyNavigation(
                       {.client = ClientId{99},
-                       .classification = NavigationClass::User,
-                       .offset = FollowScrollOffset{3, 0}})
+                       .classification = NavigationClass::User})
                   .error,
               FollowEditsError::UnknownClient);
     ASSERT_EQ(model.viewState(), before);
@@ -430,7 +421,7 @@ TEST(configurationRejectsInvalidQueueCapacity) {
 
 int main() {
     RUN(independentTransitionTableCoversSharedFollowPolicy);
-    RUN(followOffsetCountsPhantomRowsThroughViewportProjection);
+    RUN(followClientsPublishFixedCompatibilityGeometry);
     RUN(newestIntroducedHunkWinsWhenPriorBottomHunkRemains);
     RUN(burstActivatesOnlyLastFileAndAdvancesOnce);
     RUN(burstDoesNotRevealEarlierFileWhenLastFileHasNoNewHunk);

@@ -79,6 +79,62 @@ continuation is resolved to a concrete position at the presentation edge and
 then uses the existing document gesture transition; cells and rectangles never
 enter semantic input.
 
+The remaining ownership work is divisible. The first cut moves `ShellState`
+with pane actions and removes live follow-edits dependence on pane/viewport
+geometry. The second cut moves visual selection, viewport/tree projection
+state, and grid-only line/layout caches into the private implementation of
+`GridPresenter`. The private compatibility bridge holds the session operation
+lock while projecting read-only semantic state through that presenter-owned
+state, so a frame cannot combine revisions. The deprecated wrapper uses
+temporary default projection state. Client-to-view attachment identity remains
+in the session because it is host-supplied authority used to stamp actions, not
+presentation state. The second cut also deletes session-side
+`revealPrimaryCaret` and tree-reveal mutations; presenter reconciliation is the
+only retained reveal path.
+
+Line/page cursor movement and extension resolve as
+`MoveVisualSelection`. Presenter application runs `SelectionNavigator` against
+the captured frame, active diff, native pane dimensions, and presenter-owned
+desired cell. It returns a resolved-selection input containing the exact
+session basis, active tab, document revision, and nonempty byte-offset ranges.
+The session resolves each offset exactly against the current document before
+committing the selection and pausing follow edits. An out-of-range offset or one
+that is not an exact valid text boundary rejects the whole input as an invalid
+selection; the session never snaps or rewrites a range. Proposed desired-cell
+state is confirmed only when the next semantic frame has the expected active
+tab, document revision, and complete resolved selection set. Any mismatch
+discards the proposal, so a rejected semantic submission cannot leave
+speculative navigation committed in the presenter.
+
+Pane split, close, cycle, and directional focus use the existing `SplitPane`,
+`ClosePane`, `CyclePane`, and `FocusPane` actions and mutate presenter- or
+native-client-owned pane topology. Every cycle attempt, including a one-pane
+no-op, emits the existing `ViewNavigationInput` to preserve current follow-pause
+behavior. Successful directional focus emits `ResolvedPaneFocusInput`, whose
+exact session basis atomically focuses the editor and records user navigation;
+it carries no pane identity or geometry because the target remains
+presenter-local. An attempt with no destination emits `ViewNavigationInput`
+without claiming a
+focus change. Split and close are presentation-only. Browser and grid clients
+resolve these same action variants through their native layout owners rather
+than adding command-name switches. A client whose native layout has no pane
+owner, including the current browser, returns the explicit
+`view_action_unavailable` outcome for pane variants; it neither silently ignores
+them nor synthesizes a second pane concept.
+
+Follow-edits behavior becomes semantic: viewport offsets, client dimensions,
+and active pane stop influencing live behavior, and presenters reconcile follow
+targets against local navigation. This extends the existing semantic-change
+block in `GridPresenter::project`, not a second reconciliation pass, and runs
+only while follow-edits mode is following. The current wire keeps those
+deprecated fields at fixed defaults until Plan 6 activates
+`kSemanticUiWireVersion`; that coordinated version step removes them rather
+than changing the current wire shape in place. The next pointer-edge step
+temporarily consumes only
+`PointerEdgeProjectionHandoff`, containing the active view's content
+dimensions and `SelectionNavigation`. Step 4b retains that handoff and Step 5
+removes it; no other session-owned grid state survives Step 4b.
+
 ## Invariants
 
 - FRAME-1: The semantic frame is complete without client geometry. State at the
@@ -163,7 +219,8 @@ inferred from semantic change alone.
 | 1 | Introduce the semantic-frame and per-view grid-projection ownership seam | `include/ssg/session_snapshot.h`, `include/ssg/EditorSession.h`, new/existing grid presenter headers | invariant: dimensionless frame is complete | FRAME-1, FRAME-3 |
 | 2 | Add closed view-action command results and validated semantic re-entry | `include/ssg/ClientInput.h`, `include/ssg/EditorClient.h`, `include/ssg/CommandInvocation.h`, command execution and protocol codecs | command-resolution parity; malformed/stale resolved-input rejection | FRAME-5, FRAME-6 |
 | 3 | Move document/tree scroll, reveal, and center state/actions into presenters; make the deprecated wrapper project those fields from defaults | `include/ssg/GridPresenter.h`, `include/ssg/EditorSession.h`, `src/GridPresenter.cpp`, `src/runtime/presentation.cpp`, `src/runtime/navigation.cpp`, `src/runtime/snapshot.cpp`, `src/EditorSession.cpp`, TUI/web action handlers and focused scroll tests | presenter-not-session scroll ownership with unchanged semantic revision; stale-basis rejection; equal action payload/outcome across ingress; wrapper `present()` projects moved fields at fixed defaults after ignored view actions | FRAME-3, FRAME-4, FRAME-5 |
-| 4 | Move pane state, visual selection movement, remaining grid caches, and projection out of `EditorSession::Impl` as one atomic ownership cut | `src/runtime/editor_session_internal.h`, `src/runtime/editing.cpp`, `src/runtime/snapshot.cpp`, grid presentation sources, follow-edits model | concurrent session changes appear only at snapshot revision boundaries; per-view pane/selection isolation | FRAME-3, FRAME-4, FRAME-6 |
+| 4a | Move `ShellState` and pane actions into presenters/native layout owners; remove live follow-edits dependence on pane/viewport geometry while preserving deprecated wire defaults | `include/ssg/GridPresenter.h`, `src/GridPresenter.cpp`, `src/runtime/presentation.cpp`, `src/runtime/snapshot.cpp`, follow-edits model, browser pane action handler | per-view pane isolation; pane action parity; follow/paused terminal behavior parity; current wire fixture unchanged | FRAME-3, FRAME-4, FRAME-5 |
+| 4b | Move visual selection movement, viewport/tree projection state, and remaining grid caches out of `EditorSession::Impl`; retain only `PointerEdgeProjectionHandoff` for Step 5 | `include/ssg/ClientInput.h`, `include/ssg/GridPresenter.h`, `src/runtime/editor_session_internal.h`, `src/runtime/editing.cpp`, `src/runtime/snapshot.cpp`, grid presentation sources, protocol and client handlers | resolved-selection rejection; desired-cell confirmation; concurrent session changes appear only at snapshot revision boundaries; per-view selection/cache isolation | FRAME-3, FRAME-4, FRAME-6 |
 | 5 | Move pointer-edge resolution onto presenter actions using the extracted projection state | `src/EditorSession.cpp`, grid presentation sources, document gesture tests | edge continuation parity and stale-basis rejection | FRAME-3, FRAME-6 |
 | 6 | Complete TUI action application and presentation configuration through the adapter | `apps/ssg_main.cpp`, script host, terminal/render integration files | terminal cells, hits, scripted actions, and startup parity | FRAME-3, FRAME-5, FRAME-6 |
 | 7 | Isolate the old presentation projection as a deprecated compatibility envelope outside semantic state | snapshot/protocol manifest, runtime and tests | semantic clients never read bridge fields; frozen bridge fixture round-trip | FRAME-1, FRAME-2 |

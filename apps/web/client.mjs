@@ -63,6 +63,10 @@ const VIEW_ACTION = {
   SCROLL_FRACTION: 2,
   REVEAL_SELECTION: 4,
   CENTER_SELECTION: 5,
+  SPLIT_PANE: 6,
+  CLOSE_PANE: 7,
+  CYCLE_PANE: 8,
+  FOCUS_PANE: 9,
 };
 const VIEW_SCROLL_TARGET = { DOCUMENT: 0, TREE: 1 };
 
@@ -1269,17 +1273,24 @@ function scrollLineHeight(target, viewport) {
 
 function applyViewAction(request) {
   if (!request || BigInt(request.semantic_revision) !== state.revision) {
-    return false;
+    return 'invalid';
   }
   const action = request.action;
   const kind = num(action && action.kind);
+  if (kind === VIEW_ACTION.SPLIT_PANE ||
+      kind === VIEW_ACTION.CLOSE_PANE ||
+      kind === VIEW_ACTION.CYCLE_PANE ||
+      kind === VIEW_ACTION.FOCUS_PANE) {
+    chromeErrorEl.textContent = 'view_action_unavailable';
+    return 'unavailable';
+  }
   const target = kind === VIEW_ACTION.SCROLL_PAGES ||
       kind === VIEW_ACTION.REVEAL_SELECTION ||
       kind === VIEW_ACTION.CENTER_SELECTION
     ? VIEW_SCROLL_TARGET.DOCUMENT
     : num(action && action.target);
   const viewport = viewScrollContainer(target);
-  if (!viewport) return false;
+  if (!viewport) return 'invalid';
 
   if (kind === VIEW_ACTION.SCROLL_LINES) {
     viewport.scrollTop += num(action.rows) * scrollLineHeight(target, viewport);
@@ -1288,7 +1299,7 @@ function applyViewAction(request) {
   } else if (kind === VIEW_ACTION.SCROLL_FRACTION) {
     const denominator = num(action.denominator);
     const numerator = num(action.numerator);
-    if (denominator <= 0 || numerator < 0 || numerator > denominator) return false;
+    if (denominator <= 0 || numerator < 0 || numerator > denominator) return 'invalid';
     viewport.scrollTop =
       Math.max(0, viewport.scrollHeight - viewport.clientHeight) *
       numerator / denominator;
@@ -1297,13 +1308,13 @@ function applyViewAction(request) {
     revealDocumentCaret();
   } else if (kind === VIEW_ACTION.CENTER_SELECTION) {
     const caret = uiRootEl.querySelector('.doc-surface .caret');
-    if (!caret) return false;
+    if (!caret) return 'invalid';
     const caretRect = caret.getBoundingClientRect();
     const viewportRect = viewport.getBoundingClientRect();
     viewport.scrollTop +=
       (caretRect.top + caretRect.bottom - viewportRect.top - viewportRect.bottom) / 2;
   } else {
-    return false;
+    return 'invalid';
   }
 
   const documentNavigation =
@@ -1315,7 +1326,7 @@ function applyViewAction(request) {
       viewNavigation: true,
     });
   }
-  return true;
+  return 'applied';
 }
 
 let ws = null;
@@ -1430,7 +1441,7 @@ function applyProtocolFrame(buffer) {
       reconnect('command result preceded state');
       return false;
     }
-    if (payload.view_action && !applyViewAction(payload.view_action)) {
+    if (payload.view_action && applyViewAction(payload.view_action) === 'invalid') {
       reconnect('unsupported or stale view action');
       return false;
     }
@@ -1443,7 +1454,7 @@ function applyProtocolFrame(buffer) {
   } else if (inbound === 'input-result') {
     const completedInput = state.inputQueue[0];
     if (payload.command?.view_action &&
-        !applyViewAction(payload.command.view_action)) {
+        applyViewAction(payload.command.view_action) === 'invalid') {
       reconnect('unsupported or stale view action');
       return false;
     }

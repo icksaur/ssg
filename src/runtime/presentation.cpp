@@ -2,17 +2,12 @@
 
 
 #include <algorithm>
+#include <array>
 #include <stdexcept>
 #include <variant>
 
 namespace ssg {
 namespace {
-
-bool userNavigationShellCommand(std::string_view id) {
-    return id == "pane.next" || id == "pane.previous" ||
-           id == "pane.focus_left" || id == "pane.focus_right" ||
-           id == "pane.focus_up" || id == "pane.focus_down";
-}
 
 CommandHandlerResult setWordWrap(EditorSession::Impl& runtime) {
     bool next = !boolSetting(runtime.settings, SettingKey::WordWrap, runtime.wordWrap);
@@ -32,18 +27,9 @@ CommandHandlerResult setLineNumbers(EditorSession::Impl& runtime) {
     return success();
 }
 
-CommandHandlerResult shellCommand(EditorSession::Impl& runtime, ViewId viewId,
+CommandHandlerResult shellCommand(EditorSession::Impl& runtime,
                                   std::string_view id) {
-    if (id == "pane.split_horizontal") runtime.shell.splitActive(SplitAxis::Horizontal);
-    else if (id == "pane.split_vertical") runtime.shell.splitActive(SplitAxis::Vertical);
-    else if (id == "pane.close") (void)runtime.shell.closeActivePane();
-    else if (id == "pane.next") runtime.shell.nextPane();
-    else if (id == "pane.previous") runtime.shell.previousPane();
-    else if (id == "pane.focus_left") { if (runtime.shell.focusPane(PaneDirection::Left, runtime.shellView(runtime.presentation(viewId).dimensions))) runtime.interaction.focusEditor(); }
-    else if (id == "pane.focus_right") { if (runtime.shell.focusPane(PaneDirection::Right, runtime.shellView(runtime.presentation(viewId).dimensions))) runtime.interaction.focusEditor(); }
-    else if (id == "pane.focus_up") { if (runtime.shell.focusPane(PaneDirection::Up, runtime.shellView(runtime.presentation(viewId).dimensions))) runtime.interaction.focusEditor(); }
-    else if (id == "pane.focus_down") { if (runtime.shell.focusPane(PaneDirection::Down, runtime.shellView(runtime.presentation(viewId).dimensions))) runtime.interaction.focusEditor(); }
-    else if (id == "panel.toggle") (void)runtime.interaction.apply(TogglePanel{});
+    if (id == "panel.toggle") (void)runtime.interaction.apply(TogglePanel{});
     else if (id == "panel.focus") (void)runtime.interaction.focusPanel();
     else if (id == "panel.show_files") {
         if (!runtime.interaction.apply(ShowPanelProvider{PanelProvider::FileTree})) {
@@ -529,6 +515,41 @@ void registerPromptStatusCommands(CommandCatalog& builder,
 // acts on the current layout.
 void registerShellLayoutCommands(CommandCatalog& builder,
                                  EditorSession::Impl& runtime) {
+    struct PaneCommand {
+        std::string_view id;
+        std::string_view summary;
+        ViewAction action;
+    };
+    const std::array paneCommands{
+        PaneCommand{"pane.split_horizontal", "Split Horizontal",
+                    SplitPane{SplitAxis::Horizontal}},
+        PaneCommand{"pane.split_vertical", "Split Vertical",
+                    SplitPane{SplitAxis::Vertical}},
+        PaneCommand{"pane.close", "Close", ClosePane{}},
+        PaneCommand{"pane.next", "Next",
+                    CyclePane{PaneCycleDirection::Next}},
+        PaneCommand{"pane.previous", "Previous",
+                    CyclePane{PaneCycleDirection::Previous}},
+        PaneCommand{"pane.focus_left", "Focus Left",
+                    FocusPane{PaneDirection::Left}},
+        PaneCommand{"pane.focus_right", "Focus Right",
+                    FocusPane{PaneDirection::Right}},
+        PaneCommand{"pane.focus_up", "Focus Up",
+                    FocusPane{PaneDirection::Up}},
+        PaneCommand{"pane.focus_down", "Focus Down",
+                    FocusPane{PaneDirection::Down}},
+    };
+    for (const auto& command : paneCommands) {
+        builder.add(CommandSpecBuilder{std::string{command.id}}
+                        .owner("shell-layout")
+                        .summary(std::string{command.summary})
+                        .viewAction()
+                        .lua()
+                        .handler([action = command.action](CommandContext&) {
+                            return CommandHandlerResult::requireView(action);
+                        }));
+    }
+
     auto declare = [&](std::string id, std::string label, std::string summary) {
         auto name = id;
         auto built =
@@ -539,34 +560,13 @@ void registerShellLayoutCommands(CommandCatalog& builder,
                 .lua()
                 .handler([&runtime, name](CommandContext& context) {
                     return runtime.runTransaction([&] {
-                        auto result =
-                            shellCommand(runtime, context.viewId(), name);
-                        // Moving focus between panes is the user navigating,
-                        // which pauses follow-edits; splitting or closing one
-                        // is not.
-                        if (result.accepted &&
-                            userNavigationShellCommand(name)) {
-                            runtime.recordNavigation(
-                                context.principal().clientId(),
-                                context.viewId(),
-                                NavigationClass::User);
-                        }
-                        return result;
+                        return shellCommand(runtime, name);
                     });
                 });
         if (!label.empty()) built.label(std::move(label));
         builder.add(std::move(built));
     };
 
-    declare("pane.split_horizontal", "", "Split Horizontal");
-    declare("pane.split_vertical", "", "Split Vertical");
-    declare("pane.close", "", "Close");
-    declare("pane.next", "", "Next");
-    declare("pane.previous", "", "Previous");
-    declare("pane.focus_left", "", "Focus Left");
-    declare("pane.focus_right", "", "Focus Right");
-    declare("pane.focus_up", "", "Focus Up");
-    declare("pane.focus_down", "", "Focus Down");
     declare("panel.toggle", "Toggle Sidebar", "Toggle Sidebar");
     declare("panel.focus", "Focus Sidebar", "Focus Sidebar");
     declare("panel.show_files", "Show Files Sidebar", "Show Files Sidebar");

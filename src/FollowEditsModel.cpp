@@ -1,7 +1,6 @@
 #include "ssg/FollowEditsModel.h"
 
 #include <algorithm>
-#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -21,21 +20,6 @@ auto findClient(const std::vector<FollowClientView>& clients, ClientId client) {
                         [client](const FollowClientView& view) {
                             return view.client == client;
                         });
-}
-
-FollowScrollOffset offsetFor(std::size_t targetLine,
-                              const ViewportDimensions& dimensions,
-                              const RowProjection* projection) {
-    const auto rows = static_cast<std::uint64_t>(dimensions.rows);
-    const auto line =
-        projection == nullptr
-            ? static_cast<std::uint64_t>(targetLine)
-            : static_cast<std::uint64_t>(
-                  projection->visualRowForBufferLine(static_cast<uint32_t>(
-                      std::min<std::size_t>(
-                          targetLine,
-                          std::numeric_limits<uint32_t>::max()))));
-    return {line >= rows ? line - rows + 1 : 0, 0};
 }
 
 bool sameRange(std::size_t leftStart, std::size_t leftSize,
@@ -89,21 +73,13 @@ FollowEditsModel::FollowEditsModel(FollowEditsConfig config)
     }
 }
 
-FollowEditsResult FollowEditsModel::attachClient(
-    ClientId client, ViewportDimensions dimensions) {
-    if (dimensions.columns == 0 || dimensions.rows == 0) {
-        return {FollowEditsError::InvalidViewport};
-    }
+FollowEditsResult FollowEditsModel::attachClient(ClientId client) {
     if (findClient(state_.clients, client) != state_.clients.end()) {
         return {FollowEditsError::DuplicateClient};
     }
 
-    FollowScrollOffset offset;
-    if (state_.activeTarget) {
-        offset = offsetFor(state_.activeTarget->newestHunkLine, dimensions,
-                           activeProjection_ ? &*activeProjection_ : nullptr);
-    }
-    state_.clients.push_back({client, dimensions, offset});
+    state_.clients.push_back(
+        {client, ViewportDimensions{80, 24}, FollowScrollOffset{}});
     advanceGeneration();
     return {};
 }
@@ -155,7 +131,7 @@ FollowEditsResult FollowEditsModel::acceptExternalChanges(
     }
 
     if (activation && state_.mode == FollowMode::Following) {
-        activate(activation->first, activation->second);
+        activate(activation->first);
     }
     if (!changes.empty()) {
         advanceGeneration();
@@ -172,12 +148,6 @@ FollowEditsResult FollowEditsModel::applyNavigation(
 
     if (navigation.classification == NavigationClass::User) {
         state_.mode = FollowMode::Paused;
-    }
-    if (navigation.pane) {
-        state_.activePane = *navigation.pane;
-    }
-    if (navigation.offset) {
-        client->offset = *navigation.offset;
     }
     advanceGeneration();
     return {};
@@ -225,7 +195,7 @@ FollowEditsResult FollowEditsModel::resume(const DiffViewState& currentDiff) {
     state_.mode = FollowMode::Following;
     state_.queuedTargets.clear();
     if (resolved && resolvedFile) {
-        activate(*resolved, *resolvedFile);
+        activate(*resolved);
     }
     advanceGeneration();
     return {};
@@ -256,15 +226,8 @@ FollowTarget FollowEditsModel::targetFor(const DiffFileView& file,
     return {file.id, opened.path, file.deleted, hunk.targetStart, sourceRevision};
 }
 
-void FollowEditsModel::activate(const FollowTarget& target,
-                                const DiffFileView& file) {
+void FollowEditsModel::activate(const FollowTarget& target) {
     state_.activeTarget = target;
-    activeProjection_ =
-        Viewport{}.rowProjectionUnwrapped(file.currentContent, file);
-    for (auto& client : state_.clients) {
-        client.offset = offsetFor(target.newestHunkLine, client.dimensions,
-                                  &*activeProjection_);
-    }
 }
 
 void FollowEditsModel::advanceGeneration() noexcept {

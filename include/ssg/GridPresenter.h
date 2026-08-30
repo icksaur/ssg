@@ -103,6 +103,7 @@ private:
     std::optional<TabId> activeTab_;
     std::optional<DocumentPosition> primarySelection_;
     std::optional<TreeNodeId> treeSelection_;
+    ShellState shell_;
 };
 
 }  // namespace ssg

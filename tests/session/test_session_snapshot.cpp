@@ -754,6 +754,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
         std::ofstream file{root / "workspace" / "long.txt"};
         for (int line = 0; line < 80; ++line) file << "line\n";
     }
+
     auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -813,6 +814,163 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     }
 }
 
+TEST(gridPresentersOwnIndependentPaneTopology) {
+    auto root = uniqueRoot("grid_presenter_panes");
+    auto created = ssg::EditorSession::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId firstClient{1};
+    const ssg::ClientId secondClient{2};
+    ASSERT_TRUE(runtime
+                    .attach({firstClient, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .attach({secondClient, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{2})
+                    .accepted());
+
+    ssg::GridPresenter first{ssg::ViewId{1}};
+    ssg::GridPresenter second{ssg::ViewId{2}};
+    auto firstFrame = first.project(runtime, firstClient, {{80, 24}, {}});
+    auto secondFrame = second.project(runtime, secondClient, {{80, 24}, {}});
+    ASSERT_TRUE(firstFrame.has_value());
+    ASSERT_TRUE(secondFrame.has_value());
+    if (!firstFrame || !secondFrame) return;
+    ASSERT_EQ(firstFrame->presentation()->shell.panes.size(), std::size_t{1});
+    ASSERT_EQ(secondFrame->presentation()->shell.panes.size(), std::size_t{1});
+
+    const auto revision = runtime.revision();
+    auto split = runtime.dispatch(
+        firstClient, {"pane.split_horizontal", revision, {}});
+    ASSERT_EQ(split.outcome(),
+              ssg::CommandResult::Outcome::ViewActionRequired);
+    ASSERT_EQ(runtime.revision(), revision);
+    ASSERT_TRUE(split.viewAction.has_value());
+    if (!split.viewAction) return;
+    ASSERT_TRUE(
+        std::holds_alternative<ssg::SplitPane>(split.viewAction->action));
+    auto splitApplied = first.apply(*split.viewAction, *firstFrame);
+    ASSERT_TRUE(splitApplied.accepted());
+    ASSERT_FALSE(splitApplied.transition.has_value());
+
+    firstFrame = first.project(runtime, firstClient, {{80, 24}, {}});
+    secondFrame = second.project(runtime, secondClient, {{80, 24}, {}});
+    ASSERT_TRUE(firstFrame.has_value());
+    ASSERT_TRUE(secondFrame.has_value());
+    if (!firstFrame || !secondFrame) return;
+    ASSERT_EQ(firstFrame->presentation()->shell.panes.size(), std::size_t{2});
+    ASSERT_EQ(secondFrame->presentation()->shell.panes.size(), std::size_t{1});
+
+    auto blockedFocus = runtime.dispatch(
+        firstClient, {"pane.focus_down", runtime.revision(), {}});
+    ASSERT_TRUE(blockedFocus.viewAction.has_value());
+    if (!blockedFocus.viewAction) return;
+    auto blockedApplied = first.apply(*blockedFocus.viewAction, *firstFrame);
+    ASSERT_TRUE(blockedApplied.accepted());
+    ASSERT_TRUE(blockedApplied.transition.has_value());
+    ASSERT_TRUE(
+        blockedApplied.transition &&
+        std::holds_alternative<ssg::ViewNavigationInput>(
+            *blockedApplied.transition));
+    const auto paused =
+        runtime.input(firstClient, *blockedApplied.transition);
+    ASSERT_NE(paused.outcome, ssg::ClientInputOutcome::Rejected);
+
+    ASSERT_TRUE(runtime
+                    .dispatch(firstClient,
+                              {"panel.show_files", runtime.revision(), {}})
+                    .accepted());
+    firstFrame = first.project(runtime, firstClient, {{80, 24}, {}});
+    ASSERT_TRUE(firstFrame.has_value());
+    if (!firstFrame) return;
+    auto focused = runtime.dispatch(
+        firstClient, {"pane.focus_up", runtime.revision(), {}});
+    ASSERT_TRUE(focused.viewAction.has_value());
+    if (!focused.viewAction) return;
+    auto focusedApplied = first.apply(*focused.viewAction, *firstFrame);
+    ASSERT_TRUE(focusedApplied.accepted());
+    ASSERT_TRUE(
+        focusedApplied.transition &&
+        std::holds_alternative<ssg::ResolvedPaneFocusInput>(
+            *focusedApplied.transition));
+    const auto generationBeforeFocus =
+        firstFrame->sections().followEdits.generation;
+    const auto focusRevision = runtime.revision();
+    const auto focusResult =
+        runtime.input(firstClient, *focusedApplied.transition);
+    ASSERT_EQ(focusResult.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(runtime.revision(),
+              ssg::Revision{focusRevision.value() + 1});
+    auto focusedSnapshot = runtime.snapshot(firstClient);
+    ASSERT_TRUE(focusedSnapshot.has_value());
+    if (!focusedSnapshot) return;
+    ASSERT_EQ(focusedSnapshot->sections().focus, ssg::FocusTarget::Editor);
+    ASSERT_EQ(focusedSnapshot->sections().followEdits.mode,
+              ssg::FollowMode::Paused);
+    ASSERT_EQ(focusedSnapshot->sections().followEdits.generation,
+              generationBeforeFocus + 1);
+
+    firstFrame = first.project(runtime, firstClient, {{80, 24}, {}});
+    ASSERT_TRUE(firstFrame.has_value());
+    if (!firstFrame) return;
+    auto focusedAgain = runtime.dispatch(
+        firstClient, {"pane.focus_down", runtime.revision(), {}});
+    ASSERT_TRUE(focusedAgain.viewAction.has_value());
+    if (!focusedAgain.viewAction) return;
+    auto focusedAgainApplied =
+        first.apply(*focusedAgain.viewAction, *firstFrame);
+    ASSERT_TRUE(focusedAgainApplied.accepted());
+    ASSERT_TRUE(
+        focusedAgainApplied.transition &&
+        std::holds_alternative<ssg::ResolvedPaneFocusInput>(
+            *focusedAgainApplied.transition));
+    const auto generationBeforeRepeatedFocus =
+        firstFrame->sections().followEdits.generation;
+    const auto repeatedFocusResult =
+        runtime.input(firstClient, *focusedAgainApplied.transition);
+    ASSERT_EQ(repeatedFocusResult.outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    auto repeatedFocusSnapshot = runtime.snapshot(firstClient);
+    ASSERT_TRUE(repeatedFocusSnapshot.has_value());
+    if (!repeatedFocusSnapshot) return;
+    ASSERT_EQ(repeatedFocusSnapshot->sections().followEdits.generation,
+              generationBeforeRepeatedFocus + 1);
+
+    firstFrame = first.project(runtime, firstClient, {{80, 24}, {}});
+    ASSERT_TRUE(firstFrame.has_value());
+    if (!firstFrame) return;
+    auto cycled =
+        runtime.dispatch(firstClient, {"pane.next", runtime.revision(), {}});
+    ASSERT_TRUE(cycled.viewAction.has_value());
+    if (!cycled.viewAction) return;
+    auto cycleApplied = first.apply(*cycled.viewAction, *firstFrame);
+    ASSERT_TRUE(cycleApplied.accepted());
+    ASSERT_TRUE(
+        cycleApplied.transition &&
+        std::holds_alternative<ssg::ViewNavigationInput>(
+            *cycleApplied.transition));
+
+    firstFrame = first.project(runtime, firstClient, {{80, 24}, {}});
+    ASSERT_TRUE(firstFrame.has_value());
+    if (!firstFrame) return;
+    auto closed =
+        runtime.dispatch(firstClient, {"pane.close", runtime.revision(), {}});
+    ASSERT_TRUE(closed.viewAction.has_value());
+    if (!closed.viewAction) return;
+    auto closeApplied = first.apply(*closed.viewAction, *firstFrame);
+    ASSERT_TRUE(closeApplied.accepted());
+    ASSERT_FALSE(closeApplied.transition.has_value());
+
+    auto compatibility = runtime.present(firstClient, {80, 24});
+    ASSERT_TRUE(compatibility.has_value());
+    if (compatibility) {
+        ASSERT_EQ(compatibility->presentation()->shell.panes.size(),
+                  std::size_t{1});
+    }
+}
+
 } // namespace
 
 int main() {
@@ -834,6 +992,7 @@ int main() {
     RUN(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection);
     RUN(gridPresenterCannotChangeOrReassembleSemanticState);
     RUN(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis);
+    RUN(gridPresentersOwnIndependentPaneTopology);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

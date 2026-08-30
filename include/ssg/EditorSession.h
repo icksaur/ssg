@@ -292,7 +292,8 @@ private:
         std::optional<ViewId> expectedView,
         SelectionNavigation navigation,
         std::uint32_t treeFirstVisible,
-        bool revealPrimarySelection);
+        bool revealPrimarySelection,
+        const ShellState& shell);
     explicit EditorSession(std::unique_ptr<Impl> implementation) noexcept;
 
     std::unique_ptr<Impl> impl_;

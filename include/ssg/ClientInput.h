@@ -38,6 +38,7 @@ enum class ClientInputKind : std::uint8_t {
     ScrollLines,
     ScrollFraction,
     ViewNavigation,
+    ResolvedPaneFocus,
 };
 
 enum class InputPointerButton : std::uint8_t {
@@ -194,13 +195,21 @@ struct ViewNavigationInput {
                            const ViewNavigationInput&) = default;
 };
 
+struct ResolvedPaneFocusInput {
+    SemanticInputBasis basis;
+
+    friend bool operator==(const ResolvedPaneFocusInput&,
+                           const ResolvedPaneFocusInput&) = default;
+};
+
 using ClientInput =
     std::variant<ClientKeyInput, TabPointerInput, TreePointerInput,
                  PickerPointerInput, PromptControlPointerInput,
                  ExternalActionPointerInput, StatusActionPointerInput,
                  PublishedUiActionPointerInput, NoticeActionPointerInput,
                  DocumentPointerInput, ScrollLinesInput,
-                 ScrollFractionInput, ViewNavigationInput>;
+                 ScrollFractionInput, ViewNavigationInput,
+                 ResolvedPaneFocusInput>;
 
 enum class ClientOwnedInputKind : std::uint8_t {
     AppendText,

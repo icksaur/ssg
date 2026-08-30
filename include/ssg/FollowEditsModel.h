@@ -2,7 +2,6 @@
 
 #include "ssg/CommandInvocation.h"
 #include "ssg/DiffModel.h"
-#include "ssg/ShellState.h"
 #include "ssg/Viewport.h"
 
 #include <array>
@@ -115,7 +114,6 @@ enum class FollowEditsError : std::uint8_t {
     StaleRevision,
     DuplicateClient,
     UnknownClient,
-    InvalidViewport,
 };
 
 struct FollowEditsResult {
@@ -128,8 +126,6 @@ struct FollowEditsResult {
 struct FollowNavigation {
     ClientId client;
     NavigationClass classification = NavigationClass::NonNavigation;
-    std::optional<PaneId> pane;
-    std::optional<FollowScrollOffset> offset;
 };
 
 struct FollowDiffChange {
@@ -142,8 +138,7 @@ class FollowEditsModel {
 public:
     explicit FollowEditsModel(FollowEditsConfig config = {});
 
-    [[nodiscard]] FollowEditsResult attachClient(
-        ClientId client, ViewportDimensions dimensions);
+    [[nodiscard]] FollowEditsResult attachClient(ClientId client);
     [[nodiscard]] FollowEditsResult detachClient(ClientId client);
     [[nodiscard]] FollowEditsResult acceptExternalChange(
         const DiffFileView& file, Revision sourceRevision);
@@ -163,12 +158,11 @@ private:
     [[nodiscard]] FollowTarget targetFor(const DiffFileView& file,
                                           const DiffHunk& hunk,
                                           Revision sourceRevision) const;
-    void activate(const FollowTarget& target, const DiffFileView& file);
+    void activate(const FollowTarget& target);
     void advanceGeneration() noexcept;
 
     FollowEditsConfig config_;
     FollowEditsViewState state_;
-    std::optional<RowProjection> activeProjection_;
     Revision latestSourceRevision_{0};
 };
 

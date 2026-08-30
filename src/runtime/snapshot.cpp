@@ -275,8 +275,9 @@ StatusFieldProjection EditorSession::Impl::chromeStatusFields(
     return fields;
 }
 
-ShellViewState EditorSession::Impl::shellView(ViewportDimensions dimensions,
-                                               PaletteReport const& paletteReport) const {
+ShellViewState EditorSession::Impl::shellView(
+    ViewportDimensions dimensions, const ShellState& shell,
+    PaletteReport const& paletteReport) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.viewState().tabs) {
         labels.push_back({composedTabTitle(tab, style), tab.label,

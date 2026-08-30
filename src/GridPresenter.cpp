@@ -19,7 +19,7 @@ std::optional<GridFrame> GridPresenter::project(
     auto projectCurrent = [&](PaletteReport palette, bool revealSelection) {
         return session.projectForBridgedPresenterDeprecated(
             client, request.dimensions, std::move(palette), viewId_,
-            navigation_, treeFirstVisible_, revealSelection);
+            navigation_, treeFirstVisible_, revealSelection, shell_);
     };
     auto snapshot = projectCurrent(request.palette, false);
     if (!snapshot || !snapshot->presentation()) {
@@ -109,6 +109,8 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
     bool supported = true;
     bool changed = false;
     bool pausesFollow = false;
+    bool focusesEditor = false;
+    bool reportsNavigation = false;
     std::visit(
         [&](auto const& action) {
             using Action = std::decay_t<decltype(action)>;
@@ -202,6 +204,23 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                 }
                 changed = next != navigation_.firstVisualRow;
                 navigation_.firstVisualRow = next;
+            } else if constexpr (std::same_as<Action, SplitPane>) {
+                (void)shell_.splitActive(action.axis);
+            } else if constexpr (std::same_as<Action, ClosePane>) {
+                (void)shell_.closeActivePane();
+            } else if constexpr (std::same_as<Action, CyclePane>) {
+                pausesFollow = true;
+                reportsNavigation = true;
+                if (action.direction == PaneCycleDirection::Next) {
+                    shell_.nextPane();
+                } else {
+                    shell_.previousPane();
+                }
+            } else if constexpr (std::same_as<Action, FocusPane>) {
+                pausesFollow = true;
+                focusesEditor =
+                    shell_.focusPane(action.direction, presentation->shell);
+                reportsNavigation = !focusesEditor;
             } else {
                 supported = false;
             }
@@ -213,8 +232,15 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                 "view action is not supported by this presenter"};
     }
     ++generation_;
-    if (pausesFollow &&
-        frame.sections().followEdits.mode == FollowMode::Following) {
+    if (focusesEditor) {
+        return {GridActionStatus::TransitionRequired,
+                ClientInput{ResolvedPaneFocusInput{
+                    SemanticInputBasis{basis.semanticRevision}}},
+                {}};
+    }
+    if (reportsNavigation ||
+        (pausesFollow &&
+         frame.sections().followEdits.mode == FollowMode::Following)) {
         return {GridActionStatus::TransitionRequired,
                 ClientInput{ViewNavigationInput{
                     SemanticInputBasis{basis.semanticRevision}}},

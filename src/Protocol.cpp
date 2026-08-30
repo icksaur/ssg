@@ -1415,7 +1415,8 @@ bool decodePresent(ProtocolValue const& value, std::optional<ClientInputKind>& o
         ClientInputKind::ExternalAction, ClientInputKind::StatusAction,
         ClientInputKind::PublishedUiAction, ClientInputKind::NoticeAction,
         ClientInputKind::Document, ClientInputKind::ScrollLines,
-        ClientInputKind::ScrollFraction, ClientInputKind::ViewNavigation};
+        ClientInputKind::ScrollFraction, ClientInputKind::ViewNavigation,
+        ClientInputKind::ResolvedPaneFocus};
     return decodeEnum(value, out, values);
 }
 
@@ -5836,6 +5837,12 @@ std::string ProtocolCodec::encodeClientInput(
                                     toValue(ClientInputKind::ViewNavigation));
                 fields.emplace_back("basis_revision",
                                     toValue(semantic.basis.observedRevision));
+            } else if constexpr (std::same_as<Input,
+                                              ResolvedPaneFocusInput>) {
+                fields.emplace_back(
+                    "kind", toValue(ClientInputKind::ResolvedPaneFocus));
+                fields.emplace_back("basis_revision",
+                                    toValue(semantic.basis.observedRevision));
             } else {
                 auto addPointer = [&](ClientInputKind kind) {
                     fields.emplace_back("kind", toValue(kind));
@@ -6020,6 +6027,20 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         }
         return {ProtocolError::None,
                 ClientInput{ViewNavigationInput{{*basis}}}, {}};
+    }
+    if (*kind == ClientInputKind::ResolvedPaneFocus) {
+        if (!hasExactly({"kind", "basis_revision"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client resolved-pane-focus input fields are malformed"};
+        }
+        auto basis =
+            requireField<Revision>(payload.field("basis_revision"));
+        if (!basis) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client resolved-pane-focus input is malformed"};
+        }
+        return {ProtocolError::None,
+                ClientInput{ResolvedPaneFocusInput{{*basis}}}, {}};
     }
     auto button =
         requireField<InputPointerButton>(payload.field("button"));
