@@ -46,6 +46,8 @@ std::shared_ptr<ssg::CommandCatalog> catalogOf(
         spec.owner("test-owner").summary("a command");
         if (entry.effect == ssg::CommandEffect::Mutation) {
             spec.mutates();
+        } else if (entry.effect == ssg::CommandEffect::ViewAction) {
+            spec.viewAction();
         } else {
             spec.observes();
         }
@@ -127,6 +129,58 @@ TEST(staleRejectionAppliesOnlyToMutations) {
     ASSERT_TRUE(staleObservation.accepted());
     ASSERT_EQ(observations, 1);
     ASSERT_EQ(session.revision(), ssg::Revision{2});
+}
+
+TEST(viewActionsAreStampedWithoutAdvancingSemanticState) {
+    auto catalog = catalogOf({
+        command("view.scroll", ssg::CommandEffect::ViewAction,
+                [](ssg::CommandContext&, std::any const&) {
+                    return ssg::CommandHandlerResult::requireView(
+                        ssg::ViewScrollLines{ssg::ViewScrollTarget::Tree, -3});
+                }),
+        command("view.missing_action", ssg::CommandEffect::ViewAction,
+                [](ssg::CommandContext&, std::any const&) {
+                    return ssg::CommandHandlerResult::success();
+                }),
+        command("observe.invalid_action", ssg::CommandEffect::Observation,
+                [](ssg::CommandContext&, std::any const&) {
+                    return ssg::CommandHandlerResult::requireView(
+                        ssg::CenterSelection{});
+                }),
+    });
+    ssg::CommandExecutor session{catalog};
+    ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{42}).accepted());
+
+    auto result =
+        session.dispatch(ssg::ClientId{1}, request("view.scroll", 1));
+    ASSERT_TRUE(result.accepted());
+    ASSERT_EQ(result.revision, ssg::Revision{1});
+    ASSERT_EQ(session.revision(), ssg::Revision{1});
+    ASSERT_TRUE(result.viewAction.has_value());
+    if (result.viewAction) {
+        ASSERT_EQ(result.viewAction->viewId, ssg::ViewId{42});
+        ASSERT_EQ(result.viewAction->semanticRevision, ssg::Revision{1});
+        ASSERT_EQ(result.viewAction->action,
+                  (ssg::ViewAction{ssg::ViewScrollLines{
+                      ssg::ViewScrollTarget::Tree, -3}}));
+    }
+
+    auto stale =
+        session.dispatch(ssg::ClientId{1}, request("view.scroll", 0));
+    ASSERT_EQ(stale.error, ssg::CommandError::StaleRevision);
+    ASSERT_FALSE(stale.viewAction.has_value());
+    ASSERT_EQ(session.revision(), ssg::Revision{1});
+
+    ASSERT_EQ(session
+                  .dispatch(ssg::ClientId{1},
+                            request("view.missing_action", 1))
+                  .error,
+              ssg::CommandError::HandlerFailed);
+    ASSERT_EQ(session
+                  .dispatch(ssg::ClientId{1},
+                            request("observe.invalid_action", 1))
+                  .error,
+              ssg::CommandError::HandlerFailed);
 }
 
 TEST(clientIdentityAndPrincipalAreIsolated) {
@@ -266,6 +320,7 @@ TEST(principalCapabilityEnforcementHasOriginParity) {
 int main() {
     RUN(totalOrderAndRegisteredDispatch);
     RUN(staleRejectionAppliesOnlyToMutations);
+    RUN(viewActionsAreStampedWithoutAdvancingSemanticState);
     RUN(clientIdentityAndPrincipalAreIsolated);
     RUN(handlerFailureIsAtomic);
     RUN(principalCapabilityEnforcementHasOriginParity);

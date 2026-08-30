@@ -5554,6 +5554,166 @@ DecodeCommandRequestResult ProtocolCodec::decodeCommandRequest(
 
 namespace {
 
+template <typename Enum>
+std::optional<Enum> viewEnumField(ProtocolValue const* value, Enum maximum) {
+    const auto raw = requireField<std::uint8_t>(value);
+    if (!raw ||
+        *raw > static_cast<std::uint8_t>(maximum)) {
+        return std::nullopt;
+    }
+    return static_cast<Enum>(*raw);
+}
+
+ProtocolValue viewActionValue(ViewAction const& action) {
+    std::vector<ProtocolValue::Field> fields;
+    std::visit(
+        [&](auto const& typed) {
+            using Action = std::decay_t<decltype(typed)>;
+            if constexpr (std::same_as<Action, ViewScrollLines>) {
+                fields.emplace_back("kind", toValue(ViewActionKind::ScrollLines));
+                fields.emplace_back("target", toValue(typed.target));
+                fields.emplace_back("rows", toValue(typed.rows));
+            } else if constexpr (std::same_as<Action, ViewScrollPages>) {
+                fields.emplace_back("kind", toValue(ViewActionKind::ScrollPages));
+                fields.emplace_back("pages", toValue(typed.pages));
+            } else if constexpr (std::same_as<Action, ViewScrollFraction>) {
+                fields.emplace_back("kind",
+                                    toValue(ViewActionKind::ScrollFraction));
+                fields.emplace_back("target", toValue(typed.target));
+                fields.emplace_back("numerator", toValue(typed.numerator));
+                fields.emplace_back("denominator", toValue(typed.denominator));
+            } else if constexpr (std::same_as<Action, MoveVisualSelection>) {
+                fields.emplace_back(
+                    "kind", toValue(ViewActionKind::MoveVisualSelection));
+                fields.emplace_back("direction", toValue(typed.direction));
+                fields.emplace_back("extend", toValue(typed.extend));
+            } else if constexpr (std::same_as<Action, RevealSelection>) {
+                fields.emplace_back("kind",
+                                    toValue(ViewActionKind::RevealSelection));
+            } else if constexpr (std::same_as<Action, CenterSelection>) {
+                fields.emplace_back("kind",
+                                    toValue(ViewActionKind::CenterSelection));
+            } else if constexpr (std::same_as<Action, SplitPane>) {
+                fields.emplace_back("kind", toValue(ViewActionKind::SplitPane));
+                fields.emplace_back("axis", toValue(typed.axis));
+            } else if constexpr (std::same_as<Action, ClosePane>) {
+                fields.emplace_back("kind", toValue(ViewActionKind::ClosePane));
+            } else if constexpr (std::same_as<Action, CyclePane>) {
+                fields.emplace_back("kind", toValue(ViewActionKind::CyclePane));
+                fields.emplace_back("direction", toValue(typed.direction));
+            } else if constexpr (std::same_as<Action, FocusPane>) {
+                fields.emplace_back("kind", toValue(ViewActionKind::FocusPane));
+                fields.emplace_back("direction", toValue(typed.direction));
+            } else if constexpr (std::same_as<Action, ContinuePointerEdge>) {
+                fields.emplace_back(
+                    "kind", toValue(ViewActionKind::ContinuePointerEdge));
+                fields.emplace_back("direction", toValue(typed.direction));
+            }
+        },
+        action);
+    return ProtocolValue::makeObject(std::move(fields));
+}
+
+std::optional<ViewAction> viewActionFromValue(ProtocolValue const& value) {
+    if (!value.asObject()) return std::nullopt;
+    const auto kind = viewEnumField(
+        value.field("kind"), ViewActionKind::ContinuePointerEdge);
+    if (!kind) {
+        return std::nullopt;
+    }
+    switch (*kind) {
+    case ViewActionKind::ScrollLines: {
+        const auto target = viewEnumField(
+            value.field("target"), ViewScrollTarget::Tree);
+        const auto rows = requireField<std::int64_t>(value.field("rows"));
+        if (!target || !rows || *rows == 0)
+            return std::nullopt;
+        return ViewScrollLines{*target, *rows};
+    }
+    case ViewActionKind::ScrollPages: {
+        const auto pages = requireField<std::int64_t>(value.field("pages"));
+        if (!pages || *pages == 0) return std::nullopt;
+        return ViewScrollPages{*pages};
+    }
+    case ViewActionKind::ScrollFraction: {
+        const auto target = viewEnumField(
+            value.field("target"), ViewScrollTarget::Tree);
+        const auto numerator =
+            requireField<std::uint32_t>(value.field("numerator"));
+        const auto denominator =
+            requireField<std::uint32_t>(value.field("denominator"));
+        if (!target || !numerator || !denominator || *denominator == 0 ||
+            *numerator > *denominator) {
+            return std::nullopt;
+        }
+        return ViewScrollFraction{*target, *numerator, *denominator};
+    }
+    case ViewActionKind::MoveVisualSelection: {
+        const auto direction = viewEnumField(
+            value.field("direction"), VisualSelectionDirection::PageDown);
+        const auto extend = requireField<bool>(value.field("extend"));
+        if (!direction || !extend) {
+            return std::nullopt;
+        }
+        return MoveVisualSelection{*direction, *extend};
+    }
+    case ViewActionKind::RevealSelection:
+        return RevealSelection{};
+    case ViewActionKind::CenterSelection:
+        return CenterSelection{};
+    case ViewActionKind::SplitPane: {
+        const auto axis =
+            viewEnumField(value.field("axis"), SplitAxis::Vertical);
+        if (!axis) return std::nullopt;
+        return SplitPane{*axis};
+    }
+    case ViewActionKind::ClosePane:
+        return ClosePane{};
+    case ViewActionKind::CyclePane: {
+        const auto direction = viewEnumField(
+            value.field("direction"), PaneCycleDirection::Previous);
+        if (!direction)
+            return std::nullopt;
+        return CyclePane{*direction};
+    }
+    case ViewActionKind::FocusPane: {
+        const auto direction =
+            viewEnumField(value.field("direction"), PaneDirection::Down);
+        if (!direction)
+            return std::nullopt;
+        return FocusPane{*direction};
+    }
+    case ViewActionKind::ContinuePointerEdge: {
+        const auto direction = viewEnumField(
+            value.field("direction"), PointerEdgeDirection::After);
+        if (!direction)
+            return std::nullopt;
+        return ContinuePointerEdge{*direction};
+    }
+    }
+    return std::nullopt;
+}
+
+ProtocolValue viewActionRequestValue(ViewActionRequest const& request) {
+    return ProtocolValue::makeObject(
+        {{"view_id", toValue(request.viewId)},
+         {"semantic_revision", toValue(request.semanticRevision)},
+         {"action", viewActionValue(request.action)}});
+}
+
+std::optional<ViewActionRequest> viewActionRequestFromValue(
+    ProtocolValue const& value) {
+    if (!value.asObject()) return std::nullopt;
+    const auto viewId = requireField<ViewId>(value.field("view_id"));
+    const auto revision =
+        requireField<Revision>(value.field("semantic_revision"));
+    const auto* actionField = value.field("action");
+    if (!viewId || !revision || !actionField) return std::nullopt;
+    auto action = viewActionFromValue(*actionField);
+    if (!action) return std::nullopt;
+    return ViewActionRequest{*viewId, *revision, std::move(*action)};
+}
+
 ProtocolValue commandResultValue(CommandResult const& result) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back(
@@ -5570,6 +5730,10 @@ ProtocolValue commandResultValue(CommandResult const& result) {
     fields.emplace_back(
         "geometryChanged",
         ProtocolValue::makeUint(result.effects.geometryChanged ? 1u : 0u));
+    if (result.viewAction) {
+        fields.emplace_back("view_action",
+                            viewActionRequestValue(*result.viewAction));
+    }
     return ProtocolValue::makeObject(std::move(fields));
 }
 
@@ -5604,6 +5768,12 @@ std::optional<CommandResult> commandResultFromValue(
             return std::nullopt;
         }
         result.effects.geometryChanged = *geometry != 0;
+    }
+    if (auto const* actionField = payload.field("view_action")) {
+        result.viewAction = viewActionRequestFromValue(*actionField);
+        if (!result.viewAction || result.error != CommandError::None) {
+            return std::nullopt;
+        }
     }
     return result;
 }
@@ -6057,7 +6227,7 @@ DecodeClientInputResultResult ProtocolCodec::decodeClientInputResult(
     auto const& payload = *decoded.payload;
     auto outcome = requireField<std::uint8_t>(payload.field("outcome"));
     if (!payload.asObject() || !outcome ||
-        *outcome > static_cast<std::uint8_t>(ClientInputOutcome::Rejected)) {
+        *outcome > static_cast<std::uint8_t>(ClientInputOutcome::ViewOwned)) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "client input result payload is malformed"};
     }
@@ -6108,6 +6278,17 @@ DecodeClientInputResultResult ProtocolCodec::decodeClientInputResult(
             return {ProtocolError::MalformedMessage, std::nullopt,
                     "client input result command is malformed"};
         }
+    }
+    const bool commandRequiresView =
+        result.command && result.command->viewAction;
+    const bool validShape =
+        (result.outcome == ClientInputOutcome::ViewOwned &&
+         commandRequiresView) ||
+        (result.outcome != ClientInputOutcome::ViewOwned &&
+         !commandRequiresView);
+    if (!validShape) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "client input result outcome does not match its view action"};
     }
     return {ProtocolError::None, std::move(result), {}};
 }

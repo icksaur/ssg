@@ -74,6 +74,10 @@ public:
         setEffect(CommandEffect::Observation, CommandRevisionPolicy::Exact);
         return *this;
     }
+    CommandSpecBuilder& viewAction() {
+        setEffect(CommandEffect::ViewAction, CommandRevisionPolicy::Exact);
+        return *this;
+    }
     CommandSpecBuilder& stateValidatedMutation() {
         setEffect(CommandEffect::Mutation,
                   CommandRevisionPolicy::StateValidated);

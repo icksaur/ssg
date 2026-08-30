@@ -213,6 +213,7 @@ enum class ClientInputOutcome : std::uint8_t {
     ClientOwned,
     Dispatched,
     Rejected,
+    ViewOwned,
 };
 
 struct ClientInputResult {

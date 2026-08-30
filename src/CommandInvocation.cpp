@@ -43,11 +43,15 @@ void CommandContext::setActiveView(ViewId view) noexcept {
 }
 
 CommandHandlerResult CommandHandlerResult::success() {
-    return {true, {}};
+    return {true, {}, std::nullopt};
 }
 
 CommandHandlerResult CommandHandlerResult::failure(std::string message) {
-    return {false, std::move(message)};
+    return {false, std::move(message), std::nullopt};
+}
+
+CommandHandlerResult CommandHandlerResult::requireView(ViewAction action) {
+    return {true, {}, std::move(action)};
 }
 
 }  // namespace ssg

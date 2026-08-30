@@ -13,6 +13,7 @@ struct ExecutorResult {
     CommandError error;
     Revision revision;
     std::string message;
+    std::optional<ViewActionRequest> viewAction;
 
     [[nodiscard]] bool accepted() const noexcept {
         return error == CommandError::None;

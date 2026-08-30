@@ -49,6 +49,63 @@ std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
 
 // ---------------------------------------------------------------------------
 
+TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+
+    (void)runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.view_action"}
+            .owner("test-oracle")
+            .summary("returns one typed view action")
+            .viewAction()
+            .handler([](ssg::CommandContext&) {
+                return ssg::CommandHandlerResult::requireView(
+                    ssg::ViewScrollPages{-2});
+            }));
+
+    ASSERT_TRUE(
+        runtime
+            ->dispatch(
+                ssg::ClientId{1},
+                {"keymap.bind", runtime->revision(),
+                 ssg::KeymapBindArguments{"Ctrl+KeyG",
+                                          "oracle.view_action", "editor"}})
+            .accepted());
+    const auto revision = runtime->revision();
+    auto result = runtime->dispatch(
+        ssg::ClientId{1}, {"oracle.view_action", revision, {}});
+    ASSERT_TRUE(result.accepted());
+    ASSERT_FALSE(result.completed());
+    ASSERT_EQ(result.outcome(),
+              ssg::CommandResult::Outcome::ViewActionRequired);
+    ASSERT_EQ(runtime->revision(), revision);
+    ASSERT_FALSE(result.effects.routingChanged);
+    ASSERT_FALSE(result.effects.geometryChanged);
+    ASSERT_TRUE(result.viewAction.has_value());
+    if (result.viewAction) {
+        ASSERT_EQ(result.viewAction->viewId, ssg::ViewId{1});
+        ASSERT_EQ(result.viewAction->semanticRevision, revision);
+        ASSERT_EQ(result.viewAction->action,
+                  ssg::ViewAction{ssg::ViewScrollPages{-2}});
+    }
+
+    ssg::KeyStroke stroke;
+    stroke.code = ssg::KeyCode::KeyG;
+    stroke.control = true;
+    auto input = runtime->input(
+        ssg::ClientId{1}, ssg::ClientKeyInput{stroke, {}});
+    ASSERT_EQ(input.outcome, ssg::ClientInputOutcome::ViewOwned);
+    ASSERT_TRUE(input.command.has_value());
+    if (input.command) {
+        ASSERT_EQ(input.command->outcome(),
+                  ssg::CommandResult::Outcome::ViewActionRequired);
+        ASSERT_EQ(input.command->viewAction, result.viewAction);
+    }
+    ASSERT_EQ(runtime->revision(), revision);
+}
+
 // THE ORACLE for reentrant dispatch.
 //
 // Counts accepted mutating dispatches independently of the revision counter --
@@ -459,6 +516,7 @@ TEST(aggregateOperationHidesIntermediateDeferredRevisions) {
 }  // namespace
 
 int main() {
+    RUN(viewActionResultsRemainExplicitAcrossTheAggregateBoundary);
     RUN(revisionAdvancesExactlyOncePerAcceptedMutation);
     RUN(stateValidatedMutationUsesCurrentRevisionWhenClientBasisIsStale);
     RUN(revisionAdvancesOncePerMutationAcrossANestedChain);

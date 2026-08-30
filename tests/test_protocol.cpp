@@ -1526,6 +1526,36 @@ TEST(commandResultRoundTripsThroughTheWire) {
     ASSERT_TRUE(back.result.has_value());
     ASSERT_TRUE(back.result->effects.routingChanged);
     ASSERT_TRUE(back.result->effects.geometryChanged);
+
+    const std::vector<ssg::ViewAction> actions{
+        ssg::ViewScrollLines{ssg::ViewScrollTarget::Document, -2},
+        ssg::ViewScrollPages{3},
+        ssg::ViewScrollFraction{ssg::ViewScrollTarget::Tree, 1, 4},
+        ssg::MoveVisualSelection{
+            ssg::VisualSelectionDirection::PageDown, true},
+        ssg::RevealSelection{},
+        ssg::CenterSelection{},
+        ssg::SplitPane{ssg::SplitAxis::Vertical},
+        ssg::ClosePane{},
+        ssg::CyclePane{ssg::PaneCycleDirection::Previous},
+        ssg::FocusPane{ssg::PaneDirection::Up},
+        ssg::ContinuePointerEdge{ssg::PointerEdgeDirection::Before},
+    };
+    for (const auto& action : actions) {
+        ssg::CommandResult viewResult{ssg::CommandError::None,
+                                      ssg::Revision{8}, ""};
+        viewResult.viewAction =
+            ssg::ViewActionRequest{ssg::ViewId{3}, ssg::Revision{8},
+                                   action};
+        const auto decodedView = ssg::ProtocolCodec{}.decodeCommandResult(
+            ssg::ProtocolCodec{}.encodeCommandResult(viewResult));
+        ASSERT_TRUE(decodedView.accepted());
+        ASSERT_TRUE(decodedView.result.has_value());
+        if (!decodedView.result) continue;
+        ASSERT_EQ(decodedView.result->outcome(),
+                  ssg::CommandResult::Outcome::ViewActionRequired);
+        ASSERT_EQ(decodedView.result->viewAction, viewResult.viewAction);
+    }
 }
 
 TEST(clientInputAndResultRoundTripThroughTheWire) {
@@ -1576,6 +1606,36 @@ TEST(clientInputAndResultRoundTripThroughTheWire) {
     ASSERT_EQ(decodedOwned.result->clientOwned->text, std::string{"q"});
     ASSERT_FALSE(decodedOwned.result->command.has_value());
     ASSERT_FALSE(decodedOwned.result->pickerActivation.has_value());
+
+    const ssg::ViewActionRequest action{
+        ssg::ViewId{7}, ssg::Revision{9},
+        ssg::ViewScrollLines{ssg::ViewScrollTarget::Document, 2}};
+    ssg::CommandResult viewCommand{ssg::CommandError::None,
+                                   ssg::Revision{9}, ""};
+    viewCommand.viewAction = action;
+    const ssg::ClientInputResult viewOwned{
+        ssg::ClientInputOutcome::ViewOwned, std::nullopt, viewCommand,
+        std::nullopt};
+    const auto decodedView =
+        ssg::ProtocolCodec{}.decodeClientInputResult(
+            ssg::ProtocolCodec{}.encodeClientInputResult(viewOwned));
+    ASSERT_TRUE(decodedView.accepted());
+    ASSERT_TRUE(decodedView.result.has_value());
+    if (decodedView.result) {
+        ASSERT_EQ(decodedView.result->outcome,
+                  ssg::ClientInputOutcome::ViewOwned);
+        ASSERT_EQ(decodedView.result->command->viewAction,
+                  std::optional<ssg::ViewActionRequest>{action});
+    }
+
+    const ssg::ClientInputResult mismatched{
+        ssg::ClientInputOutcome::Dispatched, std::nullopt, viewCommand,
+        std::nullopt};
+    ASSERT_EQ(ssg::ProtocolCodec{}
+                  .decodeClientInputResult(
+                      ssg::ProtocolCodec{}.encodeClientInputResult(mismatched))
+                  .error,
+              ssg::ProtocolError::MalformedMessage);
 }
 
 TEST(semanticClientInputVariantsRoundTripThroughTheWire) {

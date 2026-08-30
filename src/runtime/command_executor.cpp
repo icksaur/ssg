@@ -45,7 +45,7 @@ struct ClientIdHash {
 
 ExecutorResult rejected(CommandError error, Revision revision,
                         std::string message) {
-    return {error, revision, std::move(message)};
+    return {error, revision, std::move(message), std::nullopt};
 }
 
 }  // namespace
@@ -147,7 +147,9 @@ ExecutorResult CommandExecutor::dispatch(ClientId clientId,
     }
 
     bool const mutates = command_->effect == CommandEffect::Mutation;
-    if (mutates &&
+    bool const requiresExactRevision =
+        command_->effect != CommandEffect::Observation;
+    if (requiresExactRevision &&
         command_->revisionPolicy == CommandRevisionPolicy::Exact &&
         command.baseRevision != currentRevision) {
         return rejected(CommandError::StaleRevision, currentRevision,
@@ -178,6 +180,15 @@ ExecutorResult CommandExecutor::dispatch(ClientId clientId,
         return rejected(CommandError::HandlerFailed, currentRevision,
                         std::move(handlerResult.message));
     }
+    const bool viewOwned = command_->effect == CommandEffect::ViewAction;
+    if (handlerResult.viewAction && !viewOwned) {
+        return rejected(CommandError::HandlerFailed, currentRevision,
+                        "only a view-action command may require a view action");
+    }
+    if (viewOwned && !handlerResult.viewAction) {
+        return rejected(CommandError::HandlerFailed, currentRevision,
+                        "a view-action command did not return a view action");
+    }
 
     if (mutates) {
         if (context.workspaceChanged_) {
@@ -188,7 +199,12 @@ ExecutorResult CommandExecutor::dispatch(ClientId clientId,
         }
         impl_->revision = Revision{currentRevision.value() + 1};
     }
-    return {CommandError::None, impl_->revision, {}};
+    std::optional<ViewActionRequest> viewAction;
+    if (handlerResult.viewAction) {
+        viewAction = ViewActionRequest{client->second.viewId, currentRevision,
+                                       std::move(*handlerResult.viewAction)};
+    }
+    return {CommandError::None, impl_->revision, {}, std::move(viewAction)};
 }
 
 Revision CommandExecutor::revision() const {

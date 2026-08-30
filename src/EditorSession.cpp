@@ -3243,8 +3243,10 @@ ClientInputResult inputKeyLocked(EditorSession::Impl* impl_, ClientId clientId,
         const auto activation = result.accepted()
                                     ? impl_->interaction.openPickerActivation()
                                     : std::nullopt;
-        return {ClientInputOutcome::Dispatched, std::nullopt,
-                std::move(result), activation};
+        const auto outcome = result.viewAction
+                                 ? ClientInputOutcome::ViewOwned
+                                 : ClientInputOutcome::Dispatched;
+        return {outcome, std::nullopt, std::move(result), activation};
     };
     auto clientOwned = [](ClientOwnedInputKind kind,
                           std::string text = {}) -> ClientInputResult {
@@ -3409,8 +3411,11 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                         result.accepted()
                             ? impl_->interaction.openPickerActivation()
                             : std::nullopt;
-                    return {ClientInputOutcome::Dispatched, std::nullopt,
-                            std::move(result), activation};
+                    const auto outcome = result.viewAction
+                                             ? ClientInputOutcome::ViewOwned
+                                             : ClientInputOutcome::Dispatched;
+                    return {outcome, std::nullopt, std::move(result),
+                            activation};
                 };
                 if constexpr (std::same_as<Input, DocumentPointerInput>) {
                     if (semantic.phase == InputPointerPhase::Press ||
@@ -3749,7 +3754,8 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
     const auto revisionBefore = impl_->session->revision();
     const auto withEffects = [&](ExecutorResult outcome) {
         CommandResult result{outcome.error, outcome.revision,
-                             std::move(outcome.message), {}};
+                             std::move(outcome.message), {},
+                             std::move(outcome.viewAction)};
         // routingChanged is precise; geometryChanged is the conservative gate a
         // pointer/wheel hit-test consumes. A routing change (prompt/focus/picker)
         // also reshapes presentation geometry, and a command that fails after a
@@ -3808,6 +3814,13 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
             impl_->deferredCommands.clear();
             return outcome;
         }
+        if (outcome.viewAction && !impl_->deferredCommands.empty()) {
+            impl_->deferredCommands.clear();
+            return ExecutorResult{
+                CommandError::HandlerFailed, outcome.revision,
+                "a view-action command cannot defer another command",
+                std::nullopt};
+        }
         while (!impl_->deferredCommands.empty()) {
             auto deferred = impl_->deferredCommands.takeFront();
             deferred.command.baseRevision = impl_->session->revision();
@@ -3821,7 +3834,16 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
                 return ExecutorResult{
                     deferredResult.error, deferredResult.revision,
                     std::string{deferred.command.id.name()} + ": " +
-                        deferredResult.message};
+                        deferredResult.message, std::nullopt};
+            }
+            if (deferredResult.viewAction &&
+                !impl_->deferredCommands.empty()) {
+                impl_->deferredCommands.clear();
+                return ExecutorResult{
+                    CommandError::HandlerFailed, deferredResult.revision,
+                    "a deferred view-action command cannot precede another "
+                    "command",
+                    std::nullopt};
             }
             outcome = deferredResult;
         }

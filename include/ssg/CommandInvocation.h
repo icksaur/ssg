@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/ViewAction.h>
+
 #include <ssg/CommandHandle.h>
 
 #include <ssg/types.h>
@@ -51,6 +53,15 @@ struct ViewId {
 
 private:
     std::uint64_t value_;
+};
+
+struct ViewActionRequest {
+    ViewId viewId;
+    Revision semanticRevision;
+    ViewAction action;
+
+    friend bool operator==(const ViewActionRequest&,
+                           const ViewActionRequest&) = default;
 };
 
 class CapabilityId {
@@ -164,6 +175,7 @@ private:
 enum class CommandEffect : std::uint8_t {
     Observation,
     Mutation,
+    ViewAction,
 };
 
 enum class CommandRevisionPolicy : std::uint8_t {
@@ -174,9 +186,11 @@ enum class CommandRevisionPolicy : std::uint8_t {
 struct CommandHandlerResult {
     bool accepted;
     std::string message;
+    std::optional<ViewAction> viewAction;
 
     [[nodiscard]] static CommandHandlerResult success();
     [[nodiscard]] static CommandHandlerResult failure(std::string message);
+    [[nodiscard]] static CommandHandlerResult requireView(ViewAction action);
 };
 
 using CommandHandler =

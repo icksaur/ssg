@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ssg/CommandInvocation.h>
+#include <ssg/ViewAction.h>
 
 #include <any>
 #include <cstdint>
@@ -59,9 +60,23 @@ struct CommandResult {
     // "any semantic revision advanced" gate a pointer/wheel hit-test consumes.
     // Both are unioned across every nested and deferred dispatch this call runs.
     DispatchEffects effects{};
+    std::optional<ViewActionRequest> viewAction;
+
+    enum class Outcome : std::uint8_t {
+        Completed,
+        ViewActionRequired,
+        Rejected,
+    };
 
     [[nodiscard]] bool accepted() const noexcept {
         return error == CommandError::None;
+    }
+    [[nodiscard]] bool completed() const noexcept {
+        return outcome() == Outcome::Completed;
+    }
+    [[nodiscard]] Outcome outcome() const noexcept {
+        if (error != CommandError::None) return Outcome::Rejected;
+        return viewAction ? Outcome::ViewActionRequired : Outcome::Completed;
     }
 };
 
