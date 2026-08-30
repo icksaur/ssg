@@ -28,12 +28,6 @@ SelectionSetDelta selectionDelta(SelectionSet const& before,
     return {changed, changed ? std::optional{after} : std::nullopt};
 }
 
-SelectionNavigationDelta selectionNavDelta(SelectionNavigation const& before,
-                                           SelectionNavigation const& after) {
-    bool const changed = before != after;
-    return {changed, changed ? std::optional{after} : std::nullopt};
-}
-
 SettingsSectionDelta settingsDelta(SettingsViewState const& before,
                                     SettingsViewState const& after) {
     SettingsSectionDelta result;
@@ -115,18 +109,15 @@ bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
 
 SessionSnapshot::SessionSnapshot(Revision revision, SessionTopology topology,
                                  ClientSnapshotState client,
-                                 SessionSnapshotSections sections,
-                                 std::optional<PresentationSnapshot> presentation)
+                                 SessionSnapshotSections sections)
     : revision_{revision},
       topology_{std::move(topology)},
       client_{std::move(client)},
-      sections_{std::move(sections)},
-      presentation_{std::move(presentation)} {}
+      sections_{std::move(sections)} {}
 
 bool SessionSnapshot::operator==(SessionSnapshot const& other) const {
     return revision_ == other.revision_ && topology_ == other.topology_ &&
-           client_ == other.client_ && sections_ == other.sections_ &&
-           presentation_ == other.presentation_;
+           client_ == other.client_ && sections_ == other.sections_;
 }
 
 SessionDelta::SessionDelta(
@@ -193,21 +184,22 @@ SessionDelta::SessionDelta(
       watcherAvailable_{watcherAvailable},
       externalFocusHeld_{externalFocusHeld} {}
 
-SessionSnapshot SessionSnapshotCodec::assemble(
+LegacyPresentationSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
     InvocationPrincipal const& principal, ViewId viewId,
     ViewportViewState viewport, SessionSnapshotSections sections,
     Style style, std::optional<PromptViewState> prompt,
     ShellViewState shell, SelectionNavigation selectionNav,
     std::vector<TreeWindow> treeWindows) const {
-    return {revision,
-            std::move(topology),
+    return {
+        SessionSnapshot{
+            revision, std::move(topology),
             {principal.clientId(), viewId, principal.capabilities()},
-            std::move(sections),
-            PresentationSnapshot{std::move(viewport), std::move(style),
-                                 std::move(prompt), std::move(shell),
-                                 std::move(selectionNav),
-                                 std::move(treeWindows)}};
+            std::move(sections)},
+        PresentationSnapshot{std::move(viewport), std::move(style),
+                             std::move(prompt), std::move(shell),
+                             std::move(selectionNav),
+                             std::move(treeWindows)}};
 }
 
 SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
@@ -218,15 +210,6 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         before.client().capabilities != after.client().capabilities) {
         throw std::invalid_argument{
             "session deltas require one immutable client attachment"};
-    }
-    // A delta stream is within one client's chosen mode: either both snapshots
-    // carry a grid-presentation projection (a grid client supplying dimensions)
-    // or neither does (a native-layout client). A presence transition cannot be
-    // expressed by the per-field presentation deltas and would replay wrong, so
-    // reject it loudly rather than silently drop or fabricate a projection.
-    if (before.presentation().has_value() != after.presentation().has_value()) {
-        throw std::invalid_argument{
-            "session deltas require a stable presentation mode for one client"};
     }
     if (after.revision() < before.revision() ||
         before.revision() == after.revision()) {
@@ -277,42 +260,14 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         LspFeatureDeltaCodec{}.derive(old.lspFeatures, next.lspFeatures),
         {old.theme == next.theme ? std::nullopt
                                  : std::optional{next.theme}},
-        {before.presentation() && after.presentation() &&
-                 before.presentation()->style == after.presentation()->style
-             ? std::nullopt
-             : (after.presentation()
-                    ? std::optional{after.presentation()->style}
-                    : std::nullopt)},
-        {before.presentation() && after.presentation() &&
-                 shellEqual(before.presentation()->shell,
-                            after.presentation()->shell)
-             ? std::nullopt
-             : (after.presentation()
-                    ? std::optional{after.presentation()->shell}
-                    : std::nullopt)},
-        before.presentation() && after.presentation()
-            ? Viewport{}.deriveDelta(before.presentation()->viewport,
-                                     after.presentation()->viewport)
-            : ViewportDelta{false, std::nullopt},
+        {},
+        {},
+        {},
         old.focus == next.focus ? std::nullopt
                                 : std::optional{next.focus},
-        before.presentation() && after.presentation()
-            ? selectionNavDelta(before.presentation()->selectionNav,
-                                after.presentation()->selectionNav)
-            : SelectionNavigationDelta{},
-        (before.presentation() && after.presentation() &&
-                 before.presentation()->prompt == after.presentation()->prompt)
-            ? PromptProjectionDelta{}
-            : (after.presentation()
-                   ? PromptProjectionDelta{true, after.presentation()->prompt}
-                   : PromptProjectionDelta{}),
-        (before.presentation() && after.presentation() &&
-                 before.presentation()->treeWindows ==
-                     after.presentation()->treeWindows)
-            ? TreeWindowsDelta{}
-            : (after.presentation()
-                   ? TreeWindowsDelta{true, after.presentation()->treeWindows}
-                   : TreeWindowsDelta{}),
+        {},
+        {},
+        {},
         UiSectionDelta{old.ui == next.ui ? std::nullopt
                                          : std::optional{next.ui}},
         UiStateSectionDelta{old.uiState == next.uiState
@@ -417,7 +372,6 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     }
 
     auto theme = delta.theme_.replacement.value_or(base.sections().theme);
-    auto viewport = delta.viewport_.replacement;
     auto focus = delta.focus_.value_or(base.sections().focus);
     // The palette section (candidate universe + matcher parameters) changes as
     // pickers open/close and the command catalog changes; the delta carries a whole-
@@ -487,33 +441,11 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         externalFocusHeld,
     };
     ClientSnapshotState client = base.client();
-    std::optional<PresentationSnapshot> presentation;
-    if (base.presentation()) {
-        auto style = delta.style_.replacement.value_or(
-            base.presentation()->style);
-        auto shell = delta.shell_.replacement.value_or(
-            base.presentation()->shell);
-        auto selectionNav = delta.selectionNav_.replacement.value_or(
-            base.presentation()->selectionNav);
-        auto prompt = delta.promptProjection_.changed
-                          ? delta.promptProjection_.replacement
-                          : base.presentation()->prompt;
-        auto treeWindows = delta.treeWindows_.changed
-                               ? delta.treeWindows_.replacement.value_or(
-                                     std::vector<TreeWindow>{})
-                               : base.presentation()->treeWindows;
-        presentation = PresentationSnapshot{
-            viewport.value_or(base.presentation()->viewport),
-            std::move(style), std::move(prompt),
-            std::move(shell), std::move(selectionNav),
-            std::move(treeWindows)};
-    }
     return {SessionSnapshot{
                 delta.revision_,
                 delta.topology_.value_or(base.topology()),
                 std::move(client),
-                std::move(sections),
-                std::move(presentation)},
+                std::move(sections)},
             {}};
 }
 

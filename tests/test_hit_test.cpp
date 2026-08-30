@@ -6,6 +6,7 @@
 #include <ssg/session_snapshot.h>
 
 #include "session_snapshot_builder.h"
+#include "legacy_grid_frame.h"
 #include "test_helpers.h"
 
 #include <cstdio>
@@ -91,14 +92,14 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation()->shell;
+    auto const& shell = frame->presentation().shell;
     ASSERT_FALSE(shell.panes.empty());
     if (shell.panes.empty()) return;
     auto const content = shell.panes.front().content;
-    auto const& targets = frame->presentation()->viewport.hitTargets;
+    auto const& targets = frame->presentation().viewport.hitTargets;
     ASSERT_FALSE(targets.empty());
     if (targets.empty()) return;
 
@@ -164,7 +165,7 @@ TEST(footerActionHitCarriesExactStatusActionInvocation) {
     shell.accessibilityNodes.push_back(
         {ssg::ShellNodeKind::FooterAction, "retry", "Retry", {2, 4, 5, 1},
          ssg::SemanticRole::StatusInfo, "Retry", std::nullopt, invocation});
-    ssg::SessionSnapshot snapshot{
+    ssg::LegacyPresentationSnapshot snapshot{
         ssg::Revision{1}, ssg::SessionTopology{},
         ssg::ClientSnapshotState{ssg::ClientId{1}, ssg::ViewId{1}, {}},
         minimalSections(),
@@ -173,7 +174,7 @@ TEST(footerActionHitCarriesExactStatusActionInvocation) {
                                   std::nullopt, std::move(shell),
                                   ssg::SelectionNavigation{}}};
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto hit = ssg::HitTester{*frame}.at(3, 4);
@@ -203,7 +204,7 @@ TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
         0};
     ssg::ShellViewState shell;
     shell.viewport = {20, 5};
-    ssg::SessionSnapshot snapshot{
+    ssg::LegacyPresentationSnapshot snapshot{
         ssg::Revision{1}, ssg::SessionTopology{},
         ssg::ClientSnapshotState{ssg::ClientId{1}, ssg::ViewId{1}, {}},
         std::move(sections),
@@ -212,7 +213,7 @@ TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
             ssg::Style{}, std::move(prompt), std::move(shell),
             ssg::SelectionNavigation{}}};
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
@@ -244,11 +245,11 @@ TEST(externalActionHitCarriesPublishedFileAndCommandIdentity) {
                     0};
             })
             .build();
-    ASSERT_EQ(snapshot.presentation()->shell.externalActions.size(),
+    ASSERT_EQ(snapshot.presentation().shell.externalActions.size(),
               std::size_t{1});
-    if (snapshot.presentation()->shell.externalActions.empty()) return;
+    if (snapshot.presentation().shell.externalActions.empty()) return;
     auto const& published =
-        snapshot.presentation()->shell.externalActions.front();
+        snapshot.presentation().shell.externalActions.front();
     auto hit = ssg::HitTester{snapshot}.at(published.rect.x, published.rect.y);
     ASSERT_EQ(hit.region, ssg::HitRegion::ExternalAction);
     ASSERT_EQ(hit.externalFileId,
@@ -277,10 +278,10 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation()->shell;
+    auto const& shell = frame->presentation().shell;
     ASSERT_FALSE(shell.panes.empty());
     if (shell.panes.empty()) return;
     auto const content = shell.panes.front().content;
@@ -316,7 +317,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     // The document's last visual row is the trailing empty line (offset 8 == the
     // text end after "cde\n").
     auto const lastRowEnd =
-        frame->presentation()->viewport.visibleRows.back().endByteOffset;
+        frame->presentation().viewport.visibleRows.back().endByteOffset;
     auto below =
         ssg::HitTester{*frame}.at(content.x + 10, content.bottom() - 1);
     ASSERT_EQ(below.region, ssg::HitRegion::Editor);
@@ -344,9 +345,9 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
         auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         if (!snapshot) return 9999;
         auto frame =
-            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+            ssg::test::gridFrameFromLegacy(std::move(*snapshot));
         if (!frame) return 9999;
-        auto const content = frame->presentation()->shell.panes.front().content;
+        auto const content = frame->presentation().shell.panes.front().content;
         auto hit = ssg::HitTester{*frame}.at(column, row);
         if (hit.region != ssg::HitRegion::Editor) return 9999;
         auto pos = ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{hit.byteOffset});
@@ -357,7 +358,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
              ssg::SelectionCommandArguments{pos, std::nullopt}});
         auto after = runtime->present(ssg::ClientId{1}, {80, 24});
         if (!after) return 9999;
-        return after->sections()
+        return after->semantic().sections()
             .selection.primary()
             .active.byteOffset.value();
     };
@@ -365,7 +366,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const content = snapshot->presentation()->shell.panes.front().content;
+    auto const content = snapshot->presentation().shell.panes.front().content;
 
     // Click far right of line 0 ("ab") -> caret at its end (offset 2).
     ASSERT_EQ(caretOffsetAfterClick(content.x + 40, content.y), std::uint64_t{2});
@@ -396,20 +397,20 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
                           .targetStart = 1,
                           .baselineLines = {"removed\n"},
                           .targetLines = {}});
-    const auto content = snapshot->presentation()->shell.panes.front().content;
-    auto presentation = *snapshot->presentation();
+    const auto content = snapshot->presentation().shell.panes.front().content;
+    auto presentation = snapshot->presentation();
     presentation.viewport = ssg::Viewport{}.computeUnwrapped(
         text,
         ssg::ViewportDimensions{
             static_cast<std::uint32_t>(content.width),
             static_cast<std::uint32_t>(content.height)},
         0, 0, 4, &diff);
-    auto sections = snapshot->sections();
-    ssg::SessionSnapshot projected{
-        snapshot->revision(), snapshot->topology(), snapshot->client(),
+    auto sections = snapshot->semantic().sections();
+    ssg::LegacyPresentationSnapshot projected{
+        snapshot->semantic().revision(), snapshot->semantic().topology(), snapshot->semantic().client(),
         std::move(sections), std::move(presentation)};
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(projected));
+        ssg::test::gridFrameFromLegacy(std::move(projected));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
@@ -466,13 +467,13 @@ TEST(panelRowMapsToItsTreeNodeId) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation()->shell;
+    auto const& shell = frame->presentation().shell;
     ASSERT_TRUE(shell.panel.has_value());
     if (!shell.panel) return;
-    auto const& window = frame->presentation()->treeWindows.front();
+    auto const& window = frame->presentation().treeWindows.front();
     ASSERT_FALSE(window.visibleNodeIds.empty());
     if (window.visibleNodeIds.empty()) return;
 
@@ -503,7 +504,7 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto presentation = *snapshot->presentation();
+    auto presentation = snapshot->presentation();
     ASSERT_FALSE(presentation.shell.panes.empty());
     if (presentation.shell.panes.empty()) return;
     auto const& pane = presentation.shell.panes.front();
@@ -521,11 +522,11 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
         projection.rows.push_back({"cmd-" + std::to_string(20 + i), ""});
     }
     presentation.shell.palette = projection;
-    ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), snapshot->sections(),
+    ssg::LegacyPresentationSnapshot projected{snapshot->semantic().revision(), snapshot->semantic().topology(),
+                                   snapshot->semantic().client(), snapshot->semantic().sections(),
                                    std::move(presentation)};
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(projected));
+        ssg::test::gridFrameFromLegacy(std::move(projected));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
@@ -550,7 +551,7 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto presentation = *snapshot->presentation();
+    auto presentation = snapshot->presentation();
     auto const& pane = presentation.shell.panes.front();
     std::uint32_t const rows = static_cast<std::uint32_t>(pane.content.height);
 
@@ -564,11 +565,11 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
         projection.rows.push_back({"cmd-" + std::to_string(i), ""});
     }
     presentation.shell.palette = projection;
-    ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), snapshot->sections(),
+    ssg::LegacyPresentationSnapshot projected{snapshot->semantic().revision(), snapshot->semantic().topology(),
+                                   snapshot->semantic().client(), snapshot->semantic().sections(),
                                    std::move(presentation)};
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(projected));
+        ssg::test::gridFrameFromLegacy(std::move(projected));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
@@ -606,10 +607,10 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation()->shell;
+    auto const& shell = frame->presentation().shell;
     ASSERT_FALSE(shell.panes.empty());
     if (shell.panes.empty()) return;
     auto const gutter = shell.panes.front().scrollbar;
@@ -633,7 +634,7 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     auto const thumb = tester.gutterThumb(region);
     ASSERT_TRUE(thumb.has_value());
     if (!thumb) return;
-    auto const& metrics = frame->presentation()->viewport.scrollbar;
+    auto const& metrics = frame->presentation().viewport.scrollbar;
     ASSERT_EQ(thumb->gutterY, gutter.y);
     ASSERT_EQ(thumb->viewportRows, metrics.viewportRows);
     ASSERT_EQ(thumb->thumbStart, metrics.thumbStart);
@@ -669,7 +670,7 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto const& tabs = frame->sections().tabs.tabs;
@@ -683,7 +684,7 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
         }
         return std::size_t{0};
     }();
-    auto const& hits = frame->presentation()->shell.tabHits;
+    auto const& hits = frame->presentation().shell.tabHits;
     ASSERT_FALSE(hits.empty());
     bool activeIsHittable = false;
     for (auto const& hit : hits) {
@@ -699,7 +700,7 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
         auto const& label = tabs[activeIndex].label;
         ASSERT_TRUE(hit.rect.width >= static_cast<int>(label.size()));
         ASSERT_TRUE(hit.rect.right() <=
-                    frame->presentation()->shell.tabBar->right());
+                    frame->presentation().shell.tabBar->right());
     }
 
     // Not every tab fits -- otherwise this proves nothing about scrolling.
@@ -723,7 +724,7 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     ASSERT_TRUE(scrolledBack.has_value());
     if (!scrolledBack) return;
     bool firstIsHittable = false;
-    for (auto const& hit : scrolledBack->presentation()->shell.tabHits) {
+    for (auto const& hit : scrolledBack->presentation().shell.tabHits) {
         if (hit.index == 0) firstIsHittable = true;
     }
     ASSERT_TRUE(firstIsHittable);
@@ -735,15 +736,15 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     auto narrow = runtime->present(ssg::ClientId{1}, {20, 24});
     ASSERT_TRUE(narrow.has_value());
     if (!narrow) return;
-    auto const& narrowHits = narrow->presentation()->shell.tabHits;
+    auto const& narrowHits = narrow->presentation().shell.tabHits;
     ASSERT_FALSE(narrowHits.empty());
     // And it is the ACTIVE tab that is shown, not whichever happens to follow
     // it: scrolling past the active tab would leave the user looking at a bar
     // that cannot reach the document they are editing.
     auto const narrowActive = [&] {
-        auto const& list = narrow->sections().tabs.tabs;
+        auto const& list = narrow->semantic().sections().tabs.tabs;
         for (std::size_t i = 0; i < list.size(); ++i) {
-            if (narrow->sections().tabs.active == list[i].id) return i;
+            if (narrow->semantic().sections().tabs.active == list[i].id) return i;
         }
         return std::size_t{0};
     }();
@@ -771,10 +772,10 @@ TEST(tabBarCellMapsToItsTabIndex) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation()->shell;
+    auto const& shell = frame->presentation().shell;
     ASSERT_TRUE(shell.tabHits.size() >= 2);
     if (shell.tabHits.size() < 2) return;
 
@@ -810,10 +811,10 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation()->shell;
+    auto const& shell = frame->presentation().shell;
 
     const auto* path = findNode(shell, ssg::ShellNodeKind::HeaderField, "path");
     const auto* branch =
@@ -877,10 +878,10 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
         ASSERT_TRUE(before.has_value());
         if (!before) return false;
         auto frame =
-            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*before));
+            ssg::test::gridFrameFromLegacy(std::move(*before));
         ASSERT_TRUE(frame.has_value());
         if (!frame) return false;
-        auto const* node = findNode(frame->presentation()->shell, kind, id);
+        auto const* node = findNode(frame->presentation().shell, kind, id);
         ASSERT_TRUE(node != nullptr);
         if (!node) return false;
         auto hit = ssg::HitTester{*frame}.at(node->rect.x, node->rect.y);
@@ -895,7 +896,7 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
         auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return std::nullopt;
-        const auto* provider = findNode(snapshot->presentation()->shell,
+        const auto* provider = findNode(snapshot->presentation().shell,
                                         ssg::ShellNodeKind::PanelProvider,
                                         "panel.provider");
         if (!provider) return std::nullopt;
@@ -905,13 +906,13 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
         auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return false;
-        return snapshot->presentation()->shell.panel.has_value();
+        return snapshot->presentation().shell.panel.has_value();
     };
     const auto followMode = [&]() {
         auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return ssg::FollowMode::Paused;
-        return snapshot->sections().followEdits.mode;
+        return snapshot->semantic().sections().followEdits.mode;
     };
 
     ASSERT_TRUE(clickField(ssg::ShellNodeKind::HeaderField, "path"));
@@ -943,7 +944,7 @@ TEST(outOfBoundsAndChromeReturnNoTarget) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
@@ -955,11 +956,11 @@ TEST(outOfBoundsAndChromeReturnNoTarget) {
               ssg::HitRegion::None);
     // A top-row coordinate outside visible header fields is chrome.
     int chromeX = -1;
-    for (int x = frame->presentation()->shell.viewport.columns - 1; x >= 0;
+    for (int x = frame->presentation().shell.viewport.columns - 1; x >= 0;
          --x) {
         bool occupied = false;
         for (const auto& node :
-             frame->presentation()->shell.accessibilityNodes) {
+             frame->presentation().shell.accessibilityNodes) {
             if (node.kind != ssg::ShellNodeKind::HeaderField) continue;
             if (x >= node.rect.x && x < node.rect.right()) {
                 occupied = true;

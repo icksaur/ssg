@@ -33,8 +33,8 @@ TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
     ASSERT_FALSE(completion.accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_EQ(snapshot->sections().syntax.revision(), snapshot->sections().document.revision);
-    ASSERT_FALSE(snapshot->sections().lspFeatures.status.empty());
+    ASSERT_EQ(snapshot->semantic().sections().syntax.revision(), snapshot->semantic().sections().document.revision);
+    ASSERT_FALSE(snapshot->semantic().sections().lspFeatures.status.empty());
 }
 
 } // namespace

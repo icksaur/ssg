@@ -16,13 +16,6 @@ GridPresenter::~GridPresenter() = default;
 GridPresenter::GridPresenter(GridPresenter&&) noexcept = default;
 GridPresenter& GridPresenter::operator=(GridPresenter&&) noexcept = default;
 
-std::optional<GridFrame> GridFrame::fromDeprecatedSnapshot(
-    SessionSnapshot snapshot) {
-    if (!snapshot.presentation()) return std::nullopt;
-    const GridBasis basis{snapshot.client().viewId, snapshot.revision(), 0};
-    return GridFrame{std::move(snapshot), basis};
-}
-
 std::optional<GridFrame> GridPresenter::project(
     EditorSession& session, ClientId client, GridPresentationRequest request) {
     auto& state = *state_;
@@ -32,15 +25,13 @@ std::optional<GridFrame> GridPresenter::project(
             revealSelection);
     };
     auto snapshot = projectCurrent(request.palette, false);
-    if (!snapshot || !snapshot->presentation()) {
-        return std::nullopt;
-    }
+    if (!snapshot) return std::nullopt;
     if (state.adoptedRevision &&
-        snapshot->revision() < *state.adoptedRevision) {
+        snapshot->semantic().revision() < *state.adoptedRevision) {
         return std::nullopt;
     }
-    auto const& sections = snapshot->sections();
-    auto const* presentation = &*snapshot->presentation();
+    auto const& sections = snapshot->semantic().sections();
+    auto const* presentation = &snapshot->presentation();
     bool navigationChanged = false;
     bool confirmedSelection = false;
     if (state.pendingSelection) {
@@ -96,14 +87,14 @@ std::optional<GridFrame> GridPresenter::project(
     if (documentChanged || navigationChanged) {
         snapshot = projectCurrent(request.palette,
                                   documentChanged && !confirmedSelection);
-        if (!snapshot || !snapshot->presentation()) return std::nullopt;
-        presentation = &*snapshot->presentation();
+        if (!snapshot) return std::nullopt;
+        presentation = &snapshot->presentation();
     }
-    state.adoptedRevision = snapshot->revision();
+    state.adoptedRevision = snapshot->semantic().revision();
     auto frame = GridFrame{
         std::move(*snapshot),
         GridBasis{viewId_, *state.adoptedRevision, ++state.generation}};
-    presentation = frame.presentation();
+    presentation = &frame.presentation();
     state.navigation = presentation->selectionNav;
     state.navigation.firstVisualRow =
         presentation->viewport.firstVisualRow;
@@ -128,11 +119,7 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
         return {GridActionStatus::Rejected, std::nullopt,
                 "view action basis is stale"};
     }
-    const auto* presentation = frame.presentation();
-    if (!presentation) {
-        return {GridActionStatus::Rejected, std::nullopt,
-                "view action requires a grid projection"};
-    }
+    const auto* presentation = &frame.presentation();
 
     bool supported = true;
     bool changed = false;

@@ -23,6 +23,7 @@
 
 #include "ssg_terminal.h"  // encode_ansi_frame, for the decoder round-trip only.
 #include "test_helpers.h"
+#include "legacy_grid_frame.h"
 
 #include <pty.h>
 #include <poll.h>
@@ -406,7 +407,7 @@ TEST(decoderRoundtripsTheEncodedFrame) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) { fs::remove_all(root); return; }
     auto grid = ssg::Renderer{}.render(*frame);
@@ -466,7 +467,7 @@ TEST(realBinaryOutputMatchesRenderSnapshot) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) { fs::remove_all(root); return; }
     auto grid = ssg::Renderer{}.render(*frame);
@@ -514,7 +515,7 @@ TEST(realBinaryWideGlyphOutputMatchesRender) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) { fs::remove_all(root); return; }
     auto grid = ssg::Renderer{}.render(*frame);

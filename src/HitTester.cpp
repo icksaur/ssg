@@ -25,7 +25,7 @@ RegionHit scrollbarHit(HitRegion region, Rect const& /*gutter*/, int /*row*/) {
 
 RegionHit editorHit(GridFrame const& snapshot, Rect const& content,
                      int column, int row) {
-    auto const& viewport = snapshot.presentation()->viewport;
+    auto const& viewport = snapshot.presentation().viewport;
     auto const viewportRow = static_cast<std::uint32_t>(row - content.y);
     auto const viewportColumn = static_cast<std::uint32_t>(column - content.x);
     for (auto const& target : viewport.hitTargets) {
@@ -79,7 +79,7 @@ RegionHit panelHit(GridFrame const& snapshot, Rect const& panel,
     if (row == panel.y) return {};
     auto const& tree = snapshot.sections().tree;
     if (tree.providers.empty()) return {};
-    auto const& windows = snapshot.presentation()->treeWindows;
+    auto const& windows = snapshot.presentation().treeWindows;
     if (windows.empty()) return {};
     auto const& window = windows.front();
     auto const viewportRow = static_cast<std::size_t>(row - (panel.y + 1));
@@ -94,7 +94,7 @@ RegionHit panelHit(GridFrame const& snapshot, Rect const& panel,
 
 RegionHit HitTester::at(int column, int row) const {
     auto const& snapshot = snapshot_;
-    auto const& shell = snapshot.presentation()->shell;
+    auto const& shell = snapshot.presentation().shell;
     if (column < 0 || row < 0 || column >= shell.viewport.columns ||
         row >= shell.viewport.rows) {
         return {};
@@ -141,8 +141,8 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
-    if (snapshot.presentation()->prompt) {
-        auto const& prompt = *snapshot.presentation()->prompt;
+    if (snapshot.presentation().prompt) {
+        auto const& prompt = *snapshot.presentation().prompt;
         for (auto const& projected : prompt.controls) {
             if (projected.kind == PromptControlKind::Count ||
                 !contains(projected.rect, column, row)) {
@@ -229,7 +229,7 @@ RegionHit HitTester::at(int column, int row) const {
 
 std::optional<HitTester::GutterThumb> HitTester::gutterThumb(
     HitRegion region) const {
-    auto const& shell = snapshot_.presentation()->shell;
+    auto const& shell = snapshot_.presentation().shell;
     auto const make = [](Rect const& gutter, ScrollbarMetrics const& m) {
         return GutterThumb{gutter.y, m.viewportRows, m.thumbStart, m.thumbSize};
     };
@@ -237,10 +237,10 @@ std::optional<HitTester::GutterThumb> HitTester::gutterThumb(
     case HitRegion::EditorScrollbar:
         if (shell.panes.empty()) return std::nullopt;
         return make(shell.panes.front().scrollbar,
-                    snapshot_.presentation()->viewport.scrollbar);
+                    snapshot_.presentation().viewport.scrollbar);
     case HitRegion::PanelScrollbar: {
         if (!shell.panelScrollbar) return std::nullopt;
-        auto const& windows = snapshot_.presentation()->treeWindows;
+        auto const& windows = snapshot_.presentation().treeWindows;
         if (windows.empty()) return std::nullopt;
         return make(*shell.panelScrollbar, windows.front().scrollbar);
     }

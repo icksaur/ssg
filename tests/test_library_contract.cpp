@@ -4,6 +4,7 @@
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"
+#include "legacy_grid_frame.h"
 
 #include <any>
 #include <cstdlib>
@@ -118,7 +119,7 @@ std::vector<ssg::PaletteCandidate> publishedCandidates(
                     .accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return {};
-    return snapshot->sections().palette.commandCandidates;
+    return snapshot->semantic().sections().palette.commandCandidates;
 }
 
 // Reconstruct grid row `row` as a plain string (continuation cells contribute no
@@ -200,7 +201,7 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -240,7 +241,7 @@ TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -277,7 +278,7 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -303,7 +304,7 @@ TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -354,31 +355,23 @@ TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
         ASSERT_TRUE(fresh.has_value());
         if (!fresh) break;
 
-        if (fresh->revision().value() == previous->revision().value()) {
+        if (fresh->semantic().revision().value() == previous->semantic().revision().value()) {
             // A command with no authoritative change produces no delta (the delta
             // API requires the revision to advance); the snapshot is unchanged.
             ASSERT_TRUE(*fresh == *previous);
             continue;
         }
 
-        auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(*previous, *fresh);
-        auto replayed = ssg::SessionSnapshotCodec{}.replay(*previous, delta);
+        auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+            previous->semantic(), fresh->semantic());
+        auto replayed = ssg::SessionSnapshotCodec{}.replay(
+            previous->semantic(), delta);
         ASSERT_TRUE(replayed.accepted());
         if (!replayed.accepted()) break;
 
-        // The delta-reconstructed snapshot equals a fresh production snapshot,
-        // and renders to the identical screen.
-        ASSERT_TRUE(*replayed.snapshot == *fresh);
-        auto replayedFrame =
-            ssg::GridFrame::fromDeprecatedSnapshot(
-                std::move(*replayed.snapshot));
-        auto freshFrame =
-            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*fresh));
-        ASSERT_TRUE(replayedFrame.has_value());
-        ASSERT_TRUE(freshFrame.has_value());
-        if (!replayedFrame || !freshFrame) break;
-        ASSERT_EQ(ssg::Renderer{}.render(*replayedFrame).canonical(),
-                  ssg::Renderer{}.render(*freshFrame).canonical());
+        // Delta replay is semantic-only; presentation is independently projected
+        // by the owning presenter.
+        ASSERT_TRUE(*replayed.snapshot == fresh->semantic());
 
         previous = runtime->present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(previous.has_value());

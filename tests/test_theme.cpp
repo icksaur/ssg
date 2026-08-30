@@ -161,7 +161,7 @@ TEST(editorRuntimeStartsFromTheDefaultTheme) {
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
-        ASSERT_EQ(snapshot->sections().theme, ssg::defaultTheme());
+        ASSERT_EQ(snapshot->semantic().sections().theme, ssg::defaultTheme());
     }
     std::filesystem::remove_all(root);
 }

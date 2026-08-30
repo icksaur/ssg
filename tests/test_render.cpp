@@ -12,6 +12,7 @@
 
 #include "session_snapshot_builder.h"
 #include "grid_test_view.h"
+#include "legacy_grid_frame.h"
 #include "test_helpers.h"
 
 #include <cstdio>
@@ -68,13 +69,14 @@ bool gridContains(ssg::CellGrid const& grid, std::string_view needle) {
 // reads style from the snapshot, not from a member, so this is how a test
 // restyles -- and doing it through the published section is exactly the proof
 // that the renderer and runtime share the one instance.
-ssg::SessionSnapshot withStyle(ssg::SessionSnapshot const& base,
-                               ssg::Style style) {
-    auto presentation = *base.presentation();
+ssg::LegacyPresentationSnapshot withStyle(
+    ssg::LegacyPresentationSnapshot const& base, ssg::Style style) {
+    auto presentation = base.presentation();
     presentation.style = std::move(style);
-    return ssg::SessionSnapshot{base.revision(), base.topology(), base.client(),
-                                base.sections(),
-                                std::move(presentation)};
+    return ssg::LegacyPresentationSnapshot{
+        base.semantic().revision(), base.semantic().topology(),
+        base.semantic().client(), base.semantic().sections(),
+        std::move(presentation)};
 }
 
 ssg::UiNode* mutableUiNode(ssg::UiNode& node, std::string_view id) {
@@ -102,43 +104,52 @@ ssg::UiNode* mutableUiNodeForWidget(ssg::UiNode& node,
     return nullptr;
 }
 
-ssg::SessionSnapshot withUiBackgrounds(
-    ssg::SessionSnapshot const& base,
+ssg::LegacyPresentationSnapshot withUiBackgrounds(
+    ssg::LegacyPresentationSnapshot const& base,
     std::initializer_list<std::pair<std::string_view, ssg::SemanticRole>>
         backgrounds) {
-    auto sections = base.sections();
+    auto sections = base.semantic().sections();
     for (const auto& [id, role] : backgrounds) {
         auto* node = mutableUiNode(sections.ui.root, id);
         if (node) node->style.background = role;
     }
-    return ssg::SessionSnapshot{base.revision(), base.topology(), base.client(),
-                                std::move(sections), *base.presentation()};
+    return ssg::LegacyPresentationSnapshot{
+        base.semantic().revision(), base.semantic().topology(),
+        base.semantic().client(),
+        std::move(sections), base.presentation()};
 }
 
-ssg::SessionSnapshot withUiForeground(ssg::SessionSnapshot const& base,
-                                      std::string_view id,
-                                      ssg::SemanticRole foreground) {
-    auto sections = base.sections();
+ssg::LegacyPresentationSnapshot withUiForeground(
+    ssg::LegacyPresentationSnapshot const& base, std::string_view id,
+    ssg::SemanticRole foreground) {
+    auto sections = base.semantic().sections();
     auto* node = mutableUiNode(sections.ui.root, id);
     if (node) node->style.foreground = foreground;
-    return ssg::SessionSnapshot{base.revision(), base.topology(), base.client(),
-                                std::move(sections), *base.presentation()};
+    return ssg::LegacyPresentationSnapshot{
+        base.semantic().revision(), base.semantic().topology(),
+        base.semantic().client(),
+        std::move(sections), base.presentation()};
 }
 
-ssg::SessionSnapshot withUiWidgetRole(ssg::SessionSnapshot const& base,
-                                      std::string_view widgetId,
-                                      std::string role) {
-    auto sections = base.sections();
+ssg::LegacyPresentationSnapshot withUiWidgetRole(
+    ssg::LegacyPresentationSnapshot const& base,
+    std::string_view widgetId, std::string role) {
+    auto sections = base.semantic().sections();
     auto* node = mutableUiNodeForWidget(sections.ui.root, widgetId);
     if (node) std::get<ssg::UiLeaf>(node->content).widget.role = std::move(role);
-    return ssg::SessionSnapshot{base.revision(), base.topology(), base.client(),
-                                std::move(sections), *base.presentation()};
+    return ssg::LegacyPresentationSnapshot{
+        base.semantic().revision(), base.semantic().topology(),
+        base.semantic().client(),
+        std::move(sections), base.presentation()};
 }
 
-ssg::GridFrame deprecatedGridFrame(ssg::SessionSnapshot const& snapshot) {
-    auto frame = ssg::GridFrame::fromDeprecatedSnapshot(ssg::SessionSnapshot{
-        snapshot.revision(), snapshot.topology(), snapshot.client(),
-        snapshot.sections(), *snapshot.presentation()});
+ssg::GridFrame deprecatedGridFrame(
+    ssg::LegacyPresentationSnapshot const& snapshot) {
+    auto frame = ssg::test::gridFrameFromLegacy(
+        ssg::LegacyPresentationSnapshot{
+        snapshot.semantic().revision(), snapshot.semantic().topology(),
+        snapshot.semantic().client(), snapshot.semantic().sections(),
+        snapshot.presentation()});
     return std::move(frame).value();
 }
 
@@ -163,13 +174,13 @@ TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {60, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto& shell = snapshot->presentation()->shell;
+    const auto& shell = snapshot->presentation().shell;
     ASSERT_TRUE(shell.header.has_value());
     ASSERT_TRUE(shell.footer.has_value());
     ASSERT_TRUE(shell.tabBar.has_value());
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
-    const auto& theme = snapshot->sections().theme;
+    const auto& theme = snapshot->semantic().sections().theme;
     const auto headerBand =
         theme.color(ssg::SemanticRole::HeaderBackground);
     const auto footerBand =
@@ -237,23 +248,23 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
     styled = withUiForeground(styled, ssg::kHeaderNodeId,
                              ssg::SemanticRole::CurrentLineNumber);
     const auto grid = ssg::Renderer{}.render(deprecatedGridFrame(styled));
-    const auto& shell = styled.presentation()->shell;
+    const auto& shell = styled.presentation().shell;
     const auto colorAt = [&](int x, int y) {
         return grid.colors[grid.at(x, y).background];
     };
     ASSERT_EQ(colorAt(shell.header->right() - 1, shell.header->y),
-              styled.sections().theme.color(ssg::SemanticRole::Selection));
+              styled.semantic().sections().theme.color(ssg::SemanticRole::Selection));
     ASSERT_EQ(colorAt(shell.footer->x, shell.footer->y),
-              styled.sections().theme.color(ssg::SemanticRole::SearchMatch));
+              styled.semantic().sections().theme.color(ssg::SemanticRole::SearchMatch));
     ASSERT_EQ(colorAt(shell.panel->x, shell.panel->bottom() - 1),
-              styled.sections().theme.color(
+              styled.semantic().sections().theme.color(
                   ssg::SemanticRole::CurrentLineNumberBackground));
     ASSERT_EQ(colorAt(shell.tabBar->right() - 1, shell.tabBar->y),
-              styled.sections().theme.color(
+              styled.semantic().sections().theme.color(
                   ssg::SemanticRole::LineNumberBackground));
     ASSERT_EQ(colorAt(shell.panes.front().content.right() - 1,
                       shell.panes.front().content.bottom() - 1),
-              styled.sections().theme.color(
+              styled.semantic().sections().theme.color(
                   ssg::SemanticRole::FooterBackground));
     const auto headerGlyph = std::find_if(
         shell.accessibilityNodes.begin(), shell.accessibilityNodes.end(),
@@ -266,7 +277,7 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
         ASSERT_EQ(grid.colors[grid.at(headerGlyph->rect.x,
                                       headerGlyph->rect.y)
                                   .foreground],
-                  styled.sections().theme.color(
+                  styled.semantic().sections().theme.color(
                       ssg::SemanticRole::CurrentLineNumber));
         const auto overridden =
             withUiWidgetRole(styled, headerGlyph->id, "header");
@@ -276,12 +287,12 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
                       overriddenGrid
                           .at(headerGlyph->rect.x, headerGlyph->rect.y)
                           .foreground],
-                  styled.sections().theme.color(ssg::SemanticRole::Header));
+                  styled.semantic().sections().theme.color(ssg::SemanticRole::Header));
         ASSERT_EQ(overriddenGrid.colors[
                       overriddenGrid
                           .at(headerGlyph->rect.x, headerGlyph->rect.y)
                           .background],
-                  styled.sections().theme.color(ssg::SemanticRole::Selection));
+                  styled.semantic().sections().theme.color(ssg::SemanticRole::Selection));
     }
     fs::remove_all(root);
 }
@@ -330,7 +341,7 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& pane = snapshot->presentation()->shell.panes.front();
+    auto const& pane = snapshot->presentation().shell.panes.front();
     ASSERT_TRUE(pane.lineNumbers.width > 0);
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     int const gx = pane.lineNumbers.x;
@@ -380,9 +391,9 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().selection.items().size(),
+    ASSERT_EQ(snapshot->semantic().sections().selection.items().size(),
               std::size_t{2});
-    auto const& pane = snapshot->presentation()->shell.panes.front();
+    auto const& pane = snapshot->presentation().shell.panes.front();
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     int const gx = pane.lineNumbers.x;
     auto roleAt = [&](int row) {
@@ -461,7 +472,7 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
     auto snapshot = gridView.present(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_TRUE(snapshot->presentation()->viewport.firstVisualColumn > 0);
+    ASSERT_TRUE(snapshot->presentation().viewport.firstVisualColumn > 0);
     auto grid = ssg::Renderer{}.render(*snapshot);
 
     // The end of the line is on screen; the start has scrolled off.
@@ -507,7 +518,7 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
     ASSERT_TRUE(gridContains(
         ssg::Renderer{}.render(deprecatedGridFrame(*snapshot)), "alpha"));
 
-    auto presentation = *snapshot->presentation();
+    auto presentation = snapshot->presentation();
     ASSERT_FALSE(presentation.shell.panes.empty());
     if (presentation.shell.panes.empty()) return;
     ssg::PaletteProjection projection;
@@ -516,9 +527,10 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
     projection.selected = std::uint32_t{1};
     presentation.shell.palette = projection;
 
-    ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), snapshot->sections(),
-                                   std::move(presentation)};
+    ssg::LegacyPresentationSnapshot projected{
+        snapshot->semantic().revision(), snapshot->semantic().topology(),
+        snapshot->semantic().client(), snapshot->semantic().sections(),
+        std::move(presentation)};
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(projected));
 
     // Results replace the document text in the pane.
@@ -733,7 +745,7 @@ TEST(renderPaintsSecondaryRangedSelectionCaret) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& items = snapshot->sections().selection.items();
+    auto const& items = snapshot->semantic().sections().selection.items();
     if (items.size() < 2) return;  // Ranker may not find a second; skip if so.
     bool allRanged = true;
     for (auto const& item : items) if (item.isCaret()) allRanged = false;
@@ -770,7 +782,7 @@ TEST(renderPaintsSecondaryCaretAsACell) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().selection.items().size(),
+    ASSERT_EQ(snapshot->semantic().sections().selection.items().size(),
               std::size_t{2});
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     ASSERT_TRUE(grid.caret.has_value());
@@ -806,7 +818,8 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().findReplace.matches.size(), std::size_t{3});
+    ASSERT_EQ(snapshot->semantic().sections().findReplace.matches.size(),
+              std::size_t{3});
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     int row = -1;
@@ -860,7 +873,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_FALSE(snapshot->sections().findReplace.open);
+    ASSERT_FALSE(snapshot->semantic().sections().findReplace.open);
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     bool anyMatch = false;
     for (int row = 0; row < grid.size.rows; ++row) {
@@ -1002,7 +1015,7 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     auto snapshot = gridView.present(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->presentation()->shell;
+    auto const& shell = snapshot->presentation().shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -1035,7 +1048,7 @@ TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->presentation()->shell;
+    auto const& shell = snapshot->presentation().shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
@@ -1062,7 +1075,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto presentation = *snapshot->presentation();
+    auto presentation = snapshot->presentation();
     ASSERT_FALSE(presentation.shell.panes.empty());
     if (presentation.shell.panes.empty()) return;
 
@@ -1081,9 +1094,10 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
             {"cmd-" + std::to_string(20 + i), ""});
     }
     presentation.shell.palette = projection;
-    ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), snapshot->sections(),
-                                   std::move(presentation)};
+    ssg::LegacyPresentationSnapshot projected{
+        snapshot->semantic().revision(), snapshot->semantic().topology(),
+        snapshot->semantic().client(), snapshot->semantic().sections(),
+        std::move(presentation)};
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(projected));
 
     // The window shows cmd-20.. (not cmd-00), and the absolute-25 selection lands
@@ -1119,7 +1133,7 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto presentation = *snapshot->presentation();
+    auto presentation = snapshot->presentation();
     auto const& pane = presentation.shell.panes.front();
     ssg::PaletteProjection projection;
     projection.rect = pane.content;
@@ -1130,9 +1144,10 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
         ssg::Viewport{}.scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
     projection.rows = {{"a", ""}, {"b", ""}};
     presentation.shell.palette = projection;
-    ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
-                                   snapshot->client(), snapshot->sections(),
-                                   std::move(presentation)};
+    ssg::LegacyPresentationSnapshot projected{
+        snapshot->semantic().revision(), snapshot->semantic().topology(),
+        snapshot->semantic().client(), snapshot->semantic().sections(),
+        std::move(presentation)};
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(projected));
     // The gutter is reserved (column exists) but blank: no thumb/track glyphs.
     for (int y = projection.scrollbarRect.y;
@@ -1146,7 +1161,7 @@ TEST(renderTooSmallViewportProducesLibraryPlaceholder) {
     // M11-L: below the 20x4 minimum the library (not the app) renders the
     // placeholder screen, sized to the terminal, so no app code authors cells.
     auto snapshot = ssg::test::SessionSnapshotBuilder{}.viewport(10, 5).build();
-    ASSERT_EQ(snapshot.presentation()->shell.viewport.columns, 0);  // declined layout
+    ASSERT_EQ(snapshot.presentation().shell.viewport.columns, 0);  // declined layout
     ssg::CellGrid grid;
     ASSERT_NO_THROW(grid = ssg::Renderer{}.render(snapshot));
     ASSERT_EQ(grid.size.columns, 10);
@@ -1221,7 +1236,7 @@ TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
     ASSERT_EQ(grid.caret->row, std::uint32_t{0});
 
     // And exactly one cell past the last drawn character of "> save".
-    auto const& shell = snapshot->presentation()->shell;
+    auto const& shell = snapshot->presentation().shell;
     const ssg::AccessibilityNode* query = nullptr;
     for (auto const& node : shell.accessibilityNodes) {
         if (node.id == "input_line.query") query = &node;
@@ -1254,7 +1269,7 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
 
-    auto const& shell = snapshot->presentation()->shell;
+    auto const& shell = snapshot->presentation().shell;
     const ssg::AccessibilityNode* query = nullptr;
     for (auto const& node : shell.accessibilityNodes) {
         if (node.id == "input_line.query") query = &node;
@@ -1291,7 +1306,7 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
     // Inside the header, not run off the right edge by the untruncated query.
     ASSERT_TRUE(grid.caret->column < std::uint32_t{80});
 
-    auto const& shell = snapshot->presentation()->shell;
+    auto const& shell = snapshot->presentation().shell;
     const ssg::AccessibilityNode* query = nullptr;
     for (auto const& node : shell.accessibilityNodes) {
         if (node.id == "input_line.query") query = &node;
@@ -1313,7 +1328,7 @@ TEST(inputLineCaretUsesTheLoweredPromptInputGeometry) {
                                 sections.focus = ssg::FocusTarget::Prompt;
                             })
                             .build();
-        const auto& shell = snapshot.presentation()->shell;
+        const auto& shell = snapshot.presentation().shell;
         const ssg::AccessibilityNode* input = nullptr;
         for (const auto& node : shell.accessibilityNodes) {
             if (node.id == "input_line.query") input = &node;
@@ -1350,7 +1365,7 @@ TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->presentation()->shell;
+    auto const& shell = snapshot->presentation().shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
 
@@ -1442,12 +1457,12 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The published section carries the new glyphs.
-    ASSERT_EQ(snapshot->presentation()->style.scrollbar.track, std::string{":"});
-    ASSERT_EQ(snapshot->presentation()->style.tree.expanded, std::string{"- "});
-    ASSERT_EQ(snapshot->presentation()->style.inputLineSigil, std::string{"! "});
+    ASSERT_EQ(snapshot->presentation().style.scrollbar.track, std::string{":"});
+    ASSERT_EQ(snapshot->presentation().style.tree.expanded, std::string{"- "});
+    ASSERT_EQ(snapshot->presentation().style.inputLineSigil, std::string{"! "});
     const ssg::UiNode* inputLine = nullptr;
     if (const auto* root = std::get_if<ssg::UiContainer>(
-            &snapshot->sections().ui.root.content)) {
+            &snapshot->semantic().sections().ui.root.content)) {
         for (const auto& area : root->children) {
             if (area.id.value() != ssg::kHeaderNodeId) continue;
             if (const auto* header =
@@ -1470,7 +1485,7 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
     // And the rendered screen shows them, with the shipped glyphs gone.
     auto const grid =
         ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
-    auto const& shell = snapshot->presentation()->shell;
+    auto const& shell = snapshot->presentation().shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
     int const gx = shell.panelScrollbar->x;
@@ -1505,7 +1520,7 @@ TEST(styleDefineRejectionLeavesTheLiveStyleUnchanged) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The good key in the rejected table did NOT leak into the live style.
-    ASSERT_EQ(snapshot->presentation()->style.tree.expanded, ssg::Style{}.tree.expanded);
+    ASSERT_EQ(snapshot->presentation().style.tree.expanded, ssg::Style{}.tree.expanded);
 }
 
 // LSP diagnostics reach the cells they cover, and only those cells.  The ranges
@@ -1660,7 +1675,7 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
                                 1};
                         })
                         .build();
-    auto const& shell = snapshot.presentation()->shell;
+    auto const& shell = snapshot.presentation().shell;
     auto const find = [&](ssg::ShellNodeKind kind,
                           std::string_view id)
         -> const ssg::AccessibilityNode* {

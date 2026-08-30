@@ -6401,7 +6401,9 @@ std::string ProtocolCodec::encodeSessionSnapshot(SessionSnapshot const& snapshot
     fields.emplace_back("topology", toValue(snapshot.topology()));
     fields.emplace_back("client", toValue(snapshot.client()));
     fields.emplace_back("sections", toValue(snapshot.sections()));
-    fields.emplace_back("presentation", toValue(snapshot.presentation()));
+    fields.emplace_back(
+        "presentation",
+        toValue(std::optional<PresentationSnapshot>{}));
     return encodeMessage(ProtocolMessageKind::SessionSnapshot,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -6428,15 +6430,63 @@ DecodeSessionSnapshotResult ProtocolCodec::decodeSessionSnapshot(std::string_vie
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "session snapshot presentation is malformed"};
     }
+    (void)presentation;
     if (!revision || !topology || !client || !sections) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "session snapshot payload is malformed"};
     }
     return {ProtocolError::None,
             SessionSnapshot{*revision, std::move(*topology),
-                            std::move(*client), std::move(*sections),
-                            std::move(presentation)},
+                            std::move(*client), std::move(*sections)},
             {}};
+}
+
+std::string ProtocolCodec::encodeLegacyPresentationSnapshot(
+    LegacyPresentationSnapshot const& snapshot) const {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("revision", toValue(snapshot.semantic().revision()));
+    fields.emplace_back("topology", toValue(snapshot.semantic().topology()));
+    fields.emplace_back("client", toValue(snapshot.semantic().client()));
+    fields.emplace_back("sections", toValue(snapshot.semantic().sections()));
+    fields.emplace_back(
+        "presentation",
+        toValue(std::optional<PresentationSnapshot>{
+            snapshot.presentation()}));
+    return encodeMessage(ProtocolMessageKind::SessionSnapshot,
+                         ProtocolValue::makeObject(std::move(fields)));
+}
+
+DecodeLegacyPresentationSnapshotResult
+ProtocolCodec::decodeLegacyPresentationSnapshot(
+    std::string_view bytes, ProtocolLimits limits) const {
+    auto decoded =
+        decodeMessage(bytes, ProtocolMessageKind::SessionSnapshot, limits);
+    if (decoded.error != ProtocolError::None) {
+        return {decoded.error, std::nullopt, decoded.message};
+    }
+    auto const& payload = *decoded.payload;
+    if (!payload.asObject()) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "session snapshot payload is not an object"};
+    }
+    auto revision = requireField<Revision>(payload.field("revision"));
+    auto topology = requireField<SessionTopology>(payload.field("topology"));
+    auto client = requireField<ClientSnapshotState>(payload.field("client"));
+    auto sections =
+        requireField<SessionSnapshotSections>(payload.field("sections"));
+    std::optional<PresentationSnapshot> presentation;
+    if (!decodeOptionalField(payload.field("presentation"), presentation) ||
+        !presentation || !revision || !topology || !client || !sections) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "legacy presentation snapshot payload is malformed"};
+    }
+    return {
+        ProtocolError::None,
+        LegacyPresentationSnapshot{
+            SessionSnapshot{*revision, std::move(*topology),
+                            std::move(*client), std::move(*sections)},
+            std::move(*presentation)},
+        {}};
 }
 
 std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
@@ -6468,13 +6518,16 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     fields.emplace_back(kSemanticSessionDeltaFields[17], toValue(delta.lspSync()));
     fields.emplace_back(kSemanticSessionDeltaFields[18], toValue(delta.lspFeatures()));
     fields.emplace_back(kSemanticSessionDeltaFields[19], toValue(delta.theme()));
-    fields.emplace_back("style", toValue(delta.style()));
-    fields.emplace_back("shell", toValue(delta.shell()));
-    fields.emplace_back("viewport", toValue(delta.viewport()));
+    fields.emplace_back("style", toValue(StyleSectionDelta{}));
+    fields.emplace_back("shell", toValue(ShellSectionDelta{}));
+    fields.emplace_back("viewport",
+                        toValue(ViewportDelta{false, std::nullopt}));
     fields.emplace_back(kSemanticSessionDeltaFields[20], toValue(delta.focus()));
-    fields.emplace_back("selection_nav", toValue(delta.selectionNav()));
-    fields.emplace_back("prompt_projection", toValue(delta.promptProjection()));
-    fields.emplace_back("tree_windows", toValue(delta.treeWindows()));
+    fields.emplace_back("selection_nav",
+                        toValue(SelectionNavigationDelta{}));
+    fields.emplace_back("prompt_projection",
+                        toValue(PromptProjectionDelta{}));
+    fields.emplace_back("tree_windows", toValue(TreeWindowsDelta{}));
     fields.emplace_back(kSemanticSessionDeltaFields[22], delta.ui().replacement
                                   ? encodeUiSchema(*delta.ui().replacement)
                                   : ProtocolValue::makeNull());

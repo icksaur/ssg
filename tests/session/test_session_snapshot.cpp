@@ -7,6 +7,7 @@
 #include <ssg/Keymap.h>
 
 #include <algorithm>
+#include <concepts>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -23,6 +24,14 @@ static_assert(!std::is_copy_constructible_v<ssg::GridFrame>);
 static_assert(!std::is_copy_assignable_v<ssg::GridFrame>);
 static_assert(std::is_nothrow_move_constructible_v<ssg::GridFrame>);
 static_assert(std::is_nothrow_move_assignable_v<ssg::GridFrame>);
+template <class T>
+concept HasPresentation = requires(T const& value) {
+    value.presentation();
+};
+static_assert(!HasPresentation<ssg::SessionSnapshot>);
+static_assert(std::same_as<
+              decltype(std::declval<ssg::GridFrame const&>().presentation()),
+              ssg::PresentationSnapshot const&>);
 
 std::filesystem::path uniqueRoot(std::string_view name) {
     auto root = std::filesystem::current_path() / ("runtime_snapshot_" + std::string{name});
@@ -62,9 +71,9 @@ TEST(runtimeConstructsAttachesAndProducesLiveSnapshot) {
     auto snapshot = runtime.present(ssg::ClientId{7}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->revision(), runtime.revision());
-    ASSERT_EQ(snapshot->client().clientId, ssg::ClientId{7});
-    ASSERT_EQ(snapshot->client().viewId, ssg::ViewId{9});
+    ASSERT_EQ(snapshot->semantic().revision(), runtime.revision());
+    ASSERT_EQ(snapshot->semantic().client().clientId, ssg::ClientId{7});
+    ASSERT_EQ(snapshot->semantic().client().viewId, ssg::ViewId{9});
 }
 
 TEST(runtimeSourcesDoNotIncludeFixtureModel) {
@@ -97,7 +106,7 @@ TEST(runtimePublishesValidCuratedKeymap) {
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto& keymap = snapshot->sections().keymap;
+    const auto& keymap = snapshot->semantic().sections().keymap;
     ASSERT_FALSE(keymap.bindings.empty());
     ASSERT_TRUE(ssg::KeymapMatcher{keymap}.validate({}).empty());
     ASSERT_TRUE(ssg::KeymapMatcher{keymap}.hasGlobalBinding("settings.open", {}));
@@ -134,7 +143,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
         auto snapshot = grid.present(runtime);
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
-        auto const& view = snapshot->presentation()->viewport;
+        auto const& view = snapshot->presentation().viewport;
         auto const caretLine =
             snapshot->sections().selection.primary().active.line.value();
         // The caret's line is always inside the window that is actually painted.
@@ -148,7 +157,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
     auto final = grid.present(runtime);
     ASSERT_TRUE(final.has_value());
     if (!final) return;
-    ASSERT_EQ(lastVisibleLine, final->presentation()->viewport.totalVisualRows - 1);
+    ASSERT_EQ(lastVisibleLine, final->presentation().viewport.totalVisualRows - 1);
 
     // Scrolling to the maximum offset shows the final line, so no row is
     // stranded past the end of the scroll range.
@@ -158,7 +167,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
     auto bottom = grid.present(runtime);
     ASSERT_TRUE(bottom.has_value());
     if (!bottom) return;
-    auto const& view = bottom->presentation()->viewport;
+    auto const& view = bottom->presentation().viewport;
     ASSERT_EQ(view.firstVisualRow, view.scrollbar.maximumFirstRow);
     ASSERT_EQ(view.firstVisualRow + view.visibleRows.size(),
               static_cast<std::size_t>(view.totalVisualRows));
@@ -190,7 +199,7 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
     auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& view = snapshot->presentation()->viewport;
+    auto const& view = snapshot->presentation().viewport;
     ASSERT_TRUE(view.totalVisualRows > view.visibleRows.size());
     ASSERT_TRUE(view.scrollbar.maximumFirstRow > 0);
     std::filesystem::remove_all(root);
@@ -213,7 +222,7 @@ TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
 
     auto const dirty = [&] {
         auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
-        auto const& tabs = snapshot->sections().tabs.tabs;
+        auto const& tabs = snapshot->semantic().sections().tabs.tabs;
         return !tabs.empty() && tabs.front().dirty;
     };
     ASSERT_FALSE(dirty());
@@ -240,7 +249,7 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     auto const tabLabels = [&] {
         auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
         std::vector<std::string> labels;
-        for (auto const& tab : snapshot->sections().tabs.tabs) {
+        for (auto const& tab : snapshot->semantic().sections().tabs.tabs) {
             labels.push_back(tab.label);
         }
         return labels;
@@ -326,7 +335,7 @@ TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
     if (!snapshot) return;
     bool keptScratch = false;
     bool openedFile = false;
-    for (auto const& tab : snapshot->sections().tabs.tabs) {
+    for (auto const& tab : snapshot->semantic().sections().tabs.tabs) {
         if (tab.label == "[new buffer]") keptScratch = true;
         if (tab.label == "alpha.txt") openedFile = true;
     }
@@ -358,7 +367,7 @@ TEST(anEmptySavedFileIsNeverDiscardedAsScratch) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     bool keptBlank = false;
-    for (auto const& tab : snapshot->sections().tabs.tabs) {
+    for (auto const& tab : snapshot->semantic().sections().tabs.tabs) {
         if (tab.label == "blank.txt") keptBlank = true;
     }
     ASSERT_TRUE(keptBlank);
@@ -400,7 +409,7 @@ TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
     auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& view = snapshot->presentation()->viewport;
+    auto const& view = snapshot->presentation().viewport;
     ASSERT_TRUE(view.totalVisualRows > 1);
     std::filesystem::remove_all(root);
 }
@@ -423,7 +432,7 @@ TEST(curatedKeymapBindingsAreArgumentFree) {
     // command with no open prompt) are allowed; an argument-shaped failure is
     // not.
     std::set<std::string> commands;
-    for (const auto& binding : snapshot->sections().keymap.bindings) {
+    for (const auto& binding : snapshot->semantic().sections().keymap.bindings) {
         commands.insert(binding.commandId);
     }
     for (const auto& command : commands) {
@@ -450,7 +459,7 @@ TEST(curatedKeymapResolvesPerContext) {
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto& keymap = snapshot->sections().keymap;
+    const auto& keymap = snapshot->semantic().sections().keymap;
 
     const auto down = *ssg::KeyCodec{}.parseSequence({"ArrowDown"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(down, "editor").commandId,
@@ -593,7 +602,7 @@ TEST(addCursorChordProducesMultipleSelections) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     const auto chord = *ssg::KeyCodec{}.parseSequence({"Alt+KeyJ"});
-    auto resolved = ssg::KeymapMatcher{snapshot->sections().keymap}.resolveSequence(chord, "editor");
+    auto resolved = ssg::KeymapMatcher{snapshot->semantic().sections().keymap}.resolveSequence(chord, "editor");
     ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::Resolved);
     ASSERT_EQ(resolved.commandId, std::string{"select.add_cursor_down"});
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {resolved.commandId, runtime.revision(), {}}).accepted());
@@ -601,7 +610,7 @@ TEST(addCursorChordProducesMultipleSelections) {
     auto after = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (!after) return;
-    ASSERT_TRUE(after->sections().selection.items().size() > std::size_t{1});
+    ASSERT_TRUE(after->semantic().sections().selection.items().size() > std::size_t{1});
 }
 
 TEST(settingsOpenFocusesASettingsPrompt) {
@@ -616,8 +625,8 @@ TEST(settingsOpenFocusesASettingsPrompt) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The chord actually opens: focus moves to the prompt with a visible input.
-    ASSERT_EQ(snapshot->sections().focus, ssg::FocusTarget::Prompt);
-    ASSERT_TRUE(snapshot->presentation()->prompt.has_value());
+    ASSERT_EQ(snapshot->semantic().sections().focus, ssg::FocusTarget::Prompt);
+    ASSERT_TRUE(snapshot->presentation().prompt.has_value());
 }
 
 TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
@@ -646,21 +655,20 @@ TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
     ASSERT_TRUE(semantic.has_value());
     if (!grid || !semantic) return;
 
-    // The grid client carries a presentation projection; the native client does
-    // not -- and never pays for one.
-    ASSERT_TRUE(grid->presentation().has_value());
-    ASSERT_FALSE(semantic->presentation().has_value());
+    // Only the legacy envelope carries grid projection; the semantic snapshot
+    // type has no presentation surface.
+    ASSERT_FALSE(grid->presentation().shell.panes.empty());
 
     // The grid client's tree scroll window is live (populated), proving the
     // windowing happens in presentation -- not in the semantic tree section.
-    ASSERT_FALSE(grid->presentation()->treeWindows.empty());
-    ASSERT_FALSE(grid->presentation()->treeWindows.front().visibleNodeIds.empty());
+    ASSERT_FALSE(grid->presentation().treeWindows.empty());
+    ASSERT_FALSE(grid->presentation().treeWindows.front().visibleNodeIds.empty());
 
     // The semantic sections are byte-for-byte identical: document, selection set,
     // tabs, keymap, theme roles, focus, AND the tree (nodes/selection/expansion,
     // with no scroll window). Geometry does not change what the model IS.
-    ASSERT_TRUE(grid->sections() == semantic->sections());
-    ASSERT_TRUE(grid->sections().tree == semantic->sections().tree);
+    ASSERT_TRUE(grid->semantic().sections() == semantic->sections());
+    ASSERT_TRUE(grid->semantic().sections().tree == semantic->sections().tree);
     ASSERT_FALSE(semantic->sections().tree.providers.empty());
 
     // The same command drives the same semantic result on the dimensionless path:
@@ -672,7 +680,6 @@ TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
     auto edited = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(edited.has_value());
     if (!edited) return;
-    ASSERT_FALSE(edited->presentation().has_value());
     ASSERT_TRUE(edited->sections().document.text.find('X') != std::string::npos);
     ASSERT_TRUE(edited->sections().document != semantic->sections().document);
 }
@@ -805,16 +812,16 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     auto scrolled = presenter.project(runtime, client, {{80, 12}, {}});
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
-    ASSERT_EQ(scrolled->presentation()->viewport.firstVisualRow, 5U);
+    ASSERT_EQ(scrolled->presentation().viewport.firstVisualRow, 5U);
 
     auto compatibility = runtime.present(client, {80, 12});
     ASSERT_TRUE(compatibility.has_value());
     if (compatibility) {
-        ASSERT_EQ(compatibility->presentation()->viewport.firstVisualRow, 0U);
+        ASSERT_EQ(compatibility->presentation().viewport.firstVisualRow, 0U);
     }
 
     const auto selectionBefore = runtime.present(client, {80, 12})
-                                     ->sections()
+                                     ->semantic().sections()
                                      .selection;
     auto visual = runtime.dispatch(
         client, {"cursor.page_down", runtime.revision(), {}});
@@ -823,7 +830,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     auto selectionAfter = runtime.present(client, {80, 12});
     ASSERT_TRUE(selectionAfter.has_value());
     if (selectionAfter) {
-        ASSERT_EQ(selectionAfter->sections().selection, selectionBefore);
+        ASSERT_EQ(selectionAfter->semantic().sections().selection, selectionBefore);
     }
 }
 
@@ -851,8 +858,8 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     ASSERT_TRUE(firstFrame.has_value());
     ASSERT_TRUE(secondFrame.has_value());
     if (!firstFrame || !secondFrame) return;
-    ASSERT_EQ(firstFrame->presentation()->shell.panes.size(), std::size_t{1});
-    ASSERT_EQ(secondFrame->presentation()->shell.panes.size(), std::size_t{1});
+    ASSERT_EQ(firstFrame->presentation().shell.panes.size(), std::size_t{1});
+    ASSERT_EQ(secondFrame->presentation().shell.panes.size(), std::size_t{1});
 
     const auto revision = runtime.revision();
     auto split = runtime.dispatch(
@@ -873,8 +880,8 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     ASSERT_TRUE(firstFrame.has_value());
     ASSERT_TRUE(secondFrame.has_value());
     if (!firstFrame || !secondFrame) return;
-    ASSERT_EQ(firstFrame->presentation()->shell.panes.size(), std::size_t{2});
-    ASSERT_EQ(secondFrame->presentation()->shell.panes.size(), std::size_t{1});
+    ASSERT_EQ(firstFrame->presentation().shell.panes.size(), std::size_t{2});
+    ASSERT_EQ(secondFrame->presentation().shell.panes.size(), std::size_t{1});
 
     auto blockedFocus = runtime.dispatch(
         firstClient, {"pane.focus_down", runtime.revision(), {}});
@@ -979,7 +986,7 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     auto compatibility = runtime.present(firstClient, {80, 24});
     ASSERT_TRUE(compatibility.has_value());
     if (compatibility) {
-        ASSERT_EQ(compatibility->presentation()->shell.panes.size(),
+        ASSERT_EQ(compatibility->presentation().shell.panes.size(),
                   std::size_t{1});
     }
 }
@@ -1109,9 +1116,9 @@ TEST(visualMovementUsesActivePaneAndDiscardsMismatchedProposal) {
     ASSERT_TRUE(presenter.apply(*split.viewAction, *frame).accepted());
     frame = presenter.project(runtime, client, {{41, 15}, {}});
     ASSERT_TRUE(frame.has_value());
-    if (!frame || frame->presentation()->shell.panes.size() != 2) return;
+    if (!frame || frame->presentation().shell.panes.size() != 2) return;
     const auto activeRows = static_cast<std::uint32_t>(
-        frame->presentation()->shell.panes.back().content.height);
+        frame->presentation().shell.panes.back().content.height);
 
     auto page = runtime.dispatch(
         client, {"cursor.page_down", runtime.revision(), {}});

@@ -234,6 +234,16 @@ struct DecodeSessionSnapshotResult {
     }
 };
 
+struct DecodeLegacyPresentationSnapshotResult {
+    ProtocolError error;
+    std::optional<LegacyPresentationSnapshot> snapshot;
+    std::string message;
+
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == ProtocolError::None;
+    }
+};
+
 struct DecodeSessionDeltaResult {
     ProtocolError error;
     std::optional<SessionDelta> delta;
@@ -267,6 +277,13 @@ public:
     [[nodiscard]] std::string encodeSessionSnapshot(
         SessionSnapshot const& snapshot) const;
     [[nodiscard]] DecodeSessionSnapshotResult decodeSessionSnapshot(
+        std::string_view bytes, ProtocolLimits limits = {}) const;
+    // CONTRACT: These APIs preserve the frozen presentation-bearing snapshot
+    // until kSemanticUiWireVersion removes the compatibility wire path in Plan 6.
+    [[nodiscard]] std::string encodeLegacyPresentationSnapshot(
+        LegacyPresentationSnapshot const& snapshot) const;
+    [[nodiscard]] DecodeLegacyPresentationSnapshotResult
+    decodeLegacyPresentationSnapshot(
         std::string_view bytes, ProtocolLimits limits = {}) const;
     [[nodiscard]] std::string encodeSessionDelta(SessionDelta const& delta) const;
     [[nodiscard]] DecodeSessionDeltaResult decodeSessionDelta(

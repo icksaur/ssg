@@ -12,6 +12,7 @@
 #include "init_script.h"
 
 #include "test_helpers.h"
+#include "legacy_grid_frame.h"
 
 #include <algorithm>
 #include <any>
@@ -301,7 +302,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
     ASSERT_TRUE(snap.has_value());
     if (!snap.has_value()) return;
     auto gridFrame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snap));
+        ssg::test::gridFrameFromLegacy(std::move(*snap));
     ASSERT_TRUE(gridFrame.has_value());
     if (!gridFrame) return;
     auto grid = ssg::Renderer{}.render(*gridFrame);
@@ -348,7 +349,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
         auto s = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         if (!s) return -1;
         auto frame =
-            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*s));
+            ssg::test::gridFrameFromLegacy(std::move(*s));
         if (!frame) return -1;
         auto g = ssg::Renderer{}.render(*frame);
         return g.caret ? g.caret->column : -1;
@@ -965,7 +966,7 @@ TEST(decodeKittyKeyMatchesEveryDefaultBinding) {
     if (!snap.has_value()) return;
 
     int covered = 0;
-    for (auto const& binding : snap->sections().keymap.bindings) {
+    for (auto const& binding : snap->semantic().sections().keymap.bindings) {
         if (binding.sequence.size() != 1) continue;  // all defaults are single strokes
         auto const& stroke = binding.sequence.front();
         auto const codepoint = kittyCodepointFor(stroke.code);
@@ -2349,7 +2350,8 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
     auto afterSnap = runtime.present(ssg::ClientId{1}, {80, 12});
     ASSERT_TRUE(afterSnap.has_value());
     if (!afterSnap) return;
-    auto const& survivors = afterSnap->sections().selection.items();
+    auto const& survivors =
+        afterSnap->semantic().sections().selection.items();
     ASSERT_EQ(survivors.size(), std::size_t{1});
     if (survivors.size() == 1) {
         ASSERT_EQ(survivors[0], (ssg::Selection{*p7, *p7}));  // the un-clicked one
@@ -2973,7 +2975,7 @@ TEST(evaluateInitScriptPushesComposedChromeToTheRuntime) {
     const auto hasHeaderField = [&](std::string_view id) {
         auto snap = runtime.present(ssg::ClientId{1}, dims);
         if (!snap) return false;
-        for (const auto& node : snap->presentation()->shell.accessibilityNodes) {
+        for (const auto& node : snap->presentation().shell.accessibilityNodes) {
             if (node.kind == ssg::ShellNodeKind::HeaderField && node.id == id)
                 return true;
         }
@@ -3121,12 +3123,16 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
     coalescer.noteRefreshed();
     ASSERT_TRUE(afterBurst.has_value());
     ASSERT_EQ(
-        afterBurst->sections().selection.primary().active.byteOffset.value(),
+        afterBurst->semantic()
+            .sections()
+            .selection.primary()
+            .active.byteOffset.value(),
         std::uint64_t{5});
     // The routing seam a key would take is still the editor: a cursor burst never
     // moved focus, so the coalesced (un-refreshed) keys correctly kept editor
     // routing.
-    ASSERT_TRUE(ssg::effectiveFocusFromSections(afterBurst->sections()) ==
+    ASSERT_TRUE(ssg::effectiveFocusFromSections(
+                    afterBurst->semantic().sections()) ==
                 ssg::FocusTarget::Editor);
 
     // Opening the palette changes routing, so the NEXT key must refresh -- and the
@@ -3139,9 +3145,10 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
     auto afterOpen = runtime.present(client, dims);
     coalescer.noteRefreshed();
     ASSERT_TRUE(afterOpen.has_value());
-    ASSERT_TRUE(afterOpen->sections().promptStatus.activeKind ==
+    ASSERT_TRUE(afterOpen->semantic().sections().promptStatus.activeKind ==
                 ssg::PromptKind::Palette);
-    ASSERT_TRUE(ssg::effectiveFocusFromSections(afterOpen->sections()) ==
+    ASSERT_TRUE(ssg::effectiveFocusFromSections(
+                    afterOpen->semantic().sections()) ==
                 ssg::FocusTarget::Prompt);
     fs::remove_all(root);
 }

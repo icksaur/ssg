@@ -253,20 +253,17 @@ public:
     // revision without relying on platform watcher timing.
     void refreshFilesystemForTest();
     // CONTRACT
-    // EditorSession::snapshot: the semantic model and interaction state are never
-    //   gated on grid geometry. present() adds an optional
-    //   PresentationSnapshot (viewport, style, footer prompt, shell layout,
-    //   selection scroll, tree scroll windows); present() updates and captures
-    //   that optional projection. snapshot() returns the identical semantic
-    //   sections with presentation() == nullopt. Neither operation pumps worker
-    //   results or advances the revision. A
-    //   client that lays out the model natively obtains full semantic state
-    //   without supplying, or paying for, any grid projection.
-    //   present() is a compatibility surface until Plan 6 removes
-    //   SessionSnapshot::presentation(). It projects presenter-owned navigation
-    //   from fixed defaults and ignores unresolved view actions; callers that
-    //   require persistent grid navigation own a GridPresenter.
-    [[nodiscard]] std::optional<SessionSnapshot> present(
+    // EditorSession::snapshot returns the semantic model and interaction state
+    //   without requiring or computing grid geometry. present() is the
+    //   compatibility surface that packages the same semantic snapshot with a
+    //   grid projection until kSemanticUiWireVersion removes
+    //   LegacyPresentationSnapshot in Plan 6. present() deliberately returns
+    //   LegacyPresentationSnapshot rather than SessionSnapshot; semantic callers
+    //   use snapshot(). Neither operation pumps worker results or advances the
+    //   revision. present() projects presenter-owned navigation from fixed
+    //   defaults and ignores unresolved view actions; callers requiring
+    //   persistent grid navigation own a GridPresenter.
+    [[nodiscard]] std::optional<LegacyPresentationSnapshot> present(
         ClientId clientId, ViewportDimensions dimensions,
         PaletteReport paletteReport = {});
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
@@ -289,7 +286,7 @@ public:
 
 private:
     friend class GridPresenter;
-    [[nodiscard]] std::optional<SessionSnapshot>
+    [[nodiscard]] std::optional<LegacyPresentationSnapshot>
     projectForBridgedPresenterDeprecated(
         ClientId clientId, ViewportDimensions dimensions,
         PaletteReport paletteReport,

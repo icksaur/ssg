@@ -3984,7 +3984,7 @@ GitDiffScanResult EditorSession::applyGitDiffScan(GitDiffScan scan) {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyGitDiffScan(std::move(scan));
 }
-std::optional<SessionSnapshot>
+std::optional<LegacyPresentationSnapshot>
 EditorSession::projectForBridgedPresenterDeprecated(
     ClientId clientId, ViewportDimensions dimensions,
     PaletteReport paletteReport, std::optional<ViewId> expectedView,
@@ -4060,7 +4060,7 @@ EditorSession::projectForBridgedPresenterDeprecated(
                                      std::move(treeWindows));
 }
 
-std::optional<SessionSnapshot> EditorSession::present(
+std::optional<LegacyPresentationSnapshot> EditorSession::present(
     ClientId clientId, ViewportDimensions dimensions,
     PaletteReport paletteReport) {
     detail::GridProjectionState presentation;

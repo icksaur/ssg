@@ -233,7 +233,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
         runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(beforePanel.has_value());
     if (beforePanel) {
-        ASSERT_EQ(beforePanel->sections().focus, ssg::FocusTarget::Editor);
+        ASSERT_EQ(beforePanel->semantic().sections().focus, ssg::FocusTarget::Editor);
     }
 
     // Mirrors apps/ssg_main.cpp's post-primeDeferred panel dispatch: this
@@ -246,7 +246,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
         runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterPanel.has_value());
     if (afterPanel) {
-        ASSERT_EQ(afterPanel->sections().focus, ssg::FocusTarget::Panel);
+        ASSERT_EQ(afterPanel->semantic().sections().focus, ssg::FocusTarget::Panel);
     }
 
     // Mirrors apps/ssg_main.cpp's fileOpenedAtStartup re-assert: calling
@@ -256,7 +256,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
         runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(restored.has_value());
     if (restored) {
-        ASSERT_EQ(restored->sections().focus, ssg::FocusTarget::Editor);
+        ASSERT_EQ(restored->semantic().sections().focus, ssg::FocusTarget::Editor);
     }
 
     fs::remove_all(root);

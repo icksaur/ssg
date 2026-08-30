@@ -173,7 +173,7 @@ TEST(saveAsToAFreeNameSucceedsAndRetitlesTheTab) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     bool titled = false;
-    for (const auto& tab : snapshot->sections().tabs.tabs) {
+    for (const auto& tab : snapshot->semantic().sections().tabs.tabs) {
         if (tab.label.find("fresh.txt") != std::string::npos) titled = true;
     }
     ASSERT_TRUE(titled);
@@ -196,7 +196,7 @@ TEST(renameToAFreeNameMovesTheFileAndRetitlesTheTab) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     bool titled = false;
-    for (const auto& tab : snapshot->sections().tabs.tabs) {
+    for (const auto& tab : snapshot->semantic().sections().tabs.tabs) {
         if (tab.label.find("after.txt") != std::string::npos) titled = true;
     }
     ASSERT_TRUE(titled);
@@ -212,7 +212,7 @@ TEST(aRuntimeWithNoDocumentOpensAnEditableNewBuffer) {
 
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
-    const auto& tabs = snapshot->sections().tabs.tabs;
+    const auto& tabs = snapshot->semantic().sections().tabs.tabs;
     ASSERT_EQ(tabs.size(), std::size_t{1});
     ASSERT_EQ(tabs.front().label, std::string{"[new buffer]"});
 
@@ -357,7 +357,7 @@ TEST(deletingAFileClosesItsTab) {
     auto before = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(before.has_value());
     bool present = false;
-    for (const auto& tab : before->sections().tabs.tabs) {
+    for (const auto& tab : before->semantic().sections().tabs.tabs) {
         if (tab.label.find("doomed.txt") != std::string::npos) present = true;
     }
     ASSERT_TRUE(present);
@@ -366,7 +366,7 @@ TEST(deletingAFileClosesItsTab) {
 
     auto after = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(after.has_value());
-    for (const auto& tab : after->sections().tabs.tabs) {
+    for (const auto& tab : after->semantic().sections().tabs.tabs) {
         ASSERT_TRUE(tab.label.find("doomed.txt") == std::string::npos);
     }
 }
@@ -419,9 +419,9 @@ TEST(everyActiveFileMutatorIsRefusedInALiveDiffTab) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     bool liveDiffActive = false;
-    for (const auto& tab : snapshot->sections().tabs.tabs) {
+    for (const auto& tab : snapshot->semantic().sections().tabs.tabs) {
         if (tab.kind == ssg::TabKind::LiveDiff &&
-            snapshot->sections().tabs.active == tab.id) {
+            snapshot->semantic().sections().tabs.active == tab.id) {
             liveDiffActive = true;
         }
     }

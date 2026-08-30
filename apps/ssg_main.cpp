@@ -1113,7 +1113,7 @@ int main(int argc, char** argv) {
             // lags one frame before keep-visible re-settles — the same one-frame
             // clamp the editor's server-side scroll offset already has, and it
             // self-corrects on the next snapshot.
-            auto const& shell = snapshot->presentation()->shell;
+            auto const& shell = snapshot->presentation().shell;
             if (!shell.panes.empty()) {
                 picker.paneRows = static_cast<std::uint32_t>(
                     std::max(shell.panes.front().content.height, 1));
@@ -1142,7 +1142,7 @@ int main(int argc, char** argv) {
             // nullopt for a header-hosted prompt -- is what lets typed text reach
             // the picker query.
             auto const activeKind = snapshot->sections().promptStatus.activeKind;
-            auto const& activePrompt = snapshot->presentation()->prompt;
+            auto const& activePrompt = snapshot->presentation().prompt;
             bool const wasPickerOpen = pickerOpen;
             pickerOpen = activeKind == ssg::PromptKind::Palette;
             if (pickerOpen && !wasPickerOpen) {
@@ -1295,10 +1295,10 @@ int main(int argc, char** argv) {
             // scroll one line and re-extend the selection to the new edge cell, so a
             // drag held still at the edge keeps scrolling and selecting.
             std::optional<int> dragEdge;
-            if (dragging && snapshot && !snapshot->presentation()->shell.panes.empty()) {
+            if (dragging && snapshot && !snapshot->presentation().shell.panes.empty()) {
                 dragEdge = ssg::app::edge_scroll(
                     dragging, lastPointerRow,
-                    snapshot->presentation()->shell.panes.front().content);
+                    snapshot->presentation().shell.panes.front().content);
             }
             if (dragEdge) {
                 auto const ready = waitReadiness(kEdgeScrollIntervalMs, signalPipe[0], -1);

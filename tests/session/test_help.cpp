@@ -55,16 +55,16 @@ struct Harness {
 
 std::optional<ssg::TabState> activeTab(ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
-    if (!snapshot || !snapshot->sections().tabs.active) return std::nullopt;
-    for (const auto& tab : snapshot->sections().tabs.tabs) {
-        if (tab.id == *snapshot->sections().tabs.active) return tab;
+    if (!snapshot || !snapshot->semantic().sections().tabs.active) return std::nullopt;
+    for (const auto& tab : snapshot->semantic().sections().tabs.tabs) {
+        if (tab.id == *snapshot->semantic().sections().tabs.active) return tab;
     }
     return std::nullopt;
 }
 
 std::size_t tabCount(ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
-    return snapshot ? snapshot->sections().tabs.tabs.size() : 0;
+    return snapshot ? snapshot->semantic().sections().tabs.tabs.size() : 0;
 }
 
 // The rendered tab title (composedTabTitle) for the active tab, read from the
@@ -73,7 +73,7 @@ std::string activeTabNodeContent(ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {120, 24});
     if (!snapshot) return {};
     std::string content;
-    for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
+    for (const auto& node : snapshot->presentation().shell.accessibilityNodes) {
         if (node.kind == ssg::ShellNodeKind::Tab && !node.content.empty()) {
             content = node.content;  // single tab in these tests
         }
@@ -85,7 +85,7 @@ std::optional<ssg::AccessibilityNode> footerHelpNode(
     ssg::EditorSession& runtime) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {120, 24});
     if (!snapshot) return std::nullopt;
-    for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
+    for (const auto& node : snapshot->presentation().shell.accessibilityNodes) {
         if (node.kind == ssg::ShellNodeKind::FooterHint) return node;
     }
     return std::nullopt;
@@ -263,7 +263,7 @@ TEST(savingAHelpTabFailsGracefullyWithoutAPrompt) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
-        ASSERT_FALSE(snapshot->presentation()->prompt.has_value());
+        ASSERT_FALSE(snapshot->presentation().prompt.has_value());
     }
 }
 
@@ -377,7 +377,7 @@ TEST(helpTabIsHighlightedAsMarkdown) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 40});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& syntax = snapshot->sections().syntax;
+    auto const& syntax = snapshot->semantic().sections().syntax;
     // The untitled help buffer is highlighted as Markdown (not plain text)
     // because openReadOnlyTab set a language override.
     ASSERT_EQ(syntax.language().value(), std::string{"markdown"});

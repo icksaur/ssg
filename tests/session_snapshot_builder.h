@@ -1,5 +1,7 @@
 #pragma once
 
+#include "legacy_grid_frame.h"
+
 // Kind: seam.
 //
 // Builds a SessionSnapshot directly, so a test of presentation does not have to
@@ -203,9 +205,10 @@ public:
 
         ShellViewState shellView = layout.view ? *layout.view : ShellViewState{};
         ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
-        auto frame = GridFrame::fromDeprecatedSnapshot(SessionSnapshot{
-            revision_, SessionTopology{}, std::move(client),
-            std::move(sections),
+        auto frame = test::gridFrameFromLegacy(LegacyPresentationSnapshot{
+            SessionSnapshot{
+                revision_, SessionTopology{}, std::move(client),
+                std::move(sections)},
             PresentationSnapshot{std::move(viewportState), style_, std::nullopt,
                                  std::move(shellView),
                                  SelectionNavigation{firstRow_, 0,

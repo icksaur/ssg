@@ -28,14 +28,14 @@ struct CanonicalState {
 
 template <typename Snapshot>
 CanonicalState canonical(Snapshot const& snapshot) {
-    auto const& sections = snapshot.sections();
+    auto const& sections = snapshot.semantic().sections();
     auto const* tab =
         sections.tabs.tabs.empty() ? nullptr : &sections.tabs.tabs.front();
     bool wordWrap = false;
-    for (auto const& node : snapshot.presentation()->shell.accessibilityNodes) {
+    for (auto const& node : snapshot.presentation().shell.accessibilityNodes) {
         wordWrap = wordWrap || node.label == "Word wrap on";
     }
-    return {snapshot.revision(),
+    return {snapshot.semantic().revision(),
             sections.document.text,
             tab ? tab->label : std::string{},
             sections.selection.items().size(),

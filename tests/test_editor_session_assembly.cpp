@@ -141,11 +141,13 @@ TEST(fullSnapshotMatchesReplayedAggregateDelta) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
 
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
-    ASSERT_EQ(*replayed.snapshot, after);
+    ASSERT_EQ(*replayed.snapshot, after.semantic());
 }
 
 TEST(nonDocumentTransitionReplaysAndRejectsADifferentClient) {
@@ -163,11 +165,13 @@ TEST(nonDocumentTransitionReplaysAndRejectsADifferentClient) {
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), std::move(newSections));
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     ASSERT_FALSE(delta.document().has_value());
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
     ASSERT_TRUE(replayed.accepted());
-    ASSERT_EQ(*replayed.snapshot, after);
+    ASSERT_EQ(*replayed.snapshot, after.semantic());
 
     auto otherClient = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
@@ -175,7 +179,9 @@ TEST(nonDocumentTransitionReplaysAndRejectsADifferentClient) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{10}, clientView(1),
         sections(ssg::Revision{4}, "same"));
-    ASSERT_FALSE(ssg::SessionSnapshotCodec{}.replay(otherClient, delta).accepted());
+    ASSERT_FALSE(ssg::SessionSnapshotCodec{}
+                     .replay(otherClient.semantic(), delta)
+                     .accepted());
 }
 
 TEST(themeOnlyTransitionDoesNotReplaceTheUiSchema) {
@@ -196,12 +202,14 @@ TEST(themeOnlyTransitionDoesNotReplaceTheUiSchema) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), std::move(newSections));
 
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     ASSERT_TRUE(delta.theme().replacement.has_value());
     ASSERT_FALSE(delta.ui().replacement.has_value());
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
     ASSERT_TRUE(replayed.accepted());
-    ASSERT_EQ(*replayed.snapshot, after);
+    ASSERT_EQ(*replayed.snapshot, after.semantic());
 }
 
 TEST(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay) {
@@ -221,12 +229,14 @@ TEST(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), std::move(newSections));
 
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     ASSERT_TRUE(delta.document().has_value());
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
-    ASSERT_EQ(*replayed.snapshot, after);
+    ASSERT_EQ(*replayed.snapshot, after.semantic());
 }
 
 // A document's text changing WITHOUT its document revision advancing is not
@@ -254,7 +264,8 @@ TEST(aDocumentTextChangeWithoutARevisionAdvanceIsInexpressibleAsADelta) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), std::move(newSections));
 
-    ASSERT_THROWS(ssg::SessionSnapshotCodec{}.deriveDelta(before, after),
+    ASSERT_THROWS(ssg::SessionSnapshotCodec{}.deriveDelta(
+                      before.semantic(), after.semantic()),
                   std::invalid_argument);
 }
 
@@ -272,20 +283,18 @@ TEST(perClientCapabilitiesAndViewportsAreIsolated) {
                                  ssg::InvocationOrigin::Websocket},
         ssg::ViewId{11}, clientView(7), std::move(shared));
 
-    ASSERT_EQ(first.client().capabilities.size(), std::size_t{1});
-    ASSERT_TRUE(second.client().capabilities.empty());
-    ASSERT_EQ(first.presentation()->viewport.firstVisualRow, std::uint32_t{2});
-    ASSERT_EQ(second.presentation()->viewport.firstVisualRow, std::uint32_t{7});
-    ASSERT_EQ(first.sections(), second.sections());
+    ASSERT_EQ(first.semantic().client().capabilities.size(), std::size_t{1});
+    ASSERT_TRUE(second.semantic().client().capabilities.empty());
+    ASSERT_EQ(first.presentation().viewport.firstVisualRow, std::uint32_t{2});
+    ASSERT_EQ(second.presentation().viewport.firstVisualRow, std::uint32_t{7});
+    ASSERT_EQ(first.semantic().sections(), second.semantic().sections());
 }
 
-TEST(shellDeltaDetectsAPanelScrollbarOnlyChange) {
+TEST(semanticDeltaIgnoresAPanelScrollbarOnlyChange) {
     ssg::ShellViewState oldShell;
     oldShell.panel = ssg::Rect{0, 1, 24, 10};
     oldShell.panelScrollbar = ssg::Rect{23, 2, 1, 9};
     ssg::ShellViewState newShell = oldShell;
-    // Only the gutter geometry differs (e.g. a taller panel): the shell delta
-    // must not treat this as unchanged.
     newShell.panelScrollbar = ssg::Rect{23, 2, 1, 12};
 
     auto before = ssg::SessionSnapshotCodec{}.assemble(
@@ -300,19 +309,19 @@ TEST(shellDeltaDetectsAPanelScrollbarOnlyChange) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), sections(ssg::Revision{5}, "same"),
         {}, {}, std::move(newShell));
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
-    ASSERT_TRUE(delta.shell().replacement.has_value());
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
+    ASSERT_FALSE(delta.shell().replacement.has_value());
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
     ASSERT_TRUE(replayed.accepted());
-    ASSERT_EQ(*replayed.snapshot, after);
+    ASSERT_EQ(*replayed.snapshot, after.semantic());
 }
 
-TEST(shellDeltaDetectsATabHitOnlyChange) {
+TEST(semanticDeltaIgnoresATabHitOnlyChange) {
     ssg::ShellViewState oldShell;
     oldShell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0}};
     ssg::ShellViewState newShell = oldShell;
-    // A second tab opens: only the tab hit map differs. The shell delta must not
-    // treat this as unchanged (or pointer hit-testing would target a stale map).
     newShell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
                         ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
@@ -328,14 +337,16 @@ TEST(shellDeltaDetectsATabHitOnlyChange) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), sections(ssg::Revision{5}, "same"),
         {}, {}, std::move(newShell));
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
-    ASSERT_TRUE(delta.shell().replacement.has_value());
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
+    ASSERT_FALSE(delta.shell().replacement.has_value());
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
     ASSERT_TRUE(replayed.accepted());
-    ASSERT_EQ(*replayed.snapshot, after);
+    ASSERT_EQ(*replayed.snapshot, after.semantic());
 }
 
-TEST(shellDeltaDetectsAnExternalActionOnlyChange) {
+TEST(semanticDeltaIgnoresAnExternalActionOnlyChange) {
     ssg::ShellViewState oldShell;
     ssg::ShellViewState newShell = oldShell;
     newShell.externalActions = {
@@ -353,11 +364,13 @@ TEST(shellDeltaDetectsAnExternalActionOnlyChange) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), sections(ssg::Revision{5}, "same"),
         {}, {}, std::move(newShell));
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
-    ASSERT_TRUE(delta.shell().replacement.has_value());
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
+    ASSERT_FALSE(delta.shell().replacement.has_value());
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
     ASSERT_TRUE(replayed.accepted());
-    ASSERT_EQ(*replayed.snapshot, after);
+    ASSERT_EQ(*replayed.snapshot, after.semantic());
 }
 
 static_assert(!std::is_copy_constructible_v<ssg::SessionSnapshot>);
@@ -374,8 +387,8 @@ int main() {
     RUN(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay);
     RUN(aDocumentTextChangeWithoutARevisionAdvanceIsInexpressibleAsADelta);
     RUN(perClientCapabilitiesAndViewportsAreIsolated);
-    RUN(shellDeltaDetectsAPanelScrollbarOnlyChange);
-    RUN(shellDeltaDetectsATabHitOnlyChange);
-    RUN(shellDeltaDetectsAnExternalActionOnlyChange);
+    RUN(semanticDeltaIgnoresAPanelScrollbarOnlyChange);
+    RUN(semanticDeltaIgnoresATabHitOnlyChange);
+    RUN(semanticDeltaIgnoresAnExternalActionOnlyChange);
     return failed == 0 ? 0 : 1;
 }

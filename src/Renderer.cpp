@@ -188,7 +188,7 @@ void paintDiagnostics(CellGrid& grid, GridFrame const& snapshot,
     auto const& lsp = snapshot.sections().lspSync;
     if (lsp.documents.empty()) return;
     auto const& document = snapshot.sections().document;
-    auto const& viewport = snapshot.presentation()->viewport;
+    auto const& viewport = snapshot.presentation().viewport;
 
     // Highest severity wins per cell, so an error is never hidden by a hint
     // that happens to be painted after it.
@@ -254,7 +254,7 @@ void paintDiagnostics(CellGrid& grid, GridFrame const& snapshot,
 void paintHyperlinks(CellGrid& grid, GridFrame const& snapshot,
                       Rect const& content) {
     auto const& text = snapshot.sections().document.text;
-    auto const& viewport = snapshot.presentation()->viewport;
+    auto const& viewport = snapshot.presentation().viewport;
     if (text.empty() || viewport.hitTargets.empty()) return;
 
     // Where a URL stops.  Whitespace and the C0 range always end it; the closing
@@ -730,7 +730,7 @@ void paintDocument(CellGrid& grid, GridFrame const& snapshot,
                     Rect const& content, ThemeSnapshot const& theme,
                     std::uint8_t background, Style const& style,
                     LineLayoutCache* lineCache) {
-    auto const& viewport = snapshot.presentation()->viewport;
+    auto const& viewport = snapshot.presentation().viewport;
     auto const activeDiff =
         snapshot.sections().diff.fileForDocument(snapshot.sections().document);
     std::unordered_map<std::size_t, DiffTint> rowTints;
@@ -1053,7 +1053,7 @@ void paintScrollbar(CellGrid& grid, PaneGeometry const& pane,
 void paintLineNumbers(CellGrid& grid, GridFrame const& snapshot,
                        PaneGeometry const& pane, ThemeSnapshot const& theme) {
     if (pane.lineNumbers.width <= 0) return;
-    auto const& viewport = snapshot.presentation()->viewport;
+    auto const& viewport = snapshot.presentation().viewport;
     auto const numberFg = semanticIndex(theme, SemanticRole::LineNumber);
     auto const numberBg = semanticIndex(theme, SemanticRole::LineNumberBackground);
     auto const currentFg = semanticIndex(theme, SemanticRole::CurrentLineNumber);
@@ -1244,14 +1244,14 @@ std::string CellGrid::canonical() const {
 
 CellGrid Renderer::render(GridFrame const& snapshot,
                           LineLayoutCache* lineCache) const {
-    auto const& shell = snapshot.presentation()->shell;
+    auto const& shell = snapshot.presentation().shell;
     auto const& theme = snapshot.sections().theme;
-    auto const& style = snapshot.presentation()->style;
+    auto const& style = snapshot.presentation().style;
     if (shell.viewport.columns <= 0 || shell.viewport.rows <= 0) {
         // The shell layout was declined (viewport below the 20x4 minimum): the
         // library renders the too-small placeholder, sized from the terminal
         // dimensions the client viewport carries (M11-L).
-        auto const& dimensions = snapshot.presentation()->viewport.dimensions;
+        auto const& dimensions = snapshot.presentation().viewport.dimensions;
         return renderTooSmall(
             GridSize{static_cast<int>(dimensions.columns),
                      static_cast<int>(dimensions.rows)},
@@ -1328,7 +1328,7 @@ CellGrid Renderer::render(GridFrame const& snapshot,
         // active provider's scroll offset and thumb. Empty when no provider or no
         // presentation (a native-layout client never calls this renderer).
         static TreeWindow const emptyWindow{};
-        auto const& windows = snapshot.presentation()->treeWindows;
+        auto const& windows = snapshot.presentation().treeWindows;
         auto const& window = windows.empty() ? emptyWindow : windows.front();
         paintPanelTree(grid, *shell.panel, shell.panelScrollbar,
                          snapshot.sections().tree, window, theme,
@@ -1351,12 +1351,12 @@ CellGrid Renderer::render(GridFrame const& snapshot,
             paintDiagnostics(grid, snapshot, shell.panes.front().content);
             paintHyperlinks(grid, snapshot, shell.panes.front().content);
             paintLineNumbers(grid, snapshot, shell.panes.front(), theme);
-            paintScrollbar(grid, shell.panes.front(), snapshot.presentation()->viewport,
+            paintScrollbar(grid, shell.panes.front(), snapshot.presentation().viewport,
                             theme, documentBackground, style);
 
             // Paint the reserved prompt rows (find/replace/settings) and place
             // the hardware cursor at the query when the prompt is focused.
-            auto const& prompt = snapshot.presentation()->prompt;
+            auto const& prompt = snapshot.presentation().prompt;
             if (prompt) {
                 const auto promptForegroundRole =
                     nodeForeground(ui, kFooterPromptNodeId,
@@ -1383,7 +1383,7 @@ CellGrid Renderer::render(GridFrame const& snapshot,
             // focused.
             if (snapshot.sections().focus == FocusTarget::Editor) {
                 auto const& content = shell.panes.front().content;
-                auto const& viewport = snapshot.presentation()->viewport;
+                auto const& viewport = snapshot.presentation().viewport;
                 auto const& selections =
                     snapshot.sections().selection;
                 auto const& primary = selections.primary();

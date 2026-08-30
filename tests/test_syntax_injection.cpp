@@ -109,7 +109,7 @@ TEST(injectedParserDrivesHighlighting) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot.has_value()) return;
     ASSERT_TRUE(*calls > 0);
-    ASSERT_TRUE(hasScope(snapshot->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_TRUE(hasScope(snapshot->semantic().sections().syntax, SyntaxScope::Keyword));
 }
 
 // Without an injected parser the runtime falls back to plain-text spans.
@@ -139,7 +139,7 @@ TEST(nullParserYieldsPlainText) {
     auto snapshot = runtime.present(ClientId{1}, ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot.has_value()) return;
-    ASSERT_FALSE(hasScope(snapshot->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_FALSE(hasScope(snapshot->semantic().sections().syntax, SyntaxScope::Keyword));
 }
 
 // With deferred enrichment enabled, a grammar-backed small file is still parsed
@@ -172,7 +172,7 @@ TEST(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame) {
     ASSERT_TRUE(first.has_value());
     if (!first.has_value()) return;
     ASSERT_TRUE(*calls > 0);
-    ASSERT_TRUE(hasScope(first->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_TRUE(hasScope(first->semantic().sections().syntax, SyntaxScope::Keyword));
 }
 
 // Large files stay deferred under deferEnrichment even with an available grammar:
@@ -206,14 +206,14 @@ TEST(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred) {
     ASSERT_TRUE(first.has_value());
     if (!first.has_value()) return;
     ASSERT_EQ(*calls, std::size_t{0});
-    ASSERT_FALSE(hasScope(first->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_FALSE(hasScope(first->semantic().sections().syntax, SyntaxScope::Keyword));
 
     runtime.primeDeferred();
     auto after = runtime.present(ClientId{1}, ViewportDimensions{80, 12});
     ASSERT_TRUE(after.has_value());
     if (!after.has_value()) return;
     ASSERT_TRUE(*calls > 0);
-    ASSERT_TRUE(hasScope(after->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_TRUE(hasScope(after->semantic().sections().syntax, SyntaxScope::Keyword));
 }
 
 // Syntax state is document-owned: switching back to a deferred large file must
@@ -258,7 +258,7 @@ TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
     auto firstA = runtime.present(ClientId{1}, ViewportDimensions{80, 12});
     ASSERT_TRUE(firstA.has_value());
     if (!firstA.has_value()) return;
-    ASSERT_FALSE(hasScope(firstA->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_FALSE(hasScope(firstA->semantic().sections().syntax, SyntaxScope::Keyword));
 
     ASSERT_TRUE(runtime
                     .dispatch(ClientId{1},
@@ -279,7 +279,7 @@ TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
     auto secondA = runtime.present(ClientId{1}, ViewportDimensions{80, 12});
     ASSERT_TRUE(secondA.has_value());
     if (!secondA.has_value()) return;
-    ASSERT_FALSE(hasScope(secondA->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_FALSE(hasScope(secondA->semantic().sections().syntax, SyntaxScope::Keyword));
 }
 
 TEST(closingTabDestroysDocumentRuntimeState) {

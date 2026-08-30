@@ -8,6 +8,7 @@
 // SSG_REGEN_GOLDEN=1.
 
 #include "../test_helpers.h"
+#include "../legacy_grid_frame.h"
 
 #include <ssg/EditorSession.h>
 #include <ssg/Renderer.h>
@@ -66,7 +67,7 @@ std::string captureGridMatrix() {
             return;
         }
         auto frame =
-            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+            ssg::test::gridFrameFromLegacy(std::move(*snapshot));
         std::istringstream lines{
             ssg::Renderer{}.render(*frame).canonical()};
         std::string line;

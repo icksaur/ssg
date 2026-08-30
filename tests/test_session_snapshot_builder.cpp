@@ -10,6 +10,7 @@
 // production projection, this fails and the cheap tests stay honest.
 
 #include "session_snapshot_builder.h"
+#include "legacy_grid_frame.h"
 #include "test_helpers.h"
 
 #include <ssg/EditorSession.h>
@@ -79,7 +80,7 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
                      .build();
 
     auto realFrame =
-        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*real));
+        ssg::test::gridFrameFromLegacy(std::move(*real));
     ASSERT_TRUE(realFrame.has_value());
     if (!realFrame) return;
     auto const realGrid = ssg::Renderer{}.render(*realFrame);
@@ -107,8 +108,8 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
     // The projections agree field-for-field: same visual row count, same first
     // row, same scrollbar metrics.  This is the part that would silently drift
     // if the builder reimplemented projection instead of calling it.
-    auto const& realViewport = realFrame->presentation()->viewport;
-    auto const& builtViewport = built.presentation()->viewport;
+    auto const& realViewport = realFrame->presentation().viewport;
+    auto const& builtViewport = built.presentation().viewport;
     ASSERT_EQ(realViewport.totalVisualRows, builtViewport.totalVisualRows);
     ASSERT_EQ(realViewport.firstVisualRow, builtViewport.firstVisualRow);
     ASSERT_EQ(realViewport.visibleRows.size(), builtViewport.visibleRows.size());
@@ -145,7 +146,7 @@ TEST(builderSettersReachTheRenderedScreen) {
                             return s;
                         }())
                         .build();
-    ASSERT_EQ(snapshot.presentation()->style.unrenderable, std::string{"?"});
+    ASSERT_EQ(snapshot.presentation().style.unrenderable, std::string{"?"});
 
     // And the caret is placed at a consistent document position.
     auto positioned = ssg::test::SessionSnapshotBuilder{}

@@ -189,8 +189,7 @@ class SessionSnapshot {
 public:
     SessionSnapshot(Revision revision, SessionTopology topology,
                     ClientSnapshotState client,
-                    SessionSnapshotSections sections,
-                    std::optional<PresentationSnapshot> presentation = std::nullopt);
+                    SessionSnapshotSections sections);
 
     SessionSnapshot(SessionSnapshot const&) = delete;
     SessionSnapshot& operator=(SessionSnapshot const&) = delete;
@@ -207,11 +206,6 @@ public:
     [[nodiscard]] SessionSnapshotSections const& sections() const noexcept {
         return sections_;
     }
-    [[nodiscard]] std::optional<PresentationSnapshot> const& presentation()
-        const noexcept {
-        return presentation_;
-    }
-
     bool operator==(SessionSnapshot const&) const;
 
   private:
@@ -219,7 +213,47 @@ public:
     SessionTopology topology_;
     ClientSnapshotState client_;
     SessionSnapshotSections sections_;
-    std::optional<PresentationSnapshot> presentation_;
+};
+
+// CONTRACT: LegacyPresentationSnapshot exists only for EditorSession::present
+// and the legacy snapshot codec. Plan 6 removes this compatibility envelope
+// when kSemanticUiWireVersion becomes active.
+class LegacyPresentationSnapshot {
+public:
+    LegacyPresentationSnapshot(SessionSnapshot semantic,
+                               PresentationSnapshot presentation)
+        : semantic_{std::move(semantic)},
+          presentation_{std::move(presentation)} {}
+    LegacyPresentationSnapshot(
+        Revision revision, SessionTopology topology,
+        ClientSnapshotState client, SessionSnapshotSections sections,
+        PresentationSnapshot presentation)
+        : LegacyPresentationSnapshot{
+              SessionSnapshot{revision, std::move(topology),
+                              std::move(client), std::move(sections)},
+              std::move(presentation)} {}
+    LegacyPresentationSnapshot(LegacyPresentationSnapshot const&) = delete;
+    LegacyPresentationSnapshot& operator=(
+        LegacyPresentationSnapshot const&) = delete;
+    LegacyPresentationSnapshot(LegacyPresentationSnapshot&&) noexcept = default;
+    LegacyPresentationSnapshot& operator=(
+        LegacyPresentationSnapshot&&) noexcept = default;
+
+    [[nodiscard]] SessionSnapshot const& semantic() const noexcept {
+        return semantic_;
+    }
+    [[nodiscard]] PresentationSnapshot const& presentation() const noexcept {
+        return presentation_;
+    }
+    bool operator==(LegacyPresentationSnapshot const& other) const {
+        return semantic_ == other.semantic_ &&
+               presentation_ == other.presentation_;
+    }
+
+private:
+    friend class GridFrame;
+    SessionSnapshot semantic_;
+    PresentationSnapshot presentation_;
 };
 
 struct SettingsSectionDelta {
@@ -505,7 +539,7 @@ struct SessionReplayResult {
 
 class SessionSnapshotCodec {
 public:
-    [[nodiscard]] SessionSnapshot assemble(
+    [[nodiscard]] LegacyPresentationSnapshot assemble(
         Revision revision, SessionTopology topology,
         InvocationPrincipal const& principal, ViewId viewId,
         ViewportViewState viewport, SessionSnapshotSections sections,

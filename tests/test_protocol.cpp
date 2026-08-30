@@ -752,11 +752,33 @@ TEST(sessionSnapshotRoundTripsThroughTheWire) {
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), sections(ssg::Revision{4}, "alpha"));
 
-    auto const bytes = ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot);
-    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(bytes);
+    auto const bytes =
+        ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(snapshot);
+    auto const decoded =
+        ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     ASSERT_EQ(*decoded.snapshot, snapshot);
+}
+
+TEST(semanticSnapshotEncodingUsesFixedLegacyPresentationDefaults) {
+    auto shared = sections(ssg::Revision{4}, "alpha");
+    auto first = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), shared);
+    auto second = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(7), std::move(shared));
+
+    ASSERT_EQ(ssg::ProtocolCodec{}.encodeSessionSnapshot(first.semantic()),
+              ssg::ProtocolCodec{}.encodeSessionSnapshot(second.semantic()));
+    ASSERT_TRUE(
+        ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(first) !=
+        ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(second));
 }
 
 // The additive selected field is optional on the wire: an absent selection decodes
@@ -779,7 +801,7 @@ TEST(anAbsentSelectedExternalIdDecodesAsNone) {
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), std::move(sect));
     auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     ASSERT_FALSE(
@@ -806,7 +828,7 @@ TEST(aSelectedExternalIdMustNameAFileOrTheSnapshotDecodeFailsLoud) {
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), std::move(sect));
     auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
     ASSERT_FALSE(decoded.accepted());
 }
 
@@ -826,7 +848,7 @@ TEST(externalActionAffordanceMustMatchItsAuthoritativeIdentity) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3), std::move(sect));
     auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
     ASSERT_FALSE(decoded.accepted());
 }
 
@@ -847,7 +869,7 @@ TEST(gitTreeAffordanceMustMatchItsAuthoritativeIdentity) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3), std::move(sect));
     auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
     ASSERT_FALSE(decoded.accepted());
 }
 
@@ -863,7 +885,7 @@ TEST(externalFocusHeldIsAdditiveAbsentDecodesFalse) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3), sect);
     auto const decodedQuiet = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(quiet));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(quiet.semantic()));
     ASSERT_TRUE(decodedQuiet.accepted());
     ASSERT_FALSE(decodedQuiet.snapshot->sections().externalFocusHeld);
     // The legacy focus field is always one an old three-value decode accepts.
@@ -878,7 +900,7 @@ TEST(externalFocusHeldIsAdditiveAbsentDecodesFalse) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3), sect);
     auto const decodedHeld = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(held));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(held.semantic()));
     ASSERT_TRUE(decodedHeld.accepted());
     ASSERT_TRUE(decodedHeld.snapshot->sections().externalFocusHeld);
 }
@@ -899,7 +921,8 @@ TEST(externalFocusHeldFlipIsADeltaThatRoundTrips) {
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3), afterSections);
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     ASSERT_TRUE(delta.externalFocusHeld().has_value());
     ASSERT_TRUE(*delta.externalFocusHeld());
 
@@ -907,7 +930,8 @@ TEST(externalFocusHeldFlipIsADeltaThatRoundTrips) {
         ssg::ProtocolCodec{}.encodeSessionDelta(delta));
     ASSERT_TRUE(decodedDelta.delta.has_value());
     auto replayed =
-        ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(),
+                                           *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot->sections().externalFocusHeld);
 }
@@ -953,12 +977,14 @@ TEST(sessionSnapshotRoundTripsANonDefaultStyle) {
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), std::move(snapshotSections), style);
 
-    auto const bytes = ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot);
-    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(bytes);
+    auto const bytes =
+        ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(snapshot);
+    auto const decoded =
+        ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
-    ASSERT_TRUE(decoded.snapshot->presentation()->style == style);
+    ASSERT_TRUE(decoded.snapshot->presentation().style == style);
 }
 
 // The medium-agnostic ui section survives a snapshot wire round-trip, and a
@@ -971,16 +997,18 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), sectionsWithUi(ssg::Revision{4}, "alpha"));
-    ASSERT_TRUE(!std::get<ssg::UiContainer>(snapshot.sections().ui.root.content)
+    ASSERT_TRUE(!std::get<ssg::UiContainer>(
+                     snapshot.semantic().sections().ui.root.content)
                      .children.empty());
-    ASSERT_TRUE(!snapshot.sections().uiState.nodes.empty());
+    ASSERT_TRUE(!snapshot.semantic().sections().uiState.nodes.empty());
 
     auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
     ASSERT_TRUE(decoded.snapshot.has_value());
-    ASSERT_TRUE(decoded.snapshot->sections().ui == snapshot.sections().ui);
+    ASSERT_TRUE(decoded.snapshot->sections().ui ==
+                snapshot.semantic().sections().ui);
     ASSERT_TRUE(decoded.snapshot->sections().uiState ==
-                snapshot.sections().uiState);
+                snapshot.semantic().sections().uiState);
 
     // A delta from a no-ui base to the ui snapshot carries the ui replacement.
     auto before = ssg::SessionSnapshotCodec{}.assemble(
@@ -995,7 +1023,8 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), sectionsWithUi(ssg::Revision{5}, "alpha"));
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     ASSERT_TRUE(delta.ui().replacement.has_value());
     ASSERT_TRUE(delta.uiState().replacement.has_value());
 
@@ -1003,10 +1032,13 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
         ssg::ProtocolCodec{}.encodeSessionDelta(delta));
     ASSERT_TRUE(decodedDelta.delta.has_value());
     auto replayed =
-        ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(),
+                                           *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
-    ASSERT_TRUE(replayed.snapshot->sections().ui == after.sections().ui);
-    ASSERT_TRUE(replayed.snapshot->sections().uiState == after.sections().uiState);
+    ASSERT_TRUE(replayed.snapshot->sections().ui ==
+                after.semantic().sections().ui);
+    ASSERT_TRUE(replayed.snapshot->sections().uiState ==
+                after.semantic().sections().uiState);
 }
 
 // The palette section (candidate universe + matcher parameters) survives a snapshot
@@ -1029,16 +1061,19 @@ TEST(sessionDeltaCarriesThePaletteSection) {
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3), afterSections);
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     ASSERT_TRUE(delta.palette().replacement.has_value());
 
     auto const decodedDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(delta));
     ASSERT_TRUE(decodedDelta.delta.has_value());
     auto replayed =
-        ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(),
+                                           *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
-    ASSERT_TRUE(replayed.snapshot->sections().palette == after.sections().palette);
+    ASSERT_TRUE(replayed.snapshot->sections().palette ==
+                after.semantic().sections().palette);
 }
 
 // The additive PromptView section: it survives a snapshot round-trip when present,
@@ -1081,36 +1116,40 @@ TEST(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone) {
 
     // Present round-trips whole; absent decodes to none.
     auto const decodedOpen = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(open));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(open.semantic()));
     ASSERT_TRUE(decodedOpen.snapshot.has_value());
     ASSERT_TRUE(decodedOpen.snapshot->sections().promptView == view);
     auto const decodedClosed = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(closedLow));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(closedLow.semantic()));
     ASSERT_TRUE(decodedClosed.snapshot.has_value());
     ASSERT_FALSE(decodedClosed.snapshot->sections().promptView.has_value());
 
     // A delta opening the prompt carries it and replays to the open view.
-    auto openDelta = ssg::SessionSnapshotCodec{}.deriveDelta(closedLow, open);
+    auto openDelta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        closedLow.semantic(), open.semantic());
     ASSERT_TRUE(openDelta.promptView().changed);
     ASSERT_TRUE(openDelta.promptView().replacement.has_value());
     auto const decodedOpenDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(openDelta));
     ASSERT_TRUE(decodedOpenDelta.delta.has_value());
     auto openReplay =
-        ssg::SessionSnapshotCodec{}.replay(closedLow, *decodedOpenDelta.delta);
+        ssg::SessionSnapshotCodec{}.replay(closedLow.semantic(),
+                                           *decodedOpenDelta.delta);
     ASSERT_TRUE(openReplay.accepted());
     ASSERT_TRUE(openReplay.snapshot->sections().promptView == view);
 
     // A delta closing the prompt is changed with NO replacement and replays to
     // none -- a null replacement means closed, never "unchanged".
-    auto closeDelta = ssg::SessionSnapshotCodec{}.deriveDelta(open, closedHigh);
+    auto closeDelta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        open.semantic(), closedHigh.semantic());
     ASSERT_TRUE(closeDelta.promptView().changed);
     ASSERT_FALSE(closeDelta.promptView().replacement.has_value());
     auto const decodedCloseDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(closeDelta));
     ASSERT_TRUE(decodedCloseDelta.delta.has_value());
     auto closeReplay =
-        ssg::SessionSnapshotCodec{}.replay(open, *decodedCloseDelta.delta);
+        ssg::SessionSnapshotCodec{}.replay(open.semantic(),
+                                           *decodedCloseDelta.delta);
     ASSERT_TRUE(closeReplay.accepted());
     ASSERT_FALSE(closeReplay.snapshot->sections().promptView.has_value());
 }
@@ -1150,36 +1189,40 @@ TEST(noticeViewSectionIsAdditiveAndDecodesAbsentAsNone) {
 
     // Present round-trips whole; absent decodes to none.
     auto const decodedRaised = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(raised));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(raised.semantic()));
     ASSERT_TRUE(decodedRaised.snapshot.has_value());
     ASSERT_TRUE(decodedRaised.snapshot->sections().noticeView == view);
     auto const decodedQuiet = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(quietLow));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(quietLow.semantic()));
     ASSERT_TRUE(decodedQuiet.snapshot.has_value());
     ASSERT_FALSE(decodedQuiet.snapshot->sections().noticeView.has_value());
 
     // A delta raising the notice carries it and replays to the raised view.
-    auto raiseDelta = ssg::SessionSnapshotCodec{}.deriveDelta(quietLow, raised);
+    auto raiseDelta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        quietLow.semantic(), raised.semantic());
     ASSERT_TRUE(raiseDelta.noticeView().changed);
     ASSERT_TRUE(raiseDelta.noticeView().replacement.has_value());
     auto const decodedRaiseDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(raiseDelta));
     ASSERT_TRUE(decodedRaiseDelta.delta.has_value());
     auto raiseReplay =
-        ssg::SessionSnapshotCodec{}.replay(quietLow, *decodedRaiseDelta.delta);
+        ssg::SessionSnapshotCodec{}.replay(quietLow.semantic(),
+                                           *decodedRaiseDelta.delta);
     ASSERT_TRUE(raiseReplay.accepted());
     ASSERT_TRUE(raiseReplay.snapshot->sections().noticeView == view);
 
     // A delta clearing the notice is changed with NO replacement and replays to
     // none -- a null replacement means cleared, never "unchanged".
-    auto clearDelta = ssg::SessionSnapshotCodec{}.deriveDelta(raised, quietHigh);
+    auto clearDelta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        raised.semantic(), quietHigh.semantic());
     ASSERT_TRUE(clearDelta.noticeView().changed);
     ASSERT_FALSE(clearDelta.noticeView().replacement.has_value());
     auto const decodedClearDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(clearDelta));
     ASSERT_TRUE(decodedClearDelta.delta.has_value());
     auto clearReplay =
-        ssg::SessionSnapshotCodec{}.replay(raised, *decodedClearDelta.delta);
+        ssg::SessionSnapshotCodec{}.replay(raised.semantic(),
+                                           *decodedClearDelta.delta);
     ASSERT_TRUE(clearReplay.accepted());
     ASSERT_FALSE(clearReplay.snapshot->sections().noticeView.has_value());
 }
@@ -1197,7 +1240,7 @@ TEST(presentNoticeViewRejectsDegenerateContentAtDecode) {
                                      ssg::InvocationOrigin::InProcess},
             ssg::ViewId{9}, clientView(3), std::move(sect));
         return ssg::ProtocolCodec{}.decodeSessionSnapshot(
-            ssg::ProtocolCodec{}.encodeSessionSnapshot(snap));
+            ssg::ProtocolCodec{}.encodeSessionSnapshot(snap.semantic()));
     };
     ASSERT_FALSE(decodeSnapshotWith(
                      ssg::NoticeView{"", {{"a", "b", "c"}}}).snapshot.has_value());
@@ -1219,7 +1262,7 @@ TEST(snapshotDecodeRejectsNonCorrespondingPresence) {
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), std::move(badSections));
     auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
     ASSERT_FALSE(decoded.snapshot.has_value());
 }
 
@@ -1230,19 +1273,19 @@ TEST(accessibilityNodeStatusInvocationRoundTripsWhenPresent) {
     shell.accessibilityNodes.push_back(
         {ssg::ShellNodeKind::FooterAction, "dismiss", "Dismiss", {1, 7, 7, 1},
          ssg::SemanticRole::StatusInfo, "Dismiss", std::nullopt, invocation});
-    ssg::SessionSnapshot snapshot{
+    ssg::LegacyPresentationSnapshot snapshot{
         ssg::Revision{4}, ssg::SessionTopology{},
         ssg::ClientSnapshotState{ssg::ClientId{7}, ssg::ViewId{9}, {}},
         sections(ssg::Revision{4}, "alpha"),
         ssg::PresentationSnapshot{clientView(0), ssg::Style{}, std::nullopt,
                                   std::move(shell),
                                   ssg::SelectionNavigation{}}};
-    auto decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    auto decoded = ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(
+        ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     auto const& nodes =
-        decoded.snapshot->presentation()->shell.accessibilityNodes;
+        decoded.snapshot->presentation().shell.accessibilityNodes;
     ASSERT_EQ(nodes.size(), std::size_t{1});
     ASSERT_EQ(nodes[0].statusInvocation, invocation);
 }
@@ -1253,19 +1296,19 @@ TEST(accessibilityNodeWithoutStatusInvocationRoundTripsAsAbsent) {
     shell.accessibilityNodes.push_back(
         {ssg::ShellNodeKind::FooterField, "field", "Field", {1, 7, 7, 1},
          ssg::SemanticRole::Footer, "Field", std::string{"field.command"}});
-    ssg::SessionSnapshot snapshot{
+    ssg::LegacyPresentationSnapshot snapshot{
         ssg::Revision{4}, ssg::SessionTopology{},
         ssg::ClientSnapshotState{ssg::ClientId{7}, ssg::ViewId{9}, {}},
         sections(ssg::Revision{4}, "alpha"),
         ssg::PresentationSnapshot{clientView(0), ssg::Style{}, std::nullopt,
                                   std::move(shell),
                                   ssg::SelectionNavigation{}}};
-    auto decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    auto decoded = ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(
+        ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     auto const& nodes =
-        decoded.snapshot->presentation()->shell.accessibilityNodes;
+        decoded.snapshot->presentation().shell.accessibilityNodes;
     ASSERT_EQ(nodes.size(), std::size_t{1});
     ASSERT_FALSE(nodes[0].statusInvocation.has_value());
 }
@@ -1293,10 +1336,12 @@ TEST(replayRejectsADeltaThatReplacesOnlyTheSchema) {
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), afterSections);
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     ASSERT_TRUE(delta.ui().replacement.has_value());
     ASSERT_FALSE(delta.uiPresence().replacement.has_value());
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
     ASSERT_FALSE(replayed.accepted());
 }
 
@@ -1313,16 +1358,18 @@ TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(5), std::move(afterSections));
 
-    auto const delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto const delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     auto const bytes = ssg::ProtocolCodec{}.encodeSessionDelta(delta);
     auto decoded = ssg::ProtocolCodec{}.decodeSessionDelta(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.delta.has_value());
 
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, *decoded.delta);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(
+        before.semantic(), *decoded.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
-    ASSERT_EQ(*replayed.snapshot, after);
+    ASSERT_EQ(*replayed.snapshot, after.semantic());
 }
 
 TEST(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta) {
@@ -1346,29 +1393,28 @@ TEST(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta) {
         ssg::ViewId{9}, projectedView,
         sections(ssg::Revision{5}, "text"));
 
-    const auto snapshotDecoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(after));
+    const auto snapshotDecoded =
+        ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(
+            ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(after));
     ASSERT_TRUE(snapshotDecoded.accepted());
     ASSERT_TRUE(snapshotDecoded.snapshot.has_value());
     if (snapshotDecoded.snapshot) {
-        ASSERT_EQ(snapshotDecoded.snapshot->presentation()->viewport.rowProjection,
+        ASSERT_EQ(snapshotDecoded.snapshot->presentation().viewport.rowProjection,
                   projectedView.rowProjection);
     }
 
-    const auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    const auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     const auto deltaDecoded = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(delta));
     ASSERT_TRUE(deltaDecoded.accepted());
     ASSERT_TRUE(deltaDecoded.delta.has_value());
     if (!deltaDecoded.delta) return;
     auto replayed =
-        ssg::SessionSnapshotCodec{}.replay(before, *deltaDecoded.delta);
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(),
+                                           *deltaDecoded.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
-    if (replayed.snapshot) {
-        ASSERT_EQ(replayed.snapshot->presentation()->viewport.rowProjection,
-                  projectedView.rowProjection);
-    }
 }
 
 TEST(diffWordRangesRoundTripThroughSnapshotAndDelta) {
@@ -1396,29 +1442,31 @@ TEST(diffWordRangesRoundTripThroughSnapshotAndDelta) {
         ssg::ViewId{9}, clientView(0),
         withWordRanges(ssg::Revision{5}, "words"));
     const auto decodedSnapshot = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
     ASSERT_TRUE(decodedSnapshot.accepted());
     ASSERT_TRUE(decodedSnapshot.snapshot.has_value());
     if (!decodedSnapshot.snapshot) return;
-    ASSERT_EQ(*decodedSnapshot.snapshot, snapshot);
+    ASSERT_EQ(*decodedSnapshot.snapshot, snapshot.semantic());
 
     auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(0), sections(ssg::Revision{4}, "words"));
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, snapshot);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), snapshot.semantic());
     const auto decodedDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(delta));
     ASSERT_TRUE(decodedDelta.accepted());
     ASSERT_TRUE(decodedDelta.delta.has_value());
     if (!decodedDelta.delta) return;
     auto replayed =
-        ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(),
+                                           *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     if (replayed.snapshot) {
-        ASSERT_EQ(*replayed.snapshot, snapshot);
+        ASSERT_EQ(*replayed.snapshot, snapshot.semantic());
     }
 }
 
@@ -1437,20 +1485,24 @@ TEST(twoClientCapabilityAndViewportIsolationSurvivesTheWire) {
         ssg::ViewId{11}, clientView(7), std::move(shared));
 
     auto const firstDecoded =
-        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(first));
+        ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(
+            ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(first));
     auto const secondDecoded =
-        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(second));
+        ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(
+            ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(second));
     ASSERT_TRUE(firstDecoded.accepted());
     ASSERT_TRUE(secondDecoded.accepted());
 
-    ASSERT_EQ(firstDecoded.snapshot->client().capabilities.size(),
+    ASSERT_EQ(firstDecoded.snapshot->semantic().client().capabilities.size(),
              std::size_t{1});
-    ASSERT_TRUE(secondDecoded.snapshot->client().capabilities.empty());
-    ASSERT_EQ(firstDecoded.snapshot->presentation()->viewport.firstVisualRow,
+    ASSERT_TRUE(
+        secondDecoded.snapshot->semantic().client().capabilities.empty());
+    ASSERT_EQ(firstDecoded.snapshot->presentation().viewport.firstVisualRow,
              std::uint32_t{2});
-    ASSERT_EQ(secondDecoded.snapshot->presentation()->viewport.firstVisualRow,
+    ASSERT_EQ(secondDecoded.snapshot->presentation().viewport.firstVisualRow,
              std::uint32_t{7});
-    ASSERT_EQ(firstDecoded.snapshot->sections(), secondDecoded.snapshot->sections());
+    ASSERT_EQ(firstDecoded.snapshot->semantic().sections(),
+              secondDecoded.snapshot->semantic().sections());
 }
 
 TEST(sessionSnapshotRoundTripsTreeScrollFields) {
@@ -1485,22 +1537,24 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
         ssg::ViewId{9}, clientView(3), std::move(sectionsValue), {}, {},
         std::move(shell), {}, {treeWindow});
     auto const decoded =
-        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(
+            ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
     // Whole-section equality proves the semantic tree survives the wire.
-    ASSERT_EQ(decoded.snapshot->sections().tree, snapshot.sections().tree);
+    ASSERT_EQ(decoded.snapshot->semantic().sections().tree,
+              snapshot.semantic().sections().tree);
     // And the presentation tree window round-trips.
-    auto const& w = decoded.snapshot->presentation()->treeWindows.front();
+    auto const& w = decoded.snapshot->presentation().treeWindows.front();
     ASSERT_EQ(w.firstVisible, std::uint32_t{3});
     ASSERT_EQ(w.scrollbar, ssg::Viewport{}.scrollbarMetrics(40, 9, 3));
     ASSERT_EQ(w.visibleNodeIds.size(), std::size_t{2});
-    ASSERT_TRUE(decoded.snapshot->presentation()->shell.panelScrollbar.has_value());
-    ASSERT_EQ(decoded.snapshot->presentation()->shell.panelScrollbar,
-              snapshot.presentation()->shell.panelScrollbar);
-    ASSERT_EQ(decoded.snapshot->presentation()->shell.tabHits,
-              snapshot.presentation()->shell.tabHits);
+    ASSERT_TRUE(decoded.snapshot->presentation().shell.panelScrollbar.has_value());
+    ASSERT_EQ(decoded.snapshot->presentation().shell.panelScrollbar,
+              snapshot.presentation().shell.panelScrollbar);
+    ASSERT_EQ(decoded.snapshot->presentation().shell.tabHits,
+              snapshot.presentation().shell.tabHits);
 }
 
 // ---------------------------------------------------------------------------
@@ -2175,10 +2229,9 @@ canonicalClientInputFixtures() {
     };
 }
 
-// Regenerate the canonical session_snapshot/session_delta wire goldens from the
-// same objects the round-trip tests build.  Gated on SSG_REGEN_PROTOCOL_FIXTURES
-// so a wire-format change (e.g. a new ViewportViewState field) can re-lock the
-// goldens: `SSG_REGEN_PROTOCOL_FIXTURES=1 ./build/test_protocol`.
+// Regenerate active protocol goldens. The frozen legacy session delta is
+// intentionally excluded because semantic derivation no longer produces its
+// presentation fields.
 TEST(regenerateCanonicalFixtures) {
     if (std::getenv("SSG_REGEN_PROTOCOL_FIXTURES") == nullptr) return;
     auto const registry =
@@ -2205,7 +2258,8 @@ TEST(regenerateCanonicalFixtures) {
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), sections(ssg::Revision{4}, "alpha"));
     writeFixtureHex("session_snapshot.hex",
-                      ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+                      ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(
+                          snapshot));
 
     auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
@@ -2217,8 +2271,6 @@ TEST(regenerateCanonicalFixtures) {
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
-    writeFixtureHex("session_delta.hex",
-                      ssg::ProtocolCodec{}.encodeSessionDelta(ssg::SessionSnapshotCodec{}.deriveDelta(before, after)));
     auto [beforeSections, afterSections] = semanticFixtureSections();
     before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
@@ -2231,13 +2283,16 @@ TEST(regenerateCanonicalFixtures) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(5), std::move(afterSections));
     writeFixtureHex("session_semantic_base.hex",
-                    ssg::ProtocolCodec{}.encodeSessionSnapshot(before));
+                    ssg::ProtocolCodec{}.encodeSessionSnapshot(
+                        before.semantic()));
     writeFixtureHex("session_semantic_target.hex",
-                    ssg::ProtocolCodec{}.encodeSessionSnapshot(after));
+                    ssg::ProtocolCodec{}.encodeSessionSnapshot(
+                        after.semantic()));
     writeFixtureHex(
         "session_semantic_delta.hex",
         ssg::ProtocolCodec{}.encodeSessionDelta(
-            ssg::SessionSnapshotCodec{}.deriveDelta(before, after)));
+            ssg::SessionSnapshotCodec{}.deriveDelta(
+                before.semantic(), after.semantic())));
     for (auto const& [name, input] : canonicalClientInputFixtures()) {
         writeFixtureHex(name, ssg::ProtocolCodec{}.encodeClientInput(input));
     }
@@ -2299,13 +2354,17 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
         ASSERT_EQ(decoded.result->command->revision, ssg::Revision{5});
     }
     {
-        auto decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        auto decoded =
+            ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(
             readFixtureBytes("session_snapshot.hex"));
         ASSERT_TRUE(decoded.accepted());
-        ASSERT_EQ(decoded.snapshot->revision(), ssg::Revision{4});
-        ASSERT_EQ(decoded.snapshot->client().clientId, ssg::ClientId{7});
-        ASSERT_EQ(decoded.snapshot->client().capabilities.size(),
+        ASSERT_EQ(decoded.snapshot->semantic().revision(), ssg::Revision{4});
+        ASSERT_EQ(decoded.snapshot->semantic().client().clientId,
+                 ssg::ClientId{7});
+        ASSERT_EQ(decoded.snapshot->semantic().client().capabilities.size(),
                  std::size_t{1});
+        ASSERT_EQ(decoded.snapshot->presentation().viewport.firstVisualRow,
+                 std::uint32_t{3});
     }
     {
         auto decoded =
@@ -2322,15 +2381,60 @@ TEST(semanticFixtureDeltaReplaysToItsCheckedInTarget) {
         readFixtureBytes("session_semantic_base.hex"));
     auto const delta = ssg::ProtocolCodec{}.decodeSessionDelta(
         readFixtureBytes("session_semantic_delta.hex"));
+    auto const target = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        readFixtureBytes("session_semantic_target.hex"));
     ASSERT_TRUE(base.accepted());
     ASSERT_TRUE(delta.accepted());
-    if (!base.accepted() || !delta.accepted()) return;
+    ASSERT_TRUE(target.accepted());
+    if (!base.accepted() || !delta.accepted() || !target.accepted()) return;
+    ASSERT_EQ(base.snapshot->revision(), ssg::Revision{4});
+    ASSERT_EQ(base.snapshot->sections().document.text, std::string{"a"});
+    ASSERT_TRUE(base.snapshot->sections().externalFocusHeld);
+    ASSERT_EQ(target.snapshot->revision(), ssg::Revision{5});
+    ASSERT_EQ(target.snapshot->sections().document.text,
+              std::string{"changed"});
+    ASSERT_TRUE(target.snapshot->sections().palette.activePicker.has_value());
     auto const replayed =
         ssg::SessionSnapshotCodec{}.replay(*base.snapshot, *delta.delta);
     ASSERT_TRUE(replayed.accepted());
     if (!replayed.accepted()) return;
     ASSERT_EQ(ssg::ProtocolCodec{}.encodeSessionSnapshot(*replayed.snapshot),
               readFixtureBytes("session_semantic_target.hex"));
+    ASSERT_EQ(*replayed.snapshot, *target.snapshot);
+}
+
+TEST(semanticReplayIgnoresFrozenLegacyPresentationDeltaFields) {
+    auto base = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "a"));
+    auto expected = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(5),
+        sections(ssg::Revision{5}, "changed"));
+    auto delta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        readFixtureBytes("session_delta.hex"));
+    ASSERT_TRUE(delta.accepted());
+    ASSERT_TRUE(delta.delta.has_value());
+    if (!delta.delta) return;
+    ASSERT_TRUE(delta.delta->viewport().changed);
+    auto sanitized = ssg::ProtocolCodec{}.decodeSessionDelta(
+        ssg::ProtocolCodec{}.encodeSessionDelta(*delta.delta));
+    ASSERT_TRUE(sanitized.accepted());
+    ASSERT_TRUE(sanitized.delta.has_value());
+    ASSERT_FALSE(sanitized.delta->viewport().changed);
+    ASSERT_FALSE(sanitized.delta->style().replacement.has_value());
+    ASSERT_FALSE(sanitized.delta->shell().replacement.has_value());
+
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(base.semantic(), *delta.delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_TRUE(replayed.snapshot.has_value());
+    if (replayed.snapshot)
+        ASSERT_EQ(*replayed.snapshot, expected.semantic());
 }
 
 }  // namespace
@@ -2345,11 +2449,12 @@ TEST(viewportFirstVisualColumnSurvivesTheWire) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, view, sections(ssg::Revision{4}, "alpha"));
     auto const decoded =
-        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(
+            ssg::ProtocolCodec{}.encodeLegacyPresentationSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
-    ASSERT_EQ(decoded.snapshot->presentation()->viewport.firstVisualColumn,
+    ASSERT_EQ(decoded.snapshot->presentation().viewport.firstVisualColumn,
               std::uint32_t{7});
     ASSERT_EQ(*decoded.snapshot, snapshot);
 }
@@ -2369,7 +2474,8 @@ TEST(documentIdentitySurvivesSessionSnapshotAndDeltaWireRoundTrips) {
         ssg::ViewId{9}, clientView(3),
         withIdentity(ssg::Revision{4}, "alpha", std::string{"src/b.cpp"}));
     auto decodedSnapshot =
-        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.decodeSessionSnapshot(
+            ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
     ASSERT_TRUE(decodedSnapshot.accepted());
     ASSERT_TRUE(decodedSnapshot.snapshot.has_value());
     ASSERT_EQ(decodedSnapshot.snapshot->sections().document.diffFileIdentity,
@@ -2387,12 +2493,14 @@ TEST(documentIdentitySurvivesSessionSnapshotAndDeltaWireRoundTrips) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1),
         withIdentity(ssg::Revision{4}, "same", std::string{"src/b.cpp"}));
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     auto decodedDelta =
         ssg::ProtocolCodec{}.decodeSessionDelta(ssg::ProtocolCodec{}.encodeSessionDelta(delta));
     ASSERT_TRUE(decodedDelta.accepted());
     ASSERT_TRUE(decodedDelta.delta.has_value());
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(
+        before.semantic(), *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     ASSERT_EQ(replayed.snapshot->sections().document.diffFileIdentity,
@@ -2431,7 +2539,8 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
         ssg::ViewId{9}, clientView(3),
         withReplacement(ssg::Revision{4}, "alpha", "dog"));
     auto const decoded =
-        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.decodeSessionSnapshot(
+            ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (decoded.snapshot) {
@@ -2451,12 +2560,14 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1),
         withReplacement(ssg::Revision{4}, "a", "dog"));
-    auto const delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto const delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
     auto decodedDelta =
         ssg::ProtocolCodec{}.decodeSessionDelta(ssg::ProtocolCodec{}.encodeSessionDelta(delta));
     ASSERT_TRUE(decodedDelta.accepted());
     ASSERT_TRUE(decodedDelta.delta.has_value());
-    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(
+        before.semantic(), *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     if (replayed.snapshot) {
@@ -2505,6 +2616,7 @@ int main() {
     RUN(decodeCommandRequestRejectsMalformedPayload);
     RUN(decodeCommandRequestMapsDomainInvariantFailuresToMalformed);
     RUN(sessionSnapshotRoundTripsThroughTheWire);
+    RUN(semanticSnapshotEncodingUsesFixedLegacyPresentationDefaults);
     RUN(anAbsentSelectedExternalIdDecodesAsNone);
     RUN(aSelectedExternalIdMustNameAFileOrTheSnapshotDecodeFailsLoud);
     RUN(externalActionAffordanceMustMatchItsAuthoritativeIdentity);
@@ -2539,5 +2651,6 @@ int main() {
     RUN(regenerateCanonicalFixtures);
     RUN(canonicalFixturesDecodeToTheExpectedValues);
     RUN(semanticFixtureDeltaReplaysToItsCheckedInTarget);
+    RUN(semanticReplayIgnoresFrozenLegacyPresentationDeltaFields);
     return failed == 0 ? 0 : 1;
 }

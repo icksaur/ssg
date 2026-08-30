@@ -1,4 +1,5 @@
 #include "../test_helpers.h"
+#include "../legacy_grid_frame.h"
 
 #include <ssg/EditorSession.h>
 #include <ssg/Renderer.h>
@@ -121,7 +122,7 @@ void runState(const UiState& state) {
         auto snapshot = runtime.present(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot.has_value()) continue;
-        auto const& shell = snapshot->presentation()->shell;
+        auto const& shell = snapshot->presentation().shell;
 
         bool const belowMinimum =
             static_cast<int>(dims.columns) < kMinimumColumns ||
@@ -160,7 +161,7 @@ void runState(const UiState& state) {
         assertRegionsInBounds(shell);
 
         auto frame =
-            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+            ssg::test::gridFrameFromLegacy(std::move(*snapshot));
         ASSERT_TRUE(frame.has_value());
         if (!frame) continue;
         ASSERT_NO_THROW(ssg::Renderer{}.render(*frame));

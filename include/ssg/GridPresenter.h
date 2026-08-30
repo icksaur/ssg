@@ -64,20 +64,24 @@ public:
     [[nodiscard]] SessionSnapshotSections const& sections() const noexcept {
         return semantic_.sections();
     }
-    [[nodiscard]] PresentationSnapshot const* presentation() const noexcept {
-        return semantic_.presentation() ? &*semantic_.presentation() : nullptr;
+    [[nodiscard]] PresentationSnapshot const& presentation() const noexcept {
+        return presentation_;
     }
-    // Temporary adapter for presentation tests and the compatibility bridge.
-    // Plan 6 removes this with SessionSnapshot::presentation().
-    [[nodiscard]] static std::optional<GridFrame> fromDeprecatedSnapshot(
-        SessionSnapshot snapshot);
+    GridFrame(SessionSnapshot semantic, PresentationSnapshot presentation,
+              GridBasis basis)
+        : semantic_{std::move(semantic)},
+          presentation_{std::move(presentation)},
+          basis_{basis} {}
 
 private:
     friend class GridPresenter;
-    GridFrame(SessionSnapshot semantic, GridBasis basis)
-        : semantic_{std::move(semantic)}, basis_{basis} {}
+    GridFrame(LegacyPresentationSnapshot legacy, GridBasis basis)
+        : semantic_{std::move(legacy.semantic_)},
+          presentation_{std::move(legacy.presentation_)},
+          basis_{basis} {}
 
     SessionSnapshot semantic_;
+    PresentationSnapshot presentation_;
     GridBasis basis_;
 };
 
