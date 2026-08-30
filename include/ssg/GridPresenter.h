@@ -15,7 +15,8 @@ class EditorSession;
 struct GridBasis {
     ViewId viewId;
     Revision semanticRevision;
-    // Advances once for each frame this presenter successfully projects.
+    // Advances whenever a frame is projected or an accepted action consumes the
+    // current basis. Rejection leaves it unchanged.
     std::uint64_t presentationGeneration = 0;
 
     friend bool operator==(const GridBasis&, const GridBasis&) = default;

@@ -212,7 +212,7 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
         return {GridActionStatus::Rejected, std::nullopt,
                 "view action is not supported by this presenter"};
     }
-    if (changed) ++generation_;
+    ++generation_;
     if (pausesFollow &&
         frame.sections().followEdits.mode == FollowMode::Following) {
         return {GridActionStatus::TransitionRequired,

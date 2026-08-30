@@ -773,6 +773,19 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto revision = runtime.revision();
+    auto noOpCommand = runtime.dispatch(
+        client, {"view.scroll_lines", revision,
+                 ssg::ScrollLinesArguments{-1}});
+    ASSERT_TRUE(noOpCommand.viewAction.has_value());
+    if (!noOpCommand.viewAction) return;
+    auto noOp = presenter.apply(*noOpCommand.viewAction, *frame);
+    ASSERT_TRUE(noOp.accepted());
+    ASSERT_FALSE(
+        presenter.apply(*noOpCommand.viewAction, *frame).accepted());
+    frame = presenter.project(runtime, client, {{80, 12}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+
     auto command = runtime.dispatch(
         client, {"view.scroll_lines", revision,
                  ssg::ScrollLinesArguments{5}});
