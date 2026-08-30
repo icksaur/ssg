@@ -1314,17 +1314,14 @@ int main(int argc, char** argv) {
                     continue;
                 }
                 if (!ready.input) {
-                    auto result = runtime.input(
+                    (void)handleInputResult(runtime.input(
                         client, ssg::DocumentPointerInput{
                                     {runtime.revision()}, std::nullopt, false,
                                     false, ssg::InputPointerButton::Primary,
                                     ssg::InputPointerPhase::Move,
                                     *dragEdge < 0
                                         ? ssg::DocumentPointerEdge::Before
-                                        : ssg::DocumentPointerEdge::After});
-                    if (result.command) {
-                        noteEffects(result.command->effects);
-                    }
+                                        : ssg::DocumentPointerEdge::After}));
                     continue;  // re-render with the scrolled viewport, then re-evaluate
                 }
                 // Keyboard input arrived during the drag: fall through and read it.

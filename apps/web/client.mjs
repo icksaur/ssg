@@ -69,6 +69,7 @@ const VIEW_ACTION = {
   CLOSE_PANE: 7,
   CYCLE_PANE: 8,
   FOCUS_PANE: 9,
+  CONTINUE_POINTER_EDGE: 10,
 };
 const VIEW_SCROLL_TARGET = { DOCUMENT: 0, TREE: 1 };
 
@@ -1290,7 +1291,8 @@ function applyViewAction(request) {
     chromeErrorEl.textContent = 'view_action_unavailable';
     return 'unavailable';
   }
-  if (kind === VIEW_ACTION.MOVE_VISUAL_SELECTION) {
+  if (kind === VIEW_ACTION.MOVE_VISUAL_SELECTION ||
+      kind === VIEW_ACTION.CONTINUE_POINTER_EDGE) {
     const host = uiRootEl.querySelector('.doc-surface');
     const viewport = viewScrollContainer(VIEW_SCROLL_TARGET.DOCUMENT);
     const selections = state.sections?.selection?.selections;
@@ -1302,14 +1304,25 @@ function applyViewAction(request) {
       return 'invalid';
     }
     const direction = num(action.direction);
-    const extend = Boolean(action.extend);
+    const extend = kind === VIEW_ACTION.CONTINUE_POINTER_EDGE
+      ? true
+      : Boolean(action.extend);
     const lineHeight = scrollLineHeight(
       VIEW_SCROLL_TARGET.DOCUMENT, viewport);
-    const distance = direction >= 2 ? viewport.clientHeight : lineHeight;
-    const sign = direction === 0 || direction === 2 ? -1 : 1;
+    const distance = kind === VIEW_ACTION.MOVE_VISUAL_SELECTION &&
+        direction >= 2
+      ? viewport.clientHeight
+      : lineHeight;
+    const sign = direction === 0 ||
+        (kind === VIEW_ACTION.MOVE_VISUAL_SELECTION && direction === 2)
+      ? -1
+      : 1;
     const viewportRect = viewport.getBoundingClientRect();
     const priorScrollTop = viewport.scrollTop;
-    const positions = selections.map((selection) => {
+    const movingSelections = kind === VIEW_ACTION.CONTINUE_POINTER_EDGE
+      ? selections.slice(-1)
+      : selections;
+    const positions = movingSelections.map((selection) => {
       const active = num(selection.active.byte_offset);
       const projection = host._ssgProjection;
       const displayed = projection && active >= projection.predStart
@@ -1333,7 +1346,12 @@ function applyViewAction(request) {
       viewport.scrollTop += primaryY - viewportRect.bottom + 1;
     }
     const scrollDelta = viewport.scrollTop - priorScrollTop;
-    const resolved = [];
+    const resolved = kind === VIEW_ACTION.CONTINUE_POINTER_EDGE
+      ? selections.slice(0, -1).map((selection) => ({
+          anchor: num(selection.anchor.byte_offset),
+          active: num(selection.active.byte_offset),
+        }))
+      : [];
     for (const position of positions) {
       const y = Math.min(
         viewportRect.bottom - 1,

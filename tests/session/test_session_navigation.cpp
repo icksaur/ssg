@@ -2182,7 +2182,7 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
     ASSERT_EQ(runtime.revision(), changedDocumentRevision);
 }
 
-TEST(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition) {
+TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     auto root = uniqueRoot();
     std::filesystem::create_directories(root / "workspace");
     std::ofstream{root / "workspace" / "lines.txt"}
@@ -2193,7 +2193,7 @@ TEST(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     const ssg::ClientId client{1};
-    ssg::test::GridTestView grid{client, ssg::ViewId{1}, {20, 4}};
+    ssg::GridPresenter presenter{ssg::ViewId{1}};
     ASSERT_TRUE(runtime
                     .attach({client, ssg::InvocationOrigin::InProcess},
                             ssg::ViewId{1})
@@ -2202,12 +2202,17 @@ TEST(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition) {
                     .dispatch(client, {"file.open", runtime.revision(),
                                        std::string{"lines.txt"}})
                     .accepted());
-    ASSERT_TRUE(grid.present(runtime).has_value());
+    auto frame = presenter.project(runtime, client, {{20, 4}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
     ASSERT_TRUE(runtime
                     .input(client, ssg::DocumentPointerInput{
                                        {runtime.revision()},
                                        ssg::ByteOffset{1}})
                     .command->accepted());
+    frame = presenter.project(runtime, client, {{20, 4}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
 
     for (const auto expected :
          {ssg::ByteOffset{4}, ssg::ByteOffset{7}, ssg::ByteOffset{10}}) {
@@ -2217,21 +2222,134 @@ TEST(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition) {
                         ssg::InputPointerButton::Primary,
                         ssg::InputPointerPhase::Move,
                         ssg::DocumentPointerEdge::After});
-        ASSERT_TRUE(edge.command.has_value() && edge.command->accepted());
-        auto snapshot = grid.present(runtime);
+        ASSERT_EQ(edge.outcome, ssg::ClientInputOutcome::ViewOwned);
+        ASSERT_TRUE(edge.command.has_value() && edge.command->viewAction);
+        if (!edge.command || !edge.command->viewAction) return;
+        const auto expectedAction = ssg::ViewAction{
+            ssg::ContinuePointerEdge{
+                ssg::PointerEdgeDirection::After}};
+        ASSERT_EQ(edge.command->viewAction->action, expectedAction);
+        auto applied = presenter.apply(*edge.command->viewAction, *frame);
+        ASSERT_TRUE(applied.accepted() && applied.transition.has_value());
+        ASSERT_FALSE(
+            presenter.apply(*edge.command->viewAction, *frame).accepted());
+        if (!applied.transition) return;
+        ASSERT_EQ(runtime.input(client, *applied.transition).outcome,
+                  ssg::ClientInputOutcome::Dispatched);
+        auto snapshot = presenter.project(runtime, client, {{20, 4}, {}});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
                   ssg::ByteOffset{1});
         ASSERT_EQ(snapshot->sections().selection.primary().active.byteOffset,
                   expected);
+        frame = std::move(snapshot);
     }
-    auto snapshot = grid.present(runtime);
+    auto beforeEdge = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {runtime.revision()}, std::nullopt, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Move,
+                    ssg::DocumentPointerEdge::Before});
+    ASSERT_TRUE(beforeEdge.command && beforeEdge.command->viewAction);
+    if (!beforeEdge.command || !beforeEdge.command->viewAction) return;
+    const auto beforeAction = ssg::ViewAction{
+        ssg::ContinuePointerEdge{ssg::PointerEdgeDirection::Before}};
+    ASSERT_EQ(beforeEdge.command->viewAction->action, beforeAction);
+    auto beforeApplied =
+        presenter.apply(*beforeEdge.command->viewAction, *frame);
+    ASSERT_TRUE(beforeApplied.transition.has_value());
+    if (!beforeApplied.transition) return;
+    ASSERT_EQ(runtime.input(client, *beforeApplied.transition).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    auto snapshot = presenter.project(runtime, client, {{20, 4}, {}});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
+        ASSERT_EQ(snapshot->sections().selection.primary().active.byteOffset,
+                  ssg::ByteOffset{7});
         ASSERT_TRUE(
             snapshot->presentation()->viewport.firstVisualRow > 0);
     }
+}
+
+TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
+    auto root = uniqueRoot();
+    std::filesystem::create_directories(root / "workspace");
+    std::ofstream{root / "workspace" / "lines.txt"}
+        << "aa\nbb\ncc\ndd\nee\nff\n";
+    auto created = ssg::EditorSession::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId client{1};
+    ASSERT_TRUE(runtime
+                    .attach({client, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client, {"file.open", runtime.revision(),
+                                       std::string{"lines.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .input(client, ssg::DocumentPointerInput{
+                                       {runtime.revision()},
+                                       ssg::ByteOffset{1}})
+                    .command->accepted());
+    ASSERT_EQ(
+        runtime
+            .input(client,
+                   ssg::DocumentPointerInput{
+                       {runtime.revision()}, std::nullopt, false, false,
+                       ssg::InputPointerButton::Primary,
+                       ssg::InputPointerPhase::Release})
+            .outcome,
+        ssg::ClientInputOutcome::Dispatched);
+    const auto second = ssg::SelectionNavigator::resolvePosition(
+        runtime.activeDocumentText(), ssg::ByteOffset{7});
+    ASSERT_TRUE(second.has_value());
+    if (!second) return;
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"select.add_range", runtime.revision(),
+                               ssg::SelectionCommandArguments{
+                                   std::nullopt,
+                                   ssg::Selection{*second, *second}}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .input(client,
+                           ssg::DocumentPointerInput{
+                               {runtime.revision()}, ssg::ByteOffset{10}, true})
+                    .command->accepted());
+
+    ssg::GridPresenter presenter{ssg::ViewId{1}};
+    auto frame = presenter.project(runtime, client, {{20, 4}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    const auto baseline = frame->sections().selection.items();
+    ASSERT_EQ(baseline.size(), std::size_t{3});
+    auto edge = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {runtime.revision()}, std::nullopt, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Move,
+                    ssg::DocumentPointerEdge::After});
+    ASSERT_TRUE(edge.command && edge.command->viewAction);
+    if (!edge.command || !edge.command->viewAction) return;
+    auto applied = presenter.apply(*edge.command->viewAction, *frame);
+    ASSERT_TRUE(applied.transition.has_value());
+    if (!applied.transition) return;
+    ASSERT_EQ(runtime.input(client, *applied.transition).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    frame = presenter.project(runtime, client, {{20, 4}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    const auto& selections = frame->sections().selection.items();
+    ASSERT_EQ(selections.size(), baseline.size());
+    ASSERT_EQ(selections[0], baseline[0]);
+    ASSERT_EQ(selections[1], baseline[1]);
+    ASSERT_EQ(selections[2].anchor.byteOffset, ssg::ByteOffset{10});
+    ASSERT_EQ(selections[2].active.byteOffset, ssg::ByteOffset{13});
 }
 
 TEST(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath) {
@@ -3319,7 +3437,8 @@ int main() {
     RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
     RUN(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity);
     RUN(documentPointerInputOwnsSelectionGesturePolicy);
-    RUN(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition);
+    RUN(documentEdgeMovesResolveThroughPresenterAndReveal);
+    RUN(documentEdgeContinuationPreservesAdditiveBaseline);
     RUN(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath);
     RUN(failedSelectedCommandLeavesPickerOpenForEveryOrigin);
     RUN(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker);

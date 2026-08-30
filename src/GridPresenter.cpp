@@ -140,6 +140,86 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
     bool focusesEditor = false;
     bool reportsNavigation = false;
     std::optional<ResolvedSelectionInput> resolvedSelectionInput;
+    auto resolveVisualSelection = [&](SelectionCommand command,
+                                      bool primaryOnly) {
+        auto inputSelections = frame.sections().selection;
+        if (primaryOnly) {
+            inputSelections =
+                SelectionSet{{frame.sections().selection.primary()}};
+        }
+        auto before = SelectionViewState{
+            std::move(inputSelections),
+            state.navigation.firstVisualRow,
+            state.navigation.firstVisualColumn,
+            state.navigation.desiredCell};
+        const DiffFileView* activeDiff = nullptr;
+        if (frame.sections().document.diffFileIdentity) {
+            const auto found = std::ranges::find(
+                frame.sections().diff.files,
+                *frame.sections().document.diffFileIdentity,
+                [](const DiffFileView& file) {
+                    return file.id.value();
+                });
+            if (found != frame.sections().diff.files.end()) {
+                activeDiff = &*found;
+            }
+        }
+        const auto activePane = std::ranges::find(
+            presentation->shell.panes, state.shell.activePane(),
+            &PaneGeometry::id);
+        const auto paneColumns =
+            activePane == presentation->shell.panes.end()
+                ? presentation->viewport.dimensions.columns
+                : static_cast<std::uint32_t>(
+                      std::max(activePane->content.width, 1));
+        const auto paneRows =
+            activePane == presentation->shell.panes.end()
+                ? std::max(
+                      presentation->viewport.scrollbar.viewportRows,
+                      std::uint32_t{1})
+                : static_cast<std::uint32_t>(
+                      std::max(activePane->content.height, 1));
+        const auto* wordWrapSetting =
+            frame.sections().settings.find(SettingKey::WordWrap);
+        const auto* wordWrap =
+            wordWrapSetting
+                ? std::get_if<bool>(&wordWrapSetting->effective.value)
+                : nullptr;
+        auto result = SelectionNavigator{}.apply(
+            frame.sections().document.text, before, command,
+            {paneColumns, paneRows}, {}, {}, 4,
+            wordWrap != nullptr && *wordWrap, activeDiff);
+        if (!result.accepted()) return false;
+
+        auto resolved = result.delta.replacement.value_or(before);
+        auto resolvedSelections = resolved.selections;
+        if (primaryOnly) {
+            auto selections = frame.sections().selection.items();
+            selections.back() = resolved.selections.primary();
+            resolvedSelections = SelectionSet{std::move(selections)};
+        }
+        std::vector<ResolvedSelectionRange> ranges;
+        ranges.reserve(resolvedSelections.items().size());
+        for (const auto& selection : resolvedSelections.items()) {
+            ranges.push_back(
+                {selection.anchor.byteOffset, selection.active.byteOffset});
+        }
+        resolvedSelectionInput = ResolvedSelectionInput{
+            SemanticInputBasis{basis.semanticRevision},
+            *frame.sections().tabs.active,
+            frame.sections().document.revision, std::move(ranges)};
+        if (resolvedSelections != frame.sections().selection) {
+            state.pendingSelection =
+                detail::GridProjectionState::PendingSelection{
+                    *frame.sections().tabs.active,
+                    frame.sections().document.revision,
+                    std::move(resolvedSelections),
+                    {resolved.firstVisualRow,
+                     resolved.firstVisualColumn,
+                     resolved.desiredCell}};
+        }
+        return true;
+    };
     std::visit(
         [&](auto const& action) {
             using Action = std::decay_t<decltype(action)>;
@@ -269,74 +349,19 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                                       : SelectionCommand::CursorPageDown;
                         break;
                 }
-                auto before = SelectionViewState{
-                    frame.sections().selection,
-                    state.navigation.firstVisualRow,
-                    state.navigation.firstVisualColumn,
-                    state.navigation.desiredCell};
-                const DiffFileView* activeDiff = nullptr;
-                if (frame.sections().document.diffFileIdentity) {
-                    const auto found = std::ranges::find(
-                        frame.sections().diff.files,
-                        *frame.sections().document.diffFileIdentity,
-                        [](const DiffFileView& file) {
-                            return file.id.value();
-                        });
-                    if (found != frame.sections().diff.files.end()) {
-                        activeDiff = &*found;
-                    }
-                }
-                const auto activePane = std::ranges::find(
-                    presentation->shell.panes, state.shell.activePane(),
-                    &PaneGeometry::id);
-                const auto paneColumns =
-                    activePane == presentation->shell.panes.end()
-                        ? presentation->viewport.dimensions.columns
-                        : static_cast<std::uint32_t>(
-                              std::max(activePane->content.width, 1));
-                const auto paneRows =
-                    activePane == presentation->shell.panes.end()
-                        ? std::max(
-                              presentation->viewport.scrollbar.viewportRows,
-                              std::uint32_t{1})
-                        : static_cast<std::uint32_t>(
-                              std::max(activePane->content.height, 1));
-                const auto* wordWrapSetting =
-                    frame.sections().settings.find(SettingKey::WordWrap);
-                const auto* wordWrap =
-                    wordWrapSetting
-                        ? std::get_if<bool>(
-                              &wordWrapSetting->effective.value)
-                        : nullptr;
-                auto result = SelectionNavigator{}.apply(
-                    frame.sections().document.text, before, command,
-                    {paneColumns, paneRows}, {}, {}, 4,
-                    wordWrap != nullptr && *wordWrap,
-                    activeDiff);
-                if (!result.accepted()) {
+                if (!resolveVisualSelection(command, false)) {
                     supported = false;
-                    return;
                 }
-                auto resolved = result.delta.replacement.value_or(before);
-                std::vector<ResolvedSelectionRange> ranges;
-                ranges.reserve(resolved.selections.items().size());
-                for (const auto& selection : resolved.selections.items()) {
-                    ranges.push_back({selection.anchor.byteOffset,
-                                      selection.active.byteOffset});
-                }
-                resolvedSelectionInput = ResolvedSelectionInput{
-                    SemanticInputBasis{basis.semanticRevision},
-                    *frame.sections().tabs.active,
-                    frame.sections().document.revision, std::move(ranges)};
-                if (resolved.selections != before.selections) {
-                    state.pendingSelection =
-                        detail::GridProjectionState::PendingSelection{
-                        *frame.sections().tabs.active,
-                        frame.sections().document.revision,
-                        resolved.selections,
-                        {resolved.firstVisualRow,
-                         resolved.firstVisualColumn,
-                         resolved.desiredCell}};
+                return;
+            } else if constexpr (std::same_as<Action,
+                                               ContinuePointerEdge>) {
+                if (!frame.sections().tabs.active ||
+                    !resolveVisualSelection(
+                        action.direction == PointerEdgeDirection::Before
+                            ? SelectionCommand::SelectLineUp
+                            : SelectionCommand::SelectLineDown,
+                        true)) {
+                    supported = false;
                 }
                 return;
             } else if constexpr (std::same_as<Action, SplitPane>) {

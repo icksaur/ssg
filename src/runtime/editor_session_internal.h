@@ -340,14 +340,6 @@ struct EditorSession::Impl final : CommandServices,
     mutable bool commandCandidateCacheValid = false;
     std::map<ViewId, std::size_t> viewReferences;
     std::map<ClientId, ViewId> clientViews;
-    // CONTRACT: ContinuePointerEdge is the only projection handoff retained in
-    // EditorSession::Impl and Plan 3 Step 5 removes it.
-    struct PointerEdgeProjectionHandoff {
-        ViewportDimensions contentDimensions{80, 24};
-        SelectionNavigation navigation;
-    };
-    std::map<ViewId, PointerEdgeProjectionHandoff>
-        pointerEdgeProjectionHandoffs;
     struct DocumentPointerGesture {
         FileDocumentId documentId;
         Revision documentRevision;

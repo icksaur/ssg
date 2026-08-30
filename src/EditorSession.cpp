@@ -3087,7 +3087,6 @@ bool EditorSession::detach(ClientId clientId) {
         if (references != impl_->viewReferences.end() &&
             --references->second == 0) {
             impl_->viewReferences.erase(references);
-            impl_->pointerEdgeProjectionHandoffs.erase(viewId);
         }
     }
     return detached;
@@ -3622,40 +3621,17 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                             return rejectTarget(
                                 "document edge gesture client is detached");
                         }
-                        const auto handoff =
-                            impl_->pointerEdgeProjectionHandoffs.find(
-                                client->viewId);
-                        if (handoff ==
-                            impl_->pointerEdgeProjectionHandoffs.end()) {
-                            return rejectTarget(
-                                "document edge projection is unavailable");
-                        }
-                        SelectionViewState edgeState{
-                            SelectionSet{{Selection{
-                                gesture->second.anchor,
-                                gesture->second.active}}},
-                            handoff->second.navigation.firstVisualRow,
-                            handoff->second.navigation.firstVisualColumn,
-                            handoff->second.navigation.desiredCell};
-                        const auto diff = impl_->activeDiffFile();
-                        auto advanced = SelectionNavigator{}.apply(
-                            impl_->activeText(), edgeState,
-                            semantic.edge == DocumentPointerEdge::Before
-                                ? SelectionCommand::SelectLineUp
-                                : SelectionCommand::SelectLineDown,
-                            handoff->second.contentDimensions, {}, {}, 4,
-                            impl_->wordWrap,
-                            diff ? &*diff : nullptr);
-                        if (!advanced.accepted()) {
-                            return rejectTarget(advanced.message);
-                        }
-                        if (advanced.delta.replacement) {
-                            position = advanced.delta.replacement->selections
-                                           .primary()
-                                           .active;
-                        } else {
-                            position = gesture->second.active;
-                        }
+                        auto result = CommandResult{
+                            CommandError::None, impl_->session->revision(), {}};
+                        result.viewAction = ViewActionRequest{
+                            client->viewId, impl_->session->revision(),
+                            ContinuePointerEdge{
+                                semantic.edge ==
+                                        DocumentPointerEdge::Before
+                                    ? PointerEdgeDirection::Before
+                                    : PointerEdgeDirection::After}};
+                        return {ClientInputOutcome::ViewOwned, std::nullopt,
+                                std::move(result)};
                     }
                     if (!position &&
                         semantic.phase == InputPointerPhase::Move) {
@@ -4075,12 +4051,6 @@ EditorSession::projectForBridgedPresenterDeprecated(
     auto viewport = impl_->viewport(presentation);
     auto promptView = impl_->promptProjection(dimensions, shell.prompt);
     auto treeWindows = impl_->treeWindows(presentation);
-    impl_->pointerEdgeProjectionHandoffs[client->viewId] = {
-        {std::max<std::uint32_t>(
-             presentation.paneContentColumns, 1),
-         std::max<std::uint32_t>(
-             presentation.paneContentRows, 1)},
-        presentation.navigation};
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
                                      std::move(viewport), std::move(sections),
