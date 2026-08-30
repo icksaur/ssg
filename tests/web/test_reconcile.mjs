@@ -18,7 +18,7 @@ import {
   pickerPresentationFromSubmit,
   PICKER_MODE, encodePickerSubmit, encodeSelectionByteRange, encodeTabAction,
   markedTextByteOffset, encodeTreeActivation, applyTreeDelta,
-  applySessionDeltaSections,
+  applySessionDeltaSections, applySessionDeltaCopy,
   encodeStatusActionInvocation, encodePromptFocus,
   externalModificationFromSections, externalFocusHeld, encodeExternalAction,
   applyExternalModificationDelta, isCurrentGeneration, replayAttachFrame,
@@ -26,6 +26,7 @@ import {
   predictPromptValue,
   settlePromptPrediction,
   settlePromptPresentation, deferPromptDocumentSurface,
+  mergeBrowserRenderPlans,
 } from '../../apps/web/reconcile.mjs';
 
 let checks = 0;
@@ -1310,6 +1311,27 @@ check('applySessionDeltaSections opens, changes, and CLOSES the footer prompt vi
   // guard would wrongly keep it -- this is why the delta is changed-flagged).
   applySessionDeltaSections(sections, { prompt_view: { changed: 1, replacement: null } });
   assert.equal(sections.prompt_view, null);
+});
+
+check('applySessionDeltaCopy retains unchanged large sections for a caret update', () => {
+  const document = { text: 'large document', caret: 0 };
+  const syntax = { spans: [{ begin: 0, end: 14, scope: 1 }] };
+  const palette = { command_candidates: [{ id: 'command' }] };
+  const sections = { document, syntax, palette, selection: { selections: [] } };
+  const next = applySessionDeltaCopy(sections, { document_caret: 4 });
+  assert.notEqual(next, sections);
+  assert.notEqual(next.document, document);
+  assert.equal(next.document.text, document.text);
+  assert.equal(next.syntax, syntax);
+  assert.equal(next.palette, palette);
+});
+
+check('mergeBrowserRenderPlans preserves every dirty surface and strongest work', () => {
+  assert.deepEqual(
+    mergeBrowserRenderPlans(
+      { rebuild: false, reconcile: true, repaintTheme: false, surfaces: [8] },
+      { rebuild: true, reconcile: false, repaintTheme: true, surfaces: [3, 8] }),
+    { rebuild: true, reconcile: true, repaintTheme: true, surfaces: [8, 3] });
 });
 
 check('prompt focus uses a typed revision-checked compound command', () => {

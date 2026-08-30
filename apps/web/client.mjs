@@ -13,12 +13,13 @@ import {
   resolvePickerLifecycle, effectivePickerMode, encodePickerSubmit,
   queuePickerSubmit, settlePickerLifecycle, pickerPresentationFromSubmit,
   encodeSelectionByteRange, encodeTabAction, markedTextByteOffset,
-  applySessionDeltaSections, applyTreeDelta,
+  applySessionDeltaCopy, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
   webExtentCss, applyNodeSemanticStyle, getOrCreateStyledNode,
   firstMalformedNodeStyle, roleColor,
   GenerationRetainedCache, gitAffordanceFromNode,
-  preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
+  preferredKeyboardSurface, browserRenderPlan, mergeBrowserRenderPlans,
+  settlePointerSelection,
   predictedFocusCapture, resolveUiFocusPath, focusUiNode,
   applyPalettePresenceOverlay,
   BrowserKeyDispatchTracker,
@@ -300,67 +301,169 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
 }
 
 function renderDocumentInto(host) {
-    const s = state.sections;
-    const syntaxColors = applyTheme(s.theme);
-    const authText = s.document.text;
-    const authCaret = num(s.document.caret);
-    const proj = project(authText, authCaret, state.pending);
-    const text = proj.text;
-    const predBytes = proj.predEnd - proj.predStart;
-    const shiftBegin = (o) => o >= proj.predStart ? o + predBytes : o;
-    const shiftEnd = (o) => o > proj.predStart ? o + predBytes : o;
-    const rawSpans = (s.syntax && Array.isArray(s.syntax.spans)) ? s.syntax.spans : [];
-    const spans = rawSpans.map((sp) => ({ begin: shiftBegin(num(sp.begin)), end: shiftEnd(num(sp.end)), scope: num(sp.scope) }));
-    const ranges = [];
-    const preview = pointerSelection.preview;
-    if (preview && samePointerBasis(preview.basis, currentPointerBasis())) {
-      const a = shiftEnd(preview.anchor), b = shiftEnd(preview.active);
-      if (a !== b) ranges.push([Math.min(a, b), Math.max(a, b)]);
-    } else {
-      const sels = (s.selection && Array.isArray(s.selection.selections))
-        ? s.selection.selections : [];
-      for (const sel of sels) {
-        const a = shiftEnd(num(sel.anchor.byte_offset));
-        const b = shiftEnd(num(sel.active.byte_offset));
-        if (a !== b) ranges.push([Math.min(a, b), Math.max(a, b)]);
-      }
+  const s = state.sections;
+  const authText = s.document.text;
+  const authCaret = num(s.document.caret);
+  const projection = state.pending.length
+    ? project(authText, authCaret, state.pending)
+    : { text: authText, caret: authCaret, predStart: authCaret,
+        predEnd: authCaret };
+  const text = projection.text;
+  const predBytes = projection.predEnd - projection.predStart;
+  const rawSpans = (s.syntax && Array.isArray(s.syntax.spans))
+    ? s.syntax.spans : [];
+  const cache = host._ssgDocumentCache;
+  if (!cache || cache.text !== text || cache.syntax !== rawSpans ||
+      cache.theme !== s.theme ||
+      cache.predStart !== projection.predStart ||
+      cache.predEnd !== projection.predEnd) {
+    rebuildDocument(host, text, projection, rawSpans, s.theme);
+  }
+  updateDocumentOverlays(host, projection, predBytes);
+}
+
+function displayedDocumentRanges(projection, predBytes) {
+  const shift = (offset, after) =>
+    offset > projection.predStart || (!after && offset === projection.predStart)
+      ? offset + predBytes : offset;
+  const preview = pointerSelection.preview;
+  if (preview && samePointerBasis(preview.basis, currentPointerBasis())) {
+    const anchor = shift(preview.anchor, true);
+    const active = shift(preview.active, true);
+    return anchor === active ? [] : [[Math.min(anchor, active), Math.max(anchor, active)]];
+  }
+  const ranges = [];
+  for (const selection of (state.sections.selection?.selections || [])) {
+    const anchor = shift(num(selection.anchor.byte_offset), true);
+    const active = shift(num(selection.active.byte_offset), true);
+    if (anchor !== active) ranges.push([Math.min(anchor, active), Math.max(anchor, active)]);
+  }
+  return ranges;
+}
+
+function documentPosition(cache, byteOffset) {
+  let low = 0;
+  let high = cache.segments.length - 1;
+  while (low <= high) {
+    const index = (low + high) >> 1;
+    const segment = cache.segments[index];
+    if (byteOffset < segment.start) high = index - 1;
+    else if (byteOffset > segment.end) low = index + 1;
+    else {
+      const indexAtByte = byteToIndex(
+        segment.node.data, [byteOffset - segment.start]).get(byteOffset - segment.start);
+      return { node: segment.node, offset: indexAtByte ?? segment.node.length };
     }
-    const caret = preview ? shiftEnd(preview.active) : proj.caret;
-    const total = utf8Bytes(text);
-    const bounds = new Set([0, total, caret]);
-    for (const sp of spans) { bounds.add(sp.begin); bounds.add(sp.end); }
-    for (const r of ranges) { bounds.add(r[0]); bounds.add(r[1]); }
-    const cuts = [...bounds].filter((b) => b >= 0 && b <= total).sort((a, b) => a - b);
-    const map = byteToIndex(text, cuts);
-    const scopeAt = (byte) => { for (const sp of spans) { if (byte >= sp.begin && byte < sp.end) return sp.scope; } return -1; };
-    const selectedAt = (byte) => ranges.some((r) => byte >= r[0] && byte < r[1]);
-    let html = '';
-    for (let i = 0; i + 1 < cuts.length; i++) {
-      const a = cuts[i], b = cuts[i + 1];
-      if (a === caret) {
-        html += '<span class="caret" data-byte-start="' + a + '"></span>';
-      }
-      const ia = map.get(a), ib = map.get(b);
-      if (ia === undefined || ib === undefined || ib <= ia) continue;
-      const scope = scopeAt(a);
-      const color = (scope >= 0 && scope < syntaxColors.length) ? cssColor(syntaxColors[scope]) : '';
-      const cls = selectedAt(a) ? ' class="sel"' : '';
-      const style = color ? ' style="color:' + color + '"' : '';
-      html += '<span data-byte-start="' + a + '"' + cls + style + '>' +
-        esc(text.substring(ia, ib)) + '</span>';
+  }
+  const last = cache.segments.at(-1);
+  return last
+    ? { node: last.node, offset: last.node.length }
+    : { node: cache.emptyNode, offset: 0 };
+}
+
+function rebuildDocument(host, text, projection, rawSpans, theme) {
+  const predBytes = projection.predEnd - projection.predStart;
+  const shiftBegin = (offset) =>
+    offset >= projection.predStart ? offset + predBytes : offset;
+  const shiftEnd = (offset) =>
+    offset > projection.predStart ? offset + predBytes : offset;
+  const spans = rawSpans
+    .map((span) => ({ begin: shiftBegin(num(span.begin)),
+                      end: shiftEnd(num(span.end)), scope: num(span.scope) }))
+    .sort((left, right) => left.begin - right.begin || left.end - right.end);
+  const total = utf8Bytes(text);
+  const bounds = new Set([0, total]);
+  for (const span of spans) {
+    bounds.add(span.begin);
+    bounds.add(span.end);
+  }
+  const cuts = [...bounds].filter((offset) => offset >= 0 && offset <= total)
+    .sort((left, right) => left - right);
+  const indexes = byteToIndex(text, cuts);
+  const syntaxColors = applyTheme(theme);
+  const fragment = document.createDocumentFragment();
+  const segments = [];
+  let spanIndex = 0;
+  for (let index = 0; index + 1 < cuts.length; ++index) {
+    const start = cuts[index];
+    const end = cuts[index + 1];
+    const textStart = indexes.get(start);
+    const textEnd = indexes.get(end);
+    if (textStart === undefined || textEnd === undefined || textEnd <= textStart) continue;
+    while (spanIndex < spans.length && spans[spanIndex].end <= start) ++spanIndex;
+    const scope = spanIndex < spans.length &&
+      spans[spanIndex].begin <= start && start < spans[spanIndex].end
+      ? spans[spanIndex].scope : -1;
+    const element = document.createElement('span');
+    element.dataset.byteStart = String(start);
+    element.dataset.byteEnd = String(end);
+    if (scope >= 0 && scope < syntaxColors.length) {
+      element.style.color = cssColor(syntaxColors[scope]);
     }
-    if (caret >= total) {
-      html += '<span class="caret" data-byte-start="' + total + '"></span>';
-    }
-    host.innerHTML = html;
-    host._ssgProjection = {
-      predStart: proj.predStart, predEnd: proj.predEnd,
-      predBytes, authoritativeBytes: utf8Bytes(authText),
-    };
-    host.onpointerdown = (event) => beginPointerSelection(host, event);
-    host.onpointermove = (event) => updatePointerSelection(host, event);
-    host.onpointerup = (event) => endPointerSelection(host, event);
-    host.onpointercancel = cancelPointerGesture;
+    const node = document.createTextNode(text.substring(textStart, textEnd));
+    element.appendChild(node);
+    fragment.appendChild(element);
+    segments.push({ start, end, node });
+  }
+  const emptyNode = document.createTextNode('');
+  if (!segments.length) {
+    const element = document.createElement('span');
+    element.dataset.byteStart = '0';
+    element.dataset.byteEnd = '0';
+    element.appendChild(emptyNode);
+    fragment.appendChild(element);
+    segments.push({ start: 0, end: 0, node: emptyNode });
+  }
+  const caret = document.createElement('span');
+  caret.className = 'caret';
+  caret.setAttribute('aria-hidden', 'true');
+  fragment.appendChild(caret);
+  host.replaceChildren(fragment);
+  host._ssgDocumentCache = {
+    text, syntax: rawSpans, theme, predStart: projection.predStart,
+    predEnd: projection.predEnd, segments, emptyNode, caret,
+  };
+  host._ssgProjection = {
+    predStart: projection.predStart, predEnd: projection.predEnd, predBytes,
+    authoritativeBytes: utf8Bytes(state.sections.document.text),
+  };
+  host.onpointerdown = (event) => beginPointerSelection(host, event);
+  host.onpointermove = (event) => updatePointerSelection(host, event);
+  host.onpointerup = (event) => endPointerSelection(host, event);
+  host.onpointercancel = cancelPointerGesture;
+}
+
+function updateDocumentOverlays(host, projection, predBytes) {
+  const cache = host._ssgDocumentCache;
+  if (!cache) return;
+  const ranges = displayedDocumentRanges(projection, predBytes);
+  if (globalThis.Highlight && globalThis.CSS?.highlights) {
+    const highlights = ranges.map(([start, end]) => {
+      const range = new Range();
+      const begin = documentPosition(cache, start);
+      const finish = documentPosition(cache, end);
+      range.setStart(begin.node, begin.offset);
+      range.setEnd(finish.node, finish.offset);
+      return range;
+    });
+    if (highlights.length) CSS.highlights.set('ssg-selection', new Highlight(...highlights));
+    else CSS.highlights.delete('ssg-selection');
+  } else if (ranges.length) {
+    chromeErrorEl.textContent =
+      'this browser does not support the required text selection API; update or use Chrome, Edge, or Safari';
+  }
+  const caretOffset = pointerSelection.preview
+    ? (pointerSelection.preview.active > projection.predStart
+        ? pointerSelection.preview.active + predBytes : pointerSelection.preview.active)
+    : projection.caret;
+  const position = documentPosition(cache, caretOffset);
+  const range = new Range();
+  range.setStart(position.node, position.offset);
+  range.collapse(true);
+  const rect = range.getBoundingClientRect();
+  const hostRect = host.getBoundingClientRect();
+  cache.caret.style.left = (rect.left - hostRect.left) + 'px';
+  cache.caret.style.top = (rect.top - hostRect.top) + 'px';
 }
 
 function renderSurfaceNode(node, plan) {
@@ -483,7 +586,7 @@ function submitPaletteCandidate(mode, candidate) {
     }
     state.palette.pendingSubmit = disposition.send || disposition.queued;
     state.palette.error = '';
-    render({ ...surfaceRenderPlan(), reconcile: true });
+    scheduleRender({ ...surfaceRenderPlan(), reconcile: true });
 }
 
 function renderFindResultsSurface(parent, palette, mode = state.palette.mode) {
@@ -775,14 +878,13 @@ function refreshFinder() {
     renderPickerInput(
       pickerInputElement, pickerInputElement._ssgPickerSigil);
   }
-  render(surfaceRenderPlan(SURFACE.FINDRESULTS));
+  scheduleRender(surfaceRenderPlan(SURFACE.FINDRESULTS));
 }
 
 function applyDelta(d) {
   if (!state.sections || !deltaIsContiguous(state.revision, d)) return false;
   const pointerBasis = currentPointerBasis();
-  const next = structuredClone(state.sections);
-  applySessionDeltaSections(next, d);
+  const next = applySessionDeltaCopy(state.sections, d);
   // The tree is retained and spliced in place; only a genuinely inexpressible
   // tree transition (snapshot_required, a missed base revision, or a malformed
   // splice) falls back to a full snapshot, so ordinary expand/open/select no
@@ -854,7 +956,7 @@ function samePointerBasis(left, right) {
 }
 
 function renderPointerPreview() {
-  render(surfaceRenderPlan(SURFACE.DOCUMENT));
+  scheduleRender(surfaceRenderPlan(SURFACE.DOCUMENT));
 }
 
 function clearPointerGesture() {
@@ -1161,7 +1263,7 @@ function discardPredictions() {
   state.palette.selected = 0;
   state.palette.pendingSubmit = null;
   state.palette.error = '';
-  render({
+  scheduleRender({
     ...surfaceRenderPlan(SURFACE.DOCUMENT),
     reconcile: true,
   });
@@ -1283,6 +1385,23 @@ function applyProtocolFrame(buffer) {
 }
 
 let frameRenderPlan = fullRenderPlan();
+let pendingRenderPlan = null;
+let renderFramePending = false;
+
+function scheduleRender(plan) {
+  pendingRenderPlan = pendingRenderPlan
+    ? mergeBrowserRenderPlans(pendingRenderPlan, plan) : plan;
+  if (renderFramePending) return;
+  renderFramePending = true;
+  requestAnimationFrame(() => {
+    renderFramePending = false;
+    const next = pendingRenderPlan;
+    pendingRenderPlan = null;
+    if (!next || !state.sections) return;
+    render(next);
+    flushPointerPoint();
+  });
+}
 
 function connect() {
   const generation = ++socketGeneration;
@@ -1304,8 +1423,7 @@ function connect() {
     if (!applyProtocolFrame(e.data)) return;
     if (!state.sections) { statusEl.textContent = 'no sections yet'; return; }
 
-    render(frameRenderPlan);
-    flushPointerPoint();
+    scheduleRender(frameRenderPlan);
     statusEl.textContent = '';
     } catch (err) {
       reconnect('protocol error: ' + err.message);
@@ -1401,7 +1519,7 @@ function handleKeydown(ev) {
       state.palette.selected = 0;
       state.palette.pendingSubmit = null;
       state.palette.error = '';
-      render({
+      scheduleRender({
         ...surfaceRenderPlan(SURFACE.FINDRESULTS),
         reconcile: true,
       });
@@ -1433,7 +1551,7 @@ function handleKeydown(ev) {
       p.selected = 0;
       p.pendingSubmit = null;
       p.error = '';
-      render({ ...surfaceRenderPlan(), reconcile: true });
+      scheduleRender({ ...surfaceRenderPlan(), reconcile: true });
       return;
     }
     if (ev.key === 'Enter') {
@@ -1449,7 +1567,7 @@ function handleKeydown(ev) {
       // selected is an absolute ranked index over the locally-ranked rows.
       const rows = locallyRankedPaletteRows(state.sections && state.sections.palette);
       p.selected = clampPaletteSelection(ev.key === 'ArrowDown' ? p.selected + 1 : p.selected - 1, rows.length);
-      render(surfaceRenderPlan(SURFACE.FINDRESULTS));
+      scheduleRender(surfaceRenderPlan(SURFACE.FINDRESULTS));
       return;
     }
     if (ev.key === 'Backspace') {
@@ -1532,11 +1650,11 @@ function handleKeydown(ev) {
   });
   if (predictionId != null) {
     invalidatePointerOffsets();
-    render(surfaceRenderPlan(SURFACE.DOCUMENT));
+    scheduleRender(surfaceRenderPlan(SURFACE.DOCUMENT));
   }
   if (promptPrediction != null) {
     if (state.promptPrediction == null) state.promptScrollOverride = false;
     state.promptPrediction = promptPrediction;
-    render({ ...surfaceRenderPlan(), reconcile: true });
+    scheduleRender({ ...surfaceRenderPlan(), reconcile: true });
   }
 }

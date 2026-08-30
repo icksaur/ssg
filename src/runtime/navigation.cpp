@@ -151,7 +151,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext&
         // One source of truth for line boundaries: the active text. The line
         // count is newlines + 1, and the target line's start is taken from the
         // same scan, so the two can never disagree.
-        std::string const text = runtime.activeText();
+        std::string const& text = runtime.activeText();
         std::size_t lineCount = 1;
         for (char c : text) if (c == '\n') ++lineCount;
         // Clamp the 1-based request to [1, lineCount], then convert to a 0-based

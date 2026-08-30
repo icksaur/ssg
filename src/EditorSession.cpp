@@ -2325,9 +2325,18 @@ std::optional<DiffFileView> EditorSession::Impl::activeDiffFile() const {
     return file ? std::optional<DiffFileView>{file->get()} : std::nullopt;
 }
 
-std::string EditorSession::Impl::activeText() const {
+std::string const& EditorSession::Impl::activeText() const {
+    static const std::string empty;
+    const auto documentId = activeDocumentId();
     auto const* document = activeDocument();
-    return document ? document->snapshot().text : std::string{};
+    if (!documentId || document == nullptr) return empty;
+    const auto revision = document->revision();
+    if (activeTextDocument != documentId || activeTextRevision != revision) {
+        activeTextCache = document->snapshot().text;
+        activeTextDocument = documentId;
+        activeTextRevision = revision;
+    }
+    return activeTextCache;
 }
 
 int EditorSession::Impl::lineNumberGutterWidth() const {
@@ -2361,7 +2370,7 @@ void EditorSession::Impl::resetSelectionForActiveDocument() {
 }
 
 void EditorSession::Impl::clampSelectionToActiveDocument() {
-    auto text = activeText();
+    auto const& text = activeText();
     auto offset = selection.selections.primary().active.byteOffset.value();
     if (offset > text.size()) offset = text.size();
     auto position = ssg::SelectionNavigator::resolvePosition(text, ByteOffset{offset}).value_or(zeroPosition());
@@ -2369,7 +2378,7 @@ void EditorSession::Impl::clampSelectionToActiveDocument() {
 }
 
 void EditorSession::Impl::clampSelectionsToActiveDocument() {
-    auto text = activeText();
+    auto const& text = activeText();
     auto clampPosition = [&](DocumentPosition const& p) {
         auto offset = p.byteOffset.value();
         if (offset > text.size()) offset = text.size();
@@ -2538,7 +2547,7 @@ void EditorSession::Impl::reconcileFindDocument() {
     findDocumentId.reset();
 }
 
-void EditorSession::Impl::refreshSyntax() {
+void EditorSession::Impl::refreshSyntax(std::vector<SyntaxEdit> edits) {
     auto id = activeDocumentId();
     if (!id) return;
     auto& model = syntaxFor(*id);
@@ -2563,7 +2572,9 @@ void EditorSession::Impl::refreshSyntax() {
         }
     }
     ++syntaxRunCount;
-    (void)model.parse(revision, std::move(language), std::move(text));
+    if (!model.canIncrementallyParse(language)) edits.clear();
+    (void)model.parse(revision, std::move(language), std::move(text),
+                      std::move(edits));
 }
 
 void EditorSession::Impl::primeDeferred() {
@@ -2933,7 +2944,7 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
 
 bool EditorSession::Impl::revealCurrentDiffTarget(
     const FollowTarget& target, NavigationClass classification) {
-    const auto text = activeText();
+    const auto& text = activeText();
     const auto offset = lineStartOffset(text, target.newestHunkLine);
     const auto position =
         SelectionNavigator::resolvePosition(text, ByteOffset{offset});

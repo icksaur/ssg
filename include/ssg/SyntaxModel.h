@@ -423,6 +423,8 @@ public:
         return parser_ != nullptr;
     }
     [[nodiscard]] bool hasGrammar(const LanguageId& language) const noexcept;
+    [[nodiscard]] bool canIncrementallyParse(
+        const LanguageId& language) const noexcept;
 
     // Parse `text` and adopt the result, driving request -> run -> accept inline
     // on the CALLING thread. The convenience for the common synchronous case: it

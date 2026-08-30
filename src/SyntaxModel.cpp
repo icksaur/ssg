@@ -683,11 +683,17 @@ bool SyntaxModel::hasGrammar(const LanguageId& language) const noexcept {
     if (!parser_ || language.isPlainText()) {
         return false;
     }
+
     try {
         return parser_->hasGrammar(language);
     } catch (...) {
         return false;
     }
+}
+
+bool SyntaxModel::canIncrementallyParse(
+    const LanguageId& language) const noexcept {
+    return acceptedParse_ != nullptr && language == viewState_.language();
 }
 
 SyntaxParseResult SyntaxModel::parse(

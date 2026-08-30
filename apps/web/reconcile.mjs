@@ -715,6 +715,20 @@ export function applySessionDeltaSections(sections, delta) {
   return sections;
 }
 
+// Apply non-tree delta sections with copy-on-write ownership. Unchanged sections
+// retain their identity, so a caret-only transition cannot duplicate document
+// text, syntax, or client-owned inventories.
+export function applySessionDeltaCopy(sections, delta) {
+  const next = { ...sections };
+  if (delta.document || delta.document_caret != null) {
+    next.document = { ...sections.document };
+  }
+  if (delta.syntax && delta.syntax.spans != null) {
+    next.syntax = { ...(sections.syntax || {}) };
+  }
+  return applySessionDeltaSections(next, delta);
+}
+
 // The draft-conflict notice's geometry-free semantic projection normalized for the
 // renderer, or null when the active document raises no notice. Owns the snake_case
 // wire coupling (command) so the client draws the notice bar and its clickable
@@ -836,6 +850,15 @@ export function browserRenderPlan(delta) {
                    replacementChanged(delta.prompt_status) || repaintTheme),
     repaintTheme,
     surfaces: [...surfaces].sort((a, b) => a - b),
+  };
+}
+
+export function mergeBrowserRenderPlans(left, right) {
+  return {
+    rebuild: !!left.rebuild || !!right.rebuild,
+    reconcile: !!left.reconcile || !!right.reconcile,
+    repaintTheme: !!left.repaintTheme || !!right.repaintTheme,
+    surfaces: [...new Set([...(left.surfaces || []), ...(right.surfaces || [])])],
   };
 }
 

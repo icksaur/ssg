@@ -54,12 +54,14 @@
   .surface.tabs { flex-direction:row; }
   .doc-surface { margin:0; padding:8px; white-space:pre-wrap; flex:1 1 auto;
                  min-height:0; user-select:none; cursor:text; display:block;
-                 outline:none; }
+                 outline:none; position:relative; }
   .doc-surface .sel { background:var(--ssg-selection); }
+  ::highlight(ssg-selection) { background:var(--ssg-selection); }
   .doc-surface .caret, .input-line .caret {
     display:inline-block; position:relative; width:0; height:1em;
     vertical-align:text-bottom; pointer-events:none;
   }
+  .doc-surface .caret { position:absolute; }
   .doc-surface .caret::after, .input-line .caret::after {
     content:""; position:absolute; inset:0 auto 0 0;
     border-left:2px solid var(--ssg-caret);

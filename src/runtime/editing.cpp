@@ -14,6 +14,48 @@ TextInputSettings textInputSettings(EditorSession::Impl const&) {
     return {IndentStyle::Spaces, 4, true, LineEnding::Lf};
 }
 
+std::vector<SyntaxEdit> syntaxEdits(std::string_view previousText,
+                                    EditTransaction const& transaction) {
+    std::vector<TextEdit const*> ordered;
+    ordered.reserve(transaction.edits.size());
+    for (auto const& edit : transaction.edits) ordered.push_back(&edit);
+    std::sort(ordered.begin(), ordered.end(),
+              [](TextEdit const* left, TextEdit const* right) {
+                  return left->offset < right->offset;
+              });
+    std::vector<SyntaxEdit> edits;
+    edits.reserve(ordered.size());
+    std::size_t cursor = 0;
+    SyntaxPoint point{LineIndex{0}, 0};
+    const auto advance = [](SyntaxPoint current, std::string_view text) {
+        for (const char value : text) {
+            if (value == '\n') {
+                current.row = LineIndex{current.row.value() + 1};
+                current.columnByte = 0;
+            } else {
+                ++current.columnByte;
+            }
+        }
+        return current;
+    };
+    const auto advanceTo = [&](std::size_t offset) {
+        point = advance(point, previousText.substr(cursor, offset - cursor));
+        cursor = offset;
+        return point;
+    };
+    for (auto const* edit : ordered) {
+        const auto start = static_cast<std::size_t>(edit->offset.value());
+        const auto oldEnd = start + static_cast<std::size_t>(edit->erasedBytes);
+        const auto startPoint = advanceTo(start);
+        const auto oldEndPoint = advanceTo(oldEnd);
+        edits.push_back({edit->offset, ByteOffset{oldEnd},
+                         ByteOffset{start + edit->insertedText.size()},
+                         startPoint, oldEndPoint,
+                         advance(startPoint, edit->insertedText)});
+    }
+    return edits;
+}
+
 EditCommandSettings editSettings(EditorSession::Impl const&) {
     return {IndentStyle::Spaces, 4, 4, LineEnding::Lf, "//"};
 }
@@ -26,15 +68,17 @@ CommandHandlerResult applyTransaction(EditorSession::Impl& runtime,
     auto id = runtime.activeDocumentId();
     auto* document = runtime.activeDocument();
     if (!id || document == nullptr) return failure("no active document");
+    const auto previousText = document->snapshot().text;
     auto before = runtime.selection.selections;
     auto result = runtime.historyFor(*id).applyEdit(*document, transaction, before,
                                                        selectionsAfter, kind, 0);
     if (!result.accepted()) return failure(result.message);
+    const auto syntax = syntaxEdits(previousText, transaction);
     runtime.selection.selections = result.selections.value_or(selectionsAfter);
     runtime.clampSelectionsToActiveDocument();
     runtime.revealPrimaryCaret(viewId);
     (void)runtime.updateTabsFor(*id);
-    runtime.refreshSyntax();
+    runtime.refreshSyntax(syntax);
     return success();
 }
 
@@ -215,7 +259,7 @@ void revealActiveFindMatch(EditorSession::Impl& runtime, ViewId viewId) {
         return;
     }
     auto const& match = state.matches[*state.activeMatch];
-    auto text = runtime.activeText();
+    auto const& text = runtime.activeText();
     auto anchor = ssg::SelectionNavigator::resolvePosition(text, match.begin);
     auto active = ssg::SelectionNavigator::resolvePosition(text, match.end);
     if (!anchor || !active) return;
@@ -811,7 +855,7 @@ void registerSelectionCommands(CommandCatalog& builder,
                 [&runtime](CommandContext& context,
                            const SelectionByteRangeArguments& range) {
                     return runtime.runTransaction([&] {
-                        const auto text = runtime.activeText();
+                        const auto& text = runtime.activeText();
                         auto anchor = SelectionNavigator::resolvePosition(
                             text, range.anchor, 4);
                         auto active = SelectionNavigator::resolvePosition(

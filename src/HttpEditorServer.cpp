@@ -104,6 +104,7 @@ struct HttpEditorRoute::Impl {
     };
 
     using ReplayKey = std::pair<std::string, std::uint64_t>;
+    std::optional<Revision> lastPublishedRevision;
 
     Impl(Http::Server& httpServer, EditorSession& editorRuntime,
          HttpEditorConnectionPolicy& connectionPolicy,
@@ -395,6 +396,8 @@ struct HttpEditorRoute::Impl {
     }
 
     void publish() {
+        const auto revision = runtime.revision();
+        if (lastPublishedRevision == revision) return;
         std::vector<SessionId> sessions;
         {
             std::lock_guard lock{connectionsMutex};
@@ -411,6 +414,7 @@ struct HttpEditorRoute::Impl {
         for (auto const& session : sessions) {
             publishSession(session);
         }
+        lastPublishedRevision = revision;
     }
 
     ReplayKey replayKey(AttachedSession const& binding) const {

@@ -373,6 +373,11 @@ struct EditorSession::Impl final : CommandServices,
     mutable std::optional<Revision> cellRunsRevision;
     mutable std::optional<FileDocumentId> cellRunsDocument;
     mutable std::vector<CellRun> cellRunsCache;
+    // The active document's immutable flattened text, shared by navigation and
+    // semantic snapshots until its document revision changes.
+    mutable std::optional<Revision> activeTextRevision;
+    mutable std::optional<FileDocumentId> activeTextDocument;
+    mutable std::string activeTextCache;
     std::uint64_t nextStatusId = 1;
 
     [[nodiscard]] CommandHandlerResult runTransaction(
@@ -437,7 +442,7 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] SyntaxViewState activeSyntaxView() const;
     [[nodiscard]] std::optional<WorkspaceDocumentState> activeWorkspaceState() const;
     [[nodiscard]] std::optional<DiffFileView> activeDiffFile() const;
-    [[nodiscard]] std::string activeText() const;
+    [[nodiscard]] std::string const& activeText() const;
     // The line-number gutter width for the active document: 0 when the setting is
     // off or there is no editor document, else digits(lineCount)+1. The whole-
     // document line count is cached by revision.
@@ -631,7 +636,7 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] bool openPickerPrompt(PickerKind kind);
     // Walks the workspace into `fileCandidates`, honoring the gitignore setting.
     void rebuildFileCandidates();
-    void refreshSyntax();
+    void refreshSyntax(std::vector<SyntaxEdit> edits = {});
     // M10 fast startup deferral.  While
     // `deferring_enrichment` is set (the pre-first-frame window when created with
     // defer_enrichment=true), refresh_tree and refresh_syntax record that work is
