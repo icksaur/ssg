@@ -89,7 +89,7 @@ private:
 
 } // namespace
 
-FileIdentity file_identity(const std::filesystem::path& path) {
+FileIdentity fileIdentity(const std::filesystem::path& path) {
     const HANDLE handle =
         CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -111,24 +111,24 @@ FileIdentity file_identity(const std::filesystem::path& path) {
 }
 
 ExclusiveFileLock::ExclusiveFileLock(std::intptr_t native_handle) noexcept
-    : native_handle_(native_handle) {}
+    : nativeHandle_(native_handle) {}
 
 ExclusiveFileLock::~ExclusiveFileLock() {
-    close_noexcept(native_handle_);
+    close_noexcept(nativeHandle_);
 }
 
 ExclusiveFileLock::ExclusiveFileLock(ExclusiveFileLock&& other) noexcept
-    : native_handle_(std::exchange(other.native_handle_, -1)) {}
+    : nativeHandle_(std::exchange(other.nativeHandle_, -1)) {}
 
 ExclusiveFileLock& ExclusiveFileLock::operator=(ExclusiveFileLock&& other) noexcept {
     if (this != &other) {
-        close_noexcept(native_handle_);
-        native_handle_ = std::exchange(other.native_handle_, -1);
+        close_noexcept(nativeHandle_);
+        nativeHandle_ = std::exchange(other.nativeHandle_, -1);
     }
     return *this;
 }
 
-std::optional<ExclusiveFileLock> try_lock_file(
+std::optional<ExclusiveFileLock> tryLockFile(
     const std::filesystem::path& path) {
     const HANDLE handle =
         CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
@@ -138,7 +138,7 @@ std::optional<ExclusiveFileLock> try_lock_file(
         throw_last_error("open lock file", path);
     }
     try {
-        set_owner_only_permissions(path);
+        setOwnerOnlyPermissions(path);
     } catch (...) {
         CloseHandle(handle);
         throw;
@@ -156,7 +156,7 @@ std::optional<ExclusiveFileLock> try_lock_file(
     throw_last_error("acquire file lock", path, error);
 }
 
-void set_owner_only_permissions(const std::filesystem::path& path) {
+void setOwnerOnlyPermissions(const std::filesystem::path& path) {
     PSID owner = nullptr;
     PSECURITY_DESCRIPTOR descriptor = nullptr;
     const DWORD owner_error =
@@ -202,9 +202,9 @@ void set_owner_only_permissions(const std::filesystem::path& path) {
     }
 }
 
-std::filesystem::path user_cache_root(std::string_view application_name) {
-    const auto validation = validate_workspace_relative_path(
-        application_name, PathSyntax::windows);
+std::filesystem::path userCacheRoot(std::string_view application_name) {
+    const auto validation = validateWorkspaceRelativePath(
+        application_name, PathSyntax::Windows);
     if (!validation.valid() ||
         application_name.find_first_of("/\\") != std::string_view::npos) {
         throw std::invalid_argument("cache application name must be one valid component");
@@ -237,9 +237,9 @@ std::filesystem::path user_cache_root(std::string_view application_name) {
 // user_cache_root above, which resolves to LOCALAPPDATA (local, disposable,
 // never roamed). Config is the thing a user backs up/syncs/hand-edits, so
 // this resolves to the ROAMING root (%APPDATA%) instead.
-std::filesystem::path user_config_root(std::string_view application_name) {
-    const auto validation = validate_workspace_relative_path(
-        application_name, PathSyntax::windows);
+std::filesystem::path userConfigRoot(std::string_view application_name) {
+    const auto validation = validateWorkspaceRelativePath(
+        application_name, PathSyntax::Windows);
     if (!validation.valid() ||
         application_name.find_first_of("/\\") != std::string_view::npos) {
         throw std::invalid_argument("config application name must be one valid component");
@@ -274,9 +274,9 @@ std::filesystem::path user_config_root(std::string_view application_name) {
 // Windows has no XDG state analogue, so this resolves to the LOCAL, disposable
 // LOCALAPPDATA root like user_cache_root, but under a distinct application
 // subtree so it is never mistaken for the cache.
-std::filesystem::path user_state_root(std::string_view application_name) {
-    const auto validation = validate_workspace_relative_path(
-        application_name, PathSyntax::windows);
+std::filesystem::path userStateRoot(std::string_view application_name) {
+    const auto validation = validateWorkspaceRelativePath(
+        application_name, PathSyntax::Windows);
     if (!validation.valid() ||
         application_name.find_first_of("/\\") != std::string_view::npos) {
         throw std::invalid_argument("state application name must be one valid component");
@@ -305,7 +305,7 @@ std::filesystem::path user_state_root(std::string_view application_name) {
     throw std::runtime_error("LOCALAPPDATA changed repeatedly during lookup");
 }
 
-void replace_file_atomically(const std::filesystem::path& target,
+void replaceFileAtomically(const std::filesystem::path& target,
                              std::span<const std::byte> contents) {
     TemporaryFile temporary(target);
 

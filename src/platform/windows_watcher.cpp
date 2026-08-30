@@ -41,7 +41,7 @@ std::optional<WatchFileState> observe(const std::filesystem::path& path) {
     }
     try {
         return WatchFileState{
-            file_identity(path), size,
+            fileIdentity(path), size,
             std::chrono::duration_cast<std::chrono::nanoseconds>(
                 time.time_since_epoch()).count()};
     } catch (const std::filesystem::filesystem_error&) {
@@ -100,8 +100,8 @@ public:
     WindowsFilesystemWatcher(std::filesystem::path root, WatcherConfig config)
         : root_(std::filesystem::canonical(std::move(root))),
           buffer_(64 * 1024),
-          max_rescan_entries_(config.max_rescan_entries) {
-        note_optional_construction(OptionalSubsystem::filesystem_watcher);
+          max_rescan_entries_(config.maxRescanEntries) {
+        noteOptionalConstruction(OptionalSubsystem::FilesystemWatcher);
         directory_ = ::CreateFileW(
             root_.c_str(), FILE_LIST_DIRECTORY,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
@@ -118,7 +118,7 @@ public:
             directory_ = INVALID_HANDLE_VALUE;
             throw error;
         }
-        const auto initial = scan_workspace(root_, config.max_rescan_entries);
+        const auto initial = scan_workspace(root_, config.maxRescanEntries);
         if (!initial.complete) {
             ::CloseHandle(event_);
             ::CloseHandle(directory_);
@@ -156,8 +156,8 @@ public:
         }
     }
 
-    void register_save(SaveExpectation expectation) override {
-        normalizer_->register_save(std::move(expectation));
+    void registerSave(SaveExpectation expectation) override {
+        normalizer_->registerSave(std::move(expectation));
     }
 
     std::vector<WatchEvent> poll(std::chrono::milliseconds timeout) override {
@@ -168,7 +168,7 @@ public:
             timeout.count(), std::numeric_limits<DWORD>::max() - 1));
         const auto wait = ::WaitForSingleObject(event_, bounded);
         if (wait == WAIT_TIMEOUT) {
-            return normalizer_->take_ready(WatchClock::now());
+            return normalizer_->takeReady(WatchClock::now());
         }
         if (wait != WAIT_OBJECT_0) {
             throw windows_error("failed waiting for ReadDirectoryChangesW");
@@ -183,9 +183,9 @@ public:
                 pending_rename_token_.reset();
                 start_read();
                 normalizer_->push(
-                    {NativeWatchAction::overflow, {}, 0, {}},
+                    {NativeWatchAction::Overflow, {}, 0, {}},
                     WatchClock::now());
-                return normalizer_->take_ready(WatchClock::now());
+                return normalizer_->takeReady(WatchClock::now());
             }
             throw std::system_error(
                 static_cast<int>(error), std::system_category(),
@@ -198,11 +198,11 @@ public:
         if (bytes == 0) {
             pending_rename_token_.reset();
             normalizer_->push(
-                {NativeWatchAction::overflow, {}, 0, {}}, WatchClock::now());
+                {NativeWatchAction::Overflow, {}, 0, {}}, WatchClock::now());
         } else {
             parse(completed);
         }
-        return normalizer_->take_ready(WatchClock::now());
+        return normalizer_->takeReady(WatchClock::now());
     }
 
 private:
@@ -237,28 +237,28 @@ private:
             switch (native->Action) {
             case FILE_ACTION_ADDED:
                 normalizer_->push(
-                    {NativeWatchAction::create, relative, 0, observed}, now);
+                    {NativeWatchAction::Create, relative, 0, observed}, now);
                 push_subtree_creates(relative, now);
                 break;
             case FILE_ACTION_REMOVED:
                 normalizer_->push(
-                    {NativeWatchAction::remove, relative, 0, {}}, now);
+                    {NativeWatchAction::Remove, relative, 0, {}}, now);
                 break;
             case FILE_ACTION_MODIFIED:
                 normalizer_->push(
-                    {NativeWatchAction::modify, relative, 0, observed}, now);
+                    {NativeWatchAction::Modify, relative, 0, observed}, now);
                 break;
             case FILE_ACTION_RENAMED_OLD_NAME:
                 pending_rename_token_ = next_rename_token_++;
                 normalizer_->push(
-                    {NativeWatchAction::rename_from, relative,
+                    {NativeWatchAction::RenameFrom, relative,
                      *pending_rename_token_, {}}, now);
                 break;
             case FILE_ACTION_RENAMED_NEW_NAME: {
                 const auto token =
                     pending_rename_token_.value_or(next_rename_token_++);
                 normalizer_->push(
-                    {NativeWatchAction::rename_to, relative, token, observed},
+                    {NativeWatchAction::RenameTo, relative, token, observed},
                     now);
                 pending_rename_token_.reset();
                 push_subtree_creates(relative, now);
@@ -266,7 +266,7 @@ private:
             }
             default:
                 normalizer_->push(
-                    {NativeWatchAction::overflow, {}, 0, {}}, now);
+                    {NativeWatchAction::Overflow, {}, 0, {}}, now);
                 break;
             }
             if (native->NextEntryOffset == 0) {
@@ -288,12 +288,12 @@ private:
             scan_workspace(root_ / relative, max_rescan_entries_);
         if (!subtree.complete) {
             normalizer_->push(
-                {NativeWatchAction::overflow, {}, 0, {}}, now);
+                {NativeWatchAction::Overflow, {}, 0, {}}, now);
             return;
         }
         for (const auto& entry : subtree.entries) {
             normalizer_->push(
-                {NativeWatchAction::create, relative / entry.path, 0,
+                {NativeWatchAction::Create, relative / entry.path, 0,
                  entry.state},
                 now);
         }
@@ -313,7 +313,7 @@ private:
 
 } // namespace
 
-std::unique_ptr<FilesystemWatcher> make_platform_filesystem_watcher(
+std::unique_ptr<FilesystemWatcher> makePlatformFilesystemWatcher(
     const std::filesystem::path& canonical_root, WatcherConfig config) {
     return std::make_unique<WindowsFilesystemWatcher>(canonical_root, config);
 }
