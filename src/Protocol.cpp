@@ -4716,48 +4716,69 @@ bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapsho
     return true;
 }
 
+constexpr auto kSemanticSessionFields = std::to_array<std::string_view>({
+    "document", "selection", "history", "clipboard", "prompt_status", "search",
+    "find_replace", "settings", "keymap", "text_encoding", "tabs", "diff",
+    "external_modification", "follow_edits", "tree", "syntax", "lsp_sync",
+    "lsp_features", "theme", "focus", "palette", "ui", "ui_state",
+    "ui_presence", "prompt_view", "notice_view", "watcher_available",
+    "external_focus_held",
+});
+
+constexpr auto kSemanticSessionDeltaFields = std::to_array<std::string_view>({
+    "document", "document_caret", "selection", "history", "clipboard",
+    "prompt_status", "search", "find_replace", "settings", "keymap",
+    "text_encoding", "tabs", "diff", "external_modification", "follow_edits",
+    "tree", "syntax", "lsp_sync", "lsp_features", "theme", "focus", "palette",
+    "ui", "ui_state", "ui_presence", "prompt_view", "notice_view",
+    "watcher_available", "external_focus_held",
+});
+
 ProtocolValue toValue(SessionSnapshotSections const& value) {
     std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("document", toValue(value.document));
-    fields.emplace_back("selection", toValue(value.selection));
-    fields.emplace_back("history", toValue(value.history));
-    fields.emplace_back("clipboard", toValue(value.clipboard));
-    fields.emplace_back("prompt_status", toValue(value.promptStatus));
-    fields.emplace_back("search", toValue(value.search));
-    fields.emplace_back("find_replace", toValue(value.findReplace));
-    fields.emplace_back("settings", toValue(value.settings));
-    fields.emplace_back("keymap", toValue(value.keymap));
-    fields.emplace_back("text_encoding", toValue(value.textEncoding));
-    fields.emplace_back("tabs", toValue(value.tabs));
-    fields.emplace_back("diff", toValue(value.diff));
-    fields.emplace_back("external_modification", toValue(value.externalModification));
-    fields.emplace_back("follow_edits", toValue(value.followEdits));
-    fields.emplace_back("tree", toValue(value.tree));
-    fields.emplace_back("syntax", toValue(value.syntax));
-    fields.emplace_back("lsp_sync", toValue(value.lspSync));
-    fields.emplace_back("lsp_features", toValue(value.lspFeatures));
-    fields.emplace_back("theme", toValue(value.theme));
-    fields.emplace_back("focus", toValue(value.focus));
-    fields.emplace_back("palette", encodePalette(value.palette));
-    fields.emplace_back("ui", encodeUiSchema(value.ui));
-    fields.emplace_back("ui_state", encodeUiState(value.uiState));
-    fields.emplace_back("ui_presence", encodeUiPresence(value.uiPresence));
+    fields.emplace_back(kSemanticSessionFields[0], toValue(value.document));
+    fields.emplace_back(kSemanticSessionFields[1], toValue(value.selection));
+    fields.emplace_back(kSemanticSessionFields[2], toValue(value.history));
+    fields.emplace_back(kSemanticSessionFields[3], toValue(value.clipboard));
+    fields.emplace_back(kSemanticSessionFields[4], toValue(value.promptStatus));
+    fields.emplace_back(kSemanticSessionFields[5], toValue(value.search));
+    fields.emplace_back(kSemanticSessionFields[6], toValue(value.findReplace));
+    fields.emplace_back(kSemanticSessionFields[7], toValue(value.settings));
+    fields.emplace_back(kSemanticSessionFields[8], toValue(value.keymap));
+    fields.emplace_back(kSemanticSessionFields[9], toValue(value.textEncoding));
+    fields.emplace_back(kSemanticSessionFields[10], toValue(value.tabs));
+    fields.emplace_back(kSemanticSessionFields[11], toValue(value.diff));
+    fields.emplace_back(kSemanticSessionFields[12],
+                        toValue(value.externalModification));
+    fields.emplace_back(kSemanticSessionFields[13], toValue(value.followEdits));
+    fields.emplace_back(kSemanticSessionFields[14], toValue(value.tree));
+    fields.emplace_back(kSemanticSessionFields[15], toValue(value.syntax));
+    fields.emplace_back(kSemanticSessionFields[16], toValue(value.lspSync));
+    fields.emplace_back(kSemanticSessionFields[17], toValue(value.lspFeatures));
+    fields.emplace_back(kSemanticSessionFields[18], toValue(value.theme));
+    fields.emplace_back(kSemanticSessionFields[19], toValue(value.focus));
+    fields.emplace_back(kSemanticSessionFields[20], encodePalette(value.palette));
+    fields.emplace_back(kSemanticSessionFields[21], encodeUiSchema(value.ui));
+    fields.emplace_back(kSemanticSessionFields[22], encodeUiState(value.uiState));
+    fields.emplace_back(kSemanticSessionFields[23],
+                        encodeUiPresence(value.uiPresence));
     // Additive: the semantic footer-prompt section. Null when no footer-region
     // prompt is open; a decoder that predates this field simply ignores it, and a
     // frame that omits it decodes to no footer prompt.
-    fields.emplace_back("prompt_view", value.promptView
+    fields.emplace_back(kSemanticSessionFields[24], value.promptView
                                            ? toValue(*value.promptView)
                                            : ProtocolValue::makeNull());
     // Additive: the semantic draft-conflict notice section. Null when the active
     // document has no unresolved conflict; a decoder that predates this field simply
     // ignores it, and a frame that omits it decodes to no notice.
-    fields.emplace_back("notice_view", value.noticeView
+    fields.emplace_back(kSemanticSessionFields[25], value.noticeView
                                            ? toValue(*value.noticeView)
                                            : ProtocolValue::makeNull());
     // Additive: whether the session watches for external modification (Decision
     // 13). A decoder that predates this field ignores it; an absent field decodes
     // to available (true), so an old peer is never shown as unwatched.
-    fields.emplace_back("watcher_available", toValue(value.watcherAvailable));
+    fields.emplace_back(kSemanticSessionFields[26],
+                        toValue(value.watcherAvailable));
     // Additive: whether the external-modification bar is the EFFECTIVE (top)
     // focus, not merely present on the capture stack. A Prompt captured above the
     // external capture makes this false while the legacy `focus` field publishes
@@ -4765,7 +4786,8 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     // else legacy focus" unambiguously. A decoder that predates this field
     // ignores it; an absent field decodes to false, so the legacy `focus` field
     // alone reconstructs focus for an old peer.
-    fields.emplace_back("external_focus_held", toValue(value.externalFocusHeld));
+    fields.emplace_back(kSemanticSessionFields[27],
+                        toValue(value.externalFocusHeld));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
@@ -5765,57 +5787,59 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     fields.emplace_back("view_id", toValue(delta.viewId()));
     fields.emplace_back("capabilities", toValue(delta.capabilities()));
     fields.emplace_back("topology", toValue(delta.topology()));
-    fields.emplace_back("document", toValue(delta.document()));
-    fields.emplace_back("document_caret", toValue(delta.documentCaret()));
-    fields.emplace_back("selection", toValue(delta.selection()));
-    fields.emplace_back("history", toValue(delta.history()));
-    fields.emplace_back("clipboard", toValue(delta.clipboard()));
-    fields.emplace_back("prompt_status", toValue(delta.promptStatus()));
-    fields.emplace_back("search", toValue(delta.search()));
-    fields.emplace_back("find_replace", toValue(delta.findReplace()));
-    fields.emplace_back("settings", toValue(delta.settings()));
-    fields.emplace_back("keymap", toValue(delta.keymap()));
-    fields.emplace_back("text_encoding", toValue(delta.textEncoding()));
-    fields.emplace_back("tabs", toValue(delta.tabs()));
-    fields.emplace_back("diff", toValue(delta.diff()));
-    fields.emplace_back("external_modification",
+    fields.emplace_back(kSemanticSessionDeltaFields[0], toValue(delta.document()));
+    fields.emplace_back(kSemanticSessionDeltaFields[1], toValue(delta.documentCaret()));
+    fields.emplace_back(kSemanticSessionDeltaFields[2], toValue(delta.selection()));
+    fields.emplace_back(kSemanticSessionDeltaFields[3], toValue(delta.history()));
+    fields.emplace_back(kSemanticSessionDeltaFields[4], toValue(delta.clipboard()));
+    fields.emplace_back(kSemanticSessionDeltaFields[5], toValue(delta.promptStatus()));
+    fields.emplace_back(kSemanticSessionDeltaFields[6], toValue(delta.search()));
+    fields.emplace_back(kSemanticSessionDeltaFields[7], toValue(delta.findReplace()));
+    fields.emplace_back(kSemanticSessionDeltaFields[8], toValue(delta.settings()));
+    fields.emplace_back(kSemanticSessionDeltaFields[9], toValue(delta.keymap()));
+    fields.emplace_back(kSemanticSessionDeltaFields[10], toValue(delta.textEncoding()));
+    fields.emplace_back(kSemanticSessionDeltaFields[11], toValue(delta.tabs()));
+    fields.emplace_back(kSemanticSessionDeltaFields[12], toValue(delta.diff()));
+    fields.emplace_back(kSemanticSessionDeltaFields[13],
                         toValue(delta.externalModification()));
-    fields.emplace_back("follow_edits", toValue(delta.followEdits()));
-    fields.emplace_back("tree", toValue(delta.tree()));
-    fields.emplace_back("syntax", toValue(delta.syntax()));
-    fields.emplace_back("lsp_sync", toValue(delta.lspSync()));
-    fields.emplace_back("lsp_features", toValue(delta.lspFeatures()));
-    fields.emplace_back("theme", toValue(delta.theme()));
+    fields.emplace_back(kSemanticSessionDeltaFields[14], toValue(delta.followEdits()));
+    fields.emplace_back(kSemanticSessionDeltaFields[15], toValue(delta.tree()));
+    fields.emplace_back(kSemanticSessionDeltaFields[16], toValue(delta.syntax()));
+    fields.emplace_back(kSemanticSessionDeltaFields[17], toValue(delta.lspSync()));
+    fields.emplace_back(kSemanticSessionDeltaFields[18], toValue(delta.lspFeatures()));
+    fields.emplace_back(kSemanticSessionDeltaFields[19], toValue(delta.theme()));
     fields.emplace_back("style", toValue(delta.style()));
     fields.emplace_back("shell", toValue(delta.shell()));
     fields.emplace_back("viewport", toValue(delta.viewport()));
-    fields.emplace_back("focus", toValue(delta.focus()));
+    fields.emplace_back(kSemanticSessionDeltaFields[20], toValue(delta.focus()));
     fields.emplace_back("selection_nav", toValue(delta.selectionNav()));
     fields.emplace_back("prompt_projection", toValue(delta.promptProjection()));
     fields.emplace_back("tree_windows", toValue(delta.treeWindows()));
-    fields.emplace_back("ui", delta.ui().replacement
+    fields.emplace_back(kSemanticSessionDeltaFields[22], delta.ui().replacement
                                   ? encodeUiSchema(*delta.ui().replacement)
                                   : ProtocolValue::makeNull());
-    fields.emplace_back("ui_state",
+    fields.emplace_back(kSemanticSessionDeltaFields[23],
                         delta.uiState().replacement
                             ? encodeUiState(*delta.uiState().replacement)
                             : ProtocolValue::makeNull());
-    fields.emplace_back("ui_presence",
+    fields.emplace_back(kSemanticSessionDeltaFields[24],
                         delta.uiPresence().replacement
                             ? encodeUiPresence(*delta.uiPresence().replacement)
                             : ProtocolValue::makeNull());
-    fields.emplace_back("palette",
+    fields.emplace_back(kSemanticSessionDeltaFields[21],
                         delta.palette().replacement
                             ? encodePalette(*delta.palette().replacement)
                             : ProtocolValue::makeNull());
-    fields.emplace_back("prompt_view", toValue(delta.promptView()));
-    fields.emplace_back("notice_view", toValue(delta.noticeView()));
+    fields.emplace_back(kSemanticSessionDeltaFields[25], toValue(delta.promptView()));
+    fields.emplace_back(kSemanticSessionDeltaFields[26], toValue(delta.noticeView()));
     // Additive: present only when watcher availability flipped (Decision 13). An
     // absent field means "unchanged" for a peer that predates it.
-    fields.emplace_back("watcher_available", toValue(delta.watcherAvailable()));
+    fields.emplace_back(kSemanticSessionDeltaFields[27],
+                        toValue(delta.watcherAvailable()));
     // Additive: present only when the external-focus-held state flipped. An absent
     // field means "unchanged" for a peer that predates it.
-    fields.emplace_back("external_focus_held", toValue(delta.externalFocusHeld()));
+    fields.emplace_back(kSemanticSessionDeltaFields[28],
+                        toValue(delta.externalFocusHeld()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }
@@ -6015,6 +6039,20 @@ std::vector<std::string> styleWireFieldNames() {
         names.reserve(object->size());
         for (auto const& [key, _] : *object) names.push_back(key);
     }
+    return names;
+}
+
+std::vector<std::string> semanticSessionWireFieldNames() {
+    std::vector<std::string> names;
+    names.reserve(kSemanticSessionFields.size());
+    for (auto const name : kSemanticSessionFields) names.emplace_back(name);
+    return names;
+}
+
+std::vector<std::string> semanticSessionDeltaWireFieldNames() {
+    std::vector<std::string> names;
+    names.reserve(kSemanticSessionDeltaFields.size());
+    for (auto const name : kSemanticSessionDeltaFields) names.emplace_back(name);
     return names;
 }
 

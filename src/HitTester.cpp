@@ -144,6 +144,32 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
+    if (snapshot.presentation()->prompt) {
+        auto const& prompt = *snapshot.presentation()->prompt;
+        for (auto const& projected : prompt.controls) {
+            if (projected.kind == PromptControlKind::Count ||
+                !contains(projected.rect, column, row)) {
+                continue;
+            }
+            auto const& semantic = snapshot.sections().promptView;
+            if (!semantic) return {};
+            auto const found = std::find_if(
+                semantic->controls.begin(), semantic->controls.end(),
+                [&](PromptControl const& control) {
+                    return control.id == projected.id &&
+                           control.kind == projected.kind;
+                });
+            if (found == semantic->controls.end() || found->command.empty()) {
+                return {};
+            }
+            RegionHit hit;
+            hit.region = HitRegion::PromptControl;
+            hit.fieldId = found->id;
+            hit.commandId = found->command;
+            return hit;
+        }
+    }
+
     // The external-modification bar's action sub-regions map a cell to a
     // (fileId, actionCommand) select-then-act target (7A-5b). Published as a
     // dedicated list so the geometry travels with the hit, never re-parsed from a

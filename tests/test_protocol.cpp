@@ -152,6 +152,46 @@ ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
     return result;
 }
 
+std::pair<ssg::SessionSnapshotSections, ssg::SessionSnapshotSections>
+semanticFixtureSections() {
+    auto before = sections(ssg::Revision{4}, "a");
+    auto after = sections(ssg::Revision{5}, "changed");
+    before.externalFocusHeld = true;
+    after.focus = ssg::FocusTarget::Prompt;
+    after.palette.activePicker =
+        ssg::PickerActivation{ssg::SearchMode::Command,
+                              ssg::PickerActivationId{9}};
+    after.palette.commandCandidates.push_back(
+        {"command.id", "Command", "detail"});
+    after.promptView = ssg::PromptView{
+        ssg::PromptKind::Find, "Find",
+        {{ssg::PromptControlKind::Input, "find.query", "Find text",
+          "changed", false, "find.update_query"}},
+        0};
+    after.noticeView =
+        ssg::NoticeView{"changed", {{"notice", "dismiss", "draft.dismiss"}}};
+    after.watcherAvailable = false;
+    ssg::DiffFileView diffFile{ssg::DiffFileId{"changed"}};
+    diffFile.path = "changed.txt";
+    diffFile.baselineIdentity = "base";
+    diffFile.currentContent = "changed";
+    after.diff.files.push_back(std::move(diffFile));
+    after.externalModification = ssg::ExternalModificationViewState{
+        ssg::Revision{5},
+        "one file changed on disk",
+        {{ssg::DiffFileId{"changed"}, "changed.txt",
+          ssg::ExternalDocumentStatus::ExternallyModified, "modified", "M",
+          {ssg::externalActionAffordance(ssg::ExternalAction::Reload)}}},
+        ssg::DiffFileId{"changed"}};
+    ssg::TreeNode treeNode{ssg::TreeNodeId{"workspace:changed"}, std::nullopt,
+                           "changed.txt", ssg::TreeNodeKind::File};
+    after.tree = ssg::TreeViewState{
+        ssg::TreeRevision{7},
+        {{ssg::TreeProviderId{"workspace"}, ssg::TreeProviderKind::Filesystem,
+          {ssg::TreeNodeView{treeNode, 0, false}}, treeNode.id}}};
+    return {std::move(before), std::move(after)};
+}
+
 ssg::ViewportViewState clientView(std::uint32_t firstRow) {
     return {ssg::ViewportDimensions{20, 8},
             firstRow,
@@ -863,6 +903,22 @@ TEST(externalFocusHeldFlipIsADeltaThatRoundTrips) {
     ASSERT_TRUE(replayed.snapshot->sections().externalFocusHeld);
 }
 
+TEST(effectiveFocusUsesThePublishedBaseAndExternalCaptureTruthTable) {
+    auto state = sections(ssg::Revision{4}, "alpha");
+    for (auto focus : {ssg::FocusTarget::Editor, ssg::FocusTarget::Panel,
+                       ssg::FocusTarget::Prompt}) {
+        state.focus = focus;
+        state.externalFocusHeld = false;
+        ASSERT_EQ(ssg::effectiveFocusFromSections(state), focus);
+        state.externalFocusHeld = true;
+        ASSERT_EQ(ssg::effectiveFocusFromSections(state),
+                  ssg::FocusTarget::ExternalModification);
+    }
+    state.focus = ssg::FocusTarget::Prompt;
+    state.externalFocusHeld = false;
+    ASSERT_EQ(ssg::effectiveFocusFromSections(state), ssg::FocusTarget::Prompt);
+}
+
 // The round-trip above carries a DEFAULT style, so it proves the field is
 // present but not that each of the ~29 hand-written codec fields maps to its
 // own slot.  A copy-paste error (encoding `top` where `bottom` belongs) would
@@ -1236,16 +1292,17 @@ TEST(replayRejectsADeltaThatReplacesOnlyTheSchema) {
 }
 
 TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
+    auto [beforeSections, afterSections] = semanticFixtureSections();
     auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "a"));
+        ssg::ViewId{9}, clientView(1), std::move(beforeSections));
     auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
+        ssg::ViewId{9}, clientView(5), std::move(afterSections));
 
     auto const delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
     auto const bytes = ssg::ProtocolCodec{}.encodeSessionDelta(delta);
@@ -1677,6 +1734,7 @@ std::string readFixtureBytes(std::string const& name) {
     while (!hex.empty() && (hex.back() == '\n' || hex.back() == '\r')) {
         hex.pop_back();
     }
+
     std::string bytes;
     bytes.reserve(hex.size() / 2);
     for (std::size_t index = 0; index < hex.size(); index += 2) {
@@ -1684,6 +1742,70 @@ std::string readFixtureBytes(std::string const& name) {
             std::stoul(hex.substr(index, 2), nullptr, 16)));
     }
     return bytes;
+}
+
+std::vector<std::string> semanticFieldManifestNames() {
+    std::ifstream input{std::string{SSG_PROTOCOL_FIXTURES_DIR} +
+                        "/session_semantic_fields.json"};
+    std::string const json{std::istreambuf_iterator<char>{input},
+                           std::istreambuf_iterator<char>{}};
+    std::vector<std::string> names;
+    constexpr std::string_view marker{"\"snapshot\":\""};
+    std::size_t cursor = 0;
+    while ((cursor = json.find(marker, cursor)) != std::string::npos) {
+        cursor += marker.size();
+        auto const end = json.find('"', cursor);
+        ASSERT_TRUE(end != std::string::npos);
+        if (end == std::string::npos) break;
+        names.push_back(json.substr(cursor, end - cursor));
+        cursor = end + 1;
+    }
+    return names;
+}
+
+std::vector<std::string> semanticDeltaManifestNames() {
+    std::ifstream input{std::string{SSG_PROTOCOL_FIXTURES_DIR} +
+                        "/session_semantic_fields.json"};
+    std::string const json{std::istreambuf_iterator<char>{input},
+                           std::istreambuf_iterator<char>{}};
+    std::vector<std::string> names;
+    constexpr std::string_view marker{"\"delta\":["};
+    std::size_t cursor = 0;
+    while ((cursor = json.find(marker, cursor)) != std::string::npos) {
+        cursor += marker.size();
+        auto const end = json.find(']', cursor);
+        ASSERT_TRUE(end != std::string::npos);
+        if (end == std::string::npos) break;
+        while (cursor < end) {
+            auto const beginName = json.find('"', cursor);
+            if (beginName == std::string::npos || beginName >= end) break;
+            auto const endName = json.find('"', beginName + 1);
+            ASSERT_TRUE(endName != std::string::npos && endName < end);
+            if (endName == std::string::npos || endName >= end) break;
+            names.push_back(
+                json.substr(beginName + 1, endName - beginName - 1));
+            cursor = endName + 1;
+        }
+        cursor = end + 1;
+    }
+    return names;
+}
+
+TEST(semanticFieldManifestExactlyMatchesTheSnapshotCodec) {
+    auto const manifest = semanticFieldManifestNames();
+    auto const encoded = ssg::semanticSessionWireFieldNames();
+    ASSERT_FALSE(manifest.empty());
+    ASSERT_EQ(manifest, encoded);
+    ASSERT_EQ(semanticDeltaManifestNames(),
+              ssg::semanticSessionDeltaWireFieldNames());
+    auto const unique = std::set<std::string>{manifest.begin(), manifest.end()};
+    ASSERT_EQ(unique.size(), manifest.size());
+    for (auto const presentation :
+         {"style", "shell", "viewport", "selection_nav",
+          "prompt_projection", "tree_windows"}) {
+        ASSERT_TRUE(std::find(manifest.begin(), manifest.end(), presentation) ==
+                    manifest.end());
+    }
 }
 
 void writeFixtureHex(std::string const& name, std::string const& bytes) {
@@ -1747,6 +1869,25 @@ TEST(regenerateCanonicalFixtures) {
         ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
     writeFixtureHex("session_delta.hex",
                       ssg::ProtocolCodec{}.encodeSessionDelta(ssg::SessionSnapshotCodec{}.deriveDelta(before, after)));
+    auto [beforeSections, afterSections] = semanticFixtureSections();
+    before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(beforeSections));
+    after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(5), std::move(afterSections));
+    writeFixtureHex("session_semantic_base.hex",
+                    ssg::ProtocolCodec{}.encodeSessionSnapshot(before));
+    writeFixtureHex("session_semantic_target.hex",
+                    ssg::ProtocolCodec{}.encodeSessionSnapshot(after));
+    writeFixtureHex(
+        "session_semantic_delta.hex",
+        ssg::ProtocolCodec{}.encodeSessionDelta(
+            ssg::SessionSnapshotCodec{}.deriveDelta(before, after)));
     ssg::KeyStroke stroke;
     stroke.code = ssg::KeyCode::KeyA;
     stroke.control = true;
@@ -1833,6 +1974,22 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
         ASSERT_EQ(decoded.invocation->statusId, ssg::StatusId{9});
         ASSERT_EQ(decoded.invocation->actionId, std::string{"dismiss"});
     }
+}
+
+TEST(semanticFixtureDeltaReplaysToItsCheckedInTarget) {
+    auto const base = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        readFixtureBytes("session_semantic_base.hex"));
+    auto const delta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        readFixtureBytes("session_semantic_delta.hex"));
+    ASSERT_TRUE(base.accepted());
+    ASSERT_TRUE(delta.accepted());
+    if (!base.accepted() || !delta.accepted()) return;
+    auto const replayed =
+        ssg::SessionSnapshotCodec{}.replay(*base.snapshot, *delta.delta);
+    ASSERT_TRUE(replayed.accepted());
+    if (!replayed.accepted()) return;
+    ASSERT_EQ(ssg::ProtocolCodec{}.encodeSessionSnapshot(*replayed.snapshot),
+              readFixtureBytes("session_semantic_target.hex"));
 }
 
 }  // namespace
@@ -2013,8 +2170,10 @@ int main() {
     RUN(gitTreeAffordanceMustMatchItsAuthoritativeIdentity);
     RUN(externalFocusHeldIsAdditiveAbsentDecodesFalse);
     RUN(externalFocusHeldFlipIsADeltaThatRoundTrips);
+    RUN(effectiveFocusUsesThePublishedBaseAndExternalCaptureTruthTable);
     RUN(sessionSnapshotRoundTripsANonDefaultStyle);
     RUN(styleDefineKeysExactlyMatchTheWireCodecFields);
+    RUN(semanticFieldManifestExactlyMatchesTheSnapshotCodec);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
     RUN(sessionSnapshotAndDeltaCarryTheUiSection);
     RUN(sessionDeltaCarriesThePaletteSection);
@@ -2037,5 +2196,6 @@ int main() {
     RUN(valueBoundsAreEnforcedOnDecode);
     RUN(regenerateCanonicalFixtures);
     RUN(canonicalFixturesDecodeToTheExpectedValues);
+    RUN(semanticFixtureDeltaReplaysToItsCheckedInTarget);
     return failed == 0 ? 0 : 1;
 }

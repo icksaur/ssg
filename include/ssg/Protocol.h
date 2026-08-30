@@ -290,5 +290,10 @@ public:
 // field added to one surface but not the other is caught.  Not on any runtime
 // path.
 [[nodiscard]] std::vector<std::string> styleWireFieldNames();
+// CONTRACT: declaration order matches SessionSnapshotSections. This is the
+// semantic field inventory consumed by cross-language replay oracles; grid
+// presentation fields are never included.
+[[nodiscard]] std::vector<std::string> semanticSessionWireFieldNames();
+[[nodiscard]] std::vector<std::string> semanticSessionDeltaWireFieldNames();
 
 }  // namespace ssg

@@ -27,6 +27,7 @@ enum class HitRegion : std::uint8_t {
     HeaderField,        // a shell header status field
     FooterField,
     StatusAction,        // a shell footer status field
+    PromptControl,       // a published prompt control: fieldId + commandId are set
     ExternalAction,      // an external-modification action: externalFileId +
                          // commandId are set (7A-5b)
     EditorScrollbar,   // the editor pane gutter: scroll_* are set

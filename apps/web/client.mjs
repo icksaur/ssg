@@ -885,11 +885,7 @@ function applyDelta(d) {
   if (!state.sections || !deltaIsContiguous(state.revision, d)) return false;
   const pointerBasis = currentPointerBasis();
   const next = applySessionDeltaCopy(state.sections, d);
-  // The tree is retained and spliced in place; only a genuinely inexpressible
-  // tree transition (snapshot_required, a missed base revision, or a malformed
-  // splice) falls back to a full snapshot, so ordinary expand/open/select no
-  // longer churns the panel through a resync.
-  if (d.tree && !applyTreeDelta(next.tree, d.tree)) return false;
+  if (!next) return false;
   state.sections = next;
   state.revision = BigInt(d.revision);
   if (!samePointerBasis(pointerBasis, currentPointerBasis())) {

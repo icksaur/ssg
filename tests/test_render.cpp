@@ -1622,6 +1622,65 @@ TEST(urlDetectionStopsAtSentenceAndBracketBoundaries) {
     ASSERT_TRUE(linksFor("no links here at all\n").empty());
 }
 
+TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
+    auto snapshot = ssg::test::SessionSnapshotBuilder{}
+                        .document("content\n")
+                        .viewport(80, 16)
+                        .shellRequest([](ssg::ShellLayoutRequest& request) {
+                            request.notice = ssg::ShellNotice{
+                                "Draft conflict",
+                                {{"diff", "Diff", "draft.diff"}}};
+                            request.externalBar = ssg::ShellExternalBar{
+                                "Files changed on disk",
+                                {{"a", "M a.txt",
+                                  {{"Reload", "external.reload"}}},
+                                 {"b", "M b.txt",
+                                  {{"Reload", "external.reload"}}}},
+                                1};
+                        })
+                        .build();
+    auto const& shell = snapshot.presentation()->shell;
+    auto const find = [&](ssg::ShellNodeKind kind,
+                          std::string_view id)
+        -> const ssg::AccessibilityNode* {
+        auto found = std::find_if(
+            shell.accessibilityNodes.begin(), shell.accessibilityNodes.end(),
+            [&](ssg::AccessibilityNode const& node) {
+                return node.kind == kind && node.id == id;
+            });
+        return found == shell.accessibilityNodes.end() ? nullptr : &*found;
+    };
+    auto const* notice =
+        find(ssg::ShellNodeKind::NoticeBar, "draft.notice");
+    auto const* noticeAction =
+        find(ssg::ShellNodeKind::NoticeAction, "diff");
+    auto const* unselected =
+        find(ssg::ShellNodeKind::ExternalModificationRow, "a");
+    auto const* selected =
+        find(ssg::ShellNodeKind::ExternalModificationRow, "b");
+    ASSERT_TRUE(notice != nullptr);
+    ASSERT_TRUE(noticeAction != nullptr);
+    ASSERT_TRUE(unselected != nullptr);
+    ASSERT_TRUE(selected != nullptr);
+    if (!notice || !noticeAction || !unselected || !selected) return;
+
+    auto const grid = ssg::Renderer{}.render(snapshot);
+    ASSERT_EQ(notice->role, ssg::SemanticRole::StatusWarning);
+    ASSERT_EQ(noticeAction->role, ssg::SemanticRole::StatusWarning);
+    ASSERT_EQ(grid.at(notice->rect.x, notice->rect.y).text,
+              std::string{"D"});
+    ASSERT_EQ(grid.at(notice->rect.x, notice->rect.y).role,
+              ssg::SemanticRole::StatusWarning);
+    ASSERT_EQ(grid.at(noticeAction->rect.x, noticeAction->rect.y).text,
+              std::string{"["});
+    ASSERT_EQ(grid.at(noticeAction->rect.x, noticeAction->rect.y).role,
+              ssg::SemanticRole::StatusWarning);
+    ASSERT_EQ(grid.at(unselected->rect.x, unselected->rect.y).role,
+              ssg::SemanticRole::StatusWarning);
+    ASSERT_EQ(grid.at(selected->rect.x, selected->rect.y).role,
+              ssg::SemanticRole::Selection);
+}
+
 // The dead-color-role guard. Proves the
 // theme.set name surface equals the actually-color-consumed role surface, with
 // `Caret` the sole exception (a live cell-role TAG whose color is intentionally
@@ -1893,6 +1952,7 @@ int main() {
     RUN(styleDefineRestylesTheLiveSessionChrome);
     RUN(urlsInTheDocumentBecomeClickableRuns);
     RUN(urlDetectionStopsAtSentenceAndBracketBoundaries);
+    RUN(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects);
     RUN(lspDiagnosticsUnderlineExactlyTheirRange);
     RUN(staleDiagnosticsAreNotPainted);
     RUN(styleDefineRejectionLeavesTheLiveStyleUnchanged);

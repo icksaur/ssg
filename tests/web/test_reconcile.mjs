@@ -7,6 +7,7 @@
 // after their result revision is visible; authoritative state always wins.
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput, cssColor,
   decodeMessage, browserInboundKind, encodeClientInput, encodeCommandRequest,
@@ -18,7 +19,7 @@ import {
   pickerPresentationFromSubmit,
   PICKER_MODE, encodePickerSubmit, encodeSelectionByteRange, encodeTabAction,
   markedTextByteOffset, encodeTreeActivation, applyTreeDelta,
-  applySessionDeltaSections, applySessionDeltaCopy,
+  applySessionDeltaSections, applySessionDeltaCopy, findSections,
   encodeStatusActionInvocation, encodePromptFocus,
   externalModificationFromSections, externalFocusHeld, encodeExternalAction,
   applyExternalModificationDelta, isCurrentGeneration, replayAttachFrame,
@@ -31,6 +32,14 @@ import {
 
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; };
+
+const fixtureMessage = (name) => {
+  const hex = fs.readFileSync(
+    new URL('../fixtures/protocol/' + name, import.meta.url), 'utf8').trim();
+  const bytes = Uint8Array.from(
+    hex.match(/../g).map((pair) => Number.parseInt(pair, 16)));
+  return decodeMessage(bytes.buffer).payload;
+};
 
 // --- byte <-> UTF-16 mapping, including multi-byte and astral text and EOF ---
 check('byteToIndex maps ASCII, 2-byte, and astral boundaries and EOF', () => {
@@ -1324,6 +1333,58 @@ check('applySessionDeltaCopy retains unchanged large sections for a caret update
   assert.equal(next.document.text, document.text);
   assert.equal(next.syntax, syntax);
   assert.equal(next.palette, palette);
+});
+
+check('semantic manifest and C++ fixture replay every browser section atomically', () => {
+  const manifest = JSON.parse(fs.readFileSync(
+    new URL('../fixtures/protocol/session_semantic_fields.json', import.meta.url),
+    'utf8'));
+  const base = findSections(fixtureMessage('session_semantic_base.hex'));
+  const target = findSections(fixtureMessage('session_semantic_target.hex'));
+  const delta = fixtureMessage('session_semantic_delta.hex');
+  assert.deepEqual(
+    manifest.map((entry) => entry.snapshot), Object.keys(base));
+  for (const { snapshot } of manifest) {
+    assert.notDeepEqual(base[snapshot], target[snapshot],
+      snapshot + ' fixture must independently change');
+  }
+  const replayed = applySessionDeltaCopy(base, delta);
+  assert.ok(replayed);
+  assert.deepEqual(replayed, target);
+
+  const rejectsWithoutMutation = (mutate) => {
+    const malformed = structuredClone(delta);
+    mutate(malformed);
+    const retained = structuredClone(base);
+    assert.equal(applySessionDeltaCopy(retained, malformed), null);
+    assert.deepEqual(retained, base);
+  };
+  for (const name of [
+    'document', 'search', 'diff', 'external_modification', 'tree',
+    'lsp_sync', 'lsp_features',
+  ]) {
+    rejectsWithoutMutation((malformed) => {
+      malformed[name].base_revision = 999n;
+    });
+  }
+  rejectsWithoutMutation((malformed) => {
+    malformed.settings.changes[0].before.value.value = 999n;
+  });
+  rejectsWithoutMutation((malformed) => {
+    malformed.text_encoding.before.status.encoding = 999n;
+  });
+  rejectsWithoutMutation((malformed) => {
+    malformed.selection.changed = 0n;
+  });
+  rejectsWithoutMutation((malformed) => {
+    malformed.syntax.spans = [{ begin: 1n, end: 7n, scope: 0n }];
+  });
+  rejectsWithoutMutation((malformed) => {
+    delete malformed.ui_state;
+  });
+  rejectsWithoutMutation((malformed) => {
+    delete malformed.ui_presence;
+  });
 });
 
 check('mergeBrowserRenderPlans preserves every dirty surface and strongest work', () => {

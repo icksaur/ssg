@@ -14,9 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build --config Release --parallel
+      - name: Platform interface compile and link
+        run: cmake --build build --config Release --target test_platform_interface
       - name: Core and platform gates
         run: ctest --test-dir build -C Release --output-on-failure -LE "performance"
       - name: Performance correctness

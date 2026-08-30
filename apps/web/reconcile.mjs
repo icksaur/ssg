@@ -678,7 +678,7 @@ export function applySessionDeltaSections(sections, delta) {
     sections.syntax.spans = delta.syntax.spans;
   }
   if (delta.theme && delta.theme.replacement != null) sections.theme = delta.theme.replacement;
-  if (delta.focus != null) sections.focus = num(delta.focus);
+  if (delta.focus != null) sections.focus = delta.focus;
   const replaceWrapped = (name) => { if (delta[name] && delta[name].replacement != null) sections[name] = delta[name].replacement; };
   replaceWrapped('prompt_status');
   replaceWrapped('find_replace');
@@ -715,18 +715,315 @@ export function applySessionDeltaSections(sections, delta) {
   return sections;
 }
 
-// Apply non-tree delta sections with copy-on-write ownership. Unchanged sections
-// retain their identity, so a caret-only transition cannot duplicate document
-// text, syntax, or client-owned inventories.
+const sameValue = (left, right) => {
+  const encode = (value) => JSON.stringify(
+    value, (_, item) => typeof item === 'bigint' ? item.toString() : item);
+  return encode(left) === encode(right);
+};
+
+const has = (value, key) =>
+  value != null && Object.prototype.hasOwnProperty.call(value, key);
+
+function changedReplacement(current, delta, nullable = false) {
+  if (!delta) return { accepted: true, value: current };
+  const changed = !!num(delta.changed);
+  const replacementPresent = has(delta, 'replacement');
+  if (!changed) {
+    return replacementPresent && delta.replacement != null
+      ? { accepted: false, value: current }
+      : { accepted: true, value: current };
+  }
+  if (!replacementPresent || (!nullable && delta.replacement == null)) {
+    return { accepted: false, value: current };
+  }
+  return { accepted: true, value: delta.replacement };
+}
+
+function revisionReplacement(current, delta) {
+  if (!delta) return { accepted: true, value: current };
+  if (!current ||
+      BigInt(delta.base_revision) !== BigInt(current.revision) ||
+      BigInt(delta.revision) < BigInt(delta.base_revision)) {
+    return { accepted: false, value: current };
+  }
+  if (delta.state == null) {
+    return BigInt(delta.revision) === BigInt(delta.base_revision)
+      ? { accepted: true, value: current }
+      : { accepted: false, value: current };
+  }
+  return BigInt(delta.state.revision) === BigInt(delta.revision)
+    ? { accepted: true, value: delta.state }
+    : { accepted: false, value: current };
+}
+
+function applySettingsDelta(current, delta) {
+  if (!delta) return { accepted: true, value: current };
+  const entries = (current?.entries || []).map((entry) => ({ ...entry }));
+  for (const change of (delta.changes || [])) {
+    const key = num(change.key);
+    const entry = entries[key];
+    if (!entry || !sameValue(entry.effective, change.before)) {
+      return { accepted: false, value: current };
+    }
+    entry.effective = change.after;
+  }
+  return { accepted: true, value: { ...current, entries } };
+}
+
+function applyIdMerge(current, delta, itemKey, selectionKey = null) {
+  if (!delta || !current ||
+      BigInt(delta.base_revision) !== BigInt(current.revision) ||
+      BigInt(delta.revision) < BigInt(delta.base_revision)) {
+    return { accepted: false, value: current };
+  }
+  const key = (value) => String(value == null ? '' : value);
+  const items = Array.isArray(current[itemKey]) ? current[itemKey] : [];
+  const byId = new Map(items.map((item) => [key(item.id), item]));
+  const changed = new Set();
+  for (const id of (delta.removed || [])) {
+    const normalized = key(id);
+    if (changed.has(normalized) || !byId.delete(normalized)) {
+      return { accepted: false, value: current };
+    }
+    changed.add(normalized);
+  }
+  for (const item of (delta.upserted || [])) {
+    const normalized = key(item.id);
+    if (!normalized || changed.has(normalized)) {
+      return { accepted: false, value: current };
+    }
+    changed.add(normalized);
+    byId.set(normalized, item);
+  }
+  const value = { ...current, revision: delta.revision,
+                  [itemKey]: [...byId.values()] };
+  if (has(delta, 'message')) value.message = delta.message;
+  if (selectionKey) {
+    value[selectionKey] = delta.selected == null ? null : delta.selected;
+    if (value[selectionKey] != null && !byId.has(key(value[selectionKey]))) {
+      return { accepted: false, value: current };
+    }
+  }
+  return { accepted: true, value };
+}
+
+function uiNodeIds(schema) {
+  if (!schema?.root) return null;
+  const ids = [];
+  const visit = (node) => {
+    if (!node || typeof node.id !== 'string') return false;
+    ids.push(node.id);
+    for (const child of (node.container?.children || [])) {
+      if (!visit(child)) return false;
+    }
+    return true;
+  };
+  return visit(schema.root) ? ids : null;
+}
+
+function validUiFrame(schema, state, presence) {
+  const ids = uiNodeIds(schema);
+  if (!ids || !state || !presence ||
+      num(schema.generation) !== num(state.generation) ||
+      num(schema.generation) !== num(presence.generation)) return false;
+  const expected = new Set(ids);
+  const stateIds = (state.nodes || []).map((node) => node.id);
+  const presenceIds = (presence.nodes || []).map((node) => node.id);
+  return expected.size === ids.length &&
+    stateIds.length === ids.length && presenceIds.length === ids.length &&
+    stateIds.every((id) => expected.has(id)) &&
+    presenceIds.every((id) => expected.has(id)) &&
+    new Set(stateIds).size === stateIds.length &&
+    new Set(presenceIds).size === presenceIds.length;
+}
+
+function validSyntaxState(state) {
+  const textBytes = num(state?.text_bytes);
+  if (!state || textBytes < 0 || !Array.isArray(state.spans) ||
+      !Array.isArray(state.bracket_pairs) ||
+      !Array.isArray(state.unmatched_brackets) ||
+      !Array.isArray(state.comment_tokens) ||
+      !Array.isArray(state.comment_ranges) ||
+      !Array.isArray(state.indentation) || state.indentation.length === 0) {
+    return false;
+  }
+  let cursor = 0;
+  for (const span of state.spans) {
+    const begin = num(span.begin);
+    const end = num(span.end);
+    if (begin !== cursor || begin >= end || end > textBytes) return false;
+    cursor = end;
+  }
+  if (cursor !== textBytes) return false;
+  let previous = -1;
+  for (const pair of state.bracket_pairs) {
+    const open = num(pair.open);
+    const close = num(pair.close);
+    if (open >= close || close >= textBytes || open <= previous) return false;
+    previous = open;
+  }
+  previous = -1;
+  for (const bracket of state.unmatched_brackets) {
+    const offset = num(bracket.offset);
+    if (offset >= textBytes || offset <= previous) return false;
+    previous = offset;
+  }
+  let previousBegin = -1;
+  let previousEnd = -1;
+  for (const token of state.comment_tokens) {
+    const begin = num(token.range?.begin);
+    const end = num(token.range?.end);
+    if (begin >= end || end > textBytes ||
+        (begin < previousBegin ||
+         (begin === previousBegin && end <= previousEnd))) return false;
+    previousBegin = begin;
+    previousEnd = end;
+  }
+  previous = 0;
+  for (const range of state.comment_ranges) {
+    const begin = num(range.range?.begin);
+    const end = num(range.range?.end);
+    if (begin < previous || begin >= end || end > textBytes) return false;
+    previous = end;
+  }
+  previous = -1;
+  for (let index = 0; index < state.indentation.length; ++index) {
+    const line = state.indentation[index];
+    const lineStart = num(line.line_start);
+    const contentStart = num(line.content_start);
+    if (num(line.line) !== index || lineStart > contentStart ||
+        contentStart > textBytes || lineStart <= previous) return false;
+    previous = lineStart;
+  }
+  return true;
+}
+
+// Transactionally apply every semantic section. Unchanged sections retain their
+// identity; failure returns null and leaves the retained frame untouched.
 export function applySessionDeltaCopy(sections, delta) {
+  if (!sections || !delta) return null;
   const next = { ...sections };
-  if (delta.document || delta.document_caret != null) {
+  if (delta.document) {
+    const document = delta.document;
+    if (BigInt(document.base_revision) !== BigInt(sections.document.revision) ||
+        BigInt(document.revision) <= BigInt(document.base_revision)) return null;
+    const start = num(document.start);
+    const erased = num(document.erased_bytes);
+    const total = utf8Bytes(sections.document.text);
+    const boundaries = byteToIndex(
+      sections.document.text, [start, start + erased]);
+    if (start < 0 || erased < 0 || start + erased > total ||
+        !boundaries.has(start) || !boundaries.has(start + erased)) return null;
+    next.document = {
+      ...sections.document,
+      text: applyDocumentDelta(sections.document.text, document),
+      revision: document.revision,
+      diff_file_identity: document.diff_file_identity,
+    };
+  } else if (delta.document_caret != null) {
     next.document = { ...sections.document };
   }
-  if (delta.syntax && delta.syntax.spans != null) {
-    next.syntax = { ...(sections.syntax || {}) };
+  if (delta.document_caret != null) {
+    const caret = num(delta.document_caret);
+    if (caret < 0 || caret > utf8Bytes(next.document.text) ||
+        !byteToIndex(next.document.text, [caret]).has(caret)) return null;
+    next.document.caret = delta.document_caret;
   }
-  return applySessionDeltaSections(next, delta);
+
+  const replacements = [
+    ['selection', false], ['history', false], ['clipboard', false],
+    ['prompt_status', false], ['keymap', false],
+    ['prompt_view', true], ['notice_view', true],
+  ];
+  for (const [name, nullable] of replacements) {
+    const replayed = changedReplacement(sections[name], delta[name], nullable);
+    if (!replayed.accepted) return null;
+    next[name] = replayed.value;
+  }
+  const find = delta.find_replace;
+  if (find) {
+    if (num(find.base_generation) !== num(sections.find_replace.generation)) {
+      return null;
+    }
+    const replayed = changedReplacement(sections.find_replace, find);
+    if (!replayed.accepted ||
+        (replayed.value !== sections.find_replace &&
+         num(replayed.value.generation) < num(find.base_generation))) return null;
+    next.find_replace = replayed.value;
+  }
+  for (const name of ['search', 'lsp_sync', 'lsp_features']) {
+    const replayed = revisionReplacement(sections[name], delta[name]);
+    if (!replayed.accepted) return null;
+    next[name] = replayed.value;
+  }
+  const settings = applySettingsDelta(sections.settings, delta.settings);
+  if (!settings.accepted) return null;
+  next.settings = settings.value;
+  if (delta.text_encoding) {
+    if (!sameValue(sections.text_encoding, delta.text_encoding.before)) return null;
+    next.text_encoding = delta.text_encoding.after;
+  }
+  if (delta.tabs?.state != null) next.tabs = delta.tabs.state;
+
+  const diff = applyIdMerge(sections.diff, delta.diff, 'files');
+  if (delta.diff && !diff.accepted) return null;
+  if (delta.diff) next.diff = diff.value;
+  const external = applyIdMerge(
+    sections.external_modification, delta.external_modification,
+    'files', 'selected');
+  if (delta.external_modification && !external.accepted) return null;
+  if (delta.external_modification) next.external_modification = external.value;
+
+  if (delta.follow_edits) {
+    if (num(delta.follow_edits.base_generation) !==
+        num(sections.follow_edits.generation)) return null;
+    if (delta.follow_edits.replacement == null) {
+      if (num(delta.follow_edits.generation) !==
+          num(delta.follow_edits.base_generation)) return null;
+    } else {
+      if (num(delta.follow_edits.replacement.generation) !==
+          num(delta.follow_edits.generation)) return null;
+      next.follow_edits = delta.follow_edits.replacement;
+    }
+  }
+  if (delta.tree) {
+    next.tree = { ...sections.tree };
+    if (!applyTreeDelta(next.tree, delta.tree)) return null;
+  }
+  if (delta.syntax) {
+    const baseRevision = BigInt(delta.syntax.base_revision);
+    const revision = BigInt(delta.syntax.revision);
+    const members = [
+      'language', 'text_bytes', 'spans', 'bracket_pairs',
+      'unmatched_brackets', 'comment_tokens', 'comment_ranges', 'indentation',
+    ];
+    const changed = members.some((member) => delta.syntax[member] != null);
+    if (baseRevision !== BigInt(sections.syntax.revision) ||
+        revision < baseRevision || (revision === baseRevision && changed)) {
+      return null;
+    }
+    const syntax = { ...sections.syntax, revision: delta.syntax.revision };
+    for (const member of members) {
+      if (delta.syntax[member] != null) syntax[member] = delta.syntax[member];
+    }
+    if (!validSyntaxState(syntax)) return null;
+    next.syntax = syntax;
+  }
+  if (delta.theme?.replacement != null) next.theme = delta.theme.replacement;
+  if (delta.focus != null) next.focus = delta.focus;
+  for (const name of ['palette', 'ui', 'ui_state', 'ui_presence']) {
+    if (delta[name] != null) next[name] = delta[name].replacement ?? delta[name];
+  }
+  if ((delta.ui != null || delta.ui_state != null ||
+       delta.ui_presence != null) &&
+      !validUiFrame(next.ui, next.ui_state, next.ui_presence)) return null;
+  if (delta.watcher_available != null) {
+    next.watcher_available = !!num(delta.watcher_available);
+  }
+  if (delta.external_focus_held != null) {
+    next.external_focus_held = !!num(delta.external_focus_held);
+  }
+  return next;
 }
 
 // The draft-conflict notice's geometry-free semantic projection normalized for the
