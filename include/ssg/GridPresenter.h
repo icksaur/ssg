@@ -1,0 +1,81 @@
+#pragma once
+
+#include <ssg/PaletteSearcher.h>
+#include <ssg/Viewport.h>
+#include <ssg/session_snapshot.h>
+
+#include <cstdint>
+#include <optional>
+
+namespace ssg {
+
+class EditorSession;
+
+struct GridBasis {
+    ViewId viewId;
+    Revision semanticRevision;
+    // Advances once for each frame this presenter successfully projects.
+    std::uint64_t presentationGeneration = 0;
+
+    friend bool operator==(const GridBasis&, const GridBasis&) = default;
+};
+
+struct GridPresentationRequest {
+    ViewportDimensions dimensions;
+    PaletteReport palette;
+};
+
+class GridFrame {
+public:
+    GridFrame(GridFrame const&) = delete;
+    GridFrame& operator=(GridFrame const&) = delete;
+    GridFrame(GridFrame&&) noexcept = default;
+    GridFrame& operator=(GridFrame&&) noexcept = default;
+
+    [[nodiscard]] GridBasis basis() const noexcept { return basis_; }
+    [[nodiscard]] SessionSnapshot const& semantic() const noexcept {
+        return semantic_;
+    }
+    [[nodiscard]] Revision revision() const noexcept {
+        return semantic_.revision();
+    }
+    [[nodiscard]] SessionSnapshotSections const& sections() const noexcept {
+        return semantic_.sections();
+    }
+    [[nodiscard]] PresentationSnapshot const* presentation() const noexcept {
+        return semantic_.presentation() ? &*semantic_.presentation() : nullptr;
+    }
+    // Temporary adapter for presentation tests and the compatibility bridge.
+    // Plan 6 removes this with SessionSnapshot::presentation().
+    [[nodiscard]] static std::optional<GridFrame> fromDeprecatedSnapshot(
+        SessionSnapshot snapshot);
+
+private:
+    friend class GridPresenter;
+    GridFrame(SessionSnapshot semantic, GridBasis basis)
+        : semantic_{std::move(semantic)}, basis_{basis} {}
+
+    SessionSnapshot semantic_;
+    GridBasis basis_;
+};
+
+class GridPresenter {
+public:
+    explicit GridPresenter(ViewId viewId) : viewId_{viewId} {}
+
+    GridPresenter(GridPresenter const&) = delete;
+    GridPresenter& operator=(GridPresenter const&) = delete;
+    GridPresenter(GridPresenter&&) noexcept = default;
+    GridPresenter& operator=(GridPresenter&&) noexcept = default;
+
+    [[nodiscard]] std::optional<GridFrame> project(
+        EditorSession& session, ClientId client,
+        GridPresentationRequest request);
+
+private:
+    ViewId viewId_;
+    std::optional<Revision> adoptedRevision_;
+    std::uint64_t generation_ = 0;
+};
+
+}  // namespace ssg

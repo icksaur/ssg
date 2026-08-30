@@ -5,7 +5,7 @@
 // item under it, or to a scrollbar position. It performs NO input handling —
 // milestone 8 (mouse) is the caller that turns a RegionHit into commands.
 
-#include <ssg/session_snapshot.h>
+#include <ssg/GridPresenter.h>
 #include <ssg/TreeModel.h>
 
 #include <cstdint>
@@ -75,7 +75,7 @@ struct RegionHit {
 // row, or in a reserved-but-empty gutter/list area is HitRegion::None.
 class HitTester {
 public:
-    explicit HitTester(SessionSnapshot const& snapshot) noexcept
+    explicit HitTester(GridFrame const& snapshot) noexcept
         : snapshot_(snapshot) {}
 
     [[nodiscard]] RegionHit at(int column, int row) const;
@@ -97,7 +97,7 @@ public:
     [[nodiscard]] std::optional<GutterThumb> gutterThumb(HitRegion region) const;
 
 private:
-    SessionSnapshot const& snapshot_;
+    GridFrame const& snapshot_;
 };
 
 }  // namespace ssg

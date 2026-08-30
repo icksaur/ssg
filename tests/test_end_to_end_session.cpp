@@ -26,7 +26,8 @@ struct CanonicalState {
     bool operator==(CanonicalState const&) const = default;
 };
 
-CanonicalState canonical(ssg::SessionSnapshot const& snapshot) {
+template <typename Snapshot>
+CanonicalState canonical(Snapshot const& snapshot) {
     auto const& sections = snapshot.sections();
     auto const* tab =
         sections.tabs.tabs.empty() ? nullptr : &sections.tabs.tabs.front();

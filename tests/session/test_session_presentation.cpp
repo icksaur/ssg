@@ -1039,8 +1039,12 @@ TEST(liveDiffTabGlyphColorTracksThemePalette) {
         runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(darkSnapshot.has_value());
     if (!darkSnapshot) return;
+    auto darkFrame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*darkSnapshot));
+    ASSERT_TRUE(darkFrame.has_value());
+    if (!darkFrame) return;
     std::optional<ssg::TabId> documentTabId;
-    for (const auto& tab : darkSnapshot->sections().tabs.tabs) {
+    for (const auto& tab : darkFrame->sections().tabs.tabs) {
         if (tab.kind == ssg::TabKind::Document) {
             documentTabId = tab.id;
             break;
@@ -1048,9 +1052,10 @@ TEST(liveDiffTabGlyphColorTracksThemePalette) {
     }
     ASSERT_TRUE(documentTabId.has_value());
     if (!documentTabId) return;
-    auto darkGrid = ssg::Renderer{}.render(*darkSnapshot);
+    auto darkGrid = ssg::Renderer{}.render(*darkFrame);
     const auto* darkLiveTab = [&]() -> const ssg::AccessibilityNode* {
-        for (const auto& node : darkSnapshot->presentation()->shell.accessibilityNodes) {
+        for (const auto& node :
+             darkFrame->presentation()->shell.accessibilityNodes) {
             if (node.kind == ssg::ShellNodeKind::Tab &&
                 node.content.starts_with("D ")) {
                 return &node;
@@ -1072,10 +1077,14 @@ TEST(liveDiffTabGlyphColorTracksThemePalette) {
         runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(inactiveSnapshot.has_value());
     if (!inactiveSnapshot) return;
-    auto inactiveGrid = ssg::Renderer{}.render(*inactiveSnapshot);
+    auto inactiveFrame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*inactiveSnapshot));
+    ASSERT_TRUE(inactiveFrame.has_value());
+    if (!inactiveFrame) return;
+    auto inactiveGrid = ssg::Renderer{}.render(*inactiveFrame);
     const auto* inactiveLiveTab = [&]() -> const ssg::AccessibilityNode* {
         for (const auto& node :
-             inactiveSnapshot->presentation()->shell.accessibilityNodes) {
+             inactiveFrame->presentation()->shell.accessibilityNodes) {
             if (node.kind == ssg::ShellNodeKind::Tab &&
                 node.content.starts_with("D ")) {
                 return &node;

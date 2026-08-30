@@ -6,7 +6,7 @@
 // content become cells.  Clients (terminal, browser) only translate the grid to
 // their medium; they add no layout, content, or color.
 
-#include <ssg/session_snapshot.h>
+#include <ssg/GridPresenter.h>
 #include <ssg/Style.h>
 #include <ssg/Theme.h>
 #include <ssg/ShellState.h>
@@ -99,7 +99,7 @@ public:
     // re-segmenting on-screen lines that a previous frame already shaped; a
     // nullptr cache reproduces the exact pre-cache behaviour (a fresh shape per
     // visible line). The cache holds only stable document-line text.
-    [[nodiscard]] CellGrid render(SessionSnapshot const& snapshot,
+    [[nodiscard]] CellGrid render(GridFrame const& snapshot,
                                   LineLayoutCache* lineCache = nullptr) const;
 
     // Style is no longer a renderer member: it is read from the snapshot's

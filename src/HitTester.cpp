@@ -23,7 +23,7 @@ RegionHit scrollbarHit(HitRegion region, Rect const& /*gutter*/, int /*row*/) {
     return hit;
 }
 
-RegionHit editorHit(SessionSnapshot const& snapshot, Rect const& content,
+RegionHit editorHit(GridFrame const& snapshot, Rect const& content,
                      int column, int row) {
     auto const& viewport = snapshot.presentation()->viewport;
     auto const viewportRow = static_cast<std::uint32_t>(row - content.y);
@@ -71,7 +71,7 @@ RegionHit paletteHit(PaletteProjection const& palette, int column, int row) {
     return hit;
 }
 
-RegionHit panelHit(SessionSnapshot const& snapshot, Rect const& panel,
+RegionHit panelHit(GridFrame const& snapshot, Rect const& panel,
                     std::optional<Rect> const& gutter, int column, int row) {
     if (gutter && contains(*gutter, column, row)) {
         return scrollbarHit(HitRegion::PanelScrollbar, *gutter, row);

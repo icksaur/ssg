@@ -199,7 +199,11 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto grid = ssg::Renderer{}.render(*frame);
 
     // Every rendered candidate row's label text traces to a published candidate:
     // for each reported row there is a grid line beginning with its label, and
@@ -235,13 +239,17 @@ TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto grid = ssg::Renderer{}.render(*frame);
     assertScreenInvariants(grid, 80, 24);
     // The opened document's content and name reach the screen.
     ASSERT_TRUE(screenContains(grid, "first line"));
     ASSERT_TRUE(screenContains(grid, "alpha.txt"));
     // The screen is a pure function of the snapshot: a second render is identical.
-    ASSERT_EQ(ssg::Renderer{}.render(*snapshot).canonical(), grid.canonical());
+    ASSERT_EQ(ssg::Renderer{}.render(*frame).canonical(), grid.canonical());
     fs::remove_all(root);
 }
 
@@ -268,13 +276,17 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto grid = ssg::Renderer{}.render(*frame);
     assertScreenInvariants(grid, 80, 24);
     // The reported query and candidate rows are projected onto the screen.
     ASSERT_TRUE(screenContains(grid, "sa"));
     ASSERT_TRUE(screenContains(grid, "Save File"));
     ASSERT_TRUE(screenContains(grid, "Save As"));
-    ASSERT_EQ(ssg::Renderer{}.render(*snapshot).canonical(), grid.canonical());
+    ASSERT_EQ(ssg::Renderer{}.render(*frame).canonical(), grid.canonical());
     fs::remove_all(root);
 }
 
@@ -290,7 +302,11 @@ TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {24, 3});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto grid = ssg::Renderer{}.render(*frame);
     // Below the supported minimum the library still emits a well-formed grid at
     // the terminal's real size, carrying the typed too-small state.
     assertScreenInvariants(grid, 24, 3);
@@ -353,10 +369,20 @@ TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
         // The delta-reconstructed snapshot equals a fresh production snapshot,
         // and renders to the identical screen.
         ASSERT_TRUE(*replayed.snapshot == *fresh);
-        ASSERT_EQ(ssg::Renderer{}.render(*replayed.snapshot).canonical(),
-                  ssg::Renderer{}.render(*fresh).canonical());
+        auto replayedFrame =
+            ssg::GridFrame::fromDeprecatedSnapshot(
+                std::move(*replayed.snapshot));
+        auto freshFrame =
+            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*fresh));
+        ASSERT_TRUE(replayedFrame.has_value());
+        ASSERT_TRUE(freshFrame.has_value());
+        if (!replayedFrame || !freshFrame) break;
+        ASSERT_EQ(ssg::Renderer{}.render(*replayedFrame).canonical(),
+                  ssg::Renderer{}.render(*freshFrame).canonical());
 
-        previous = std::move(fresh);
+        previous = runtime->present(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(previous.has_value());
+        if (!previous) break;
     }
     fs::remove_all(root);
 }

@@ -760,11 +760,13 @@ int main(int argc, char** argv) {
     STARTUP_MARK("post_create");
 
     ssg::ClientId client{1};
-    if (!runtime.attach({client, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1})
+    const ssg::ViewId view{1};
+    if (!runtime.attach({client, ssg::InvocationOrigin::InProcess}, view)
              .accepted()) {
         std::fprintf(stderr, "ssg: failed to attach client\n");
         return 1;
     }
+    ssg::GridPresenter gridPresenter{view};
     STARTUP_MARK("post_attach");
 
     // Lives for the rest of the process, so a function init.lua defines
@@ -1099,8 +1101,9 @@ int main(int argc, char** argv) {
     // Take a fresh snapshot and adopt its authoritative client state. Called
     // before every input event so coalesced input after a focus-changing command
     // routes against the new focus rather than a stale one.
-    auto refresh = [&]() -> std::optional<ssg::SessionSnapshot> {
-        auto snapshot = runtime.present(client, terminalSize(), buildReport());
+    auto refresh = [&]() -> std::optional<ssg::GridFrame> {
+        auto snapshot = gridPresenter.project(
+            runtime, client, {terminalSize(), buildReport()});
         if (snapshot) {
             focus = effectiveFocusFromSections(snapshot->sections());
             pickerActivation = snapshot->sections().palette.activePicker;

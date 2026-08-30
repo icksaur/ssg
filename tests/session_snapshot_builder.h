@@ -22,6 +22,7 @@
 // enlarge the public library surface.
 
 #include <ssg/GraphemeLayout.h>
+#include <ssg/GridPresenter.h>
 #include <ssg/InteractionState.h>
 #include <ssg/Renderer.h>
 #include <ssg/ShellState.h>
@@ -131,7 +132,7 @@ public:
         return *this;
     }
 
-    [[nodiscard]] SessionSnapshot build() const {
+    [[nodiscard]] GridFrame build() const {
         auto const caret = caret_ > text_.size() ? text_.size() : caret_;
 
         // ShellState now owns only panes + distraction-free; panel presence and focus are
@@ -202,14 +203,14 @@ public:
 
         ShellViewState shellView = layout.view ? *layout.view : ShellViewState{};
         ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
-        return SessionSnapshot{revision_, SessionTopology{}, std::move(client),
-                                std::move(sections),
-                                PresentationSnapshot{std::move(viewportState),
-                                                     style_, std::nullopt,
-                                                     std::move(shellView),
-                                                     SelectionNavigation{
-                                                         firstRow_, 0,
-                                                         std::nullopt}}};
+        auto frame = GridFrame::fromDeprecatedSnapshot(SessionSnapshot{
+            revision_, SessionTopology{}, std::move(client),
+            std::move(sections),
+            PresentationSnapshot{std::move(viewportState), style_, std::nullopt,
+                                 std::move(shellView),
+                                 SelectionNavigation{firstRow_, 0,
+                                                     std::nullopt}}});
+        return std::move(*frame);
     }
 
 private:

@@ -24,6 +24,7 @@
 namespace ssg {
 
 class CommandCatalog;
+class GridPresenter;
 
 struct EditorSessionConfig {
     std::filesystem::path cwd;
@@ -257,6 +258,8 @@ public:
     //   results or advances the revision. A
     //   client that lays out the model natively obtains full semantic state
     //   without supplying, or paying for, any grid projection.
+    //   present() is a compatibility surface until Plan 6 removes
+    //   SessionSnapshot::presentation(); new grid consumers use GridPresenter.
     [[nodiscard]] std::optional<SessionSnapshot> present(
         ClientId clientId, ViewportDimensions dimensions,
         PaletteReport paletteReport = {});
@@ -279,6 +282,12 @@ public:
     struct Impl;
 
 private:
+    friend class GridPresenter;
+    [[nodiscard]] std::optional<SessionSnapshot>
+    projectForBridgedPresenterDeprecated(
+        ClientId clientId, ViewportDimensions dimensions,
+        PaletteReport paletteReport,
+        std::optional<ViewId> expectedView = std::nullopt);
     explicit EditorSession(std::unique_ptr<Impl> implementation) noexcept;
 
     std::unique_ptr<Impl> impl_;

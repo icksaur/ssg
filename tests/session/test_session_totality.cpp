@@ -159,8 +159,12 @@ void runState(const UiState& state) {
         ASSERT_EQ(shell.viewport.rows, static_cast<int>(dims.rows));
         assertRegionsInBounds(shell);
 
-        ASSERT_NO_THROW(ssg::Renderer{}.render(*snapshot));
-        auto grid = ssg::Renderer{}.render(*snapshot);
+        auto frame =
+            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        ASSERT_TRUE(frame.has_value());
+        if (!frame) continue;
+        ASSERT_NO_THROW(ssg::Renderer{}.render(*frame));
+        auto grid = ssg::Renderer{}.render(*frame);
         ASSERT_EQ(grid.size.columns, static_cast<int>(dims.columns));
         ASSERT_EQ(grid.size.rows, static_cast<int>(dims.rows));
         ASSERT_EQ(grid.cells.size(),

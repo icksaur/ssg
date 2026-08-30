@@ -1,5 +1,6 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/EditorSession.cpp
+    ${SSG_SOURCE_DIR}/src/GridPresenter.cpp
     ${SSG_SOURCE_DIR}/src/runtime/editing.cpp
     ${SSG_SOURCE_DIR}/src/runtime/files.cpp
     ${SSG_SOURCE_DIR}/src/runtime/help.cpp

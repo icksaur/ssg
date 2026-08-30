@@ -183,7 +183,7 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
 // produced them for the revision on screen: diagnostic ranges are byte offsets
 // into a specific revision, and painting stale ones underlines whatever text has
 // since moved into those positions.
-void paintDiagnostics(CellGrid& grid, SessionSnapshot const& snapshot,
+void paintDiagnostics(CellGrid& grid, GridFrame const& snapshot,
                        Rect const& content) {
     auto const& lsp = snapshot.sections().lspSync;
     if (lsp.documents.empty()) return;
@@ -251,7 +251,7 @@ void paintDiagnostics(CellGrid& grid, SessionSnapshot const& snapshot,
 // in a comment, a string, a markdown link or a plain note, and coupling this to
 // one grammar's captures would make it work in markdown and nowhere else.  That
 // is the "cheap for any language" the feature asks for.
-void paintHyperlinks(CellGrid& grid, SessionSnapshot const& snapshot,
+void paintHyperlinks(CellGrid& grid, GridFrame const& snapshot,
                       Rect const& content) {
     auto const& text = snapshot.sections().document.text;
     auto const& viewport = snapshot.presentation()->viewport;
@@ -726,7 +726,7 @@ std::optional<GridPosition> screenCellFor(ViewportViewState const& viewport,
     return boundary;
 }
 
-void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
+void paintDocument(CellGrid& grid, GridFrame const& snapshot,
                     Rect const& content, ThemeSnapshot const& theme,
                     std::uint8_t background, Style const& style,
                     LineLayoutCache* lineCache) {
@@ -1050,7 +1050,7 @@ void paintScrollbar(CellGrid& grid, PaneGeometry const& pane,
 // its 1-indexed logical line number right-aligned with a trailing space; a
 // wrapped continuation row (firstSpan != 0) shows a blank gutter; the caret's
 // logical line uses the current-line roles.
-void paintLineNumbers(CellGrid& grid, SessionSnapshot const& snapshot,
+void paintLineNumbers(CellGrid& grid, GridFrame const& snapshot,
                        PaneGeometry const& pane, ThemeSnapshot const& theme) {
     if (pane.lineNumbers.width <= 0) return;
     auto const& viewport = snapshot.presentation()->viewport;
@@ -1242,7 +1242,7 @@ std::string CellGrid::canonical() const {
     return output.str();
 }
 
-CellGrid Renderer::render(SessionSnapshot const& snapshot,
+CellGrid Renderer::render(GridFrame const& snapshot,
                           LineLayoutCache* lineCache) const {
     auto const& shell = snapshot.presentation()->shell;
     auto const& theme = snapshot.sections().theme;

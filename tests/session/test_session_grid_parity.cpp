@@ -65,7 +65,10 @@ std::string captureGridMatrix() {
             out << "(no snapshot)\n";
             return;
         }
-        std::istringstream lines{ssg::Renderer{}.render(*snapshot).canonical()};
+        auto frame =
+            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        std::istringstream lines{
+            ssg::Renderer{}.render(*frame).canonical()};
         std::string line;
         while (std::getline(lines, line)) {
             // Drop "cell <col> 0 ..." (row 0 = header); keep sizes and every other row.

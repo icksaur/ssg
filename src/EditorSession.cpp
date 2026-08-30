@@ -3935,15 +3935,17 @@ GitDiffScanResult EditorSession::applyGitDiffScan(GitDiffScan scan) {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyGitDiffScan(std::move(scan));
 }
-std::optional<SessionSnapshot> EditorSession::present(
+std::optional<SessionSnapshot>
+EditorSession::projectForBridgedPresenterDeprecated(
     ClientId clientId, ViewportDimensions dimensions,
-    PaletteReport paletteReport) {
+    PaletteReport paletteReport, std::optional<ViewId> expectedView) {
     if (impl_->session->activeDispatchRevision()) {
         throw std::logic_error{"a view cannot be presented during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
     auto client = impl_->session->attachedClient(clientId);
-    if (!client) return std::nullopt;
+    if (!client || (expectedView && client->viewId != *expectedView))
+        return std::nullopt;
     auto& presentation = impl_->presentation(client->viewId);
     presentation.dimensions = dimensions;
     // Sections FIRST, then the viewport: computing the shell layout is what
@@ -3984,6 +3986,13 @@ std::optional<SessionSnapshot> EditorSession::present(
                                      impl_->style, std::move(promptView),
                                      std::move(shell), selectionNav,
                                      std::move(treeWindows));
+}
+
+std::optional<SessionSnapshot> EditorSession::present(
+    ClientId clientId, ViewportDimensions dimensions,
+    PaletteReport paletteReport) {
+    return projectForBridgedPresenterDeprecated(
+        clientId, dimensions, std::move(paletteReport));
 }
 
 std::optional<SessionSnapshot> EditorSession::snapshot(ClientId clientId,

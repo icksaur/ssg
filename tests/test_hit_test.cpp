@@ -90,11 +90,15 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->presentation()->shell;
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto const& shell = frame->presentation()->shell;
     ASSERT_FALSE(shell.panes.empty());
     if (shell.panes.empty()) return;
     auto const content = shell.panes.front().content;
-    auto const& targets = snapshot->presentation()->viewport.hitTargets;
+    auto const& targets = frame->presentation()->viewport.hitTargets;
     ASSERT_FALSE(targets.empty());
     if (targets.empty()) return;
 
@@ -107,7 +111,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     for (auto const& target : targets) {
         int const column = content.x + static_cast<int>(target.viewportColumn);
         int const row = content.y + static_cast<int>(target.viewportRow);
-        auto hit = ssg::HitTester{*snapshot}.at( column, row);
+        auto hit = ssg::HitTester{*frame}.at(column, row);
         ASSERT_EQ(hit.region, ssg::HitRegion::Editor);
         ASSERT_EQ(hit.byteOffset, target.byteOffset);
         auto position =
@@ -141,7 +145,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     // A cell far past the end of the short first line ("alpha", 5 cells) now
     // clamps to that line's end (M8 click-past-EOL): an editor hit at the newline
     // byte after "alpha" (offset 5), zero-width.
-    auto pastEol = ssg::HitTester{*snapshot}.at( content.right() - 2, content.y);
+    auto pastEol = ssg::HitTester{*frame}.at(content.right() - 2, content.y);
     ASSERT_EQ(pastEol.region, ssg::HitRegion::Editor);
     ASSERT_EQ(pastEol.byteOffset, std::uint32_t{5});
     ASSERT_EQ(pastEol.byteLen, std::uint32_t{0});
@@ -168,7 +172,11 @@ TEST(footerActionHitCarriesExactStatusActionInvocation) {
                                   ssg::Style{},
                                   std::nullopt, std::move(shell),
                                   ssg::SelectionNavigation{}}};
-    auto hit = ssg::HitTester{snapshot}.at(3, 4);
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto hit = ssg::HitTester{*frame}.at(3, 4);
     ASSERT_EQ(hit.region, ssg::HitRegion::StatusAction);
     ASSERT_EQ(hit.statusInvocation, invocation);
 }
@@ -203,20 +211,24 @@ TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
             ssg::ViewportViewState{ssg::ViewportDimensions{20, 5}},
             ssg::Style{}, std::move(prompt), std::move(shell),
             ssg::SelectionNavigation{}}};
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
 
-    auto input = ssg::HitTester{snapshot}.at(2, 3);
+    auto input = ssg::HitTester{*frame}.at(2, 3);
     ASSERT_EQ(input.region, ssg::HitRegion::PromptControl);
     ASSERT_EQ(input.fieldId, std::optional<std::string>{"query"});
     ASSERT_EQ(input.commandId,
               std::optional<std::string>{"find.update_query"});
-    auto toggle = ssg::HitTester{snapshot}.at(10, 3);
+    auto toggle = ssg::HitTester{*frame}.at(10, 3);
     ASSERT_EQ(toggle.region, ssg::HitRegion::PromptControl);
     ASSERT_EQ(toggle.fieldId, std::optional<std::string>{"case"});
     ASSERT_EQ(toggle.commandId,
               std::optional<std::string>{"find.toggle_case"});
-    ASSERT_EQ(ssg::HitTester{snapshot}.at(16, 3).region,
+    ASSERT_EQ(ssg::HitTester{*frame}.at(16, 3).region,
               ssg::HitRegion::None);
-    ASSERT_EQ(ssg::HitTester{snapshot}.at(19, 3).region,
+    ASSERT_EQ(ssg::HitTester{*frame}.at(19, 3).region,
               ssg::HitRegion::None);
 }
 
@@ -264,7 +276,11 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->presentation()->shell;
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto const& shell = frame->presentation()->shell;
     ASSERT_FALSE(shell.panes.empty());
     if (shell.panes.empty()) return;
     auto const content = shell.panes.front().content;
@@ -275,13 +291,13 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     };
 
     // Exact cell unchanged: 'a' at row 0 col 0 -> offset 0.
-    auto exact = ssg::HitTester{*snapshot}.at( content.x, content.y);
+    auto exact = ssg::HitTester{*frame}.at(content.x, content.y);
     ASSERT_EQ(exact.region, ssg::HitRegion::Editor);
     ASSERT_EQ(exact.byteOffset, std::uint32_t{0});
     ASSERT_TRUE(exact.byteLen > 0);
 
     // Past the end of line 0 ("ab") -> the newline at offset 2, on line 0.
-    auto past0 = ssg::HitTester{*snapshot}.at( content.x + 30, content.y);
+    auto past0 = ssg::HitTester{*frame}.at(content.x + 30, content.y);
     ASSERT_EQ(past0.region, ssg::HitRegion::Editor);
     ASSERT_EQ(past0.byteOffset, std::uint32_t{2});
     ASSERT_EQ(past0.byteLen, std::uint32_t{0});
@@ -290,7 +306,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     // The blank line (row 1) — anywhere on it, including column 0 — resolves to the
     // blank line's own offset (3), on line 1. A blank row has no hit targets, so
     // this is purely the clamp.
-    auto blank = ssg::HitTester{*snapshot}.at( content.x + 5, content.y + 1);
+    auto blank = ssg::HitTester{*frame}.at(content.x + 5, content.y + 1);
     ASSERT_EQ(blank.region, ssg::HitRegion::Editor);
     ASSERT_EQ(blank.byteOffset, std::uint32_t{3});
     ASSERT_EQ(blank.byteLen, std::uint32_t{0});
@@ -300,8 +316,9 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     // The document's last visual row is the trailing empty line (offset 8 == the
     // text end after "cde\n").
     auto const lastRowEnd =
-        snapshot->presentation()->viewport.visibleRows.back().endByteOffset;
-    auto below = ssg::HitTester{*snapshot}.at( content.x + 10, content.bottom() - 1);
+        frame->presentation()->viewport.visibleRows.back().endByteOffset;
+    auto below =
+        ssg::HitTester{*frame}.at(content.x + 10, content.bottom() - 1);
     ASSERT_EQ(below.region, ssg::HitRegion::Editor);
     ASSERT_EQ(below.byteOffset, lastRowEnd);
     ASSERT_EQ(below.byteLen, std::uint32_t{0});
@@ -326,8 +343,11 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
     auto caretOffsetAfterClick = [&](int column, int row) -> std::uint64_t {
         auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         if (!snapshot) return 9999;
-        auto const content = snapshot->presentation()->shell.panes.front().content;
-        auto hit = ssg::HitTester{*snapshot}.at( column, row);
+        auto frame =
+            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+        if (!frame) return 9999;
+        auto const content = frame->presentation()->shell.panes.front().content;
+        auto hit = ssg::HitTester{*frame}.at(column, row);
         if (hit.region != ssg::HitRegion::Editor) return 9999;
         auto pos = ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{hit.byteOffset});
         if (!pos) return 9999;
@@ -388,9 +408,13 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
     ssg::SessionSnapshot projected{
         snapshot->revision(), snapshot->topology(), snapshot->client(),
         std::move(sections), std::move(presentation)};
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(projected));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
 
     const auto phantom =
-        ssg::HitTester{projected}.at(content.x + 5, content.y + 1);
+        ssg::HitTester{*frame}.at(content.x + 5, content.y + 1);
     ASSERT_EQ(phantom.region, ssg::HitRegion::Editor);
     ASSERT_EQ(phantom.byteOffset, std::uint32_t{4});
     ASSERT_EQ(phantom.byteLen, std::uint32_t{0});
@@ -441,25 +465,30 @@ TEST(panelRowMapsToItsTreeNodeId) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->presentation()->shell;
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto const& shell = frame->presentation()->shell;
     ASSERT_TRUE(shell.panel.has_value());
     if (!shell.panel) return;
-    auto const& window = snapshot->presentation()->treeWindows.front();
+    auto const& window = frame->presentation()->treeWindows.front();
     ASSERT_FALSE(window.visibleNodeIds.empty());
     if (window.visibleNodeIds.empty()) return;
 
     // The provider-label row (panel.y) is not a node.
-    auto label = ssg::HitTester{*snapshot}.at( shell.panel->x, shell.panel->y);
+    auto label = ssg::HitTester{*frame}.at(shell.panel->x, shell.panel->y);
     ASSERT_EQ(label.region, ssg::HitRegion::None);
 
     // The first content row maps to the first visible node id.
-    auto hit = ssg::HitTester{*snapshot}.at( shell.panel->x, shell.panel->y + 1);
+    auto hit = ssg::HitTester{*frame}.at(shell.panel->x, shell.panel->y + 1);
     ASSERT_EQ(hit.region, ssg::HitRegion::Panel);
     ASSERT_TRUE(hit.nodeId.has_value());
     if (hit.nodeId) ASSERT_EQ(*hit.nodeId, window.visibleNodeIds.front());
 
     // A row below the last visible node is empty.
-    auto empty = ssg::HitTester{*snapshot}.at( shell.panel->x, shell.panel->bottom() - 1);
+    auto empty =
+        ssg::HitTester{*frame}.at(shell.panel->x, shell.panel->bottom() - 1);
     ASSERT_EQ(empty.region, ssg::HitRegion::None);
 }
 
@@ -495,13 +524,17 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), snapshot->sections(),
                                    std::move(presentation)};
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(projected));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
 
-    auto hit = ssg::HitTester{projected}.at( pane.content.x, pane.content.y + 3);
+    auto hit = ssg::HitTester{*frame}.at(pane.content.x, pane.content.y + 3);
     ASSERT_EQ(hit.region, ssg::HitRegion::Palette);
     ASSERT_EQ(hit.itemIndex, std::uint32_t{23});
 
     // The palette overlays the pane: a document cell is inert while it is open.
-    auto overDoc = ssg::HitTester{projected}.at( pane.content.x, pane.content.y);
+    auto overDoc = ssg::HitTester{*frame}.at(pane.content.x, pane.content.y);
     ASSERT_EQ(overDoc.region, ssg::HitRegion::Palette);
     ASSERT_EQ(overDoc.itemIndex, std::uint32_t{20});
 }
@@ -534,15 +567,20 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), snapshot->sections(),
                                    std::move(presentation)};
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(projected));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
 
     // The gutter classifies as the palette scrollbar along its whole height; the
     // scroll position a press sends is computed by the app from the published
     // thumb geometry, not from this hit's row.
-    auto top = ssg::HitTester{projected}.at( pane.scrollbar.x, pane.scrollbar.y);
+    auto top = ssg::HitTester{*frame}.at(pane.scrollbar.x, pane.scrollbar.y);
     ASSERT_EQ(top.region, ssg::HitRegion::PaletteScrollbar);
-    auto bottom = ssg::HitTester{projected}.at( pane.scrollbar.x, pane.scrollbar.bottom() - 1);
+    auto bottom =
+        ssg::HitTester{*frame}.at(pane.scrollbar.x, pane.scrollbar.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::PaletteScrollbar);
-    auto const thumb = ssg::HitTester{projected}.gutterThumb(
+    auto const thumb = ssg::HitTester{*frame}.gutterThumb(
         ssg::HitRegion::PaletteScrollbar);
     ASSERT_TRUE(thumb.has_value());
     if (thumb) ASSERT_EQ(thumb->gutterY, pane.scrollbar.y);
@@ -567,12 +605,16 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->presentation()->shell;
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto const& shell = frame->presentation()->shell;
     ASSERT_FALSE(shell.panes.empty());
     if (shell.panes.empty()) return;
     auto const gutter = shell.panes.front().scrollbar;
     ASSERT_TRUE(gutter.height > 1);
-    ssg::HitTester const tester{*snapshot};
+    ssg::HitTester const tester{*frame};
     auto const region = ssg::HitRegion::EditorScrollbar;
 
     // On the gutter's own column at() finds the scrollbar region.
@@ -591,7 +633,7 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     auto const thumb = tester.gutterThumb(region);
     ASSERT_TRUE(thumb.has_value());
     if (!thumb) return;
-    auto const& metrics = snapshot->presentation()->viewport.scrollbar;
+    auto const& metrics = frame->presentation()->viewport.scrollbar;
     ASSERT_EQ(thumb->gutterY, gutter.y);
     ASSERT_EQ(thumb->viewportRows, metrics.viewportRows);
     ASSERT_EQ(thumb->thumbStart, metrics.thumbStart);
@@ -626,18 +668,22 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& tabs = snapshot->sections().tabs.tabs;
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto const& tabs = frame->sections().tabs.tabs;
     ASSERT_TRUE(tabs.size() > 1);
 
     // The last-opened tab is active; it must have a hit rectangle, or it cannot
     // be clicked back to.
     auto const activeIndex = [&] {
         for (std::size_t i = 0; i < tabs.size(); ++i) {
-            if (snapshot->sections().tabs.active == tabs[i].id) return i;
+            if (frame->sections().tabs.active == tabs[i].id) return i;
         }
         return std::size_t{0};
     }();
-    auto const& hits = snapshot->presentation()->shell.tabHits;
+    auto const& hits = frame->presentation()->shell.tabHits;
     ASSERT_FALSE(hits.empty());
     bool activeIsHittable = false;
     for (auto const& hit : hits) {
@@ -652,7 +698,8 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
         if (hit.index != activeIndex) continue;
         auto const& label = tabs[activeIndex].label;
         ASSERT_TRUE(hit.rect.width >= static_cast<int>(label.size()));
-        ASSERT_TRUE(hit.rect.right() <= snapshot->presentation()->shell.tabBar->right());
+        ASSERT_TRUE(hit.rect.right() <=
+                    frame->presentation()->shell.tabBar->right());
     }
 
     // Not every tab fits -- otherwise this proves nothing about scrolling.
@@ -662,8 +709,8 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     // is an ACTIONABLE one rather than merely drawn.
     for (auto const& hit : hits) {
         if (hit.index != activeIndex) continue;
-        auto const region = ssg::HitTester{*snapshot}.at(
-            hit.rect.x, hit.rect.y);
+        auto const region =
+            ssg::HitTester{*frame}.at(hit.rect.x, hit.rect.y);
         ASSERT_EQ(region.region, ssg::HitRegion::Tab);
         ASSERT_EQ(region.tabIndex, static_cast<std::uint32_t>(activeIndex));
     }
@@ -723,13 +770,17 @@ TEST(tabBarCellMapsToItsTabIndex) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->presentation()->shell;
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto const& shell = frame->presentation()->shell;
     ASSERT_TRUE(shell.tabHits.size() >= 2);
     if (shell.tabHits.size() < 2) return;
 
     // A cell inside each published tab rect resolves to that tab's index.
     for (auto const& tab : shell.tabHits) {
-        auto hit = ssg::HitTester{*snapshot}.at( tab.rect.x, tab.rect.y);
+        auto hit = ssg::HitTester{*frame}.at(tab.rect.x, tab.rect.y);
         ASSERT_EQ(hit.region, ssg::HitRegion::Tab);
         ASSERT_EQ(hit.tabIndex, tab.index);
     }
@@ -737,7 +788,7 @@ TEST(tabBarCellMapsToItsTabIndex) {
     // The tab-bar row past the last tab is padding, not a tab.
     auto const& last = shell.tabHits.back();
     ASSERT_TRUE(last.rect.right() < shell.viewport.columns);
-    auto pad = ssg::HitTester{*snapshot}.at( last.rect.right(), last.rect.y);
+    auto pad = ssg::HitTester{*frame}.at(last.rect.right(), last.rect.y);
     ASSERT_TRUE(pad.region != ssg::HitRegion::Tab);
 }
 
@@ -758,7 +809,11 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->presentation()->shell;
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto const& shell = frame->presentation()->shell;
 
     const auto* path = findNode(shell, ssg::ShellNodeKind::HeaderField, "path");
     const auto* branch =
@@ -770,28 +825,29 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
     ASSERT_TRUE(follow != nullptr);
     if (!path || !branch || !follow) return;
 
-    auto pathHit = ssg::HitTester{*snapshot}.at(path->rect.x, path->rect.y);
+    auto pathHit = ssg::HitTester{*frame}.at(path->rect.x, path->rect.y);
     ASSERT_EQ(pathHit.region, ssg::HitRegion::HeaderField);
     ASSERT_EQ(pathHit.fieldId, std::optional<std::string>{"path"});
     ASSERT_EQ(pathHit.commandId,
               std::optional<std::string>{"panel.show_files"});
 
     auto branchHit =
-        ssg::HitTester{*snapshot}.at(branch->rect.x, branch->rect.y);
+        ssg::HitTester{*frame}.at(branch->rect.x, branch->rect.y);
     ASSERT_EQ(branchHit.region, ssg::HitRegion::HeaderField);
     ASSERT_EQ(branchHit.fieldId, std::optional<std::string>{"branch"});
     ASSERT_EQ(branchHit.commandId,
               std::optional<std::string>{"panel.show_git_status"});
 
     auto followHit =
-        ssg::HitTester{*snapshot}.at(follow->rect.x, follow->rect.y);
+        ssg::HitTester{*frame}.at(follow->rect.x, follow->rect.y);
     ASSERT_EQ(followHit.region, ssg::HitRegion::FooterField);
     ASSERT_EQ(followHit.fieldId, std::optional<std::string>{"follow"});
     ASSERT_EQ(followHit.commandId,
               std::optional<std::string>{"follow_edits.toggle"});
 
     // A chrome coordinate outside any field remains a non-field hit.
-    auto chrome = ssg::HitTester{*snapshot}.at(shell.viewport.columns - 1, 0);
+    auto chrome =
+        ssg::HitTester{*frame}.at(shell.viewport.columns - 1, 0);
     ASSERT_TRUE(chrome.region != ssg::HitRegion::HeaderField);
     ASSERT_TRUE(chrome.region != ssg::HitRegion::FooterField);
 }
@@ -820,10 +876,14 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
         auto before = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(before.has_value());
         if (!before) return false;
-        auto const* node = findNode(before->presentation()->shell, kind, id);
+        auto frame =
+            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*before));
+        ASSERT_TRUE(frame.has_value());
+        if (!frame) return false;
+        auto const* node = findNode(frame->presentation()->shell, kind, id);
         ASSERT_TRUE(node != nullptr);
         if (!node) return false;
-        auto hit = ssg::HitTester{*before}.at(node->rect.x, node->rect.y);
+        auto hit = ssg::HitTester{*frame}.at(node->rect.x, node->rect.y);
         ASSERT_TRUE(hit.commandId.has_value());
         if (!hit.commandId) return false;
         return runtime
@@ -882,16 +942,24 @@ TEST(outOfBoundsAndChromeReturnNoTarget) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
 
-    ASSERT_EQ(ssg::HitTester{*snapshot}.at( -1, 5).region, ssg::HitRegion::None);
-    ASSERT_EQ(ssg::HitTester{*snapshot}.at( 5, -1).region, ssg::HitRegion::None);
-    ASSERT_EQ(ssg::HitTester{*snapshot}.at( 9999, 5).region, ssg::HitRegion::None);
-    ASSERT_EQ(ssg::HitTester{*snapshot}.at( 5, 9999).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{*frame}.at(-1, 5).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{*frame}.at(5, -1).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{*frame}.at(9999, 5).region,
+              ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{*frame}.at(5, 9999).region,
+              ssg::HitRegion::None);
     // A top-row coordinate outside visible header fields is chrome.
     int chromeX = -1;
-    for (int x = snapshot->presentation()->shell.viewport.columns - 1; x >= 0; --x) {
+    for (int x = frame->presentation()->shell.viewport.columns - 1; x >= 0;
+         --x) {
         bool occupied = false;
-        for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
+        for (const auto& node :
+             frame->presentation()->shell.accessibilityNodes) {
             if (node.kind != ssg::ShellNodeKind::HeaderField) continue;
             if (x >= node.rect.x && x < node.rect.right()) {
                 occupied = true;
@@ -905,7 +973,7 @@ TEST(outOfBoundsAndChromeReturnNoTarget) {
     }
     ASSERT_TRUE(chromeX >= 0);
     if (chromeX >= 0) {
-        auto topChrome = ssg::HitTester{*snapshot}.at(chromeX, 0);
+        auto topChrome = ssg::HitTester{*frame}.at(chromeX, 0);
         ASSERT_TRUE(topChrome.region != ssg::HitRegion::HeaderField);
     }
 }

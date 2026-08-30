@@ -405,7 +405,11 @@ TEST(decoderRoundtripsTheEncodedFrame) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) { fs::remove_all(root); return; }
+    auto grid = ssg::Renderer{}.render(*frame);
 
     auto encoded =
         ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::Truecolor);
@@ -461,7 +465,11 @@ TEST(realBinaryOutputMatchesRenderSnapshot) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) { fs::remove_all(root); return; }
+    auto grid = ssg::Renderer{}.render(*frame);
 
     ASSERT_TRUE(compareScreen(screen, grid) > 0);
 
@@ -505,7 +513,11 @@ TEST(realBinaryWideGlyphOutputMatchesRender) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) { fs::remove_all(root); return; }
+    auto grid = ssg::Renderer{}.render(*frame);
 
     // Sanity: the rendered document actually contains wide (continuation) cells,
     // so this case genuinely exercises wide-glyph handling.

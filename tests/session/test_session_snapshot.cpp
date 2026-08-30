@@ -2,6 +2,7 @@
 #include "../test_helpers.h"
 
 #include <ssg/EditorSession.h>
+#include <ssg/GridPresenter.h>
 #include <ssg/Keymap.h>
 
 #include <algorithm>
@@ -9,12 +10,18 @@
 #include <fstream>
 #include <set>
 #include <string>
+#include <type_traits>
 
 #ifndef SSG_SOURCE_SCAN_ROOT
 #error "SSG_SOURCE_SCAN_ROOT must name the source tree"
 #endif
 
 namespace {
+
+static_assert(!std::is_copy_constructible_v<ssg::GridFrame>);
+static_assert(!std::is_copy_assignable_v<ssg::GridFrame>);
+static_assert(std::is_nothrow_move_constructible_v<ssg::GridFrame>);
+static_assert(std::is_nothrow_move_assignable_v<ssg::GridFrame>);
 
 std::filesystem::path uniqueRoot(std::string_view name) {
     auto root = std::filesystem::current_path() / ("runtime_snapshot_" + std::string{name});
@@ -668,6 +675,77 @@ TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
     ASSERT_TRUE(edited->sections().document != semantic->sections().document);
 }
 
+TEST(gridPresenterCannotChangeOrReassembleSemanticState) {
+    auto root = uniqueRoot("grid_presenter_semantics");
+    std::ofstream{root / "workspace" / "m.txt"} << "alpha\nbeta\ngamma\n";
+    auto created = ssg::EditorSession::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId client{1};
+    const ssg::ViewId view{9};
+    ASSERT_TRUE(runtime
+                    .attach({client, ssg::InvocationOrigin::InProcess}, view)
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client, {"file.open", runtime.revision(),
+                                       std::string{"m.txt"}})
+                    .accepted());
+
+    auto before = runtime.snapshot(client);
+    ASSERT_TRUE(before.has_value());
+    if (!before) return;
+    const auto revision = runtime.revision();
+    ssg::GridPresenter presenter{view};
+    auto frame = presenter.project(runtime, client, {{80, 24}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    ASSERT_EQ(frame->basis().viewId, view);
+    ASSERT_EQ(frame->basis().semanticRevision, revision);
+    const auto firstGeneration = frame->basis().presentationGeneration;
+    ASSERT_EQ(frame->semantic().sections(), before->sections());
+    ASSERT_EQ(runtime.revision(), revision);
+
+    auto after = runtime.snapshot(client);
+    ASSERT_TRUE(after.has_value());
+    if (!after) return;
+    ASSERT_EQ(after->sections(), before->sections());
+    ASSERT_EQ(after->topology(), before->topology());
+    ASSERT_EQ(after->client(), before->client());
+
+    auto nextFrame = presenter.project(runtime, client, {{100, 30}, {}});
+    ASSERT_TRUE(nextFrame.has_value());
+    if (!nextFrame) return;
+    ASSERT_EQ(nextFrame->basis().semanticRevision, revision);
+    ASSERT_EQ(nextFrame->basis().presentationGeneration,
+              firstGeneration + 1);
+    ASSERT_EQ(nextFrame->semantic().sections(), before->sections());
+
+    ssg::GridPresenter wrongView{ssg::ViewId{10}};
+    ASSERT_FALSE(
+        wrongView.project(runtime, client, {{80, 24}, {}}).has_value());
+    ASSERT_EQ(runtime.revision(), revision);
+
+    auto staleRoot = uniqueRoot("grid_presenter_stale_revision");
+    auto staleCreated = ssg::EditorSession::create(configFor(staleRoot));
+    ASSERT_TRUE(staleCreated.accepted());
+    if (!staleCreated.accepted()) return;
+    auto& staleRuntime = *staleCreated.session;
+    ASSERT_TRUE(
+        staleRuntime
+            .attach({client, ssg::InvocationOrigin::InProcess}, view)
+            .accepted());
+    ASSERT_TRUE(staleRuntime.revision() < revision);
+    ASSERT_FALSE(
+        presenter.project(staleRuntime, client, {{80, 24}, {}}).has_value());
+
+    auto resumedFrame = presenter.project(runtime, client, {{100, 30}, {}});
+    ASSERT_TRUE(resumedFrame.has_value());
+    if (!resumedFrame) return;
+    ASSERT_EQ(resumedFrame->basis().presentationGeneration,
+              nextFrame->basis().presentationGeneration + 1);
+}
+
 } // namespace
 
 int main() {
@@ -687,6 +765,7 @@ int main() {
     RUN(addCursorChordProducesMultipleSelections);
     RUN(settingsOpenFocusesASettingsPrompt);
     RUN(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection);
+    RUN(gridPresenterCannotChangeOrReassembleSemanticState);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

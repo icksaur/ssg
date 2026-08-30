@@ -100,6 +100,13 @@ ssg::SessionSnapshot snapshotWith(
             std::move(sections), std::move(presentation)};
 }
 
+ssg::GridFrame deprecatedGridFrame(ssg::SessionSnapshot const& snapshot) {
+    auto frame = ssg::GridFrame::fromDeprecatedSnapshot(ssg::SessionSnapshot{
+        snapshot.revision(), snapshot.topology(), snapshot.client(),
+        snapshot.sections(), *snapshot.presentation()});
+    return std::move(frame).value();
+}
+
 }
 
 TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
@@ -151,7 +158,8 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
               std::optional<std::string>{"overlay-id"});
     ASSERT_FALSE(snapshot->presentation()->shell.panes.empty());
     if (snapshot->presentation()->shell.panes.empty()) return;
-    const auto grid = ssg::Renderer{}.render(*snapshot);
+    const auto grid =
+        ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     const auto paneContent = snapshot->presentation()->shell.panes.front().content;
     ASSERT_TRUE(hasDiffTintInPane(grid, paneContent));
 
@@ -161,7 +169,8 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
     ssg::SessionSnapshot mismatched{
         snapshot->revision(), snapshot->topology(), snapshot->client(),
         std::move(sections), snapshot->presentation()};
-    const auto mismatchGrid = ssg::Renderer{}.render(mismatched);
+    const auto mismatchGrid =
+        ssg::Renderer{}.render(deprecatedGridFrame(mismatched));
     ASSERT_TRUE(hasDiffTintInPane(mismatchGrid, paneContent));
 }
 
@@ -198,7 +207,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     const auto content = presentation.shell.panes.front().content;
     auto overlay =
         snapshotWith(*base, std::move(sections), std::move(presentation));
-    const auto grid = ssg::Renderer{}.render(overlay);
+    const auto grid = ssg::Renderer{}.render(deprecatedGridFrame(overlay));
 
     const auto [addedColumn, addedRow] =
         findText(grid, "added search search");
@@ -249,7 +258,8 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
         text, scrolledPresentation.viewport.dimensions, 0, 8, 4, &diffFile);
     auto scrolled = snapshotWith(
         overlay, std::move(scrolledSections), std::move(scrolledPresentation));
-    const auto scrolledGrid = ssg::Renderer{}.render(scrolled);
+    const auto scrolledGrid =
+        ssg::Renderer{}.render(deprecatedGridFrame(scrolled));
     const auto [scrolledRemovedColumn, scrolledRemovedRow] =
         findText(scrolledGrid, "baseline");
     ASSERT_EQ(scrolledRemovedColumn, content.x);
@@ -277,7 +287,8 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     precedenceSections.findReplace.activeMatch = std::size_t{0};
     auto precedence = snapshotWith(
         overlay, std::move(precedenceSections), *overlay.presentation());
-    const auto precedenceGrid = ssg::Renderer{}.render(precedence);
+    const auto precedenceGrid =
+        ssg::Renderer{}.render(deprecatedGridFrame(precedence));
     ASSERT_EQ(precedenceGrid.at(addedColumn, addedRow).role,
               ssg::SemanticRole::Selection);
     ASSERT_EQ(precedenceGrid.at(addedColumn, addedRow).tint,
@@ -301,7 +312,8 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     auto wordSelection =
         snapshotWith(overlay, std::move(wordSelectionSections),
                      *overlay.presentation());
-    const auto wordSelectionGrid = ssg::Renderer{}.render(wordSelection);
+    const auto wordSelectionGrid =
+        ssg::Renderer{}.render(deprecatedGridFrame(wordSelection));
     ASSERT_EQ(wordSelectionGrid.at(modifiedColumn + 14, modifiedRow).role,
               ssg::SemanticRole::Selection);
     ASSERT_EQ(wordSelectionGrid.at(modifiedColumn + 14, modifiedRow).tint,
@@ -315,7 +327,8 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
         text, noDiffPresentation.viewport.dimensions, 0, 0, 4);
     auto noDiff = snapshotWith(
         overlay, std::move(noDiffSections), std::move(noDiffPresentation));
-    const auto noDiffGrid = ssg::Renderer{}.render(noDiff);
+    const auto noDiffGrid =
+        ssg::Renderer{}.render(deprecatedGridFrame(noDiff));
     for (const auto& cell : noDiffGrid.cells) {
         ASSERT_EQ(cell.tint, ssg::DiffTint::None);
     }
@@ -331,7 +344,9 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     unidentifiedSections.diff = overlay.sections().diff;
     auto unidentified = snapshotWith(
         noDiff, std::move(unidentifiedSections), *noDiff.presentation());
-    ASSERT_EQ(ssg::Renderer{}.render(unidentified).canonical(),
+    ASSERT_EQ(ssg::Renderer{}
+                 .render(deprecatedGridFrame(unidentified))
+                 .canonical(),
               noDiffGrid.canonical());
 }
 

@@ -300,7 +300,11 @@ TEST(unicodeEndToEndGridAndEncoding) {
     auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (!snap.has_value()) return;
-    auto grid = ssg::Renderer{}.render(*snap);
+    auto gridFrame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snap));
+    ASSERT_TRUE(gridFrame.has_value());
+    if (!gridFrame) return;
+    auto grid = ssg::Renderer{}.render(*gridFrame);
 
     // Locate the content row: the first cell run "a","b".
     int row = -1, startx = -1;
@@ -343,7 +347,10 @@ TEST(unicodeEndToEndGridAndEncoding) {
                                 ssg::SelectionCommandArguments{pos, std::nullopt}});
         auto s = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         if (!s) return -1;
-        auto g = ssg::Renderer{}.render(*s);
+        auto frame =
+            ssg::GridFrame::fromDeprecatedSnapshot(std::move(*s));
+        if (!frame) return -1;
+        auto g = ssg::Renderer{}.render(*frame);
         return g.caret ? g.caret->column : -1;
     };
     int const columnBefore = caretColumnAt(before);

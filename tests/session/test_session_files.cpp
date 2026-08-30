@@ -560,18 +560,22 @@ TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     ASSERT_TRUE(reopenNote(runtime).accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
 
     // Both projections agree that a notice is raised.
-    ASSERT_TRUE(hasNoticeBar(*snapshot));
-    const auto& notice = snapshot->sections().noticeView;
+    ASSERT_TRUE(hasNoticeBar(frame->semantic()));
+    const auto& notice = frame->sections().noticeView;
     ASSERT_TRUE(notice.has_value());
 
     // Both projections carry the same semantic action identities. Commands remain
     // library-owned and are resolved only after input returns to the session.
     std::vector<std::string> gridActions;
-    for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
+    for (const auto& node : frame->presentation()->shell.accessibilityNodes) {
         if (node.kind == ssg::ShellNodeKind::NoticeAction) {
-            const auto hit = ssg::HitTester{*snapshot}.at(node.rect.x, node.rect.y);
+            const auto hit = ssg::HitTester{*frame}.at(node.rect.x, node.rect.y);
             ASSERT_TRUE(hit.fieldId.has_value());
             ASSERT_FALSE(hit.commandId.has_value());
             if (hit.fieldId) gridActions.push_back(*hit.fieldId);
@@ -615,6 +619,10 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     auto conflictSnap = conflict.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(conflictSnap.has_value());
     ASSERT_TRUE(hasNoticeBar(*conflictSnap));
+    auto conflictFrame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*conflictSnap));
+    ASSERT_TRUE(conflictFrame.has_value());
+    if (!conflictFrame) return;
 
     auto restoredRoot = uniqueRoot("notice_perturb_restored");
     leaveDirtyDraft(restoredRoot);  // disk unchanged -> Restored, no notice
@@ -625,10 +633,16 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     auto restoredSnap = restored.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(restoredSnap.has_value());
     ASSERT_FALSE(hasNoticeBar(*restoredSnap));
+    auto restoredFrame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*restoredSnap));
+    ASSERT_TRUE(restoredFrame.has_value());
+    if (!restoredFrame) return;
 
     ASSERT_EQ(conflict.activeDocumentText(), restored.activeDocumentText());
-    const auto& withNotice = conflictSnap->presentation()->shell.panes.front().content;
-    const auto& without = restoredSnap->presentation()->shell.panes.front().content;
+    const auto& withNotice =
+        conflictFrame->presentation()->shell.panes.front().content;
+    const auto& without =
+        restoredFrame->presentation()->shell.panes.front().content;
     // Reserved from the top: same left edge and width, top pushed down one, one
     // fewer content row -- the document is not shifted, it just shows one less
     // row (exactly like the prompt reservation costs a row from the bottom).
@@ -639,9 +653,9 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     // The same viewport-origin cell resolves to the same document byte offset in
     // both: the document's internal coordinate space is untouched.
     const auto withHit =
-        ssg::HitTester{*conflictSnap}.at(withNotice.x, withNotice.y);
+        ssg::HitTester{*conflictFrame}.at(withNotice.x, withNotice.y);
     const auto withoutHit =
-        ssg::HitTester{*restoredSnap}.at(without.x, without.y);
+        ssg::HitTester{*restoredFrame}.at(without.x, without.y);
     ASSERT_EQ(withHit.byteOffset, withoutHit.byteOffset);
 }
 
@@ -657,16 +671,21 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
     ASSERT_TRUE(reopenNote(runtime).accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
+    auto frame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*snapshot));
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
 
     // Each action node hit-tests to its semantic identity, not its command.
     for (const auto& id :
          {"draft.notice.diff", "draft.notice.use_disk",
           "draft.notice.dismiss"}) {
         const auto* node =
-            findShellNode(*snapshot, ssg::ShellNodeKind::NoticeAction, id);
+            findShellNode(frame->semantic(), ssg::ShellNodeKind::NoticeAction,
+                          id);
         ASSERT_TRUE(node != nullptr);
         if (!node) continue;
-        const auto hit = ssg::HitTester{*snapshot}.at(node->rect.x, node->rect.y);
+        const auto hit = ssg::HitTester{*frame}.at(node->rect.x, node->rect.y);
         ASSERT_EQ(hit.fieldId, std::optional<std::string>{id});
         ASSERT_FALSE(hit.commandId.has_value());
     }

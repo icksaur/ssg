@@ -134,6 +134,13 @@ ssg::SessionSnapshot withUiWidgetRole(ssg::SessionSnapshot const& base,
                                 std::move(sections), *base.presentation()};
 }
 
+ssg::GridFrame deprecatedGridFrame(ssg::SessionSnapshot const& snapshot) {
+    auto frame = ssg::GridFrame::fromDeprecatedSnapshot(ssg::SessionSnapshot{
+        snapshot.revision(), snapshot.topology(), snapshot.client(),
+        snapshot.sections(), *snapshot.presentation()});
+    return std::move(frame).value();
+}
+
 }  // namespace
 
 TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
@@ -159,7 +166,7 @@ TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
     ASSERT_TRUE(shell.header.has_value());
     ASSERT_TRUE(shell.footer.has_value());
     ASSERT_TRUE(shell.tabBar.has_value());
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     const auto& theme = snapshot->sections().theme;
     const auto headerBand =
@@ -228,7 +235,7 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
          {ssg::kDocumentNodeId, ssg::SemanticRole::FooterBackground}});
     styled = withUiForeground(styled, ssg::kHeaderNodeId,
                              ssg::SemanticRole::CurrentLineNumber);
-    const auto grid = ssg::Renderer{}.render(styled);
+    const auto grid = ssg::Renderer{}.render(deprecatedGridFrame(styled));
     const auto& shell = styled.presentation()->shell;
     const auto colorAt = [&](int x, int y) {
         return grid.colors[grid.at(x, y).background];
@@ -262,7 +269,8 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
                       ssg::SemanticRole::CurrentLineNumber));
         const auto overridden =
             withUiWidgetRole(styled, headerGlyph->id, "header");
-        const auto overriddenGrid = ssg::Renderer{}.render(overridden);
+        const auto overriddenGrid =
+            ssg::Renderer{}.render(deprecatedGridFrame(overridden));
         ASSERT_EQ(overriddenGrid.colors[
                       overriddenGrid
                           .at(headerGlyph->rect.x, headerGlyph->rect.y)
@@ -289,7 +297,7 @@ TEST(renderPaintsContentNotAccessibilityLabels) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     // Container accessibility labels must never be painted.
     ASSERT_FALSE(gridContains(grid, "Status header"));
     ASSERT_FALSE(gridContains(grid, "Open tabs"));
@@ -323,7 +331,7 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
     if (!snapshot) return;
     auto const& pane = snapshot->presentation()->shell.panes.front();
     ASSERT_TRUE(pane.lineNumbers.width > 0);
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     int const gx = pane.lineNumbers.x;
     int const gw = pane.lineNumbers.width;  // 4 lines -> 1 digit -> width 2
     ASSERT_EQ(gw, 2);
@@ -374,7 +382,7 @@ TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
     ASSERT_EQ(snapshot->sections().selection.items().size(),
               std::size_t{2});
     auto const& pane = snapshot->presentation()->shell.panes.front();
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     int const gx = pane.lineNumbers.x;
     auto roleAt = [&](int row) {
         return grid.at(gx, pane.lineNumbers.y + row).role;
@@ -410,7 +418,7 @@ TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return 0;
         ssg::Renderer::resetRenderSegmentationCalls();
-        auto grid = ssg::Renderer{}.render(*snapshot);
+        auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
         (void)grid;
         return ssg::Renderer::renderSegmentationCalls();
     };
@@ -451,7 +459,7 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_TRUE(snapshot->presentation()->viewport.firstVisualColumn > 0);
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     // The end of the line is on screen; the start has scrolled off.
     ASSERT_TRUE(gridContains(grid, "ENDmarker"));
@@ -493,7 +501,8 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
     if (!snapshot) return;
 
     // Without a palette projection the document content is painted.
-    ASSERT_TRUE(gridContains(ssg::Renderer{}.render(*snapshot), "alpha"));
+    ASSERT_TRUE(gridContains(
+        ssg::Renderer{}.render(deprecatedGridFrame(*snapshot)), "alpha"));
 
     auto presentation = *snapshot->presentation();
     ASSERT_FALSE(presentation.shell.panes.empty());
@@ -507,7 +516,7 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), snapshot->sections(),
                                    std::move(presentation)};
-    auto grid = ssg::Renderer{}.render(projected);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(projected));
 
     // Results replace the document text in the pane.
     ASSERT_TRUE(gridContains(grid, "file.save"));
@@ -546,7 +555,7 @@ TEST(renderShowsPaletteQueryAndGhostInHeader) {
         runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     // The header shows the query (prompt role) and the dim ghost completion.
     ASSERT_TRUE(gridContains(grid, "> sa"));
@@ -582,7 +591,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
         auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
-        auto grid = ssg::Renderer{}.render(*snapshot);
+        auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
         bool anySelection = false;
         for (int row = 0; row < grid.size.rows; ++row) {
             for (int col = 0; col < grid.size.columns; ++col) {
@@ -600,7 +609,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     int alphaRow = -1;
     for (int row = 0; row < grid.size.rows; ++row) {
@@ -650,7 +659,7 @@ TEST(renderFillsEndOfLineForMultilineSelection) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     int alphaRow = -1, alphaCol = -1;
     for (int row = 0; row < grid.size.rows && alphaRow < 0; ++row) {
@@ -684,7 +693,7 @@ TEST(renderHighlightsWideGlyphCells) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     int row = -1, col = -1;
     for (int r = 0; r < grid.size.rows && row < 0; ++r) {
@@ -724,7 +733,7 @@ TEST(renderPaintsSecondaryRangedSelectionCaret) {
     bool allRanged = true;
     for (auto const& item : items) if (item.isCaret()) allRanged = false;
     ASSERT_TRUE(allRanged);
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     int paintedSecondary = 0;
     for (int row = 0; row < grid.size.rows; ++row) {
         for (int col = 0; col < grid.size.columns; ++col) {
@@ -758,7 +767,7 @@ TEST(renderPaintsSecondaryCaretAsACell) {
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().selection.items().size(),
               std::size_t{2});
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     ASSERT_TRUE(grid.caret.has_value());
 
     int paintedSecondary = 0;
@@ -793,7 +802,7 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().findReplace.matches.size(), std::size_t{3});
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     int row = -1;
     for (int r = 0; r < grid.size.rows; ++r) {
@@ -847,7 +856,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_FALSE(snapshot->sections().findReplace.open);
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     bool anyMatch = false;
     for (int row = 0; row < grid.size.rows; ++row) {
         for (int col = 0; col < grid.size.columns; ++col) {
@@ -879,7 +888,7 @@ TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     // The reserved replace rows show the query and the replacement.
     ASSERT_TRUE(gridContains(grid, "cat"));
@@ -911,7 +920,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
         auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
-        auto grid = ssg::Renderer{}.render(*snapshot);
+        auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
         ASSERT_TRUE(gridContains(grid, "[ ] case"));
         ASSERT_TRUE(gridContains(grid, "[ ] word"));
         ASSERT_TRUE(gridContains(grid, "[ ] regex"));
@@ -926,7 +935,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     ASSERT_TRUE(gridContains(grid, "[x] case"));
     ASSERT_TRUE(gridContains(grid, "[ ] word"));
 }
@@ -956,7 +965,7 @@ TEST(renderPromptControlLabelsAreLowercaseChrome) {
         auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) continue;
-        auto grid = ssg::Renderer{}.render(*snapshot);
+        auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
         ASSERT_TRUE(gridContains(grid, c.lower));
         ASSERT_FALSE(gridContains(grid, c.title));
         (void)runtime->dispatch(ssg::ClientId{1},
@@ -989,7 +998,7 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     auto const& shell = snapshot->presentation()->shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     // A thumb (the default thumb glyph) is drawn in the reserved gutter column.
     int const gx = shell.panelScrollbar->x;
@@ -1022,7 +1031,7 @@ TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
     auto const& shell = snapshot->presentation()->shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     // The gutter is reserved (column exists) but blank: no thumb or track glyphs,
     // so the tree's content width never changes as items are added or removed.
     int const gx = shell.panelScrollbar->x;
@@ -1068,7 +1077,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), snapshot->sections(),
                                    std::move(presentation)};
-    auto grid = ssg::Renderer{}.render(projected);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(projected));
 
     // The window shows cmd-20.. (not cmd-00), and the absolute-25 selection lands
     // at window row 5.
@@ -1117,7 +1126,7 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), snapshot->sections(),
                                    std::move(presentation)};
-    auto grid = ssg::Renderer{}.render(projected);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(projected));
     // The gutter is reserved (column exists) but blank: no thumb/track glyphs.
     for (int y = projection.scrollbarRect.y;
          y < projection.scrollbarRect.y + projection.scrollbarRect.height; ++y) {
@@ -1151,7 +1160,7 @@ TEST(renderTooSmallMatchesHandAuthoredGolden) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {24, 3});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     ASSERT_EQ(grid.size.columns, 24);
     ASSERT_EQ(grid.size.rows, 3);
     // 18-cell message centered in 24 columns -> start column (24-18)/2 = 3, on
@@ -1161,7 +1170,10 @@ TEST(renderTooSmallMatchesHandAuthoredGolden) {
               std::string("   terminal too small   "));
     ASSERT_EQ(rowText(grid, 2), std::string(24, ' '));
     // Determinism.
-    ASSERT_EQ(ssg::Renderer{}.render(*snapshot).canonical(), grid.canonical());
+    ASSERT_EQ(ssg::Renderer{}
+                  .render(deprecatedGridFrame(*snapshot))
+                  .canonical(),
+              grid.canonical());
     std::filesystem::remove_all(root);
 }
 
@@ -1194,7 +1206,7 @@ TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
@@ -1231,7 +1243,7 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
 
@@ -1264,7 +1276,7 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
 
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
@@ -1343,7 +1355,8 @@ TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
     style.scrollbar.bottom = "@";
     style.tree.collapsed = "+ ";
     style.tree.expanded = "- ";
-    auto const grid = ssg::Renderer{}.render(withStyle(*snapshot, style));
+    auto const grid = ssg::Renderer{}.render(
+        deprecatedGridFrame(withStyle(*snapshot, style)));
 
     int const gx = shell.panelScrollbar->x;
     bool restyledThumb = false;
@@ -1448,7 +1461,8 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
     }
 
     // And the rendered screen shows them, with the shipped glyphs gone.
-    auto const grid = ssg::Renderer{}.render(*snapshot);
+    auto const grid =
+        ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     auto const& shell = snapshot->presentation()->shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
@@ -1897,12 +1911,15 @@ TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
     if (!snapshot) return;
 
     ssg::LineLayoutCache cache;
-    auto warm = ssg::Renderer{}.render(*snapshot, &cache);  // warm
+    auto warm = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot),
+                                       &cache);  // warm
     ssg::GraphemeLayout::resetCellRunCalls();
-    auto cached = ssg::Renderer{}.render(*snapshot, &cache);
+    auto cached =
+        ssg::Renderer{}.render(deprecatedGridFrame(*snapshot), &cache);
     auto const cachedCalls = ssg::GraphemeLayout::cellRunCalls();
     ssg::GraphemeLayout::resetCellRunCalls();
-    auto uncached = ssg::Renderer{}.render(*snapshot);
+    auto uncached =
+        ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
     auto const uncachedCalls = ssg::GraphemeLayout::cellRunCalls();
 
     // The cache reused the visible document lines: strictly fewer segmentations.

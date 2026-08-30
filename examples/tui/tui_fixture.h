@@ -2,7 +2,7 @@
 
 #include <ssg/Keymap.h>
 #include <ssg/EditorSession.h>
-#include <ssg/session_snapshot.h>
+#include <ssg/GridPresenter.h>
 
 #include <array>
 #include <any>
@@ -45,7 +45,7 @@ public:
     [[nodiscard]] CommandResult submit(SemanticCommand const& command);
     [[nodiscard]] CommandResult submit(std::string command_id,
                                        std::any payload = {});
-    [[nodiscard]] SessionSnapshot const& snapshot() const noexcept {
+    [[nodiscard]] GridFrame const& snapshot() const noexcept {
         return *snapshot_;
     }
 
@@ -56,7 +56,8 @@ private:
     InvocationPrincipal principal_;
     ViewId viewId_;
     ViewportDimensions dimensions_;
-    std::optional<SessionSnapshot> snapshot_;
+    GridPresenter presenter_;
+    std::optional<GridFrame> snapshot_;
 };
 
 }  // namespace ssg::tui

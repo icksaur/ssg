@@ -78,7 +78,11 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
                      .viewport(80, 24)
                      .build();
 
-    auto const realGrid = ssg::Renderer{}.render(*real);
+    auto realFrame =
+        ssg::GridFrame::fromDeprecatedSnapshot(std::move(*real));
+    ASSERT_TRUE(realFrame.has_value());
+    if (!realFrame) return;
+    auto const realGrid = ssg::Renderer{}.render(*realFrame);
     auto const builtGrid = ssg::Renderer{}.render(built);
 
     ASSERT_EQ(realGrid.size.columns, builtGrid.size.columns);
@@ -103,7 +107,7 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
     // The projections agree field-for-field: same visual row count, same first
     // row, same scrollbar metrics.  This is the part that would silently drift
     // if the builder reimplemented projection instead of calling it.
-    auto const& realViewport = real->presentation()->viewport;
+    auto const& realViewport = realFrame->presentation()->viewport;
     auto const& builtViewport = built.presentation()->viewport;
     ASSERT_EQ(realViewport.totalVisualRows, builtViewport.totalVisualRows);
     ASSERT_EQ(realViewport.firstVisualRow, builtViewport.firstVisualRow);

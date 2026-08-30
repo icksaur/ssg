@@ -69,7 +69,8 @@ TuiClient::TuiClient(EditorSession& runtime, InvocationPrincipal principal,
     : runtime_{&runtime},
       principal_{std::move(principal)},
       viewId_{viewId},
-      dimensions_{dimensions} {
+      dimensions_{dimensions},
+      presenter_{viewId} {
     auto attached = runtime_->attach(principal_, viewId_);
     if (!attached.accepted()) throw std::invalid_argument{attached.message};
     try {
@@ -97,7 +98,9 @@ CommandResult TuiClient::submit(std::string commandId, std::any payload) {
 }
 
 void TuiClient::refresh() {
-    auto next = runtime_->present(principal_.clientId(), dimensions_);
+    auto next = presenter_.project(
+        *runtime_, principal_.clientId(),
+        GridPresentationRequest{dimensions_, PaletteReport{}});
     if (!next) {
         throw std::logic_error{"TUI runtime did not return its attached snapshot"};
     }
