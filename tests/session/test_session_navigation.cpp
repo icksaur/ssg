@@ -2231,6 +2231,10 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
         ASSERT_EQ(edge.command->viewAction->action, expectedAction);
         auto applied = presenter.apply(*edge.command->viewAction, *frame);
         ASSERT_TRUE(applied.accepted() && applied.transition.has_value());
+        ASSERT_TRUE(
+            applied.transition &&
+            std::holds_alternative<ssg::DocumentPointerInput>(
+                *applied.transition));
         ASSERT_FALSE(
             presenter.apply(*edge.command->viewAction, *frame).accepted());
         if (!applied.transition) return;

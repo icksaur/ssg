@@ -139,7 +139,7 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
     bool pausesFollow = false;
     bool focusesEditor = false;
     bool reportsNavigation = false;
-    std::optional<ResolvedSelectionInput> resolvedSelectionInput;
+    std::optional<ClientInput> resolvedInput;
     auto resolveVisualSelection = [&](SelectionCommand command,
                                       bool primaryOnly) {
         auto inputSelections = frame.sections().selection;
@@ -204,10 +204,20 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
             ranges.push_back(
                 {selection.anchor.byteOffset, selection.active.byteOffset});
         }
-        resolvedSelectionInput = ResolvedSelectionInput{
-            SemanticInputBasis{basis.semanticRevision},
-            *frame.sections().tabs.active,
-            frame.sections().document.revision, std::move(ranges)};
+        if (primaryOnly) {
+            resolvedInput = DocumentPointerInput{
+                SemanticInputBasis{basis.semanticRevision},
+                resolvedSelections.primary().active.byteOffset,
+                false,
+                false,
+                InputPointerButton::Primary,
+                InputPointerPhase::Move};
+        } else {
+            resolvedInput = ResolvedSelectionInput{
+                SemanticInputBasis{basis.semanticRevision},
+                *frame.sections().tabs.active,
+                frame.sections().document.revision, std::move(ranges)};
+        }
         if (resolvedSelections != frame.sections().selection) {
             state.pendingSelection =
                 detail::GridProjectionState::PendingSelection{
@@ -393,9 +403,9 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                 "view action is not supported by this presenter"};
     }
     ++state.generation;
-    if (resolvedSelectionInput) {
+    if (resolvedInput) {
         return {GridActionStatus::TransitionRequired,
-                ClientInput{std::move(*resolvedSelectionInput)}, {}};
+                std::move(*resolvedInput), {}};
     }
     if (focusesEditor) {
         return {GridActionStatus::TransitionRequired,

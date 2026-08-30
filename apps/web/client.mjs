@@ -1370,10 +1370,16 @@ function applyViewAction(request) {
         active: target,
       });
     }
+    const frame = kind === VIEW_ACTION.CONTINUE_POINTER_EDGE
+      ? encodeDocumentPointerInput(
+          resolved.at(-1).active, request.semantic_revision, { phase: 1 })
+      : encodeResolvedSelectionInput(
+          request.semantic_revision, activeTab, documentRevision, resolved);
     if (!sendInputFrame(
-        encodeResolvedSelectionInput(
-          request.semantic_revision, activeTab, documentRevision, resolved),
-        { resolvedSelection: true })) {
+        frame,
+        kind === VIEW_ACTION.CONTINUE_POINTER_EDGE
+          ? {}
+          : { resolvedSelection: true })) {
       viewport.scrollTop = priorScrollTop;
       return 'unavailable';
     }
