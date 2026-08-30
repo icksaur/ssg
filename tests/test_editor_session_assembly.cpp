@@ -335,6 +335,31 @@ TEST(shellDeltaDetectsATabHitOnlyChange) {
     ASSERT_EQ(*replayed.snapshot, after);
 }
 
+TEST(shellDeltaDetectsAnExternalActionOnlyChange) {
+    ssg::ShellViewState oldShell;
+    ssg::ShellViewState newShell = oldShell;
+    newShell.externalActions = {
+        {ssg::Rect{2, 3, 6, 1}, "changed.txt", "external.reload"}};
+
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "same"),
+        {}, {}, std::move(oldShell));
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), sections(ssg::Revision{5}, "same"),
+        {}, {}, std::move(newShell));
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    ASSERT_TRUE(delta.shell().replacement.has_value());
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_EQ(*replayed.snapshot, after);
+}
+
 static_assert(!std::is_copy_constructible_v<ssg::SessionSnapshot>);
 static_assert(std::is_move_constructible_v<ssg::SessionSnapshot>);
 static_assert(!std::is_copy_constructible_v<ssg::SessionDelta>);
@@ -351,5 +376,6 @@ int main() {
     RUN(perClientCapabilitiesAndViewportsAreIsolated);
     RUN(shellDeltaDetectsAPanelScrollbarOnlyChange);
     RUN(shellDeltaDetectsATabHitOnlyChange);
+    RUN(shellDeltaDetectsAnExternalActionOnlyChange);
     return failed == 0 ? 0 : 1;
 }

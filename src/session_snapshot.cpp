@@ -18,7 +18,8 @@ bool shellEqual(ShellViewState const& left, ShellViewState const& right) {
            left.panes == right.panes &&
            left.tabHits == right.tabHits &&
            left.accessibilityNodes == right.accessibilityNodes &&
-           left.palette == right.palette;
+           left.palette == right.palette &&
+           left.externalActions == right.externalActions;
 }
 
 SelectionSetDelta selectionDelta(SelectionSet const& before,
