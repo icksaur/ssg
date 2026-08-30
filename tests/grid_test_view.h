@@ -35,7 +35,11 @@ public:
         if (applied.transition) {
             auto transition = session.input(client_, *applied.transition);
             if (transition.outcome == ClientInputOutcome::Rejected) {
-                throw std::runtime_error{"view transition was rejected"};
+                throw std::runtime_error{
+                    transition.command
+                        ? "view transition was rejected: " +
+                              transition.command->message
+                        : "view transition was rejected"};
             }
         }
         return result;

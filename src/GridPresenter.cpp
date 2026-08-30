@@ -2,10 +2,19 @@
 
 #include <ssg/EditorSession.h>
 
+#include "grid_projection_state.h"
+
 #include <algorithm>
 #include <type_traits>
 
 namespace ssg {
+
+GridPresenter::GridPresenter(ViewId viewId)
+    : viewId_{viewId},
+      state_{std::make_unique<detail::GridProjectionState>()} {}
+GridPresenter::~GridPresenter() = default;
+GridPresenter::GridPresenter(GridPresenter&&) noexcept = default;
+GridPresenter& GridPresenter::operator=(GridPresenter&&) noexcept = default;
 
 std::optional<GridFrame> GridFrame::fromDeprecatedSnapshot(
     SessionSnapshot snapshot) {
@@ -16,38 +25,52 @@ std::optional<GridFrame> GridFrame::fromDeprecatedSnapshot(
 
 std::optional<GridFrame> GridPresenter::project(
     EditorSession& session, ClientId client, GridPresentationRequest request) {
+    auto& state = *state_;
     auto projectCurrent = [&](PaletteReport palette, bool revealSelection) {
         return session.projectForBridgedPresenterDeprecated(
-            client, request.dimensions, std::move(palette), viewId_,
-            navigation_, treeFirstVisible_, revealSelection, shell_);
+            client, request.dimensions, std::move(palette), viewId_, state,
+            revealSelection);
     };
     auto snapshot = projectCurrent(request.palette, false);
     if (!snapshot || !snapshot->presentation()) {
         return std::nullopt;
     }
-    if (adoptedRevision_ && snapshot->revision() < *adoptedRevision_) {
+    if (state.adoptedRevision &&
+        snapshot->revision() < *state.adoptedRevision) {
         return std::nullopt;
     }
     auto const& sections = snapshot->sections();
     auto const* presentation = &*snapshot->presentation();
-    const auto primary = sections.selection.primary().active;
-    const bool documentChanged =
-        !documentRevision_ || *documentRevision_ != sections.document.revision ||
-        !findGeneration_ ||
-        *findGeneration_ != sections.findReplace.generation ||
-        activeTab_ != sections.tabs.active ||
-        !primarySelection_ || *primarySelection_ != primary;
     bool navigationChanged = false;
-    documentRevision_ = sections.document.revision;
-    findGeneration_ = sections.findReplace.generation;
-    activeTab_ = sections.tabs.active;
-    primarySelection_ = primary;
+    bool confirmedSelection = false;
+    if (state.pendingSelection) {
+        if (sections.tabs.active == state.pendingSelection->activeTab &&
+            sections.document.revision ==
+                state.pendingSelection->documentRevision &&
+            sections.selection == state.pendingSelection->expected) {
+            state.navigation = state.pendingSelection->navigation;
+            navigationChanged = true;
+            confirmedSelection = true;
+        }
+        state.pendingSelection.reset();
+    }
+    const bool documentChanged =
+        !state.documentRevision ||
+        *state.documentRevision != sections.document.revision ||
+        !state.findGeneration ||
+        *state.findGeneration != sections.findReplace.generation ||
+        state.activeTab != sections.tabs.active ||
+        !state.selections || *state.selections != sections.selection;
+    state.documentRevision = sections.document.revision;
+    state.findGeneration = sections.findReplace.generation;
+    state.activeTab = sections.tabs.active;
+    state.selections = sections.selection;
 
     const auto selectedTree =
         sections.tree.providers.empty()
             ? std::optional<TreeNodeId>{}
             : sections.tree.providers.front().selected;
-    if (selectedTree && selectedTree != treeSelection_ &&
+    if (selectedTree && selectedTree != state.treeSelection &&
         !presentation->treeWindows.empty() &&
         !sections.tree.providers.empty()) {
         auto const& provider = sections.tree.providers.front();
@@ -59,44 +82,49 @@ std::optional<GridFrame> GridPresenter::project(
                 std::distance(provider.nodes.begin(), found));
             auto const& scrollbar =
                 presentation->treeWindows.front().scrollbar;
-            ScrollOffset offset{treeFirstVisible_};
+            ScrollOffset offset{state.treeFirstVisible};
             offset.revealSelection(selected, scrollbar.totalRows,
                                    scrollbar.viewportRows);
             navigationChanged =
                 navigationChanged ||
-                offset.firstVisible() != treeFirstVisible_;
-            treeFirstVisible_ = offset.firstVisible();
+                offset.firstVisible() != state.treeFirstVisible;
+            state.treeFirstVisible = offset.firstVisible();
         }
     }
-    treeSelection_ = selectedTree;
+    state.treeSelection = selectedTree;
 
     if (documentChanged || navigationChanged) {
-        snapshot = projectCurrent(request.palette, documentChanged);
+        snapshot = projectCurrent(request.palette,
+                                  documentChanged && !confirmedSelection);
         if (!snapshot || !snapshot->presentation()) return std::nullopt;
         presentation = &*snapshot->presentation();
     }
-    adoptedRevision_ = snapshot->revision();
+    state.adoptedRevision = snapshot->revision();
     auto frame = GridFrame{
         std::move(*snapshot),
-        GridBasis{viewId_, *adoptedRevision_, ++generation_}};
+        GridBasis{viewId_, *state.adoptedRevision, ++state.generation}};
     presentation = frame.presentation();
-    navigation_ = presentation->selectionNav;
-    navigation_.firstVisualRow = presentation->viewport.firstVisualRow;
-    navigation_.firstVisualColumn = presentation->viewport.firstVisualColumn;
+    state.navigation = presentation->selectionNav;
+    state.navigation.firstVisualRow =
+        presentation->viewport.firstVisualRow;
+    state.navigation.firstVisualColumn =
+        presentation->viewport.firstVisualColumn;
     if (!presentation->treeWindows.empty()) {
-        treeFirstVisible_ = presentation->treeWindows.front().firstVisible;
+        state.treeFirstVisible =
+            presentation->treeWindows.front().firstVisible;
     }
     return frame;
 }
 
 GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                                       GridFrame const& frame) {
+    auto& state = *state_;
     const auto basis = frame.basis();
     if (request.viewId != viewId_ || basis.viewId != viewId_ ||
         request.semanticRevision != basis.semanticRevision ||
-        !adoptedRevision_ ||
-        basis.semanticRevision != *adoptedRevision_ ||
-        basis.presentationGeneration != generation_) {
+        !state.adoptedRevision ||
+        basis.semanticRevision != *state.adoptedRevision ||
+        basis.presentationGeneration != state.generation) {
         return {GridActionStatus::Rejected, std::nullopt,
                 "view action basis is stale"};
     }
@@ -111,6 +139,7 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
     bool pausesFollow = false;
     bool focusesEditor = false;
     bool reportsNavigation = false;
+    std::optional<ResolvedSelectionInput> resolvedSelectionInput;
     std::visit(
         [&](auto const& action) {
             using Action = std::decay_t<decltype(action)>;
@@ -121,20 +150,23 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                 }
                 if (action.target == ViewScrollTarget::Document) {
                     pausesFollow = true;
-                    ScrollOffset offset{navigation_.firstVisualRow};
+                    ScrollOffset offset{state.navigation.firstVisualRow};
                     offset.byLines(
                         action.rows, presentation->viewport.totalVisualRows,
                         presentation->viewport.scrollbar.viewportRows);
                     changed =
-                        offset.firstVisible() != navigation_.firstVisualRow;
-                    navigation_.firstVisualRow = offset.firstVisible();
+                        offset.firstVisible() !=
+                        state.navigation.firstVisualRow;
+                    state.navigation.firstVisualRow =
+                        offset.firstVisible();
                 } else if (!presentation->treeWindows.empty()) {
                     auto const& tree = presentation->treeWindows.front();
-                    ScrollOffset offset{treeFirstVisible_};
+                    ScrollOffset offset{state.treeFirstVisible};
                     offset.byLines(action.rows, tree.scrollbar.totalRows,
                                    tree.scrollbar.viewportRows);
-                    changed = offset.firstVisible() != treeFirstVisible_;
-                    treeFirstVisible_ = offset.firstVisible();
+                    changed =
+                        offset.firstVisible() != state.treeFirstVisible;
+                    state.treeFirstVisible = offset.firstVisible();
                 }
             } else if constexpr (std::same_as<Action, ViewScrollPages>) {
                 pausesFollow = true;
@@ -142,12 +174,13 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                     supported = false;
                     return;
                 }
-                ScrollOffset offset{navigation_.firstVisualRow};
+                ScrollOffset offset{state.navigation.firstVisualRow};
                 offset.byPages(
                     action.pages, presentation->viewport.totalVisualRows,
                     presentation->viewport.scrollbar.viewportRows);
-                changed = offset.firstVisible() != navigation_.firstVisualRow;
-                navigation_.firstVisualRow = offset.firstVisible();
+                changed = offset.firstVisible() !=
+                          state.navigation.firstVisualRow;
+                state.navigation.firstVisualRow = offset.firstVisible();
             } else if constexpr (std::same_as<Action,
                                               ViewScrollFraction>) {
                 if (action.denominator == 0 ||
@@ -157,22 +190,25 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                 }
                 if (action.target == ViewScrollTarget::Document) {
                     pausesFollow = true;
-                    ScrollOffset offset{navigation_.firstVisualRow};
+                    ScrollOffset offset{state.navigation.firstVisualRow};
                     offset.toFraction(
                         action.numerator, action.denominator,
                         presentation->viewport.totalVisualRows,
                         presentation->viewport.scrollbar.viewportRows);
                     changed =
-                        offset.firstVisible() != navigation_.firstVisualRow;
-                    navigation_.firstVisualRow = offset.firstVisible();
+                        offset.firstVisible() !=
+                        state.navigation.firstVisualRow;
+                    state.navigation.firstVisualRow =
+                        offset.firstVisible();
                 } else if (!presentation->treeWindows.empty()) {
                     auto const& tree = presentation->treeWindows.front();
-                    ScrollOffset offset{treeFirstVisible_};
+                    ScrollOffset offset{state.treeFirstVisible};
                     offset.toFraction(action.numerator, action.denominator,
                                       tree.scrollbar.totalRows,
                                       tree.scrollbar.viewportRows);
-                    changed = offset.firstVisible() != treeFirstVisible_;
-                    treeFirstVisible_ = offset.firstVisible();
+                    changed =
+                        offset.firstVisible() != state.treeFirstVisible;
+                    state.treeFirstVisible = offset.firstVisible();
                 }
             } else if constexpr (std::same_as<Action, RevealSelection> ||
                                  std::same_as<Action, CenterSelection>) {
@@ -183,7 +219,7 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                     rows.visualRowForPosition(selections.primary().active);
                 const auto viewportRows =
                     presentation->viewport.scrollbar.viewportRows;
-                auto next = navigation_.firstVisualRow;
+                auto next = state.navigation.firstVisualRow;
                 if constexpr (std::same_as<Action, RevealSelection>) {
                     ScrollOffset offset{next};
                     offset.revealSelection(
@@ -202,24 +238,124 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                             : 0;
                     next = std::min(centered, maximum);
                 }
-                changed = next != navigation_.firstVisualRow;
-                navigation_.firstVisualRow = next;
+                changed = next != state.navigation.firstVisualRow;
+                state.navigation.firstVisualRow = next;
+            } else if constexpr (std::same_as<Action,
+                                              MoveVisualSelection>) {
+                if (!frame.sections().tabs.active) {
+                    supported = false;
+                    return;
+                }
+                SelectionCommand command = SelectionCommand::CursorLineDown;
+                switch (action.direction) {
+                    case VisualSelectionDirection::LineUp:
+                        command = action.extend
+                                      ? SelectionCommand::SelectLineUp
+                                      : SelectionCommand::CursorLineUp;
+                        break;
+                    case VisualSelectionDirection::LineDown:
+                        command = action.extend
+                                      ? SelectionCommand::SelectLineDown
+                                      : SelectionCommand::CursorLineDown;
+                        break;
+                    case VisualSelectionDirection::PageUp:
+                        command = action.extend
+                                      ? SelectionCommand::SelectPageUp
+                                      : SelectionCommand::CursorPageUp;
+                        break;
+                    case VisualSelectionDirection::PageDown:
+                        command = action.extend
+                                      ? SelectionCommand::SelectPageDown
+                                      : SelectionCommand::CursorPageDown;
+                        break;
+                }
+                auto before = SelectionViewState{
+                    frame.sections().selection,
+                    state.navigation.firstVisualRow,
+                    state.navigation.firstVisualColumn,
+                    state.navigation.desiredCell};
+                const DiffFileView* activeDiff = nullptr;
+                if (frame.sections().document.diffFileIdentity) {
+                    const auto found = std::ranges::find(
+                        frame.sections().diff.files,
+                        *frame.sections().document.diffFileIdentity,
+                        [](const DiffFileView& file) {
+                            return file.id.value();
+                        });
+                    if (found != frame.sections().diff.files.end()) {
+                        activeDiff = &*found;
+                    }
+                }
+                const auto activePane = std::ranges::find(
+                    presentation->shell.panes, state.shell.activePane(),
+                    &PaneGeometry::id);
+                const auto paneColumns =
+                    activePane == presentation->shell.panes.end()
+                        ? presentation->viewport.dimensions.columns
+                        : static_cast<std::uint32_t>(
+                              std::max(activePane->content.width, 1));
+                const auto paneRows =
+                    activePane == presentation->shell.panes.end()
+                        ? std::max(
+                              presentation->viewport.scrollbar.viewportRows,
+                              std::uint32_t{1})
+                        : static_cast<std::uint32_t>(
+                              std::max(activePane->content.height, 1));
+                const auto* wordWrapSetting =
+                    frame.sections().settings.find(SettingKey::WordWrap);
+                const auto* wordWrap =
+                    wordWrapSetting
+                        ? std::get_if<bool>(
+                              &wordWrapSetting->effective.value)
+                        : nullptr;
+                auto result = SelectionNavigator{}.apply(
+                    frame.sections().document.text, before, command,
+                    {paneColumns, paneRows}, {}, {}, 4,
+                    wordWrap != nullptr && *wordWrap,
+                    activeDiff);
+                if (!result.accepted()) {
+                    supported = false;
+                    return;
+                }
+                auto resolved = result.delta.replacement.value_or(before);
+                std::vector<ResolvedSelectionRange> ranges;
+                ranges.reserve(resolved.selections.items().size());
+                for (const auto& selection : resolved.selections.items()) {
+                    ranges.push_back({selection.anchor.byteOffset,
+                                      selection.active.byteOffset});
+                }
+                resolvedSelectionInput = ResolvedSelectionInput{
+                    SemanticInputBasis{basis.semanticRevision},
+                    *frame.sections().tabs.active,
+                    frame.sections().document.revision, std::move(ranges)};
+                if (resolved.selections != before.selections) {
+                    state.pendingSelection =
+                        detail::GridProjectionState::PendingSelection{
+                        *frame.sections().tabs.active,
+                        frame.sections().document.revision,
+                        resolved.selections,
+                        {resolved.firstVisualRow,
+                         resolved.firstVisualColumn,
+                         resolved.desiredCell}};
+                }
+                return;
             } else if constexpr (std::same_as<Action, SplitPane>) {
-                (void)shell_.splitActive(action.axis);
+                (void)state.shell.splitActive(action.axis);
             } else if constexpr (std::same_as<Action, ClosePane>) {
-                (void)shell_.closeActivePane();
+                (void)state.shell.closeActivePane();
             } else if constexpr (std::same_as<Action, CyclePane>) {
                 pausesFollow = true;
                 reportsNavigation = true;
                 if (action.direction == PaneCycleDirection::Next) {
-                    shell_.nextPane();
+                    state.shell.nextPane();
                 } else {
-                    shell_.previousPane();
+                    state.shell.previousPane();
                 }
             } else if constexpr (std::same_as<Action, FocusPane>) {
                 pausesFollow = true;
                 focusesEditor =
-                    shell_.focusPane(action.direction, presentation->shell);
+                    state.shell.focusPane(action.direction,
+                                          presentation->shell);
                 reportsNavigation = !focusesEditor;
             } else {
                 supported = false;
@@ -231,7 +367,11 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
         return {GridActionStatus::Rejected, std::nullopt,
                 "view action is not supported by this presenter"};
     }
-    ++generation_;
+    ++state.generation;
+    if (resolvedSelectionInput) {
+        return {GridActionStatus::TransitionRequired,
+                ClientInput{std::move(*resolvedSelectionInput)}, {}};
+    }
     if (focusesEditor) {
         return {GridActionStatus::TransitionRequired,
                 ClientInput{ResolvedPaneFocusInput{

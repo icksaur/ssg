@@ -6,11 +6,15 @@
 #include <ssg/session_snapshot.h>
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 namespace ssg {
 
 class EditorSession;
+namespace detail {
+struct GridProjectionState;
+}
 
 struct GridBasis {
     ViewId viewId;
@@ -79,12 +83,13 @@ private:
 
 class GridPresenter {
 public:
-    explicit GridPresenter(ViewId viewId) : viewId_{viewId} {}
+    explicit GridPresenter(ViewId viewId);
+    ~GridPresenter();
 
     GridPresenter(GridPresenter const&) = delete;
     GridPresenter& operator=(GridPresenter const&) = delete;
-    GridPresenter(GridPresenter&&) noexcept = default;
-    GridPresenter& operator=(GridPresenter&&) noexcept = default;
+    GridPresenter(GridPresenter&&) noexcept;
+    GridPresenter& operator=(GridPresenter&&) noexcept;
 
     [[nodiscard]] std::optional<GridFrame> project(
         EditorSession& session, ClientId client,
@@ -94,16 +99,7 @@ public:
 
 private:
     ViewId viewId_;
-    std::optional<Revision> adoptedRevision_;
-    std::uint64_t generation_ = 0;
-    SelectionNavigation navigation_;
-    std::uint32_t treeFirstVisible_ = 0;
-    std::optional<Revision> documentRevision_;
-    std::optional<std::uint64_t> findGeneration_;
-    std::optional<TabId> activeTab_;
-    std::optional<DocumentPosition> primarySelection_;
-    std::optional<TreeNodeId> treeSelection_;
-    ShellState shell_;
+    std::unique_ptr<detail::GridProjectionState> state_;
 };
 
 }  // namespace ssg

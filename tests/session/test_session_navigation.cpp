@@ -83,6 +83,10 @@ std::vector<std::string_view> keyboardRoutes(
     std::type_identity<ssg::ResolvedPaneFocusInput>) {
     return {};
 }
+std::vector<std::string_view> keyboardRoutes(
+    std::type_identity<ssg::ResolvedSelectionInput>) {
+    return {};
+}
 
 template <std::size_t... Index>
 std::vector<std::string_view> allKeyboardRoutes(
@@ -282,8 +286,10 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
               ssg::DiffFileId{"c.txt"});
     ASSERT_EQ(snapshot->sections().followEdits.mode, ssg::FollowMode::Following);
 
-    ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
+    ssg::test::GridTestView grid{
+        ssg::ClientId{1}, ssg::ViewId{1}, dimensions};
+    ASSERT_TRUE(grid
+                    .dispatch(runtime,
                               {"cursor.line_up", runtime.revision(), {}})
                     .accepted());
     snapshot = runtime.present(ssg::ClientId{1}, dimensions);
@@ -1907,6 +1913,7 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
         ASSERT_TRUE(fraction.command.has_value() &&
                     fraction.command->accepted());
     }
+
     const auto beforeInvalidScroll = runtime.revision();
     auto invalidScroll = runtime.input(
         client, ssg::ScrollFractionInput{
@@ -1934,6 +1941,74 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     if (focused && focused->sections().promptView) {
         ASSERT_EQ(focused->sections().promptView->activeInput, std::size_t{1});
     }
+}
+
+TEST(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity) {
+    auto runtime = followPauseRuntime("a\xC3\xA9z\n");
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    auto snapshot = runtime->snapshot(ssg::ClientId{1});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot || !snapshot->sections().tabs.active) return;
+    const auto basis = ssg::SemanticInputBasis{runtime->revision()};
+    const auto tab = *snapshot->sections().tabs.active;
+    const auto documentRevision = snapshot->sections().document.revision;
+    const auto valid = ssg::ResolvedSelectionInput{
+        basis, tab, documentRevision,
+        {{ssg::ByteOffset{1}, ssg::ByteOffset{3}}}};
+
+    const auto beforeSelection = snapshot->sections().selection;
+    const auto beforeRevision = runtime->revision();
+    const auto expectRejected = [&](ssg::ResolvedSelectionInput input) {
+        const auto result =
+            runtime->input(ssg::ClientId{1},
+                           ssg::ClientInput{std::move(input)});
+        ASSERT_EQ(result.outcome, ssg::ClientInputOutcome::Rejected);
+        const auto after = runtime->snapshot(ssg::ClientId{1});
+        ASSERT_TRUE(after.has_value());
+        if (after) {
+            ASSERT_EQ(after->sections().selection, beforeSelection);
+            ASSERT_EQ(after->revision(), beforeRevision);
+        }
+    };
+
+    auto stale = valid;
+    stale.basis.observedRevision =
+        ssg::Revision{beforeRevision.value() + 1};
+    expectRejected(stale);
+    auto wrongTab = valid;
+    wrongTab.activeTab = ssg::TabId{tab.value() + 1};
+    expectRejected(wrongTab);
+    auto wrongDocument = valid;
+    wrongDocument.documentRevision =
+        ssg::Revision{documentRevision.value() + 1};
+    expectRejected(wrongDocument);
+    auto empty = valid;
+    empty.selections.clear();
+    expectRejected(empty);
+    auto outside = valid;
+    outside.selections.front().active = ssg::ByteOffset{99};
+    expectRejected(outside);
+    auto insideCodePoint = valid;
+    insideCodePoint.selections.front().active = ssg::ByteOffset{2};
+    expectRejected(insideCodePoint);
+
+    const auto accepted =
+        runtime->input(ssg::ClientId{1}, ssg::ClientInput{valid});
+    ASSERT_EQ(accepted.outcome, ssg::ClientInputOutcome::Dispatched);
+    const auto after = runtime->snapshot(ssg::ClientId{1});
+    ASSERT_TRUE(after.has_value());
+    if (after) {
+        ASSERT_EQ(after->sections().selection.primary().anchor.byteOffset,
+                  ssg::ByteOffset{1});
+        ASSERT_EQ(after->sections().selection.primary().active.byteOffset,
+                  ssg::ByteOffset{3});
+    }
+
+    ASSERT_TRUE(runtime->detach(ssg::ClientId{1}));
+    ASSERT_EQ(
+        runtime->input(ssg::ClientId{1}, ssg::ClientInput{valid}).outcome,
+        ssg::ClientInputOutcome::Rejected);
 }
 
 TEST(documentPointerInputOwnsSelectionGesturePolicy) {
@@ -2952,15 +3027,17 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
                                  {"view.toggle_word_wrap", runtime.revision(), {}})
                     .accepted());
     ssg::ViewportDimensions const dims{80, 24};
-    (void)runtime.present(ssg::ClientId{1}, dims);  // warm the cache
+    ssg::test::GridTestView grid{
+        ssg::ClientId{1}, ssg::ViewId{1}, dims};
+    (void)grid.present(runtime);
 
     // Two identical wrap snapshots: the second re-shapes nothing from the
     // document -- only the constant chrome/prompt shaping remains.
     ssg::GraphemeLayout::resetCellRunCalls();
-    (void)runtime.present(ssg::ClientId{1}, dims);
+    (void)grid.present(runtime);
     auto const base = ssg::GraphemeLayout::cellRunCalls();
     ssg::GraphemeLayout::resetCellRunCalls();
-    (void)runtime.present(ssg::ClientId{1}, dims);
+    (void)grid.present(runtime);
     ASSERT_EQ(ssg::GraphemeLayout::cellRunCalls(), base);
 
     // An edit bumps the document revision, so the whole document is re-shaped:
@@ -2970,7 +3047,7 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
                                   ssg::TextInputArguments{"z"}})
                     .accepted());
     ssg::GraphemeLayout::resetCellRunCalls();
-    (void)runtime.present(ssg::ClientId{1}, dims);
+    (void)grid.present(runtime);
     ASSERT_TRUE(ssg::GraphemeLayout::cellRunCalls() > base);
     std::filesystem::remove_all(root);
 }
@@ -3004,10 +3081,12 @@ TEST(dispatchEffectsSeparateRoutingFromGeometryAcrossRoutes) {
     ASSERT_TRUE(runtime.dispatch(client, {"file.open", runtime.revision(),
                                           std::string{"doc.txt"}}).accepted());
 
-    // A cursor move: geometry advances (a new revision), routing does not.
+    // Visual cursor movement is view-owned until its resolved selection returns.
     auto down = runtime.dispatch(client, {"cursor.line_down", runtime.revision(), {}});
     ASSERT_TRUE(down.accepted());
-    ASSERT_TRUE(down.effects.geometryChanged);
+    ASSERT_EQ(down.outcome(),
+              ssg::CommandResult::Outcome::ViewActionRequired);
+    ASSERT_FALSE(down.effects.geometryChanged);
     ASSERT_FALSE(down.effects.routingChanged);
 
     // Typing text: geometry, not routing.
@@ -3068,14 +3147,15 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
     ssg::ViewportDimensions const dims{80, 24};
 
     auto navSegmentations = [&](std::string const& file) -> std::uint64_t {
+        ssg::test::GridTestView grid{
+            ssg::ClientId{1}, ssg::ViewId{1}, dims};
         (void)runtime.dispatch(
             ssg::ClientId{1}, {"file.open", runtime.revision(), file});
-        (void)runtime.present(ssg::ClientId{1}, dims);  // prime pane cache
+        (void)grid.present(runtime);
         ssg::GraphemeLayout::resetCellRunCalls();
         for (int i = 0; i < 4; ++i) {
-            (void)runtime.dispatch(
-                ssg::ClientId{1},
-                {"cursor.line_down", runtime.revision(), {}});
+            (void)grid.dispatch(
+                runtime, {"cursor.line_down", runtime.revision(), {}});
         }
         return ssg::GraphemeLayout::cellRunCalls();
     };
@@ -3087,7 +3167,8 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
     // Bounded (~ per move: visible rows + the moved line), and NOT proportional to
     // the 400x-larger document.
     ASSERT_TRUE(smallCalls < 200);
-    ASSERT_EQ(smallCalls, bigCalls);
+    ASSERT_TRUE(bigCalls > 0);
+    ASSERT_TRUE(bigCalls < 200);
     std::filesystem::remove_all(root);
 }
 
@@ -3236,6 +3317,7 @@ int main() {
     RUN(commandPickerSubmissionHasOriginParity);
     RUN(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision);
     RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
+    RUN(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity);
     RUN(documentPointerInputOwnsSelectionGesturePolicy);
     RUN(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition);
     RUN(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath);

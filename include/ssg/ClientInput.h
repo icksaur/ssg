@@ -39,6 +39,7 @@ enum class ClientInputKind : std::uint8_t {
     ScrollFraction,
     ViewNavigation,
     ResolvedPaneFocus,
+    ResolvedSelection,
 };
 
 enum class InputPointerButton : std::uint8_t {
@@ -202,6 +203,24 @@ struct ResolvedPaneFocusInput {
                            const ResolvedPaneFocusInput&) = default;
 };
 
+struct ResolvedSelectionRange {
+    ByteOffset anchor;
+    ByteOffset active;
+
+    friend bool operator==(const ResolvedSelectionRange&,
+                           const ResolvedSelectionRange&) = default;
+};
+
+struct ResolvedSelectionInput {
+    SemanticInputBasis basis;
+    TabId activeTab;
+    Revision documentRevision;
+    std::vector<ResolvedSelectionRange> selections;
+
+    friend bool operator==(const ResolvedSelectionInput&,
+                           const ResolvedSelectionInput&) = default;
+};
+
 using ClientInput =
     std::variant<ClientKeyInput, TabPointerInput, TreePointerInput,
                  PickerPointerInput, PromptControlPointerInput,
@@ -209,7 +228,7 @@ using ClientInput =
                  PublishedUiActionPointerInput, NoticeActionPointerInput,
                  DocumentPointerInput, ScrollLinesInput,
                  ScrollFractionInput, ViewNavigationInput,
-                 ResolvedPaneFocusInput>;
+                 ResolvedPaneFocusInput, ResolvedSelectionInput>;
 
 enum class ClientOwnedInputKind : std::uint8_t {
     AppendText,

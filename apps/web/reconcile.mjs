@@ -255,6 +255,20 @@ export function encodeViewNavigationInput(observedRevision) {
   });
 }
 
+export function encodeResolvedSelectionInput(
+    observedRevision, activeTab, documentRevision, selections) {
+  return encodeMessage(7, {
+    kind: 14n,
+    basis_revision: BigInt(observedRevision),
+    active_tab: BigInt(activeTab),
+    document_revision: BigInt(documentRevision),
+    selections: selections.map(({ anchor, active }) => ({
+      anchor: BigInt(anchor),
+      active: BigInt(active),
+    })),
+  });
+}
+
 const MODIFIER_CODES = new Set([
   'AltLeft', 'AltRight', 'ControlLeft', 'ControlRight',
   'MetaLeft', 'MetaRight', 'ShiftLeft', 'ShiftRight',

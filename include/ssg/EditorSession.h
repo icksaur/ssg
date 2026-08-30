@@ -23,6 +23,10 @@
 
 namespace ssg {
 
+namespace detail {
+struct GridProjectionState;
+}
+
 class CommandCatalog;
 class GridPresenter;
 
@@ -290,10 +294,8 @@ private:
         ClientId clientId, ViewportDimensions dimensions,
         PaletteReport paletteReport,
         std::optional<ViewId> expectedView,
-        SelectionNavigation navigation,
-        std::uint32_t treeFirstVisible,
-        bool revealPrimarySelection,
-        const ShellState& shell);
+        detail::GridProjectionState& presentation,
+        bool revealPrimarySelection);
     explicit EditorSession(std::unique_ptr<Impl> implementation) noexcept;
 
     std::unique_ptr<Impl> impl_;

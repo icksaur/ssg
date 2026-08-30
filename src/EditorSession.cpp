@@ -1,4 +1,5 @@
 #include "runtime/editor_session_internal.h"
+#include "grid_projection_state.h"
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/DraftReopenClassifier.h>
@@ -2338,34 +2339,32 @@ std::string const& EditorSession::Impl::activeText() const {
     return activeTextCache;
 }
 
-int EditorSession::Impl::lineNumberGutterWidth() const {
+int EditorSession::Impl::lineNumberGutterWidth(
+    detail::GridProjectionState& presentation) const {
     if (!lineNumbers) return 0;
     auto const* document = activeDocument();
     if (document == nullptr) return 0;
     auto const revision = document->revision();
     auto const documentId = activeDocumentId();
-    if (!lineCountRevision || *lineCountRevision != revision ||
-        lineCountDocument != documentId) {
+    if (!presentation.lineCountRevision ||
+        *presentation.lineCountRevision != revision ||
+        presentation.lineCountDocument != documentId) {
         auto const text = document->snapshot().text;
         std::uint32_t lines = 1;
         for (char c : text) {
             if (c == '\n') ++lines;
         }
-        lineCountCache = lines;
-        lineCountRevision = revision;
-        lineCountDocument = documentId;
+        presentation.lineCountCache = lines;
+        presentation.lineCountRevision = revision;
+        presentation.lineCountDocument = documentId;
     }
-    return static_cast<int>(std::to_string(lineCountCache).size()) + 1;
+    return static_cast<int>(
+               std::to_string(presentation.lineCountCache).size()) +
+           1;
 }
 
 void EditorSession::Impl::resetSelectionForActiveDocument() {
     selection = initialSelection();
-    for (auto& [_, view] : viewPresentations) {
-        view.requestedFirstVisualRow = 0;
-        view.requestedFirstVisualColumn = 0;
-        view.desiredCell.reset();
-        view.viewportLineCache = LineLayoutCache{};
-    }
 }
 
 void EditorSession::Impl::clampSelectionToActiveDocument() {
@@ -2407,13 +2406,15 @@ void EditorSession::Impl::clampSelectionsToActiveDocument() {
     selection.selections = SelectionSet{std::move(clamped)};
 }
 
-const std::vector<CellRun>& EditorSession::Impl::activeCellRuns() const {
+const std::vector<CellRun>& EditorSession::Impl::activeCellRuns(
+    detail::GridProjectionState& presentation) const {
     auto const* document = activeDocument();
     auto const documentId = activeDocumentId();
     auto const revision = document ? document->revision() : Revision{0};
-    if (cellRunsRevision && *cellRunsRevision == revision &&
-        cellRunsDocument == documentId) {
-        return cellRunsCache;
+    if (presentation.cellRunsRevision &&
+        *presentation.cellRunsRevision == revision &&
+        presentation.cellRunsDocument == documentId) {
+        return presentation.cellRunsCache;
     }
     std::string const text = document ? document->snapshot().text : std::string{};
     std::vector<CellRun> runs;
@@ -2426,14 +2427,14 @@ const std::vector<CellRun>& EditorSession::Impl::activeCellRuns() const {
         start = end + 1;
     }
     if (runs.empty()) runs.push_back(GraphemeLayout{}.computeRun("", 4));
-    cellRunsCache = std::move(runs);
-    cellRunsRevision = revision;
-    cellRunsDocument = documentId;
-    return cellRunsCache;
+    presentation.cellRunsCache = std::move(runs);
+    presentation.cellRunsRevision = revision;
+    presentation.cellRunsDocument = documentId;
+    return presentation.cellRunsCache;
 }
 
 ViewportViewState EditorSession::Impl::computeEditorViewport(
-    ViewPresentationState& presentation, std::uint32_t firstRow,
+    detail::GridProjectionState& presentation, std::uint32_t firstRow,
     std::uint32_t firstColumn) const {
     auto const dimensions = presentation.dimensions;
     const auto diffFile = activeDiffFile();
@@ -2459,7 +2460,8 @@ ViewportViewState EditorSession::Impl::computeEditorViewport(
                                        dimensions.rows))};
     auto const view =
         wordWrap
-            ? Viewport{}.compute(activeCellRuns(), content, firstRow,
+            ? Viewport{}.compute(activeCellRuns(presentation), content,
+                                 firstRow,
                                  diffFile ? &*diffFile : nullptr, dimensions)
             // Word wrap off (default): one logical line is one visual row; only
             // the visible lines are segmented, so this is O(visible rows), not
@@ -2473,10 +2475,10 @@ ViewportViewState EditorSession::Impl::computeEditorViewport(
 }
 
 ViewportViewState EditorSession::Impl::viewport(
-    ViewPresentationState& presentation) const {
+    detail::GridProjectionState& presentation) const {
     return computeEditorViewport(
-        presentation, presentation.requestedFirstVisualRow,
-        presentation.requestedFirstVisualColumn);
+        presentation, presentation.navigation.firstVisualRow,
+        presentation.navigation.firstVisualColumn);
 }
 
 bool EditorSession::Impl::refreshTree() {
@@ -2981,17 +2983,6 @@ EditorSession::EditorSession(std::unique_ptr<Impl> implementation) noexcept
     : impl_{std::move(implementation)} {}
 EditorSession::~EditorSession() = default;
 
-EditorSession::Impl::ViewPresentationState&
-EditorSession::Impl::presentation(ViewId viewId) {
-    return viewPresentations.at(viewId);
-}
-
-EditorSession::Impl::ViewPresentationState const&
-EditorSession::Impl::presentation(
-    ViewId viewId) const {
-    return viewPresentations.at(viewId);
-}
-
 void EditorSession::resetKeymapToDefault() {
     std::lock_guard operationLock{impl_->operationMutex};
     // defaultTerminalKeymap() is a fixed, already-construction-time-
@@ -3076,9 +3067,7 @@ AttachResult EditorSession::attach(InvocationPrincipal principal, ViewId viewId)
     auto result = impl_->session->attach(std::move(principal), viewId);
     if (result.accepted()) {
         auto& references = impl_->viewReferences[viewId];
-        if (references++ == 0) {
-            impl_->viewPresentations.try_emplace(viewId);
-        }
+        ++references;
         impl_->clientViews.emplace(clientId, viewId);
         (void)impl_->follow.attachClient(clientId);
     }
@@ -3098,7 +3087,7 @@ bool EditorSession::detach(ClientId clientId) {
         if (references != impl_->viewReferences.end() &&
             --references->second == 0) {
             impl_->viewReferences.erase(references);
-            impl_->viewPresentations.erase(viewId);
+            impl_->pointerEdgeProjectionHandoffs.erase(viewId);
         }
     }
     return detached;
@@ -3368,7 +3357,9 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                               !std::same_as<Input, ScrollFractionInput> &&
                               !std::same_as<Input, ViewNavigationInput> &&
                               !std::same_as<Input,
-                                            ResolvedPaneFocusInput>) {
+                                            ResolvedPaneFocusInput> &&
+                              !std::same_as<Input,
+                                            ResolvedSelectionInput>) {
                     if (semantic.phase != InputPointerPhase::Press) {
                         return unhandled();
                     }
@@ -3377,7 +3368,9 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                               !std::same_as<Input, ScrollFractionInput> &&
                               !std::same_as<Input, ViewNavigationInput> &&
                               !std::same_as<Input,
-                                            ResolvedPaneFocusInput>) {
+                                            ResolvedPaneFocusInput> &&
+                              !std::same_as<Input,
+                                            ResolvedSelectionInput>) {
                     if (semantic.button != InputPointerButton::Primary &&
                         !std::same_as<Input, TabPointerInput>) {
                         return unhandled();
@@ -3475,6 +3468,54 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                             CommandError::None, impl_->session->revision(), {},
                             {/*routingChanged=*/focusChanged,
                              /*geometryChanged=*/false}}};
+                } else if constexpr (std::same_as<
+                                        Input, ResolvedSelectionInput>) {
+                    const auto* tab = impl_->activeTabState();
+                    const auto* document = impl_->activeDocument();
+                    if (tab == nullptr || tab->id != semantic.activeTab) {
+                        return rejectTarget(
+                            "resolved selection active tab is stale");
+                    }
+                    if (document == nullptr ||
+                        impl_->documentView().revision !=
+                            semantic.documentRevision) {
+                        return rejectTarget(
+                            "resolved selection document is stale");
+                    }
+                    if (semantic.selections.empty()) {
+                        return rejectTarget(
+                            "resolved selection must not be empty");
+                    }
+                    std::vector<Selection> selections;
+                    selections.reserve(semantic.selections.size());
+                    const auto& text = impl_->activeText();
+                    for (const auto& range : semantic.selections) {
+                        auto anchor = SelectionNavigator::resolvePosition(
+                            text, range.anchor);
+                        auto active = SelectionNavigator::resolvePosition(
+                            text, range.active);
+                        if (!anchor || !active) {
+                            return rejectTarget(
+                               "resolved selection range is invalid");
+                        }
+                        selections.push_back({*anchor, *active});
+                    }
+                    impl_->selection.selections =
+                        SelectionSet{std::move(selections)};
+                    if (const auto documentId =
+                            impl_->activeDocumentId()) {
+                        impl_->historyFor(*documentId).breakCoalescing();
+                    }
+                    impl_->recordNavigation(
+                        clientId, impl_->clientViews.at(clientId),
+                        NavigationClass::User);
+                    impl_->session->advanceRevision();
+                    return {
+                        ClientInputOutcome::Dispatched, std::nullopt,
+                        CommandResult{
+                            CommandError::None, impl_->session->revision(), {},
+                            {/*routingChanged=*/false,
+                            /*geometryChanged=*/false}}};
                 } else if constexpr (std::same_as<Input,
                                                   DocumentPointerInput>) {
                     const auto handled = [&] {
@@ -3581,27 +3622,29 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                             return rejectTarget(
                                 "document edge gesture client is detached");
                         }
-                        auto& presentation =
-                            impl_->presentation(client->viewId);
+                        const auto handoff =
+                            impl_->pointerEdgeProjectionHandoffs.find(
+                                client->viewId);
+                        if (handoff ==
+                            impl_->pointerEdgeProjectionHandoffs.end()) {
+                            return rejectTarget(
+                                "document edge projection is unavailable");
+                        }
                         SelectionViewState edgeState{
                             SelectionSet{{Selection{
                                 gesture->second.anchor,
                                 gesture->second.active}}},
-                            presentation.requestedFirstVisualRow,
-                            presentation.requestedFirstVisualColumn,
-                            presentation.desiredCell};
-                        const ViewportDimensions viewport{
-                            std::max<std::uint32_t>(
-                                presentation.paneContentColumns, 1),
-                            std::max<std::uint32_t>(
-                                presentation.paneContentRows, 1)};
+                            handoff->second.navigation.firstVisualRow,
+                            handoff->second.navigation.firstVisualColumn,
+                            handoff->second.navigation.desiredCell};
                         const auto diff = impl_->activeDiffFile();
                         auto advanced = SelectionNavigator{}.apply(
                             impl_->activeText(), edgeState,
                             semantic.edge == DocumentPointerEdge::Before
                                 ? SelectionCommand::SelectLineUp
                                 : SelectionCommand::SelectLineDown,
-                            viewport, {}, {}, 4, impl_->wordWrap,
+                            handoff->second.contentDimensions, {}, {}, 4,
+                            impl_->wordWrap,
                             diff ? &*diff : nullptr);
                         if (!advanced.accepted()) {
                             return rejectTarget(advanced.message);
@@ -3969,8 +4012,8 @@ std::optional<SessionSnapshot>
 EditorSession::projectForBridgedPresenterDeprecated(
     ClientId clientId, ViewportDimensions dimensions,
     PaletteReport paletteReport, std::optional<ViewId> expectedView,
-    SelectionNavigation navigation, std::uint32_t treeFirstVisible,
-    bool revealPrimarySelection, const ShellState& shellState) {
+    detail::GridProjectionState& presentation,
+    bool revealPrimarySelection) {
     if (impl_->session->activeDispatchRevision()) {
         throw std::logic_error{"a view cannot be presented during dispatch"};
     }
@@ -3978,20 +4021,7 @@ EditorSession::projectForBridgedPresenterDeprecated(
     auto client = impl_->session->attachedClient(clientId);
     if (!client || (expectedView && client->viewId != *expectedView))
         return std::nullopt;
-    auto& cachedPresentation = impl_->presentation(client->viewId);
-    EditorSession::Impl::ViewPresentationState presentation;
-    presentation.paneContentRows = cachedPresentation.paneContentRows;
-    presentation.paneContentColumns = cachedPresentation.paneContentColumns;
-    presentation.reservedPromptRows =
-        cachedPresentation.reservedPromptRows;
-    presentation.panelContentRows = cachedPresentation.panelContentRows;
-    presentation.viewportLineCache =
-        std::move(cachedPresentation.viewportLineCache);
     presentation.dimensions = dimensions;
-    presentation.requestedFirstVisualRow = navigation.firstVisualRow;
-    presentation.requestedFirstVisualColumn = navigation.firstVisualColumn;
-    presentation.desiredCell = navigation.desiredCell;
-    presentation.treeFirstVisible = treeFirstVisible;
     // Sections FIRST, then the viewport: computing the shell layout is what
     // caches the pane content height the viewport scrolls against.  As
     // arguments to one call their evaluation order would be unspecified, so the
@@ -4000,7 +4030,8 @@ EditorSession::projectForBridgedPresenterDeprecated(
     // The shell layout is computed FIRST: it caches the panel content height that
     // treeView() (inside sections) and viewport() resolve their scroll against.
     // Its geometry is the presentation's shell projection; its focus is semantic.
-    auto shell = impl_->shellView(dimensions, shellState, paletteReport);
+    auto shell =
+        impl_->shellView(dimensions, presentation, paletteReport);
     if (!shell.panes.empty()) {
         auto const& content = shell.panes.front().content;
         presentation.paneContentRows =
@@ -4018,38 +4049,54 @@ EditorSession::projectForBridgedPresenterDeprecated(
                           std::max(shell.panel->height - 1, 0))
                     : 0;
     if (revealPrimarySelection) {
-        impl_->revealPrimaryCaret(presentation);
+        const ViewportDimensions revealViewport{
+            std::max<std::uint32_t>(
+                presentation.paneContentColumns, 1),
+            std::max<std::uint32_t>(
+                presentation.paneContentRows, 1)};
+        auto navigation = SelectionViewState{
+            impl_->selection.selections,
+            presentation.navigation.firstVisualRow,
+            presentation.navigation.firstVisualColumn,
+            presentation.navigation.desiredCell};
+        const auto diff = impl_->activeDiffFile();
+        auto revealed = SelectionNavigator{}.apply(
+            impl_->activeText(), navigation,
+            SelectionCommand::ViewRevealCaret, revealViewport, {}, {}, 4,
+            impl_->wordWrap, diff ? &*diff : nullptr);
+        if (revealed.accepted() && revealed.delta.replacement) {
+            presentation.navigation = {
+                revealed.delta.replacement->firstVisualRow,
+                revealed.delta.replacement->firstVisualColumn,
+                revealed.delta.replacement->desiredCell};
+        }
     }
-    cachedPresentation.dimensions = presentation.dimensions;
-    cachedPresentation.paneContentRows = presentation.paneContentRows;
-    cachedPresentation.paneContentColumns = presentation.paneContentColumns;
-    cachedPresentation.reservedPromptRows = presentation.reservedPromptRows;
-    cachedPresentation.panelContentRows = presentation.panelContentRows;
     auto sections = impl_->sections(paletteReport);
     auto viewport = impl_->viewport(presentation);
     auto promptView = impl_->promptProjection(dimensions, shell.prompt);
-    ssg::SelectionNavigation selectionNav{
-        presentation.requestedFirstVisualRow,
-        presentation.requestedFirstVisualColumn, presentation.desiredCell};
     auto treeWindows = impl_->treeWindows(presentation);
-    cachedPresentation.viewportLineCache =
-        std::move(presentation.viewportLineCache);
+    impl_->pointerEdgeProjectionHandoffs[client->viewId] = {
+        {std::max<std::uint32_t>(
+             presentation.paneContentColumns, 1),
+         std::max<std::uint32_t>(
+             presentation.paneContentRows, 1)},
+        presentation.navigation};
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
                                      std::move(viewport), std::move(sections),
                                      impl_->style, std::move(promptView),
-                                     std::move(shell), selectionNav,
+                                     std::move(shell),
+                                     presentation.navigation,
                                      std::move(treeWindows));
 }
 
 std::optional<SessionSnapshot> EditorSession::present(
     ClientId clientId, ViewportDimensions dimensions,
     PaletteReport paletteReport) {
-    SelectionNavigation navigation;
-    ShellState shell;
+    detail::GridProjectionState presentation;
     return projectForBridgedPresenterDeprecated(
         clientId, dimensions, std::move(paletteReport), std::nullopt,
-        navigation, 0, true, shell);
+        presentation, true);
 }
 
 std::optional<SessionSnapshot> EditorSession::snapshot(ClientId clientId,

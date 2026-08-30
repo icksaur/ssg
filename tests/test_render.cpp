@@ -657,12 +657,14 @@ TEST(renderFillsEndOfLineForMultilineSelection) {
         {"file.open", runtime->revision(), std::string{"ml.txt"}});
     // Anchor at line 0 col 0, extend down into line 1: the selection spans the
     // newline after "alpha", so alpha's end-of-line fills to the pane edge.
-    (void)runtime->dispatch(ssg::ClientId{1},
-                            {"select.line_down", runtime->revision(), {}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
+    ssg::test::GridTestView presenter{
+        ssg::ClientId{1}, ssg::ViewId{1}, {80, 24}};
+    (void)presenter.dispatch(
+        *runtime, {"select.line_down", runtime->revision(), {}});
+    auto snapshot = presenter.present(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     int alphaRow = -1, alphaCol = -1;
     for (int row = 0; row < grid.size.rows && alphaRow < 0; ++row) {

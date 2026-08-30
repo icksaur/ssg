@@ -76,7 +76,6 @@ CommandHandlerResult applyTransaction(EditorSession::Impl& runtime,
     const auto syntax = syntaxEdits(previousText, transaction);
     runtime.selection.selections = result.selections.value_or(selectionsAfter);
     runtime.clampSelectionsToActiveDocument();
-    runtime.revealPrimaryCaret(viewId);
     (void)runtime.updateTabsFor(*id);
     runtime.refreshSyntax(syntax);
     return success();
@@ -132,21 +131,10 @@ CommandHandlerResult bindSelection(EditorSession::Impl& runtime,
     if (auto const* typed = payloadAs<SelectionCommandArguments>(payload)) {
         arguments = *typed;
     }
-    // Navigate and reveal against the REAL editor pane cached from the last
-    // snapshot, not a fake {80, 24}: page motion advances by the real height and
-    // the built-in caret reveal uses the real height/width (so a far-right column
-    // on a wide line is not clamped at column 80).
-    auto& presentation = runtime.presentation(viewId);
-    ViewportDimensions const viewport{
-        std::max<std::uint32_t>(presentation.paneContentColumns, 1),
-        std::max<std::uint32_t>(presentation.paneContentRows, 1)};
     auto navigation = runtime.selection;
-    navigation.firstVisualRow = presentation.requestedFirstVisualRow;
-    navigation.firstVisualColumn = presentation.requestedFirstVisualColumn;
-    navigation.desiredCell = presentation.desiredCell;
     const auto diffFile = runtime.activeDiffFile();
     auto result = ssg::SelectionNavigator{}.apply(runtime.activeText(), navigation,
-                                             command, viewport,
+                                             command, {1, 1},
                                              arguments, {}, 4,
                                              runtime.wordWrap,
                                              diffFile ? &*diffFile : nullptr);
@@ -155,10 +143,6 @@ CommandHandlerResult bindSelection(EditorSession::Impl& runtime,
         runtime.selection.selections = result.delta.replacement->selections;
         navigation = *result.delta.replacement;
     }
-    presentation.requestedFirstVisualRow = navigation.firstVisualRow;
-    presentation.requestedFirstVisualColumn =
-        navigation.firstVisualColumn;
-    presentation.desiredCell = navigation.desiredCell;
     if (auto active = runtime.activeDocumentId()) {
         runtime.historyFor(*active).breakCoalescing();
     }
@@ -207,7 +191,6 @@ CommandHandlerResult bindHistory(EditorSession::Impl& runtime, ViewId viewId,
     if (!result.accepted()) return failure(result.message);
     if (result.selections) runtime.selection.selections = *result.selections;
     runtime.clampSelectionsToActiveDocument();
-    runtime.revealPrimaryCaret(viewId);
     (void)runtime.updateTabsFor(*id);
     runtime.refreshSyntax();
     return success();
@@ -243,7 +226,6 @@ CommandHandlerResult bindClipboard(EditorSession::Impl& runtime, ViewId viewId,
         // selection set) so a cut/paste with the caret off-screen scrolls into
         // view. Do NOT clamp here: clamp_selection_to_active_document collapses
         // the set to a single caret and would discard a multi-cursor cut/paste.
-        runtime.revealPrimaryCaret(viewId);
         (void)runtime.updateTabsFor(*id);
         runtime.refreshSyntax();
     }
@@ -252,7 +234,7 @@ CommandHandlerResult bindClipboard(EditorSession::Impl& runtime, ViewId viewId,
 
 // Move the primary selection onto the active find match and reveal it so the
 // viewport scrolls to follow find navigation (find.next/previous/update_query).
-void revealActiveFindMatch(EditorSession::Impl& runtime, ViewId viewId) {
+void revealActiveFindMatch(EditorSession::Impl& runtime) {
     auto const& state = runtime.findReplace.viewState();
     if (!state.open || !state.activeMatch ||
         *state.activeMatch >= state.matches.size()) {
@@ -265,37 +247,6 @@ void revealActiveFindMatch(EditorSession::Impl& runtime, ViewId viewId) {
     if (!anchor || !active) return;
     runtime.selection.selections =
         SelectionSet{std::vector<Selection>{Selection{*anchor, *active}}};
-    // Reveal against the real document pane from the last snapshot, reserving the
-    // find prompt's rows plus a one-row margin so the match never sits flush
-    // against the prompt.  Adding back the rows that snapshot reserved yields a
-    // prompt-agnostic pane height; subtracting the find prompt's rows (and the
-    // margin) guarantees the match lands above the prompt whether or not it was
-    // open last snapshot.
-    auto const reserved = promptRowCount(PromptKind::Find) + 1;
-    auto& presentation = runtime.presentation(viewId);
-    auto const baseRows = presentation.paneContentRows +
-                          presentation.reservedPromptRows;
-    auto const revealRows = baseRows > reserved
-                                 ? baseRows - reserved
-                                 : std::uint32_t{1};
-    ViewportDimensions revealViewport{presentation.paneContentColumns,
-                                       revealRows};
-    auto navigation = runtime.selection;
-    navigation.firstVisualRow = presentation.requestedFirstVisualRow;
-    navigation.firstVisualColumn = presentation.requestedFirstVisualColumn;
-    navigation.desiredCell = presentation.desiredCell;
-    const auto diffFile = runtime.activeDiffFile();
-    auto result = ssg::SelectionNavigator{}.apply(
-        text, navigation, SelectionCommand::ViewRevealCaret,
-        revealViewport, {}, {}, 4, runtime.wordWrap,
-        diffFile ? &*diffFile : nullptr);
-    if (result.accepted() && result.delta.replacement) {
-        navigation = *result.delta.replacement;
-    }
-    presentation.requestedFirstVisualRow = navigation.firstVisualRow;
-    presentation.requestedFirstVisualColumn =
-        navigation.firstVisualColumn;
-    presentation.desiredCell = navigation.desiredCell;
 }
 
 // A replace prompt is active when the controller is open in replace mode AND
@@ -363,7 +314,7 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
         case FindReplaceCommand::FindOpen:
             runtime.findReplace.open(snapshot, FindRequest{query, runtime.findReplace.viewState().options, range});
             runtime.findDocumentId = runtime.activeDocumentId();
-            revealActiveFindMatch(runtime, viewId);
+            revealActiveFindMatch(runtime);
             // Open the find prompt so focus moves to it and the reserved rows
             // display the controller query (projected at snapshot time).
             if (auto opened = runtime.interaction.openPrompt(PromptRequest{
@@ -389,7 +340,7 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
             runtime.findReplace.open(
                 snapshot, FindRequest{needle, options, std::nullopt});
             runtime.findDocumentId = runtime.activeDocumentId();
-            revealActiveFindMatch(runtime, viewId);
+            revealActiveFindMatch(runtime);
             if (auto opened = runtime.interaction.openPrompt(PromptRequest{
                     PromptKind::Find, "find", {{"find.query", "find query", needle}},
                     findOptionToggles(runtime),
@@ -402,7 +353,7 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
         case FindReplaceCommand::ReplaceOpen:
             runtime.findReplace.openReplace(snapshot, FindRequest{query, runtime.findReplace.viewState().options, range});
             runtime.findDocumentId = runtime.activeDocumentId();
-            revealActiveFindMatch(runtime, viewId);
+            revealActiveFindMatch(runtime);
             // Three-row replace prompt: query (row 0, display-only, seeded from
             // the current find query), replacement (row 1, editable), and the
             // option/match-count row.  The client edits only the replacement.
@@ -440,19 +391,19 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
         case FindReplaceCommand::FindNext:
             if (!findOrReplacePromptActive(runtime)) return success();
             runtime.findReplace.next();
-            revealActiveFindMatch(runtime, viewId);
+            revealActiveFindMatch(runtime);
             return success();
         case FindReplaceCommand::FindPrevious:
             if (!findOrReplacePromptActive(runtime)) return success();
             runtime.findReplace.previous();
-            revealActiveFindMatch(runtime, viewId);
+            revealActiveFindMatch(runtime);
             return success();
         case FindReplaceCommand::FindUpdateQuery: {
             auto const* arguments = payloadAs<FindQueryArguments>(payload);
             if (arguments == nullptr) return failure("find.update_query requires a query payload");
             runtime.findReplace.updateQuery(snapshot, arguments->query, range);
             runtime.findDocumentId = runtime.activeDocumentId();
-            revealActiveFindMatch(runtime, viewId);
+            revealActiveFindMatch(runtime);
             return success();
         }
         case FindReplaceCommand::FindToggleCase:
@@ -489,7 +440,7 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
             runtime.clampSelectionsToActiveDocument();
             runtime.refreshSyntax();
             auto tabsResult = runtime.updateTabsFor(*id);
-            revealActiveFindMatch(runtime, viewId);
+            revealActiveFindMatch(runtime);
             // If no match remains to reveal (common after replace.all), still
             // reveal the primary caret so a replace with the caret off-screen
             // scrolls into view, per the edits-reveal policy. When a match does
@@ -498,7 +449,6 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
             auto const& fr = runtime.findReplace.viewState();
             if (!fr.open || !fr.activeMatch ||
                 *fr.activeMatch >= fr.matches.size()) {
-                runtime.revealPrimaryCaret(viewId);
             }
             return tabsResult;
         }
@@ -547,37 +497,6 @@ CommandHandlerResult executeFindReplaceCommand(EditorSession::Impl& runtime,
                                                FindReplaceCommand command,
                                                std::any const& payload) {
     return bindFindReplace(runtime, viewId, revision, command, payload);
-}
-
-void EditorSession::Impl::revealPrimaryCaret(ViewId viewId) {
-    // Reveal against the real editor pane cached from the last snapshot: the
-    // content rows/columns already exclude any reserved prompt rows, so no prompt
-    // adjustment is needed (unlike reveal_active_find_match, which runs while the
-    // find prompt is open). The offset is re-clamped in compute_viewport, so a
-    // one-frame-stale cache can never place it out of range.
-    revealPrimaryCaret(presentation(viewId));
-}
-
-void EditorSession::Impl::revealPrimaryCaret(
-    ViewPresentationState& view) const {
-    ViewportDimensions revealViewport{
-        std::max<std::uint32_t>(view.paneContentColumns, 1),
-        std::max<std::uint32_t>(view.paneContentRows, 1)};
-    auto navigation = selection;
-    navigation.firstVisualRow = view.requestedFirstVisualRow;
-    navigation.firstVisualColumn = view.requestedFirstVisualColumn;
-    navigation.desiredCell = view.desiredCell;
-    const auto diffFile = activeDiffFile();
-    auto result = ssg::SelectionNavigator{}.apply(
-        activeText(), navigation, SelectionCommand::ViewRevealCaret,
-        revealViewport, {}, {}, 4, wordWrap,
-        diffFile ? &*diffFile : nullptr);
-    if (result.accepted() && result.delta.replacement) {
-        navigation = *result.delta.replacement;
-    }
-    view.requestedFirstVisualRow = navigation.firstVisualRow;
-    view.requestedFirstVisualColumn = navigation.firstVisualColumn;
-    view.desiredCell = navigation.desiredCell;
 }
 
 // The text-input commands, declared where they are implemented.
@@ -831,6 +750,51 @@ void registerSelectionCommands(CommandCatalog& builder,
     auto const motions = selectionNavigationCommandSet();
     for (auto const& descriptor : motions.descriptors()) {
         auto const command = descriptor.command;
+        const auto visualAction = [command]() -> std::optional<MoveVisualSelection> {
+            switch (command) {
+                case SelectionCommand::CursorLineUp:
+                    return MoveVisualSelection{
+                        VisualSelectionDirection::LineUp, false};
+                case SelectionCommand::CursorLineDown:
+                    return MoveVisualSelection{
+                        VisualSelectionDirection::LineDown, false};
+                case SelectionCommand::CursorPageUp:
+                    return MoveVisualSelection{
+                        VisualSelectionDirection::PageUp, false};
+                case SelectionCommand::CursorPageDown:
+                    return MoveVisualSelection{
+                        VisualSelectionDirection::PageDown, false};
+                case SelectionCommand::SelectLineUp:
+                    return MoveVisualSelection{
+                        VisualSelectionDirection::LineUp, true};
+                case SelectionCommand::SelectLineDown:
+                    return MoveVisualSelection{
+                        VisualSelectionDirection::LineDown, true};
+                case SelectionCommand::SelectPageUp:
+                    return MoveVisualSelection{
+                        VisualSelectionDirection::PageUp, true};
+                case SelectionCommand::SelectPageDown:
+                    return MoveVisualSelection{
+                        VisualSelectionDirection::PageDown, true};
+                default:
+                    return std::nullopt;
+            }
+        }();
+        if (visualAction) {
+            builder.add(
+                CommandSpecBuilder{std::string{descriptor.id}}
+                    .owner("selection-navigation")
+                    .summary(summaryOf(descriptor.id))
+                    .viewAction()
+                    .lua()
+                    .optionalHandler<SelectionCommandArguments>(
+                        [action = *visualAction](
+                            CommandContext&,
+                            std::optional<SelectionCommandArguments> const&) {
+                            return CommandHandlerResult::requireView(action);
+                        }));
+            continue;
+        }
         if (command == SelectionCommand::ViewRevealCaret ||
             command == SelectionCommand::ViewCenterCaret) {
             builder.add(

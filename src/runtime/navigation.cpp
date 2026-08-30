@@ -197,8 +197,8 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
     // panel is shown).
     (void)runtime.tree.activateProvider(
         panelProviderTreeBinding(runtime.interaction.truth().selectedProvider).id);
-    if (id == "tree.select_next") { (void)runtime.tree.selectNext(); runtime.revealTreeSelection(context.viewId()); return success(); }
-    if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); runtime.revealTreeSelection(context.viewId()); return success(); }
+    if (id == "tree.select_next") { (void)runtime.tree.selectNext(); return success(); }
+    if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); return success(); }
     if (id == "tree.activate_node") {
         auto const* arguments = payloadAs<TreeSelectArguments>(payload);
         if (arguments == nullptr) {
@@ -207,7 +207,7 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
         if (!runtime.tree.select(arguments->nodeId)) {
             return failure("tree node is not selectable");
         }
-        runtime.revealTreeSelection(context.viewId());
+
         (void)runtime.interaction.focusPanel();
         return treeCommand(runtime, context, "tree.activate", {});
     }
@@ -219,7 +219,7 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
                                       treeView.providers.front().kind};
         auto selected = runtime.tree.selectedNode();
         if (!selected) return failure("no tree node is selected");
-        if (selected->expandable) { (void)runtime.tree.toggleSelected(); runtime.revealTreeSelection(context.viewId()); return success(); }
+        if (selected->expandable) { (void)runtime.tree.toggleSelected(); return success(); }
         if (providerKind == TreeProviderKind::Git && selected->workspacePath) {
             const auto diffView = runtime.diff.viewState();
             auto file = std::find_if(
@@ -251,7 +251,7 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
         auto const* arguments = payloadAs<TreeSelectArguments>(payload);
         if (arguments == nullptr) return failure("tree.select requires a node id payload");
         if (!runtime.tree.select(arguments->nodeId)) return failure("tree node is not selectable");
-        runtime.revealTreeSelection(context.viewId());
+
         // Focus follows the pointer (M8-F): clicking a tree row acts on the panel,
         // so move keyboard focus there. (For a file click the app dispatches
         // tree.activate next, whose file-open focus_editor() then wins.)
@@ -262,7 +262,7 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
     if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {
         auto toggled = runtime.tree.toggleExpanded(invocation->providerId, invocation->nodeId);
-        if (toggled) runtime.revealTreeSelection(context.viewId());
+
         return toggled ? success() : failure("tree node does not exist");
     }
     auto command = runtime.tree.invokeNodeCommand(invocation->providerId, invocation->nodeId, invocation->commandId);

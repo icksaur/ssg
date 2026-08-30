@@ -51,6 +51,9 @@
 #include "command_executor.h"
 
 namespace ssg {
+namespace detail {
+struct GridProjectionState;
+}
 
 // Casts a command payload to the expected type, or null when it holds something
 // else. The one definition shared by every runtime handler file, which each
@@ -271,23 +274,6 @@ struct EditorSession::Impl final : CommandServices,
         ClientCommand command;
     };
 
-    // CONTRACT
-    // A view's client-derived geometry and scroll projection never become
-    // aggregate-wide behavior. Distinct ViewIds retain independent presentation
-    // state; clients intentionally sharing a ViewId share this record.
-    struct ViewPresentationState {
-        ViewportDimensions dimensions{80, 24};
-        std::uint32_t paneContentRows = 24;
-        std::uint32_t paneContentColumns = 80;
-        std::uint32_t reservedPromptRows = 0;
-        std::uint32_t panelContentRows = 0;
-        std::uint32_t requestedFirstVisualRow = 0;
-        std::uint32_t requestedFirstVisualColumn = 0;
-        std::optional<CellIndex> desiredCell;
-        std::uint32_t treeFirstVisible = 0;
-        LineLayoutCache viewportLineCache;
-    };
-
     // The queue, shaped so `Impl::defer` is the only way to ADD to it -- by
     // construction, not by convention.
     //
@@ -352,9 +338,16 @@ struct EditorSession::Impl final : CommandServices,
     mutable CatalogRevision commandCandidateCatalogRevision = 0;
     mutable KeymapViewState commandCandidateKeymap;
     mutable bool commandCandidateCacheValid = false;
-    std::map<ViewId, ViewPresentationState> viewPresentations;
     std::map<ViewId, std::size_t> viewReferences;
     std::map<ClientId, ViewId> clientViews;
+    // CONTRACT: ContinuePointerEdge is the only projection handoff retained in
+    // EditorSession::Impl and Plan 3 Step 5 removes it.
+    struct PointerEdgeProjectionHandoff {
+        ViewportDimensions contentDimensions{80, 24};
+        SelectionNavigation navigation;
+    };
+    std::map<ViewId, PointerEdgeProjectionHandoff>
+        pointerEdgeProjectionHandoffs;
     struct DocumentPointerGesture {
         FileDocumentId documentId;
         Revision documentRevision;
@@ -364,23 +357,8 @@ struct EditorSession::Impl final : CommandServices,
         std::vector<Selection> baseline;
     };
     std::map<ClientId, DocumentPointerGesture> documentPointerGestures;
-    [[nodiscard]] ViewPresentationState& presentation(ViewId viewId);
-    [[nodiscard]] ViewPresentationState const& presentation(ViewId viewId) const;
     bool wordWrap = false;
     bool lineNumbers = false;
-    // Cache of the active document's logical line count keyed by its revision,
-    // so the line-number gutter width is not recomputed by scanning the whole
-    // document every frame.
-    mutable std::optional<Revision> lineCountRevision;
-    mutable std::optional<FileDocumentId> lineCountDocument;
-    mutable std::uint32_t lineCountCache = 1;
-    // Cache of the active document's per-logical-line cell runs (wrap-mode
-    // shaping), keyed by (revision, documentId) exactly like the line-count
-    // cache above. Word-wrap shaping is O(document); without this it re-shapes
-    // every line each frame even when navigation left the document unchanged.
-    mutable std::optional<Revision> cellRunsRevision;
-    mutable std::optional<FileDocumentId> cellRunsDocument;
-    mutable std::vector<CellRun> cellRunsCache;
     // The active document's immutable flattened text, shared by navigation and
     // semantic snapshots until its document revision changes.
     mutable std::optional<Revision> activeTextRevision;
@@ -454,7 +432,8 @@ struct EditorSession::Impl final : CommandServices,
     // The line-number gutter width for the active document: 0 when the setting is
     // off or there is no editor document, else digits(lineCount)+1. The whole-
     // document line count is cached by revision.
-    [[nodiscard]] int lineNumberGutterWidth() const;
+    [[nodiscard]] int lineNumberGutterWidth(
+        detail::GridProjectionState& presentation) const;
     void resetSelectionForActiveDocument();
     // Collapses to a SINGLE caret at the primary's clamped position.  For a
     // document switch, where the carried selection belongs to the previous
@@ -464,15 +443,16 @@ struct EditorSession::Impl final : CommandServices,
     // and ranges.  For in-document edits, where a multi-cursor set must survive
     // (typing over N selections leaves N carets, Sublime-style).
     void clampSelectionsToActiveDocument();
-    [[nodiscard]] const std::vector<CellRun>& activeCellRuns() const;
+    [[nodiscard]] const std::vector<CellRun>& activeCellRuns(
+        detail::GridProjectionState& presentation) const;
     // The editor viewport, gated on word wrap: exact wrapped geometry when word
     // wrap is on; O(visible rows) unwrapped projection (compute_viewport_unwrapped)
     // when off, so a large document's first frame is viewport-bounded (M12).
     [[nodiscard]] ViewportViewState computeEditorViewport(
-        ViewPresentationState& presentation, std::uint32_t firstRow,
+        detail::GridProjectionState& presentation, std::uint32_t firstRow,
         std::uint32_t firstColumn) const;
     [[nodiscard]] ViewportViewState viewport(
-        ViewPresentationState& presentation) const;
+        detail::GridProjectionState& presentation) const;
     [[nodiscard]] SessionSnapshotSections sections(
         PaletteReport const& paletteReport = {}) const;
     [[nodiscard]] PromptStatusViewState promptStatusView() const;
@@ -508,7 +488,8 @@ struct EditorSession::Impl final : CommandServices,
     // so stale matches are never navigable or projected.
     void reconcileFindDocument();
     [[nodiscard]] ShellViewState shellView(
-        ViewportDimensions dimensions, const ShellState& shell,
+        ViewportDimensions dimensions,
+        detail::GridProjectionState& presentation,
         PaletteReport const& paletteReport = {}) const;
     // The projected + command-bound header/footer status fields the composed chrome
     // resolves its provider widgets against. Shared by shellView (built-in fields +
@@ -526,24 +507,7 @@ struct EditorSession::Impl final : CommandServices,
     // hit map resolved against the last panel height (keep-selection-visible).
     [[nodiscard]] TreeViewState treeView() const;
     [[nodiscard]] std::vector<TreeWindow> treeWindows(
-        ViewPresentationState const& presentation) const;
-    // Scroll the tree so the selected node is visible, using the last cached
-    // panel height. Called on the command path after a selection/expansion change
-    // (never during snapshot generation), so it cannot perturb another client.
-    void revealTreeSelection(ViewId viewId);
-    // Scroll the tree viewport by `rows` (wheel), adjusting the server-owned
-    // offset clamped to [0, maximum_first_row] WITHOUT moving the selection --
-    // the tree analog of the editor's view.scroll_lines.
-    void scrollTree(ViewId viewId, std::int64_t rows);
-    void scrollTreeToFraction(ViewId viewId, std::uint32_t numerator,
-                              std::uint32_t denominator);
-    // Scroll the editor viewport minimally so the PRIMARY caret is visible, using
-    // the last cached pane dimensions. Called on the command path after any edit
-    // moves the caret (typing, delete, undo/redo, paste), so the view follows the
-    // caret instead of leaving the user typing off-screen. The plain-caret
-    // analog of reveal_active_find_match.
-    void revealPrimaryCaret(ViewId viewId);
-    void revealPrimaryCaret(ViewPresentationState& presentation) const;
+        detail::GridProjectionState const& presentation) const;
     [[nodiscard]] TextEncodingViewState textEncodingView() const;
     [[nodiscard]] DocumentViewState documentView() const;
     [[nodiscard]] CommandHandlerResult updateTabsFor(FileDocumentId document);

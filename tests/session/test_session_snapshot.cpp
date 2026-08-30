@@ -141,8 +141,8 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
         ASSERT_TRUE(caretLine >= view.firstVisualRow);
         ASSERT_TRUE(caretLine < view.firstVisualRow + view.visibleRows.size());
         lastVisibleLine = std::max<std::uint32_t>(lastVisibleLine, caretLine);
-        (void)runtime.dispatch(ssg::ClientId{1},
-                               {"cursor.line_down", runtime.revision(), {}});
+        (void)grid.dispatch(
+            runtime, {"cursor.line_down", runtime.revision(), {}});
     }
     // The last line of the document was reached, not merely approached.
     auto final = grid.present(runtime);
@@ -812,6 +812,19 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     if (compatibility) {
         ASSERT_EQ(compatibility->presentation()->viewport.firstVisualRow, 0U);
     }
+
+    const auto selectionBefore = runtime.present(client, {80, 12})
+                                     ->sections()
+                                     .selection;
+    auto visual = runtime.dispatch(
+        client, {"cursor.page_down", runtime.revision(), {}});
+    ASSERT_EQ(visual.outcome(),
+              ssg::CommandResult::Outcome::ViewActionRequired);
+    auto selectionAfter = runtime.present(client, {80, 12});
+    ASSERT_TRUE(selectionAfter.has_value());
+    if (selectionAfter) {
+        ASSERT_EQ(selectionAfter->sections().selection, selectionBefore);
+    }
 }
 
 TEST(gridPresentersOwnIndependentPaneTopology) {
@@ -971,6 +984,188 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     }
 }
 
+TEST(visualLineMovementRequiresPresenterResolution) {
+    auto root = uniqueRoot("grid_presenter_visual_selection");
+    {
+        std::ofstream lines{root / "workspace" / "lines.txt"};
+        for (int line = 0; line < 40; ++line) {
+            lines << "line " << line << '\n';
+        }
+    }
+    auto created = ssg::EditorSession::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId client{1};
+    ASSERT_TRUE(runtime
+                    .attach({client, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"file.open", runtime.revision(),
+                               std::string{"lines.txt"}})
+                    .accepted());
+
+    const auto revision = runtime.revision();
+    auto moved = runtime.dispatch(
+        client, {"cursor.line_down", revision, {}});
+    ASSERT_EQ(moved.outcome(),
+              ssg::CommandResult::Outcome::ViewActionRequired);
+    ASSERT_EQ(runtime.revision(), revision);
+    ASSERT_TRUE(moved.viewAction.has_value());
+    if (!moved.viewAction) return;
+    const auto expectedMove = ssg::ViewAction{
+        ssg::MoveVisualSelection{
+            ssg::VisualSelectionDirection::LineDown, false}};
+    ASSERT_EQ(moved.viewAction->action, expectedMove);
+
+    ssg::GridPresenter presenter{ssg::ViewId{1}};
+    auto frame = presenter.project(runtime, client, {{80, 12}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto applied = presenter.apply(*moved.viewAction, *frame);
+    ASSERT_TRUE(applied.accepted());
+    ASSERT_TRUE(
+        applied.transition &&
+        std::holds_alternative<ssg::ResolvedSelectionInput>(
+            *applied.transition));
+    const auto submitted = runtime.input(client, *applied.transition);
+    ASSERT_EQ(submitted.outcome, ssg::ClientInputOutcome::Dispatched);
+    auto confirmed = presenter.project(runtime, client, {{80, 12}, {}});
+    ASSERT_TRUE(confirmed.has_value());
+    if (!confirmed) return;
+    ASSERT_EQ(confirmed->sections().selection.primary().active.line,
+              ssg::LineIndex{1});
+
+    const struct {
+        const char* command;
+        ssg::VisualSelectionDirection direction;
+        bool extend;
+    } movements[] = {
+        {"cursor.page_down", ssg::VisualSelectionDirection::PageDown, false},
+        {"cursor.page_up", ssg::VisualSelectionDirection::PageUp, false},
+        {"select.line_up", ssg::VisualSelectionDirection::LineUp, true},
+        {"select.line_down", ssg::VisualSelectionDirection::LineDown, true},
+        {"select.page_down", ssg::VisualSelectionDirection::PageDown, true},
+        {"select.page_up", ssg::VisualSelectionDirection::PageUp, true},
+        {"cursor.line_up", ssg::VisualSelectionDirection::LineUp, false},
+    };
+    for (const auto& movement : movements) {
+        const auto before = confirmed->sections().selection;
+        auto command = runtime.dispatch(
+            client, {movement.command, runtime.revision(), {}});
+        ASSERT_EQ(command.outcome(),
+                  ssg::CommandResult::Outcome::ViewActionRequired);
+        ASSERT_TRUE(command.viewAction.has_value());
+        if (!command.viewAction) return;
+        const auto expected = ssg::ViewAction{
+            ssg::MoveVisualSelection{
+                movement.direction, movement.extend}};
+        ASSERT_EQ(command.viewAction->action, expected);
+        auto result = presenter.apply(*command.viewAction, *confirmed);
+        ASSERT_TRUE(result.transition.has_value());
+        if (!result.transition) return;
+        ASSERT_EQ(runtime.input(client, *result.transition).outcome,
+                  ssg::ClientInputOutcome::Dispatched);
+        confirmed = presenter.project(runtime, client, {{80, 12}, {}});
+        ASSERT_TRUE(confirmed.has_value());
+        if (!confirmed) return;
+        ASSERT_NE(confirmed->sections().selection, before);
+    }
+}
+
+TEST(visualMovementUsesActivePaneAndDiscardsMismatchedProposal) {
+    auto root = uniqueRoot("grid_presenter_active_pane_selection");
+    {
+        std::ofstream lines{root / "workspace" / "lines.txt"};
+        for (int line = 0; line < 60; ++line) {
+            lines << "line " << line << '\n';
+        }
+    }
+    auto created = ssg::EditorSession::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId client{1};
+    ASSERT_TRUE(runtime
+                    .attach({client, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"file.open", runtime.revision(),
+                               std::string{"lines.txt"}})
+                    .accepted());
+
+    ssg::GridPresenter presenter{ssg::ViewId{1}};
+    auto frame = presenter.project(runtime, client, {{41, 15}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    auto split = runtime.dispatch(
+        client, {"pane.split_horizontal", runtime.revision(), {}});
+    ASSERT_TRUE(split.viewAction.has_value());
+    if (!split.viewAction) return;
+    ASSERT_TRUE(presenter.apply(*split.viewAction, *frame).accepted());
+    frame = presenter.project(runtime, client, {{41, 15}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame || frame->presentation()->shell.panes.size() != 2) return;
+    const auto activeRows = static_cast<std::uint32_t>(
+        frame->presentation()->shell.panes.back().content.height);
+
+    auto page = runtime.dispatch(
+        client, {"cursor.page_down", runtime.revision(), {}});
+    ASSERT_TRUE(page.viewAction.has_value());
+    if (!page.viewAction) return;
+    auto proposed = presenter.apply(*page.viewAction, *frame);
+    ASSERT_TRUE(proposed.transition.has_value());
+    if (!proposed.transition) return;
+    ASSERT_EQ(runtime.input(client, *proposed.transition).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    frame = presenter.project(runtime, client, {{41, 15}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    ASSERT_EQ(frame->sections().selection.primary().active.line.value(),
+              activeRows);
+
+    auto next = runtime.dispatch(
+        client, {"cursor.line_down", runtime.revision(), {}});
+    ASSERT_TRUE(next.viewAction.has_value());
+    if (!next.viewAction) return;
+    auto staleProposal = presenter.apply(*next.viewAction, *frame);
+    ASSERT_TRUE(staleProposal.transition.has_value());
+    if (!staleProposal.transition) return;
+    ASSERT_EQ(
+        runtime
+            .input(client,
+                   ssg::ResolvedPaneFocusInput{
+                       {runtime.revision()}})
+            .outcome,
+        ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(runtime.input(client, *staleProposal.transition).outcome,
+              ssg::ClientInputOutcome::Rejected);
+    frame = presenter.project(runtime, client, {{41, 15}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    const auto unchangedLine =
+        frame->sections().selection.primary().active.line;
+    auto retry = runtime.dispatch(
+        client, {"cursor.line_down", runtime.revision(), {}});
+    ASSERT_TRUE(retry.viewAction.has_value());
+    if (!retry.viewAction) return;
+    auto retried = presenter.apply(*retry.viewAction, *frame);
+    ASSERT_TRUE(retried.transition.has_value());
+    if (!retried.transition) return;
+    ASSERT_EQ(runtime.input(client, *retried.transition).outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    frame = presenter.project(runtime, client, {{41, 15}, {}});
+    ASSERT_TRUE(frame.has_value());
+    if (frame) {
+        ASSERT_EQ(frame->sections().selection.primary().active.line.value(),
+                  unchangedLine.value() + 1);
+    }
+}
+
 } // namespace
 
 int main() {
@@ -993,6 +1188,8 @@ int main() {
     RUN(gridPresenterCannotChangeOrReassembleSemanticState);
     RUN(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis);
     RUN(gridPresentersOwnIndependentPaneTopology);
+    RUN(visualLineMovementRequiresPresenterResolution);
+    RUN(visualMovementUsesActivePaneAndDiscardsMismatchedProposal);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

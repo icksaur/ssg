@@ -1,4 +1,5 @@
 #include "editor_session_internal.h"
+#include "../grid_projection_state.h"
 
 #include <ssg/CommandCatalog.h>
 
@@ -276,7 +277,8 @@ StatusFieldProjection EditorSession::Impl::chromeStatusFields(
 }
 
 ShellViewState EditorSession::Impl::shellView(
-    ViewportDimensions dimensions, const ShellState& shell,
+    ViewportDimensions dimensions,
+    detail::GridProjectionState& presentation,
     PaletteReport const& paletteReport) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.viewState().tabs) {
@@ -286,7 +288,8 @@ ShellViewState EditorSession::Impl::shellView(
     auto statusFields = chromeStatusFields(ChromeFieldMode::Grid);
     ShellLayoutRequest request;    request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = interaction.prompt().active() ? promptRowCount(interaction.prompt().request()->kind) : 0;
-    request.lineNumberGutterWidth = lineNumberGutterWidth();
+    request.lineNumberGutterWidth =
+        lineNumberGutterWidth(presentation);
     // Surface the draft-conflict notice for the active document (M15) from the one
     // resolver; the grid ShellNotice is that geometry-free notice plus rects, added
     // by the shell layout. Reserving a chrome row (rather than stealing document
@@ -354,7 +357,8 @@ ShellViewState EditorSession::Impl::shellView(
         promptInput.query = paletteReport.query;
         promptInput.ghost = paletteReport.ghost;
     }
-    auto result = computeShellLayout(request, shell, interaction.interaction(),
+    auto result = computeShellLayout(request, presentation.shell,
+                                     interaction.interaction(),
                                      promptStatus.status, promptInput);
     if (!result.accepted()) return {};
     auto view = *result.view;
@@ -468,7 +472,7 @@ TreeViewState EditorSession::Impl::treeView() const {
 }
 
 std::vector<TreeWindow> EditorSession::Impl::treeWindows(
-    ViewPresentationState const& presentation) const {
+    detail::GridProjectionState const& presentation) const {
     auto view = tree.viewState();
     if (view.providers.empty()) return {};
     // Only the active (front) provider is rendered. Resolve a display window from
@@ -500,60 +504,6 @@ std::vector<TreeWindow> EditorSession::Impl::treeWindows(
             provider.nodes[scroll.firstVisible + row].node.id);
     }
     return {std::move(window)};
-}
-
-void EditorSession::Impl::revealTreeSelection(ViewId viewId) {
-    auto view = tree.viewState();
-    if (view.providers.empty()) return;
-    auto const& provider = view.providers.front();
-    if (!provider.selected) return;
-    std::optional<std::uint32_t> selectedIndex;
-    for (std::size_t i = 0; i < provider.nodes.size(); ++i) {
-        if (provider.nodes[i].node.id == *provider.selected) {
-            selectedIndex = static_cast<std::uint32_t>(i);
-            break;
-        }
-    }
-    if (!selectedIndex) return;
-    auto& viewPresentation = presentation(viewId);
-    auto offset = ScrollOffset{viewPresentation.treeFirstVisible};
-    offset.revealSelection(*selectedIndex,
-                           static_cast<std::uint32_t>(provider.nodes.size()),
-                           viewPresentation.panelContentRows);
-    viewPresentation.treeFirstVisible = offset.firstVisible();
-}
-
-void EditorSession::Impl::scrollTreeToFraction(ViewId viewId,
-                                                std::uint32_t numerator,
-                                                std::uint32_t denominator) {
-    // Only the node COUNT is needed, and this runs per pointer motion during a
-    // thumb drag, so it must not rebuild every provider's view.
-    auto const nodes = tree.activeVisibleNodeCount();
-    if (nodes == 0) return;
-    // The panel's counterpart to view.scroll_to_fraction: a gutter click or
-    // thumb drag positions the tree along its track. Same ScrollOffset the
-    // editor uses, so both gutters map a pointer row to a position identically.
-    auto& viewPresentation = presentation(viewId);
-    auto offset = ScrollOffset{viewPresentation.treeFirstVisible};
-    offset.toFraction(numerator, denominator,
-                      static_cast<std::uint32_t>(nodes),
-                      viewPresentation.panelContentRows);
-    viewPresentation.treeFirstVisible = offset.firstVisible();
-}
-
-void EditorSession::Impl::scrollTree(ViewId viewId, std::int64_t rows) {
-    // Same reasoning as scrollTreeToFraction: the wheel path needs the count,
-    // not the view.
-    auto const nodes = tree.activeVisibleNodeCount();
-    if (nodes == 0) return;
-    // keep-visible is not applied: a wheel scroll moves the viewport, not the
-    // selection (a later revealTreeSelection re-snaps). The saturating
-    // clamp-shift lives in ScrollOffset, shared with every other surface.
-    auto& viewPresentation = presentation(viewId);
-    auto offset = ScrollOffset{viewPresentation.treeFirstVisible};
-    offset.byLines(rows, static_cast<std::uint32_t>(nodes),
-                   viewPresentation.panelContentRows);
-    viewPresentation.treeFirstVisible = offset.firstVisible();
 }
 
 PaletteViewState EditorSession::Impl::paletteView() const {

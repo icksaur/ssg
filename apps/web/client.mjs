@@ -26,6 +26,7 @@ import {
   applyPalettePresenceOverlay,
   BrowserKeyDispatchTracker,
   encodeCommandRequest, encodeClientInput, encodeViewNavigationInput,
+  encodeResolvedSelectionInput,
   encodeTreePointerInput,
   encodeStatusActionPointerInput,
   encodePromptControlPointerInput,
@@ -61,6 +62,7 @@ const VIEW_ACTION = {
   SCROLL_LINES: 0,
   SCROLL_PAGES: 1,
   SCROLL_FRACTION: 2,
+  MOVE_VISUAL_SELECTION: 3,
   REVEAL_SELECTION: 4,
   CENTER_SELECTION: 5,
   SPLIT_PANE: 6,
@@ -1064,6 +1066,10 @@ function authoritativePointerOffset(host, event) {
   const displayed = displayByteOffsetAtPoint(
     host, event.clientX, event.clientY);
   if (displayed == null) return null;
+  return authoritativeDisplayOffset(host, displayed);
+}
+
+function authoritativeDisplayOffset(host, displayed) {
   const projection = host._ssgProjection;
   if (!projection) return displayed;
   if (displayed <= projection.predStart) return displayed;
@@ -1283,6 +1289,77 @@ function applyViewAction(request) {
       kind === VIEW_ACTION.FOCUS_PANE) {
     chromeErrorEl.textContent = 'view_action_unavailable';
     return 'unavailable';
+  }
+  if (kind === VIEW_ACTION.MOVE_VISUAL_SELECTION) {
+    const host = uiRootEl.querySelector('.doc-surface');
+    const viewport = viewScrollContainer(VIEW_SCROLL_TARGET.DOCUMENT);
+    const selections = state.sections?.selection?.selections;
+    const activeTab = state.sections?.tabs?.active;
+    const documentRevision = state.sections?.document?.revision;
+    if (!host?._ssgDocumentCache || !viewport ||
+        !Array.isArray(selections) || selections.length === 0 ||
+        activeTab == null || documentRevision == null) {
+      return 'invalid';
+    }
+    const direction = num(action.direction);
+    const extend = Boolean(action.extend);
+    const lineHeight = scrollLineHeight(
+      VIEW_SCROLL_TARGET.DOCUMENT, viewport);
+    const distance = direction >= 2 ? viewport.clientHeight : lineHeight;
+    const sign = direction === 0 || direction === 2 ? -1 : 1;
+    const viewportRect = viewport.getBoundingClientRect();
+    const priorScrollTop = viewport.scrollTop;
+    const positions = selections.map((selection) => {
+      const active = num(selection.active.byte_offset);
+      const projection = host._ssgProjection;
+      const displayed = projection && active >= projection.predStart
+        ? active + projection.predBytes
+        : active;
+      const position = documentPosition(host._ssgDocumentCache, displayed);
+      const range = document.createRange();
+      range.setStart(position.node, position.offset);
+      range.collapse(true);
+      const rect = range.getBoundingClientRect();
+      return {
+        selection,
+        x: rect.left + Math.max(rect.width / 2, 1),
+        y: (rect.top + rect.bottom) / 2 + sign * distance,
+      };
+    });
+    const primaryY = positions[0].y;
+    if (primaryY < viewportRect.top + 1) {
+      viewport.scrollTop += primaryY - viewportRect.top - 1;
+    } else if (primaryY > viewportRect.bottom - 1) {
+      viewport.scrollTop += primaryY - viewportRect.bottom + 1;
+    }
+    const scrollDelta = viewport.scrollTop - priorScrollTop;
+    const resolved = [];
+    for (const position of positions) {
+      const y = Math.min(
+        viewportRect.bottom - 1,
+        Math.max(viewportRect.top + 1,
+                 position.y - scrollDelta));
+      const displayed = displayByteOffsetAtPoint(host, position.x, y);
+      if (displayed == null) {
+        viewport.scrollTop = priorScrollTop;
+        return 'invalid';
+      }
+      const target = authoritativeDisplayOffset(host, displayed);
+      resolved.push({
+        anchor: extend
+          ? num(position.selection.anchor.byte_offset)
+          : target,
+        active: target,
+      });
+    }
+    if (!sendInputFrame(
+        encodeResolvedSelectionInput(
+          request.semantic_revision, activeTab, documentRevision, resolved),
+        { resolvedSelection: true })) {
+      viewport.scrollTop = priorScrollTop;
+      return 'unavailable';
+    }
+    return 'applied';
   }
   const target = kind === VIEW_ACTION.SCROLL_PAGES ||
       kind === VIEW_ACTION.REVEAL_SELECTION ||

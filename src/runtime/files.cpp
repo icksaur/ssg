@@ -274,7 +274,6 @@ CommandHandlerResult bindTab(EditorSession::Impl& runtime,
     // active tab's caret is on-screen instead of inheriting the previous tab's
     // scroll offset.
     if (runtime.activeDocumentId() != documentBefore) {
-        runtime.revealPrimaryCaret(viewId);
     }
     runtime.refreshSyntax();
     // Focus follows the pointer (M8-F): activating a tab (a tab click, or the

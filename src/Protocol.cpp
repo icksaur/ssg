@@ -908,6 +908,9 @@ ProtocolValue toValue(FollowEditsViewState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<FollowEditsViewState>& out);
 ProtocolValue toValue(FollowEditsDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<FollowEditsDelta>& out);
+ProtocolValue toValue(ResolvedSelectionRange const& value);
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<ResolvedSelectionRange>& out);
 ProtocolValue toValue(TreeNodeCommand const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeCommand>& out);
 ProtocolValue toValue(GitTreeAffordance const& value);
@@ -1416,7 +1419,8 @@ bool decodePresent(ProtocolValue const& value, std::optional<ClientInputKind>& o
         ClientInputKind::PublishedUiAction, ClientInputKind::NoticeAction,
         ClientInputKind::Document, ClientInputKind::ScrollLines,
         ClientInputKind::ScrollFraction, ClientInputKind::ViewNavigation,
-        ClientInputKind::ResolvedPaneFocus};
+        ClientInputKind::ResolvedPaneFocus,
+        ClientInputKind::ResolvedSelection};
     return decodeEnum(value, out, values);
 }
 
@@ -3765,6 +3769,24 @@ bool decodePresent(ProtocolValue const& value, std::optional<FollowClientView>& 
     return true;
 }
 
+ProtocolValue toValue(ResolvedSelectionRange const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("anchor", toValue(value.anchor));
+    fields.emplace_back("active", toValue(value.active));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<ResolvedSelectionRange>& out) {
+    const auto* object = value.asObject();
+    if (object == nullptr || object->size() != 2) return false;
+    auto anchor = requireField<ByteOffset>(value.field("anchor"));
+    auto active = requireField<ByteOffset>(value.field("active"));
+    if (!anchor || !active) return false;
+    out.emplace(ResolvedSelectionRange{*anchor, *active});
+    return true;
+}
+
 ProtocolValue toValue(FollowEditsViewState const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("generation", toValue(value.generation));
@@ -5843,6 +5865,18 @@ std::string ProtocolCodec::encodeClientInput(
                     "kind", toValue(ClientInputKind::ResolvedPaneFocus));
                 fields.emplace_back("basis_revision",
                                     toValue(semantic.basis.observedRevision));
+            } else if constexpr (std::same_as<Input,
+                                               ResolvedSelectionInput>) {
+                fields.emplace_back(
+                    "kind", toValue(ClientInputKind::ResolvedSelection));
+                fields.emplace_back("basis_revision",
+                                    toValue(semantic.basis.observedRevision));
+                fields.emplace_back("active_tab",
+                                    toValue(semantic.activeTab));
+                fields.emplace_back("document_revision",
+                                    toValue(semantic.documentRevision));
+                fields.emplace_back("selections",
+                                    toValue(semantic.selections));
             } else {
                 auto addPointer = [&](ClientInputKind kind) {
                     fields.emplace_back("kind", toValue(kind));
@@ -6041,6 +6075,33 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         }
         return {ProtocolError::None,
                 ClientInput{ResolvedPaneFocusInput{{*basis}}}, {}};
+    }
+    if (*kind == ClientInputKind::ResolvedSelection) {
+        if (!hasExactly({"kind", "basis_revision", "active_tab",
+                        "document_revision", "selections"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                   "client resolved-selection input fields are malformed"};
+        }
+        auto basis =
+            requireField<Revision>(payload.field("basis_revision"));
+        auto activeTab =
+            requireField<TabId>(payload.field("active_tab"));
+        auto documentRevision =
+            requireField<Revision>(payload.field("document_revision"));
+        auto selections =
+            requireField<std::vector<ResolvedSelectionRange>>(
+                payload.field("selections"));
+        if (!basis || !activeTab || !documentRevision || !selections ||
+            selections->empty()) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                   "client resolved-selection input is malformed"};
+        }
+        return {
+            ProtocolError::None,
+            ClientInput{ResolvedSelectionInput{
+                {*basis}, *activeTab, *documentRevision,
+                std::move(*selections)}},
+            {}};
     }
     auto button =
         requireField<InputPointerButton>(payload.field("button"));

@@ -1676,6 +1676,10 @@ TEST(semanticClientInputVariantsRoundTripThroughTheWire) {
             basis, ssg::SemanticScrollTarget::Document, 2, 7},
         ssg::ViewNavigationInput{basis},
         ssg::ResolvedPaneFocusInput{basis},
+        ssg::ResolvedSelectionInput{
+            basis, ssg::TabId{3}, ssg::Revision{11},
+            {{ssg::ByteOffset{1}, ssg::ByteOffset{4}},
+             {ssg::ByteOffset{8}, ssg::ByteOffset{8}}}},
     };
     for (auto const& input : inputs) {
         auto const decoded = ssg::ProtocolCodec{}.decodeClientInput(
@@ -1753,6 +1757,20 @@ TEST(semanticClientInputVariantsRejectMalformedAndAmbiguousShapes) {
     paneFocusLimits.maxMessageBytes = boundedPaneFocus.size() - 1;
     ASSERT_EQ(codec.decodeClientInput(boundedPaneFocus, paneFocusLimits).error,
               ssg::ProtocolError::MessageTooLarge);
+
+    auto emptySelection = codec.encodeClientInput(
+        ssg::ResolvedSelectionInput{
+            basis, ssg::TabId{3}, ssg::Revision{11}, {}});
+    ASSERT_EQ(codec.decodeClientInput(emptySelection).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto malformedSelection = codec.encodeClientInput(
+        ssg::ResolvedSelectionInput{
+            basis, ssg::TabId{3}, ssg::Revision{11},
+            {{ssg::ByteOffset{1}, ssg::ByteOffset{4}}}});
+    renameField(malformedSelection, "anchor", "broken");
+    ASSERT_EQ(codec.decodeClientInput(malformedSelection).error,
+              ssg::ProtocolError::MalformedMessage);
 
     auto zeroActivation = codec.encodeClientInput(
         ssg::PickerPointerInput{
@@ -2150,6 +2168,10 @@ canonicalClientInputFixtures() {
         {"client_input_scroll_fraction.hex",
          ssg::ScrollFractionInput{
              {ssg::Revision{17}}, ssg::SemanticScrollTarget::Document, 3, 8}},
+        {"client_input_resolved_selection.hex",
+         ssg::ResolvedSelectionInput{
+             {ssg::Revision{18}}, ssg::TabId{4}, ssg::Revision{12},
+             {{ssg::ByteOffset{3}, ssg::ByteOffset{8}}}}},
     };
 }
 

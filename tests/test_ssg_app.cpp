@@ -3103,25 +3103,26 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
     (void)runtime.present(client, dims);  // loop-top snapshot
     coalescer.noteRefreshed();
 
-    // A burst of cursor-down keys. Each consumes routing; each dirties only
+    // A burst of cursor-right keys. Each consumes routing; each dirties only
     // geometry, so no refresh is needed BETWEEN them -- they coalesce.
     const auto keyAxes = ssg::app::consumed_axes(ssg::app::DecodeStatus::key);
     for (int i = 0; i < 5; ++i) {
         ASSERT_FALSE(coalescer.needsRefresh(keyAxes));
         coalescer.noteEffects(
-            runtime.dispatch(client, {"cursor.line_down", runtime.revision(), {}})
+            runtime.dispatch(client, {"cursor.right", runtime.revision(), {}})
                 .effects);
     }
     // A pointer now consumes geometry, which the burst dirtied -> it must refresh,
-    // and the refreshed snapshot must reflect all five moves (caret on line 5).
+    // and the refreshed snapshot must reflect all five moves.
     const auto pointerAxes =
         ssg::app::consumed_axes(ssg::app::DecodeStatus::pointer);
     ASSERT_TRUE(coalescer.needsRefresh(pointerAxes));
     auto afterBurst = runtime.present(client, dims);
     coalescer.noteRefreshed();
     ASSERT_TRUE(afterBurst.has_value());
-    ASSERT_EQ(afterBurst->sections().selection.primary().active.line.value(),
-              std::uint32_t{5});
+    ASSERT_EQ(
+        afterBurst->sections().selection.primary().active.byteOffset.value(),
+        std::uint64_t{5});
     // The routing seam a key would take is still the editor: a cursor burst never
     // moved focus, so the coalesced (un-refreshed) keys correctly kept editor
     // routing.

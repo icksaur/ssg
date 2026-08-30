@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import {
   applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput, cssColor,
   decodeMessage, browserInboundKind, encodeClientInput,
-  encodeViewNavigationInput, encodeCommandRequest,
+  encodeViewNavigationInput, encodeResolvedSelectionInput, encodeCommandRequest,
   BrowserKeyDispatchTracker,
   settleCommandResult,
   matcherParametersFromWire, matcherBoundsFromPalette,
@@ -357,6 +357,19 @@ check('typed raw input and command requests round-trip through ProtocolValue', (
     kind: 7,
     payload: { kind: 12n, basis_revision: 9n },
   });
+  assert.deepEqual(
+    decodeMessage(encodeResolvedSelectionInput(
+      9n, 4n, 12n, [{ anchor: 3, active: 8 }]).buffer),
+    {
+      kind: 7,
+      payload: {
+        kind: 14n,
+        basis_revision: 9n,
+        active_tab: 4n,
+        document_revision: 12n,
+        selections: [{ anchor: 3n, active: 8n }],
+      },
+    });
 
   check('browser protocol decoding rejects malformed and over-bound values', () => {
     assert.throws(() => decodeMessage(
@@ -563,6 +576,9 @@ check('browser semantic input bytes match the C++ canonical frames', () => {
       encodeScrollLinesInput(1, -4, 16n)],
     ['client_input_scroll_fraction.hex',
       encodeScrollFractionInput(0, 3, 8, 17n)],
+    ['client_input_resolved_selection.hex',
+      encodeResolvedSelectionInput(
+        18n, 4n, 12n, [{ anchor: 3n, active: 8n }])],
   ];
   for (const [fixture, encoded] of cases) {
     assert.deepEqual(encoded, fixtureBytes(fixture));
