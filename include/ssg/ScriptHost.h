@@ -1,6 +1,8 @@
 #pragma once
-
+#include <ssg/GridPresenter.h>
 #include <ssg/LuaCommandHost.h>
+
+#include <functional>
 
 #include <memory>
 #include <optional>
@@ -38,9 +40,18 @@ inline constexpr ClientId kScriptClientId{2};
 // thread may evaluate or dispatch into it.
 class ScriptHost {
 public:
+    using ViewActionSink =
+        std::function<GridActionResult(ViewActionRequest const&)>;
+
     // Attaches the script client to `runtime`, which must outlive this host.
     // Throws std::runtime_error if the runtime refuses the attachment.
+    // Without a view-action sink, an immediate script request for a view-owned
+    // command fails with `view_action_unavailable`.
     explicit ScriptHost(EditorSession& runtime);
+    // Attaches the script client to `viewId`. The host-owned sink applies a
+    // view action; ScriptHost submits its optional semantic transition once.
+    ScriptHost(EditorSession& runtime, ViewId viewId,
+               ViewActionSink viewActionSink);
     ~ScriptHost();
 
     ScriptHost(ScriptHost const&) = delete;

@@ -1,7 +1,9 @@
 #include <ssg/ScriptHost.h>
 
 #include <ssg/CommandCatalog.h>
+#include <ssg/CommandSpecBuilder.h>
 #include <ssg/EditorSession.h>
+#include <ssg/GridPresenter.h>
 
 #include "test_helpers.h"
 
@@ -69,6 +71,54 @@ TEST(aScriptStillReachesTheEditorThroughTheOrdinaryCommandBoundary) {
         "ssg.command('keymap.bind', "
         "{sequence = 'Alt+KeyU', command = 'file.save'})");
     ASSERT_TRUE(bound.accepted());
+    fs::remove_all(root);
+}
+
+TEST(viewActionsRequireAndUseAHostSuppliedSink) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    auto command = runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.view_action"}
+            .owner("test-oracle")
+            .summary("returns one typed view action")
+            .viewAction()
+            .initScript()
+            .handler([](ssg::CommandContext&) {
+                return ssg::CommandHandlerResult::requireView(
+                    ssg::ViewScrollLines{
+                        ssg::ViewScrollTarget::Document, 1});
+            }));
+
+    {
+        ssg::ScriptHost scripts{*runtime};
+        auto unavailable =
+            scripts.evaluate("ssg.command('oracle.view_action')");
+        ASSERT_FALSE(unavailable.accepted());
+        ASSERT_TRUE(
+            unavailable.message.find("view_action_unavailable") !=
+            std::string::npos);
+    }
+
+    int applications = 0;
+    const auto before = runtime->revision();
+    ssg::ScriptHost scripts{
+        *runtime, ssg::ViewId{1},
+        [&](ssg::ViewActionRequest const& request) {
+            ++applications;
+            ASSERT_EQ(request.viewId, ssg::ViewId{1});
+            return ssg::GridActionResult{
+                ssg::GridActionStatus::TransitionRequired,
+                ssg::ClientInput{ssg::ViewNavigationInput{
+                    {request.semanticRevision}}},
+                {}};
+        }};
+    ASSERT_TRUE(
+        scripts.evaluate("ssg.command('oracle.view_action')").accepted());
+    ASSERT_TRUE(
+        scripts.evaluate("ssg.command('oracle.view_action')").accepted());
+    ASSERT_EQ(applications, 2);
+    ASSERT_EQ(runtime->revision().value(), before.value() + 1);
     fs::remove_all(root);
 }
 
@@ -428,6 +478,7 @@ TEST(OnlyOneScriptHostMayAttachPerRuntime) {
 int main() {
     RUN(theScriptStateOutlivesTheScriptThatCreatedIt);
     RUN(aScriptStillReachesTheEditorThroughTheOrdinaryCommandBoundary);
+    RUN(viewActionsRequireAndUseAHostSuppliedSink);
     RUN(aBrokenScriptIsReportedAndLeavesTheHostUsable);
     RUN(aCommandTheScriptClientMayNotCallIsRefused);
     RUN(aCommandAScriptRegistersIsAnOrdinaryCatalogCommand);

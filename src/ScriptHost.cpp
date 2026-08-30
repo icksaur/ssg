@@ -65,16 +65,19 @@ struct ScriptHost::Impl {
     EditorSession& runtime;
     std::thread::id owningThread{std::this_thread::get_id()};
     LuaCommandHost host;
+    ViewActionSink viewActionSink;
     // What the last successful evaluation put in the catalog, retired by the
     // next one.
     std::vector<CommandHandle> generation;
 
-    Impl(EditorSession& editorRuntime, LuaCommandHostOptions options)
+    Impl(EditorSession& editorRuntime, LuaCommandHostOptions options,
+         ViewActionSink sink)
         : runtime{editorRuntime},
           host{std::move(options),
                [this](LuaInvocation const& invocation) {
                    return dispatch(invocation);
-               }} {}
+               }},
+          viewActionSink{std::move(sink)} {}
 
     // Sends one command from `runtime` and reports it the way Lua expects.
     //
@@ -96,8 +99,37 @@ struct ScriptHost::Impl {
             return CommandHandlerResult::success();
         }
         auto result = runtime.dispatch(kScriptClientId, std::move(command));
-        return result.accepted() ? CommandHandlerResult::success()
-                                 : CommandHandlerResult::failure(result.message);
+        if (!result.accepted()) {
+            return CommandHandlerResult::failure(result.message);
+        }
+        if (!result.viewAction) return CommandHandlerResult::success();
+        if (!viewActionSink) {
+            return CommandHandlerResult::failure(
+                "view_action_unavailable");
+        }
+        auto applied = viewActionSink(*result.viewAction);
+        if (!applied.accepted()) {
+            return CommandHandlerResult::failure(
+                applied.message.empty() ? "view action was rejected"
+                                        : applied.message);
+        }
+        if ((applied.status == GridActionStatus::TransitionRequired) !=
+            applied.transition.has_value()) {
+            return CommandHandlerResult::failure(
+                "view action returned an invalid transition");
+        }
+        if (applied.transition) {
+            auto transition =
+                runtime.input(kScriptClientId, *applied.transition);
+            if (transition.outcome == ClientInputOutcome::Rejected) {
+                return CommandHandlerResult::failure(
+                    transition.command &&
+                            !transition.command->message.empty()
+                        ? transition.command->message
+                        : "view action transition was rejected");
+            }
+        }
+        return CommandHandlerResult::success();
     }
 
     // Translates one ssg.command(id, args) call into the matching payload and
@@ -151,16 +183,23 @@ struct ScriptHost::Impl {
                     argumentField(*invocation.arguments, "sequence"),
                     argumentField(*invocation.arguments, "context")});
         }
+        if (!invocation.arguments) {
+            return forward(invocation.commandId, {});
+        }
         return CommandHandlerResult::failure("unknown script command: " +
                                              std::string{invocation.commandId});
     }
 };
 
-ScriptHost::ScriptHost(EditorSession& runtime) {
+ScriptHost::ScriptHost(EditorSession& runtime)
+    : ScriptHost(runtime, ViewId{0}, {}) {}
+
+ScriptHost::ScriptHost(EditorSession& runtime, ViewId viewId,
+                      ViewActionSink viewActionSink) {
     if (!runtime
              .attach({kScriptClientId, InvocationOrigin::Lua,
                       scriptCapabilities()},
-                     ViewId{0})
+                     viewId)
              .accepted()) {
         throw std::runtime_error{"the runtime refused the script client"};
     }
@@ -173,7 +212,8 @@ ScriptHost::ScriptHost(EditorSession& runtime) {
     options.publishGate = [this](std::vector<std::string> const& ids) {
         return offerGeneration(ids);
     };
-    impl_ = std::make_unique<Impl>(runtime, std::move(options));
+    impl_ = std::make_unique<Impl>(
+        runtime, std::move(options), std::move(viewActionSink));
 }
 
 ScriptHost::~ScriptHost() {

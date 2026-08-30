@@ -771,7 +771,18 @@ int main(int argc, char** argv) {
 
     // Lives for the rest of the process, so a function init.lua defines
     // remains callable long after the script that defined it has finished.
-    ssg::ScriptHost scripts{runtime};
+    ssg::ScriptHost scripts{
+        runtime, view,
+        [&](ssg::ViewActionRequest const& request) {
+            auto frame = gridPresenter.project(
+                runtime, client, {terminalSize(), {}});
+            if (!frame) {
+                return ssg::GridActionResult{
+                    ssg::GridActionStatus::Rejected, std::nullopt,
+                    "view action has no current grid frame"};
+            }
+            return gridPresenter.apply(request, *frame);
+        }};
     auto const appliedInitScript = loadInitScript(scripts, runtime);
     STARTUP_MARK("post_init_script");
 
@@ -976,20 +987,6 @@ int main(int argc, char** argv) {
     // snapshot, so it dirties both axes exactly as a runtime dispatch would.
     auto markPickerDirty = [&] { coalescer.markPickerDirty(); };
 
-    auto dispatch = [&](std::string_view id, std::any payload = {}) {
-        noteEffects(runtime
-                        .dispatch(client, {std::string{id}, runtime.revision(),
-                                           std::move(payload)})
-                        .effects);
-    };
-    // The keystroke path's dispatch: the command is already identified, so no
-    // name is constructed, hashed or compared.
-    auto dispatchHandle = [&](ssg::CommandName const& command,
-                              std::any payload = {}) {
-        noteEffects(
-            runtime.dispatch(client, {command, runtime.revision(), std::move(payload)})
-                .effects);
-    };
     // Re-center the client-owned palette window on the current selection
     // (keep-visible). Called ONLY when the selection changes (arrow navigation,
     // open, type, backspace); the per-frame build_report otherwise honors the
