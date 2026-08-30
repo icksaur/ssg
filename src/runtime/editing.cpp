@@ -846,33 +846,6 @@ void registerSelectionCommands(CommandCatalog& builder,
                         });
                     }));
     }
-    builder.add(
-        CommandSpecBuilder{"select.set_byte_range"}
-            .owner("selection-navigation")
-            .summary("Set Selection From Byte Offsets")
-            .mutates()
-            .handler<SelectionByteRangeArguments>(
-                [&runtime](CommandContext& context,
-                           const SelectionByteRangeArguments& range) {
-                    return runtime.runTransaction([&] {
-                        const auto& text = runtime.activeText();
-                        auto anchor = SelectionNavigator::resolvePosition(
-                            text, range.anchor, 4);
-                        auto active = SelectionNavigator::resolvePosition(
-                            text, range.active, 4);
-                        if (!anchor || !active) {
-                            return failure(
-                                "selection byte range is not on document boundaries");
-                        }
-                        SelectionCommandArguments arguments;
-                        arguments.selection = Selection{*anchor, *active};
-                        return bindSelection(
-                            runtime, context.viewId(),
-                            context.principal().clientId(),
-                            SelectionCommand::SelectSetRange,
-                            std::any{std::move(arguments)});
-                    });
-                }));
 }
 
 void bindRuntimeEditing(CommandCatalog& builder, EditorSession::Impl& runtime) {

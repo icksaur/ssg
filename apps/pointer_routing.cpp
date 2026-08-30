@@ -9,32 +9,19 @@
 namespace ssg::app {
 namespace {
 
-// True when the click byte offset lands on `selection`: exactly on a collapsed
-// caret, or inside a range with an exclusive upper bound (matching the
-// caret-between-cells model).
-bool selectionCoversPosition(ssg::Selection const& selection,
-                             ssg::DocumentPosition position) noexcept {
-    auto const lo = selection.lower().byteOffset.value();
-    auto const hi = selection.upper().byteOffset.value();
-    auto const p = position.byteOffset.value();
-    if (lo == hi) return p == lo;  // collapsed caret
-    return lo <= p && p < hi;      // ranged: [lo, hi)
-}
-
 // The one list of scrollable surfaces. `route_pointer` and `route_wheel` both
 // drive from it, so a surface cannot be wired for one gesture and forgotten for
 // the other -- which is exactly how the panel and picker gutters ended up
 // wheel-scrollable but not draggable.
 constexpr ScrollableRegionDescriptor kScrollableRegions[] = {
     {ssg::HitRegion::Editor, ssg::HitRegion::EditorScrollbar,
-     WheelTarget::editor, "view.scroll_to_fraction"},
-    {ssg::HitRegion::Panel, ssg::HitRegion::PanelScrollbar, WheelTarget::tree,
-     "tree.scroll_to_fraction"},
+     WheelTarget::editor},
+    {ssg::HitRegion::Panel, ssg::HitRegion::PanelScrollbar, WheelTarget::tree},
         // No command: the picker's ranked list is client-owned for latency, so its
     // scroll must never round-trip. route_pointer returns a ClientScroll for
     // this one instead.
     {ssg::HitRegion::Palette, ssg::HitRegion::PaletteScrollbar,
-     WheelTarget::palette, {}},
+     WheelTarget::palette},
 };
 
 // The descriptor whose GUTTER this region is, if any.
@@ -49,17 +36,20 @@ const ScrollableRegionDescriptor* gutterRegion(ssg::HitRegion region) {
 // offset, or a client-local scroll for a client-owned one. One place, so every
 // gutter behaves alike.
 PointerDispatch gutterScroll(ScrollableRegionDescriptor const& descriptor,
-                             ssg::RegionHit const& hit) {
+                             ssg::RegionHit const& hit,
+                             ssg::Revision observedRevision) {
     PointerDispatch dispatch;
-    if (descriptor.scrollCommand.empty()) {
+    if (descriptor.target == WheelTarget::palette) {
         dispatch.client_scroll = ClientScroll{
             descriptor.target, hit.scrollNumerator, hit.scrollDenominator};
         return dispatch;
     }
-    dispatch.commands.push_back(
-        {std::string{descriptor.scrollCommand},
-         ssg::ScrollFractionArguments{hit.scrollNumerator,
-                                      hit.scrollDenominator}});
+    dispatch.semantic_input = ssg::ScrollFractionInput{
+        {observedRevision},
+        descriptor.target == WheelTarget::editor
+            ? ssg::SemanticScrollTarget::Document
+            : ssg::SemanticScrollTarget::Tree,
+        hit.scrollNumerator, hit.scrollDenominator};
     return dispatch;
 }
 
@@ -67,15 +57,6 @@ PointerDispatch gutterScroll(ScrollableRegionDescriptor const& descriptor,
 
 std::span<const ScrollableRegionDescriptor> scrollable_regions() noexcept {
     return kScrollableRegions;
-}
-
-std::optional<std::size_t> caret_hit_index(
-    std::vector<ssg::Selection> const& baseline,
-    ssg::DocumentPosition position) {
-    for (std::size_t index = 0; index < baseline.size(); ++index) {
-        if (selectionCoversPosition(baseline[index], position)) return index;
-    }
-    return std::nullopt;
 }
 
 bool is_scrollbar_region(ssg::HitRegion region) noexcept {
@@ -115,11 +96,11 @@ bool register_click_is_double(ClickTracker& tracker,
     return false;
 }
 
-PointerDispatch double_click_dispatch(ssg::DocumentPosition position) {
+PointerDispatch double_click_dispatch(ssg::DocumentPosition position,
+                                      ssg::Revision observedRevision) {
     PointerDispatch dispatch;
-    dispatch.commands.push_back(
-        {"select.word_at_position",
-         ssg::SelectionCommandArguments{position, std::nullopt}});
+    dispatch.semantic_input = ssg::DocumentPointerInput{
+        {observedRevision}, position.byteOffset, false, true};
     // A double-click selects a word; it must not also start a drag-select.
     dispatch.begins_drag = false;
     return dispatch;
@@ -128,8 +109,7 @@ PointerDispatch double_click_dispatch(ssg::DocumentPosition position) {
 PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                               PointerKind kind, bool alt, bool dragging,
                               std::optional<ssg::DocumentPosition> dragAnchor,
-                              PointerTargets const& targets,
-                              std::vector<ssg::Selection> const& altDragBaseline) {
+                              PointerTargets const& targets) {
     PointerDispatch dispatch;
     // Middle-click a tab closes it (a common convention).  Handled before the
     // left-only guard below; no other middle-button gesture is recognised.
@@ -155,7 +135,7 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // Independent of the selection drag state: the offset moves live as
             // the thumb is dragged.
             if (auto const* gutter = gutterRegion(hit.region)) {
-                return gutterScroll(*gutter, hit);
+                return gutterScroll(*gutter, hit, targets.observed_revision);
             }
             // A left press on a tab activates it (the caller resolved tab_index
             // -> TabId); on a palette row it executes that candidate (the caller
@@ -224,41 +204,9 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // With Alt, it instead ADDS a collapsed caret so multi-cursor
             // gestures compose with the existing set.
             if (hit.region == ssg::HitRegion::Editor && targets.document_position) {
-                if (alt) {
-                    // Alt+click TOGGLES: if the click lands on an existing
-                    // selection and more than one exists, REMOVE that whole
-                    // selection (Sublime toggle) by rebuilding the set without
-                    // it; a removal starts no drag. Otherwise ADD a collapsed
-                    // caret (re-adding an existing one de-dups to a no-op, which
-                    // is how an Alt+click on the sole caret becomes a no-op).
-                    auto const hit_index =
-                        altDragBaseline.size() > 1
-                            ? caret_hit_index(altDragBaseline,
-                                              *targets.document_position)
-                            : std::nullopt;
-                    if (hit_index) {
-                        std::vector<ssg::Selection> ranges = altDragBaseline;
-                        ranges.erase(ranges.begin() +
-                                     static_cast<std::ptrdiff_t>(*hit_index));
-                        dispatch.commands.push_back(
-                            {"select.set_ranges",
-                             ssg::SelectionCommandArguments{std::nullopt,
-                                                            std::nullopt,
-                                                            std::move(ranges)}});
-                        return dispatch;  // a discrete removal: no drag
-                    }
-                    dispatch.commands.push_back(
-                        {"select.add_range",
-                         ssg::SelectionCommandArguments{
-                             std::nullopt,
-                             ssg::Selection{*targets.document_position,
-                                            *targets.document_position}}});
-                } else {
-                    dispatch.commands.push_back(
-                        {"cursor.set_position",
-                         ssg::SelectionCommandArguments{*targets.document_position,
-                                                        std::nullopt}});
-                }
+                dispatch.semantic_input = ssg::DocumentPointerInput{
+                    {targets.observed_revision},
+                    targets.document_position->byteOffset, alt, false};
                 dispatch.begins_drag = true;
             }
             return dispatch;
@@ -266,7 +214,7 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // Dragging any gutter thumb scrolls that surface live, each motion,
             // independent of the selection drag state. Same catalog as press.
             if (auto const* gutter = gutterRegion(hit.region)) {
-                return gutterScroll(*gutter, hit);
+                return gutterScroll(*gutter, hit, targets.observed_revision);
             }
             // While dragging, a motion over an editor cell extends the selection
             // from the press anchor to the cell under the pointer. A drag over a
@@ -275,28 +223,23 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // last in-viewport position (edge auto-scroll is M8-S2).
             if (dragging && dragAnchor && hit.region == ssg::HitRegion::Editor &&
                 targets.document_position) {
-                if (alt) {
-                    std::vector<ssg::Selection> ranges = altDragBaseline;
-                    ranges.push_back(
-                        ssg::Selection{*dragAnchor, *targets.document_position});
-                    dispatch.commands.push_back(
-                        {"select.set_ranges",
-                         ssg::SelectionCommandArguments{std::nullopt, std::nullopt,
-                                                        std::move(ranges)}});
-                } else {
-                    dispatch.commands.push_back(
-                        {"select.set_range",
-                         ssg::SelectionCommandArguments{
-                             std::nullopt,
-                             ssg::Selection{*dragAnchor,
-                                            *targets.document_position}}});
-                }
+                dispatch.semantic_input = ssg::DocumentPointerInput{
+                    {targets.observed_revision},
+                    targets.document_position->byteOffset, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Move};
             }
             return dispatch;
         case PointerKind::release:
             // Release ends the drag; the last set_position/set_range already
             // reflects the selection, so no command is dispatched.
-            if (dragging) dispatch.ends_drag = true;
+            if (dragging) {
+                dispatch.semantic_input = ssg::DocumentPointerInput{
+                    {targets.observed_revision}, std::nullopt, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Release};
+                dispatch.ends_drag = true;
+            }
             return dispatch;
     }
     return dispatch;

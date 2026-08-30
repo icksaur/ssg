@@ -169,13 +169,20 @@ const u64 = (n) => {
   new DataView(b.buffer).setBigUint64(0, BigInt(n), true);
   return b;
 };
+const i64 = (n) => {
+  const b = new Uint8Array(8);
+  new DataView(b.buffer).setBigInt64(0, BigInt(n), true);
+  return b;
+};
 
 export function encodeValue(value) {
   const enc = new TextEncoder();
   if (value == null) return new Uint8Array([0]);
   if (typeof value === 'boolean') return new Uint8Array([1, value ? 1 : 0]);
   if (typeof value === 'number' || typeof value === 'bigint') {
-    return concat([new Uint8Array([3]), u64(value)]);
+    return value < 0
+      ? concat([new Uint8Array([2]), i64(value)])
+      : concat([new Uint8Array([3]), u64(value)]);
   }
   if (typeof value === 'string') {
     const bytes = enc.encode(value);
@@ -292,10 +299,33 @@ export const encodePickerPointerInput = (activation, candidateId) =>
     candidate_id: String(candidateId),
   });
 
-export const encodeSelectionByteRange = (anchor, active, revision) =>
-  encodeCommandRequest('select.set_byte_range', revision, {
-    anchor_byte_offset: BigInt(anchor),
-    active_byte_offset: BigInt(active),
+export const encodeDocumentPointerInput = (
+    position, revision,
+    { additive = false, selectWord = false, phase = 0, edge = 0 } = {}) =>
+  encodePointerInput(9, {
+    basis_revision: BigInt(revision),
+    position: position == null ? null : BigInt(position),
+    additive,
+    select_word: selectWord,
+    edge: BigInt(edge),
+  }, 0, phase);
+
+export const encodeScrollLinesInput = (target, rows, revision) =>
+  encodeMessage(7, {
+    kind: 10n,
+    basis_revision: BigInt(revision),
+    target: BigInt(target),
+    rows: BigInt(rows),
+  });
+
+export const encodeScrollFractionInput = (
+    target, numerator, denominator, revision) =>
+  encodeMessage(7, {
+    kind: 11n,
+    basis_revision: BigInt(revision),
+    target: BigInt(target),
+    numerator: BigInt(numerator),
+    denominator: BigInt(denominator),
   });
 
 export const encodeTabPointerInput = (tabId, revision, button = 0) =>

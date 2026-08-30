@@ -115,7 +115,7 @@ TEST(statusActionPointerClickRoutesToInvokeActionWithGeneration) {
     targets.status_invocation = invocation;
     auto plan = ssg::app::route_pointer(
         hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
-        false, false, std::nullopt, targets, {});
+        false, false, std::nullopt, targets);
     ASSERT_TRUE(plan.semantic_input.has_value());
     auto const* input = std::get_if<ssg::StatusActionPointerInput>(
         &*plan.semantic_input);
@@ -142,7 +142,7 @@ TEST(aClickOnAnExternalActionRoutesThroughPointerTargetsToSelectThenAct) {
         ssg::DiffFileId{*hit.externalFileId}, ssg::ExternalAction::Reload};
     auto plan = ssg::app::route_pointer(
         hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
-        false, false, std::nullopt, targets, {});
+        false, false, std::nullopt, targets);
     ASSERT_TRUE(plan.semantic_input.has_value());
     auto const* input = std::get_if<ssg::ExternalActionPointerInput>(
         &*plan.semantic_input);
@@ -2041,7 +2041,15 @@ TEST(decodeInputPointerSplitReadsAreIncomplete) {
     ASSERT_TRUE(complete.status == ssg::app::DecodeStatus::pointer);
 }
 
-TEST(routePointerLeftPressOnEditorPlacesCaret) {
+const ssg::DocumentPointerInput* documentInputOf(
+    ssg::app::PointerDispatch const& plan) {
+    return plan.semantic_input
+               ? std::get_if<ssg::DocumentPointerInput>(
+                     &*plan.semantic_input)
+               : nullptr;
+}
+
+TEST(routePointerLeftPressOnEditorEmitsDocumentInput) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Editor;
     hit.byteOffset = 3;
@@ -2052,17 +2060,13 @@ TEST(routePointerLeftPressOnEditorPlacesCaret) {
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::press, false, false,
                                         std::nullopt, targets);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"cursor.set_position"});
-        auto const* args = std::any_cast<ssg::SelectionCommandArguments>(
-            &plan.commands[0].payload);
-        ASSERT_TRUE(args != nullptr);
-        if (args) {
-            ASSERT_TRUE(args->position.has_value());
-            if (args->position) ASSERT_EQ(*args->position, *targets.document_position);
-            ASSERT_FALSE(args->selection.has_value());
-        }
+    auto const* input = documentInputOf(plan);
+    ASSERT_TRUE(input != nullptr);
+    if (input) {
+        ASSERT_EQ(input->position, std::optional<ssg::ByteOffset>{
+                                       targets.document_position->byteOffset});
+        ASSERT_EQ(input->phase, ssg::InputPointerPhase::Press);
+        ASSERT_FALSE(input->additive);
     }
     // The press begins a potential selection drag.
     ASSERT_TRUE(plan.begins_drag);
@@ -2077,7 +2081,7 @@ TEST(routePointerIgnoresNonEditorAndNonLeft) {
     auto nonePlan = ssg::app::route_pointer(
         noneHit, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
         false, std::nullopt, empty);
-    ASSERT_TRUE(nonePlan.commands.empty());
+    ASSERT_FALSE(nonePlan.semantic_input.has_value());
     ASSERT_FALSE(nonePlan.begins_drag);
 
     // A left press on a non-editor region (e.g. the panel) is not handled by
@@ -2087,7 +2091,7 @@ TEST(routePointerIgnoresNonEditorAndNonLeft) {
     auto panelPlan = ssg::app::route_pointer(
         panelHit, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
         false, std::nullopt, empty);
-    ASSERT_TRUE(panelPlan.commands.empty());
+    ASSERT_FALSE(panelPlan.semantic_input.has_value());
 
     // A right/middle press on the editor is a no-op in M8.
     ssg::RegionHit editorHit;
@@ -2098,14 +2102,14 @@ TEST(routePointerIgnoresNonEditorAndNonLeft) {
     auto rightPlan = ssg::app::route_pointer(
         editorHit, ssg::app::PointerButton::right, ssg::app::PointerKind::press, false,
         false, std::nullopt, targets);
-    ASSERT_TRUE(rightPlan.commands.empty());
+    ASSERT_FALSE(rightPlan.semantic_input.has_value());
 
     // A left press on the editor with no resolved position (e.g. a blank cell)
     // dispatches nothing.
     auto unresolved = ssg::app::route_pointer(
         editorHit, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
         false, std::nullopt, empty);
-    ASSERT_TRUE(unresolved.commands.empty());
+    ASSERT_FALSE(unresolved.semantic_input.has_value());
     ASSERT_FALSE(unresolved.begins_drag);
 }
 
@@ -2135,7 +2139,7 @@ TEST(decodeInputPointerRejectsMalformedButTerminatedPayloads) {
     ASSERT_EQ(consumed, earlyFinal.size() - 1);
 }
 
-TEST(routePointerDragExtendsSelectionFromAnchor) {
+TEST(routePointerDragEmitsDocumentMove) {
     auto const anchor =
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
     ssg::RegionHit hit;
@@ -2146,24 +2150,15 @@ TEST(routePointerDragExtendsSelectionFromAnchor) {
         ssg::DocumentPosition{ssg::ByteOffset{10}, ssg::LineIndex{1}, ssg::CellIndex{2}};
     targets.document_position = active;
 
-    // A drag while dragging with an anchor -> select.set_range spanning the two.
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::drag, false, true,
                                         anchor, targets);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.set_range"});
-        auto const* args = std::any_cast<ssg::SelectionCommandArguments>(
-            &plan.commands[0].payload);
-        ASSERT_TRUE(args != nullptr);
-        if (args) {
-            ASSERT_FALSE(args->position.has_value());
-            ASSERT_TRUE(args->selection.has_value());
-            if (args->selection) {
-                ASSERT_EQ(args->selection->anchor, anchor);
-                ASSERT_EQ(args->selection->active, active);
-            }
-        }
+    auto const* input = documentInputOf(plan);
+    ASSERT_TRUE(input != nullptr);
+    if (input) {
+        ASSERT_EQ(input->position,
+                  std::optional<ssg::ByteOffset>{active.byteOffset});
+        ASSERT_EQ(input->phase, ssg::InputPointerPhase::Move);
     }
     ASSERT_FALSE(plan.begins_drag);
     ASSERT_FALSE(plan.ends_drag);
@@ -2208,7 +2203,7 @@ TEST(routePointerDragWithoutAnchorOrTargetIsANoOp) {
     auto notDragging = ssg::app::route_pointer(
         editorHit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag, false,
         false, anchor, targets);
-    ASSERT_TRUE(notDragging.commands.empty());
+    ASSERT_FALSE(notDragging.semantic_input.has_value());
 
     // Dragging but the pointer is over a cell with no document target (past a
     // short line's end / beyond the viewport edge) -> no command, selection holds.
@@ -2216,7 +2211,7 @@ TEST(routePointerDragWithoutAnchorOrTargetIsANoOp) {
     auto offContent = ssg::app::route_pointer(
         editorHit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag, false,
         true, anchor, noTarget);
-    ASSERT_TRUE(offContent.commands.empty());
+    ASSERT_FALSE(offContent.semantic_input.has_value());
 
     // Dragging over a non-editor region (e.g. the panel) -> no command.
     ssg::RegionHit panelHit;
@@ -2224,10 +2219,10 @@ TEST(routePointerDragWithoutAnchorOrTargetIsANoOp) {
     auto offEditor = ssg::app::route_pointer(
         panelHit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag, false,
         true, anchor, targets);
-    ASSERT_TRUE(offEditor.commands.empty());
+    ASSERT_FALSE(offEditor.semantic_input.has_value());
 }
 
-TEST(routePointerReleaseEndsDragWithoutACommand) {
+TEST(routePointerReleaseEndsAuthoritativeDocumentGesture) {
     ssg::RegionHit editorHit;
     editorHit.region = ssg::HitRegion::Editor;
     ssg::app::PointerTargets targets;
@@ -2238,18 +2233,23 @@ TEST(routePointerReleaseEndsDragWithoutACommand) {
     auto ending = ssg::app::route_pointer(
         editorHit, ssg::app::PointerButton::left, ssg::app::PointerKind::release, false,
         true, targets.document_position, targets);
-    ASSERT_TRUE(ending.commands.empty());
+    auto const* input = documentInputOf(ending);
+    ASSERT_TRUE(input != nullptr);
+    if (input) {
+        ASSERT_FALSE(input->position.has_value());
+        ASSERT_EQ(input->phase, ssg::InputPointerPhase::Release);
+    }
     ASSERT_TRUE(ending.ends_drag);
 
     // A release when not dragging is inert.
     auto stray = ssg::app::route_pointer(
         editorHit, ssg::app::PointerButton::left, ssg::app::PointerKind::release, false,
         false, std::nullopt, targets);
-    ASSERT_TRUE(stray.commands.empty());
+    ASSERT_FALSE(stray.semantic_input.has_value());
     ASSERT_FALSE(stray.ends_drag);
 }
 
-TEST(routePointerAltPressAddsCollapsedCaret) {
+TEST(routePointerAltPressMarksDocumentInputAdditive) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Editor;
     hit.byteOffset = 3;
@@ -2258,185 +2258,36 @@ TEST(routePointerAltPressAddsCollapsedCaret) {
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
     targets.document_position = pos;
 
-    // Alt press adds a collapsed caret (add_range), not cursor.set_position, and
-    // still begins the drag.
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::press, true, false,
                                         std::nullopt, targets);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.add_range"});
-        auto const* args = std::any_cast<ssg::SelectionCommandArguments>(
-            &plan.commands[0].payload);
-        ASSERT_TRUE(args != nullptr);
-        if (args) {
-            ASSERT_FALSE(args->position.has_value());
-            ASSERT_TRUE(args->selection.has_value());
-            if (args->selection) {
-                ASSERT_EQ(args->selection->anchor, pos);
-                ASSERT_EQ(args->selection->active, pos);
-            }
-            ASSERT_TRUE(args->selections.empty());
-        }
-    }
+    auto const* input = documentInputOf(plan);
+    ASSERT_TRUE(input != nullptr);
+    if (input) ASSERT_TRUE(input->additive);
     ASSERT_TRUE(plan.begins_drag);
 
     // The same press without Alt keeps cursor.set_position.
     auto plain = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                          ssg::app::PointerKind::press, false, false,
                                          std::nullopt, targets);
-    ASSERT_EQ(plain.commands.size(), std::size_t{1});
-    if (plain.commands.size() == 1) {
-        ASSERT_EQ(plain.commands[0].command_id, std::string{"cursor.set_position"});
-    }
+    input = documentInputOf(plain);
+    ASSERT_TRUE(input != nullptr);
+    if (input) ASSERT_FALSE(input->additive);
 }
 
-// Alt+click on an existing caret/selection
-// REMOVES it (Sublime toggle) via select.set_ranges of the baseline minus the
-// hit, and starts no drag; a click on empty space still ADDS; the sole caret is
-// never removed. These are pure-router hand cases.
 namespace {
 ssg::DocumentPosition posAt(std::uint64_t byte, std::uint32_t line,
                             std::uint32_t cell) {
     return ssg::DocumentPosition{ssg::ByteOffset{byte}, ssg::LineIndex{line},
                                  ssg::CellIndex{cell}};
 }
-ssg::app::PointerDispatch altPressAt(ssg::DocumentPosition p,
-                                     std::vector<ssg::Selection> baseline) {
-    ssg::RegionHit hit;
-    hit.region = ssg::HitRegion::Editor;
-    hit.byteOffset = static_cast<int>(p.byteOffset.value());
-    ssg::app::PointerTargets targets;
-    targets.document_position = p;
-    return ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
-                                   ssg::app::PointerKind::press, true, false,
-                                   std::nullopt, targets, std::move(baseline));
-}
-const ssg::SelectionCommandArguments* argsOf(
-    ssg::app::PointerDispatch const& plan) {
-    if (plan.commands.size() != 1) return nullptr;
-    return std::any_cast<ssg::SelectionCommandArguments>(
-        &plan.commands[0].payload);
-}
 }  // namespace
 
-TEST(altClickRemovesOneOfTwoCarets) {
-    auto const c3 = posAt(3, 0, 3);
-    auto const c7 = posAt(7, 0, 7);
-    std::vector<ssg::Selection> baseline{{c3, c3}, {c7, c7}};
-
-    // Alt-click the caret at 3 -> set_ranges with only the caret at 7, no drag.
-    auto plan = altPressAt(c3, baseline);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.set_ranges"});
-        auto const* args = argsOf(plan);
-        ASSERT_TRUE(args != nullptr);
-        if (args) {
-            ASSERT_EQ(args->selections.size(), std::size_t{1});
-            if (args->selections.size() == 1)
-                ASSERT_EQ(args->selections[0], (ssg::Selection{c7, c7}));
-        }
-    }
-    ASSERT_FALSE(plan.begins_drag);
-}
-
-TEST(altClickInsideARangeRemovesThatRange) {
-    auto const c1 = posAt(1, 0, 1);
-    auto const rlo = posAt(5, 0, 5);
-    auto const rhi = posAt(10, 0, 10);
-    std::vector<ssg::Selection> baseline{{c1, c1}, {rlo, rhi}};
-
-    // Click at byte 7 (inside [5,10)) removes the range, keeps the caret at 1.
-    auto plan = altPressAt(posAt(7, 0, 7), baseline);
-    auto const* args = argsOf(plan);
-    ASSERT_TRUE(args != nullptr);
-    if (args) {
-        ASSERT_EQ(args->selections.size(), std::size_t{1});
-        if (args->selections.size() == 1)
-            ASSERT_EQ(args->selections[0], (ssg::Selection{c1, c1}));
-    }
-    ASSERT_FALSE(plan.begins_drag);
-}
-
-TEST(altClickOnEmptySpaceAddsACaret) {
-    auto const c3 = posAt(3, 0, 3);
-    std::vector<ssg::Selection> baseline{{c3, c3}, {posAt(7, 0, 7), posAt(7, 0, 7)}};
-    // Byte 5 is on neither -> add_range, begins_drag stays true.
-    auto plan = altPressAt(posAt(5, 0, 5), baseline);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1)
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.add_range"});
-    ASSERT_TRUE(plan.begins_drag);
-}
-
-TEST(altClickOnTheSoleCaretIsANoOpAdd) {
-    auto const c3 = posAt(3, 0, 3);
-    std::vector<ssg::Selection> baseline{{c3, c3}};
-    // Size == 1: never removes; falls through to the (self-deduping) add path.
-    auto plan = altPressAt(c3, baseline);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1)
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.add_range"});
-    ASSERT_TRUE(plan.begins_drag);
-}
-
-TEST(altClickRangeBoundaryIsExclusiveAtTheUpperEnd) {
-    auto const c1 = posAt(1, 0, 1);
-    auto const rlo = posAt(5, 0, 5);
-    auto const rhi = posAt(10, 0, 10);
-    std::vector<ssg::Selection> baseline{{c1, c1}, {rlo, rhi}};
-
-    // P == hi (10) is NOT inside [5,10) -> no hit -> add (not set_ranges).
-    auto atUpper = altPressAt(posAt(10, 0, 10), baseline);
-    ASSERT_EQ(atUpper.commands.size(), std::size_t{1});
-    if (atUpper.commands.size() == 1)
-        ASSERT_EQ(atUpper.commands[0].command_id, std::string{"select.add_range"});
-
-    // P == lo (5) IS inside -> removes the range.
-    auto atLower = altPressAt(posAt(5, 0, 5), baseline);
-    auto const* args = argsOf(atLower);
-    ASSERT_TRUE(args != nullptr);
-    if (args) {
-        ASSERT_EQ(args->selections.size(), std::size_t{1});
-        if (args->selections.size() == 1)
-            ASSERT_EQ(args->selections[0], (ssg::Selection{c1, c1}));
-    }
-}
-
-TEST(altClickPrefersACaretOverARangeSharingItsLowerBound) {
-    // A caret [5,5] coexists with a range [5,10) (strict-< merge keeps both).
-    // The baseline is in normalized order (caret before range), so a click at 5
-    // removes the CARET, leaving the range.
-    auto const caret5 = posAt(5, 0, 5);
-    auto const rlo = posAt(5, 0, 5);
-    auto const rhi = posAt(10, 0, 10);
-    std::vector<ssg::Selection> baseline{{caret5, caret5}, {rlo, rhi}};
-
-    auto plan = altPressAt(posAt(5, 0, 5), baseline);
-    auto const* args = argsOf(plan);
-    ASSERT_TRUE(args != nullptr);
-    if (args) {
-        ASSERT_EQ(args->selections.size(), std::size_t{1});
-        if (args->selections.size() == 1)
-            ASSERT_EQ(args->selections[0], (ssg::Selection{rlo, rhi}));
-    }
-}
-
 TEST(altDoubleClickStillSelectsAWordNeverRemoves) {
-    // The app routes ANY double-click (Alt or not) through double_click_dispatch,
-    // which has no Alt parameter and only ever selects a word -- so the remove
-    // path (which lives solely in route_pointer's Alt-press branch) is
-    // unreachable for a double-click. Pin that the double-click seam yields word
-    // selection and never a select.set_ranges/add_range, guarding the app-loop
-    // short-circuit against a future refactor.
     auto const doubled = ssg::app::double_click_dispatch(posAt(5, 0, 5));
-    ASSERT_EQ(doubled.commands.size(), std::size_t{1});
-    if (doubled.commands.size() == 1) {
-        ASSERT_EQ(doubled.commands[0].command_id,
-                  std::string{"select.word_at_position"});
-        ASSERT_NE(doubled.commands[0].command_id, std::string{"select.set_ranges"});
-    }
+    auto const* input = documentInputOf(doubled);
+    ASSERT_TRUE(input != nullptr);
+    if (input) ASSERT_TRUE(input->selectWord);
     ASSERT_FALSE(doubled.begins_drag);
 }
 
@@ -2482,24 +2333,11 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
                                    std::nullopt, ssg::Selection{*p7, *p7}}})
                     .accepted());
 
-    auto beforeSnap = runtime.present(ssg::ClientId{1}, {80, 12});
-    ASSERT_TRUE(beforeSnap.has_value());
-    if (!beforeSnap) return;
-    auto const& items = beforeSnap->sections().selection.items();
-    ASSERT_EQ(items.size(), std::size_t{2});
-    std::vector<ssg::Selection> baseline(items.begin(), items.end());
-
-    // Route a REAL Alt-press on the caret at 2 and dispatch the plan.
-    auto plan = altPressAt(*p2, baseline);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    for (auto const& command : plan.commands) {
-        ASSERT_TRUE(
-            runtime.dispatch(ssg::ClientId{1},
-                             {command.command_id, runtime.revision(),
-                              std::any_cast<ssg::SelectionCommandArguments>(
-                                  command.payload)})
-                .accepted());
-    }
+    auto result = runtime.input(
+        ssg::ClientId{1},
+        ssg::DocumentPointerInput{
+            {runtime.revision()}, p2->byteOffset, true});
+    ASSERT_TRUE(result.command.has_value() && result.command->accepted());
 
     auto afterSnap = runtime.present(ssg::ClientId{1}, {80, 12});
     ASSERT_TRUE(afterSnap.has_value());
@@ -2516,51 +2354,35 @@ TEST(routePointerAltDragSetsRangesFromBaseline) {
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
     auto const active =
         ssg::DocumentPosition{ssg::ByteOffset{10}, ssg::LineIndex{1}, ssg::CellIndex{2}};
-    auto const baselineCaret =
-        ssg::DocumentPosition{ssg::ByteOffset{1}, ssg::LineIndex{0}, ssg::CellIndex{1}};
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Editor;
     ssg::app::PointerTargets targets;
     targets.document_position = active;
-    std::vector<ssg::Selection> const baseline{
-        ssg::Selection{baselineCaret, baselineCaret}};
 
-    // Alt drag rebuilds the whole set: baseline + the dragged range.
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::drag, true, true,
-                                        anchor, targets, baseline);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.set_ranges"});
-        auto const* args = std::any_cast<ssg::SelectionCommandArguments>(
-            &plan.commands[0].payload);
-        ASSERT_TRUE(args != nullptr);
-        if (args) {
-            ASSERT_FALSE(args->selection.has_value());
-            ASSERT_EQ(args->selections.size(), std::size_t{2});
-            if (args->selections.size() == 2) {
-                ASSERT_EQ(args->selections[0].anchor, baselineCaret);
-                ASSERT_EQ(args->selections[0].active, baselineCaret);
-                ASSERT_EQ(args->selections[1].anchor, anchor);
-                ASSERT_EQ(args->selections[1].active, active);
-            }
-        }
+                                        anchor, targets);
+    auto const* input = documentInputOf(plan);
+    ASSERT_TRUE(input != nullptr);
+    if (input) {
+        ASSERT_FALSE(input->additive);
+        ASSERT_EQ(input->phase, ssg::InputPointerPhase::Move);
+        ASSERT_EQ(input->position,
+                  std::optional<ssg::ByteOffset>{active.byteOffset});
     }
 
     // A no-Alt drag keeps select.set_range (unchanged single-selection path).
     auto plain = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                          ssg::app::PointerKind::drag, false, true,
-                                         anchor, targets, baseline);
-    ASSERT_EQ(plain.commands.size(), std::size_t{1});
-    if (plain.commands.size() == 1) {
-        ASSERT_EQ(plain.commands[0].command_id, std::string{"select.set_range"});
-    }
+                                         anchor, targets);
+    input = documentInputOf(plain);
+    ASSERT_TRUE(input != nullptr);
+    if (input) ASSERT_FALSE(input->additive);
 }
 
 TEST(routePointerAltDragIgnoresPerMotionModifierBit) {
-    // The app feeds the router the ESTABLISHED alt for a drag, so the router
-    // routes to select.set_ranges whenever alt is true regardless of the raw
-    // motion bit: a mid-drag modifier drop still extends the multi-cursor set.
+    // The modifier is authoritative only on Press. Move and Release do not
+    // restate it; the library retains the established gesture mode.
     auto const anchor =
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
     auto const active =
@@ -2569,21 +2391,20 @@ TEST(routePointerAltDragIgnoresPerMotionModifierBit) {
     hit.region = ssg::HitRegion::Editor;
     ssg::app::PointerTargets targets;
     targets.document_position = active;
-    std::vector<ssg::Selection> const baseline{
-        ssg::Selection{anchor, anchor}};
 
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::drag, true, true,
-                                        anchor, targets, baseline);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.set_ranges"});
-    }
+                                        anchor, targets);
+    auto const* input = documentInputOf(plan);
+    ASSERT_TRUE(input != nullptr);
+    if (input) ASSERT_FALSE(input->additive);
     // Alt release ends the drag and dispatches nothing.
     auto release = ssg::app::route_pointer(
         hit, ssg::app::PointerButton::left, ssg::app::PointerKind::release, true,
-        true, anchor, targets, baseline);
-    ASSERT_TRUE(release.commands.empty());
+        true, anchor, targets);
+    input = documentInputOf(release);
+    ASSERT_TRUE(input != nullptr);
+    if (input) ASSERT_EQ(input->phase, ssg::InputPointerPhase::Release);
     ASSERT_TRUE(release.ends_drag);
 }
 
@@ -2593,10 +2414,14 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
     // gutter reports numerator == denominator (-> maximum_first_row); the top
     // reports numerator 0 (-> first_row 0).
     auto scrollArgs = [](ssg::app::PointerDispatch const& plan)
-        -> ssg::ScrollFractionArguments const* {
-        if (plan.commands.size() != 1) return nullptr;
-        if (plan.commands[0].command_id != "view.scroll_to_fraction") return nullptr;
-        return std::any_cast<ssg::ScrollFractionArguments>(&plan.commands[0].payload);
+        -> ssg::ScrollFractionInput const* {
+        if (!plan.semantic_input) return nullptr;
+        auto const* input =
+            std::get_if<ssg::ScrollFractionInput>(&*plan.semantic_input);
+        return input &&
+                       input->target == ssg::SemanticScrollTarget::Document
+                   ? input
+                   : nullptr;
     };
 
     ssg::RegionHit bottom;
@@ -2663,10 +2488,9 @@ TEST(everyScrollableGutterAnswersPressAndDrag) {
                 hit, ssg::app::PointerButton::left, kind, false, false, std::nullopt,
                 empty);
 
-            if (descriptor.scrollCommand.empty()) {
+            if (descriptor.target == ssg::app::WheelTarget::palette) {
                 // A client-owned surface must NOT emit a command (S-I5): its
                 // scroll would otherwise round-trip on a latency-critical path.
-                ASSERT_TRUE(plan.commands.empty());
                 ASSERT_TRUE(plan.client_scroll.has_value());
                 if (plan.client_scroll) {
                     ASSERT_EQ(plan.client_scroll->numerator, std::uint32_t{3});
@@ -2674,15 +2498,21 @@ TEST(everyScrollableGutterAnswersPressAndDrag) {
                     ASSERT_TRUE(plan.client_scroll->target == descriptor.target);
                 }
             } else {
-                ASSERT_EQ(plan.commands.size(), std::size_t{1});
-                ASSERT_EQ(plan.commands[0].command_id,
-                          std::string{descriptor.scrollCommand});
-                auto const* args = std::any_cast<ssg::ScrollFractionArguments>(
-                    &plan.commands[0].payload);
-                ASSERT_TRUE(args != nullptr);
-                if (args) {
-                    ASSERT_EQ(args->numerator, std::uint32_t{3});
-                    ASSERT_EQ(args->denominator, std::uint32_t{4});
+                ASSERT_TRUE(plan.semantic_input.has_value());
+                auto const* input =
+                    plan.semantic_input
+                        ? std::get_if<ssg::ScrollFractionInput>(
+                              &*plan.semantic_input)
+                        : nullptr;
+                ASSERT_TRUE(input != nullptr);
+                if (input) {
+                    ASSERT_EQ(input->numerator, std::uint32_t{3});
+                    ASSERT_EQ(input->denominator, std::uint32_t{4});
+                    ASSERT_EQ(
+                        input->target,
+                        descriptor.target == ssg::app::WheelTarget::editor
+                            ? ssg::SemanticScrollTarget::Document
+                            : ssg::SemanticScrollTarget::Tree);
                 }
                 ASSERT_FALSE(plan.client_scroll.has_value());
             }
@@ -2703,7 +2533,7 @@ TEST(noClientOwnedSurfaceEverDispatchesAScrollCommand) {
     std::size_t clientOwned = 0;
 
     for (auto const& descriptor : ssg::app::scrollable_regions()) {
-        if (!descriptor.scrollCommand.empty()) continue;
+        if (descriptor.target != ssg::app::WheelTarget::palette) continue;
         ++clientOwned;
         // A client-owned surface must name a target the loop can act on;
         // `none` would be a gesture routed nowhere.
@@ -2718,7 +2548,7 @@ TEST(noClientOwnedSurfaceEverDispatchesAScrollCommand) {
             auto plan = ssg::app::route_pointer(
                 hit, ssg::app::PointerButton::left, kind, false, false, std::nullopt,
                 empty);
-            ASSERT_TRUE(plan.commands.empty());
+            ASSERT_FALSE(plan.semantic_input.has_value());
         }
     }
     // The picker is the one such surface today; if that ever becomes zero the
@@ -2784,7 +2614,7 @@ TEST(routePointerTabPressActivatesTheTab) {
     auto unresolved = ssg::app::route_pointer(
         hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false, false,
         std::nullopt, empty);
-    ASSERT_TRUE(unresolved.commands.empty());
+    ASSERT_FALSE(unresolved.semantic_input.has_value());
 }
 
 TEST(routePointerMiddleClickOnATabClosesIt) {
@@ -2810,20 +2640,20 @@ TEST(routePointerMiddleClickOnATabClosesIt) {
     // Middle-click off a tab, or a release rather than a press, does nothing.
     ssg::RegionHit editorHit;
     editorHit.region = ssg::HitRegion::Editor;
-    ASSERT_TRUE(ssg::app::route_pointer(editorHit, ssg::app::PointerButton::middle,
+    ASSERT_FALSE(ssg::app::route_pointer(editorHit, ssg::app::PointerButton::middle,
                                         ssg::app::PointerKind::press, false, false,
                                         std::nullopt, targets)
-                    .commands.empty());
-    ASSERT_TRUE(ssg::app::route_pointer(hit, ssg::app::PointerButton::middle,
+                    .semantic_input.has_value());
+    ASSERT_FALSE(ssg::app::route_pointer(hit, ssg::app::PointerButton::middle,
                                         ssg::app::PointerKind::release, false, false,
                                         std::nullopt, targets)
-                    .commands.empty());
+                    .semantic_input.has_value());
     // An unresolved tab id dispatches nothing.
     ssg::app::PointerTargets const noTab;
-    ASSERT_TRUE(ssg::app::route_pointer(hit, ssg::app::PointerButton::middle,
+    ASSERT_FALSE(ssg::app::route_pointer(hit, ssg::app::PointerButton::middle,
                                         ssg::app::PointerKind::press, false, false,
                                         std::nullopt, noTab)
-                    .commands.empty());
+                    .semantic_input.has_value());
 }
 
 TEST(doubleClickDetectorPairsPressesByTimeAndCell) {
@@ -2887,25 +2717,21 @@ TEST(aDoubleClickOnTheEditorSelectsTheWordNotJustTheCaret) {
     auto single = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                           ssg::app::PointerKind::press, false, false,
                                           std::nullopt, targets);
-    ASSERT_EQ(single.commands.size(), std::size_t{1});
-    ASSERT_EQ(single.commands[0].command_id,
-              std::string{"cursor.set_position"});
+    auto const* input = documentInputOf(single);
+    ASSERT_TRUE(input != nullptr);
+    if (input) ASSERT_FALSE(input->selectWord);
     ASSERT_TRUE(single.begins_drag);
 
     // Double-click: word selection, NO drag, and the clicked position passed
     // through as the command argument.
     auto doubled = ssg::app::double_click_dispatch(position);
-    ASSERT_EQ(doubled.commands.size(), std::size_t{1});
-    ASSERT_EQ(doubled.commands[0].command_id,
-              std::string{"select.word_at_position"});
+    input = documentInputOf(doubled);
+    ASSERT_TRUE(input != nullptr);
     ASSERT_FALSE(doubled.begins_drag);
-    auto const* args = std::any_cast<ssg::SelectionCommandArguments>(
-        &doubled.commands[0].payload);
-    ASSERT_TRUE(args != nullptr);
-    if (args) {
-        ASSERT_TRUE(args->position.has_value());
-        if (args->position) ASSERT_EQ(*args->position, position);
-        ASSERT_FALSE(args->selection.has_value());
+    if (input) {
+        ASSERT_TRUE(input->selectWord);
+        ASSERT_EQ(input->position,
+                  std::optional<ssg::ByteOffset>{position.byteOffset});
     }
 }
 
@@ -2974,7 +2800,7 @@ TEST(routePointerPalettePressExecutesTheCandidate) {
     auto unresolved = ssg::app::route_pointer(
         hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false, false,
         std::nullopt, empty);
-    ASSERT_TRUE(unresolved.commands.empty());
+    ASSERT_FALSE(unresolved.semantic_input.has_value());
 }
 
 // Clicking a row must mean the same as pressing Enter on it.  A file
@@ -3027,7 +2853,7 @@ TEST(routePointerPanelPressSelectsAndActivatesTheNode) {
     auto inert = ssg::app::route_pointer(
         noNode, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
         false, std::nullopt, empty);
-    ASSERT_TRUE(inert.commands.empty());
+    ASSERT_FALSE(inert.semantic_input.has_value());
 }
 
 TEST(routeWheelMapsRegionToScrollTarget) {
@@ -3371,19 +3197,13 @@ int main() {
     RUN(decodeInputPointerCarriesAltModifier);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);
-    RUN(routePointerLeftPressOnEditorPlacesCaret);
+    RUN(routePointerLeftPressOnEditorEmitsDocumentInput);
     RUN(routePointerIgnoresNonEditorAndNonLeft);
-    RUN(routePointerDragExtendsSelectionFromAnchor);
+    RUN(routePointerDragEmitsDocumentMove);
     RUN(routePointerFieldHitEmitsPublishedUiActionIdentity);
     RUN(routePointerDragWithoutAnchorOrTargetIsANoOp);
-    RUN(routePointerReleaseEndsDragWithoutACommand);
-    RUN(routePointerAltPressAddsCollapsedCaret);
-    RUN(altClickRemovesOneOfTwoCarets);
-    RUN(altClickInsideARangeRemovesThatRange);
-    RUN(altClickOnEmptySpaceAddsACaret);
-    RUN(altClickOnTheSoleCaretIsANoOpAdd);
-    RUN(altClickRangeBoundaryIsExclusiveAtTheUpperEnd);
-    RUN(altClickPrefersACaretOverARangeSharingItsLowerBound);
+    RUN(routePointerReleaseEndsAuthoritativeDocumentGesture);
+    RUN(routePointerAltPressMarksDocumentInputAdditive);
     RUN(altDoubleClickStillSelectsAWordNeverRemoves);
     RUN(altClickRemoveEndToEndLeavesTheSurvivingCaret);
     RUN(routePointerAltDragSetsRangesFromBaseline);

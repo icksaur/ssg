@@ -1251,49 +1251,6 @@ TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     ASSERT_EQ(closed->sections().focus, ssg::FocusTarget::Editor);
 }
 
-TEST(byteRangeSelectionResolvesAuthoritativeDocumentPositions) {
-    auto root = uniqueRoot();
-    std::ofstream{root / "workspace" / "utf8.txt"} << "a\xC3\xA9z\n";
-    auto created = ssg::EditorSession::create(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket},
-                            ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"file.open", runtime.revision(),
-                               std::string{"utf8.txt"}})
-                    .accepted());
-    ASSERT_TRUE(
-        runtime
-            .dispatch(ssg::ClientId{1},
-                      {"select.set_byte_range", runtime.revision(),
-                       ssg::SelectionByteRangeArguments{ssg::ByteOffset{1},
-                                                        ssg::ByteOffset{3}}})
-            .accepted());
-    auto selected =
-        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(selected.has_value());
-    if (!selected) return;
-    ASSERT_EQ(selected->sections().selection.items().size(), std::size_t{1});
-    if (!selected->sections().selection.items().empty()) {
-        const auto& selection = selected->sections().selection.items().front();
-        ASSERT_EQ(selection.anchor.byteOffset.value(), std::size_t{1});
-        ASSERT_EQ(selection.active.byteOffset.value(), std::size_t{3});
-    }
-    ASSERT_FALSE(
-        runtime
-            .dispatch(ssg::ClientId{1},
-                      {"select.set_byte_range", runtime.revision(),
-                       ssg::SelectionByteRangeArguments{ssg::ByteOffset{2},
-                                                        ssg::ByteOffset{3}}})
-            .accepted());
-}
-
 // The open-picker kind is derived from the prompt after every dispatch rather
 // than cleared at each close path.  Pin that across every way a picker closes:
 // a stale kind would make the NEXT open publish the previous picker's mode and
@@ -1848,6 +1805,26 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     ASSERT_TRUE(publishedAction.command.has_value() &&
                 publishedAction.command->accepted());
 
+    for (auto target : {ssg::SemanticScrollTarget::Document,
+                        ssg::SemanticScrollTarget::Tree}) {
+        auto scroll = runtime.input(
+            client, ssg::ScrollLinesInput{
+                        {runtime.revision()}, target, 1});
+        ASSERT_TRUE(scroll.command.has_value() && scroll.command->accepted());
+        auto fraction = runtime.input(
+            client, ssg::ScrollFractionInput{
+                        {runtime.revision()}, target, 0, 1});
+        ASSERT_TRUE(fraction.command.has_value() &&
+                    fraction.command->accepted());
+    }
+    const auto beforeInvalidScroll = runtime.revision();
+    auto invalidScroll = runtime.input(
+        client, ssg::ScrollFractionInput{
+                    {beforeInvalidScroll},
+                    ssg::SemanticScrollTarget::Document, 2, 1});
+    ASSERT_EQ(invalidScroll.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_EQ(runtime.revision(), beforeInvalidScroll);
+
     ASSERT_TRUE(runtime
                     .dispatch(client,
                               {"replace.open", runtime.revision(), {}})
@@ -1866,6 +1843,228 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
                 focused->sections().promptView.has_value());
     if (focused && focused->sections().promptView) {
         ASSERT_EQ(focused->sections().promptView->activeInput, std::size_t{1});
+    }
+}
+
+TEST(documentPointerInputOwnsSelectionGesturePolicy) {
+    auto root = uniqueRoot();
+    std::filesystem::create_directories(root / "workspace");
+    std::ofstream{root / "workspace" / "words.txt"} << "alpha beta gamma\n";
+    auto created = ssg::EditorSession::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId client{1};
+    ASSERT_TRUE(runtime
+                    .attach({client, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client, {"file.open", runtime.revision(),
+                                       std::string{"words.txt"}})
+                    .accepted());
+
+    auto press = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {runtime.revision()}, ssg::ByteOffset{1}});
+    ASSERT_TRUE(press.command.has_value() && press.command->accepted());
+    auto move = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {runtime.revision()}, ssg::ByteOffset{9}, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Move});
+    ASSERT_TRUE(move.command.has_value() && move.command->accepted());
+    auto snapshot = runtime.snapshot(client);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
+              ssg::ByteOffset{1});
+    ASSERT_EQ(snapshot->sections().selection.primary().active.byteOffset,
+              ssg::ByteOffset{9});
+
+    auto release = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {runtime.revision()}, std::nullopt, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Release});
+    ASSERT_EQ(release.outcome, ssg::ClientInputOutcome::Dispatched);
+    auto strayMove = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {runtime.revision()}, ssg::ByteOffset{4}, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Move});
+    ASSERT_EQ(strayMove.outcome, ssg::ClientInputOutcome::Unhandled);
+
+    ASSERT_TRUE(runtime
+                    .input(client, ssg::DocumentPointerInput{
+                                       {runtime.revision()},
+                                       ssg::ByteOffset{3}})
+                    .command->accepted());
+    auto stalePress = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {ssg::Revision{runtime.revision().value() - 1}},
+                    ssg::ByteOffset{4}});
+    ASSERT_EQ(stalePress.outcome, ssg::ClientInputOutcome::Rejected);
+    auto moveAfterStalePress = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {runtime.revision()}, ssg::ByteOffset{5}, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Move});
+    ASSERT_EQ(moveAfterStalePress.outcome,
+              ssg::ClientInputOutcome::Unhandled);
+
+    ASSERT_TRUE(runtime
+                    .input(client, ssg::DocumentPointerInput{
+                                       {runtime.revision()},
+                                       ssg::ByteOffset{3}})
+                    .command->accepted());
+    auto staleCancel = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {ssg::Revision{runtime.revision().value() - 1}},
+                    std::nullopt, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Cancel});
+    ASSERT_EQ(staleCancel.outcome, ssg::ClientInputOutcome::Rejected);
+    auto moveAfterStaleCancel = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {runtime.revision()}, ssg::ByteOffset{5}, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Move});
+    ASSERT_EQ(moveAfterStaleCancel.outcome,
+              ssg::ClientInputOutcome::Unhandled);
+
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"cursor.set_position", runtime.revision(),
+                               ssg::SelectionCommandArguments{
+                                   ssg::SelectionNavigator::resolvePosition(
+                                       runtime.activeDocumentText(),
+                                       ssg::ByteOffset{2}),
+                                   std::nullopt}})
+                    .accepted());
+    const auto second = ssg::SelectionNavigator::resolvePosition(
+        runtime.activeDocumentText(), ssg::ByteOffset{12});
+    ASSERT_TRUE(second.has_value());
+    if (!second) return;
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"select.add_range", runtime.revision(),
+                               ssg::SelectionCommandArguments{
+                                   std::nullopt,
+                                   ssg::Selection{*second, *second}}})
+                    .accepted());
+    auto toggle = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {runtime.revision()}, ssg::ByteOffset{2}, true});
+    ASSERT_TRUE(toggle.command.has_value() && toggle.command->accepted());
+    snapshot = runtime.snapshot(client);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().selection.items().size(), std::size_t{1});
+    ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
+              ssg::ByteOffset{12});
+
+    auto word = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {runtime.revision()}, ssg::ByteOffset{7}, false, true});
+    ASSERT_TRUE(word.command.has_value() && word.command->accepted());
+    snapshot = runtime.snapshot(client);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().selection.primary().lower().byteOffset,
+              ssg::ByteOffset{6});
+    ASSERT_EQ(snapshot->sections().selection.primary().upper().byteOffset,
+              ssg::ByteOffset{10});
+
+    ASSERT_TRUE(runtime
+                    .input(client, ssg::DocumentPointerInput{
+                                       {runtime.revision()},
+                                       ssg::ByteOffset{0}})
+                    .command->accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"text.insert", runtime.revision(),
+                               ssg::TextInputArguments{"X"}})
+                    .accepted());
+    const auto editedDocumentRevision = runtime.revision();
+    auto editedDocumentMove = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {editedDocumentRevision}, ssg::ByteOffset{1}, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Move});
+    ASSERT_EQ(editedDocumentMove.outcome,
+              ssg::ClientInputOutcome::Rejected);
+    ASSERT_EQ(runtime.revision(), editedDocumentRevision);
+
+    ASSERT_TRUE(runtime
+                    .input(client, ssg::DocumentPointerInput{
+                                       {runtime.revision()},
+                                       ssg::ByteOffset{0}})
+                    .command->accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"file.new", runtime.revision(), {}})
+                    .accepted());
+    const auto changedDocumentRevision = runtime.revision();
+    auto changedDocumentMove = runtime.input(
+        client, ssg::DocumentPointerInput{
+                    {changedDocumentRevision}, ssg::ByteOffset{0}, false, false,
+                    ssg::InputPointerButton::Primary,
+                    ssg::InputPointerPhase::Move});
+    ASSERT_EQ(changedDocumentMove.outcome,
+              ssg::ClientInputOutcome::Rejected);
+    ASSERT_EQ(runtime.revision(), changedDocumentRevision);
+}
+
+TEST(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition) {
+    auto root = uniqueRoot();
+    std::filesystem::create_directories(root / "workspace");
+    std::ofstream{root / "workspace" / "lines.txt"}
+        << "aa\nbb\ncc\ndd\nee\nff\n";
+    auto created = ssg::EditorSession::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId client{1};
+    ASSERT_TRUE(runtime
+                    .attach({client, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client, {"file.open", runtime.revision(),
+                                       std::string{"lines.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime.present(client, {20, 4}).has_value());
+    ASSERT_TRUE(runtime
+                    .input(client, ssg::DocumentPointerInput{
+                                       {runtime.revision()},
+                                       ssg::ByteOffset{1}})
+                    .command->accepted());
+
+    for (const auto expected :
+         {ssg::ByteOffset{4}, ssg::ByteOffset{7}, ssg::ByteOffset{10}}) {
+        auto edge = runtime.input(
+            client, ssg::DocumentPointerInput{
+                        {runtime.revision()}, std::nullopt, false, false,
+                        ssg::InputPointerButton::Primary,
+                        ssg::InputPointerPhase::Move,
+                        ssg::DocumentPointerEdge::After});
+        ASSERT_TRUE(edge.command.has_value() && edge.command->accepted());
+        auto snapshot = runtime.present(client, {20, 4});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return;
+        ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
+                  ssg::ByteOffset{1});
+        ASSERT_EQ(snapshot->sections().selection.primary().active.byteOffset,
+                  expected);
+    }
+    auto snapshot = runtime.present(client, {20, 4});
+    ASSERT_TRUE(snapshot.has_value());
+    if (snapshot) {
+        ASSERT_TRUE(
+            snapshot->presentation()->viewport.firstVisualRow > 0);
     }
 }
 
@@ -2843,7 +3042,6 @@ int main() {
     RUN(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution);
     RUN(followPauseOnEditTransitionTable);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
-    RUN(byteRangeSelectionResolvesAuthoritativeDocumentPositions);
     RUN(everyPaletteClosePathLeavesNoOpenPickerBehind);
     RUN(paletteExecuteValidatesCandidateMembership);
     RUN(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute);
@@ -2854,6 +3052,8 @@ int main() {
     RUN(commandPickerSubmissionHasOriginParity);
     RUN(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision);
     RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
+    RUN(documentPointerInputOwnsSelectionGesturePolicy);
+    RUN(documentEdgeMovesExtendAndRevealInOneAuthoritativeTransition);
     RUN(failedSelectedCommandLeavesPickerOpenForEveryOrigin);
     RUN(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker);
     RUN(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation);

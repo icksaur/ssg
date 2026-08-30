@@ -32,7 +32,13 @@ published authoritative data and reconcile through normal results.
 Cover tab close/activate, tree select/activate, external actions, status
 actions, selection gestures, multi-cursor modifiers, word selection, and
 scrolling. Native coordinates stay in clients; typed input names semantic
-targets and offsets. The load-bearing device conversions are
+targets and offsets. The browser's native layout owns its local document
+viewport and scrolling; authoritative scroll inputs apply only to projected
+viewports whose position is library state, such as the TUI document and tree.
+Clients may schedule repeated edge-gesture ticks as device I/O, but each tick
+carries no derived position or scroll amount: the library advances selection
+and reveals the projected viewport as one authoritative transition.
+The load-bearing device conversions are
 `routePointerInput`/terminal event dispatch in `apps/pointer_routing.cpp` and
 `apps/ssg_main.cpp`, plus pointer, keyboard, picker, and action handlers in
 `apps/web/client.mjs`. Avoid feature-specific transport messages when command

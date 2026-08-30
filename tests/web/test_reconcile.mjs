@@ -19,7 +19,8 @@ import {
   pickerPresentationFromSubmit,
   resolveKeyCommand, predictPickerInput, applyPickerInputPrediction,
   CLIENT_OWNED_INPUT, deleteLastGrapheme, deleteLastWord,
-  PICKER_MODE, encodePickerPointerInput, encodeSelectionByteRange,
+  PICKER_MODE, encodePickerPointerInput, encodeDocumentPointerInput,
+  encodeScrollLinesInput, encodeScrollFractionInput,
   encodeTabPointerInput, markedTextByteOffset, encodeTreePointerInput,
   applyTreeDelta,
   applySessionDeltaSections, applySessionDeltaCopy, findSections,
@@ -497,9 +498,10 @@ check('semantic pointer inputs carry published identities and revision', () => {
     { kind: 3n, button: 0n, phase: 0n,
       picker_mode: 4n, activation_id: 13n, candidate_id: 'command.open' });
   assert.deepEqual(
-    decodeMessage(encodeSelectionByteRange(2, 7, 6n).buffer).payload,
-    { id: 'select.set_byte_range', base_revision: 6n,
-      payload: { anchor_byte_offset: 2n, active_byte_offset: 7n } });
+    decodeMessage(encodeDocumentPointerInput(
+      7, 6n, { phase: 1 }).buffer).payload,
+    { kind: 9n, button: 0n, phase: 1n, basis_revision: 6n,
+      position: 7n, additive: false, select_word: false, edge: 0n });
   assert.deepEqual(
     decodeMessage(encodeTreePointerInput('tree:src', 6n).buffer).payload,
     { kind: 2n, button: 0n, phase: 0n,
@@ -532,6 +534,12 @@ check('browser semantic input bytes match the C++ canonical frames', () => {
       encodePublishedUiActionPointerInput('header.help', 4n, 12n)],
     ['client_input_notice_action.hex',
       encodeNoticeActionPointerInput('draft.notice.dismiss', 12n)],
+    ['client_input_document.hex',
+      encodeDocumentPointerInput(8, 15n, { additive: true })],
+    ['client_input_scroll_lines.hex',
+      encodeScrollLinesInput(1, -4, 16n)],
+    ['client_input_scroll_fraction.hex',
+      encodeScrollFractionInput(0, 3, 8, 17n)],
   ];
   for (const [fixture, encoded] of cases) {
     assert.deepEqual(encoded, fixtureBytes(fixture));

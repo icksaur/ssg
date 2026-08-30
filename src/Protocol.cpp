@@ -714,6 +714,10 @@ bool decodePresent(ProtocolValue const& value,
                    std::optional<InputPointerButton>& out);
 bool decodePresent(ProtocolValue const& value,
                    std::optional<InputPointerPhase>& out);
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<DocumentPointerEdge>& out);
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<SemanticScrollTarget>& out);
 
 ProtocolValue toValue(Revision const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<Revision>& out);
@@ -1027,9 +1031,6 @@ ProtocolValue toValue(PromptFocusArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptFocusArguments>& out);
 ProtocolValue toValue(SelectionCommandArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out);
-ProtocolValue toValue(SelectionByteRangeArguments const& value);
-bool decodePresent(ProtocolValue const& value,
-                   std::optional<SelectionByteRangeArguments>& out);
 ProtocolValue toValue(ScrollLinesArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ScrollLinesArguments>& out);
 ProtocolValue toValue(ScrollPagesArguments const& value);
@@ -1412,7 +1413,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<ClientInputKind>& o
         ClientInputKind::Key, ClientInputKind::Tab, ClientInputKind::Tree,
         ClientInputKind::Picker, ClientInputKind::PromptControl,
         ClientInputKind::ExternalAction, ClientInputKind::StatusAction,
-        ClientInputKind::PublishedUiAction, ClientInputKind::NoticeAction};
+        ClientInputKind::PublishedUiAction, ClientInputKind::NoticeAction,
+        ClientInputKind::Document, ClientInputKind::ScrollLines,
+        ClientInputKind::ScrollFraction};
     return decodeEnum(value, out, values);
 }
 
@@ -1429,6 +1432,21 @@ bool decodePresent(ProtocolValue const& value,
     static constexpr std::array values{
         InputPointerPhase::Press, InputPointerPhase::Move,
         InputPointerPhase::Release, InputPointerPhase::Cancel};
+    return decodeEnum(value, out, values);
+}
+
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<DocumentPointerEdge>& out) {
+    static constexpr std::array values{
+        DocumentPointerEdge::None, DocumentPointerEdge::Before,
+        DocumentPointerEdge::After};
+    return decodeEnum(value, out, values);
+}
+
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<SemanticScrollTarget>& out) {
+    static constexpr std::array values{
+        SemanticScrollTarget::Document, SemanticScrollTarget::Tree};
     return decodeEnum(value, out, values);
 }
 
@@ -5088,23 +5106,6 @@ bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArg
     return true;
 }
 
-ProtocolValue toValue(SelectionByteRangeArguments const& value) {
-    return ProtocolValue::makeObject(
-        {{"anchor_byte_offset", toValue(value.anchor)},
-         {"active_byte_offset", toValue(value.active)}});
-}
-bool decodePresent(ProtocolValue const& value,
-                   std::optional<SelectionByteRangeArguments>& out) {
-    if (!value.asObject()) return false;
-    auto anchor =
-        requireField<ByteOffset>(value.field("anchor_byte_offset"));
-    auto active =
-        requireField<ByteOffset>(value.field("active_byte_offset"));
-    if (!anchor || !active) return false;
-    out.emplace(SelectionByteRangeArguments{*anchor, *active});
-    return true;
-}
-
 ProtocolValue toValue(ScrollLinesArguments const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("rows", toValue(value.rows));
@@ -5416,7 +5417,6 @@ argumentCodecsByType() {
         std::unordered_map<std::type_index, CommandArgumentCodec> table;
         table.emplace(typeid(TextInputArguments), makeTypedCodec<TextInputArguments>());
         table.emplace(typeid(SelectionCommandArguments), makeTypedCodec<SelectionCommandArguments>());
-        table.emplace(typeid(SelectionByteRangeArguments), makeTypedCodec<SelectionByteRangeArguments>());
         table.emplace(typeid(ScrollLinesArguments), makeTypedCodec<ScrollLinesArguments>());
         table.emplace(typeid(ScrollPagesArguments), makeTypedCodec<ScrollPagesArguments>());
         table.emplace(typeid(ScrollFractionArguments), makeTypedCodec<ScrollFractionArguments>());
@@ -5644,6 +5644,22 @@ std::string ProtocolCodec::encodeClientInput(
                                   : toValue(semantic.stroke));
                 fields.emplace_back("committed_text",
                                     toValue(semantic.committedText));
+            } else if constexpr (std::same_as<Input, ScrollLinesInput>) {
+                fields.emplace_back("kind",
+                                    toValue(ClientInputKind::ScrollLines));
+                fields.emplace_back("basis_revision",
+                                    toValue(semantic.basis.observedRevision));
+                fields.emplace_back("target", toValue(semantic.target));
+                fields.emplace_back("rows", toValue(semantic.rows));
+            } else if constexpr (std::same_as<Input, ScrollFractionInput>) {
+                fields.emplace_back("kind",
+                                    toValue(ClientInputKind::ScrollFraction));
+                fields.emplace_back("basis_revision",
+                                    toValue(semantic.basis.observedRevision));
+                fields.emplace_back("target", toValue(semantic.target));
+                fields.emplace_back("numerator", toValue(semantic.numerator));
+                fields.emplace_back("denominator",
+                                    toValue(semantic.denominator));
             } else {
                 auto addPointer = [&](ClientInputKind kind) {
                     fields.emplace_back("kind", toValue(kind));
@@ -5709,6 +5725,18 @@ std::string ProtocolCodec::encodeClientInput(
                     fields.emplace_back("basis_revision",
                                         toValue(semantic.basis.observedRevision));
                     fields.emplace_back("action_id", toValue(semantic.actionId));
+                } else if constexpr (std::same_as<
+                                         Input, DocumentPointerInput>) {
+                    addPointer(ClientInputKind::Document);
+                    fields.emplace_back("basis_revision",
+                                        toValue(semantic.basis.observedRevision));
+                    fields.emplace_back("position",
+                                        toValue(semantic.position));
+                    fields.emplace_back("additive",
+                                        toValue(semantic.additive));
+                    fields.emplace_back("select_word",
+                                        toValue(semantic.selectWord));
+                    fields.emplace_back("edge", toValue(semantic.edge));
                 }
             }
         },
@@ -5759,6 +5787,49 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         }
         return {ProtocolError::None,
                 ClientInput{ClientKeyInput{stroke, std::move(*text)}}, {}};
+    }
+    if (*kind == ClientInputKind::ScrollLines) {
+        if (!hasExactly(
+                {"kind", "basis_revision", "target", "rows"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client line-scroll input fields are malformed"};
+        }
+        auto basis =
+            requireField<Revision>(payload.field("basis_revision"));
+        auto target =
+            requireField<SemanticScrollTarget>(payload.field("target"));
+        auto rows = requireField<std::int64_t>(payload.field("rows"));
+        if (!basis || !target || !rows || *rows == 0) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client line-scroll input is malformed"};
+        }
+        return {ProtocolError::None,
+                ClientInput{ScrollLinesInput{{*basis}, *target, *rows}}, {}};
+    }
+    if (*kind == ClientInputKind::ScrollFraction) {
+        if (!hasExactly({"kind", "basis_revision", "target", "numerator",
+                         "denominator"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client fraction-scroll input fields are malformed"};
+        }
+        auto basis =
+            requireField<Revision>(payload.field("basis_revision"));
+        auto target =
+            requireField<SemanticScrollTarget>(payload.field("target"));
+        auto numerator =
+            requireField<std::uint32_t>(payload.field("numerator"));
+        auto denominator =
+            requireField<std::uint32_t>(payload.field("denominator"));
+        if (!basis || !target || !numerator || !denominator ||
+            *denominator == 0 || *numerator > *denominator) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client fraction-scroll input is malformed"};
+        }
+        return {
+            ProtocolError::None,
+            ClientInput{ScrollFractionInput{
+                {*basis}, *target, *numerator, *denominator}},
+            {}};
     }
     auto button =
         requireField<InputPointerButton>(payload.field("button"));
@@ -5893,6 +5964,48 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
                        semanticBasis, std::move(*id), *button, *phase}},
                    {}};
         }
+    } else if (*kind == ClientInputKind::Document) {
+        if (!hasExactly({"kind", "button", "phase", "basis_revision",
+                         "position", "additive", "select_word", "edge"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client document input fields are malformed"};
+        }
+        std::optional<ByteOffset> position;
+        auto const* positionField = payload.field("position");
+        if (positionField == nullptr) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client document input target is malformed"};
+        }
+        if (positionField->kind() != ProtocolValue::Kind::NullValue) {
+            auto decodedPosition = requireField<ByteOffset>(positionField);
+            if (!decodedPosition) {
+                return {ProtocolError::MalformedMessage, std::nullopt,
+                        "client document input target is malformed"};
+            }
+            position = *decodedPosition;
+        }
+        auto additive = requireField<bool>(payload.field("additive"));
+        auto selectWord = requireField<bool>(payload.field("select_word"));
+        auto edge =
+            requireField<DocumentPointerEdge>(payload.field("edge"));
+        const auto hasEdge = edge && *edge != DocumentPointerEdge::None;
+        if (!additive || !selectWord || !edge ||
+            (*phase == InputPointerPhase::Press && (!position || hasEdge)) ||
+            (*phase == InputPointerPhase::Move &&
+             (position.has_value() == hasEdge)) ||
+            ((*phase == InputPointerPhase::Release ||
+              *phase == InputPointerPhase::Cancel) &&
+             (position || hasEdge)) ||
+            (*phase != InputPointerPhase::Press &&
+             (*selectWord || *additive))) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client document input gesture is malformed"};
+        }
+        return {ProtocolError::None,
+                ClientInput{DocumentPointerInput{
+                    semanticBasis, position, *additive, *selectWord,
+                    *button, *phase, *edge}},
+                {}};
     }
     return {ProtocolError::MalformedMessage, std::nullopt,
             "client pointer input target is malformed"};

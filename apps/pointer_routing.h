@@ -2,23 +2,21 @@
 
 // Pure pointer-event routing (M8): given a classified hit (from the library
 // `hit_test`), the button/kind, the current drag state, and the caller-resolved
-// targets (document position / candidate / tab id), decide which command(s) the
-// I/O loop should dispatch and how the drag state changes.  This is a pure
+// targets (document position / candidate / tab id), normalize one typed input
+// and decide how native drag state changes. This is a pure
 // function with no terminal or runtime dependency so it can be unit-tested
 // directly; the loop does only decode -> refresh -> hit_test -> resolve -> route
-// -> dispatch.
+// -> input.
 
 #include "ssg_terminal.h"
 
 #include <ssg/ClientInput.h>
 #include <ssg/HitTester.h>
-#include <ssg/Selection.h>
 #include <ssg/StatusActionInvocation.h>
 #include <ssg/TabManager.h>
 #include <ssg/ShellState.h>
 #include <ssg/ExternalModificationFlow.h>
 
-#include <any>
 #include <chrono>
 #include <optional>
 #include <string>
@@ -27,18 +25,6 @@
 #include <vector>
 
 namespace ssg::app {
-
-// One command the loop should dispatch, with its typed argument (empty for a
-// command that takes no payload).
-struct PointerCommand {
-    std::string command_id;
-    std::any payload;
-    // When set, this command runs only if the immediately preceding command in
-    // the plan was accepted. Used for select-then-act sequences (e.g. an external
-    // action after external.select) so a rejected selection of a stale id does not
-    // let the action run against the previously selected file.
-    bool gate_on_previous = false;
-};
 
 // Which scroll a gesture drives, by the surface it targets. Declared here
 // because both the wheel and the gutter routing name surfaces with it.
@@ -60,10 +46,6 @@ struct ScrollableRegionDescriptor {
     ssg::HitRegion content;
     ssg::HitRegion scrollbar;
     WheelTarget target;
-    // The command a gutter gesture dispatches, or empty when the surface's
-    // offset is client-owned and must not round-trip (the picker: its ranked
-    // list is produced client-side for latency, so scrolling it stays local).
-    std::string_view scrollCommand;
 };
 
 // Every scrollable surface. Routing drives from this, so listing a surface here
@@ -121,11 +103,9 @@ struct ClientScroll {
     std::uint32_t denominator = 0;
 };
 
-// The result of routing one pointer event: an ordered command sequence (0, 1,
-// or — for a tree-row click — 2 commands, dispatched in order) plus how the
-// client-local drag state changes.
+// The result of routing one pointer event into the typed library ingress, plus
+// native drag bookkeeping and any client-owned picker scroll.
 struct PointerDispatch {
-    std::vector<PointerCommand> commands;
     std::optional<ssg::ClientInput> semantic_input;
     bool begins_drag = false;  // a press that starts an editor selection drag
     bool ends_drag = false;    // a release that ends a drag
@@ -154,38 +134,24 @@ struct PointerTargets {
     std::optional<ssg::ExternalActionInvocation> external_invocation;
 };
 
-// The index into `baseline` of the selection the click position `P` lands on, or
-// nullopt when it lands on none (the caller then ADDS a caret). A collapsed caret
-// is hit when `P.byteOffset == its offset`; a ranged selection when
-// `lo ≤ P.byteOffset < hi` (exclusive upper: the cell past the range's end does
-// not hit). Compares byte offsets only. When a collapsed caret coexists with a
-// range at the same lower bound (the only overlap `SelectionSet` normalization
-// permits), the FIRST hit in `baseline`'s order is returned -- the caret, which
-// normalizes before a range sharing its lower bound. Pure.
-//
-[[nodiscard]] std::optional<std::size_t> caret_hit_index(
-    std::vector<ssg::Selection> const& baseline, ssg::DocumentPosition position);
-
 // Route one pointer event.  `dragging`/`drag_anchor` are the loop's current
 // drag state.  `alt` is the EFFECTIVE Alt modifier for this event: the app
 // supplies the press event's own Alt to establish an Alt-drag gesture, then the
 // established drag state alone for subsequent drag/release (the per-motion bit
 // is ignored once a drag is under way). During an Alt-drag the app also supplies
-// `alt_drag_baseline`, the selection set captured at press, so the router can
-// rebuild the whole set from an immutable baseline each motion. Pure: depends
-// only on its arguments.
+// Pure: depends only on its arguments.
 [[nodiscard]] PointerDispatch route_pointer(
     ssg::RegionHit const& hit, PointerButton button, PointerKind kind, bool alt,
     bool dragging, std::optional<ssg::DocumentPosition> drag_anchor,
-    PointerTargets const& targets,
-    std::vector<ssg::Selection> const& alt_drag_baseline = {});
+    PointerTargets const& targets);
 
 // The dispatch for a recognized double-click on the editor: select the word at
 // `position` and arm no drag.  A named helper (rather than an inline dispatch in
 // the app loop) so the "double-click selects the word, no drag" decision is a
 // pure, unit-tested unit like route_pointer.
 [[nodiscard]] PointerDispatch double_click_dispatch(
-    ssg::DocumentPosition position);
+    ssg::DocumentPosition position,
+    ssg::Revision observedRevision = ssg::Revision{0});
 
 // Route a mouse-wheel event to the scroll it drives for the region under the
 // pointer: the side panel (or its gutter) scrolls the tree, the palette (or its

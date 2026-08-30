@@ -4,6 +4,7 @@
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/Keymap.h>
 #include <ssg/Picker.h>
+#include <ssg/Selection.h>
 #include <ssg/StatusActionInvocation.h>
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
@@ -33,6 +34,9 @@ enum class ClientInputKind : std::uint8_t {
     StatusAction,
     PublishedUiAction,
     NoticeAction,
+    Document,
+    ScrollLines,
+    ScrollFraction,
 };
 
 enum class InputPointerButton : std::uint8_t {
@@ -46,6 +50,12 @@ enum class InputPointerPhase : std::uint8_t {
     Move,
     Release,
     Cancel,
+};
+
+enum class DocumentPointerEdge : std::uint8_t {
+    None,
+    Before,
+    After,
 };
 
 struct SemanticInputBasis {
@@ -136,11 +146,50 @@ struct NoticeActionPointerInput {
                            const NoticeActionPointerInput&) = default;
 };
 
+struct DocumentPointerInput {
+    SemanticInputBasis basis;
+    std::optional<ByteOffset> position;
+    bool additive = false;
+    bool selectWord = false;
+    InputPointerButton button = InputPointerButton::Primary;
+    InputPointerPhase phase = InputPointerPhase::Press;
+    DocumentPointerEdge edge = DocumentPointerEdge::None;
+
+    friend bool operator==(const DocumentPointerInput&,
+                           const DocumentPointerInput&) = default;
+};
+
+enum class SemanticScrollTarget : std::uint8_t {
+    Document,
+    Tree,
+};
+
+struct ScrollLinesInput {
+    SemanticInputBasis basis;
+    SemanticScrollTarget target = SemanticScrollTarget::Document;
+    std::int64_t rows = 0;
+
+    friend bool operator==(const ScrollLinesInput&,
+                           const ScrollLinesInput&) = default;
+};
+
+struct ScrollFractionInput {
+    SemanticInputBasis basis;
+    SemanticScrollTarget target = SemanticScrollTarget::Document;
+    std::uint32_t numerator = 0;
+    std::uint32_t denominator = 1;
+
+    friend bool operator==(const ScrollFractionInput&,
+                           const ScrollFractionInput&) = default;
+};
+
 using ClientInput =
     std::variant<ClientKeyInput, TabPointerInput, TreePointerInput,
                  PickerPointerInput, PromptControlPointerInput,
                  ExternalActionPointerInput, StatusActionPointerInput,
-                 PublishedUiActionPointerInput, NoticeActionPointerInput>;
+                 PublishedUiActionPointerInput, NoticeActionPointerInput,
+                 DocumentPointerInput, ScrollLinesInput,
+                 ScrollFractionInput>;
 
 enum class ClientOwnedInputKind : std::uint8_t {
     AppendText,

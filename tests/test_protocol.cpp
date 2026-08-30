@@ -325,24 +325,6 @@ TEST(commandRequestRoundTripsCompoundBrowserActions) {
     }
     {
         ssg::ClientCommand const command{
-            "select.set_byte_range", ssg::Revision{5},
-            ssg::SelectionByteRangeArguments{ssg::ByteOffset{2},
-                                             ssg::ByteOffset{7}}};
-        auto decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
-            ssg::ProtocolCodec{}.encodeCommandRequest(command, registry),
-            registry);
-        ASSERT_TRUE(decoded.accepted());
-        auto const* arguments =
-            std::any_cast<ssg::SelectionByteRangeArguments>(
-                &decoded.command->payload);
-        ASSERT_TRUE(arguments != nullptr);
-        if (arguments) {
-            ASSERT_EQ(arguments->anchor.value(), std::size_t{2});
-            ASSERT_EQ(arguments->active.value(), std::size_t{7});
-        }
-    }
-    {
-        ssg::ClientCommand const command{
             "external.invoke_action", ssg::Revision{5},
             ssg::ExternalActionInvocation{
                 ssg::DiffFileId{"external:file"},
@@ -1622,6 +1604,16 @@ TEST(semanticClientInputVariantsRoundTripThroughTheWire) {
             Button::Primary, Phase::Press},
         ssg::NoticeActionPointerInput{
             basis, "draft.notice.dismiss", Button::Primary, Phase::Press},
+        ssg::DocumentPointerInput{
+            basis, ssg::ByteOffset{12}, false, false,
+            Button::Primary, Phase::Move},
+        ssg::DocumentPointerInput{
+            basis, std::nullopt, false, false,
+            Button::Primary, Phase::Move, ssg::DocumentPointerEdge::After},
+        ssg::ScrollLinesInput{
+            basis, ssg::SemanticScrollTarget::Tree, -3},
+        ssg::ScrollFractionInput{
+            basis, ssg::SemanticScrollTarget::Document, 2, 7},
     };
     for (auto const& input : inputs) {
         auto const decoded = ssg::ProtocolCodec{}.decodeClientInput(
@@ -1753,6 +1745,40 @@ TEST(semanticClientInputVariantsRejectMalformedAndAmbiguousShapes) {
             ssg::ProtocolMessageKind::StatusActionInvocation)) +
         statusWithExtra;
     ASSERT_EQ(codec.decodeStatusActionInvocation(statusWithExtra).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto missingDocumentTarget = codec.encodeClientInput(
+        ssg::DocumentPointerInput{basis, std::nullopt});
+    ASSERT_EQ(codec.decodeClientInput(missingDocumentTarget).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto wordMove = codec.encodeClientInput(
+        ssg::DocumentPointerInput{
+            basis, ssg::ByteOffset{2}, false, true,
+            ssg::InputPointerButton::Primary,
+            ssg::InputPointerPhase::Move});
+    ASSERT_EQ(codec.decodeClientInput(wordMove).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto edgeWithPosition = codec.encodeClientInput(
+        ssg::DocumentPointerInput{
+            basis, ssg::ByteOffset{2}, false, false,
+            ssg::InputPointerButton::Primary,
+            ssg::InputPointerPhase::Move,
+            ssg::DocumentPointerEdge::After});
+    ASSERT_EQ(codec.decodeClientInput(edgeWithPosition).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto zeroLines = codec.encodeClientInput(
+        ssg::ScrollLinesInput{
+            basis, ssg::SemanticScrollTarget::Document, 0});
+    ASSERT_EQ(codec.decodeClientInput(zeroLines).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto invalidFraction = codec.encodeClientInput(
+        ssg::ScrollFractionInput{
+            basis, ssg::SemanticScrollTarget::Tree, 4, 3});
+    ASSERT_EQ(codec.decodeClientInput(invalidFraction).error,
               ssg::ProtocolError::MalformedMessage);
 
     ssg::ProtocolLimits limits;
@@ -2051,6 +2077,15 @@ canonicalClientInputFixtures() {
         {"client_input_notice_action.hex",
          ssg::NoticeActionPointerInput{
              {ssg::Revision{12}}, "draft.notice.dismiss"}},
+        {"client_input_document.hex",
+         ssg::DocumentPointerInput{
+             {ssg::Revision{15}}, ssg::ByteOffset{8}, true, false}},
+        {"client_input_scroll_lines.hex",
+         ssg::ScrollLinesInput{
+             {ssg::Revision{16}}, ssg::SemanticScrollTarget::Tree, -4}},
+        {"client_input_scroll_fraction.hex",
+         ssg::ScrollFractionInput{
+             {ssg::Revision{17}}, ssg::SemanticScrollTarget::Document, 3, 8}},
     };
 }
 

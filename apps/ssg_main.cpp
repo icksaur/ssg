@@ -900,17 +900,13 @@ int main(int argc, char** argv) {
     // resolved with the shared list-scroll
     // primitive.
     ssg::PaletteWindowState picker{};
-    // Mouse drag state (M8): a left press on the editor records the anchor and
-    // enters dragging; subsequent motion extends the selection. Client-local and
-    // transient — the server only ever sees cursor.set_position / select.set_range.
+    // Native drag tracking retains only the device gesture anchor. Selection
+    // policy and authoritative gesture state live in EditorSession::input.
     bool dragging = false;
     std::optional<ssg::DocumentPosition> dragAnchor;
-    // Alt-drag (multi-cursor) state: fixed at press, held for the gesture. The
-    // baseline is the selection set captured BEFORE the press added its caret, so
-    // every motion rebuilds the whole set from an immutable list (baseline + the
-    // dragged range) and the other cursors never move.
+    // Alt-drag state is fixed at press. The library owns the baseline selection
+    // set and all multi-cursor policy for the gesture.
     bool altDrag = false;
-    std::vector<ssg::Selection> altDragBaseline;
     // Which scrollbar gutter a press landed on, held until release.  A drag is
     // routed to THIS gutter regardless of where the pointer has since moved, and
     // the cursor is hidden while it is set: during a drag the caret is not what
@@ -1291,39 +1287,16 @@ int main(int argc, char** argv) {
                     continue;
                 }
                 if (!ready.input) {
-                    dispatch("view.scroll_lines", ssg::ScrollLinesArguments{*dragEdge});
-                    auto scrolled = refresh();
-                    if (scrolled && dragAnchor &&
-                        !scrolled->presentation()->shell.panes.empty()) {
-                        auto const content = scrolled->presentation()->shell.panes.front().content;
-                        int const edgeRow =
-                            *dragEdge < 0 ? content.y : content.bottom() - 1;
-                        int const column = std::clamp(lastPointerColumn, content.x,
-                                                      content.right() - 1);
-                        auto hit = ssg::HitTester{*scrolled}.at(column, edgeRow);
-                        if (hit.region == ssg::HitRegion::Editor) {
-                            auto active = ssg::SelectionNavigator::resolvePosition(
-                                scrolled->sections().document.text,
-                                ssg::ByteOffset{hit.byteOffset});
-                            if (active) {
-                                if (altDrag) {
-                                    std::vector<ssg::Selection> ranges =
-                                        altDragBaseline;
-                                    ranges.push_back(
-                                        ssg::Selection{*dragAnchor, *active});
-                                    dispatch("select.set_ranges",
-                                             ssg::SelectionCommandArguments{
-                                                 std::nullopt, std::nullopt,
-                                                 std::move(ranges)});
-                                } else {
-                                    dispatch("select.set_range",
-                                             ssg::SelectionCommandArguments{
-                                                 std::nullopt,
-                                                 ssg::Selection{*dragAnchor,
-                                                                *active}});
-                                }
-                            }
-                        }
+                    auto result = runtime.input(
+                        client, ssg::DocumentPointerInput{
+                                    {runtime.revision()}, std::nullopt, false,
+                                    false, ssg::InputPointerButton::Primary,
+                                    ssg::InputPointerPhase::Move,
+                                    *dragEdge < 0
+                                        ? ssg::DocumentPointerEdge::Before
+                                        : ssg::DocumentPointerEdge::After});
+                    if (result.command) {
+                        noteEffects(result.command->effects);
                     }
                     continue;  // re-render with the scrolled viewport, then re-evaluate
                 }
@@ -1581,40 +1554,20 @@ int main(int argc, char** argv) {
                     decoded.pointer.kind == ssg::app::PointerKind::press
                         ? decoded.pointer.alt
                         : altDrag;
-                // Capture the baseline BEFORE dispatching the add so it excludes
-                // the caret this press is about to add.
-                if (!doubleClickPosition &&
-                    decoded.pointer.kind == ssg::app::PointerKind::press &&
-                    effectiveAlt && hit.region == ssg::HitRegion::Editor &&
-                    targets.document_position && snapshot) {
-                    auto const& items =
-                        snapshot->sections().selection.items();
-                    altDragBaseline.assign(items.begin(), items.end());
-                }
                 auto plan =
                     doubleClickPosition
-                        ? ssg::app::double_click_dispatch(*doubleClickPosition)
+                        ? ssg::app::double_click_dispatch(
+                              *doubleClickPosition,
+                              targets.observed_revision)
                         : ssg::app::route_pointer(
                               hit, decoded.pointer.button, decoded.pointer.kind,
-                              effectiveAlt, dragging, dragAnchor, targets,
-                              altDragBaseline);
+                              effectiveAlt, dragging, dragAnchor, targets);
                 if (plan.semantic_input) {
                     auto const pointerResult =
                         runtime.input(client, *plan.semantic_input);
                     if (pointerResult.command) {
                         noteEffects(pointerResult.command->effects);
                     }
-                }
-                bool previousAccepted = true;
-                for (auto const& command : plan.commands) {
-                    if (command.gate_on_previous && !previousAccepted) {
-                        continue;
-                    }
-                    auto const pointerResult =
-                        runtime.dispatch(client, {command.command_id,
-                                                  runtime.revision(), command.payload});
-                    noteEffects(pointerResult.effects);
-                    previousAccepted = pointerResult.accepted();
                 }
                 // A gutter gesture on a client-owned surface has no command to
                 // dispatch (the picker's offset must not round-trip), so the
@@ -1641,7 +1594,6 @@ int main(int argc, char** argv) {
                     dragging = true;
                     dragAnchor = targets.document_position;
                     altDrag = effectiveAlt;
-                    if (!altDrag) altDragBaseline.clear();
                 }
                 // A gutter thumb drag ends on any release; the press that starts
                 // it, and the grab offset it captures, are handled where `hit` is
@@ -1653,7 +1605,6 @@ int main(int argc, char** argv) {
                     dragging = false;
                     dragAnchor.reset();
                     altDrag = false;
-                    altDragBaseline.clear();
                 }
                 continue;
             }
@@ -1679,12 +1630,26 @@ int main(int argc, char** argv) {
                 }
                 switch (ssg::app::route_wheel(region)) {
                     case ssg::app::WheelTarget::editor:
-                        dispatch("view.scroll_lines",
-                                 ssg::ScrollLinesArguments{decoded.scroll});
+                        if (auto result = runtime.input(
+                                client,
+                                ssg::ScrollLinesInput{
+                                    {runtime.revision()},
+                                    ssg::SemanticScrollTarget::Document,
+                                    decoded.scroll});
+                            result.command) {
+                            noteEffects(result.command->effects);
+                        }
                         break;
                     case ssg::app::WheelTarget::tree:
-                        dispatch("tree.scroll",
-                                 ssg::ScrollLinesArguments{decoded.scroll});
+                        if (auto result = runtime.input(
+                                client,
+                                ssg::ScrollLinesInput{
+                                    {runtime.revision()},
+                                    ssg::SemanticScrollTarget::Tree,
+                                    decoded.scroll});
+                            result.command) {
+                            noteEffects(result.command->effects);
+                        }
                         break;
                     case ssg::app::WheelTarget::palette:
                         scrollPalette(decoded.scroll);

@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 200 commands.
+There are 199 commands.
 
 ## clipboard-register
 
@@ -232,7 +232,6 @@ There are 200 commands.
 | `select.word_at_position` | Word At Position | selection | lua |
 | `view.reveal_caret` | Reveal Caret | selection | lua |
 | `view.center_caret` | Center Caret | selection | lua |
-| `select.set_byte_range` | Set Selection From Byte Offsets | selection byte range | — |
 
 ## settings-model
 

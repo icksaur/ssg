@@ -14,7 +14,7 @@ import {
   queuePickerSubmit, settlePickerLifecycle, pickerPresentationFromSubmit,
   resolveKeyCommand, predictPickerInput, applyPickerInputPrediction,
   CLIENT_OWNED_INPUT,
-  encodeSelectionByteRange, encodeTabPointerInput, markedTextByteOffset,
+  encodeDocumentPointerInput, encodeTabPointerInput, markedTextByteOffset,
   applySessionDeltaCopy, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
   webExtentCss, applyNodeSemanticStyle, getOrCreateStyledNode,
@@ -943,6 +943,8 @@ const pointerSelection = {
   inFlight: null,
   queued: null,
   point: null,
+  additive: false,
+  selectWord: false,
 };
 let commandRequests = [];
 
@@ -971,6 +973,8 @@ function clearPointerGesture() {
   pointerSelection.basis = null;
   pointerSelection.released = false;
   pointerSelection.point = null;
+  pointerSelection.additive = false;
+  pointerSelection.selectWord = false;
 }
 
 function cancelPointerGesture() {
@@ -1084,14 +1088,44 @@ function flushPointerPoint() {
     active: offset,
     basis: pointerSelection.basis,
     retries: 0,
+    additive: pointerSelection.additive,
+    selectWord: pointerSelection.selectWord,
   };
   renderPointerPreview();
   if (pointerSelection.released) finishPointerGesture();
 }
 
 function dispatchPointerRange(range) {
-  const sent = sendCommandFrame(encodeSelectionByteRange(
-    range.anchor, range.active, state.revision), 'pointer');
+  const sent = sendInputFrame(
+    encodeDocumentPointerInput(range.anchor, state.revision, {
+      additive: range.additive,
+      selectWord: range.selectWord,
+    }),
+    { pointerRange: { ...range, stage: 'press' } });
+  if (!sent) {
+    cancelPointerSelection();
+    return false;
+  }
+  pointerSelection.inFlight = range;
+  return true;
+}
+
+function dispatchPointerRelease(range) {
+  const sent = sendInputFrame(
+    encodeDocumentPointerInput(null, state.revision, { phase: 2 }),
+    { pointerRange: { ...range, stage: 'release' } });
+  if (!sent) {
+    cancelPointerSelection();
+    return false;
+  }
+  pointerSelection.inFlight = range;
+  return true;
+}
+
+function dispatchPointerMove(range) {
+  const sent = sendInputFrame(
+    encodeDocumentPointerInput(range.active, state.revision, { phase: 1 }),
+    { pointerRange: { ...range, stage: 'move' } });
   if (!sent) {
     cancelPointerSelection();
     return false;
@@ -1111,6 +1145,8 @@ function finishPointerGesture() {
     active: pointerSelection.active,
     basis: pointerSelection.basis,
     retries: 0,
+    additive: pointerSelection.additive,
+    selectWord: pointerSelection.selectWord,
   };
   clearPointerGesture();
   pointerSelection.preview = range;
@@ -1141,6 +1177,8 @@ function beginPointerSelection(host, event) {
   pointerSelection.basis = null;
   pointerSelection.released = false;
   pointerSelection.point = null;
+  pointerSelection.additive = event.altKey;
+  pointerSelection.selectWord = event.detail >= 2;
   host.setPointerCapture(event.pointerId);
   retainPointerPoint(host, event);
 }
@@ -1318,10 +1356,6 @@ function applyProtocolFrame(buffer) {
       return false;
     }
     commandRequests = settled.queue;
-    if (settled.owner === 'pointer') {
-      settlePointerRange(num(payload.error));
-      frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
-    }
   } else if (inbound === 'input-result') {
     const completedInput = state.inputQueue[0];
     const settled = settleInput(
@@ -1332,6 +1366,22 @@ function applyProtocolFrame(buffer) {
     }
     state.inputQueue = settled.inputQueue;
     state.pending = settled.pending;
+    if (completedInput && completedInput.pointerRange) {
+      const range = completedInput.pointerRange;
+      const error = payload.command == null ? 1 : num(payload.command.error);
+      if (range.stage === 'press' && error === 0) {
+        if (!range.selectWord && range.anchor !== range.active) {
+          dispatchPointerMove(range);
+        } else {
+          dispatchPointerRelease(range);
+        }
+      } else if (range.stage === 'move' && error === 0) {
+        dispatchPointerRelease(range);
+      } else {
+        settlePointerRange(error);
+      }
+      frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
+    } else {
     const pickerLifecycleCompleted = completedInput &&
       (completedInput.pickerOpenMode != null || completedInput.pickerClose);
     if (pickerLifecycleCompleted) {
@@ -1410,6 +1460,7 @@ function applyProtocolFrame(buffer) {
       };
     } else {
       frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
+    }
     }
   } else {
     // Additive server messages are safe to ignore. Required incompatible

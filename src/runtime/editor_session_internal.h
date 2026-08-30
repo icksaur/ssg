@@ -356,6 +356,15 @@ struct EditorSession::Impl final : CommandServices,
     std::map<ViewId, ViewPresentationState> viewPresentations;
     std::map<ViewId, std::size_t> viewReferences;
     std::map<ClientId, ViewId> clientViews;
+    struct DocumentPointerGesture {
+        FileDocumentId documentId;
+        Revision documentRevision;
+        DocumentPosition anchor;
+        DocumentPosition active;
+        bool additive = false;
+        std::vector<Selection> baseline;
+    };
+    std::map<ClientId, DocumentPointerGesture> documentPointerGestures;
     [[nodiscard]] ViewPresentationState& presentation(ViewId viewId);
     [[nodiscard]] ViewPresentationState const& presentation(ViewId viewId) const;
     bool wordWrap = false;

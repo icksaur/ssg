@@ -3115,6 +3115,7 @@ bool EditorSession::detach(ClientId clientId) {
     (void)impl_->follow.detachClient(clientId);
     auto const detached = impl_->session->detach(clientId);
     if (detached && attached != impl_->clientViews.end()) {
+        impl_->documentPointerGestures.erase(clientId);
         auto const viewId = attached->second;
         impl_->clientViews.erase(attached);
         auto references = impl_->viewReferences.find(viewId);
@@ -3384,8 +3385,19 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                                       impl_->session->revision(),
                                       std::move(message), {}}};
                 };
-                if (semantic.phase != InputPointerPhase::Press) {
-                    return unhandled();
+                if constexpr (!std::same_as<Input, DocumentPointerInput> &&
+                              !std::same_as<Input, ScrollLinesInput> &&
+                              !std::same_as<Input, ScrollFractionInput>) {
+                    if (semantic.phase != InputPointerPhase::Press) {
+                        return unhandled();
+                    }
+                }
+                if constexpr (!std::same_as<Input, ScrollLinesInput> &&
+                              !std::same_as<Input, ScrollFractionInput>) {
+                    if (semantic.button != InputPointerButton::Primary &&
+                        !std::same_as<Input, TabPointerInput>) {
+                        return unhandled();
+                    }
                 }
                 auto dispatch = [&](CommandName command,
                                     std::any payload) -> ClientInputResult {
@@ -3400,6 +3412,12 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                     return {ClientInputOutcome::Dispatched, std::nullopt,
                             std::move(result), activation};
                 };
+                if constexpr (std::same_as<Input, DocumentPointerInput>) {
+                    if (semantic.phase == InputPointerPhase::Press ||
+                        semantic.phase == InputPointerPhase::Cancel) {
+                        impl_->documentPointerGestures.erase(clientId);
+                    }
+                }
                 if constexpr (!std::same_as<Input, PickerPointerInput>) {
                     if (semantic.basis.observedRevision !=
                         impl_->session->revision()) {
@@ -3410,7 +3428,213 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                                           "semantic input basis is stale", {}}};
                     }
                 }
-                if constexpr (std::same_as<Input, TabPointerInput>) {
+                if constexpr (std::same_as<Input, ScrollLinesInput>) {
+                    if (semantic.rows == 0) {
+                        return rejectTarget(
+                            "line-scroll input must move at least one row");
+                    }
+                    switch (semantic.target) {
+                        case SemanticScrollTarget::Document:
+                            return dispatch(
+                                "view.scroll_lines",
+                                ScrollLinesArguments{semantic.rows});
+                        case SemanticScrollTarget::Tree:
+                            return dispatch(
+                                "tree.scroll",
+                                ScrollLinesArguments{semantic.rows});
+                    }
+                    return rejectTarget("line-scroll target is invalid");
+                } else if constexpr (std::same_as<Input,
+                                                  ScrollFractionInput>) {
+                    if (semantic.denominator == 0 ||
+                        semantic.numerator > semantic.denominator) {
+                        return rejectTarget(
+                            "fraction-scroll input is invalid");
+                    }
+                    const auto fraction = ScrollFractionArguments{
+                        semantic.numerator, semantic.denominator};
+                    switch (semantic.target) {
+                        case SemanticScrollTarget::Document:
+                            return dispatch("view.scroll_to_fraction",
+                                            fraction);
+                        case SemanticScrollTarget::Tree:
+                            return dispatch("tree.scroll_to_fraction",
+                                            fraction);
+                    }
+                    return rejectTarget("fraction-scroll target is invalid");
+                } else if constexpr (std::same_as<Input,
+                                                  DocumentPointerInput>) {
+                    const auto handled = [&] {
+                        return ClientInputResult{
+                            ClientInputOutcome::Dispatched, std::nullopt,
+                            CommandResult{CommandError::None,
+                                          impl_->session->revision(), {}, {}}};
+                    };
+                    if (semantic.phase == InputPointerPhase::Cancel) {
+                        impl_->documentPointerGestures.erase(clientId);
+                        return handled();
+                    }
+                    const auto resolvePosition = [&]()
+                        -> std::optional<DocumentPosition> {
+                        if (!semantic.position) return std::nullopt;
+                        return SelectionNavigator::resolvePosition(
+                            impl_->activeText(), *semantic.position);
+                    };
+                    if (semantic.phase == InputPointerPhase::Press) {
+                        auto position = resolvePosition();
+                        auto documentId = impl_->activeDocumentId();
+                        if (!position || !documentId) {
+                            return rejectTarget(
+                                "document pointer target is not actionable");
+                        }
+                        if (semantic.selectWord) {
+                            return dispatch(
+                                "select.word_at_position",
+                                SelectionCommandArguments{*position,
+                                                          std::nullopt});
+                        }
+                        auto const& items = impl_->selection.selections.items();
+                        std::vector<Selection> baseline{
+                            items.begin(), items.end()};
+                        if (semantic.additive && baseline.size() > 1) {
+                            auto const hit = std::find_if(
+                                baseline.begin(), baseline.end(),
+                                [&](Selection const& selection) {
+                                    auto const offset =
+                                        position->byteOffset.value();
+                                    auto const lower =
+                                        selection.lower().byteOffset.value();
+                                    auto const upper =
+                                        selection.upper().byteOffset.value();
+                                    return lower == upper ? offset == lower
+                                                          : lower <= offset &&
+                                                                offset < upper;
+                                });
+                            if (hit != baseline.end()) {
+                                baseline.erase(hit);
+                                return dispatch(
+                                    "select.set_ranges",
+                                    SelectionCommandArguments{
+                                        std::nullopt, std::nullopt,
+                                        std::move(baseline)});
+                            }
+                        }
+                        impl_->documentPointerGestures.insert_or_assign(
+                            clientId,
+                            EditorSession::Impl::DocumentPointerGesture{
+                                *documentId,
+                                impl_->activeDocument()->revision(),
+                                *position, *position, semantic.additive,
+                                baseline});
+                        auto result =
+                            semantic.additive
+                                ? dispatch(
+                                      "select.add_range",
+                                      SelectionCommandArguments{
+                                          std::nullopt,
+                                          Selection{*position, *position}})
+                                : dispatch(
+                                      "cursor.set_position",
+                                      SelectionCommandArguments{*position,
+                                                                std::nullopt});
+                        if (!result.command || !result.command->accepted()) {
+                            impl_->documentPointerGestures.erase(clientId);
+                        }
+                        return result;
+                    }
+                    auto gesture =
+                        impl_->documentPointerGestures.find(clientId);
+                    if (gesture == impl_->documentPointerGestures.end()) {
+                        return unhandled();
+                    }
+                    if (impl_->activeDocumentId() !=
+                        std::optional<FileDocumentId>{
+                            gesture->second.documentId}) {
+                        impl_->documentPointerGestures.erase(gesture);
+                        return rejectTarget(
+                            "document pointer gesture target changed");
+                    }
+                    if (impl_->activeDocument()->revision() !=
+                        gesture->second.documentRevision) {
+                        impl_->documentPointerGestures.erase(gesture);
+                        return rejectTarget(
+                            "document changed during pointer gesture");
+                    }
+                    auto position = resolvePosition();
+                    if (semantic.edge != DocumentPointerEdge::None) {
+                        const auto client =
+                            impl_->session->attachedClient(clientId);
+                        if (!client) {
+                            return rejectTarget(
+                                "document edge gesture client is detached");
+                        }
+                        auto& presentation =
+                            impl_->presentation(client->viewId);
+                        SelectionViewState edgeState{
+                            SelectionSet{{Selection{
+                                gesture->second.anchor,
+                                gesture->second.active}}},
+                            presentation.requestedFirstVisualRow,
+                            presentation.requestedFirstVisualColumn,
+                            presentation.desiredCell};
+                        const ViewportDimensions viewport{
+                            std::max<std::uint32_t>(
+                                presentation.paneContentColumns, 1),
+                            std::max<std::uint32_t>(
+                                presentation.paneContentRows, 1)};
+                        const auto diff = impl_->activeDiffFile();
+                        auto advanced = SelectionNavigator{}.apply(
+                            impl_->activeText(), edgeState,
+                            semantic.edge == DocumentPointerEdge::Before
+                                ? SelectionCommand::SelectLineUp
+                                : SelectionCommand::SelectLineDown,
+                            viewport, {}, {}, 4, impl_->wordWrap,
+                            diff ? &*diff : nullptr);
+                        if (!advanced.accepted()) {
+                            return rejectTarget(advanced.message);
+                        }
+                        if (advanced.delta.replacement) {
+                            position = advanced.delta.replacement->selections
+                                           .primary()
+                                           .active;
+                        } else {
+                            position = gesture->second.active;
+                        }
+                    }
+                    if (!position &&
+                        semantic.phase == InputPointerPhase::Move) {
+                        return rejectTarget(
+                            "document pointer target is not actionable");
+                    }
+                    ClientInputResult result = handled();
+                    if (position) {
+                        if (gesture->second.additive) {
+                            auto ranges = gesture->second.baseline;
+                            ranges.push_back(Selection{
+                                gesture->second.anchor, *position});
+                            result = dispatch(
+                                "select.set_ranges",
+                                SelectionCommandArguments{
+                                    std::nullopt, std::nullopt,
+                                    std::move(ranges)});
+                        } else {
+                            result = dispatch(
+                                "select.set_range",
+                                SelectionCommandArguments{
+                                    std::nullopt,
+                                    Selection{gesture->second.anchor,
+                                              *position}});
+                        }
+                        if (result.command && result.command->accepted() &&
+                            position) {
+                            gesture->second.active = *position;
+                        }
+                    }
+                    if (semantic.phase == InputPointerPhase::Release) {
+                        impl_->documentPointerGestures.erase(clientId);
+                    }
+                    return result;
+                } else if constexpr (std::same_as<Input, TabPointerInput>) {
                     if (semantic.button == InputPointerButton::Primary) {
                         return dispatch("tab.activate", semantic.tabId);
                     }

@@ -34,7 +34,6 @@ std::unordered_map<std::type_index, std::string_view> const& argumentNames() {
     static std::unordered_map<std::type_index, std::string_view> const names{
         {typeid(TextInputArguments), "text"},
         {typeid(SelectionCommandArguments), "selection"},
-        {typeid(SelectionByteRangeArguments), "selection byte range"},
         {typeid(ScrollLinesArguments), "scroll lines"},
         {typeid(ScrollPagesArguments), "scroll pages"},
         {typeid(ScrollFractionArguments), "scroll fraction"},
