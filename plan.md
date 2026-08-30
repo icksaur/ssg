@@ -110,7 +110,7 @@ round-trip.
 
 ## Staged roadmap
 
-### 0. Establish complete seam oracles
+### 0. Establish complete seam oracles (complete)
 
 - Add exhaustive C++ and JavaScript session-delta replay coverage. Perturb
   every semantic field and prove snapshot -> delta -> replay equality,
