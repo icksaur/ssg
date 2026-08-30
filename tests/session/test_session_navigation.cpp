@@ -1743,6 +1743,132 @@ TEST(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision) {
               std::optional<ssg::PickerActivation>{second});
 }
 
+TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorSession::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId client{1};
+    const ssg::ViewportDimensions viewport{80, 24};
+    ASSERT_TRUE(runtime
+                    .attach({client, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client, {"file.open", runtime.revision(),
+                                       std::string{"needle.txt"}})
+                    .accepted());
+    auto document = runtime.present(client, viewport);
+    ASSERT_TRUE(document.has_value());
+    if (!document || !document->sections().tabs.active) return;
+    const auto documentTab = *document->sections().tabs.active;
+
+    ASSERT_TRUE(
+        runtime.dispatch(client, {"file.new", runtime.revision(), {}}).accepted());
+    auto scratch = runtime.present(client, viewport);
+    ASSERT_TRUE(scratch.has_value());
+    if (!scratch || !scratch->sections().tabs.active) return;
+    const auto scratchTab = *scratch->sections().tabs.active;
+    auto activate = runtime.input(
+        client, ssg::TabPointerInput{{scratch->revision()}, documentTab});
+    ASSERT_EQ(activate.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_TRUE(activate.command.has_value() && activate.command->accepted());
+    ASSERT_EQ(runtime.present(client, viewport)->sections().tabs.active,
+              std::optional<ssg::TabId>{documentTab});
+
+    auto beforeStale = runtime.present(client, viewport);
+    ASSERT_TRUE(beforeStale.has_value());
+    if (!beforeStale) return;
+    auto stale = runtime.input(
+        client,
+        ssg::TabPointerInput{
+            {ssg::Revision{beforeStale->revision().value() - 1}}, scratchTab});
+    ASSERT_EQ(stale.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_TRUE(stale.command.has_value());
+    ASSERT_EQ(stale.command->error, ssg::CommandError::StaleRevision);
+    ASSERT_EQ(runtime.present(client, viewport)->sections().tabs.active,
+              beforeStale->sections().tabs.active);
+
+    auto closeBasis = runtime.present(client, viewport);
+    ASSERT_TRUE(closeBasis.has_value());
+    if (!closeBasis) return;
+    auto close = runtime.input(
+        client,
+        ssg::TabPointerInput{{closeBasis->revision()}, scratchTab,
+                             ssg::InputPointerButton::Auxiliary});
+    ASSERT_TRUE(close.command.has_value() && close.command->accepted());
+    auto afterClose = runtime.present(client, viewport);
+    ASSERT_TRUE(afterClose.has_value());
+    ASSERT_TRUE(std::none_of(
+        afterClose->sections().tabs.tabs.begin(),
+        afterClose->sections().tabs.tabs.end(),
+        [&](const ssg::TabState& tab) { return tab.id == scratchTab; }));
+
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"palette.open", runtime.revision(), {}})
+                    .accepted());
+    auto palette = runtime.present(client, viewport);
+    ASSERT_TRUE(palette.has_value());
+    if (!palette || !palette->sections().palette.activePicker) return;
+    const auto activation = *palette->sections().palette.activePicker;
+    auto submit = runtime.input(
+        client,
+        ssg::PickerPointerInput{activation, "panel.toggle"});
+    ASSERT_TRUE(submit.command.has_value() && submit.command->accepted());
+    auto afterSubmit = runtime.present(client, viewport);
+    ASSERT_TRUE(afterSubmit.has_value());
+    ASSERT_FALSE(afterSubmit->sections().palette.activePicker.has_value());
+    ASSERT_TRUE(afterSubmit->presentation()->shell.panel.has_value());
+
+    auto const actionNode = std::find_if(
+        afterSubmit->sections().uiState.nodes.begin(),
+        afterSubmit->sections().uiState.nodes.end(), [](auto const& node) {
+            return node.leaf && node.leaf->command &&
+                   !node.leaf->command->empty();
+        });
+    ASSERT_TRUE(actionNode != afterSubmit->sections().uiState.nodes.end());
+    if (actionNode == afterSubmit->sections().uiState.nodes.end()) return;
+    const auto revisionBeforeInvalid = runtime.revision();
+    auto invalidUiAction = runtime.input(
+        client, ssg::PublishedUiActionPointerInput{
+                    {revisionBeforeInvalid},
+                    afterSubmit->sections().uiState.generation,
+                    ssg::UiNodeId{"missing.action"}});
+    ASSERT_EQ(invalidUiAction.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_EQ(runtime.revision(), revisionBeforeInvalid);
+
+    auto publishedAction = runtime.input(
+        client, ssg::PublishedUiActionPointerInput{
+                    {runtime.revision()},
+                    afterSubmit->sections().uiState.generation,
+                    actionNode->id});
+    ASSERT_TRUE(publishedAction.command.has_value() &&
+                publishedAction.command->accepted());
+
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"replace.open", runtime.revision(), {}})
+                    .accepted());
+    auto replace = runtime.present(client, viewport);
+    ASSERT_TRUE(replace.has_value() &&
+                replace->sections().promptView.has_value());
+    if (!replace || !replace->sections().promptView) return;
+    auto focusReplacement = runtime.input(
+        client, ssg::PromptControlPointerInput{
+                    {replace->revision()}, "replace.replacement"});
+    ASSERT_TRUE(focusReplacement.command.has_value() &&
+                focusReplacement.command->accepted());
+    auto focused = runtime.present(client, viewport);
+    ASSERT_TRUE(focused.has_value() &&
+                focused->sections().promptView.has_value());
+    if (focused && focused->sections().promptView) {
+        ASSERT_EQ(focused->sections().promptView->activeInput, std::size_t{1});
+    }
+}
+
 TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
     for (auto const origin : {ssg::InvocationOrigin::InProcess,
                               ssg::InvocationOrigin::Websocket}) {
@@ -2727,6 +2853,7 @@ int main() {
     RUN(websocketPickerSubmissionRequiresAndClosesTheAuthoritativePicker);
     RUN(commandPickerSubmissionHasOriginParity);
     RUN(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision);
+    RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
     RUN(failedSelectedCommandLeavesPickerOpenForEveryOrigin);
     RUN(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker);
     RUN(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation);

@@ -201,7 +201,7 @@ export function encodeValue(value) {
 }
 
 export function encodeMessage(kind, payload) {
-  return concat([new Uint8Array([3, kind]), encodeValue(payload)]);
+  return concat([new Uint8Array([4, kind]), encodeValue(payload)]);
 }
 
 export function decodeMessage(buffer) {
@@ -209,7 +209,7 @@ export function decodeMessage(buffer) {
   if (dv.byteLength > PROTOCOL_LIMITS.messageBytes) {
     throw new Error('protocol message length exceeded');
   }
-  if (dv.byteLength < 3 || dv.getUint8(0) !== 3) {
+  if (dv.byteLength < 3 || dv.getUint8(0) !== 4) {
     throw new Error('unsupported protocol frame');
   }
   const kind = dv.getUint8(1);
@@ -238,7 +238,7 @@ export function encodeCommandRequest(id, baseRevision, payload = null) {
 export function encodeClientInput({ code = '', control = false, alt = false,
                                     meta = false, shift = false, text = '' }) {
   const stroke = code ? { code, control, alt, meta, shift } : null;
-  return encodeMessage(7, { stroke, committed_text: text });
+  return encodeMessage(7, { kind: 0n, stroke, committed_text: text });
 }
 
 const MODIFIER_CODES = new Set([
@@ -275,22 +275,22 @@ export class BrowserKeyDispatchTracker {
   }
 }
 
-export function encodeStatusActionInvocation({ statusId, actionId, generation }) {
-  return encodeMessage(5, {
-    status_id: BigInt(statusId), action_id: actionId,
-    generation: BigInt(generation),
-  });
-}
-
 export const PICKER_MODE = Object.freeze({ FILE: 0, COMMAND: 4 });
 
-export const encodePickerSubmit = (activation, candidateId, revision) =>
-  encodeCommandRequest('picker.submit', revision,
-                       {
-                         mode: BigInt(activation.mode),
-                         activation_id: BigInt(activation.id),
-                         candidate_id: String(candidateId),
-                       });
+const encodePointerInput = (kind, fields, button = 0, phase = 0) =>
+  encodeMessage(7, {
+    kind: BigInt(kind),
+    button: BigInt(button),
+    phase: BigInt(phase),
+    ...fields,
+  });
+
+export const encodePickerPointerInput = (activation, candidateId) =>
+  encodePointerInput(3, {
+    picker_mode: BigInt(activation.mode),
+    activation_id: BigInt(activation.id),
+    candidate_id: String(candidateId),
+  });
 
 export const encodeSelectionByteRange = (anchor, active, revision) =>
   encodeCommandRequest('select.set_byte_range', revision, {
@@ -298,12 +298,11 @@ export const encodeSelectionByteRange = (anchor, active, revision) =>
     active_byte_offset: BigInt(active),
   });
 
-export const encodeTabAction = (commandId, tabId, revision) => {
-  if (commandId !== 'tab.activate' && commandId !== 'tab.close') {
-    throw new TypeError('unsupported tab action');
-  }
-  return encodeCommandRequest(commandId, revision, BigInt(tabId));
-};
+export const encodeTabPointerInput = (tabId, revision, button = 0) =>
+  encodePointerInput(1, {
+    basis_revision: BigInt(revision),
+    tab_id: BigInt(tabId),
+  }, button);
 
 export function markedTextByteOffset(byteStart, text, utf16Offset) {
   if (!Number.isSafeInteger(byteStart) || byteStart < 0 ||
@@ -322,17 +321,48 @@ export function markedTextByteOffset(byteStart, text, utf16Offset) {
   return byteStart + utf8Bytes(text.slice(0, utf16Offset));
 }
 
-export const encodeTreeActivation = (nodeId, revision) =>
-  encodeCommandRequest('tree.activate_node', revision,
-                       { node_id: String(nodeId) });
+export const encodeTreePointerInput = (nodeId, revision) =>
+  encodePointerInput(2, {
+    basis_revision: BigInt(revision),
+    node_id: String(nodeId),
+  });
 
-export const encodePromptFocus = (controlId, revision) =>
-  encodeCommandRequest('prompt.focus_control', revision,
-                       { control_id: String(controlId) });
+export const encodePromptControlPointerInput = (controlId, revision) =>
+  encodePointerInput(4, {
+    basis_revision: BigInt(revision),
+    control_id: String(controlId),
+  });
 
-export const encodeExternalAction = (action, fileId, revision) =>
-  encodeCommandRequest('external.invoke_action', revision,
-                       { file_id: String(fileId), action: BigInt(action) });
+export const encodeExternalActionPointerInput = (action, fileId, revision) =>
+  encodePointerInput(5, {
+    basis_revision: BigInt(revision),
+    invocation: { file_id: String(fileId), action: BigInt(action) },
+  });
+
+export const encodeStatusActionPointerInput = (
+    { statusId, actionId, generation }, revision) =>
+  encodePointerInput(6, {
+    basis_revision: BigInt(revision),
+    invocation: {
+      status_id: BigInt(statusId),
+      action_id: String(actionId),
+      generation: BigInt(generation),
+    },
+  });
+
+export const encodePublishedUiActionPointerInput = (
+    nodeId, schemaGeneration, revision) =>
+  encodePointerInput(7, {
+    basis_revision: BigInt(revision),
+    schema_generation: BigInt(schemaGeneration),
+    node_id: String(nodeId),
+  });
+
+export const encodeNoticeActionPointerInput = (actionId, revision) =>
+  encodePointerInput(8, {
+    basis_revision: BigInt(revision),
+    action_id: String(actionId),
+  });
 
 export function settleInput(inputQueue, pending, result, appliedRevision) {
   if (inputQueue.length === 0) return null;
@@ -565,8 +595,8 @@ function sameStroke(bindingStroke, inputStroke) {
     !!bindingStroke.shift === !!inputStroke.shift;
 }
 
-export function resolvePickerLifecycle(keymap, palette, inputStroke, context) {
-  if (!keymap || !Array.isArray(keymap.bindings) || !palette) return null;
+export function resolveKeyCommand(keymap, inputStroke, context) {
+  if (!keymap || !Array.isArray(keymap.bindings)) return null;
   let resolved = null;
   for (const binding of keymap.bindings) {
     if (!Array.isArray(binding.sequence) || binding.sequence.length !== 1 ||
@@ -579,14 +609,96 @@ export function resolvePickerLifecycle(keymap, palette, inputStroke, context) {
       resolved = binding;
     }
   }
-  if (resolved == null) return null;
-  if (resolved.command_id === palette.command_open_command_id) {
+  return resolved == null ? null : resolved.command_id;
+}
+
+export function resolvePickerLifecycle(keymap, palette, inputStroke, context) {
+  if (!palette) return null;
+  const command = resolveKeyCommand(keymap, inputStroke, context);
+  if (command === palette.command_open_command_id) {
     return PICKER_MODE.COMMAND;
   }
-  if (resolved.command_id === palette.file_open_command_id) {
+  if (command === palette.file_open_command_id) {
     return PICKER_MODE.FILE;
   }
   return null;
+}
+
+export const CLIENT_OWNED_INPUT = Object.freeze({
+  APPEND_TEXT: 0,
+  DELETE_GRAPHEME_BACKWARD: 1,
+  DELETE_WORD_BACKWARD: 2,
+  SELECT_NEXT: 3,
+  SELECT_PREVIOUS: 4,
+  SUBMIT: 5,
+});
+
+export function predictPickerInput(keymap, inputStroke, text) {
+  const command = resolveKeyCommand(keymap, inputStroke, 'prompt');
+  if (command === 'prompt.submit') {
+    return { kind: CLIENT_OWNED_INPUT.SUBMIT, text: '' };
+  }
+  if (command === 'prompt.next' || command === 'palette.next') {
+    return { kind: CLIENT_OWNED_INPUT.SELECT_NEXT, text: '' };
+  }
+  if (command === 'prompt.previous' || command === 'palette.previous') {
+    return { kind: CLIENT_OWNED_INPUT.SELECT_PREVIOUS, text: '' };
+  }
+  if (command === 'prompt.cancel') return { close: true };
+  if (inputStroke.code === 'Backspace') {
+    return {
+      kind: inputStroke.alt
+        ? CLIENT_OWNED_INPUT.DELETE_WORD_BACKWARD
+        : CLIENT_OWNED_INPUT.DELETE_GRAPHEME_BACKWARD,
+      text: '',
+    };
+  }
+  return text
+    ? { kind: CLIENT_OWNED_INPUT.APPEND_TEXT, text }
+    : null;
+}
+
+export function deleteLastGrapheme(text) {
+  if (!text) return text;
+  const segments = [...new Intl.Segmenter(
+    undefined, { granularity: 'grapheme' }).segment(text)];
+  return segments.length < 2 ? '' : text.slice(0, segments.at(-1).index);
+}
+
+export function deleteLastWord(text) {
+  let end = text.length;
+  const isWord = (character) => /[A-Za-z0-9_]/.test(character);
+  while (end > 0 && !isWord(text[end - 1])) --end;
+  while (end > 0 && isWord(text[end - 1])) --end;
+  return text.slice(0, end);
+}
+
+export function applyPickerInputPrediction(picker, prediction, rowCount) {
+  const next = { ...picker };
+  if (prediction == null || prediction.close ||
+      prediction.kind === CLIENT_OWNED_INPUT.SUBMIT) return next;
+  switch (prediction.kind) {
+    case CLIENT_OWNED_INPUT.APPEND_TEXT:
+      next.query += prediction.text;
+      next.selected = 0;
+      break;
+    case CLIENT_OWNED_INPUT.DELETE_GRAPHEME_BACKWARD:
+      next.query = deleteLastGrapheme(next.query);
+      next.selected = 0;
+      break;
+    case CLIENT_OWNED_INPUT.DELETE_WORD_BACKWARD:
+      next.query = deleteLastWord(next.query);
+      next.selected = 0;
+      break;
+    case CLIENT_OWNED_INPUT.SELECT_NEXT:
+      next.selected = clampPaletteSelection(next.selected + 1, rowCount);
+      break;
+    case CLIENT_OWNED_INPUT.SELECT_PREVIOUS:
+      next.selected = clampPaletteSelection(next.selected - 1, rowCount);
+      break;
+  }
+  next.error = '';
+  return next;
 }
 
 // Apply a tree section delta to the retained tree, mirroring the C++

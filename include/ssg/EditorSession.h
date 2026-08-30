@@ -136,7 +136,7 @@ public:
     [[nodiscard]] CommandResult dispatch(ClientId clientId,
                                          ClientCommand const& command);
     [[nodiscard]] ClientInputResult input(ClientId clientId,
-                                          ClientKeyInput const& input);
+                                          ClientInput const& input);
 
     // Asks for `command` to be dispatched once the dispatch in progress
     // finishes, and reports whether the request was taken.

@@ -30,6 +30,7 @@ enum class HitRegion : std::uint8_t {
     PromptControl,       // a published prompt control: fieldId + commandId are set
     ExternalAction,      // an external-modification action: externalFileId +
                          // commandId are set (7A-5b)
+    NoticeAction,        // a notice action: fieldId names the semantic action
     EditorScrollbar,   // the editor pane gutter: scroll_* are set
     PanelScrollbar,    // the side-panel gutter: scroll_* are set
     PaletteScrollbar,  // the palette gutter: scroll_* are set

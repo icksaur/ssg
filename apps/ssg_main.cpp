@@ -14,6 +14,7 @@
 #include "ssg_terminal.h"
 
 #include <ssg/EditorSession.h>
+#include <ssg/GraphemeLayout.h>
 #include <ssg/TreeSitterGrammars.h>
 #include <ssg/HitTester.h>
 #include <ssg/FindReplace.h>
@@ -21,7 +22,6 @@
 #include <ssg/LuaCommandHost.h>
 #include <ssg/ScriptHost.h>
 #include <ssg/PaletteSearcher.h>
-#include <ssg/PaletteSubmit.h>
 #include <ssg/Picker.h>
 #include <ssg/platform_files.h>
 #include <ssg/session_snapshot.h>
@@ -292,13 +292,26 @@ void installSignalTagHandler(int signo) {
     sigaction(signo, &action, nullptr);
 }
 
-// Delete one UTF-8 code point from the end of a client-local query string.
-void popCodePoint(std::string& text) {
+void popGrapheme(std::string& text) {
+    if (text.empty()) return;
+    const auto run = ssg::GraphemeLayout{}.computeRun(text);
+    if (!run.spans.empty()) text.resize(run.spans.back().byteOffset);
+}
+
+void popWord(std::string& text) {
+    const auto isWord = [](unsigned char value) {
+        return (value >= 'a' && value <= 'z') ||
+               (value >= 'A' && value <= 'Z') ||
+               (value >= '0' && value <= '9') || value == '_';
+    };
     while (!text.empty() &&
-           (static_cast<unsigned char>(text.back()) & 0xC0) == 0x80) {
+           !isWord(static_cast<unsigned char>(text.back()))) {
         text.pop_back();
     }
-    if (!text.empty()) text.pop_back();
+    while (!text.empty() &&
+           isWord(static_cast<unsigned char>(text.back()))) {
+        text.pop_back();
+    }
 }
 
 
@@ -1027,19 +1040,15 @@ int main(int argc, char** argv) {
                           picker.paneRows);
         picker.firstVisible = offset.firstVisible();
     };
-    // Submit routes to the open picker's command, chosen from the mode the
-    // server published rather than assumed: a candidate id means different
-    // things per picker (a command id for the command palette), so a single
-    // hardcoded submit would silently misinterpret another picker's ids.
     auto submitSelectedCandidate = [&] {
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
         if (order.empty() || picker.selected >= order.size()) return;
         auto const& id = candidates[order[picker.selected]].id;
         if (pickerActivation) {
-            auto const submit =
-                ssg::paletteSubmitCommand(*pickerActivation, id);
-            if (!submit) return;
-            dispatch(submit->command.name(), submit->payload);
+            auto result = runtime.input(
+                client,
+                ssg::PickerPointerInput{*pickerActivation, id});
+            if (result.command) noteEffects(result.command->effects);
         }
     };
     auto applyClientOwnedInput = [&](ssg::ClientOwnedInput const& input) {
@@ -1050,8 +1059,12 @@ int main(int argc, char** argv) {
             revealPaletteSelection();
             break;
         case ssg::ClientOwnedInputKind::DeleteGraphemeBackward:
+            popGrapheme(picker.query);
+            picker.selected = 0;
+            revealPaletteSelection();
+            break;
         case ssg::ClientOwnedInputKind::DeleteWordBackward:
-            popCodePoint(picker.query);
+            popWord(picker.query);
             picker.selected = 0;
             revealPaletteSelection();
             break;
@@ -1069,7 +1082,8 @@ int main(int argc, char** argv) {
         }
     };
     auto routeInput = [&](ssg::KeyStroke stroke, std::string text) {
-        auto result = runtime.input(client, {stroke, std::move(text)});
+        auto result = runtime.input(
+            client, ssg::ClientKeyInput{stroke, std::move(text)});
         if (result.clientOwned) applyClientOwnedInput(*result.clientOwned);
         return result.outcome;
     };
@@ -1438,6 +1452,7 @@ int main(int argc, char** argv) {
                 ssg::app::PointerTargets targets;
                 std::optional<ssg::DocumentPosition> doubleClickPosition;
                 if (snapshot) {
+                    targets.observed_revision = snapshot->revision();
                     ssg::HitTester tester{*snapshot};
                     if (draggingGutter &&
                         decoded.pointer.kind == ssg::app::PointerKind::drag) {
@@ -1508,17 +1523,32 @@ int main(int argc, char** argv) {
                         }
                     } else if (hit.region == ssg::HitRegion::HeaderField ||
                                hit.region == ssg::HitRegion::FooterField ||
+                               hit.region == ssg::HitRegion::PromptControl ||
                                hit.region == ssg::HitRegion::StatusAction) {
-                        targets.field_command_id = hit.commandId;
+                        if (hit.fieldId) {
+                            targets.ui_generation =
+                                snapshot->sections().ui.generation;
+                            targets.ui_node_id = ssg::UiNodeId{*hit.fieldId};
+                        }
+                        targets.prompt_control_id = hit.fieldId;
                         targets.status_invocation = hit.statusInvocation;
+                    } else if (hit.region == ssg::HitRegion::NoticeAction) {
+                        targets.notice_action_id = hit.fieldId;
                     } else if (hit.region == ssg::HitRegion::ExternalAction &&
                                hit.externalFileId && hit.commandId) {
-                        // Resolve the runtime-minted file id into the select-then-act
-                        // targets the router dispatches (external.select then the
-                        // payload-less action command).
-                        targets.external_file_id =
-                            ssg::DiffFileId{*hit.externalFileId};
-                        targets.external_action_command = hit.commandId;
+                        const auto fileId = ssg::DiffFileId{*hit.externalFileId};
+                        for (auto const& file :
+                             snapshot->sections().externalModification.files) {
+                            if (file.id != fileId) continue;
+                            for (auto const& action : file.actions) {
+                                if (action.command == *hit.commandId) {
+                                    targets.external_invocation =
+                                        ssg::ExternalActionInvocation{
+                                            file.id, action.action};
+                                    break;
+                                }
+                            }
+                        }
                     }
                     // A second left click on the same editor cell within the
                     // window selects the word there instead of just placing the
@@ -1568,6 +1598,13 @@ int main(int argc, char** argv) {
                               hit, decoded.pointer.button, decoded.pointer.kind,
                               effectiveAlt, dragging, dragAnchor, targets,
                               altDragBaseline);
+                if (plan.semantic_input) {
+                    auto const pointerResult =
+                        runtime.input(client, *plan.semantic_input);
+                    if (pointerResult.command) {
+                        noteEffects(pointerResult.command->effects);
+                    }
+                }
                 bool previousAccepted = true;
                 for (auto const& command : plan.commands) {
                     if (command.gate_on_previous && !previousAccepted) {

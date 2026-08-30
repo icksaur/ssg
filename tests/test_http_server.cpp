@@ -316,7 +316,7 @@ TEST(typedClientInputPublishesStateBeforeItsResult) {
     sendAll(socket.socket,
             maskedFrame(
                 0x2, ssg::ProtocolCodec{}.encodeClientInput(
-                         {ssg::KeyStroke{}, "typed"})));
+                         ssg::ClientKeyInput{ssg::KeyStroke{}, "typed"})));
     auto firstFrame = reader.next().payload;
     auto delta =
         ssg::ProtocolCodec{}.decodeSessionDelta(firstFrame);
@@ -332,6 +332,72 @@ TEST(typedClientInputPublishesStateBeforeItsResult) {
               delta.delta->revision());
     ASSERT_EQ(fixture.runtime->activeDocumentText(),
               std::string{"typed"});
+    server.stop();
+}
+
+TEST(semanticInputRejectsStaleTargetsWithoutPublishingPartialState) {
+    Fixture fixture;
+    const ssg::ClientId setupClient{99};
+    ASSERT_TRUE(
+        fixture.runtime
+            ->attach({setupClient, ssg::InvocationOrigin::InProcess},
+                     ssg::ViewId{99})
+            .accepted());
+    ASSERT_TRUE(fixture.runtime
+                    ->dispatch(setupClient,
+                               {"file.new", fixture.runtime->revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(fixture.runtime->detach(setupClient));
+
+    constexpr std::uint16_t port = 18795;
+    ssg::HttpEditorServer server{
+        *fixture.runtime,
+        *fixture.policy, {port, "/session", 8, 8, 250ms}};
+    server.start();
+    std::this_thread::sleep_for(20ms);
+    auto socket = connectWebsocket(port);
+    FrameReader reader{socket.socket};
+    attach(socket.socket);
+    auto initial = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        reader.next().payload);
+    ASSERT_TRUE(initial.accepted());
+    if (!initial.accepted() ||
+        initial.snapshot->sections().tabs.tabs.size() < 2) {
+        server.stop();
+        return;
+    }
+    const auto target = initial.snapshot->sections().tabs.tabs.front().id;
+    const auto revision = initial.snapshot->revision();
+
+    sendAll(socket.socket,
+            maskedFrame(
+                0x2, ssg::ProtocolCodec{}.encodeClientInput(
+                         ssg::TabPointerInput{
+                             {ssg::Revision{revision.value() - 1}}, target})));
+    auto stale = ssg::ProtocolCodec{}.decodeClientInputResult(
+        reader.next().payload);
+    ASSERT_TRUE(stale.accepted());
+    ASSERT_EQ(stale.result->outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_TRUE(stale.result->command.has_value());
+    ASSERT_EQ(stale.result->command->error, ssg::CommandError::StaleRevision);
+    ASSERT_EQ(fixture.runtime->revision(), revision);
+
+    sendAll(socket.socket,
+            maskedFrame(
+                0x2, ssg::ProtocolCodec{}.encodeClientInput(
+                         ssg::TabPointerInput{{revision}, target})));
+    auto delta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        reader.next().payload);
+    ASSERT_TRUE(delta.accepted());
+    auto completion = ssg::ProtocolCodec{}.decodeClientInputResult(
+        reader.next().payload);
+    ASSERT_TRUE(completion.accepted());
+    ASSERT_EQ(completion.result->outcome,
+              ssg::ClientInputOutcome::Dispatched);
+    ASSERT_TRUE(completion.result->command.has_value() &&
+                completion.result->command->accepted());
+    ASSERT_EQ(completion.result->command->revision,
+              delta.delta->revision());
     server.stop();
 }
 
@@ -794,6 +860,7 @@ int main() {
     RUN(externallyOwnedRouteSharesOneServerLifecycle);
     RUN(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess);
     RUN(typedClientInputPublishesStateBeforeItsResult);
+    RUN(semanticInputRejectsStaleTargetsWithoutPublishingPartialState);
     RUN(acceptedNoChangeCommandStillReceivesAResult);
     RUN(deferredFailurePublishesAdvancedStateBeforeRejectedResult);
     RUN(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot);

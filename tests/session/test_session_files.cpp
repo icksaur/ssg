@@ -566,24 +566,24 @@ TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     const auto& notice = snapshot->sections().noticeView;
     ASSERT_TRUE(notice.has_value());
 
-    // The semantic actions carry exactly the command ids the grid NoticeAction
-    // nodes dispatch -- proof of a single source. Order is a grid-layout detail, so
-    // compare the command sets.
-    std::vector<std::string> gridCommands;
+    // Both projections carry the same semantic action identities. Commands remain
+    // library-owned and are resolved only after input returns to the session.
+    std::vector<std::string> gridActions;
     for (const auto& node : snapshot->presentation()->shell.accessibilityNodes) {
         if (node.kind == ssg::ShellNodeKind::NoticeAction) {
             const auto hit = ssg::HitTester{*snapshot}.at(node.rect.x, node.rect.y);
-            ASSERT_TRUE(hit.commandId.has_value());
-            if (hit.commandId) gridCommands.push_back(*hit.commandId);
+            ASSERT_TRUE(hit.fieldId.has_value());
+            ASSERT_FALSE(hit.commandId.has_value());
+            if (hit.fieldId) gridActions.push_back(*hit.fieldId);
         }
     }
-    std::vector<std::string> semanticCommands;
+    std::vector<std::string> semanticActions;
     for (const auto& action : notice->actions)
-        semanticCommands.push_back(action.command);
-    std::sort(gridCommands.begin(), gridCommands.end());
-    std::sort(semanticCommands.begin(), semanticCommands.end());
-    ASSERT_EQ(gridCommands.size(), semanticCommands.size());
-    ASSERT_TRUE(gridCommands == semanticCommands);
+        semanticActions.push_back(action.id);
+    std::sort(gridActions.begin(), gridActions.end());
+    std::sort(semanticActions.begin(), semanticActions.end());
+    ASSERT_EQ(gridActions.size(), semanticActions.size());
+    ASSERT_TRUE(gridActions == semanticActions);
 
     // Dismiss clears BOTH projections together.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -658,24 +658,33 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
     auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
 
-    // Each action node hit-tests to its command id.
-    for (const auto& [id, command] :
-         std::vector<std::pair<std::string, std::string>>{
-             {"draft.notice.diff", "draft.diff"},
-             {"draft.notice.use_disk", "draft.discard"},
-             {"draft.notice.dismiss", "draft.dismiss"}}) {
+    // Each action node hit-tests to its semantic identity, not its command.
+    for (const auto& id :
+         {"draft.notice.diff", "draft.notice.use_disk",
+          "draft.notice.dismiss"}) {
         const auto* node =
             findShellNode(*snapshot, ssg::ShellNodeKind::NoticeAction, id);
         ASSERT_TRUE(node != nullptr);
         if (!node) continue;
         const auto hit = ssg::HitTester{*snapshot}.at(node->rect.x, node->rect.y);
-        ASSERT_EQ(hit.commandId, std::optional<std::string>{command});
+        ASSERT_EQ(hit.fieldId, std::optional<std::string>{id});
+        ASSERT_FALSE(hit.commandId.has_value());
     }
 
-    // Dismiss clears the notice.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"draft.dismiss", runtime.revision(), {}})
-                    .accepted());
+    const auto revisionBeforeInvalid = runtime.revision();
+    auto invalid = runtime.input(
+        ssg::ClientId{1},
+        ssg::NoticeActionPointerInput{{revisionBeforeInvalid},
+                                      "draft.notice.missing"});
+    ASSERT_EQ(invalid.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_EQ(runtime.revision(), revisionBeforeInvalid);
+
+    // The semantic action identity is resolved against the current notice.
+    auto dismiss = runtime.input(
+        ssg::ClientId{1},
+        ssg::NoticeActionPointerInput{{runtime.revision()},
+                                      "draft.notice.dismiss"});
+    ASSERT_TRUE(dismiss.command.has_value() && dismiss.command->accepted());
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                 ssg::EditorSession::DraftReopenNotice::None);
     ASSERT_FALSE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, dims)));

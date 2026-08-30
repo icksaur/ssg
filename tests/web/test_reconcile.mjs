@@ -17,11 +17,16 @@ import {
   clampPaletteSelection, pickerCandidatesFromPalette, resolvePickerLifecycle,
   effectivePickerMode, queuePickerSubmit, settlePickerLifecycle,
   pickerPresentationFromSubmit,
-  PICKER_MODE, encodePickerSubmit, encodeSelectionByteRange, encodeTabAction,
-  markedTextByteOffset, encodeTreeActivation, applyTreeDelta,
+  resolveKeyCommand, predictPickerInput, applyPickerInputPrediction,
+  CLIENT_OWNED_INPUT, deleteLastGrapheme, deleteLastWord,
+  PICKER_MODE, encodePickerPointerInput, encodeSelectionByteRange,
+  encodeTabPointerInput, markedTextByteOffset, encodeTreePointerInput,
+  applyTreeDelta,
   applySessionDeltaSections, applySessionDeltaCopy, findSections,
-  encodeStatusActionInvocation, encodePromptFocus,
-  externalModificationFromSections, externalFocusHeld, encodeExternalAction,
+  encodeStatusActionPointerInput, encodePromptControlPointerInput,
+  encodePublishedUiActionPointerInput, encodeNoticeActionPointerInput,
+  externalModificationFromSections, externalFocusHeld,
+  encodeExternalActionPointerInput,
   applyExternalModificationDelta, isCurrentGeneration, replayAttachFrame,
   deltaIsContiguous, clearUncertainInputs, reconnectDelay,
   predictPromptValue,
@@ -33,13 +38,13 @@ import {
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; };
 
-const fixtureMessage = (name) => {
+const fixtureBytes = (name) => {
   const hex = fs.readFileSync(
     new URL('../fixtures/protocol/' + name, import.meta.url), 'utf8').trim();
-  const bytes = Uint8Array.from(
+  return Uint8Array.from(
     hex.match(/../g).map((pair) => Number.parseInt(pair, 16)));
-  return decodeMessage(bytes.buffer).payload;
 };
+const fixtureMessage = (name) => decodeMessage(fixtureBytes(name).buffer).payload;
 
 // --- byte <-> UTF-16 mapping, including multi-byte and astral text and EOF ---
 check('byteToIndex maps ASCII, 2-byte, and astral boundaries and EOF', () => {
@@ -206,14 +211,16 @@ check('picker submit settlement adopts success and preserves rejected intent', (
     });
 });
 
-check('picker submit wire payload carries authoritative activation identity', () => {
+check('picker pointer input carries authoritative activation identity', () => {
   const decoded = decodeMessage(
-    encodePickerSubmit(
-      { mode: PICKER_MODE.FILE, id: 41n }, 'src/main.cpp', 9n).buffer);
-  assert.equal(decoded.payload.id, 'picker.submit');
-  assert.equal(decoded.payload.payload.mode, BigInt(PICKER_MODE.FILE));
-  assert.equal(decoded.payload.payload.activation_id, 41n);
-  assert.equal(decoded.payload.payload.candidate_id, 'src/main.cpp');
+    encodePickerPointerInput(
+      { mode: PICKER_MODE.FILE, id: 41n }, 'src/main.cpp').buffer);
+  assert.equal(decoded.kind, 7);
+  assert.deepEqual(decoded.payload, {
+    kind: 3n, button: 0n, phase: 0n,
+    picker_mode: BigInt(PICKER_MODE.FILE),
+    activation_id: 41n, candidate_id: 'src/main.cpp',
+  });
 });
 
 check('picker query lifetime follows activation identity', () => {
@@ -321,6 +328,7 @@ check('typed raw input and command requests round-trip through ProtocolValue', (
   }).buffer), {
     kind: 7,
     payload: {
+      kind: 0n,
       stroke: { code: 'KeyA', control: false, alt: true, meta: false, shift: false },
       committed_text: 'a',
     },
@@ -330,15 +338,15 @@ check('typed raw input and command requests round-trip through ProtocolValue', (
     assert.throws(() => decodeMessage(
       new Uint8Array([1, 9, 0]).buffer), /unsupported protocol frame/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([3, 1, 1, 2]).buffer), /malformed protocol bool/);
+      new Uint8Array([4, 1, 1, 2]).buffer), /malformed protocol bool/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([3, 1, 4, 4, 0, 0, 0, 65]).buffer), /truncated/);
+      new Uint8Array([4, 1, 4, 4, 0, 0, 0, 65]).buffer), /truncated/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([3, 1, 6, 1, 0, 1, 0]).buffer), /collection length/);
+      new Uint8Array([4, 1, 6, 1, 0, 1, 0]).buffer), /collection length/);
   });
 
   check('browser ignores additive message kinds without weakening wire versions', () => {
-    const decoded = decodeMessage(new Uint8Array([3, 9, 0]).buffer);
+    const decoded = decodeMessage(new Uint8Array([4, 9, 0]).buffer);
     assert.equal(browserInboundKind(decoded.kind), 'ignore');
     assert.equal(browserInboundKind(1), 'snapshot');
     assert.equal(browserInboundKind(8), 'input-result');
@@ -375,19 +383,53 @@ check('browser key tracker falls back only when an Alt keydown was consumed', ()
   assert.equal(keys.keyup('ShiftLeft', true), false);
 });
 
-check('encodeStatusActionInvocation emits the exact StatusActionInvocation wire frame', () => {
-  const actual = encodeStatusActionInvocation({ statusId: 7, actionId: 'dismiss', generation: 3 });
-  const expected = new Uint8Array([
-    3, 5,
-    7, 3, 0, 0, 0,
-    9, 0, 0, 0, 115, 116, 97, 116, 117, 115, 95, 105, 100,
-    3, 7, 0, 0, 0, 0, 0, 0, 0,
-    9, 0, 0, 0, 97, 99, 116, 105, 111, 110, 95, 105, 100,
-    4, 7, 0, 0, 0, 100, 105, 115, 109, 105, 115, 115,
-    10, 0, 0, 0, 103, 101, 110, 101, 114, 97, 116, 105, 111, 110,
-    3, 3, 0, 0, 0, 0, 0, 0, 0,
-  ]);
-  assert.deepEqual(actual, expected);
+check('picker key prediction follows the published keymap and Unicode edits', () => {
+  const keymap = { bindings: [
+    { context: 'prompt', command_id: 'prompt.submit',
+      sequence: [{ code: 'Enter' }] },
+    { context: 'prompt', command_id: 'prompt.next',
+      sequence: [{ code: 'ArrowDown' }] },
+    { context: 'prompt', command_id: 'prompt.previous',
+      sequence: [{ code: 'ArrowUp' }] },
+    { context: 'prompt', command_id: 'prompt.cancel',
+      sequence: [{ code: 'Escape' }] },
+    { context: 'editor', command_id: 'select.document_start',
+      sequence: [{ code: 'Home', control: true, shift: true }] },
+  ] };
+  assert.equal(resolveKeyCommand(
+    keymap, { code: 'Home', control: true, shift: true }, 'editor'),
+  'select.document_start');
+  assert.deepEqual(
+    predictPickerInput(keymap, { code: 'ArrowDown' }, ''),
+    { kind: CLIENT_OWNED_INPUT.SELECT_NEXT, text: '' });
+  assert.deepEqual(
+    predictPickerInput(keymap, { code: 'KeyA' }, 'a'),
+    { kind: CLIENT_OWNED_INPUT.APPEND_TEXT, text: 'a' });
+  assert.deepEqual(
+    predictPickerInput(keymap, { code: 'Backspace', alt: true }, ''),
+    { kind: CLIENT_OWNED_INPUT.DELETE_WORD_BACKWARD, text: '' });
+  assert.deepEqual(
+    predictPickerInput(keymap, { code: 'Escape' }, ''), { close: true });
+
+  assert.equal(deleteLastGrapheme('a\u0301b'), 'a\u0301');
+  assert.equal(deleteLastGrapheme('a\u0301'), '');
+  assert.equal(deleteLastWord('alpha beta  '), 'alpha ');
+  assert.equal(deleteLastWord('alpha \u{1f642}'), '');
+  assert.deepEqual(
+    applyPickerInputPrediction(
+      { query: 'a\u0301b', selected: 2, error: 'old' },
+      { kind: CLIENT_OWNED_INPUT.DELETE_GRAPHEME_BACKWARD, text: '' }, 3),
+    { query: 'a\u0301', selected: 0, error: '' });
+});
+
+check('status action uses the common semantic input envelope', () => {
+  const decoded = decodeMessage(encodeStatusActionPointerInput(
+    { statusId: 7, actionId: 'dismiss', generation: 3 }, 11n).buffer);
+  assert.equal(decoded.kind, 7);
+  assert.deepEqual(decoded.payload, {
+    kind: 6n, button: 0n, phase: 0n, basis_revision: 11n,
+    invocation: { status_id: 7n, action_id: 'dismiss', generation: 3n },
+  });
 });
 
 check('command results settle direct command owners in send order', () => {
@@ -446,32 +488,54 @@ check('browser-local picker mode backs a null authoritative mode', () => {
                PICKER_MODE.COMMAND);
 });
 
-check('compound interaction commands carry published identities and revision', () => {
+check('semantic pointer inputs carry published identities and revision', () => {
   assert.deepEqual(
     decodeMessage(
-      encodePickerSubmit(
+      encodePickerPointerInput(
         { mode: PICKER_MODE.COMMAND, id: 13n },
-        'command.open', 5n).buffer).payload,
-    { id: 'picker.submit', base_revision: 5n,
-      payload: {
-        mode: 4n, activation_id: 13n, candidate_id: 'command.open',
-      } });
+        'command.open').buffer).payload,
+    { kind: 3n, button: 0n, phase: 0n,
+      picker_mode: 4n, activation_id: 13n, candidate_id: 'command.open' });
   assert.deepEqual(
     decodeMessage(encodeSelectionByteRange(2, 7, 6n).buffer).payload,
     { id: 'select.set_byte_range', base_revision: 6n,
       payload: { anchor_byte_offset: 2n, active_byte_offset: 7n } });
-  assert.deepEqual(decodeMessage(encodeTreeActivation('tree:src', 6n).buffer).payload,
-    { id: 'tree.activate_node', base_revision: 6n,
-      payload: { node_id: 'tree:src' } });
   assert.deepEqual(
-    decodeMessage(encodeTabAction('tab.activate', 17n, 6n).buffer).payload,
-    { id: 'tab.activate', base_revision: 6n, payload: 17n });
+    decodeMessage(encodeTreePointerInput('tree:src', 6n).buffer).payload,
+    { kind: 2n, button: 0n, phase: 0n,
+      basis_revision: 6n, node_id: 'tree:src' });
   assert.deepEqual(
-    decodeMessage(encodeTabAction('tab.close', 17n, 6n).buffer).payload,
-    { id: 'tab.close', base_revision: 6n, payload: 17n });
-  assert.throws(
-    () => encodeTabAction('tab.close_all', 17n, 6n),
-    /unsupported tab action/);
+    decodeMessage(encodeTabPointerInput(17n, 6n).buffer).payload,
+    { kind: 1n, button: 0n, phase: 0n,
+      basis_revision: 6n, tab_id: 17n });
+  assert.deepEqual(
+    decodeMessage(encodeTabPointerInput(17n, 6n, 1).buffer).payload,
+    { kind: 1n, button: 1n, phase: 0n,
+      basis_revision: 6n, tab_id: 17n });
+});
+
+check('browser semantic input bytes match the C++ canonical frames', () => {
+  const cases = [
+    ['client_input_tab.hex', encodeTabPointerInput(17n, 6n)],
+    ['client_input_tree.hex', encodeTreePointerInput('tree:src', 6n)],
+    ['client_input_picker.hex',
+      encodePickerPointerInput(
+        { mode: PICKER_MODE.COMMAND, id: 13n }, 'command.open')],
+    ['client_input_prompt_control.hex',
+      encodePromptControlPointerInput('replace.replacement', 7n)],
+    ['client_input_external_action.hex',
+      encodeExternalActionPointerInput(0, 'external:src/a:b.cpp', 11n)],
+    ['client_input_status_action.hex',
+      encodeStatusActionPointerInput(
+        { statusId: 7, actionId: 'dismiss', generation: 3 }, 11n)],
+    ['client_input_ui_action.hex',
+      encodePublishedUiActionPointerInput('header.help', 4n, 12n)],
+    ['client_input_notice_action.hex',
+      encodeNoticeActionPointerInput('draft.notice.dismiss', 12n)],
+  ];
+  for (const [fixture, encoded] of cases) {
+    assert.deepEqual(encoded, fixtureBytes(fixture));
+  }
 });
 
 check('marked text offsets convert UTF-16 positions to authoritative UTF-8 bytes', () => {
@@ -1395,11 +1459,12 @@ check('mergeBrowserRenderPlans preserves every dirty surface and strongest work'
     { rebuild: true, reconcile: true, repaintTheme: true, surfaces: [8, 3] });
 });
 
-check('prompt focus uses a typed revision-checked compound command', () => {
+check('prompt focus uses a typed revision-checked semantic input', () => {
   assert.deepEqual(
-    decodeMessage(encodePromptFocus('replace.replacement', 7n).buffer).payload,
-    { id: 'prompt.focus_control', base_revision: 7n,
-      payload: { control_id: 'replace.replacement' } });
+    decodeMessage(
+      encodePromptControlPointerInput('replace.replacement', 7n).buffer).payload,
+    { kind: 4n, button: 0n, phase: 0n, basis_revision: 7n,
+      control_id: 'replace.replacement' });
 });
 
 // --- Draft-conflict notice: semantic NoticeView projection, delta, action ingress ---
@@ -1503,9 +1568,11 @@ check('a click on an external action sends a typed validated invocation', () => 
   const file = bar.files[0];
   const action = file.actions[0];
   assert.deepEqual(
-    decodeMessage(encodeExternalAction(action.action, file.id, 11n).buffer).payload,
-    { id: 'external.invoke_action', base_revision: 11n,
-      payload: { file_id: 'external:src/a:b.cpp', action: 0n } });
+    decodeMessage(
+      encodeExternalActionPointerInput(
+        action.action, file.id, 11n).buffer).payload,
+    { kind: 5n, button: 0n, phase: 0n, basis_revision: 11n,
+      invocation: { file_id: 'external:src/a:b.cpp', action: 0n } });
 });
 
 check('the web suppresses document echo when external_focus_held is true, never comparing a focus ordinal', () => {

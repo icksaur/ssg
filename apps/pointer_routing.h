@@ -10,6 +10,7 @@
 
 #include "ssg_terminal.h"
 
+#include <ssg/ClientInput.h>
 #include <ssg/HitTester.h>
 #include <ssg/Selection.h>
 #include <ssg/StatusActionInvocation.h>
@@ -125,6 +126,7 @@ struct ClientScroll {
 // client-local drag state changes.
 struct PointerDispatch {
     std::vector<PointerCommand> commands;
+    std::optional<ssg::ClientInput> semantic_input;
     bool begins_drag = false;  // a press that starts an editor selection drag
     bool ends_drag = false;    // a release that ends a drag
     // Set when the gesture targets a surface whose offset the client owns, so
@@ -135,6 +137,7 @@ struct PointerDispatch {
 // The snapshot-derived data a pointer event needs, resolved by the caller (only
 // the field matching the hit region is populated).
 struct PointerTargets {
+    ssg::Revision observed_revision{0};
     std::optional<ssg::DocumentPosition> document_position;  // an editor hit
     std::optional<ssg::TabId> tab_id;             // a tab hit (tabs[index] id)
     // A picker-row candidate id, plus which picker published it.  The id alone
@@ -143,12 +146,12 @@ struct PointerTargets {
     // either fails the server guard or is nonsense.
     std::optional<std::string> picker_candidate_id;
     std::optional<ssg::PickerActivation> picker_activation;
-    std::optional<std::string> field_command_id;    // a header/footer field command
+    std::optional<ssg::Generation> ui_generation;
+    std::optional<ssg::UiNodeId> ui_node_id;
+    std::optional<std::string> notice_action_id;
+    std::optional<std::string> prompt_control_id;
     std::optional<ssg::StatusActionInvocation> status_invocation;
-    // An external-modification action hit (7A-5b): the runtime-minted file id to
-    // select, and the payload-less action command to run on it (select-then-act).
-    std::optional<ssg::DiffFileId> external_file_id;
-    std::optional<std::string> external_action_command;
+    std::optional<ssg::ExternalActionInvocation> external_invocation;
 };
 
 // The index into `baseline` of the selection the click position `P` lands on, or

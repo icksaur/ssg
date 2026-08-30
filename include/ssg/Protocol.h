@@ -180,6 +180,10 @@ enum class ProtocolMessageKind : std::uint8_t {
     ClientInputResult = 8,
 };
 
+inline constexpr std::uint8_t kSemanticUiWireVersion = 4;
+inline constexpr std::uint8_t kProtocolWireVersion =
+    kSemanticUiWireVersion;
+
 struct DecodeCommandRequestResult {
     ProtocolError error;
     std::optional<ClientCommand> command;
@@ -202,7 +206,7 @@ struct DecodeCommandResultResult {
 
 struct DecodeClientInputResult {
     ProtocolError error;
-    std::optional<ClientKeyInput> input;
+    std::optional<ClientInput> input;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
@@ -263,7 +267,7 @@ public:
     [[nodiscard]] DecodeCommandResultResult decodeCommandResult(
         std::string_view bytes, ProtocolLimits limits = {}) const;
     [[nodiscard]] std::string encodeClientInput(
-        ClientKeyInput const& input) const;
+        ClientInput const& input) const;
     [[nodiscard]] DecodeClientInputResult decodeClientInput(
         std::string_view bytes, ProtocolLimits limits = {}) const;
     [[nodiscard]] std::string encodeClientInputResult(

@@ -10,9 +10,11 @@ import {
   findSections, num, cssColor, byteToIndex, utf8Bytes, project, decodeMessage,
   browserInboundKind,
   matcherBoundsFromPalette, clampPaletteSelection, pickerCandidatesFromPalette,
-  resolvePickerLifecycle, effectivePickerMode, encodePickerSubmit,
+  resolvePickerLifecycle, effectivePickerMode, encodePickerPointerInput,
   queuePickerSubmit, settlePickerLifecycle, pickerPresentationFromSubmit,
-  encodeSelectionByteRange, encodeTabAction, markedTextByteOffset,
+  resolveKeyCommand, predictPickerInput, applyPickerInputPrediction,
+  CLIENT_OWNED_INPUT,
+  encodeSelectionByteRange, encodeTabPointerInput, markedTextByteOffset,
   applySessionDeltaCopy, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
   webExtentCss, applyNodeSemanticStyle, getOrCreateStyledNode,
@@ -23,11 +25,13 @@ import {
   predictedFocusCapture, resolveUiFocusPath, focusUiNode,
   applyPalettePresenceOverlay,
   BrowserKeyDispatchTracker,
-  encodeCommandRequest, encodeClientInput, encodeTreeActivation,
-  encodeStatusActionInvocation,
-  encodePromptFocus,
+  encodeCommandRequest, encodeClientInput, encodeTreePointerInput,
+  encodeStatusActionPointerInput,
+  encodePromptControlPointerInput,
+  encodePublishedUiActionPointerInput, encodeNoticeActionPointerInput,
   noticeViewFromSections,
-  externalModificationFromSections, externalFocusHeld, encodeExternalAction,
+  externalModificationFromSections, externalFocusHeld,
+  encodeExternalActionPointerInput,
   settleCommandResult, settleInput, isCurrentGeneration, replayAttachFrame,
   deltaIsContiguous,
   clearUncertainInputs, reconnectDelay,
@@ -125,7 +129,7 @@ function renderTabsInto(host, tabs, theme) {
         'aria-label', (t.label || '') + (t.dirty ? ', modified' : ''));
       if (idKey(t.id) === activeId) el.setAttribute('aria-current', 'page');
       el.addEventListener('click', () => {
-        sendCommandFrame(encodeTabAction('tab.activate', t.id, state.revision));
+        sendInputFrame(encodeTabPointerInput(t.id, state.revision));
       });
       el.addEventListener('mousedown', (event) => {
         if (event.button === 1) event.preventDefault();
@@ -133,7 +137,7 @@ function renderTabsInto(host, tabs, theme) {
       el.addEventListener('auxclick', (event) => {
         if (event.button !== 1) return;
         event.preventDefault();
-        sendCommandFrame(encodeTabAction('tab.close', t.id, state.revision));
+        sendInputFrame(encodeTabPointerInput(t.id, state.revision, 1));
       });
       host.appendChild(el);
     }
@@ -269,7 +273,8 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
         if (renderedFooterPromptHost) {
           renderedFooterPromptHost.focus({ preventScroll: true });
         }
-        sendCommandFrame(encodePromptFocus(node.controlId, state.revision));
+        sendInputFrame(
+          encodePromptControlPointerInput(node.controlId, state.revision));
       };
     } else {
       pickerInputElement = el;
@@ -291,7 +296,9 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
   applyNodeSemanticStyle(el.style, node, theme);
   applySize(el, node.size, parentAxis);
   el.title = node.command || '';
-  el.onclick = node.command ? () => sendCommand(node.command) : null;
+  el.onclick = node.command ? () => sendInputFrame(
+    encodePublishedUiActionPointerInput(
+      node.id, state.sections.ui.generation, state.revision)) : null;
   if (inFooterPrompt && node.checked != null) {
     el.setAttribute('role', 'checkbox');
     el.setAttribute('aria-checked', node.checked ? 'true' : 'false');
@@ -551,7 +558,7 @@ function renderTreeSurface(parent, surface, tree) {
       // directory -- the same library commands a TUI pointer press dispatches.
       if (typeof n.id === 'string') {
         div.addEventListener('click', () =>
-          sendCommandFrame(encodeTreeActivation(n.id, state.revision)));
+          sendInputFrame(encodeTreePointerInput(n.id, state.revision)));
       }
       parent.appendChild(div);
     }
@@ -577,11 +584,10 @@ function submitPaletteCandidate(mode, candidate) {
       state.palette.pendingSubmit);
     if (!disposition.send && !disposition.queued) return;
     if (disposition.send &&
-        !sendCommandFrame(
-          encodePickerSubmit(
-            disposition.send.activation, disposition.send.candidateId,
-            state.revision),
-          'picker-submit')) {
+        !sendInputFrame(
+          encodePickerPointerInput(
+            disposition.send.activation, disposition.send.candidateId),
+          { pickerSubmit: true })) {
       return;
     }
     state.palette.pendingSubmit = disposition.send || disposition.queued;
@@ -624,9 +630,9 @@ function renderStatusActionsNode(el, theme) {
       button.textContent = action.accessible_label || action.accessibleLabel || action.id || '';
       button.style.color = roleColor(ROLE.statusInfo, theme);
       button.addEventListener('click', () =>
-        sendCommandFrame(encodeStatusActionInvocation({
+        sendInputFrame(encodeStatusActionPointerInput({
           statusId: item.id, actionId: action.id, generation: item.generation,
-        })));
+        }, state.revision)));
       el.appendChild(button);
   }
 }
@@ -828,7 +834,8 @@ function renderNotice(host, sections) {
     el.className = 'notice-action';
     el.setAttribute('aria-label', action.label);
     el.textContent = '[' + action.label + ']';
-    el.addEventListener('click', () => sendCommand(action.command));
+    el.addEventListener('click', () => sendInputFrame(
+      encodeNoticeActionPointerInput(action.id, state.revision)));
     host.appendChild(el);
   }
 }
@@ -865,8 +872,9 @@ function renderExternalModification(host, sections) {
       el.setAttribute('aria-label', action.label);
       el.textContent = '[' + action.label + ']';
       el.addEventListener('click', () =>
-        sendCommandFrame(
-          encodeExternalAction(action.action, file.id, state.revision)));
+        sendInputFrame(
+          encodeExternalActionPointerInput(
+            action.action, file.id, state.revision)));
       row.appendChild(el);
     }
     host.appendChild(row);
@@ -1209,6 +1217,17 @@ function sendCommandFrame(frame, owner = 'other') {
   return true;
 }
 
+function sendInputFrame(frame, metadata = {}) {
+  if (!sendTyped(frame)) return false;
+  state.inputQueue.push({
+    predictionId: null,
+    promptPrediction: false,
+    promptInput: false,
+    ...metadata,
+  });
+  return true;
+}
+
 function authoritativePickerActivation() {
   const palette = state.sections && state.sections.palette;
   if (!palette || palette.active_mode == null ||
@@ -1225,7 +1244,7 @@ function authoritativePickerMode() {
 function pickerTransitionPending() {
   return state.inputQueue.some(
     (input) => input.pickerOpenMode != null || input.pickerClose) ||
-    commandRequests.includes('picker-submit');
+    state.inputQueue.some((input) => input.pickerSubmit);
 }
 
 function syncPickerFromAuthority() {
@@ -1302,18 +1321,6 @@ function applyProtocolFrame(buffer) {
     if (settled.owner === 'pointer') {
       settlePointerRange(num(payload.error));
       frameRenderPlan = surfaceRenderPlan(SURFACE.DOCUMENT);
-    } else if (settled.owner === 'picker-submit') {
-      const presentation =
-        pickerPresentationFromSubmit(
-          num(payload.error), authoritativePickerActivation(), state.palette);
-      state.palette.mode = presentation.mode;
-      state.palette.activationId = presentation.activationId;
-      state.palette.query = presentation.query;
-      state.palette.selected = presentation.selected;
-      state.palette.pendingSubmit = presentation.pendingSubmit;
-      state.palette.error = num(payload.error) === 0
-        ? '' : String(payload.message || 'picker activation failed');
-      frameRenderPlan = { ...surfaceRenderPlan(), reconcile: true };
     }
   } else if (inbound === 'input-result') {
     const completedInput = state.inputQueue[0];
@@ -1346,12 +1353,44 @@ function applyProtocolFrame(buffer) {
       state.palette.activationId = picker.activation?.id ?? null;
       state.palette.pendingSubmit = picker.submit;
       if (picker.submit &&
-          !sendCommandFrame(
-            encodePickerSubmit(
-              picker.submit.activation, picker.submit.candidateId,
-              state.revision),
-            'picker-submit')) {
+          !sendInputFrame(
+            encodePickerPointerInput(
+              picker.submit.activation, picker.submit.candidateId),
+            { pickerSubmit: true })) {
         state.palette.pendingSubmit = null;
+      }
+      frameRenderPlan = { ...surfaceRenderPlan(), reconcile: true };
+    } else if (completedInput && completedInput.pickerSubmit) {
+      const presentation = pickerPresentationFromSubmit(
+        payload.command == null ? 1 : num(payload.command.error),
+        authoritativePickerActivation(), state.palette);
+      state.palette.mode = presentation.mode;
+      state.palette.activationId = presentation.activationId;
+      state.palette.query = presentation.query;
+      state.palette.selected = presentation.selected;
+      state.palette.pendingSubmit = presentation.pendingSubmit;
+      state.palette.error = payload.command != null &&
+          num(payload.command.error) === 0
+        ? '' : String(payload.command?.message || 'picker activation failed');
+      frameRenderPlan = { ...surfaceRenderPlan(), reconcile: true };
+    } else if (completedInput && completedInput.pickerPrediction !== undefined) {
+      const expected = completedInput.pickerPrediction;
+      const actual = payload.client_owned;
+      const matches = expected == null
+        ? actual == null
+        : actual != null && num(actual.kind) === expected.kind &&
+          String(actual.text || '') === String(expected.text || '');
+      if (!matches) {
+        Object.assign(state.palette, completedInput.pickerBefore);
+        syncPickerFromAuthority();
+      } else if (expected &&
+                 expected.kind === CLIENT_OWNED_INPUT.SUBMIT) {
+        const rows = locallyRankedPaletteRows(
+          state.sections && state.sections.palette);
+        state.palette.selected =
+          clampPaletteSelection(state.palette.selected, rows.length);
+        submitPaletteCandidate(
+          state.palette.mode, rows[state.palette.selected]);
       }
       frameRenderPlan = { ...surfaceRenderPlan(), reconcile: true };
     } else if (state.promptPrediction) {
@@ -1471,23 +1510,27 @@ function handleKeydown(ev) {
     cancelPointerGesture();
   }
 
-  // Ctrl/Meta chords belong to the browser: ssg's keymap uses Alt as its chord
-  // modifier, so the web client never claims a Ctrl/Meta combo. Letting them
-  // through keeps native zoom, copy/paste, and find working -- the browser is a
-  // first-class client that may add its own affordances. (The one library action
-  // reachable only via Ctrl+Shift+Home/End, select-to-document-extreme, has no
-  // Alt twin and is thus unreachable on web until the keymap grows one.)
-  if (ev.ctrlKey || ev.metaKey) return;
-  if (state.palette.pendingSubmit ||
-      commandRequests.includes('picker-submit')) {
-    ev.preventDefault();
-    return;
-  }
-
   const inputStroke = {
     code: ev.code, control: ev.ctrlKey, alt: ev.altKey,
     meta: ev.metaKey, shift: ev.shiftKey,
   };
+  if (ev.ctrlKey || ev.metaKey) {
+    const focus = paletteOpen()
+      ? 'prompt'
+      : (state.sections && externalFocusHeld(state.sections)
+          ? 'external'
+          : ['editor', 'panel', 'prompt', 'external'][
+              num(state.sections?.focus)]);
+    if (resolveKeyCommand(state.sections?.keymap, inputStroke, focus) == null) {
+      return;
+    }
+  }
+  if (state.palette.pendingSubmit ||
+      state.inputQueue.some((input) => input.pickerSubmit)) {
+    ev.preventDefault();
+    return;
+  }
+
   const promptActive = state.sections &&
     state.sections.prompt_status &&
     state.sections.prompt_status.active_kind != null;
@@ -1500,7 +1543,8 @@ function handleKeydown(ev) {
     if (mode != null) {
       ev.preventDefault();
       const sent = sendTyped(encodeClientInput({
-        code: ev.code, alt: ev.altKey, shift: ev.shiftKey, text: '',
+        code: ev.code, control: ev.ctrlKey, alt: ev.altKey,
+        meta: ev.metaKey, shift: ev.shiftKey, text: '',
       }));
       if (!sent) return;
       state.inputQueue.push({
@@ -1523,67 +1567,42 @@ function handleKeydown(ev) {
     }
   }
 
-  // When a picker is open, the browser owns its query and selection (a
-  // client-owned derived view). Query edits and selection moves re-request a
-  // local ranking; Enter submits the selected candidate id; Escape closes via the
-  // library keymap (prompt.cancel). Nothing here touches the document.
+  // Picker state is predicted locally, then settled against the library's
+  // authoritative key resolution.
   if (paletteOpen()) {
     const p = state.palette;
-    if (ev.key === 'Escape') {
-      ev.preventDefault();
-      const sent = sendTyped(encodeClientInput({
-        code: ev.code, alt: ev.altKey, shift: ev.shiftKey, text: '',
-      }));
-      if (!sent) return;
-      state.inputQueue.push({
-        predictionId: null,
-        promptPrediction: false,
-        promptInput: false,
-        pickerClose: true,
-      });
+    const printable = Array.from(ev.key).length === 1 && !ev.altKey &&
+      !ev.ctrlKey && !ev.metaKey;
+    const text = printable ? ev.key : '';
+    const prediction = predictPickerInput(
+      state.sections?.keymap, inputStroke, text);
+    const before = { ...p };
+    const rows = locallyRankedPaletteRows(
+      state.sections && state.sections.palette);
+    ev.preventDefault();
+    if (prediction?.close) {
       p.mode = null;
       p.activationId = null;
       p.query = '';
       p.selected = 0;
       p.pendingSubmit = null;
       p.error = '';
-      scheduleRender({ ...surfaceRenderPlan(), reconcile: true });
+    } else {
+      Object.assign(
+        p, applyPickerInputPrediction(p, prediction, rows.length));
+    }
+    const sent = sendInputFrame(encodeClientInput({
+      code: ev.code, control: ev.ctrlKey, alt: ev.altKey,
+      meta: ev.metaKey, shift: ev.shiftKey, text,
+    }), prediction?.close
+      ? { pickerClose: true }
+      : { pickerPrediction: prediction, pickerBefore: before });
+    if (!sent) {
+      Object.assign(p, before);
       return;
     }
-    if (ev.key === 'Enter') {
-      ev.preventDefault();
-      p.selected = clampPaletteSelection(p.selected, locallyRankedPaletteRows(state.sections && state.sections.palette).length);
-      const rows = locallyRankedPaletteRows(state.sections && state.sections.palette);
-      const candidate = rows[p.selected];
-      submitPaletteCandidate(p.mode, candidate);
-      return;
-    }
-    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
-      ev.preventDefault();
-      // selected is an absolute ranked index over the locally-ranked rows.
-      const rows = locallyRankedPaletteRows(state.sections && state.sections.palette);
-      p.selected = clampPaletteSelection(ev.key === 'ArrowDown' ? p.selected + 1 : p.selected - 1, rows.length);
-      scheduleRender(surfaceRenderPlan(SURFACE.FINDRESULTS));
-      return;
-    }
-    if (ev.key === 'Backspace') {
-      ev.preventDefault();
-      p.query = Array.from(p.query).slice(0, -1).join('');
-      p.selected = 0;
-      p.error = '';
-      refreshFinder();
-      return;
-    }
-    if (Array.from(ev.key).length === 1 && !ev.altKey) {
-      ev.preventDefault();
-      p.query += ev.key;
-      p.selected = 0;
-      p.error = '';
-      refreshFinder();
-      return;
-    }
-    // Unhandled keys remain browser input while the local picker owns focus.
-    ev.preventDefault();
+    scheduleRender({ ...surfaceRenderPlan(SURFACE.FINDRESULTS),
+                     reconcile: true });
     return;
   }
 
@@ -1630,7 +1649,8 @@ function handleKeydown(ev) {
     }
   }
   const sent = sendTyped(encodeClientInput({
-    code: ev.code, alt: ev.altKey, shift: ev.shiftKey, text,
+    code: ev.code, control: ev.ctrlKey, alt: ev.altKey,
+    meta: ev.metaKey, shift: ev.shiftKey, text,
   }));
   if (!sent) {
     if (predictionId != null) {

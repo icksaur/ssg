@@ -3224,8 +3224,8 @@ namespace {
 CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
                              ClientCommand const& command);
 
-ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
-                              ClientKeyInput const& input) {
+ClientInputResult inputKeyLocked(EditorSession::Impl* impl_, ClientId clientId,
+                                 ClientKeyInput const& input) {
     if (!impl_->session->attachedClient(clientId)) {
         return {ClientInputOutcome::Rejected, std::nullopt,
                 CommandResult{CommandError::UnknownClient,
@@ -3359,6 +3359,154 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
     return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
 }
 
+ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
+                              ClientInput const& input) {
+    return std::visit(
+        [&](auto const& semantic) -> ClientInputResult {
+            using Input = std::decay_t<decltype(semantic)>;
+            if constexpr (std::same_as<Input, ClientKeyInput>) {
+                return inputKeyLocked(impl_, clientId, semantic);
+            } else {
+                if (!impl_->session->attachedClient(clientId)) {
+                    return {ClientInputOutcome::Rejected, std::nullopt,
+                            CommandResult{CommandError::UnknownClient,
+                                          impl_->session->revision(),
+                                          "client ID is not attached", {}}};
+                }
+                const auto unhandled = [] {
+                    return ClientInputResult{ClientInputOutcome::Unhandled,
+                                             std::nullopt, std::nullopt};
+                };
+                const auto rejectTarget = [&](std::string message) {
+                    return ClientInputResult{
+                        ClientInputOutcome::Rejected, std::nullopt,
+                        CommandResult{CommandError::HandlerFailed,
+                                      impl_->session->revision(),
+                                      std::move(message), {}}};
+                };
+                if (semantic.phase != InputPointerPhase::Press) {
+                    return unhandled();
+                }
+                auto dispatch = [&](CommandName command,
+                                    std::any payload) -> ClientInputResult {
+                    auto result = dispatchLocked(
+                        impl_, clientId,
+                        {std::move(command), impl_->session->revision(),
+                         std::move(payload)});
+                    const auto activation =
+                        result.accepted()
+                            ? impl_->interaction.openPickerActivation()
+                            : std::nullopt;
+                    return {ClientInputOutcome::Dispatched, std::nullopt,
+                            std::move(result), activation};
+                };
+                if constexpr (!std::same_as<Input, PickerPointerInput>) {
+                    if (semantic.basis.observedRevision !=
+                        impl_->session->revision()) {
+                        return {
+                            ClientInputOutcome::Rejected, std::nullopt,
+                            CommandResult{CommandError::StaleRevision,
+                                          impl_->session->revision(),
+                                          "semantic input basis is stale", {}}};
+                    }
+                }
+                if constexpr (std::same_as<Input, TabPointerInput>) {
+                    if (semantic.button == InputPointerButton::Primary) {
+                        return dispatch("tab.activate", semantic.tabId);
+                    }
+                    if (semantic.button == InputPointerButton::Auxiliary) {
+                        return dispatch("tab.close", semantic.tabId);
+                    }
+                    return unhandled();
+                } else if constexpr (std::same_as<Input, TreePointerInput>) {
+                    if (semantic.button != InputPointerButton::Primary) {
+                        return unhandled();
+                    }
+                    return dispatch("tree.activate_node",
+                                    TreeSelectArguments{semantic.nodeId});
+                } else if constexpr (std::same_as<Input,
+                                                  PickerPointerInput>) {
+                    if (semantic.button != InputPointerButton::Primary) {
+                        return unhandled();
+                    }
+                    return dispatch(
+                        "picker.submit",
+                        PickerSubmitArguments{semantic.activation,
+                                              semantic.candidateId});
+                } else if constexpr (std::same_as<
+                                         Input, PromptControlPointerInput>) {
+                    if (semantic.button != InputPointerButton::Primary) {
+                        return unhandled();
+                    }
+                    return dispatch(
+                        "prompt.focus_control",
+                        PromptFocusArguments{semantic.controlId});
+                } else if constexpr (std::same_as<
+                                         Input, ExternalActionPointerInput>) {
+                    if (semantic.button != InputPointerButton::Primary) {
+                        return unhandled();
+                    }
+                    return dispatch("external.invoke_action",
+                                    semantic.invocation);
+                } else if constexpr (std::same_as<
+                                         Input, StatusActionPointerInput>) {
+                    if (semantic.button != InputPointerButton::Primary) {
+                        return unhandled();
+                    }
+                    return dispatch("status.invoke_action",
+                                    semantic.invocation);
+                } else if constexpr (std::same_as<
+                                         Input,
+                                         PublishedUiActionPointerInput>) {
+                    if (semantic.button != InputPointerButton::Primary) {
+                        return unhandled();
+                    }
+                    auto const sections = impl_->sections();
+                    if (sections.uiState.generation !=
+                            semantic.schemaGeneration ||
+                        sections.uiPresence.generation !=
+                            semantic.schemaGeneration) {
+                        return rejectTarget("UI action schema is stale");
+                    }
+                    bool present = false;
+                    for (auto const& node : sections.uiPresence.nodes) {
+                        if (node.id == semantic.nodeId) {
+                            present = node.present;
+                            break;
+                        }
+                    }
+                    if (!present) {
+                        return rejectTarget("UI action target is not present");
+                    }
+                    for (auto const& node : sections.uiState.nodes) {
+                        if (node.id == semantic.nodeId && node.leaf &&
+                            node.leaf->command &&
+                            !node.leaf->command->empty()) {
+                            return dispatch(*node.leaf->command, std::any{});
+                        }
+                    }
+                    return rejectTarget("UI action target is not actionable");
+                } else if constexpr (std::same_as<
+                                         Input, NoticeActionPointerInput>) {
+                    if (semantic.button != InputPointerButton::Primary) {
+                        return unhandled();
+                    }
+                    const auto notice = impl_->noticeView();
+                    if (!notice) {
+                        return rejectTarget("notice action target is not present");
+                    }
+                    for (auto const& action : notice->actions) {
+                        if (action.id == semantic.actionId) {
+                            return dispatch(action.command, std::any{});
+                        }
+                    }
+                    return rejectTarget("notice action target is not actionable");
+                }
+            }
+        },
+        input);
+}
+
 CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
                              ClientCommand const& command) {
     // The routing signature: every runtime-owned input a host reads to interpret
@@ -3475,7 +3623,7 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
 }  // namespace
 
 ClientInputResult EditorSession::input(ClientId clientId,
-                                       ClientKeyInput const& input) {
+                                       ClientInput const& input) {
     if (const auto nested = impl_->session->activeDispatchRevision()) {
         return {ClientInputOutcome::Rejected, std::nullopt,
                 CommandResult{CommandError::HandlerFailed, *nested,

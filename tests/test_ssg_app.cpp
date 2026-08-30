@@ -111,14 +111,19 @@ TEST(statusActionPointerClickRoutesToInvokeActionWithGeneration) {
     hit.region = ssg::HitRegion::StatusAction;
     hit.statusInvocation = invocation;
     ssg::app::PointerTargets targets;
+    targets.observed_revision = ssg::Revision{23};
     targets.status_invocation = invocation;
     auto plan = ssg::app::route_pointer(
         hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
         false, false, std::nullopt, targets, {});
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    ASSERT_EQ(plan.commands[0].command_id, std::string{"status.invoke_action"});
-    ASSERT_EQ(std::any_cast<ssg::StatusActionInvocation>(plan.commands[0].payload),
-              invocation);
+    ASSERT_TRUE(plan.semantic_input.has_value());
+    auto const* input = std::get_if<ssg::StatusActionPointerInput>(
+        &*plan.semantic_input);
+    ASSERT_TRUE(input != nullptr);
+    if (input) {
+        ASSERT_EQ(input->basis.observedRevision, ssg::Revision{23});
+        ASSERT_EQ(input->invocation, invocation);
+    }
 }
 
 
@@ -132,20 +137,20 @@ TEST(aClickOnAnExternalActionRoutesThroughPointerTargetsToSelectThenAct) {
     hit.externalFileId = "external:src/foo:bar.cpp";  // an id that contains ':'
     hit.commandId = "external.reload";
     ssg::app::PointerTargets targets;
-    targets.external_file_id = ssg::DiffFileId{*hit.externalFileId};
-    targets.external_action_command = hit.commandId;
+    targets.observed_revision = ssg::Revision{19};
+    targets.external_invocation = ssg::ExternalActionInvocation{
+        ssg::DiffFileId{*hit.externalFileId}, ssg::ExternalAction::Reload};
     auto plan = ssg::app::route_pointer(
         hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
         false, false, std::nullopt, targets, {});
-    ASSERT_EQ(plan.commands.size(), std::size_t{2});
-    ASSERT_EQ(plan.commands[0].command_id, std::string{"external.select"});
-    ASSERT_EQ(std::any_cast<ssg::DiffFileId>(plan.commands[0].payload),
-              ssg::DiffFileId{"external:src/foo:bar.cpp"});
-    ASSERT_EQ(plan.commands[1].command_id, std::string{"external.reload"});
-    // The action is gated on the select: a rejected external.select of a stale id
-    // must not let the action run against the previously selected file.
-    ASSERT_TRUE(plan.commands[1].gate_on_previous);
-    ASSERT_TRUE(!plan.commands[0].gate_on_previous);
+    ASSERT_TRUE(plan.semantic_input.has_value());
+    auto const* input = std::get_if<ssg::ExternalActionPointerInput>(
+        &*plan.semantic_input);
+    ASSERT_TRUE(input != nullptr);
+    if (input) {
+        ASSERT_EQ(input->basis.observedRevision, ssg::Revision{19});
+        ASSERT_EQ(input->invocation, *targets.external_invocation);
+    }
     ASSERT_TRUE(!plan.begins_drag);
 }
 
@@ -2164,9 +2169,11 @@ TEST(routePointerDragExtendsSelectionFromAnchor) {
     ASSERT_FALSE(plan.ends_drag);
 }
 
-TEST(routePointerFieldHitDispatchesPublishedCommandGenerically) {
+TEST(routePointerFieldHitEmitsPublishedUiActionIdentity) {
     ssg::app::PointerTargets targets;
-    targets.field_command_id = std::string{"panel.show_files"};
+    targets.observed_revision = ssg::Revision{8};
+    targets.ui_generation = ssg::Generation{3};
+    targets.ui_node_id = ssg::UiNodeId{"header.files"};
     for (auto region :
          {ssg::HitRegion::HeaderField, ssg::HitRegion::FooterField}) {
         ssg::RegionHit hit;
@@ -2174,10 +2181,14 @@ TEST(routePointerFieldHitDispatchesPublishedCommandGenerically) {
         auto plan = ssg::app::route_pointer(
             hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
             false, std::nullopt, targets);
-        ASSERT_EQ(plan.commands.size(), std::size_t{1});
-        if (plan.commands.size() == 1) {
-            ASSERT_EQ(plan.commands[0].command_id,
-                      std::string{"panel.show_files"});
+        ASSERT_TRUE(plan.semantic_input.has_value());
+        auto const* input = std::get_if<ssg::PublishedUiActionPointerInput>(
+            &*plan.semantic_input);
+        ASSERT_TRUE(input != nullptr);
+        if (input) {
+            ASSERT_EQ(input->basis.observedRevision, ssg::Revision{8});
+            ASSERT_EQ(input->schemaGeneration, ssg::Generation{3});
+            ASSERT_EQ(input->nodeId, ssg::UiNodeId{"header.files"});
         }
         ASSERT_FALSE(plan.begins_drag);
         ASSERT_FALSE(plan.ends_drag);
@@ -2750,17 +2761,20 @@ TEST(routePointerTabPressActivatesTheTab) {
     hit.region = ssg::HitRegion::Tab;
     hit.tabIndex = 2;
     ssg::app::PointerTargets targets;
+    targets.observed_revision = ssg::Revision{12};
     targets.tab_id = ssg::TabId{7};
 
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::press, false, false,
                                         std::nullopt, targets);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"tab.activate"});
-        auto const* id = std::any_cast<ssg::TabId>(&plan.commands[0].payload);
-        ASSERT_TRUE(id != nullptr);
-        if (id) ASSERT_TRUE(*id == ssg::TabId{7});
+    ASSERT_TRUE(plan.semantic_input.has_value());
+    auto const* input =
+        std::get_if<ssg::TabPointerInput>(&*plan.semantic_input);
+    ASSERT_TRUE(input != nullptr);
+    if (input) {
+        ASSERT_EQ(input->basis.observedRevision, ssg::Revision{12});
+        ASSERT_EQ(input->tabId, ssg::TabId{7});
+        ASSERT_EQ(input->button, ssg::InputPointerButton::Primary);
     }
     ASSERT_FALSE(plan.begins_drag);
     ASSERT_FALSE(plan.ends_drag);
@@ -2778,17 +2792,19 @@ TEST(routePointerMiddleClickOnATabClosesIt) {
     hit.region = ssg::HitRegion::Tab;
     hit.tabIndex = 2;
     ssg::app::PointerTargets targets;
+    targets.observed_revision = ssg::Revision{12};
     targets.tab_id = ssg::TabId{7};
 
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::middle,
                                         ssg::app::PointerKind::press, false, false,
                                         std::nullopt, targets);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"tab.close"});
-        auto const* id = std::any_cast<ssg::TabId>(&plan.commands[0].payload);
-        ASSERT_TRUE(id != nullptr);
-        if (id) ASSERT_TRUE(*id == ssg::TabId{7});
+    ASSERT_TRUE(plan.semantic_input.has_value());
+    auto const* input =
+        std::get_if<ssg::TabPointerInput>(&*plan.semantic_input);
+    ASSERT_TRUE(input != nullptr);
+    if (input) {
+        ASSERT_EQ(input->tabId, ssg::TabId{7});
+        ASSERT_EQ(input->button, ssg::InputPointerButton::Auxiliary);
     }
 
     // Middle-click off a tab, or a release rather than a press, does nothing.
@@ -2943,16 +2959,13 @@ TEST(routePointerPalettePressExecutesTheCandidate) {
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::press, false, false,
                                         std::nullopt, targets);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"picker.submit"});
-        auto const* args = std::any_cast<ssg::PickerSubmitArguments>(
-            &plan.commands[0].payload);
-        ASSERT_TRUE(args != nullptr);
-        if (args) {
-            ASSERT_TRUE(args->activation == *targets.picker_activation);
-            ASSERT_EQ(args->candidateId, std::string{"view.split"});
-        }
+    ASSERT_TRUE(plan.semantic_input.has_value());
+    auto const* input =
+        std::get_if<ssg::PickerPointerInput>(&*plan.semantic_input);
+    ASSERT_TRUE(input != nullptr);
+    if (input) {
+        ASSERT_TRUE(input->activation == *targets.picker_activation);
+        ASSERT_EQ(input->candidateId, std::string{"view.split"});
     }
     ASSERT_FALSE(plan.begins_drag);
 
@@ -2979,17 +2992,14 @@ TEST(routePointerFilePickerPressUsesTheGenericPickerSubmit) {
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::press, false, false,
                                         std::nullopt, targets);
-    ASSERT_EQ(plan.commands.size(), std::size_t{1});
-    if (plan.commands.size() == 1) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"picker.submit"});
-        auto const* args = std::any_cast<ssg::PickerSubmitArguments>(
-            &plan.commands[0].payload);
-        ASSERT_TRUE(args != nullptr);
-        if (args) {
-            ASSERT_TRUE(args->activation == *targets.picker_activation);
-            ASSERT_EQ(args->candidateId,
-                      std::string{"src/runtime/snapshot.cpp"});
-        }
+    ASSERT_TRUE(plan.semantic_input.has_value());
+    auto const* input =
+        std::get_if<ssg::PickerPointerInput>(&*plan.semantic_input);
+    ASSERT_TRUE(input != nullptr);
+    if (input) {
+        ASSERT_TRUE(input->activation == *targets.picker_activation);
+        ASSERT_EQ(input->candidateId,
+                  std::string{"src/runtime/snapshot.cpp"});
     }
     ASSERT_FALSE(plan.begins_drag);
 }
@@ -3003,17 +3013,11 @@ TEST(routePointerPanelPressSelectsAndActivatesTheNode) {
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::press, false, false,
                                         std::nullopt, empty);
-    // A tree-row click selects the node, then activates it (matching keyboard
-    // select-then-Enter), in that order.
-    ASSERT_EQ(plan.commands.size(), std::size_t{2});
-    if (plan.commands.size() == 2) {
-        ASSERT_EQ(plan.commands[0].command_id, std::string{"tree.select"});
-        auto const* args = std::any_cast<ssg::TreeSelectArguments>(
-            &plan.commands[0].payload);
-        ASSERT_TRUE(args != nullptr);
-        if (args) ASSERT_EQ(args->nodeId, *hit.nodeId);
-        ASSERT_EQ(plan.commands[1].command_id, std::string{"tree.activate"});
-    }
+    ASSERT_TRUE(plan.semantic_input.has_value());
+    auto const* input =
+        std::get_if<ssg::TreePointerInput>(&*plan.semantic_input);
+    ASSERT_TRUE(input != nullptr);
+    if (input) ASSERT_EQ(input->nodeId, *hit.nodeId);
     ASSERT_FALSE(plan.begins_drag);
     ASSERT_FALSE(plan.ends_drag);
 
@@ -3370,7 +3374,7 @@ int main() {
     RUN(routePointerLeftPressOnEditorPlacesCaret);
     RUN(routePointerIgnoresNonEditorAndNonLeft);
     RUN(routePointerDragExtendsSelectionFromAnchor);
-    RUN(routePointerFieldHitDispatchesPublishedCommandGenerically);
+    RUN(routePointerFieldHitEmitsPublishedUiActionIdentity);
     RUN(routePointerDragWithoutAnchorOrTargetIsANoOp);
     RUN(routePointerReleaseEndsDragWithoutACommand);
     RUN(routePointerAltPressAddsCollapsedCaret);

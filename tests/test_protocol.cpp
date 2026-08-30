@@ -649,6 +649,33 @@ void appendFieldKey(std::string& out, std::string const& key) {
     out += key;
 }
 
+void overwriteUintField(std::string& bytes, std::string const& key,
+                        std::uint64_t value) {
+    std::string encodedKey;
+    appendFieldKey(encodedKey, key);
+    const auto found = bytes.find(encodedKey);
+    ASSERT_TRUE(found != std::string::npos);
+    if (found == std::string::npos) return;
+    const auto valueTag = found + encodedKey.size();
+    ASSERT_TRUE(valueTag + 9 <= bytes.size());
+    ASSERT_EQ(static_cast<unsigned char>(bytes[valueTag]), 3U);
+    for (int index = 0; index < 8; ++index) {
+        bytes[valueTag + 1 + static_cast<std::size_t>(index)] =
+            static_cast<char>((value >> (8 * index)) & 0xFF);
+    }
+}
+
+void renameField(std::string& bytes, std::string const& from,
+                 std::string const& to) {
+    ASSERT_EQ(from.size(), to.size());
+    std::string encodedKey;
+    appendFieldKey(encodedKey, from);
+    const auto found = bytes.find(encodedKey);
+    ASSERT_TRUE(found != std::string::npos);
+    if (found == std::string::npos) return;
+    bytes.replace(found + 4, from.size(), to);
+}
+
 // Hand-builds a `command_request` wire message directly against the
 // documented [u8 version][u8 kind][value] envelope and object/text/uint tag
 // scheme, independent of protocol.cpp's private encoder. This is the only
@@ -668,7 +695,7 @@ std::string buildCommandRequestMessage(std::string const& id,
     appendNullValue(body);
 
     std::string message;
-    message += wireU8(3);
+    message += wireU8(ssg::kProtocolWireVersion);
     message += wireU8(
         static_cast<std::uint8_t>(ssg::ProtocolMessageKind::CommandRequest));
     message += body;
@@ -694,7 +721,7 @@ std::string buildInvalidScrollFractionMessage() {
     appendFieldKey(body, "payload");
     body += payload;
 
-    return wireU8(3) +
+    return wireU8(ssg::kProtocolWireVersion) +
            wireU8(static_cast<std::uint8_t>(
                ssg::ProtocolMessageKind::CommandRequest)) +
            body;
@@ -1529,8 +1556,8 @@ TEST(clientInputAndResultRoundTripThroughTheWire) {
         ssg::ProtocolCodec{}.encodeClientInput(input));
     ASSERT_TRUE(decodedInput.accepted());
     ASSERT_TRUE(decodedInput.input.has_value());
-    ASSERT_EQ(decodedInput.input->stroke, input.stroke);
-    ASSERT_EQ(decodedInput.input->committedText, input.committedText);
+    ASSERT_TRUE(decodedInput.input.has_value() &&
+                *decodedInput.input == ssg::ClientInput{input});
 
     ssg::CommandResult command{ssg::CommandError::None,
                                ssg::Revision{9}, ""};
@@ -1567,6 +1594,175 @@ TEST(clientInputAndResultRoundTripThroughTheWire) {
     ASSERT_EQ(decodedOwned.result->clientOwned->text, std::string{"q"});
     ASSERT_FALSE(decodedOwned.result->command.has_value());
     ASSERT_FALSE(decodedOwned.result->pickerActivation.has_value());
+}
+
+TEST(semanticClientInputVariantsRoundTripThroughTheWire) {
+    using Button = ssg::InputPointerButton;
+    using Phase = ssg::InputPointerPhase;
+    const ssg::SemanticInputBasis basis{ssg::Revision{7}};
+    const std::vector<ssg::ClientInput> inputs{
+        ssg::TabPointerInput{basis, ssg::TabId{3}, Button::Primary,
+                             Phase::Press},
+        ssg::TreePointerInput{basis, ssg::TreeNodeId{"node"},
+                              Button::Primary, Phase::Release},
+        ssg::PickerPointerInput{
+            {ssg::SearchMode::File, ssg::PickerActivationId{5}}, "file.txt",
+            Button::Primary, Phase::Press},
+        ssg::PromptControlPointerInput{basis, "find.query", Button::Primary,
+                                       Phase::Press},
+        ssg::ExternalActionPointerInput{
+            basis,
+            {ssg::DiffFileId{"file.txt"}, ssg::ExternalAction::Reload},
+            Button::Primary, Phase::Press},
+        ssg::StatusActionPointerInput{
+            basis, {ssg::StatusId{4}, "retry", 8}, Button::Auxiliary,
+            Phase::Cancel},
+        ssg::PublishedUiActionPointerInput{
+            basis, ssg::Generation{9}, ssg::UiNodeId{"header.help"},
+            Button::Primary, Phase::Press},
+        ssg::NoticeActionPointerInput{
+            basis, "draft.notice.dismiss", Button::Primary, Phase::Press},
+    };
+    for (auto const& input : inputs) {
+        auto const decoded = ssg::ProtocolCodec{}.decodeClientInput(
+            ssg::ProtocolCodec{}.encodeClientInput(input));
+        ASSERT_TRUE(decoded.accepted());
+        ASSERT_TRUE(decoded.input.has_value() && *decoded.input == input);
+    }
+}
+
+TEST(semanticClientInputVariantsRejectMalformedAndAmbiguousShapes) {
+    const auto codec = ssg::ProtocolCodec{};
+    const ssg::SemanticInputBasis basis{ssg::Revision{7}};
+
+    auto unknownKind = codec.encodeClientInput(
+        ssg::TabPointerInput{basis, ssg::TabId{3}});
+    overwriteUintField(unknownKind, "kind", 255);
+    ASSERT_EQ(codec.decodeClientInput(unknownKind).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto invalidButton = codec.encodeClientInput(
+        ssg::TreePointerInput{basis, ssg::TreeNodeId{"node"}});
+    overwriteUintField(invalidButton, "button", 255);
+    ASSERT_EQ(codec.decodeClientInput(invalidButton).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto invalidPhase = codec.encodeClientInput(
+        ssg::TreePointerInput{basis, ssg::TreeNodeId{"node"}});
+    overwriteUintField(invalidPhase, "phase", 255);
+    ASSERT_EQ(codec.decodeClientInput(invalidPhase).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto missingTarget = codec.encodeClientInput(
+        ssg::TreePointerInput{basis, ssg::TreeNodeId{"node"}});
+    renameField(missingTarget, "node_id", "nope_id");
+    ASSERT_EQ(codec.decodeClientInput(missingTarget).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto legacyKey = codec.encodeClientInput(
+        ssg::ClientKeyInput{ssg::KeyStroke{}, "text"});
+    renameField(legacyKey, "committed_text", "committed_xext");
+    ASSERT_EQ(codec.decodeClientInput(legacyKey).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto missingBasis = codec.encodeClientInput(
+        ssg::TabPointerInput{basis, ssg::TabId{3}});
+    renameField(missingBasis, "basis_revision", "bogus_revision");
+    ASSERT_EQ(codec.decodeClientInput(missingBasis).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto zeroActivation = codec.encodeClientInput(
+        ssg::PickerPointerInput{
+            {ssg::SearchMode::File, ssg::PickerActivationId{5}}, "file"});
+    overwriteUintField(zeroActivation, "activation_id", 0);
+    ASSERT_EQ(codec.decodeClientInput(zeroActivation).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    auto emptyCandidate = codec.encodeClientInput(
+        ssg::PickerPointerInput{
+            {ssg::SearchMode::File, ssg::PickerActivationId{5}}, ""});
+    ASSERT_EQ(codec.decodeClientInput(emptyCandidate).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    std::string nullCandidate = wireU8(7);
+    appendU32(nullCandidate, 6);
+    appendFieldKey(nullCandidate, "kind");
+    appendUintValue(nullCandidate,
+                    static_cast<std::uint8_t>(ssg::ClientInputKind::Picker));
+    appendFieldKey(nullCandidate, "button");
+    appendUintValue(nullCandidate, 0);
+    appendFieldKey(nullCandidate, "phase");
+    appendUintValue(nullCandidate, 0);
+    appendFieldKey(nullCandidate, "picker_mode");
+    appendUintValue(nullCandidate,
+                    static_cast<std::uint8_t>(ssg::SearchMode::File));
+    appendFieldKey(nullCandidate, "activation_id");
+    appendUintValue(nullCandidate, 5);
+    appendFieldKey(nullCandidate, "candidate_id");
+    appendNullValue(nullCandidate);
+    nullCandidate =
+        wireU8(ssg::kProtocolWireVersion) +
+        wireU8(static_cast<std::uint8_t>(
+            ssg::ProtocolMessageKind::ClientInput)) +
+        nullCandidate;
+    ASSERT_EQ(codec.decodeClientInput(nullCandidate).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    std::string externalWithExtra = wireU8(7);
+    appendU32(externalWithExtra, 5);
+    appendFieldKey(externalWithExtra, "kind");
+    appendUintValue(
+        externalWithExtra,
+        static_cast<std::uint8_t>(ssg::ClientInputKind::ExternalAction));
+    appendFieldKey(externalWithExtra, "button");
+    appendUintValue(externalWithExtra, 0);
+    appendFieldKey(externalWithExtra, "phase");
+    appendUintValue(externalWithExtra, 0);
+    appendFieldKey(externalWithExtra, "basis_revision");
+    appendUintValue(externalWithExtra, 7);
+    appendFieldKey(externalWithExtra, "invocation");
+    externalWithExtra += wireU8(7);
+    appendU32(externalWithExtra, 3);
+    appendFieldKey(externalWithExtra, "file_id");
+    appendTextValue(externalWithExtra, "file");
+    appendFieldKey(externalWithExtra, "action");
+    appendUintValue(externalWithExtra, 0);
+    appendFieldKey(externalWithExtra, "extra");
+    appendNullValue(externalWithExtra);
+    externalWithExtra =
+        wireU8(ssg::kProtocolWireVersion) +
+        wireU8(static_cast<std::uint8_t>(
+            ssg::ProtocolMessageKind::ClientInput)) +
+        externalWithExtra;
+    ASSERT_EQ(codec.decodeClientInput(externalWithExtra).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    std::string statusWithExtra = wireU8(7);
+    appendU32(statusWithExtra, 4);
+    appendFieldKey(statusWithExtra, "status_id");
+    appendUintValue(statusWithExtra, 1);
+    appendFieldKey(statusWithExtra, "action_id");
+    appendTextValue(statusWithExtra, "dismiss");
+    appendFieldKey(statusWithExtra, "generation");
+    appendUintValue(statusWithExtra, 2);
+    appendFieldKey(statusWithExtra, "extra");
+    appendNullValue(statusWithExtra);
+    statusWithExtra =
+        wireU8(ssg::kProtocolWireVersion) +
+        wireU8(static_cast<std::uint8_t>(
+            ssg::ProtocolMessageKind::StatusActionInvocation)) +
+        statusWithExtra;
+    ASSERT_EQ(codec.decodeStatusActionInvocation(statusWithExtra).error,
+              ssg::ProtocolError::MalformedMessage);
+
+    ssg::ProtocolLimits limits;
+    limits.maxTextBytes = 32;
+    auto oversizedCandidate = codec.encodeClientInput(
+        ssg::PickerPointerInput{
+            {ssg::SearchMode::File, ssg::PickerActivationId{5}},
+            std::string(64, 'x')});
+    ASSERT_EQ(codec.decodeClientInput(oversizedCandidate, limits).error,
+              ssg::ProtocolError::ValueBoundsExceeded);
 }
 
 
@@ -1821,6 +2017,43 @@ void writeFixtureHex(std::string const& name, std::string const& bytes) {
     out << hex;
 }
 
+std::vector<std::pair<std::string, ssg::ClientInput>>
+canonicalClientInputFixtures() {
+    ssg::KeyStroke stroke;
+    stroke.code = ssg::KeyCode::KeyA;
+    stroke.control = true;
+    const auto basis6 = ssg::SemanticInputBasis{ssg::Revision{6}};
+    return {
+        {"client_input.hex", ssg::ClientKeyInput{stroke, "hello"}},
+        {"client_input_tab.hex",
+         ssg::TabPointerInput{basis6, ssg::TabId{17}}},
+        {"client_input_tree.hex",
+         ssg::TreePointerInput{basis6, ssg::TreeNodeId{"tree:src"}}},
+        {"client_input_picker.hex",
+         ssg::PickerPointerInput{
+             {ssg::SearchMode::Command, ssg::PickerActivationId{13}},
+             "command.open"}},
+        {"client_input_prompt_control.hex",
+         ssg::PromptControlPointerInput{
+             {ssg::Revision{7}}, "replace.replacement"}},
+        {"client_input_external_action.hex",
+         ssg::ExternalActionPointerInput{
+             {ssg::Revision{11}},
+             {ssg::DiffFileId{"external:src/a:b.cpp"},
+              ssg::ExternalAction::Reload}}},
+        {"client_input_status_action.hex",
+         ssg::StatusActionPointerInput{
+             {ssg::Revision{11}}, {ssg::StatusId{7}, "dismiss", 3}}},
+        {"client_input_ui_action.hex",
+         ssg::PublishedUiActionPointerInput{
+             {ssg::Revision{12}}, ssg::Generation{4},
+             ssg::UiNodeId{"header.help"}}},
+        {"client_input_notice_action.hex",
+         ssg::NoticeActionPointerInput{
+             {ssg::Revision{12}}, "draft.notice.dismiss"}},
+    };
+}
+
 // Regenerate the canonical session_snapshot/session_delta wire goldens from the
 // same objects the round-trip tests build.  Gated on SSG_REGEN_PROTOCOL_FIXTURES
 // so a wire-format change (e.g. a new ViewportViewState field) can re-lock the
@@ -1888,12 +2121,9 @@ TEST(regenerateCanonicalFixtures) {
         "session_semantic_delta.hex",
         ssg::ProtocolCodec{}.encodeSessionDelta(
             ssg::SessionSnapshotCodec{}.deriveDelta(before, after)));
-    ssg::KeyStroke stroke;
-    stroke.code = ssg::KeyCode::KeyA;
-    stroke.control = true;
-    writeFixtureHex(
-        "client_input.hex",
-        ssg::ProtocolCodec{}.encodeClientInput({stroke, "hello"}));
+    for (auto const& [name, input] : canonicalClientInputFixtures()) {
+        writeFixtureHex(name, ssg::ProtocolCodec{}.encodeClientInput(input));
+    }
     writeFixtureHex(
         "client_input_result.hex",
         ssg::ProtocolCodec{}.encodeClientInputResult(
@@ -1933,13 +2163,14 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
         ASSERT_EQ(decoded.result->message,
                   std::string{"base revision is stale"});
     }
-    {
-        auto decoded = ssg::ProtocolCodec{}.decodeClientInput(
-            readFixtureBytes("client_input.hex"));
+    for (auto const& [name, expected] : canonicalClientInputFixtures()) {
+        const auto fixture = readFixtureBytes(name);
+        auto decoded = ssg::ProtocolCodec{}.decodeClientInput(fixture);
         ASSERT_TRUE(decoded.accepted());
-        ASSERT_EQ(decoded.input->stroke.code, ssg::KeyCode::KeyA);
-        ASSERT_TRUE(decoded.input->stroke.control);
-        ASSERT_EQ(decoded.input->committedText, std::string{"hello"});
+        ASSERT_TRUE(decoded.input.has_value());
+        if (!decoded.input) return;
+        ASSERT_EQ(*decoded.input, expected);
+        ASSERT_EQ(ssg::ProtocolCodec{}.encodeClientInput(expected), fixture);
     }
     {
         auto decoded = ssg::ProtocolCodec{}.decodeClientInputResult(
@@ -2189,6 +2420,8 @@ int main() {
     RUN(sessionSnapshotRoundTripsTreeScrollFields);
     RUN(commandResultRoundTripsThroughTheWire);
     RUN(clientInputAndResultRoundTripThroughTheWire);
+    RUN(semanticClientInputVariantsRoundTripThroughTheWire);
+    RUN(semanticClientInputVariantsRejectMalformedAndAmbiguousShapes);
     RUN(statusActionInvocationRoundTripsThroughTheWire);
     RUN(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus);
     RUN(retiredWireKindsAreNeverReclaimed);

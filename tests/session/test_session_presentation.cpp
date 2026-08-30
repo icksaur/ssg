@@ -109,7 +109,7 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
                     .accepted());
 
     auto text = runtime.input(
-        ssg::ClientId{1}, {ssg::KeyStroke{}, "hello"});
+        ssg::ClientId{1}, ssg::ClientKeyInput{ssg::KeyStroke{}, "hello"});
     ASSERT_EQ(text.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_TRUE(text.command.has_value());
     ASSERT_TRUE(text.command->accepted());
@@ -121,7 +121,7 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
     fileFinder.code = ssg::KeyCode::KeyP;
     fileFinder.alt = true;
     auto finderOpen =
-        runtime.input(ssg::ClientId{1}, {fileFinder, {}});
+        runtime.input(ssg::ClientId{1}, ssg::ClientKeyInput{fileFinder, {}});
     ASSERT_EQ(finderOpen.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_TRUE(finderOpen.command.has_value());
     ASSERT_TRUE(finderOpen.command->accepted());
@@ -133,7 +133,8 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
 
     ssg::KeyStroke escape;
     escape.code = ssg::KeyCode::Escape;
-    auto finderEscape = runtime.input(ssg::ClientId{1}, {escape, {}});
+    auto finderEscape =
+        runtime.input(ssg::ClientId{1}, ssg::ClientKeyInput{escape, {}});
     ASSERT_EQ(finderEscape.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_TRUE(finderEscape.command.has_value());
     ASSERT_TRUE(finderEscape.command->accepted());
@@ -144,7 +145,7 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
                     .accepted());
     auto const before = runtime.revision();
     auto paletteText = runtime.input(
-        ssg::ClientId{1}, {ssg::KeyStroke{}, "q"});
+        ssg::ClientId{1}, ssg::ClientKeyInput{ssg::KeyStroke{}, "q"});
     ASSERT_EQ(paletteText.outcome, ssg::ClientInputOutcome::ClientOwned);
     ASSERT_TRUE(paletteText.clientOwned.has_value());
     ASSERT_EQ(paletteText.clientOwned->kind,
@@ -154,14 +155,16 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
 
     ssg::KeyStroke down;
     down.code = ssg::KeyCode::ArrowDown;
-    auto paletteDown = runtime.input(ssg::ClientId{1}, {down, {}});
+    auto paletteDown =
+        runtime.input(ssg::ClientId{1}, ssg::ClientKeyInput{down, {}});
     ASSERT_EQ(paletteDown.outcome, ssg::ClientInputOutcome::ClientOwned);
     ASSERT_TRUE(paletteDown.clientOwned.has_value());
     ASSERT_EQ(paletteDown.clientOwned->kind,
               ssg::ClientOwnedInputKind::SelectNext);
     ASSERT_EQ(runtime.revision(), before);
 
-    auto paletteEscape = runtime.input(ssg::ClientId{1}, {escape, {}});
+    auto paletteEscape =
+        runtime.input(ssg::ClientId{1}, ssg::ClientKeyInput{escape, {}});
     ASSERT_EQ(paletteEscape.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_TRUE(paletteEscape.command.has_value());
     ASSERT_TRUE(paletteEscape.command->accepted());
@@ -175,12 +178,14 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
                               {"find.open", runtime.revision(), {}})
                     .accepted());
     auto promptText = runtime.input(
-        ssg::ClientId{1}, {ssg::KeyStroke{}, "alpha beta"});
+        ssg::ClientId{1},
+        ssg::ClientKeyInput{ssg::KeyStroke{}, "alpha beta"});
     ASSERT_EQ(promptText.outcome, ssg::ClientInputOutcome::Dispatched);
     ssg::KeyStroke backspace;
     backspace.code = ssg::KeyCode::Backspace;
     auto graphemeDelete =
-        runtime.input(ssg::ClientId{1}, {backspace, {}});
+        runtime.input(ssg::ClientId{1},
+                      ssg::ClientKeyInput{backspace, {}});
     ASSERT_EQ(graphemeDelete.outcome,
               ssg::ClientInputOutcome::Dispatched);
     snapshot = runtime.snapshot(ssg::ClientId{1});
@@ -188,7 +193,8 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
     ASSERT_EQ(snapshot->sections().promptView->controls.front().value,
               std::string{"alpha bet"});
     backspace.alt = true;
-    auto wordDelete = runtime.input(ssg::ClientId{1}, {backspace, {}});
+    auto wordDelete =
+        runtime.input(ssg::ClientId{1}, ssg::ClientKeyInput{backspace, {}});
     ASSERT_EQ(wordDelete.outcome, ssg::ClientInputOutcome::Dispatched);
     snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot->sections().promptView.has_value());
@@ -197,7 +203,8 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
 
     auto const afterInput = runtime.revision();
     auto unknown = runtime.input(
-        ssg::ClientId{9}, {ssg::KeyStroke{}, "ignored"});
+        ssg::ClientId{9},
+        ssg::ClientKeyInput{ssg::KeyStroke{}, "ignored"});
     ASSERT_EQ(unknown.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_TRUE(unknown.command.has_value());
     ASSERT_EQ(unknown.command->error, ssg::CommandError::UnknownClient);

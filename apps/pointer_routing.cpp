@@ -4,7 +4,6 @@
 
 #include <ssg/Keymap.h>
 #include <ssg/PaletteSearcher.h>
-#include <ssg/PaletteSubmit.h>
 #include <ssg/TreeModel.h>
 
 namespace ssg::app {
@@ -137,7 +136,9 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
     if (button == PointerButton::middle) {
         if (kind == PointerKind::press && hit.region == ssg::HitRegion::Tab &&
             targets.tab_id) {
-            dispatch.commands.push_back({"tab.close", *targets.tab_id});
+            dispatch.semantic_input = ssg::TabPointerInput{
+                {targets.observed_revision}, *targets.tab_id,
+                ssg::InputPointerButton::Auxiliary};
         }
         return dispatch;
     }
@@ -161,23 +162,26 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // mapped the absolute item_index -> candidate id). Neither begins a
             // selection drag.
             if (hit.region == ssg::HitRegion::Tab && targets.tab_id) {
-                dispatch.commands.push_back({"tab.activate", *targets.tab_id});
+                dispatch.semantic_input = ssg::TabPointerInput{
+                    {targets.observed_revision}, *targets.tab_id};
                 return dispatch;
             }
             if (hit.region == ssg::HitRegion::Palette &&
                 targets.picker_candidate_id && targets.picker_activation) {
-                if (auto const submit = ssg::paletteSubmitCommand(
-                        *targets.picker_activation,
-                        *targets.picker_candidate_id)) {
-                    dispatch.commands.push_back(
-                        {std::string{submit->command.name()}, submit->payload});
-                }
+                dispatch.semantic_input = ssg::PickerPointerInput{
+                    *targets.picker_activation, *targets.picker_candidate_id};
                 return dispatch;
             }
             if (hit.region == ssg::HitRegion::StatusAction &&
                 targets.status_invocation) {
-                dispatch.commands.push_back({"status.invoke_action",
-                                             *targets.status_invocation});
+                dispatch.semantic_input = ssg::StatusActionPointerInput{
+                    {targets.observed_revision}, *targets.status_invocation};
+                return dispatch;
+            }
+            if (hit.region == ssg::HitRegion::PromptControl &&
+                targets.prompt_control_id) {
+                dispatch.semantic_input = ssg::PromptControlPointerInput{
+                    {targets.observed_revision}, *targets.prompt_control_id};
                 return dispatch;
             }
             // An external-modification action selects its file then runs the
@@ -187,27 +191,31 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // payload-less and honored only if the selected file offers it (the
             // command's own guard).
             if (hit.region == ssg::HitRegion::ExternalAction &&
-                targets.external_file_id && targets.external_action_command) {
-                dispatch.commands.push_back(
-                    {"external.select", *targets.external_file_id});
-                dispatch.commands.push_back(
-                    {*targets.external_action_command, std::any{},
-                     /*gate_on_previous=*/true});
+                targets.external_invocation) {
+                dispatch.semantic_input = ssg::ExternalActionPointerInput{
+                    {targets.observed_revision}, *targets.external_invocation};
                 return dispatch;
             }
             if ((hit.region == ssg::HitRegion::HeaderField ||
                  hit.region == ssg::HitRegion::FooterField) &&
-                targets.field_command_id) {
-                dispatch.commands.push_back({*targets.field_command_id, std::any{}});
+                targets.ui_generation && targets.ui_node_id) {
+                dispatch.semantic_input = ssg::PublishedUiActionPointerInput{
+                   {targets.observed_revision}, *targets.ui_generation,
+                   *targets.ui_node_id};
+                return dispatch;
+            }
+            if (hit.region == ssg::HitRegion::NoticeAction &&
+                targets.notice_action_id) {
+                dispatch.semantic_input = ssg::NoticeActionPointerInput{
+                   {targets.observed_revision}, *targets.notice_action_id};
                 return dispatch;
             }
             // A left press on a tree row selects that node and then activates it
             // (opens a file / toggles a directory), matching the keyboard
             // select-then-Enter behavior. The node id travels on the hit.
             if (hit.region == ssg::HitRegion::Panel && hit.nodeId) {
-                dispatch.commands.push_back(
-                    {"tree.select", ssg::TreeSelectArguments{*hit.nodeId}});
-                dispatch.commands.push_back({"tree.activate", std::any{}});
+                dispatch.semantic_input = ssg::TreePointerInput{
+                    {targets.observed_revision}, *hit.nodeId};
                 return dispatch;
             }
             // A left press on the editor places the caret and begins a potential

@@ -979,34 +979,30 @@ TEST(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile) {
             return action.action == ssg::ExternalAction::Reload;
         }));
 
-    ASSERT_TRUE(
-        session.runtime
-            ->dispatch(
-                ssg::ClientId{1},
-                {"external.invoke_action", session.runtime->revision(),
-                 ssg::ExternalActionInvocation{
-                     files[0].id, ssg::ExternalAction::Reload}})
-            .accepted());
+    auto rejectedAction = session.runtime->input(
+        ssg::ClientId{1},
+        ssg::ExternalActionPointerInput{
+            {session.runtime->revision()},
+            {files[0].id, ssg::ExternalAction::Reload}});
+    ASSERT_TRUE(rejectedAction.command.has_value());
+    ASSERT_TRUE(rejectedAction.command->accepted());
     ASSERT_EQ(externalFiles(*session.runtime).size(), 1U);
 
-    // Dispatching the unoffered Reload is a guarded no-op: the section is untouched
-    // and the buffer preserved.
-    ASSERT_TRUE(session.runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"external.reload", session.runtime->revision(),
-                                {}})
-                    .accepted());
+    // The unoffered action is a guarded no-op: the section is untouched and the
+    // buffer preserved.
     files = externalFiles(*session.runtime);
     ASSERT_EQ(files.size(), 1U);
     ASSERT_EQ(files[0].status, ssg::ExternalDocumentStatus::ExternallyRemoved);
     ASSERT_EQ(session.runtime->activeDocumentText(), buffer);
 
     // The offered KeepBuffer, by contrast, resolves the selected file.
-    ASSERT_TRUE(session.runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"external.keep_buffer",
-                                session.runtime->revision(), {}})
-                    .accepted());
+    auto offeredAction = session.runtime->input(
+        ssg::ClientId{1},
+        ssg::ExternalActionPointerInput{
+            {session.runtime->revision()},
+            {files[0].id, ssg::ExternalAction::KeepBuffer}});
+    ASSERT_TRUE(offeredAction.command.has_value());
+    ASSERT_TRUE(offeredAction.command->accepted());
     ASSERT_TRUE(externalFiles(*session.runtime).empty());
 }
 

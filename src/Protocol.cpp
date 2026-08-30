@@ -463,8 +463,6 @@ ProtocolError toProtocolError(ValueReadStatus status) {
 }
 
 
-constexpr std::uint8_t kProtocolWireVersion = 3;
-
 std::string encodeMessage(ProtocolMessageKind kind, ProtocolValue const& payload) {
     std::string out;
     writeU8(out, kProtocolWireVersion);
@@ -711,6 +709,11 @@ bool decodePresent(ProtocolValue const& value, std::optional<LspDiagnosticSeveri
 bool decodePresent(ProtocolValue const& value, std::optional<ShellNodeKind>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<FocusTarget>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<SemanticRole>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ClientInputKind>& out);
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<InputPointerButton>& out);
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<InputPointerPhase>& out);
 
 ProtocolValue toValue(Revision const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<Revision>& out);
@@ -1402,6 +1405,31 @@ bool decodePresent(ProtocolValue const& value, std::optional<FocusTarget>& out) 
 
 bool decodePresent(ProtocolValue const& value, std::optional<SemanticRole>& out) {
     return decodeEnum(value, out, kAllSemanticRoles);
+}
+
+bool decodePresent(ProtocolValue const& value, std::optional<ClientInputKind>& out) {
+    static constexpr std::array values{
+        ClientInputKind::Key, ClientInputKind::Tab, ClientInputKind::Tree,
+        ClientInputKind::Picker, ClientInputKind::PromptControl,
+        ClientInputKind::ExternalAction, ClientInputKind::StatusAction,
+        ClientInputKind::PublishedUiAction, ClientInputKind::NoticeAction};
+    return decodeEnum(value, out, values);
+}
+
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<InputPointerButton>& out) {
+    static constexpr std::array values{
+        InputPointerButton::Primary, InputPointerButton::Auxiliary,
+        InputPointerButton::Secondary};
+    return decodeEnum(value, out, values);
+}
+
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<InputPointerPhase>& out) {
+    static constexpr std::array values{
+        InputPointerPhase::Press, InputPointerPhase::Move,
+        InputPointerPhase::Release, InputPointerPhase::Cancel};
+    return decodeEnum(value, out, values);
 }
 
 // Strong-id toValue()/decodePresent() definitions.
@@ -2349,7 +2377,10 @@ ProtocolValue toValue(StatusActionInvocation const& value) {
 }
 bool decodePresent(ProtocolValue const& value, std::optional<StatusActionInvocation>& out) {
     auto const* object = value.asObject();
-    if (!object) return false;
+    if (!object || object->size() != 3 || !value.field("status_id") ||
+        !value.field("action_id") || !value.field("generation")) {
+        return false;
+    }
     auto statusId = requireField<StatusId>(value.field("status_id"));
     auto actionId = requireField<std::string>(value.field("action_id"));
     auto generation = requireField<std::uint64_t>(value.field("generation"));
@@ -4978,7 +5009,11 @@ ProtocolValue toValue(ExternalActionInvocation const& value) {
 }
 bool decodePresent(ProtocolValue const& value,
                    std::optional<ExternalActionInvocation>& out) {
-    if (!value.asObject()) return false;
+    auto const* object = value.asObject();
+    if (!object || object->size() != 2 || !value.field("file_id") ||
+        !value.field("action")) {
+        return false;
+    }
     auto fileId = requireField<DiffFileId>(value.field("file_id"));
     auto action = requireField<std::uint8_t>(value.field("action"));
     if (!fileId || !action ||
@@ -5596,13 +5631,88 @@ DecodeCommandResultResult ProtocolCodec::decodeCommandResult(
 }
 
 std::string ProtocolCodec::encodeClientInput(
-    ClientKeyInput const& input) const {
+    ClientInput const& input) const {
     std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back(
-        "stroke", input.stroke.code == KeyCode::None
-                      ? ProtocolValue::makeNull()
-                      : toValue(input.stroke));
-    fields.emplace_back("committed_text", toValue(input.committedText));
+    std::visit(
+        [&](auto const& semantic) {
+            using Input = std::decay_t<decltype(semantic)>;
+            if constexpr (std::same_as<Input, ClientKeyInput>) {
+                fields.emplace_back("kind", toValue(ClientInputKind::Key));
+                fields.emplace_back(
+                    "stroke", semantic.stroke.code == KeyCode::None
+                                  ? ProtocolValue::makeNull()
+                                  : toValue(semantic.stroke));
+                fields.emplace_back("committed_text",
+                                    toValue(semantic.committedText));
+            } else {
+                auto addPointer = [&](ClientInputKind kind) {
+                    fields.emplace_back("kind", toValue(kind));
+                    fields.emplace_back("button", toValue(semantic.button));
+                    fields.emplace_back("phase", toValue(semantic.phase));
+                };
+                if constexpr (std::same_as<Input, TabPointerInput>) {
+                    addPointer(ClientInputKind::Tab);
+                    fields.emplace_back("basis_revision",
+                                        toValue(semantic.basis.observedRevision));
+                    fields.emplace_back("tab_id", toValue(semantic.tabId));
+                } else if constexpr (std::same_as<Input, TreePointerInput>) {
+                    addPointer(ClientInputKind::Tree);
+                    fields.emplace_back("basis_revision",
+                                        toValue(semantic.basis.observedRevision));
+                    fields.emplace_back("node_id", toValue(semantic.nodeId));
+                } else if constexpr (std::same_as<Input,
+                                                  PickerPointerInput>) {
+                    addPointer(ClientInputKind::Picker);
+                    fields.emplace_back("picker_mode",
+                                        toValue(semantic.activation.mode));
+                    fields.emplace_back(
+                        "activation_id",
+                        ProtocolValue::makeUint(semantic.activation.id.value()));
+                    fields.emplace_back("candidate_id",
+                                        toValue(semantic.candidateId));
+                } else if constexpr (std::same_as<
+                                         Input, PromptControlPointerInput>) {
+                    addPointer(ClientInputKind::PromptControl);
+                    fields.emplace_back("basis_revision",
+                                        toValue(semantic.basis.observedRevision));
+                    fields.emplace_back("control_id",
+                                        toValue(semantic.controlId));
+                } else if constexpr (std::same_as<
+                                         Input, ExternalActionPointerInput>) {
+                    addPointer(ClientInputKind::ExternalAction);
+                    fields.emplace_back("basis_revision",
+                                        toValue(semantic.basis.observedRevision));
+                    fields.emplace_back("invocation",
+                                        toValue(semantic.invocation));
+                } else if constexpr (std::same_as<
+                                         Input, StatusActionPointerInput>) {
+                    addPointer(ClientInputKind::StatusAction);
+                    fields.emplace_back("basis_revision",
+                                        toValue(semantic.basis.observedRevision));
+                    fields.emplace_back("invocation",
+                                        toValue(semantic.invocation));
+                } else if constexpr (std::same_as<
+                                         Input, PublishedUiActionPointerInput>) {
+                    addPointer(ClientInputKind::PublishedUiAction);
+                    fields.emplace_back("basis_revision",
+                                        toValue(semantic.basis.observedRevision));
+                    fields.emplace_back(
+                        "schema_generation",
+                        ProtocolValue::makeUint(
+                            semantic.schemaGeneration.value()));
+                    fields.emplace_back(
+                        "node_id",
+                        ProtocolValue::makeText(semantic.nodeId.value()));
+                } else if constexpr (std::same_as<
+                                         Input, NoticeActionPointerInput>) {
+                    addPointer(ClientInputKind::NoticeAction);
+                    fields.emplace_back("basis_revision",
+                                        toValue(semantic.basis.observedRevision));
+                    fields.emplace_back("action_id", toValue(semantic.actionId));
+                }
+            }
+        },
+        input);
     return encodeMessage(ProtocolMessageKind::ClientInput,
                          ProtocolValue::makeObject(std::move(fields)));
 }
@@ -5615,23 +5725,177 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         return {decoded.error, std::nullopt, decoded.message};
     }
     auto const& payload = *decoded.payload;
-    auto const* strokeField = payload.field("stroke");
-    auto text = requireField<std::string>(payload.field("committed_text"));
-    if (!payload.asObject() || strokeField == nullptr || !text) {
+    auto kind = requireField<ClientInputKind>(payload.field("kind"));
+    if (!payload.asObject() || !kind) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "client input payload is malformed"};
     }
-    KeyStroke stroke;
-    if (strokeField->kind() != ProtocolValue::Kind::NullValue) {
-        auto decodedStroke = requireField<KeyStroke>(strokeField);
-        if (!decodedStroke) {
+    const auto hasExactly = [&](std::initializer_list<std::string_view> names) {
+        const auto* fields = payload.asObject();
+        if (fields == nullptr || fields->size() != names.size()) return false;
+        return std::all_of(
+            names.begin(), names.end(),
+            [&](std::string_view name) { return payload.field(name) != nullptr; });
+    };
+    if (*kind == ClientInputKind::Key) {
+        if (!hasExactly({"kind", "stroke", "committed_text"})) {
             return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client input stroke is malformed"};
+                    "client key input fields are malformed"};
         }
-        stroke = *decodedStroke;
+        auto const* strokeField = payload.field("stroke");
+        auto text = requireField<std::string>(payload.field("committed_text"));
+        if (strokeField == nullptr || !text) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                   "client key input payload is malformed"};
+        }
+        KeyStroke stroke;
+        if (strokeField->kind() != ProtocolValue::Kind::NullValue) {
+            auto decodedStroke = requireField<KeyStroke>(strokeField);
+            if (!decodedStroke) {
+                return {ProtocolError::MalformedMessage, std::nullopt,
+                       "client input stroke is malformed"};
+            }
+            stroke = *decodedStroke;
+        }
+        return {ProtocolError::None,
+                ClientInput{ClientKeyInput{stroke, std::move(*text)}}, {}};
     }
-    return {ProtocolError::None,
-            ClientKeyInput{stroke, std::move(*text)}, {}};
+    auto button =
+        requireField<InputPointerButton>(payload.field("button"));
+    auto phase = requireField<InputPointerPhase>(payload.field("phase"));
+    if (!button || !phase) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "client pointer input gesture is malformed"};
+    }
+    if (*kind == ClientInputKind::Picker) {
+        if (!hasExactly({"kind", "button", "phase", "picker_mode",
+                         "activation_id", "candidate_id"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client picker input fields are malformed"};
+        }
+        auto mode = requireField<SearchMode>(payload.field("picker_mode"));
+        auto activationId =
+            requireField<std::uint64_t>(payload.field("activation_id"));
+        auto candidate =
+            requireField<std::string>(payload.field("candidate_id"));
+        if (!mode || !activationId || *activationId == 0 || !candidate ||
+            candidate->empty()) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                   "client picker input target is malformed"};
+        }
+        return {
+            ProtocolError::None,
+            ClientInput{PickerPointerInput{
+                PickerActivation{*mode, PickerActivationId{*activationId}},
+                std::move(*candidate), *button, *phase}},
+            {}};
+    }
+    auto basis =
+        requireField<Revision>(payload.field("basis_revision"));
+    if (!basis) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "client pointer input basis is malformed"};
+    }
+    const SemanticInputBasis semanticBasis{*basis};
+    if (*kind == ClientInputKind::Tab) {
+        if (!hasExactly(
+                {"kind", "button", "phase", "basis_revision", "tab_id"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client tab input fields are malformed"};
+        }
+        auto id = requireField<TabId>(payload.field("tab_id"));
+        if (id) {
+            return {ProtocolError::None,
+                   ClientInput{TabPointerInput{
+                       semanticBasis, *id, *button, *phase}},
+                   {}};
+        }
+    } else if (*kind == ClientInputKind::Tree) {
+        if (!hasExactly(
+                {"kind", "button", "phase", "basis_revision", "node_id"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client tree input fields are malformed"};
+        }
+        auto id = requireField<TreeNodeId>(payload.field("node_id"));
+        if (id) {
+            return {ProtocolError::None,
+                   ClientInput{TreePointerInput{
+                       semanticBasis, std::move(*id), *button, *phase}},
+                   {}};
+        }
+    } else if (*kind == ClientInputKind::PromptControl) {
+        if (!hasExactly({"kind", "button", "phase", "basis_revision",
+                         "control_id"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client prompt-control input fields are malformed"};
+        }
+        auto id = requireField<std::string>(payload.field("control_id"));
+        if (id && !id->empty()) {
+            return {ProtocolError::None,
+                   ClientInput{PromptControlPointerInput{
+                       semanticBasis, std::move(*id), *button, *phase}},
+                   {}};
+        }
+    } else if (*kind == ClientInputKind::ExternalAction) {
+        if (!hasExactly({"kind", "button", "phase", "basis_revision",
+                         "invocation"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client external-action input fields are malformed"};
+        }
+        auto invocation = requireField<ExternalActionInvocation>(
+            payload.field("invocation"));
+        if (invocation) {
+            return {ProtocolError::None,
+                   ClientInput{ExternalActionPointerInput{
+                       semanticBasis, std::move(*invocation), *button, *phase}},
+                   {}};
+        }
+    } else if (*kind == ClientInputKind::StatusAction) {
+        if (!hasExactly({"kind", "button", "phase", "basis_revision",
+                         "invocation"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client status-action input fields are malformed"};
+        }
+        auto invocation = requireField<StatusActionInvocation>(
+            payload.field("invocation"));
+        if (invocation) {
+            return {ProtocolError::None,
+                   ClientInput{StatusActionPointerInput{
+                       semanticBasis, std::move(*invocation), *button, *phase}},
+                   {}};
+        }
+    } else if (*kind == ClientInputKind::PublishedUiAction) {
+        if (!hasExactly({"kind", "button", "phase", "basis_revision",
+                         "schema_generation", "node_id"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client UI-action input fields are malformed"};
+        }
+        auto generation =
+            requireField<std::uint64_t>(payload.field("schema_generation"));
+        auto id = requireField<std::string>(payload.field("node_id"));
+        if (generation && id && !id->empty()) {
+            return {ProtocolError::None,
+                   ClientInput{PublishedUiActionPointerInput{
+                       semanticBasis, Generation{*generation},
+                       UiNodeId{std::move(*id)}, *button, *phase}},
+                   {}};
+        }
+    } else if (*kind == ClientInputKind::NoticeAction) {
+        if (!hasExactly({"kind", "button", "phase", "basis_revision",
+                         "action_id"})) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "client notice-action input fields are malformed"};
+        }
+        auto id = requireField<std::string>(payload.field("action_id"));
+        if (id && !id->empty()) {
+            return {ProtocolError::None,
+                   ClientInput{NoticeActionPointerInput{
+                       semanticBasis, std::move(*id), *button, *phase}},
+                   {}};
+        }
+    }
+    return {ProtocolError::MalformedMessage, std::nullopt,
+            "client pointer input target is malformed"};
 }
 
 std::string ProtocolCodec::encodeClientInputResult(
