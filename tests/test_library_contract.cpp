@@ -173,8 +173,9 @@ TEST(paletteReportIsAPureFunctionOfCandidatesAndQuery) {
                       ssg::PaletteSearcher{}.ghost(candidates[order.front()].label, query));
             // The reported rows are exactly the window of the shared ranker's
             // order — the client uses no private ranking.
-            ASSERT_EQ(report.rows.size(),
-                      std::min<std::size_t>(order.size(), 12));
+            const auto expectedRows =
+                std::min<std::size_t>(order.size(), 12);
+            ASSERT_EQ(report.rows.size(), expectedRows);
             for (std::size_t row = 0; row < report.rows.size(); ++row) {
                 ASSERT_TRUE(report.rows[row] ==
                             candidates[order[report.firstVisible + row]]);

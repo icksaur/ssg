@@ -324,8 +324,11 @@ TEST(reloadRefreshesBaselineFromDisk) {
 
     const auto opened = workspace.openFile("live.txt");
     ASSERT_TRUE(opened.accepted());
-    ASSERT_EQ(workspace.baselineFor(*opened.document)->contentHash,
-              ssg::fastContentHash("first\n"));
+    const auto openedBaseline = workspace.baselineFor(*opened.document);
+    ASSERT_TRUE(openedBaseline.has_value());
+    if (openedBaseline) {
+        ASSERT_EQ(openedBaseline->contentHash, ssg::fastContentHash("first\n"));
+    }
 
     // Something external rewrites the file; reload re-reads disk, so the baseline
     // now reflects the new disk content (the authority is disk, not the buffer).
@@ -351,8 +354,12 @@ TEST(undoingReloadRestoresThePreReloadBaseline) {
     writeBytes(temporary.path() / "live.txt", "external edit\n");
     const auto reloaded = workspace.reload(*opened.document);
     ASSERT_TRUE(reloaded.accepted());
-    ASSERT_EQ(workspace.baselineFor(*opened.document)->contentHash,
-              ssg::fastContentHash("external edit\n"));
+    const auto reloadedBaseline = workspace.baselineFor(*opened.document);
+    ASSERT_TRUE(reloadedBaseline.has_value());
+    if (reloadedBaseline) {
+        ASSERT_EQ(reloadedBaseline->contentHash,
+                  ssg::fastContentHash("external edit\n"));
+    }
 
     // Undoing the reload must also restore the baseline the pre-reload edits
     // branched from — otherwise a later dirty close would record a baseline that
@@ -360,8 +367,12 @@ TEST(undoingReloadRestoresThePreReloadBaseline) {
     // prompted the reload.
     ASSERT_TRUE(reloaded.compensation.has_value());
     ASSERT_TRUE(workspace.restore(*reloaded.compensation).accepted());
-    ASSERT_EQ(workspace.baselineFor(*opened.document)->contentHash,
-              ssg::fastContentHash("original\n"));
+    const auto restoredBaseline = workspace.baselineFor(*opened.document);
+    ASSERT_TRUE(restoredBaseline.has_value());
+    if (restoredBaseline) {
+        ASSERT_EQ(restoredBaseline->contentHash,
+                  ssg::fastContentHash("original\n"));
+    }
 }
 
 }  // namespace
