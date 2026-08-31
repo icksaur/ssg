@@ -76,6 +76,7 @@ TEST(theSurfaceBackingMappingIsTheSpecifiedContract) {
     ASSERT_TRUE(has(ViewSurface::GitStatus, SnapshotSection::Tree));
     ASSERT_TRUE(has(ViewSurface::FindResults, SnapshotSection::Palette));
     ASSERT_TRUE(has(ViewSurface::Symbols, SnapshotSection::Tree));
+    ASSERT_TRUE(has(ViewSurface::Tree, SnapshotSection::Tree));
     ASSERT_TRUE(has(ViewSurface::FooterPrompt, SnapshotSection::PromptView));
     ASSERT_TRUE(has(ViewSurface::Notice, SnapshotSection::NoticeView));
     ASSERT_TRUE(has(ViewSurface::ExternalModification,
@@ -100,7 +101,7 @@ TEST(gridChromeLoweringRefusesAViewCenter) {
     WidgetDescriptor view;
     view.kind = WidgetKind::View;
     view.id = "footer.middle.0";
-    view.surface = ViewSurface::FileTree;
+    view.surface = ViewSurface::Tree;
 
     // Row[ left(Auto), middle(Flex) with a Flex View center, right(Auto) ].
     UiContainer left{Axis::Row, {}, {}, {}};

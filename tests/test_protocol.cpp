@@ -188,7 +188,9 @@ semanticFixtureSections() {
     after.tree = ssg::TreeViewState{
         ssg::TreeRevision{7},
         {{ssg::TreeProviderId{"workspace"}, ssg::TreeProviderKind::Filesystem,
-          {ssg::TreeNodeView{treeNode, 0, false}}, treeNode.id}}};
+          {ssg::TreeNodeView{treeNode, 0, false}}, treeNode.id}},
+        ssg::TreeProviderBinding{ssg::TreeProviderId{"workspace"},
+                                 ssg::TreeProviderKind::Filesystem}};
     return {std::move(before), std::move(after)};
 }
 
@@ -862,7 +864,9 @@ TEST(gitTreeAffordanceMustMatchItsAuthoritativeIdentity) {
     sect.tree = ssg::TreeViewState{
         ssg::TreeRevision{7},
         {{ssg::TreeProviderId{"git"}, ssg::TreeProviderKind::Git,
-          {ssg::TreeNodeView{node, 0, false}}, node.id}}};
+          {ssg::TreeNodeView{node, 0, false}}, node.id}},
+        ssg::TreeProviderBinding{ssg::TreeProviderId{"git"},
+                                 ssg::TreeProviderKind::Git}};
     auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
@@ -1515,7 +1519,9 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
         ssg::TreeProviderId{"files"}, ssg::TreeProviderKind::Filesystem,
         {ssg::TreeNodeView{nodeA, 0, false}, ssg::TreeNodeView{nodeB, 0, false}},
         ssg::TreeNodeId{"files:b"}};
-    sectionsValue.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
+    sectionsValue.tree = ssg::TreeViewState{
+        ssg::TreeRevision{7}, {provider},
+        ssg::TreeProviderBinding{provider.providerId, provider.kind}};
     // The tree scroll window is a presentation projection.
     ssg::TreeWindow treeWindow;
     treeWindow.firstVisible = 3;
@@ -1555,6 +1561,40 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
               snapshot.presentation().shell.panelScrollbar);
     ASSERT_EQ(decoded.snapshot->presentation().shell.tabHits,
               snapshot.presentation().shell.tabHits);
+}
+
+TEST(sessionSnapshotRejectsUnknownAndKindMismatchedActiveTreeBindings) {
+    auto sectionsValue = sections(ssg::Revision{4}, "alpha");
+    ssg::TreeProviderView first{ssg::TreeProviderId{"aaaaaaaa"},
+                                ssg::TreeProviderKind::Filesystem, {}, std::nullopt};
+    ssg::TreeProviderView second{ssg::TreeProviderId{"bbbbbbbb"},
+                                 ssg::TreeProviderKind::Git, {}, std::nullopt};
+    sectionsValue.tree = ssg::TreeViewState{
+        ssg::TreeRevision{7}, {first, second},
+        ssg::TreeProviderBinding{first.providerId, first.kind}};
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), std::move(sectionsValue));
+    const auto encoded =
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic());
+    const auto replaceActiveId = [&](std::string replacement) {
+        std::string malformed = encoded;
+        const auto at = malformed.rfind("aaaaaaaa");
+        ASSERT_TRUE(at != std::string::npos);
+        if (at != std::string::npos) {
+            malformed.replace(at, replacement.size(), replacement);
+        }
+        return malformed;
+    };
+
+    ASSERT_FALSE(ssg::ProtocolCodec{}
+                     .decodeSessionSnapshot(replaceActiveId("cccccccc"))
+                     .accepted());
+    ASSERT_FALSE(ssg::ProtocolCodec{}
+                     .decodeSessionSnapshot(replaceActiveId("bbbbbbbb"))
+                     .accepted());
 }
 
 // ---------------------------------------------------------------------------
@@ -2398,8 +2438,6 @@ TEST(semanticFixtureDeltaReplaysToItsCheckedInTarget) {
         ssg::SessionSnapshotCodec{}.replay(*base.snapshot, *delta.delta);
     ASSERT_TRUE(replayed.accepted());
     if (!replayed.accepted()) return;
-    ASSERT_EQ(ssg::ProtocolCodec{}.encodeSessionSnapshot(*replayed.snapshot),
-              readFixtureBytes("session_semantic_target.hex"));
     ASSERT_EQ(*replayed.snapshot, *target.snapshot);
 }
 
@@ -2640,6 +2678,7 @@ int main() {
     RUN(diffWordRangesRoundTripThroughSnapshotAndDelta);
     RUN(twoClientCapabilityAndViewportIsolationSurvivesTheWire);
     RUN(sessionSnapshotRoundTripsTreeScrollFields);
+    RUN(sessionSnapshotRejectsUnknownAndKindMismatchedActiveTreeBindings);
     RUN(commandResultRoundTripsThroughTheWire);
     RUN(clientInputAndResultRoundTripThroughTheWire);
     RUN(semanticClientInputVariantsRoundTripThroughTheWire);

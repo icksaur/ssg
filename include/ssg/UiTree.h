@@ -141,6 +141,7 @@ inline constexpr std::string_view kFindResultsViewportNodeId = "findresults.view
 inline constexpr std::string_view kFileTreeNodeId = "filetree";
 inline constexpr std::string_view kGitStatusNodeId = "gitstatus";
 inline constexpr std::string_view kSymbolsNodeId = "symbols";
+inline constexpr std::string_view kTreeNodeId = "tree";
 inline constexpr std::string_view kTabBarNodeId = "tabbar";
 inline constexpr std::string_view kDocumentNodeId = "document";
 inline constexpr std::string_view kFindResultsNodeId = "findresults";

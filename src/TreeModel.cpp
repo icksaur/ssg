@@ -382,8 +382,9 @@ TreeCommandSet::TreeCommandSet()
 TreeCommandSet treeCommandSet() { return TreeCommandSet{}; }
 
 void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
+    const TreeProviderId providerId = snapshot.providerId();
     auto iterator = std::lower_bound(
-        providers_.begin(), providers_.end(), snapshot.providerId(),
+        providers_.begin(), providers_.end(), providerId,
         [](const ProviderState& state, const TreeProviderId& id) {
             return state.snapshot.providerId() < id;
         });
@@ -402,6 +403,7 @@ void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
         providers_.insert(
             iterator, ProviderState{std::move(snapshot), {}});
     }
+    if (!activeProviderId_) activeProviderId_ = providerId;
     revision_ = TreeRevision{revision_.value() + 1};
 
     // Keep the selection valid against the active provider; default to its
@@ -424,45 +426,24 @@ void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
     }
 }
 
-// Falls back to providers_.front() when activeProviderId_ is unset OR
-// refers to a provider not (yet) registered -- e.g. a caller's
-// activateProvider(id) call failed because that provider was still
-// pending registration (a deferred workspace scan not yet primed; see
-// apps/ssg_main.cpp's startup panel.show_files sequencing). This masks a
-// failed/never-issued activation as long as there is only ONE registered
-// provider at the time, which is today's common case at startup, but is
-// an incidental correctness reliance, not a guarantee: if a second
-// provider (e.g. "git") were ever registered before "filesystem" during
-// some future startup-ordering change, this fallback could silently
-// select the WRONG one instead of surfacing that activation never
-// happened. Worth hardening (e.g. returning nullptr for a stale-but-set
-// activeProviderId_ rather than guessing) if that scenario becomes real.
 TreeModel::ProviderState* TreeModel::activeProvider() {
-    if (providers_.empty()) return nullptr;
-    if (activeProviderId_) {
-        auto found = std::find_if(
-            providers_.begin(), providers_.end(),
-            [&](const ProviderState& state) {
-                return state.snapshot.providerId() == *activeProviderId_;
-            });
-        if (found != providers_.end()) return &*found;
-    }
-    return &providers_.front();
+    if (!activeProviderId_) return nullptr;
+    auto found = std::find_if(
+        providers_.begin(), providers_.end(),
+        [&](const ProviderState& state) {
+            return state.snapshot.providerId() == *activeProviderId_;
+        });
+    return found == providers_.end() ? nullptr : &*found;
 }
 
-// Same fallback-to-front() reliance as the non-const overload above -- see
-// its comment.
 const TreeModel::ProviderState* TreeModel::activeProvider() const {
-    if (providers_.empty()) return nullptr;
-    if (activeProviderId_) {
-        auto found = std::find_if(
-            providers_.begin(), providers_.end(),
-            [&](const ProviderState& state) {
-                return state.snapshot.providerId() == *activeProviderId_;
-            });
-        if (found != providers_.end()) return &*found;
-    }
-    return &providers_.front();
+    if (!activeProviderId_) return nullptr;
+    auto found = std::find_if(
+        providers_.begin(), providers_.end(),
+        [&](const ProviderState& state) {
+            return state.snapshot.providerId() == *activeProviderId_;
+        });
+    return found == providers_.end() ? nullptr : &*found;
 }
 
 bool TreeModel::selectNext() {
@@ -588,7 +569,15 @@ std::vector<TreeModel::ProviderIdentity> TreeModel::providerIdentities() const {
     return identities;
 }
 
-bool TreeModel::activateProvider(const TreeProviderId& providerId) {    const auto found = std::find_if(
+std::optional<TreeProviderBinding> TreeModel::activeProviderBinding() const {
+    const auto* provider = activeProvider();
+    if (provider == nullptr) return std::nullopt;
+    return TreeProviderBinding{provider->snapshot.providerId(),
+                               provider->snapshot.kind()};
+}
+
+bool TreeModel::activateProvider(const TreeProviderId& providerId) {
+    const auto found = std::find_if(
         providers_.begin(), providers_.end(),
         [&](const ProviderState& state) {
             return state.snapshot.providerId() == providerId;
@@ -626,8 +615,14 @@ bool TreeModel::activateOrCreate(
             "TreeModel::activateOrCreate requires a revision source "
             "(revisionForCreate must be callable)"};
     }
-    if (activateProvider(binding.id)) {
-        return true;
+    const auto existing = std::find_if(
+        providers_.begin(), providers_.end(),
+        [&](const ProviderState& state) {
+            return state.snapshot.providerId() == binding.id;
+        });
+    if (existing != providers_.end()) {
+        if (existing->snapshot.kind() != binding.kind) return false;
+        return activateProvider(binding.id);
     }
     // Not present. Only Git/Symbols may be created on demand; a Filesystem
     // provider is seeded at construction, so a missing one is a real failure.
@@ -674,7 +669,7 @@ std::size_t TreeModel::activeVisibleNodeCount() const {
 }
 
 TreeViewState TreeModel::viewState() const {
-    TreeViewState result{revision_, {}};
+    TreeViewState result{revision_, {}, activeProviderBinding()};
     result.providers.reserve(providers_.size());
     std::vector<const ProviderState*> ordered;
     ordered.reserve(providers_.size());
@@ -702,6 +697,34 @@ TreeViewState TreeModel::viewState() const {
     return result;
 }
 
+const TreeProviderView* activeTreeProvider(const TreeViewState& state) noexcept {
+    if (!state.activeBinding) return nullptr;
+    const auto found = std::find_if(
+        state.providers.begin(), state.providers.end(),
+        [&](const TreeProviderView& provider) {
+            return provider.providerId == state.activeBinding->id &&
+                   provider.kind == state.activeBinding->kind;
+        });
+    if (found == state.providers.end()) return nullptr;
+    const auto duplicate = std::find_if(
+        std::next(found), state.providers.end(),
+        [&](const TreeProviderView& provider) {
+            return provider.providerId == state.activeBinding->id &&
+                   provider.kind == state.activeBinding->kind;
+        });
+    return duplicate == state.providers.end() ? &*found : nullptr;
+}
+
+bool isValidTreeViewState(const TreeViewState& state) noexcept {
+    if (state.providers.empty()) return !state.activeBinding;
+    if (!state.activeBinding || activeTreeProvider(state) == nullptr) return false;
+    std::set<TreeProviderId> ids;
+    return std::all_of(state.providers.begin(), state.providers.end(),
+                       [&](const TreeProviderView& provider) {
+                           return ids.insert(provider.providerId).second;
+                       });
+}
+
 std::size_t TreeDelta::operationCount() const noexcept {
     std::size_t result = 0;
     for (const auto& provider : providers) {
@@ -713,7 +736,8 @@ std::size_t TreeDelta::operationCount() const noexcept {
 TreeDelta TreeDeltaCodec::derive(const TreeViewState& base,
                                  const TreeViewState& target,
                                  std::size_t maximumOperations) const {
-    TreeDelta result{base.revision, target.revision, false, {}, {}};
+    TreeDelta result{base.revision, target.revision, false, {}, {},
+                     target.activeBinding};
     result.providerOrder.reserve(target.providers.size());
     for (const auto& provider : target.providers) {
         result.providerOrder.push_back(provider.providerId);
@@ -794,10 +818,10 @@ TreeReplayResult TreeDeltaCodec::replay(const TreeViewState& base,
         if (!changed.insert(change.providerId).second) {
             return {std::nullopt, TreeReplayError::MalformedDelta};
         }
-        auto provider = std::lower_bound(
-            state.providers.begin(), state.providers.end(), change.providerId,
-            [](const TreeProviderView& candidate, const TreeProviderId& id) {
-                return candidate.providerId < id;
+        auto provider = std::find_if(
+            state.providers.begin(), state.providers.end(),
+            [&](const TreeProviderView& candidate) {
+                return candidate.providerId == change.providerId;
             });
         if (change.removeProvider) {
             if (provider == state.providers.end() ||
@@ -853,7 +877,19 @@ TreeReplayResult TreeDeltaCodec::replay(const TreeViewState& base,
         ordered.push_back(*provider);
     }
     state.providers = std::move(ordered);
+    if (delta.activeBinding) {
+        state.activeBinding = delta.activeBinding;
+    } else if (!state.providers.empty()) {
+        // Deltas encoded before active_binding was added used active-first order.
+        state.activeBinding = TreeProviderBinding{
+            state.providers.front().providerId, state.providers.front().kind};
+    } else {
+        state.activeBinding.reset();
+    }
     state.revision = delta.revision;
+    if (!isValidTreeViewState(state)) {
+        return {std::nullopt, TreeReplayError::MalformedDelta};
+    }
     return {std::move(state), TreeReplayError::None};
 }
 

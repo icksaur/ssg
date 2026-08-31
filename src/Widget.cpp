@@ -27,7 +27,7 @@ constexpr std::array kViewSurfaceNames{
     std::string_view{"gitstatus"}, std::string_view{"findresults"},
     std::string_view{"symbols"}, std::string_view{"footer_prompt"},
     std::string_view{"notice"}, std::string_view{"external_modification"},
-    std::string_view{"document"},
+    std::string_view{"document"}, std::string_view{"tree"},
 };
 static_assert(kViewSurfaceNames.size() == kViewSurfaceCount);
 }  // namespace

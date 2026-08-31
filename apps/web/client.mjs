@@ -15,7 +15,7 @@ import {
   resolveKeyCommand, predictPickerInput, applyPickerInputPrediction,
   CLIENT_OWNED_INPUT,
   encodeDocumentPointerInput, encodeTabPointerInput, markedTextByteOffset,
-  applySessionDelta, applyTreeDelta,
+  applySessionDelta, applyTreeDelta, normalizeTreeActiveBinding,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
   webExtentCss, applyNodeSemanticStyle, getOrCreateStyledNode,
   responsiveSurvivors, responsiveFlexCss,
@@ -605,11 +605,9 @@ function renderSurfaceContent(el, surface) {
   } else if (surface === SURFACE.DOCUMENT) {
     el.classList.add('doc-surface');
     renderDocumentInto(el);
-  } else if (surface === SURFACE.FILETREE ||
-             surface === SURFACE.GITSTATUS ||
-             surface === SURFACE.SYMBOLS) {
+  } else if (surface === SURFACE.TREE) {
     el.textContent = '';
-    renderTreeSurface(el, surface, s.tree);
+    renderTreeSurface(el, s.tree);
   } else if (surface === SURFACE.FINDRESULTS) {
     el.textContent = '';
     el.classList.add('find-results-surface');
@@ -628,12 +626,12 @@ function renderSurfaceContent(el, surface) {
   }
 }
 
-const TREE_KIND = { FILESYSTEM: 0, GIT: 1, SYMBOLS: 2 };
-function renderTreeSurface(parent, surface, tree) {
-    const want = surface === SURFACE.FILETREE ? TREE_KIND.FILESYSTEM
-               : surface === SURFACE.GITSTATUS ? TREE_KIND.GIT : TREE_KIND.SYMBOLS;
+function renderTreeSurface(parent, tree) {
     const providers = tree && Array.isArray(tree.providers) ? tree.providers : [];
-    const provider = providers.find((p) => num(p.kind) === want);
+    const binding = tree && tree.active_binding;
+    const provider = binding && providers.find((p) =>
+      idKey(p.provider_id) === idKey(binding.provider_id) &&
+      num(p.kind) === num(binding.kind));
     const selected = provider ? idKey(provider.selected) : '';
     for (const row of (provider && Array.isArray(provider.nodes) ? provider.nodes : [])) {
       const n = row.node || {};
@@ -646,7 +644,7 @@ function renderTreeSurface(parent, surface, tree) {
       twisty.className = 'twisty';
       twisty.textContent = n.expandable ? (row.expanded ? '\u25be ' : '\u25b8 ') : '  ';
       div.appendChild(twisty);
-      const git = surface === SURFACE.GITSTATUS ? gitAffordanceFromNode(n) : null;
+      const git = gitAffordanceFromNode(n);
       if (git) {
         const marker = document.createElement('span');
         marker.className = 'git-status';
@@ -1613,7 +1611,12 @@ function applyProtocolFrame(buffer) {
   const { kind, payload } = decodeMessage(buffer);
   const inbound = browserInboundKind(kind);
   if (inbound === 'snapshot') {
-    state.sections = findSections(payload);
+    const sections = findSections(payload);
+    if (!sections || !normalizeTreeActiveBinding(sections.tree)) {
+      reconnect('state snapshot rejected');
+      return false;
+    }
+    state.sections = sections;
     state.revision = BigInt(payload.revision);
     reconnectAttempts = 0;
     frameRenderPlan = fullRenderPlan();

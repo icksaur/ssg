@@ -2,8 +2,8 @@
 
 // The whole-screen interaction aggregate, built as a PURE function of semantic truth.
 // Presence and focus over the whole-screen schema are not owned as loose state that a
-// caller mutates; they are recomputed from WholeScreenTruth -- the panel's presence, the
-// selected panel provider, whether the finder is open, and the base focus -- so the tree
+// caller mutates; they are recomputed from WholeScreenTruth -- the panel's presence,
+// whether the finder is open, and the base focus -- so the tree
 // the client lays out always reflects the authoritative subsystems, and a schema
 // generation change is handled by simply rebuilding from the same truth over the new
 // schema (the migration contract: recompute presence from truth, reconcile captures,
@@ -33,9 +33,6 @@ struct WholeScreenTruth {
     bool panelPresent = false;
     // Whether chrome, panels, and tabs are hidden so only the document remains.
     bool distractionFree = false;
-    // The selected panel provider. Its node is present only when the panel is present;
-    // the persistent last-active choice lives in the separate provider hint, not here.
-    PanelProvider selectedProvider = PanelProvider::FileTree;
     // The open picker, if any -- the aggregate owns the picker IDENTITY, not merely a
     // finder-open bit, so truth distinguishes command from file candidates. Both kinds
     // show the findresults content surface.
@@ -70,9 +67,9 @@ struct WholeScreenTruth {
 };
 
 // Build the interaction aggregate for `schema` from `truth` and the active prompt's region.
-// Presence hides the panel and ALL its provider children when the panel is absent, else the
-// two non-selected panel providers, and whichever editor/find-results branch the open picker
-// excludes; base focus is Editor unless the panel is present and focused. `promptRegion` is
+// Presence hides the panel when absent and whichever editor/find-results branch the open
+// picker excludes; base focus is Editor unless the panel is present and focused.
+// `promptRegion` is
 // DERIVED from the authority-owned PromptSurface at build time (not stored in truth, so it
 // cannot drift): when set, a single prompt-focus capture is anchored on the region's host
 // node -- header for a Palette prompt (command palette, file finder), footer otherwise --

@@ -127,7 +127,8 @@ TEST(applyShowProviderCreatesTreeBackingFromTheOwnedSource) {
     ASSERT_FALSE(revisionOf(tree, "git").has_value());
     ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::GitStatus}));
     ASSERT_TRUE(authority.truth().panelPresent);
-    ASSERT_TRUE(authority.truth().selectedProvider == PanelProvider::GitStatus);
+    ASSERT_TRUE(tree.activeProviderBinding() ==
+                panelProviderTreeBinding(PanelProvider::GitStatus));
     // The git provider was created and stamped from the authority's revision source (5).
     const auto gitRevision = revisionOf(tree, "git");
     ASSERT_TRUE(gitRevision.has_value());
@@ -341,7 +342,8 @@ TEST(providerCyclingWhileHiddenAndEditorFocusedPreservesBoth) {
     ASSERT_TRUE(authority.apply(SwitchPanelProvider{PanelProvider::GitStatus}));
     ASSERT_FALSE(authority.truth().panelPresent);
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
-    ASSERT_TRUE(authority.truth().selectedProvider == PanelProvider::GitStatus);
+    ASSERT_TRUE(tree.activeProviderBinding() ==
+                panelProviderTreeBinding(PanelProvider::GitStatus));
 }
 
 TEST(editorFocusWithThePanelVisibleKeepsThePanelPresent) {

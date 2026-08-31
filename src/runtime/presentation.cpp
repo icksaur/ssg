@@ -41,14 +41,18 @@ CommandHandlerResult shellCommand(EditorSession::Impl& runtime,
         }
     }
     else if (id == "panel.next_provider") {
-        const PanelProvider target = cyclePanelProvider(
-            runtime.interaction.truth().selectedProvider, CycleDirection::Next);
+        const auto active = runtime.tree.activeProviderBinding();
+        if (!active) return failure("no active tree provider");
+        const PanelProvider target =
+            cyclePanelProvider(*active, CycleDirection::Next);
         if (!runtime.interaction.apply(SwitchPanelProvider{target})) {
             return failure("next tree provider is unavailable");
         }
     } else if (id == "panel.previous_provider") {
-        const PanelProvider target = cyclePanelProvider(
-            runtime.interaction.truth().selectedProvider, CycleDirection::Previous);
+        const auto active = runtime.tree.activeProviderBinding();
+        if (!active) return failure("no active tree provider");
+        const PanelProvider target =
+            cyclePanelProvider(*active, CycleDirection::Previous);
         if (!runtime.interaction.apply(SwitchPanelProvider{target})) {
             return failure("previous tree provider is unavailable");
         }

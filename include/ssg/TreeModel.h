@@ -189,8 +189,15 @@ struct TreeWindow {
 struct TreeViewState {
     TreeRevision revision{0};
     std::vector<TreeProviderView> providers;
+    std::optional<TreeProviderBinding> activeBinding;
     bool operator==(const TreeViewState&) const = default;
 };
+
+// Resolve the explicitly active provider. Invalid state returns null; callers
+// never infer active identity from provider ordering.
+[[nodiscard]] const TreeProviderView* activeTreeProvider(
+    const TreeViewState& state) noexcept;
+[[nodiscard]] bool isValidTreeViewState(const TreeViewState& state) noexcept;
 
 struct TreeCommandInvocation {
     TreeProviderId providerId;
@@ -225,6 +232,7 @@ public:
         TreeRevision revision{0};
     };
     [[nodiscard]] std::vector<ProviderIdentity> providerIdentities() const;
+    [[nodiscard]] std::optional<TreeProviderBinding> activeProviderBinding() const;
 
     // Activate the provider named by `binding`. When it does not exist yet and
     // its kind is Git or Symbols, create it empty and activate it -- a panel can
@@ -329,6 +337,7 @@ struct TreeDelta {
     // The complete target ordering. The active provider is first, followed by
     // inactive providers; node splices alone cannot express that permutation.
     std::vector<TreeProviderId> providerOrder;
+    std::optional<TreeProviderBinding> activeBinding;
 
     std::size_t operationCount() const noexcept;
     bool operator==(const TreeDelta&) const = default;

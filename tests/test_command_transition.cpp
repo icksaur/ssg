@@ -54,7 +54,12 @@ TransitionInputs inputs(WholeScreenTruth truth,
                         std::vector<TreeProviderPresence> present = {},
                         PromptSurface prompt = {}) {
     return TransitionInputs{std::move(truth), schema(), std::move(prompt),
-                            std::move(present), TreeRevision{7}};
+                            present,
+                            present.empty()
+                                ? std::optional<TreeProviderBinding>{}
+                                : std::optional<TreeProviderBinding>{
+                                      present.front().binding},
+                            TreeRevision{7}};
 }
 
 bool present(const PreparedTransition& p, std::string_view id) {
@@ -101,13 +106,11 @@ TEST(showProviderPreparesACreateSnapshotForAnAbsentGitProvider) {
         ShowPanelProvider{PanelProvider::GitStatus}, inputs(truth, {presence(filesystem(), 1)}));
     ASSERT_TRUE(prepared.has_value());
     ASSERT_TRUE(prepared->truth().panelPresent);
-    ASSERT_TRUE(prepared->truth().selectedProvider == PanelProvider::GitStatus);
     ASSERT_TRUE(prepared->tree().has_value());
     ASSERT_TRUE(prepared->tree()->activate == TreeProviderId{"git"});
     ASSERT_TRUE(prepared->tree()->create.has_value());
     ASSERT_TRUE(prepared->tree()->create->kind() == TreeProviderKind::Git);
-    ASSERT_TRUE(present(*prepared, kGitStatusNodeId));
-    ASSERT_FALSE(present(*prepared, kFileTreeNodeId));
+    ASSERT_TRUE(present(*prepared, kTreeNodeId));
 }
 
 TEST(showProviderActivatesAMatchingProviderWithoutCreating) {
@@ -123,22 +126,15 @@ TEST(showProviderActivatesAMatchingProviderWithoutCreating) {
     ASSERT_TRUE(prepared->tree()->activate == TreeProviderId{"git"});
 }
 
-TEST(showProviderRecreatesAnIdPresentUnderTheWrongKind) {
+TEST(showProviderRejectsAnIdPresentUnderTheWrongKind) {
     WholeScreenTruth truth;
-    // A "git" id backing a Symbols-kind tree is NOT the GitStatus provider: activating by
-    // id alone would show GitStatus over a Symbols tree, so it must be recreated.
+    // A "git" id backing a Symbols-kind tree is not the GitStatus provider.
     const auto prepared = prepareTransition(
         ShowPanelProvider{PanelProvider::GitStatus},
         inputs(truth, {presence(filesystem(), 1),
                        presence(TreeProviderBinding{TreeProviderId{"git"},
                                                     TreeProviderKind::Symbols}, 5)}));
-    ASSERT_TRUE(prepared.has_value());
-    ASSERT_TRUE(prepared->tree().has_value());
-    ASSERT_TRUE(prepared->tree()->create.has_value());
-    ASSERT_TRUE(prepared->tree()->create->kind() == TreeProviderKind::Git);
-    // Stamped from the runtime's revision source (nextTreeRevision == 7), which leads the
-    // provider it replaces, so commit's replaceProvider cannot throw.
-    ASSERT_EQ(prepared->tree()->create->revision().value(), std::uint64_t{7});
+    ASSERT_FALSE(prepared.has_value());
 }
 
 TEST(showProviderRejectsARecreateWhenTheRevisionSourceHasDesynced) {
@@ -164,7 +160,6 @@ TEST(showAMissingFilesystemProviderIsRejected) {
 TEST(reselectingTheShownProviderHidesThePanel) {
     WholeScreenTruth truth;
     truth.panelPresent = true;
-    truth.selectedProvider = PanelProvider::FileTree;
     truth.baseFocus = BaseFocus::Panel;
     truth.panelReturnFocus = BaseFocus::Editor;
     const auto prepared = prepareTransition(
@@ -187,7 +182,6 @@ TEST(switchProviderWhileHiddenPreservesHiddenAndFocus) {
     ASSERT_TRUE(prepared.has_value());
     ASSERT_FALSE(prepared->truth().panelPresent);            // stayed hidden
     ASSERT_TRUE(prepared->truth().baseFocus == BaseFocus::Editor);  // focus untouched
-    ASSERT_TRUE(prepared->truth().selectedProvider == PanelProvider::GitStatus);
     ASSERT_FALSE(prepared->tree()->create.has_value());      // matching -> activate only
 }
 
@@ -195,20 +189,17 @@ TEST(switchProviderWhileShownPreservesShownAndFocus) {
     WholeScreenTruth truth;
     truth.panelPresent = true;
     truth.baseFocus = BaseFocus::Panel;
-    truth.selectedProvider = PanelProvider::FileTree;
     const auto prepared = prepareTransition(
         SwitchPanelProvider{PanelProvider::Symbols}, inputs(truth, {presence(filesystem(), 1)}));
     ASSERT_TRUE(prepared.has_value());
     ASSERT_TRUE(prepared->truth().panelPresent);             // stayed shown
     ASSERT_TRUE(prepared->truth().baseFocus == BaseFocus::Panel);   // focus untouched
-    ASSERT_TRUE(prepared->truth().selectedProvider == PanelProvider::Symbols);
     ASSERT_TRUE(prepared->tree()->create.has_value());       // symbols absent -> create
 }
 
 TEST(switchProviderNeverTogglesOffOnReselect) {
     WholeScreenTruth truth;
     truth.panelPresent = true;
-    truth.selectedProvider = PanelProvider::FileTree;
     // ShowPanelProvider would hide here; SwitchPanelProvider keeps it shown.
     const auto prepared = prepareTransition(
         SwitchPanelProvider{PanelProvider::FileTree}, inputs(truth, {presence(filesystem(), 1)}));
@@ -295,7 +286,7 @@ int main() {
     RUN(togglePanelFromShownRestoresPanelReturnFocus);
     RUN(showProviderPreparesACreateSnapshotForAnAbsentGitProvider);
     RUN(showProviderActivatesAMatchingProviderWithoutCreating);
-    RUN(showProviderRecreatesAnIdPresentUnderTheWrongKind);
+    RUN(showProviderRejectsAnIdPresentUnderTheWrongKind);
     RUN(showProviderRejectsARecreateWhenTheRevisionSourceHasDesynced);
     RUN(showAMissingFilesystemProviderIsRejected);
     RUN(reselectingTheShownProviderHidesThePanel);

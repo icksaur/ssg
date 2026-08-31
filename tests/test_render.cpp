@@ -2241,6 +2241,8 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
                     {{dir, 0, true}, {file, 1, false}},
                     ssg::TreeNodeId{"f"}};
                 sections.tree.providers = {provider};
+                sections.tree.activeBinding = ssg::TreeProviderBinding{
+                    provider.providerId, provider.kind};
                 // A ranged selection on line 0 paints real Selection-role
                 // cells, so Selection is proven consumed at the cell level, not
                 // only via grid.selectionFill.

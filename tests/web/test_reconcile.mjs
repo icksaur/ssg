@@ -23,7 +23,7 @@ import {
   PICKER_MODE, encodePickerPointerInput, encodeDocumentPointerInput,
   encodeScrollLinesInput, encodeScrollFractionInput,
   encodeTabPointerInput, markedTextByteOffset, encodeTreePointerInput,
-  applyTreeDelta,
+  applyTreeDelta, normalizeTreeActiveBinding,
   applySessionDeltaSections, applySessionDeltaCopy, applySessionDelta,
   findSections,
   encodeStatusActionPointerInput, encodePromptControlPointerInput,
@@ -608,6 +608,7 @@ check('applyTreeDelta splices the retained tree and resyncs only when inexpressi
   assert.equal(t.revision, 2);
   assert.deepEqual(t.providers[0].nodes.map((r) => r.node.id), ['a', 'b']);
   assert.equal(t.providers[0].selected, 'b');
+  assert.deepEqual(t.active_binding, { provider_id: 'fs', kind: 0 });
   // A no-op delta (revision equals base) applies cleanly and stays current.
   t = tree();
   assert.equal(applyTreeDelta(t, { base_revision: 1, revision: 1, snapshot_required: false,
@@ -628,6 +629,16 @@ check('applyTreeDelta splices the retained tree and resyncs only when inexpressi
     providers: [{ provider_id: 'git', kind: 1, start: 0, erase_count: 0,
       insert: [{ node: { id: 'g' }, depth: 0 }], selected: null }] }), true);
   assert.deepEqual(t.providers.map((p) => p.provider_id), ['git', 'fs']);
+  assert.deepEqual(t.active_binding, { provider_id: 'git', kind: 1 });
+  // An explicit binding must identify exactly one provider in the resulting inventory.
+  t = tree();
+  const beforeInvalidBinding = structuredClone(t);
+  assert.equal(applyTreeDelta(t, {
+    base_revision: 1, revision: 2, snapshot_required: false,
+    provider_order: ['fs'], providers: [],
+    active_binding: { provider_id: 'missing', kind: 0 },
+  }), false);
+  assert.deepEqual(t, beforeInvalidBinding);
   // No tree object at all: nothing to do, stays current.
   assert.equal(applyTreeDelta(tree(), undefined), true);
   // Two changes for one provider are malformed (matches C++ replay's reject).
@@ -790,17 +801,17 @@ check('firstUnsupportedPrimitive accepts the prompt TextInput by default and rej
 
 check('firstUnsupportedPrimitive rejects a View naming a surface unsupported by a narrowed profile', () => {
   const profile = { ...WEB_UI_PROFILE, surfaces: new Set() };
-  const root = rowNode('root', [leafNode('v', WIDGET.VIEW, { surface: SURFACE.GITSTATUS })]);
-  assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root), profile), { kind: 'surface', ordinal: SURFACE.GITSTATUS });
+  const root = rowNode('root', [leafNode('v', WIDGET.VIEW, { surface: SURFACE.TREE })]);
+  assert.deepEqual(firstUnsupportedPrimitive(schemaOf(1, root), profile), { kind: 'surface', ordinal: SURFACE.TREE });
 });
 
 check('firstUnsupportedPrimitive accepts a View whose surface the default profile declares', () => {
-  const root = rowNode('root', [leafNode('v', WIDGET.VIEW, { surface: SURFACE.GITSTATUS })]);
+  const root = rowNode('root', [leafNode('v', WIDGET.VIEW, { surface: SURFACE.TREE })]);
   assert.equal(firstUnsupportedPrimitive(schemaOf(1, root)), null);
 });
 
-check('firstUnsupportedPrimitive accepts Symbols under the default profile', () => {
-  const root = rowNode('root', [leafNode('symbols', WIDGET.VIEW, { surface: SURFACE.SYMBOLS })]);
+check('firstUnsupportedPrimitive accepts the generic tree under the default profile', () => {
+  const root = rowNode('root', [leafNode('tree', WIDGET.VIEW, { surface: SURFACE.TREE })]);
   assert.equal(firstUnsupportedPrimitive(schemaOf(1, root)), null);
 });
 
@@ -824,7 +835,7 @@ check('interpretChrome carries a node ScrollAxis so a client derives independent
   ]);
   const root = { id: 'root', size: {}, container: { axis: 1, gap: 0, children: [
     rowNode('body', [
-      scrollContainer('panel', SCROLL.VERTICAL, [leafNode('filetree', WIDGET.VIEW, { surface: SURFACE.FILETREE })]),
+      scrollContainer('panel', SCROLL.VERTICAL, [leafNode('tree', WIDGET.VIEW, { surface: SURFACE.TREE })]),
       scrollContainer('content', SCROLL.NONE, [editor]),
     ]),
     scrollContainer('future', 99, [leafNode('x', WIDGET.VIEW, { surface: SURFACE.NOTICE })]),
@@ -844,7 +855,7 @@ check('interpretChrome carries a node ScrollAxis so a client derives independent
   assert.deepEqual(
     byId['document.viewport'].children.map((child) => child.id),
     ['document']);
-  assert.equal(byId.filetree.scroll ?? SCROLL.NONE, SCROLL.NONE);
+  assert.equal(byId.tree.scroll ?? SCROLL.NONE, SCROLL.NONE);
   assert.equal(byId.document.scroll ?? SCROLL.NONE, SCROLL.NONE);
   assert.equal(byId.body.scroll, SCROLL.NONE);
   assert.equal(byId.future.scroll, SCROLL.NONE);  // unknown axis -> none
@@ -946,7 +957,7 @@ check('picker presence overlay preserves header siblings and panel while replaci
     leafNode('path', WIDGET.FIELD), input, leafNode('branch', WIDGET.FIELD),
   ]);
   const panel = rowNode('panel', [
-    leafNode('filetree', WIDGET.VIEW, { surface: SURFACE.FILETREE }),
+    leafNode('tree', WIDGET.VIEW, { surface: SURFACE.TREE }),
   ]);
   const editor = rowNode('editor', [
     leafNode('tabbar', WIDGET.VIEW, { surface: SURFACE.TABBAR }),
@@ -990,7 +1001,7 @@ check('picker presence overlay preserves header siblings and panel while replaci
   const rendered = interpretChrome(
     schema, { generation: 9, nodes }, applied.presence);
   const ids = drawnLeaves(rendered.root).map((node) => node.id);
-  assert.deepEqual(ids, ['path', 'input_line', 'branch', 'filetree', 'findresults']);
+  assert.deepEqual(ids, ['path', 'input_line', 'branch', 'tree', 'findresults']);
 
   const twice = applyPalettePresenceOverlay(
     schema, applied.presence, overlay);
@@ -1073,8 +1084,7 @@ check('interpretChrome applies the per-kind render gate', () => {
 
 check('interpretChrome produces View leaves for every supported surface', () => {
   const surfaces = [
-    SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS,
-    SURFACE.SYMBOLS, SURFACE.NOTICE,
+    SURFACE.TABBAR, SURFACE.TREE, SURFACE.FINDRESULTS, SURFACE.NOTICE,
     SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
   ];
   const root = rowNode('root', surfaces.map((surface) => leafNode('surface-' + surface, WIDGET.VIEW, { surface })));
@@ -1148,7 +1158,7 @@ check('session deltas dirty only their dependent browser surfaces', () => {
     tree: { base_revision: 1n, revision: 2n, providers: [] },
   }), {
     rebuild: false, reconcile: false, responsive: false, repaintTheme: false,
-    surfaces: [SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.SYMBOLS],
+    surfaces: [SURFACE.TREE],
   });
   assert.deepEqual(browserRenderPlan({ ui_presence: { nodes: [] } }), {
     rebuild: false, reconcile: true, responsive: true, repaintTheme: false,
@@ -1161,9 +1171,8 @@ check('session deltas dirty only their dependent browser surfaces', () => {
   assert.deepEqual(browserRenderPlan({ theme: { replacement: {} } }), {
     rebuild: false, reconcile: true, responsive: false, repaintTheme: true,
     surfaces: [
-      SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS,
-      SURFACE.FINDRESULTS, SURFACE.SYMBOLS,
-      SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
+      SURFACE.TABBAR, SURFACE.FINDRESULTS, SURFACE.NOTICE,
+      SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT, SURFACE.TREE,
     ],
   });
 });
@@ -1197,7 +1206,7 @@ check('the locally owned finder becomes keyboard owner while it replaces the doc
     SURFACE.FINDRESULTS);
   assert.equal(
     preferredKeyboardSurface([SURFACE.FINDRESULTS]), SURFACE.FINDRESULTS);
-  assert.equal(preferredKeyboardSurface([SURFACE.FILETREE]), null);
+  assert.equal(preferredKeyboardSurface([SURFACE.TREE]), null);
 });
 
 check('git affordance projection preserves deliberately varied published facts', () => {
@@ -1573,6 +1582,7 @@ check('semantic manifest and C++ fixture replay every browser section atomically
   }
   const replayed = applySessionDeltaCopy(base, delta);
   assert.ok(replayed);
+  assert.equal(normalizeTreeActiveBinding(target.tree), true);
   assert.deepEqual(replayed, target);
 
   const rejectsWithoutMutation = (mutate) => {

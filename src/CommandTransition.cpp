@@ -56,6 +56,18 @@ PanelProvider cyclePanelProvider(PanelProvider provider, CycleDirection directio
     return kCycle[(index + step) % kCycle.size()];
 }
 
+PanelProvider cyclePanelProvider(const TreeProviderBinding& provider,
+                                 CycleDirection direction) {
+    const auto current = std::find_if(
+        kCycle.begin(), kCycle.end(), [&](PanelProvider candidate) {
+            return panelProviderTreeBinding(candidate) == provider;
+        });
+    if (current == kCycle.end()) {
+        rejectCorrupt("active tree provider is outside the panel cycle");
+    }
+    return cyclePanelProvider(*current, direction);
+}
+
 std::optional<PromptRegion> activePromptRegion(const PromptSurface& prompt) {
     if (!prompt.active()) return std::nullopt;
     return promptFocusRegion(prompt.request()->kind);
@@ -116,17 +128,17 @@ struct TransitionBuilder {
     }
 
     // Fully prepare the tree backing for `provider` so commit is infallible, or signal
-    // rejection. Match id AND kind: an id present under the wrong kind is not the provider
-    // we want, so it must be recreated, not activated. A non-matching Filesystem provider
-    // is a genuine rejection -- it is seeded with real nodes, never created or replaced
-    // empty. A new snapshot's revision comes from the single revision source, never
+    // rejection. Match id AND kind: an id present under the wrong kind is a corrupt
+    // binding and is rejected, never activated or replaced. An absent Filesystem provider
+    // is also a genuine rejection -- it is seeded with real nodes, never created empty.
+    // A new snapshot's revision comes from the single revision source, never
     // invented as existing+1 (which could overflow or run ahead of that source and make a
     // later replacement reject); preflight rejects a source that cannot lead the provider
     // it replaces (desync) or has no successor (exhaustion), so both replaceProvider and
     // the source's post-install advance are infallible. Returns false on rejection.
-    static bool prepareTreeBacking(PanelProvider provider, const TransitionInputs& inputs,
+    static bool prepareTreeBacking(const TreeProviderBinding& binding,
+                                   const TransitionInputs& inputs,
                                    std::optional<TreeBackingPlan>& out) {
-        const TreeProviderBinding binding = panelProviderTreeBinding(provider);
         const auto existing = std::find_if(
             inputs.presentProviders.begin(), inputs.presentProviders.end(),
             [&](const TreeProviderPresence& p) { return p.binding.id == binding.id; });
@@ -134,13 +146,10 @@ struct TransitionBuilder {
                               existing->binding.kind == binding.kind;
         TreeBackingPlan plan{binding.id, std::nullopt};
         if (!matching) {
+            if (existing != inputs.presentProviders.end()) return false;
             if (binding.kind == TreeProviderKind::Filesystem) return false;
             const std::uint64_t next = inputs.nextTreeRevision.value();
             if (next == std::numeric_limits<std::uint64_t>::max()) return false;
-            if (existing != inputs.presentProviders.end() &&
-                next <= existing->revision.value()) {
-                return false;
-            }
             plan.create =
                 TreeProviderSnapshot{binding.id, binding.kind, inputs.nextTreeRevision, {}};
         }
@@ -151,18 +160,19 @@ struct TransitionBuilder {
     static std::optional<PreparedTransition> prepare(ShowPanelProvider request,
                                                      const TransitionInputs& inputs) {
         const WholeScreenTruth& truth = inputs.truth;
+        const TreeProviderBinding binding =
+            panelProviderTreeBinding(request.provider);
         // Reselecting the shown provider hides the panel -- this command's semantics.
-        if (truth.panelPresent && truth.selectedProvider == request.provider) {
+        if (truth.panelPresent && inputs.activeProvider == binding) {
             return hidePanel(truth, inputs);
         }
 
         std::optional<TreeBackingPlan> plan;
-        if (!prepareTreeBacking(request.provider, inputs, plan)) return std::nullopt;
+        if (!prepareTreeBacking(binding, inputs, plan)) return std::nullopt;
 
         WholeScreenTruth next = truth;
         if (!truth.panelPresent) next.panelReturnFocus = truth.baseFocus;
         next.panelPresent = true;
-        next.selectedProvider = request.provider;
         next.baseFocus = BaseFocus::Panel;
         return make(std::move(next), inputs.schema, inputs.prompt, std::move(plan));
     }
@@ -171,10 +181,11 @@ struct TransitionBuilder {
                                                      const TransitionInputs& inputs) {
         // Change the provider backing only; panel visibility and focus are preserved (this
         // is cycling next/previous, not a show). Never toggles off on reselect.
+        const TreeProviderBinding binding =
+            panelProviderTreeBinding(request.provider);
         std::optional<TreeBackingPlan> plan;
-        if (!prepareTreeBacking(request.provider, inputs, plan)) return std::nullopt;
+        if (!prepareTreeBacking(binding, inputs, plan)) return std::nullopt;
         WholeScreenTruth next = inputs.truth;
-        next.selectedProvider = request.provider;
         return make(std::move(next), inputs.schema, inputs.prompt, std::move(plan));
     }
 

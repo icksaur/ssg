@@ -190,13 +190,6 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
                                  CommandContext& context,
                                  std::string_view id,
                                  std::any const& payload) {
-    // Best-effort activate the provider bound to the active panel WITHOUT
-    // creating one: a tree command may fire while the panel is hidden, where the
-    // currently-active provider must be retained rather than replaced by a fresh
-    // empty git/symbols provider (that is syncTreeProviderToPanel's job when a
-    // panel is shown).
-    (void)runtime.tree.activateProvider(
-        panelProviderTreeBinding(runtime.interaction.truth().selectedProvider).id);
     if (id == "tree.select_next") { (void)runtime.tree.selectNext(); return success(); }
     if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); return success(); }
     if (id == "tree.activate_node") {
@@ -212,11 +205,10 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
         return treeCommand(runtime, context, "tree.activate", {});
     }
     if (id == "tree.activate") {
-        auto treeView = runtime.tree.viewState();
-        auto providerKind = treeView.providers.empty()
-                                ? std::optional<TreeProviderKind>{}
-                                : std::optional<TreeProviderKind>{
-                                      treeView.providers.front().kind};
+        const auto binding = runtime.tree.activeProviderBinding();
+        const auto providerKind =
+            binding ? std::optional<TreeProviderKind>{binding->kind}
+                    : std::nullopt;
         auto selected = runtime.tree.selectedNode();
         if (!selected) return failure("no tree node is selected");
         if (selected->expandable) { (void)runtime.tree.toggleSelected(); return success(); }

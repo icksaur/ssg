@@ -268,17 +268,17 @@ TEST(wellKnownAreasRejectAPanelViewWithTheWrongSurface) {
     auto& root = std::get<UiContainer>(schema.root.content);
     auto& body = std::get<UiContainer>(root.children[1].content);
     auto& panel = std::get<UiContainer>(body.children[0].content);
-    auto& filetree = std::get<UiLeaf>(panel.children[0].content);
-    filetree.widget.surface = ssg::ViewSurface::GitStatus;
+    auto& tree = std::get<UiLeaf>(panel.children[0].content);
+    tree.widget.surface = ssg::ViewSurface::GitStatus;
     ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
 }
 
-TEST(wellKnownAreasRejectPanelChildrenInTheWrongOrder) {
+TEST(wellKnownAreasRejectAnAdditionalPanelChild) {
     UiSchema schema = canonicalWholeScreenSchema();
     auto& root = std::get<UiContainer>(schema.root.content);
     auto& body = std::get<UiContainer>(root.children[1].content);
     auto& panel = std::get<UiContainer>(body.children[0].content);
-    std::swap(panel.children[0], panel.children[1]);
+    panel.children.push_back(panel.children.front());
     ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
 }
 
@@ -305,6 +305,6 @@ int main() {
     RUN(wellKnownAreasRejectAMisplacedHeader);
     RUN(wellKnownAreasRejectAMissingBody);
     RUN(wellKnownAreasRejectAPanelViewWithTheWrongSurface);
-    RUN(wellKnownAreasRejectPanelChildrenInTheWrongOrder);
+    RUN(wellKnownAreasRejectAnAdditionalPanelChild);
     return failed == 0 ? 0 : 1;
 }

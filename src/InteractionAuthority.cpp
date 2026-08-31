@@ -63,6 +63,7 @@ bool InteractionAuthority::apply(const CommandTransition& transition) {
     // Peek the revision source and prepare in one step: hiding prepare+install behind this
     // method means no allocation can occur between the peek and the consuming install.
     TransitionInputs inputs{truth_, schema_.validated(), prompt_, presentProviders(),
+                            tree_.activeProviderBinding(),
                             TreeRevision{nextTreeRevision_}};
     std::optional<PreparedTransition> prepared = prepareTransition(transition, inputs);
     if (!prepared) return false;

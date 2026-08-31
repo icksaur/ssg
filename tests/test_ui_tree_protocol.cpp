@@ -110,6 +110,19 @@ TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
     UiNode footerPrompt = std::move(root.children[2]);
     UiNode footer = std::move(root.children[3]);
     auto& bodyContainer = std::get<ssg::UiContainer>(body.content);
+    auto& panel =
+        std::get<ssg::UiContainer>(bodyContainer.children[0].content);
+    const UiNode genericTree = panel.children.front();
+    const auto legacyTree = [&](std::string_view id, ssg::ViewSurface surface) {
+        UiNode node = genericTree;
+        node.id = ssg::UiNodeId{std::string{id}};
+        std::get<ssg::UiLeaf>(node.content).widget.surface = surface;
+        return node;
+    };
+    panel.children = {
+        legacyTree(ssg::kFileTreeNodeId, ssg::ViewSurface::FileTree),
+        legacyTree(ssg::kGitStatusNodeId, ssg::ViewSurface::GitStatus),
+        legacyTree(ssg::kSymbolsNodeId, ssg::ViewSurface::Symbols)};
     bodyContainer.children[0].size =
         ssg::Size::exact(ssg::StyleDimensions{}.panelTargetWidth);
     bodyContainer.children[1].size = ssg::Size::flex();
@@ -131,6 +144,58 @@ TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
     const auto decoded = decodeUiSchema(encodeUiSchema(preceding));
     ASSERT_TRUE(decoded.has_value());
     if (decoded) ASSERT_EQ(*decoded, current);
+
+    UiSchema precedingTree = current;
+    auto& currentRoot = std::get<ssg::UiContainer>(precedingTree.root.content);
+    auto& currentBody = std::get<ssg::UiContainer>(
+        currentRoot.children[1].content);
+    auto& currentPanel =
+        std::get<ssg::UiContainer>(currentBody.children[0].content);
+    const UiNode currentGeneric = currentPanel.children.front();
+    const auto precedingLeaf =
+        [&](std::string_view id, ssg::ViewSurface surface) {
+            UiNode node = currentGeneric;
+            node.id = ssg::UiNodeId{std::string{id}};
+            std::get<ssg::UiLeaf>(node.content).widget.surface = surface;
+            return node;
+        };
+    currentPanel.children = {
+        precedingLeaf(ssg::kFileTreeNodeId, ssg::ViewSurface::FileTree),
+        precedingLeaf(ssg::kGitStatusNodeId, ssg::ViewSurface::GitStatus),
+        precedingLeaf(ssg::kSymbolsNodeId, ssg::ViewSurface::Symbols)};
+    const auto treeDecoded = decodeUiSchema(encodeUiSchema(precedingTree));
+    ASSERT_TRUE(treeDecoded.has_value());
+    if (treeDecoded) ASSERT_EQ(*treeDecoded, current);
+
+    const auto panelChildren = [](UiSchema& candidate)
+        -> std::vector<UiNode>& {
+        auto& candidateRoot =
+            std::get<ssg::UiContainer>(candidate.root.content);
+        auto& candidateBody =
+            std::get<ssg::UiContainer>(candidateRoot.children[1].content);
+        return std::get<ssg::UiContainer>(
+                   candidateBody.children[0].content)
+            .children;
+    };
+    UiSchema extraTreeChild = precedingTree;
+    panelChildren(extraTreeChild).push_back(
+        panelChildren(extraTreeChild).front());
+    ASSERT_FALSE(decodeUiSchema(encodeUiSchema(extraTreeChild)).has_value());
+
+    UiSchema missingTreeChild = precedingTree;
+    panelChildren(missingTreeChild).pop_back();
+    ASSERT_FALSE(decodeUiSchema(encodeUiSchema(missingTreeChild)).has_value());
+
+    UiSchema reorderedTreeChildren = precedingTree;
+    std::swap(panelChildren(reorderedTreeChildren)[0],
+              panelChildren(reorderedTreeChildren)[1]);
+    ASSERT_FALSE(
+        decodeUiSchema(encodeUiSchema(reorderedTreeChildren)).has_value());
+
+    UiSchema wrongTreeSurface = precedingTree;
+    std::get<ssg::UiLeaf>(panelChildren(wrongTreeSurface)[0].content)
+        .widget.surface = ssg::ViewSurface::Tree;
+    ASSERT_FALSE(decodeUiSchema(encodeUiSchema(wrongTreeSurface)).has_value());
 
     UiSchema malformedInterior = preceding;
     auto& malformedRoot =

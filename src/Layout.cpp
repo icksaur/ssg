@@ -241,13 +241,12 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
         0,
         {},
         {}};
-    if (tree.providers.empty() || panel.rect.width <= 0 ||
-        panel.rect.height <= 0) {
+    const auto* provider = activeTreeProvider(tree);
+    if (provider == nullptr || panel.rect.width <= 0 || panel.rect.height <= 0) {
         return solved;
     }
 
-    const auto& provider = tree.providers.front();
-    solved.providerText = std::string{treeProviderLabel(provider.kind)};
+    solved.providerText = std::string{treeProviderLabel(provider->kind)};
     const auto contentRows =
         static_cast<std::uint32_t>(std::max(panel.rect.height - 1, 0));
     const int gutterWidth =
@@ -265,24 +264,24 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
                                  ? solved.scrollbarGutter->x
                                  : panel.rect.right();
     std::optional<std::uint32_t> selectedIndex;
-    if (provider.selected) {
+    if (provider->selected) {
         const auto selected = std::ranges::find(
-            provider.nodes, *provider.selected,
+            provider->nodes, *provider->selected,
             [](const TreeNodeView& row) { return row.node.id; });
-        if (selected != provider.nodes.end()) {
+        if (selected != provider->nodes.end()) {
             selectedIndex = static_cast<std::uint32_t>(
-                std::distance(provider.nodes.begin(), selected));
+                std::distance(provider->nodes.begin(), selected));
         }
     }
     const auto window = Viewport{}.listScrollView(
-        static_cast<std::uint32_t>(provider.nodes.size()), contentRows,
+        static_cast<std::uint32_t>(provider->nodes.size()), contentRows,
         firstVisible, selectedIndex, revealSelection);
     solved.firstVisible = window.firstVisible;
     solved.scrollbar = window.scrollbar;
     solved.rows.reserve(window.visibleCount);
     for (std::uint32_t row = 0; row < window.visibleCount; ++row) {
         const auto absolute = window.firstVisible + row;
-        const auto& view = provider.nodes[absolute];
+        const auto& view = provider->nodes[absolute];
         std::string text(view.depth * style.tree.indentPerDepth, ' ');
         if (view.node.expandable) {
             text += view.expanded ? style.tree.expanded : style.tree.collapsed;
@@ -294,7 +293,7 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
              std::move(text),
              {panel.rect.x, panel.rect.y + 1 + static_cast<int>(row),
               contentRight - panel.rect.x, 1},
-             provider.selected && view.node.id == *provider.selected,
+             provider->selected && view.node.id == *provider->selected,
              view.node.kind == TreeNodeKind::Directory});
     }
     return solved;

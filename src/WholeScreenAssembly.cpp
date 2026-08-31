@@ -226,9 +226,7 @@ UiComposition assembleWholeScreen(
             kPanelNodeId, Axis::Column,
             Size::optionalPreferred(dimensions.panelTargetWidth,
                                     dimensions.panelMinimumWidth),
-            {viewLeaf(kFileTreeNodeId, ViewSurface::FileTree, Size::flex()),
-             viewLeaf(kGitStatusNodeId, ViewSurface::GitStatus, Size::flex()),
-             viewLeaf(kSymbolsNodeId, ViewSurface::Symbols, Size::flex())},
+            {viewLeaf(kTreeNodeId, ViewSurface::Tree, Size::flex())},
             ScrollAxis::Vertical),
         SemanticRole::PanelInactive, SemanticRole::TreeBackground);
     // Editor-owned transient chrome sits after tabs and before the document. It

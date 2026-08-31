@@ -285,7 +285,7 @@ TEST(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase) {
     ASSERT_EQ(staleReplay.error, TreeReplayError::StaleRevision);
 }
 
-TEST(treeDeltaPreservesActiveProviderOrder) {
+TEST(treeDeltaPublishesActiveBindingAndPreservesCompatibilityOrder) {
     TemporaryDirectory directory;
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromFilesystem(
@@ -295,10 +295,16 @@ TEST(treeDeltaPreservesActiveProviderOrder) {
         {{.workspacePath = "changed.txt", .label = "changed.txt",
           .status = GitTreeStatus::Modified}}));
     const auto base = model.viewState();
+    ASSERT_TRUE((base.activeBinding ==
+                 TreeProviderBinding{TreeProviderId{"filesystem"},
+                                     TreeProviderKind::Filesystem}));
     ASSERT_EQ(base.providers.front().providerId, TreeProviderId{"filesystem"});
 
     ASSERT_TRUE(model.activateProvider(TreeProviderId{"git"}));
     const auto target = model.viewState();
+    ASSERT_TRUE((target.activeBinding ==
+                 TreeProviderBinding{TreeProviderId{"git"},
+                                     TreeProviderKind::Git}));
     ASSERT_EQ(target.providers.front().providerId, TreeProviderId{"git"});
 
     const auto delta = TreeDeltaCodec{}.derive(base, target, 8);
@@ -306,6 +312,41 @@ TEST(treeDeltaPreservesActiveProviderOrder) {
     const auto replay = TreeDeltaCodec{}.replay(base, delta);
     ASSERT_TRUE(replay.accepted());
     ASSERT_EQ(*replay.state, target);
+
+    auto legacyDelta = delta;
+    legacyDelta.activeBinding.reset();
+    const auto legacyReplay = TreeDeltaCodec{}.replay(base, legacyDelta);
+    ASSERT_TRUE(legacyReplay.accepted());
+    ASSERT_EQ(*legacyReplay.state, target);
+}
+
+TEST(treeViewStateRejectsMissingMismatchedAndDuplicateActiveBindings) {
+    TreeModel model;
+    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
+        TreeProviderId{"symbols"}, TreeRevision{1},
+        {{.stableKey = "A", .label = "A"}}));
+    const auto valid = model.viewState();
+    ASSERT_TRUE(isValidTreeViewState(valid));
+    ASSERT_TRUE(activeTreeProvider(valid) != nullptr);
+
+    auto missing = valid;
+    missing.activeBinding.reset();
+    ASSERT_FALSE(isValidTreeViewState(missing));
+
+    auto mismatched = valid;
+    mismatched.activeBinding->kind = TreeProviderKind::Git;
+    ASSERT_FALSE(isValidTreeViewState(mismatched));
+
+    auto duplicate = valid;
+    duplicate.providers.push_back(duplicate.providers.front());
+    ASSERT_FALSE(isValidTreeViewState(duplicate));
+
+    auto malformedDelta = TreeDeltaCodec{}.derive(valid, valid, 8);
+    malformedDelta.activeBinding =
+        TreeProviderBinding{TreeProviderId{"missing"}, TreeProviderKind::Symbols};
+    const auto replay = TreeDeltaCodec{}.replay(valid, malformedDelta);
+    ASSERT_FALSE(replay.accepted());
+    ASSERT_EQ(replay.error, TreeReplayError::MalformedDelta);
 }
 
 TEST(overBudgetDeltaRequiresSnapshotWithoutPartialOperations) {
@@ -389,6 +430,14 @@ TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
     ASSERT_TRUE(model.viewState().providers.front().providerId ==
                 TreeProviderId{"git"});
 
+    ASSERT_FALSE(model.activateOrCreate(
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Symbols},
+        revision(101)));
+    ASSERT_EQ(revisionRequests, requestsAfterFirst);
+    ASSERT_TRUE((model.activeProviderBinding() ==
+                 TreeProviderBinding{TreeProviderId{"git"},
+                                     TreeProviderKind::Git}));
+
     // A filesystem binding is NEVER created here (it is seeded at construction);
     // a missing one is a genuine failure that creates nothing and asks for no
     // revision.
@@ -470,7 +519,8 @@ int main() {
     RUN(selectionNavigatesExpandsAndReportsSelectedNode);
     RUN(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes);
     RUN(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase);
-    RUN(treeDeltaPreservesActiveProviderOrder);
+    RUN(treeDeltaPublishesActiveBindingAndPreservesCompatibilityOrder);
+    RUN(treeViewStateRejectsMissingMismatchedAndDuplicateActiveBindings);
     RUN(overBudgetDeltaRequiresSnapshotWithoutPartialOperations);
     RUN(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem);
     RUN(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation);

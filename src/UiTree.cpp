@@ -266,17 +266,11 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
     if (auto err = requireChildren(body, "body", bodyIds, bodyContainer)) return err;
 
     const UiContainer* panel = nullptr;
-    constexpr std::array panelIds{kFileTreeNodeId, kGitStatusNodeId, kSymbolsNodeId};
+    constexpr std::array panelIds{kTreeNodeId};
     if (auto err = requireChildren(bodyContainer->children[0], "panel", panelIds, panel))
         return err;
-    if (auto err = requireViewLeaf(panel->children[0], kFileTreeNodeId,
-                                   ViewSurface::FileTree))
-        return err;
-    if (auto err = requireViewLeaf(panel->children[1], kGitStatusNodeId,
-                                   ViewSurface::GitStatus))
-        return err;
-    if (auto err = requireViewLeaf(panel->children[2], kSymbolsNodeId,
-                                   ViewSurface::Symbols))
+    if (auto err = requireViewLeaf(panel->children[0], kTreeNodeId,
+                                   ViewSurface::Tree))
         return err;
 
     const UiContainer* content = nullptr;

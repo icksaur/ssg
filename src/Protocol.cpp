@@ -747,6 +747,9 @@ ProtocolValue toValue(PaneId const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PaneId>& out);
 ProtocolValue toValue(TreeProviderId const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderId>& out);
+ProtocolValue toValue(TreeProviderBinding const& value);
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<TreeProviderBinding>& out);
 ProtocolValue toValue(TreeNodeId const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeId>& out);
 ProtocolValue toValue(TreeRevision const& value);
@@ -1594,6 +1597,20 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderId>& ou
     auto const* text = value.asText();
     if (!text) return false;
     out.emplace(*text);
+    return true;
+}
+
+ProtocolValue toValue(TreeProviderBinding const& value) {
+    return ProtocolValue::makeObject(
+        {{"provider_id", toValue(value.id)}, {"kind", toValue(value.kind)}});
+}
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<TreeProviderBinding>& out) {
+    if (!value.asObject()) return false;
+    auto providerId = requireField<TreeProviderId>(value.field("provider_id"));
+    auto kind = requireField<TreeProviderKind>(value.field("kind"));
+    if (!providerId || !kind) return false;
+    out.emplace(TreeProviderBinding{std::move(*providerId), *kind});
     return true;
 }
 
@@ -3984,9 +4001,22 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeWindow>& out) {
 }
 
 ProtocolValue toValue(TreeViewState const& value) {
+    if (!isValidTreeViewState(value)) {
+        throw std::invalid_argument("cannot encode an invalid TreeViewState");
+    }
+    auto providers = value.providers;
+    if (value.activeBinding) {
+        const auto active = std::find_if(
+            providers.begin(), providers.end(), [&](const TreeProviderView& provider) {
+                return provider.providerId == value.activeBinding->id &&
+                       provider.kind == value.activeBinding->kind;
+            });
+        std::rotate(providers.begin(), active, std::next(active));
+    }
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("revision", toValue(value.revision));
-    fields.emplace_back("providers", toValue(value.providers));
+    fields.emplace_back("providers", toValue(providers));
+    fields.emplace_back("active_binding", toValue(value.activeBinding));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<TreeViewState>& out) {
@@ -3995,7 +4025,17 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeViewState>& out
     auto revision = requireField<TreeRevision>(value.field("revision"));
     auto providers = requireField<std::vector<TreeProviderView>>(value.field("providers"));
     if (!revision || !providers) return false;
-    out.emplace(TreeViewState{*revision, *providers});
+    std::optional<TreeProviderBinding> activeBinding;
+    const bool hasActiveBinding = value.field("active_binding") != nullptr;
+    if (!decodeOptionalField(value.field("active_binding"), activeBinding)) return false;
+    if (!hasActiveBinding && !providers->empty()) {
+        activeBinding = TreeProviderBinding{providers->front().providerId,
+                                            providers->front().kind};
+    }
+    TreeViewState decoded{*revision, std::move(*providers),
+                          std::move(activeBinding)};
+    if (!isValidTreeViewState(decoded)) return false;
+    out.emplace(std::move(decoded));
     return true;
 }
 
@@ -4032,12 +4072,25 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderDelta>&
 }
 
 ProtocolValue toValue(TreeDelta const& value) {
+    auto providerOrder = value.providerOrder;
+    if (value.activeBinding) {
+        const auto active =
+            std::ranges::find(providerOrder, value.activeBinding->id);
+        if (active == providerOrder.end()) {
+            throw std::invalid_argument(
+                "cannot encode a TreeDelta whose active binding is absent");
+        }
+        std::rotate(providerOrder.begin(), active, std::next(active));
+    }
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("base_revision", toValue(value.baseRevision));
     fields.emplace_back("revision", toValue(value.revision));
     fields.emplace_back("snapshot_required", toValue(value.snapshotRequired));
     fields.emplace_back("providers", toValue(value.providers));
-    fields.emplace_back("provider_order", toValue(value.providerOrder));
+    fields.emplace_back("provider_order", toValue(providerOrder));
+    if (value.activeBinding || providerOrder.empty()) {
+        fields.emplace_back("active_binding", toValue(value.activeBinding));
+    }
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<TreeDelta>& out) {
@@ -4051,8 +4104,10 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeDelta>& out) {
         requireField<std::vector<TreeProviderId>>(value.field("provider_order"));
     if (!baseRevision || !revision || !snapshotRequired || !providers ||
         !providerOrder) return false;
+    std::optional<TreeProviderBinding> activeBinding;
+    if (!decodeOptionalField(value.field("active_binding"), activeBinding)) return false;
     out.emplace(TreeDelta{*baseRevision, *revision, *snapshotRequired, *providers,
-                          *providerOrder});
+                          *providerOrder, std::move(activeBinding)});
     return true;
 }
 
@@ -4838,6 +4893,57 @@ void canonicalizeUiRecordOrder(UiSchema const& schema,
     records = std::move(ordered);
 }
 
+template <typename Record>
+std::optional<std::array<std::size_t, 3>> legacyTreeRecordIndexes(
+    const std::vector<Record>& records) {
+    std::array<std::size_t, 3> indexes{};
+    constexpr std::array ids{kFileTreeNodeId, kGitStatusNodeId, kSymbolsNodeId};
+    for (std::size_t wanted = 0; wanted < ids.size(); ++wanted) {
+        const auto found = std::find_if(
+            records.begin(), records.end(), [&](const Record& record) {
+                return record.id.value() == ids[wanted];
+            });
+        if (found == records.end()) return std::nullopt;
+        indexes[wanted] =
+            static_cast<std::size_t>(std::distance(records.begin(), found));
+    }
+    return indexes;
+}
+
+void normalizeLegacyTreeRecords(UiPresenceSection& presence) {
+    const auto indexes = legacyTreeRecordIndexes(presence.nodes);
+    if (!indexes) return;
+    std::erase_if(presence.nodes, [](const UiPresenceRecord& record) {
+        return record.id.value() == kFileTreeNodeId ||
+               record.id.value() == kGitStatusNodeId ||
+               record.id.value() == kSymbolsNodeId;
+    });
+    presence.nodes.push_back(
+        UiPresenceRecord{UiNodeId{std::string{kTreeNodeId}}, true});
+}
+
+void normalizeLegacyTreeRecords(UiStateSection& state) {
+    const auto indexes = legacyTreeRecordIndexes(state.nodes);
+    if (!indexes) return;
+    std::erase_if(state.nodes, [](const UiNodeState& record) {
+        return record.id.value() == kFileTreeNodeId ||
+               record.id.value() == kGitStatusNodeId ||
+               record.id.value() == kSymbolsNodeId;
+    });
+    state.nodes.push_back(
+        UiNodeState{UiNodeId{std::string{kTreeNodeId}}, std::nullopt});
+    if (state.focusPath) {
+        for (auto& id : *state.focusPath) {
+            if (id.value() == kFileTreeNodeId ||
+                id.value() == kGitStatusNodeId ||
+                id.value() == kSymbolsNodeId) {
+                id = UiNodeId{std::string{kTreeNodeId}};
+            }
+
+        }
+    }
+}
+
 ProtocolValue toValue(SessionSnapshotSections const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back(kSemanticSessionFields[0], toValue(value.document));
@@ -4978,6 +5084,11 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     if (ui && uiPresence) {
         auto validated = ValidatedSchema::validate(*ui);
         if (!validated.ok()) return false;
+        if (uiSchemaNodeIds(*ui).contains(
+                UiNodeId{std::string{kTreeNodeId}})) {
+            normalizeLegacyTreeRecords(*uiPresence);
+            if (uiState) normalizeLegacyTreeRecords(*uiState);
+        }
         if (!uiPresenceCorrespondsToSchema(*uiPresence, validated.schema()))
             return false;
         canonicalizeUiRecordOrder(*ui, uiPresence->nodes);
@@ -6688,6 +6799,12 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
             }
             uiPresenceDelta.replacement = std::move(*uiPresence);
         }
+    }
+    if (uiStateDelta.replacement) {
+        normalizeLegacyTreeRecords(*uiStateDelta.replacement);
+    }
+    if (uiPresenceDelta.replacement) {
+        normalizeLegacyTreeRecords(*uiPresenceDelta.replacement);
     }
     PaletteSectionDelta paletteDelta;
     if (const ProtocolValue* paletteField = payload.field("palette")) {

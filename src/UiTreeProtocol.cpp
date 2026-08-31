@@ -404,6 +404,14 @@ bool hasChildren(UiNode const& node,
     return true;
 }
 
+bool isViewLeaf(const UiNode& node, std::string_view id,
+                ViewSurface surface) {
+    const auto* leaf = std::get_if<UiLeaf>(&node.content);
+    return node.id.value() == id && leaf != nullptr &&
+           leaf->widget.kind == WidgetKind::View &&
+           leaf->widget.surface == surface;
+}
+
 // The presentation-bearing legacy delta is frozen until Plan 6, so its schema
 // cannot be regenerated when the canonical whole-screen topology moves.
 bool normalizePrecedingWholeScreenTopology(UiSchema& schema) {
@@ -471,6 +479,33 @@ bool normalizePrecedingWholeScreenTopology(UiSchema& schema) {
     return true;
 }
 
+bool normalizePrecedingTreeSurface(UiSchema& schema) {
+    if (!hasChildren(schema.root, {kHeaderNodeId, kBodyNodeId,
+                                   kFooterPromptNodeId, kFooterNodeId})) {
+        return false;
+    }
+    auto& root = std::get<UiContainer>(schema.root.content);
+    auto& body = root.children[1];
+    if (!hasChildren(body, {kPanelNodeId, kContentNodeId})) return false;
+    auto& panel = std::get<UiContainer>(body.content).children[0];
+    if (!hasChildren(panel,
+                     {kFileTreeNodeId, kGitStatusNodeId, kSymbolsNodeId})) {
+        return false;
+    }
+    auto& children = std::get<UiContainer>(panel.content).children;
+    if (!isViewLeaf(children[0], kFileTreeNodeId, ViewSurface::FileTree) ||
+        !isViewLeaf(children[1], kGitStatusNodeId, ViewSurface::GitStatus) ||
+        !isViewLeaf(children[2], kSymbolsNodeId, ViewSurface::Symbols)) {
+        return false;
+    }
+    children[0].id = UiNodeId{std::string{kTreeNodeId}};
+    auto& widget = std::get<UiLeaf>(children[0].content).widget;
+    widget.id = std::string{kTreeNodeId};
+    widget.surface = ViewSurface::Tree;
+    children.erase(children.begin() + 1, children.end());
+    return true;
+}
+
 }  // namespace
 
 ProtocolValue encodeUiSchema(const UiSchema& schema) {
@@ -497,7 +532,10 @@ std::optional<UiSchema> decodeUiSchema(const ProtocolValue& value) {
     // as a plausible schema.
     if (!validateUiSchema(schema).ok()) return std::nullopt;
     if (!validateWellKnownAreas(schema).ok()) {
-        if (!normalizePrecedingWholeScreenTopology(schema) ||
+        const bool topologyNormalized =
+            normalizePrecedingWholeScreenTopology(schema);
+        const bool treeNormalized = normalizePrecedingTreeSurface(schema);
+        if ((!topologyNormalized && !treeNormalized) ||
             !validateWellKnownAreas(schema).ok()) {
             return std::nullopt;
         }

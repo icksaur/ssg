@@ -118,12 +118,12 @@ TEST(profileRejectsAndNamesTheFirstUnsupportedSurface) {
     ClientUiProfile profile;
     profile.allowSurfaces({ssg::ViewSurface::TabBar});
     const std::vector surfaces{ssg::ViewSurface::TabBar,
-                               ssg::ViewSurface::GitStatus};
+                               ssg::ViewSurface::Tree};
     const std::optional<ssg::ViewSurface> rejected =
         profile.firstUnsupported(surfaces);
     ASSERT_TRUE(rejected.has_value());
-    ASSERT_EQ(*rejected, ssg::ViewSurface::GitStatus);
-    ASSERT_EQ(ssg::viewSurfaceName(*rejected), std::string_view{"gitstatus"});
+    ASSERT_EQ(*rejected, ssg::ViewSurface::Tree);
+    ASSERT_EQ(ssg::viewSurfaceName(*rejected), std::string_view{"tree"});
 }
 
 TEST(everyViewSurfaceHasADistinctName) {

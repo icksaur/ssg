@@ -66,14 +66,15 @@ enum class ViewSurface : std::uint8_t {
     Notice,       // the draft-conflict notice above the document (semantic NoticeView)
     ExternalModification,  // the external-modification bar above the document (7A-5b)
     Document,     // the active document body, selection, caret, and syntax
+    Tree,         // the active tree provider named by TreeViewState
 };
 
-inline constexpr std::size_t kViewSurfaceCount = 9;
+inline constexpr std::size_t kViewSurfaceCount = 10;
 inline constexpr std::array kAllViewSurfaces{
     ViewSurface::TabBar,       ViewSurface::FileTree,     ViewSurface::GitStatus,
     ViewSurface::FindResults,  ViewSurface::Symbols,      ViewSurface::FooterPrompt,
     ViewSurface::Notice,       ViewSurface::ExternalModification,
-    ViewSurface::Document,
+    ViewSurface::Document,     ViewSurface::Tree,
 };
 static_assert(kAllViewSurfaces.size() == kViewSurfaceCount);
 

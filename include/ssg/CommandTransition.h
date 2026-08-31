@@ -43,6 +43,8 @@ enum class CycleDirection : std::uint8_t { Next, Previous };
 // (which preserves panel visibility and focus) rather than being transition variants.
 [[nodiscard]] PanelProvider cyclePanelProvider(PanelProvider provider,
                                                CycleDirection direction);
+[[nodiscard]] PanelProvider cyclePanelProvider(
+    const TreeProviderBinding& provider, CycleDirection direction);
 
 // The region the active prompt's focus anchors on, derived from the prompt (never stored),
 // or nullopt when no prompt is active. Shared by the transition builder and the authority.
@@ -98,6 +100,7 @@ struct TransitionInputs {
     // The tree providers that already exist. Matching needs id+kind (activating by id
     // alone cannot prove the kind) and the revision (to stamp a valid recreate).
     std::vector<TreeProviderPresence> presentProviders;
+    std::optional<TreeProviderBinding> activeProvider;
     TreeRevision nextTreeRevision{0};           // revision stamped on a fresh provider
 };
 

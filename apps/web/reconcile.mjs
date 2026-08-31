@@ -763,6 +763,25 @@ export function applyPickerInputPrediction(picker, prediction, rowCount) {
 // and commits to `tree` only on full success, so a rejected delta never leaves the
 // panel half-applied. Keeping the panel retained here is what stops every
 // expand/open/select from forcing a resync.
+export function normalizeTreeActiveBinding(tree) {
+  if (!tree) return false;
+  const providers = Array.isArray(tree.providers) ? tree.providers : [];
+  const key = (v) => (typeof v === 'bigint' ? v.toString() : String(v));
+  if (new Set(providers.map((provider) => key(provider.provider_id))).size !==
+      providers.length) return false;
+  if (!Object.prototype.hasOwnProperty.call(tree, 'active_binding')) {
+    tree.active_binding = providers.length === 0 ? null : {
+      provider_id: providers[0].provider_id, kind: providers[0].kind,
+    };
+  }
+  const active = tree.active_binding;
+  if ((providers.length === 0) !== (active == null)) return false;
+  if (active == null) return true;
+  return providers.filter((provider) =>
+    key(provider.provider_id) === key(active.provider_id) &&
+    num(provider.kind) === num(active.kind)).length === 1;
+}
+
 export function applyTreeDelta(tree, treeDelta) {
   if (!treeDelta) return true;
   if (treeDelta.snapshot_required) return false;
@@ -813,9 +832,23 @@ export function applyTreeDelta(tree, treeDelta) {
   const byId = new Map(providers.map((provider) => [key(provider.provider_id), provider]));
   if (order.some((id) => !byId.has(id))) return false;
   providers.splice(0, providers.length, ...order.map((id) => byId.get(id)));
+  if (byId.size !== providers.length) return false;
+  const active = Object.prototype.hasOwnProperty.call(treeDelta, 'active_binding')
+    ? treeDelta.active_binding
+    : (providers.length === 0 ? null : {
+        provider_id: providers[0].provider_id, kind: providers[0].kind,
+      });
+  if ((providers.length === 0) !== (active == null)) return false;
+  if (active != null) {
+    const matches = providers.filter((provider) =>
+      key(provider.provider_id) === key(active.provider_id) &&
+      num(provider.kind) === num(active.kind));
+    if (matches.length !== 1) return false;
+  }
   tree.providers = providers;
+  tree.active_binding = active;
   tree.revision = treeDelta.revision;
-  return true;
+  return normalizeTreeActiveBinding(tree);
 }
 
 export function clampPaletteSelection(selected, rowCount) {
@@ -1288,12 +1321,14 @@ export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2, RESPONSIVE: 3 };
 // a viewport"), matching the wire decoder's forward-compat rule.
 export const SCROLL = { NONE: 0, VERTICAL: 1 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
-export const SURFACE = { TABBAR: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5, NOTICE: 6, EXTERNAL_MODIFICATION: 7, DOCUMENT: 8 };
+export const SURFACE = { TABBAR: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5, NOTICE: 6, EXTERNAL_MODIFICATION: 7, DOCUMENT: 8, TREE: 9 };
 export const PALETTE_PRESENCE_OP = { SHOW: 0, HIDE: 1 };
-const ALL_SURFACES = Object.freeze(
-  Object.values(SURFACE).filter((surface) => surface !== SURFACE.FOOTER_PROMPT));
+const ALL_SURFACES = Object.freeze([
+  SURFACE.TABBAR, SURFACE.TREE, SURFACE.FINDRESULTS, SURFACE.NOTICE,
+  SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
+]);
 const TREE_SURFACES = Object.freeze([
-  SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.SYMBOLS,
+  SURFACE.TREE,
 ]);
 
 export function browserRenderPlan(delta) {
@@ -1584,7 +1619,7 @@ const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL
 // Placement is tree structure + well-known node ids, so there is no region-role set.
 export const WEB_UI_PROFILE = {
   widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.TEXT_INPUT, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
-  surfaces: new Set([SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT]),
+  surfaces: new Set([SURFACE.TABBAR, SURFACE.TREE, SURFACE.FINDRESULTS, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT]),
   sizes: new Set(Object.values(SIZE)),
 };
 

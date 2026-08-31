@@ -121,9 +121,7 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     ASSERT_TRUE(findResultsViewport != nullptr);
     struct Leaf { std::string_view id; const UiNode* parent; ViewSurface surface; };
     const Leaf leaves[] = {
-        {kFileTreeNodeId, panel, ViewSurface::FileTree},
-        {kGitStatusNodeId, panel, ViewSurface::GitStatus},
-        {kSymbolsNodeId, panel, ViewSurface::Symbols},
+        {kTreeNodeId, panel, ViewSurface::Tree},
         {kTabBarNodeId, content, ViewSurface::TabBar},
         {kNoticeNodeId, content, ViewSurface::Notice},
         {kExternalModNodeId, content, ViewSurface::ExternalModification},
@@ -179,7 +177,7 @@ TEST(assembledTreeNamesTheIndependentVerticalScrollViewports) {
     ASSERT_TRUE(scrollOf(editor) == ScrollAxis::None);
     ASSERT_TRUE(scrollOf(documentViewport) == ScrollAxis::Vertical);
     ASSERT_TRUE(scrollOf(findResultsViewport) == ScrollAxis::Vertical);
-    if (panel) ASSERT_TRUE(scrollOf(childById(*panel, kFileTreeNodeId)) == ScrollAxis::None);
+    if (panel) ASSERT_TRUE(scrollOf(childById(*panel, kTreeNodeId)) == ScrollAxis::None);
     if (content)
         ASSERT_TRUE(scrollOf(childById(*content, kTabBarNodeId)) ==
                     ScrollAxis::None);

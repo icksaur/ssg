@@ -83,34 +83,20 @@ TEST(panelIsPresentOnlyWhenRequested) {
     hidden.panelPresent = false;
     const auto a = buildWholeScreenInteraction(schemaOf({}), hidden);
     ASSERT_FALSE(present(a, kPanelNodeId));
-    // No provider leaks its presence when the panel is absent (provider choice lives in
-    // the last-active hint, not in presence).
-    ASSERT_FALSE(present(a, kFileTreeNodeId));
-    ASSERT_FALSE(present(a, kGitStatusNodeId));
-    ASSERT_FALSE(present(a, kSymbolsNodeId));
+    ASSERT_FALSE(present(a, kTreeNodeId));
 
     WholeScreenTruth shown;
     shown.panelPresent = true;
     const auto b = buildWholeScreenInteraction(schemaOf({}), shown);
     ASSERT_TRUE(present(b, kPanelNodeId));
+    ASSERT_TRUE(present(b, kTreeNodeId));
 }
 
-TEST(corruptSelectedProviderIsRejected) {
+TEST(panelPresenceDoesNotEncodeProviderIdentity) {
     WholeScreenTruth truth;
     truth.panelPresent = true;
-    truth.selectedProvider = static_cast<PanelProvider>(200);
-    // Invalid truth must not produce plausible presence.
-    ASSERT_THROWS(buildWholeScreenInteraction(schemaOf({}), truth), std::logic_error);
-}
-
-TEST(exactlyTheSelectedProviderIsPresent) {
-    WholeScreenTruth truth;
-    truth.panelPresent = true;
-    truth.selectedProvider = PanelProvider::GitStatus;
     const auto s = buildWholeScreenInteraction(schemaOf({}), truth);
-    ASSERT_TRUE(present(s, kGitStatusNodeId));
-    ASSERT_FALSE(present(s, kFileTreeNodeId));
-    ASSERT_FALSE(present(s, kSymbolsNodeId));
+    ASSERT_TRUE(present(s, kTreeNodeId));
 }
 
 TEST(contentShowsEditorXorFindResultsByFinderState) {
@@ -163,15 +149,11 @@ TEST(distractionFreePresenceLeavesOnlyTheDocumentBranchVisible) {
 TEST(pickerPresenceOverlayMatchesEveryAuthoritativeOpenProjection) {
     const auto schema = schemaOf({});
     for (const bool panelPresent : {false, true}) {
-        for (const PanelProvider provider :
-             {PanelProvider::FileTree, PanelProvider::GitStatus,
-              PanelProvider::Symbols}) {
-            for (const bool noticePresent : {false, true}) {
+        for (const bool noticePresent : {false, true}) {
                 for (const bool externalPresent : {false, true}) {
                     for (const bool distractionFree : {false, true}) {
                         WholeScreenTruth closed;
                         closed.panelPresent = panelPresent;
-                        closed.selectedProvider = provider;
                         closed.noticePresent = noticePresent;
                         closed.externalModificationPresent = externalPresent;
                         closed.distractionFree = distractionFree;
@@ -195,15 +177,14 @@ TEST(pickerPresenceOverlayMatchesEveryAuthoritativeOpenProjection) {
                                 for (const PalettePresenceOp& op :
                                      overlay.ops) {
                                     if (op.target == id) {
-                                        actual =
+                                    actual =
                                             op.kind ==
                                             PalettePresenceOpKind::Show;
-                                    }
                                 }
+                             }
                                 ASSERT_EQ(
                                     actual,
                                     expected.presence().isPresent(id));
-                            }
                         }
                     }
                 }
@@ -305,12 +286,11 @@ TEST(baseFocusNeverStrandsOnAnAbsentPanel) {
 TEST(rebuildOverANewGenerationPreservesTruthAndResetsBasis) {
     WholeScreenTruth truth;
     truth.panelPresent = true;
-    truth.selectedProvider = PanelProvider::Symbols;
     truth.openPicker = PickerKind::Command;
 
     // Generation 0. A command palette is a Palette prompt -> header-region focus.
     const auto g0 = buildWholeScreenInteraction(schemaOf({}), truth, PromptRegion::Header);
-    ASSERT_TRUE(present(g0, kSymbolsNodeId));
+    ASSERT_TRUE(present(g0, kTreeNodeId));
     ASSERT_TRUE(present(g0, kFindResultsNodeId));
     ASSERT_TRUE(g0.effectiveFocus() == FocusTarget::Prompt);
 
@@ -326,9 +306,8 @@ TEST(rebuildOverANewGenerationPreservesTruthAndResetsBasis) {
     ValidatedSchema migrated = owner.validated();
     const auto g1 =
         buildWholeScreenInteraction(std::move(migrated), truth, PromptRegion::Header);
-    ASSERT_TRUE(present(g1, kSymbolsNodeId));
+    ASSERT_TRUE(present(g1, kTreeNodeId));
     ASSERT_TRUE(present(g1, kFindResultsNodeId));
-    ASSERT_FALSE(present(g1, kFileTreeNodeId));
     ASSERT_TRUE(g1.effectiveFocus() == FocusTarget::Prompt);
     // The basis is generation-scoped and reset on a fresh build to its baseline.
     ASSERT_EQ(g1.presence().basis().value(), std::uint64_t{0});
@@ -381,8 +360,7 @@ int main() {
     RUN(schemaGenerationHoldsWhenStructureIsUnchanged);
     RUN(schemaGenerationAdvancesOnAStructuralChange);
     RUN(panelIsPresentOnlyWhenRequested);
-    RUN(corruptSelectedProviderIsRejected);
-    RUN(exactlyTheSelectedProviderIsPresent);
+    RUN(panelPresenceDoesNotEncodeProviderIdentity);
     RUN(contentShowsEditorXorFindResultsByFinderState);
     RUN(distractionFreePresenceLeavesOnlyTheDocumentBranchVisible);
     RUN(pickerPresenceOverlayMatchesEveryAuthoritativeOpenProjection);

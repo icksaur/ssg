@@ -420,10 +420,10 @@ std::optional<GridFrame> GridPresenter::project(
             *state.findGeneration != sections.findReplace.generation ||
             state.activeTab != sections.tabs.active ||
             !state.selections || *state.selections != sections.selection;
+        const auto* treeProvider = activeTreeProvider(sections.tree);
         const auto selectedTree =
-            sections.tree.providers.empty()
-                ? std::optional<TreeNodeId>{}
-                : sections.tree.providers.front().selected;
+            treeProvider == nullptr ? std::optional<TreeNodeId>{}
+                                    : treeProvider->selected;
         const auto documentRevision = sections.document.revision;
         const auto findGeneration = sections.findReplace.generation;
         const auto activeTab = sections.tabs.active;
