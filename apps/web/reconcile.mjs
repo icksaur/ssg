@@ -883,7 +883,6 @@ export function applySessionDeltaSections(sections, delta) {
     sections.syntax.spans = delta.syntax.spans;
   }
   if (delta.theme && delta.theme.replacement != null) sections.theme = delta.theme.replacement;
-  if (delta.focus != null) sections.focus = delta.focus;
   const replaceWrapped = (name) => { if (delta[name] && delta[name].replacement != null) sections[name] = delta[name].replacement; };
   replaceWrapped('prompt_status');
   replaceWrapped('find_replace');
@@ -903,14 +902,10 @@ export function applySessionDeltaSections(sections, delta) {
   // The external-modification section travels as a merge delta (upserted/removed/
   // selected against a base revision), like the diff section it mirrors. Merge it
   // into the retained section so the bar tracks live changes without a full
-  // snapshot. `external_focus_held` is an additive top-level bool, present only
-  // when it flips; absent leaves the prior value.
+  // snapshot.
   if (delta.external_modification) {
     sections.external_modification =
       applyExternalModificationDelta(sections.external_modification, delta.external_modification);
-  }
-  if (delta.external_focus_held != null) {
-    sections.external_focus_held = !!num(delta.external_focus_held);
   }
   if (delta.ui_frame_delta != null && sections.ui_frame != null) {
     const frame = applyUiFrameDelta(sections.ui_frame, delta.ui_frame_delta);
@@ -1081,6 +1076,8 @@ function validUiFrame(frame) {
         return !expected.has(id) || !Number.isInteger(context) ||
           context < 0 || context > 3;
       })) return false;
+  const baseContext = num(uiNodeById(schema.root, path[0])?.focus_context);
+  if (baseContext !== 0 && baseContext !== 1) return false;
   const effective = effectiveUiPresence(schema, presence);
   return effective?.get(path[path.length - 1]) === true;
 }
@@ -1147,32 +1144,54 @@ function normalizeUiFrameSections(sections) {
   const legacyPresent = legacyNames.filter((name) =>
     Object.prototype.hasOwnProperty.call(sections, name));
   if (sections.ui_frame != null) {
-    return legacyPresent.length === 0 && validUiFrame(sections.ui_frame);
+    if (legacyPresent.length !== 0 || !validUiFrame(sections.ui_frame)) {
+      return false;
+    }
+    const pair = uiFrameLegacyFocusPair(sections.ui_frame);
+    const external = sections.external_focus_held == null
+      ? false : strictBoolean(sections.external_focus_held);
+    return pair != null &&
+      sections.focus != null && num(sections.focus) === pair.focus &&
+      external != null && external === pair.external;
   }
   if (legacyPresent.length === 0) return true;
   if (legacyPresent.length !== legacyNames.length ||
       legacyNames.some((name) => sections[name] == null)) return false;
+  const schema = structuredClone(sections.ui);
+  const legacyContexts = new Map([
+    ['editor', 0], ['panel', 1], ['input_line', 2],
+    ['footer.prompt', 2], ['externalmod', 3],
+  ]);
+  const annotate = (node) => {
+    if (!node || typeof node.id !== 'string') return;
+    // Preceding schemas had no focus metadata; known host identity supplies it.
+    if (legacyContexts.has(node.id)) {
+      node.focus_context = legacyContexts.get(node.id);
+    }
+    for (const child of (node.container?.children || [])) annotate(child);
+  };
+  annotate(schema.root);
   const state = { ...sections.ui_state };
+  const external = sections.external_focus_held == null
+    ? false : strictBoolean(sections.external_focus_held);
+  if (sections.focus == null || external == null) return false;
   if (state.focus_path == null) {
-    const focus = sections.external_focus_held ? 3 : num(sections.focus);
-    const candidates = focus === 0 ? ['editor']
-      : focus === 1 ? ['tree']
-      : focus === 2 ? ['input_line', 'footer.prompt']
-      : focus === 3 ? ['externalmod'] : [];
-    const schemaIds = new Set(uiNodeIds(sections.ui) || []);
-    const direct = new Map((sections.ui_presence.nodes || []).map((record) =>
-      [record.id, !!record.present]));
-    const present = candidates.filter((id) =>
-      schemaIds.has(id) && direct.get(id) === true);
-    if (present.length !== 1) return false;
-    state.focus_path = present;
+    const provisional = {
+      schema,
+      state,
+      presence: sections.ui_presence,
+    };
+    state.focus_path = legacyFocusPath(
+      provisional, num(sections.focus),
+      external);
+    if (!state.focus_path) return false;
   }
   const frame = {
     version: {
       generation: sections.ui.generation,
       presence_basis: sections.ui_presence.basis,
     },
-    schema: sections.ui,
+    schema,
     state,
     presence: sections.ui_presence,
   };
@@ -1180,6 +1199,102 @@ function normalizeUiFrameSections(sections) {
   sections.ui_frame = frame;
   for (const name of legacyNames) delete sections[name];
   return true;
+}
+
+function uiFrameLegacyFocusPair(frame) {
+  const resolved = resolveUiFocusPath(
+    frame?.schema, frame?.state, frame?.presence);
+  if (!resolved) return null;
+  const contexts = new Map();
+  const collect = (node) => {
+    if (!node || typeof node.id !== 'string') return;
+    contexts.set(node.id, num(node.focus_context));
+    for (const child of (node.container?.children || [])) collect(child);
+  };
+  collect(frame.schema.root);
+  let focus = null;
+  for (let index = resolved.path.length - 1; index >= 0; --index) {
+    const context = contexts.get(resolved.path[index]);
+    if (context !== 3) {
+      focus = context;
+      break;
+    }
+  }
+  return focus == null || focus < 0 || focus > 2 ? null : {
+    focus,
+    external: resolved.context === 'external',
+  };
+}
+
+function legacyFocusPath(frame, focus, external) {
+  if (!Number.isInteger(focus) || focus < 0 || focus > 2 ||
+      (focus === 2 && external)) {
+    return null;
+  }
+  const base = focus === 1 ? 'panel' : 'editor';
+  const baseNode = uiNodeById(frame.schema.root, base);
+  if (num(baseNode?.focus_context) !== (focus === 1 ? 1 : 0)) return null;
+  const effective = effectiveUiPresence(frame.schema, frame.presence);
+  if (!effective) return null;
+  const path = [base];
+  if (focus === 2) {
+    const prompts = ['input_line', 'footer.prompt'].filter((id) =>
+      num(uiNodeById(frame.schema.root, id)?.focus_context) === 2 &&
+      effective.get(id) === true);
+    if (prompts.length !== 1) return null;
+    path.push(prompts[0]);
+  } else if (effective.get(base) !== true) {
+    return null;
+  }
+  if (external) {
+    if (num(uiNodeById(frame.schema.root, 'externalmod')?.focus_context) !== 3 ||
+        effective.get('externalmod') !== true) {
+      return null;
+    }
+    path.push('externalmod');
+  }
+  return path;
+}
+
+function frameDeltaChangesFocus(delta) {
+  if (delta?.ui_frame_delta != null) {
+    return delta.ui_frame_delta.kind === 'replacement' ||
+      delta.ui_frame_delta.state?.focus_path != null;
+  }
+  return delta?.ui_state?.focus_path != null;
+}
+
+function strictBoolean(value) {
+  return typeof value === 'boolean' ? value : null;
+}
+
+function reconcileLegacyFocusDelta(baseFrame, candidate, delta) {
+  const hasFocus = delta.focus != null;
+  const hasExternal = delta.external_focus_held != null;
+  if (!hasFocus && !hasExternal) return candidate;
+  const external = hasExternal
+    ? strictBoolean(delta.external_focus_held) : null;
+  if (hasExternal && external == null) return null;
+  const actual = uiFrameLegacyFocusPair(candidate);
+  if (!actual) return null;
+  if (frameDeltaChangesFocus(delta)) {
+    if ((hasFocus && actual.focus !== num(delta.focus)) ||
+        (hasExternal && actual.external !== external)) {
+      return null;
+    }
+    return candidate;
+  }
+  const base = uiFrameLegacyFocusPair(baseFrame);
+  if (!base) return null;
+  const focus = hasFocus ? num(delta.focus) : base.focus;
+  const requestedExternal = hasExternal ? external : base.external;
+  const path = legacyFocusPath(candidate, focus, requestedExternal);
+  if (!path) return null;
+  const reconciled = {
+    ...candidate,
+    state: { ...candidate.state, focus_path: path },
+  };
+  return validUiFrame(reconciled) ? reconciled : null;
 }
 
 function validSyntaxState(state) {
@@ -1358,7 +1473,6 @@ export function applySessionDeltaCopy(sections, delta) {
     next.syntax = syntax;
   }
   if (delta.theme?.replacement != null) next.theme = delta.theme.replacement;
-  if (delta.focus != null) next.focus = delta.focus;
   if (delta.palette != null) {
     next.palette = delta.palette.replacement ?? delta.palette;
   }
@@ -1387,12 +1501,16 @@ export function applySessionDeltaCopy(sections, delta) {
     if (!validUiFrame(frame)) return null;
     next.ui_frame = frame;
   }
+  if (sections.ui_frame != null || next.ui_frame != null) {
+    next.ui_frame = reconcileLegacyFocusDelta(
+      sections.ui_frame, next.ui_frame, delta);
+    if (!next.ui_frame) return null;
+  }
   if (delta.watcher_available != null) {
     next.watcher_available = !!num(delta.watcher_available);
   }
-  if (delta.external_focus_held != null) {
-    next.external_focus_held = !!num(delta.external_focus_held);
-  }
+  delete next.focus;
+  delete next.external_focus_held;
   return next;
 }
 
@@ -1475,10 +1593,6 @@ export function externalModificationFromSections(sections) {
 // Editor/Panel/Prompt for older clients); this additive bool is the ONLY signal,
 // so the client MUST read it rather than compare the focus ordinal to a value
 // that never appears on the wire.
-export function externalFocusHeld(sections) {
-  return !!(sections && num(sections.external_focus_held));
-}
-
 // --- UI-VM: the web interpreter over the published schema + dynamic node state ---
 //
 // Wire ordinals, pinned by the C++ enums (WidgetKind, RegionRole, Axis, SizeKind,

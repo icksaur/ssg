@@ -18,11 +18,11 @@
   {"snapshot":"lsp_sync","delta":["lsp_sync"],"deprecated":false},
   {"snapshot":"lsp_features","delta":["lsp_features"],"deprecated":false},
   {"snapshot":"theme","delta":["theme"],"deprecated":false},
-  {"snapshot":"focus","delta":["focus"],"deprecated":false},
+  {"snapshot":"focus","delta":["focus"],"deprecated":true},
   {"snapshot":"palette","delta":["palette"],"deprecated":false},
   {"snapshot":"ui_frame","delta":["ui_frame_delta"],"deprecated":false},
   {"snapshot":"prompt_view","delta":["prompt_view"],"deprecated":false},
   {"snapshot":"notice_view","delta":["notice_view"],"deprecated":false},
   {"snapshot":"watcher_available","delta":["watcher_available"],"deprecated":false},
-  {"snapshot":"external_focus_held","delta":["external_focus_held"],"deprecated":false}
+  {"snapshot":"external_focus_held","delta":["external_focus_held"],"deprecated":true}
 ]

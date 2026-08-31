@@ -74,7 +74,6 @@ ssg::SessionSnapshotSections minimalSections() {
         ssg::LspSyncViewState{},
         ssg::LspFeatureViewState{},
         ssg::ThemeSnapshot{},
-        ssg::FocusTarget::Editor,
         ssg::PaletteViewState{}};
     return sections;
 }

@@ -3114,14 +3114,13 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
     // The routing seam a key would take is still the editor: a cursor burst never
     // moved focus, so the coalesced (un-refreshed) keys correctly kept editor
     // routing.
-    ASSERT_TRUE(ssg::effectiveFocusFromSections(
-                    afterBurst->semantic().sections()) ==
+    ASSERT_TRUE(afterBurst->semantic().sections().uiFrame.effectiveFocus() ==
                 ssg::FocusTarget::Editor);
 
     // Opening the palette changes routing, so the NEXT key must refresh -- and the
     // refreshed snapshot must route the next key to the prompt, not the editor.
-    // Deriving focus through the same seam refresh() uses (effectiveFocusFromSections)
-    // is what pins that a stale-focus wiring cannot pass.
+    // Deriving focus through the same frame seam refresh() uses is what pins
+    // that stale-focus wiring cannot pass.
     coalescer.noteEffects(
         runtime.dispatch(client, {"palette.open", runtime.revision(), {}}).effects);
     ASSERT_TRUE(coalescer.needsRefresh(keyAxes));
@@ -3130,8 +3129,7 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
     ASSERT_TRUE(afterOpen.has_value());
     ASSERT_TRUE(afterOpen->semantic().sections().promptStatus.activeKind ==
                 ssg::PromptKind::Palette);
-    ASSERT_TRUE(ssg::effectiveFocusFromSections(
-                    afterOpen->semantic().sections()) ==
+    ASSERT_TRUE(afterOpen->semantic().sections().uiFrame.effectiveFocus() ==
                 ssg::FocusTarget::Prompt);
     fs::remove_all(root);
 }

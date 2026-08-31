@@ -39,6 +39,9 @@ public:
         return *state_.focusPath;
     }
     [[nodiscard]] FocusTarget effectiveFocus() const noexcept;
+    // Compatibility projection for the preceding three-value focus wire field.
+    // Removed with that field in Plan 6.
+    [[nodiscard]] FocusTarget legacyFocus() const noexcept;
     [[nodiscard]] UiFrameVersion version() const noexcept {
         return {schema_.generation, presence_.basis};
     }

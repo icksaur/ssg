@@ -67,7 +67,6 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
         {revision, {}},
         {revision, {}, std::nullopt, {}, marker},
         theme,
-        ssg::FocusTarget::Editor,
     };
 }
 

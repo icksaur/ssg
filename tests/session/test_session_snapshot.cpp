@@ -794,7 +794,8 @@ TEST(settingsOpenFocusesASettingsPrompt) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The chord actually opens: focus moves to the prompt with a visible input.
-    ASSERT_EQ(snapshot->semantic().sections().focus, ssg::FocusTarget::Prompt);
+    ASSERT_EQ(snapshot->semantic().sections().uiFrame.effectiveFocus(),
+              ssg::FocusTarget::Prompt);
     ASSERT_TRUE(snapshot->presentation().prompt.has_value());
 }
 
@@ -1101,7 +1102,8 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     auto focusedSnapshot = runtime.snapshot(firstClient);
     ASSERT_TRUE(focusedSnapshot.has_value());
     if (!focusedSnapshot) return;
-    ASSERT_EQ(focusedSnapshot->sections().focus, ssg::FocusTarget::Editor);
+    ASSERT_EQ(focusedSnapshot->sections().uiFrame.effectiveFocus(),
+              ssg::FocusTarget::Editor);
     ASSERT_EQ(focusedSnapshot->sections().followEdits.mode,
               ssg::FollowMode::Paused);
     ASSERT_EQ(focusedSnapshot->sections().followEdits.generation,

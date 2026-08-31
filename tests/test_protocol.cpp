@@ -6,6 +6,7 @@
 #include <ssg/CommandCatalog.h>
 
 #include "all_command_ids.h"
+#include "../src/legacy_focus_compat.h"
 #include <ssg/EditorSession.h>
 #include <ssg/WholeScreenAssembly.h>
 
@@ -90,7 +91,6 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         {revision, {}},
         {revision, {}, std::nullopt, {}, marker},
         theme,
-        ssg::FocusTarget::Editor,
     };
     ssg::UiSchema ui{
         ssg::Generation{marker.size()},
@@ -110,36 +110,35 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
     return result;
 }
 
-ssg::SessionSnapshotSections sectionsFocusedOn(ssg::FocusTarget target) {
-    auto result = sections(ssg::Revision{4}, "focus");
-    auto state = result.uiFrame.state();
+ssg::UiFrame frameFocusedOn(const ssg::UiFrame& frame,
+                            ssg::FocusTarget target) {
+    auto state = frame.state();
     const auto id = [](std::string_view value) {
         return ssg::UiNodeId{std::string{value}};
     };
     switch (target) {
     case ssg::FocusTarget::Editor:
         state.focusPath = std::vector{id(ssg::kEditorNodeId)};
-        result.focus = ssg::FocusTarget::Editor;
         break;
     case ssg::FocusTarget::Panel:
         state.focusPath = std::vector{id(ssg::kPanelNodeId)};
-        result.focus = ssg::FocusTarget::Panel;
         break;
     case ssg::FocusTarget::Prompt:
         state.focusPath = std::vector{id(ssg::kEditorNodeId),
                                       id(ssg::kHeaderPromptInputNodeId)};
-        result.focus = ssg::FocusTarget::Prompt;
         break;
     case ssg::FocusTarget::ExternalModification:
         state.focusPath = std::vector{id(ssg::kEditorNodeId),
                                       id(ssg::kExternalModNodeId)};
-        result.focus = ssg::FocusTarget::Editor;
-        result.externalFocusHeld = true;
         break;
     }
-    result.uiFrame = ssg::UiFrame::require(
-        result.uiFrame.schema(), std::move(state),
-        result.uiFrame.presence());
+    return ssg::UiFrame::require(frame.schema(), std::move(state),
+                                 frame.presence());
+}
+
+ssg::SessionSnapshotSections sectionsFocusedOn(ssg::FocusTarget target) {
+    auto result = sections(ssg::Revision{4}, "focus");
+    result.uiFrame = frameFocusedOn(result.uiFrame, target);
     return result;
 }
 
@@ -235,8 +234,10 @@ std::pair<ssg::SessionSnapshotSections, ssg::SessionSnapshotSections>
 semanticFixtureSections() {
     auto before = sections(ssg::Revision{4}, "a");
     auto after = sections(ssg::Revision{5}, "changed");
-    before.externalFocusHeld = true;
-    after.focus = ssg::FocusTarget::Prompt;
+    before.uiFrame = frameFocusedOn(
+        before.uiFrame, ssg::FocusTarget::ExternalModification);
+    after.uiFrame =
+        frameFocusedOn(after.uiFrame, ssg::FocusTarget::Prompt);
     after.palette.activePicker =
         ssg::PickerActivation{ssg::SearchMode::Command,
                               ssg::PickerActivationId{9}};
@@ -978,44 +979,37 @@ TEST(gitTreeAffordanceMustMatchItsAuthoritativeIdentity) {
     ASSERT_FALSE(decoded.accepted());
 }
 
-// The additive external-focus-held field: the default (false) round-trips, a true
-// value round-trips, so a new client reconstructs the true focus from it while the
-// legacy `focus` field stays in the closed decode set.
-TEST(externalFocusHeldIsAdditiveAbsentDecodesFalse) {
-    auto sect = sections(ssg::Revision{4}, "alpha");
-    ASSERT_FALSE(sect.externalFocusHeld);
+TEST(snapshotCompatibilityFocusIsDerivedFromTheFrame) {
+    auto quietSections = sectionsFocusedOn(ssg::FocusTarget::Editor);
     auto quiet = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(3), sect);
+                                ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), std::move(quietSections));
     auto const decodedQuiet = ssg::ProtocolCodec{}.decodeSessionSnapshot(
         ssg::ProtocolCodec{}.encodeSessionSnapshot(quiet.semantic()));
     ASSERT_TRUE(decodedQuiet.accepted());
-    ASSERT_FALSE(decodedQuiet.snapshot->sections().externalFocusHeld);
-    // The legacy focus field is always one an old three-value decode accepts.
-    ASSERT_TRUE(decodedQuiet.snapshot->sections().focus == ssg::FocusTarget::Editor ||
-                decodedQuiet.snapshot->sections().focus == ssg::FocusTarget::Panel ||
-                decodedQuiet.snapshot->sections().focus == ssg::FocusTarget::Prompt);
+    ASSERT_TRUE(decodedQuiet.snapshot->sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::Editor);
 
-    sect.externalFocusHeld = true;
+    auto heldSections =
+        sectionsFocusedOn(ssg::FocusTarget::ExternalModification);
     auto held = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(3), sect);
+                                ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(3), std::move(heldSections));
     auto const decodedHeld = ssg::ProtocolCodec{}.decodeSessionSnapshot(
         ssg::ProtocolCodec{}.encodeSessionSnapshot(held.semantic()));
     ASSERT_TRUE(decodedHeld.accepted());
-    ASSERT_TRUE(decodedHeld.snapshot->sections().externalFocusHeld);
+    ASSERT_TRUE(decodedHeld.snapshot->sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::ExternalModification);
 }
 
-// A flip of the external-focus-held state is a real delta: it round-trips and
-// replays onto the base.
-TEST(externalFocusHeldFlipIsADeltaThatRoundTrips) {
-    auto beforeSections = sections(ssg::Revision{4}, "alpha");
-    auto afterSections = sections(ssg::Revision{5}, "alpha");
-    afterSections.externalFocusHeld = true;
+TEST(frameFocusFlipCarriesCompatibilityDeltaAtTheCodecEdge) {
+    auto beforeSections = sectionsFocusedOn(ssg::FocusTarget::Editor);
+    auto afterSections =
+        sectionsFocusedOn(ssg::FocusTarget::ExternalModification);
     auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
@@ -1028,8 +1022,8 @@ TEST(externalFocusHeldFlipIsADeltaThatRoundTrips) {
         ssg::ViewId{9}, clientView(3), afterSections);
     auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
         before.semantic(), after.semantic());
-    ASSERT_TRUE(delta.externalFocusHeld().has_value());
-    ASSERT_TRUE(*delta.externalFocusHeld());
+    ASSERT_TRUE(delta.legacyExternalFocusHeld().has_value());
+    ASSERT_TRUE(*delta.legacyExternalFocusHeld());
 
     auto const decodedDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(delta));
@@ -1038,23 +1032,138 @@ TEST(externalFocusHeldFlipIsADeltaThatRoundTrips) {
         ssg::SessionSnapshotCodec{}.replay(before.semantic(),
                                            *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
-    ASSERT_TRUE(replayed.snapshot->sections().externalFocusHeld);
+    ASSERT_TRUE(replayed.snapshot->sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::ExternalModification);
 }
 
-TEST(effectiveFocusUsesThePublishedBaseAndExternalCaptureTruthTable) {
-    auto state = sections(ssg::Revision{4}, "alpha");
-    for (auto focus : {ssg::FocusTarget::Editor, ssg::FocusTarget::Panel,
-                       ssg::FocusTarget::Prompt}) {
-        state.focus = focus;
-        state.externalFocusHeld = false;
-        ASSERT_EQ(ssg::effectiveFocusFromSections(state), focus);
-        state.externalFocusHeld = true;
-        ASSERT_EQ(ssg::effectiveFocusFromSections(state),
-                  ssg::FocusTarget::ExternalModification);
+TEST(effectiveAndLegacyFocusAreBothDerivedFromOneFrameStack) {
+    const auto prompt = sectionsFocusedOn(ssg::FocusTarget::Prompt).uiFrame;
+    ASSERT_EQ(prompt.effectiveFocus(), ssg::FocusTarget::Prompt);
+    ASSERT_EQ(prompt.legacyFocus(), ssg::FocusTarget::Prompt);
+
+    const auto external =
+        sectionsFocusedOn(ssg::FocusTarget::ExternalModification).uiFrame;
+    ASSERT_EQ(external.effectiveFocus(),
+              ssg::FocusTarget::ExternalModification);
+    ASSERT_EQ(external.legacyFocus(), ssg::FocusTarget::Editor);
+}
+
+ssg::SessionDelta withCompatibilityFocus(
+    const ssg::SessionDelta& source, ssg::UiFrameDelta frameDelta,
+    std::optional<ssg::FocusTarget> focus,
+    std::optional<bool> external = std::nullopt) {
+    return ssg::SessionSnapshotCodec{}.decodeWire(
+        source.baseRevision(), source.revision(), source.clientId(),
+        source.viewId(), source.capabilities(), source.topology(),
+        source.document(), source.documentCaret(), source.selection(),
+        source.history(), source.clipboard(), source.promptStatus(),
+        source.search(), source.findReplace(), source.settings(),
+        source.keymap(), source.textEncoding(), source.tabs(), source.diff(),
+        source.externalModification(), source.followEdits(), source.tree(),
+        source.syntax(), source.lspSync(), source.lspFeatures(), source.theme(),
+        source.style(), source.shell(), source.viewport(),
+        std::move(frameDelta), focus, source.selectionNav(),
+        source.promptProjection(), source.treeWindows(), source.palette(),
+        source.promptView(), source.noticeView(), source.watcherAvailable(),
+        external);
+}
+
+TEST(precedingFocusOnlyDeltaReplacesTheFrameFocusTransactionally) {
+    auto beforeSections = sectionsFocusedOn(ssg::FocusTarget::Editor);
+    auto afterSections = sectionsFocusedOn(ssg::FocusTarget::Editor);
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(beforeSections));
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(afterSections));
+    const auto ordinary = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
+    auto focusOnly = withCompatibilityFocus(
+        ordinary,
+        ssg::UiFrameDeltaCodec{}.derive(
+            before.semantic().sections().uiFrame,
+            before.semantic().sections().uiFrame),
+        ssg::FocusTarget::Panel);
+    const auto replay = ssg::SessionSnapshotCodec{}.replay(
+        before.semantic(), focusOnly);
+    ASSERT_TRUE(replay.accepted());
+    if (replay.snapshot) {
+        ASSERT_EQ(replay.snapshot->sections().uiFrame.effectiveFocus(),
+                  ssg::FocusTarget::Panel);
     }
-    state.focus = ssg::FocusTarget::Prompt;
-    state.externalFocusHeld = false;
-    ASSERT_EQ(ssg::effectiveFocusFromSections(state), ssg::FocusTarget::Prompt);
+}
+
+TEST(mixedFrameAndCompatibilityFocusRejectOnDisagreement) {
+    auto beforeSections = sectionsFocusedOn(ssg::FocusTarget::Editor);
+    auto afterSections = sectionsFocusedOn(ssg::FocusTarget::Prompt);
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(beforeSections));
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(afterSections));
+    const auto ordinary = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
+    auto conflicting = withCompatibilityFocus(
+        ordinary,
+        ssg::UiFrameDeltaCodec{}.derive(
+            before.semantic().sections().uiFrame,
+            after.semantic().sections().uiFrame),
+        ssg::FocusTarget::Panel);
+    ASSERT_FALSE(ssg::SessionSnapshotCodec{}
+                     .replay(before.semantic(), conflicting)
+                     .accepted());
+}
+
+TEST(legacyFocusSynthesisRejectsEveryInvalidHostCombination) {
+    const auto frame =
+        sectionsFocusedOn(ssg::FocusTarget::Editor).uiFrame;
+    ASSERT_FALSE(ssg::detail::legacyFocusPath(
+        frame.schema(), frame.presence(), ssg::FocusTarget::Prompt, true));
+
+    auto missingPanel = frame.schema();
+    auto& children =
+        std::get<ssg::UiContainer>(missingPanel.root.content).children;
+    std::erase_if(children, [](const ssg::UiNode& node) {
+        return node.id.value() == ssg::kPanelNodeId;
+    });
+    ASSERT_FALSE(ssg::detail::legacyFocusPath(
+        missingPanel, frame.presence(), ssg::FocusTarget::Panel, false));
+
+    auto wrongPanel = frame.schema();
+    auto changeContext = [](auto&& self, ssg::UiNode& node) -> bool {
+        if (node.id.value() == ssg::kPanelNodeId) {
+            node.focusContext = ssg::FocusTarget::Prompt;
+            return true;
+        }
+        if (auto* container = std::get_if<ssg::UiContainer>(&node.content)) {
+            for (auto& child : container->children) {
+                if (self(self, child)) return true;
+            }
+        }
+        return false;
+    };
+    ASSERT_TRUE(changeContext(changeContext, wrongPanel.root));
+    ASSERT_FALSE(ssg::detail::legacyFocusPath(
+        wrongPanel, frame.presence(), ssg::FocusTarget::Panel, false));
+
+    auto hiddenPanel = frame.presence();
+    const ssg::UiNodeId panel{std::string{ssg::kPanelNodeId}};
+    auto panelPresence = std::ranges::find(
+        hiddenPanel.nodes, panel, &ssg::UiPresenceRecord::id);
+    ASSERT_TRUE(panelPresence != hiddenPanel.nodes.end());
+    panelPresence->present = false;
+    ASSERT_FALSE(ssg::detail::legacyFocusPath(
+        frame.schema(), hiddenPanel, ssg::FocusTarget::Panel, false));
 }
 
 // The round-trip above carries a DEFAULT style, so it proves the field is
@@ -2563,7 +2672,8 @@ TEST(semanticFixtureDeltaReplaysToItsCheckedInTarget) {
     if (!base.accepted() || !delta.accepted() || !target.accepted()) return;
     ASSERT_EQ(base.snapshot->revision(), ssg::Revision{4});
     ASSERT_EQ(base.snapshot->sections().document.text, std::string{"a"});
-    ASSERT_TRUE(base.snapshot->sections().externalFocusHeld);
+    ASSERT_TRUE(base.snapshot->sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::ExternalModification);
     ASSERT_EQ(target.snapshot->revision(), ssg::Revision{5});
     ASSERT_EQ(target.snapshot->sections().document.text,
               std::string{"changed"});
@@ -2816,9 +2926,11 @@ int main() {
     RUN(aSelectedExternalIdMustNameAFileOrTheSnapshotDecodeFailsLoud);
     RUN(externalActionAffordanceMustMatchItsAuthoritativeIdentity);
     RUN(gitTreeAffordanceMustMatchItsAuthoritativeIdentity);
-    RUN(externalFocusHeldIsAdditiveAbsentDecodesFalse);
-    RUN(externalFocusHeldFlipIsADeltaThatRoundTrips);
-    RUN(effectiveFocusUsesThePublishedBaseAndExternalCaptureTruthTable);
+    RUN(snapshotCompatibilityFocusIsDerivedFromTheFrame);
+    RUN(frameFocusFlipCarriesCompatibilityDeltaAtTheCodecEdge);
+    RUN(effectiveAndLegacyFocusAreBothDerivedFromOneFrameStack);
+    RUN(precedingFocusOnlyDeltaReplacesTheFrameFocusTransactionally);
+    RUN(mixedFrameAndCompatibilityFocusRejectOnDisagreement);
     RUN(sessionSnapshotRoundTripsANonDefaultStyle);
     RUN(styleDefineKeysExactlyMatchTheWireCodecFields);
     RUN(semanticFieldManifestExactlyMatchesTheSnapshotCodec);

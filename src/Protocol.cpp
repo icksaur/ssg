@@ -16,6 +16,8 @@
 #include <ssg/PaletteProtocol.h>
 #include <ssg/PaletteSearcher.h>
 
+#include "legacy_focus_compat.h"
+
 #include <any>
 #include <array>
 #include <bit>
@@ -4962,43 +4964,10 @@ std::optional<UiFrameDelta> decodeUiFrameDelta(const ProtocolValue& value) {
     return UiFrameDelta::changes(*base, *target, std::move(changes));
 }
 
-std::optional<std::vector<UiNodeId>> legacyFocusPath(
-    FocusTarget focus, const UiSchema& schema,
-    const UiPresenceSection& presence) {
-    std::vector<std::string_view> candidates;
-    switch (focus) {
-        case FocusTarget::Editor:
-            candidates = {kEditorNodeId};
-            break;
-        case FocusTarget::Panel:
-            candidates = {kPanelNodeId};
-            break;
-        case FocusTarget::Prompt:
-            candidates = {kHeaderPromptInputNodeId, kFooterPromptNodeId};
-            break;
-        case FocusTarget::ExternalModification:
-            candidates = {kExternalModNodeId};
-            break;
-    }
-    std::vector<UiNodeId> present;
-    const auto schemaIds = uiSchemaNodeIds(schema);
-    for (const auto candidate : candidates) {
-        const UiNodeId id{std::string{candidate}};
-        const auto record = std::find_if(
-            presence.nodes.begin(), presence.nodes.end(),
-            [&](const UiPresenceRecord& item) {
-                return item.id == id && item.present;
-            });
-        if (schemaIds.contains(id) && record != presence.nodes.end()) {
-            present.push_back(id);
-        }
-    }
-    if (present.size() != 1) return std::nullopt;
-    return present;
-}
-
 void annotateLegacyFocusHosts(UiNode& node) {
     const std::string_view id = node.id.value();
+    // Preceding schemas had no focus metadata; codec-known host identity wins
+    // over any incidental value carried by that frozen representation.
     if (id == kEditorNodeId) {
         node.focusContext = FocusTarget::Editor;
     } else if (id == kPanelNodeId) {
@@ -5139,7 +5108,8 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back(kSemanticSessionFields[16], toValue(value.lspSync));
     fields.emplace_back(kSemanticSessionFields[17], toValue(value.lspFeatures));
     fields.emplace_back(kSemanticSessionFields[18], toValue(value.theme));
-    fields.emplace_back(kSemanticSessionFields[19], toValue(value.focus));
+    fields.emplace_back(kSemanticSessionFields[19],
+                        toValue(value.uiFrame.legacyFocus()));
     fields.emplace_back(kSemanticSessionFields[20], encodePalette(value.palette));
     fields.emplace_back(kSemanticSessionFields[21],
                         encodeUiFrame(value.uiFrame));
@@ -5168,7 +5138,8 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     // ignores it; an absent field decodes to false, so the legacy `focus` field
     // alone reconstructs focus for an old peer.
     fields.emplace_back(kSemanticSessionFields[25],
-                        toValue(value.externalFocusHeld));
+                        toValue(value.uiFrame.effectiveFocus() ==
+                                FocusTarget::ExternalModification));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
@@ -5275,12 +5246,16 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         return false;
     }
     if (!palette) return false;
+    if (uiFrame &&
+        (uiFrame->legacyFocus() != *focus ||
+         (uiFrame->effectiveFocus() == FocusTarget::ExternalModification) !=
+             externalFocusHeld)) {
+        return false;
+    }
     if (!uiFrame && ui && uiState && uiPresence) {
         if (!uiState->focusPath) {
-            const FocusTarget effective =
-                externalFocusHeld ? FocusTarget::ExternalModification : *focus;
-            uiState->focusPath = legacyFocusPath(
-                effective, *ui, *uiPresence);
+            uiState->focusPath = detail::legacyFocusPath(
+                *ui, *uiPresence, *focus, externalFocusHeld);
             if (!uiState->focusPath) return false;
         }
         uiFrame = UiFrame::create(std::move(*ui), std::move(*uiState),
@@ -5291,13 +5266,12 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         *document, *selection, *history, *clipboard, *promptStatus, *search,
         *findReplace, *settings, *keymap, *textEncoding, *tabs, *diff,
         *externalModification, *followEdits, *tree, std::move(*syntax), *lspSync,
-        *lspFeatures, *theme, *focus});
+        *lspFeatures, *theme});
     out->palette = std::move(*palette);
     if (uiFrame) out->uiFrame = std::move(*uiFrame);
     out->promptView = std::move(promptView);
     out->noticeView = std::move(noticeView);
     out->watcherAvailable = watcherAvailable;
-    out->externalFocusHeld = externalFocusHeld;
     return true;
 }
 
@@ -6873,7 +6847,8 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     fields.emplace_back("shell", toValue(ShellSectionDelta{}));
     fields.emplace_back("viewport",
                         toValue(ViewportDelta{false, std::nullopt}));
-    fields.emplace_back(kSemanticSessionDeltaFields[20], toValue(delta.focus()));
+    fields.emplace_back(kSemanticSessionDeltaFields[20],
+                        toValue(delta.legacyFocus()));
     fields.emplace_back("selection_nav",
                         toValue(SelectionNavigationDelta{}));
     fields.emplace_back("prompt_projection",
@@ -6894,7 +6869,7 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     // Additive: present only when the external-focus-held state flipped. An absent
     // field means "unchanged" for a peer that predates it.
     fields.emplace_back(kSemanticSessionDeltaFields[26],
-                        toValue(delta.externalFocusHeld()));
+                        toValue(delta.legacyExternalFocusHeld()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
 }

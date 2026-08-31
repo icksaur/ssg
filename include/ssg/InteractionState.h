@@ -43,14 +43,6 @@ public:
         }
         return focusContext(baseNode(focus_.base()));
     }
-    [[nodiscard]] FocusTarget legacyEffectiveFocus() const {
-        for (auto it = focus_.captures().rbegin();
-             it != focus_.captures().rend(); ++it) {
-            const FocusTarget context = focusContext(it->node);
-            if (context != FocusTarget::ExternalModification) return context;
-        }
-        return focusContext(baseNode(focus_.base()));
-    }
     // CONTRACT: The path is ordered base-to-top, contains only nodes from this
     // schema, and ends at a present node. The base may be temporarily hidden by
     // the transient surface that captured focus above it.

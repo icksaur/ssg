@@ -2,8 +2,12 @@
 
 #include <ssg/PresenceProtocol.h>
 
+#include "legacy_focus_compat.h"
+
 #include <algorithm>
+#include <map>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
 namespace ssg {
@@ -71,6 +75,55 @@ std::optional<State> replayReplacement(State const& state,
     return delta.replacement ? delta.replacement : std::optional<State>{state};
 }
 
+struct LegacyFocusPair {
+    FocusTarget focus = FocusTarget::Editor;
+    bool external = false;
+
+    friend bool operator==(const LegacyFocusPair&,
+                           const LegacyFocusPair&) = default;
+};
+
+LegacyFocusPair legacyFocusPair(const UiFrame& frame) {
+    return {frame.legacyFocus(),
+            frame.effectiveFocus() == FocusTarget::ExternalModification};
+}
+
+bool explicitlyChangesFocus(const UiFrameDelta& delta) {
+    if (std::holds_alternative<UiFrameReplacement>(delta.body())) return true;
+    if (const auto* changes = std::get_if<UiFrameChanges>(&delta.body())) {
+        return changes->focusPathChanged;
+    }
+    const auto& legacy = std::get<LegacyUiFrameChanges>(delta.body());
+    return legacy.state && legacy.state->focusPath;
+}
+
+std::optional<UiFrame> reconcileLegacyFocus(
+    const UiFrame& base, UiFrame candidate, const UiFrameDelta& frameDelta,
+    const std::optional<FocusTarget>& focus,
+    const std::optional<bool>& external) {
+    if (!focus && !external) return candidate;
+    const LegacyFocusPair actual = legacyFocusPair(candidate);
+    if (explicitlyChangesFocus(frameDelta)) {
+        if ((focus && actual.focus != *focus) ||
+            (external && actual.external != *external)) {
+            return std::nullopt;
+        }
+        return candidate;
+    }
+
+    LegacyFocusPair requested = legacyFocusPair(base);
+    if (focus) requested.focus = *focus;
+    if (external) requested.external = *external;
+    auto path = detail::legacyFocusPath(
+        candidate.schema(), candidate.presence(), requested.focus,
+        requested.external);
+    if (!path) return std::nullopt;
+    UiStateSection state = candidate.state();
+    state.focusPath = std::move(*path);
+    return UiFrame::create(candidate.schema(), std::move(state),
+                           candidate.presence());
+}
+
 }  // namespace
 
 bool operator==(SessionSnapshotSections const& left,
@@ -90,13 +143,11 @@ bool operator==(SessionSnapshotSections const& left,
            left.lspSync == right.lspSync &&
            left.lspFeatures == right.lspFeatures &&
            left.theme == right.theme &&
-           left.focus == right.focus &&
            left.palette == right.palette &&
            left.uiFrame == right.uiFrame &&
            left.promptView == right.promptView &&
            left.noticeView == right.noticeView &&
-           left.watcherAvailable == right.watcherAvailable &&
-           left.externalFocusHeld == right.externalFocusHeld;
+           left.watcherAvailable == right.watcherAvailable;
 }
 
 bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
@@ -136,11 +187,13 @@ SessionDelta::SessionDelta(
     ThemeSectionDelta theme, StyleSectionDelta style,
     ShellSectionDelta shell, ViewportDelta viewport,
     UiFrameDelta uiFrameDelta,
-    std::optional<FocusTarget> focus, SelectionNavigationDelta selectionNav,
+    std::optional<FocusTarget> legacyFocus,
+    SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows,
     PaletteSectionDelta palette,
     PromptViewSectionDelta promptView, NoticeViewSectionDelta noticeView,
-    std::optional<bool> watcherAvailable, std::optional<bool> externalFocusHeld)
+    std::optional<bool> watcherAvailable,
+    std::optional<bool> legacyExternalFocusHeld)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -171,7 +224,7 @@ SessionDelta::SessionDelta(
       shell_{std::move(shell)},
       viewport_{std::move(viewport)},
       uiFrameDelta_{std::move(uiFrameDelta)},
-      focus_{focus},
+      legacyFocus_{legacyFocus},
       selectionNav_{std::move(selectionNav)},
       promptProjection_{std::move(promptProjection)},
       treeWindows_{std::move(treeWindows)},
@@ -179,7 +232,7 @@ SessionDelta::SessionDelta(
       promptView_{std::move(promptView)},
       noticeView_{std::move(noticeView)},
       watcherAvailable_{watcherAvailable},
-      externalFocusHeld_{externalFocusHeld} {}
+      legacyExternalFocusHeld_{legacyExternalFocusHeld} {}
 
 LegacyPresentationSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
@@ -261,8 +314,9 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         {},
         {},
         UiFrameDeltaCodec{}.derive(old.uiFrame, next.uiFrame),
-        old.focus == next.focus ? std::nullopt
-                                : std::optional{next.focus},
+        old.uiFrame.legacyFocus() == next.uiFrame.legacyFocus()
+            ? std::nullopt
+            : std::optional{next.uiFrame.legacyFocus()},
         {},
         {},
         {},
@@ -276,9 +330,12 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         old.watcherAvailable == next.watcherAvailable
             ? std::nullopt
             : std::optional{next.watcherAvailable},
-        old.externalFocusHeld == next.externalFocusHeld
+        (old.uiFrame.effectiveFocus() == FocusTarget::ExternalModification) ==
+                (next.uiFrame.effectiveFocus() ==
+                 FocusTarget::ExternalModification)
             ? std::nullopt
-            : std::optional{next.externalFocusHeld},
+            : std::optional{next.uiFrame.effectiveFocus() ==
+                            FocusTarget::ExternalModification},
     };
 }
 
@@ -362,7 +419,6 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     }
 
     auto theme = delta.theme_.replacement.value_or(base.sections().theme);
-    auto focus = delta.focus_.value_or(base.sections().focus);
     // The palette section (candidate universe + matcher parameters) changes as
     // pickers open/close and the command catalog changes; the delta carries a whole-
     // value replacement when it does, else the base value is preserved.
@@ -383,12 +439,15 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     // (nullopt otherwise), so an unchanged availability preserves the base value.
     auto watcherAvailable =
         delta.watcherAvailable_.value_or(base.sections().watcherAvailable);
-    // Additive: the delta carries the external-focus flag only when it flips
-    // (nullopt otherwise), so an unchanged state preserves the base value.
-    auto externalFocusHeld =
-        delta.externalFocusHeld_.value_or(base.sections().externalFocusHeld);
     if (!uiFrame.accepted()) {
         return {std::nullopt, "UI frame delta is inconsistent"};
+    }
+    auto reconciledFrame = reconcileLegacyFocus(
+        base.sections().uiFrame, std::move(*uiFrame.frame),
+        delta.uiFrameDelta_, delta.legacyFocus_,
+        delta.legacyExternalFocusHeld_);
+    if (!reconciledFrame) {
+        return {std::nullopt, "legacy focus conflicts with UI frame"};
     }
 
     SessionSnapshotSections sections{
@@ -411,13 +470,11 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(*lspSync.state),
         std::move(*lspFeatures.state),
         std::move(theme),
-        focus,
         std::move(palette),
-        std::move(*uiFrame.frame),
+        std::move(*reconciledFrame),
         std::move(promptView),
         std::move(noticeView),
         watcherAvailable,
-        externalFocusHeld,
     };
     ClientSnapshotState client = base.client();
     return {SessionSnapshot{

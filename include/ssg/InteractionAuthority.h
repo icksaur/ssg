@@ -118,9 +118,6 @@ public:
     // ExternalModification capture is invisible here, so the published `focus`
     // field stays in the closed set an old client can decode. The external-focus
     // state is carried separately (WholeScreenTruth::externalFocusHeld).
-    [[nodiscard]] FocusTarget legacyEffectiveFocus() const noexcept {
-        return interaction_.legacyEffectiveFocus();
-    }
     [[nodiscard]] std::optional<PickerKind> openPicker() const noexcept {
         return truth_.openPicker;
     }

@@ -1130,7 +1130,8 @@ TEST(tabActivateFocusesTheEditor) {
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = runtime.present(ssg::ClientId{1}, dims);
-        return snap ? snap->semantic().sections().focus : ssg::FocusTarget::Editor;
+        return snap ? snap->semantic().sections().uiFrame.effectiveFocus()
+                    : ssg::FocusTarget::Editor;
     };
 
     // Move focus to the panel, then activating a tab (a tab click) returns focus

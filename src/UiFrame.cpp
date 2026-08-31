@@ -56,7 +56,12 @@ bool validFocusPath(const UiSchema& schema, const UiStateSection& state,
             return effective.contains(id) && node && node->focusContext;
         });
     const auto active = effective.find(state.focusPath->back());
-    return everyNodeExists && active != effective.end() && active->second;
+    const UiNode* base = findUiNode(schema, state.focusPath->front());
+    const bool validBase =
+        base && (base->focusContext == FocusTarget::Editor ||
+                 base->focusContext == FocusTarget::Panel);
+    return everyNodeExists && validBase && active != effective.end() &&
+           active->second;
 }
 
 template <typename Record>
@@ -106,6 +111,14 @@ UiFrame::UiFrame() {
 
 FocusTarget UiFrame::effectiveFocus() const noexcept {
     return *findUiNode(schema_, focusPath().back())->focusContext;
+}
+
+FocusTarget UiFrame::legacyFocus() const noexcept {
+    for (auto it = focusPath().rbegin(); it != focusPath().rend(); ++it) {
+        const FocusTarget context = *findUiNode(schema_, *it)->focusContext;
+        if (context != FocusTarget::ExternalModification) return context;
+    }
+    return *findUiNode(schema_, focusPath().front())->focusContext;
 }
 
 std::optional<UiFrame> UiFrame::create(UiSchema schema, UiStateSection state,

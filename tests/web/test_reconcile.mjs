@@ -30,7 +30,7 @@ import {
   findSections,
   encodeStatusActionPointerInput, encodePromptControlPointerInput,
   encodePublishedUiActionPointerInput, encodeNoticeActionPointerInput,
-  externalModificationFromSections, externalFocusHeld,
+  externalModificationFromSections,
   encodeExternalActionPointerInput,
   applyExternalModificationDelta, isCurrentGeneration, replayAttachFrame,
   deltaIsContiguous, clearUncertainInputs, reconnectDelay,
@@ -1662,6 +1662,43 @@ check('UI frame replay restores hidden focus only in one atomic change', () => {
   assert.equal(frame.presence.nodes[1].present, false);
 });
 
+check('preceding focus-only delta becomes the authoritative frame path', () => {
+  const base = findSections(fixtureMessage('session_focus_editor.hex'));
+  delete base.focus;
+  delete base.external_focus_held;
+  const replayed = applySessionDeltaCopy(base, { focus: 1n });
+  assert.ok(replayed);
+  assert.equal(replayed.focus, undefined);
+  assert.equal(replayed.external_focus_held, undefined);
+  assert.equal(resolveUiFocusPath(
+    replayed.ui_frame.schema, replayed.ui_frame.state,
+    replayed.ui_frame.presence).context, 'panel');
+});
+
+check('browser rejects focus compatibility forms rejected by C++', () => {
+  const fixture = () =>
+    structuredClone(findSections(fixtureMessage('session_focus_editor.hex')));
+
+  const promptBase = fixture();
+  promptBase.ui_frame.state.focus_path = ['input_line'];
+  promptBase.focus = 2n;
+  assert.equal(findSections(promptBase), null);
+
+  const missingFocus = fixture();
+  delete missingFocus.focus;
+  assert.equal(findSections(missingFocus), null);
+
+  const malformedSnapshotBool = fixture();
+  malformedSnapshotBool.external_focus_held = 2n;
+  assert.equal(findSections(malformedSnapshotBool), null);
+
+  const base = fixture();
+  delete base.focus;
+  delete base.external_focus_held;
+  assert.equal(
+    applySessionDeltaCopy(base, { external_focus_held: 2n }), null);
+});
+
 check('session delta replay permits switching to an older document revision', () => {
   const sections = {
     document: {
@@ -1713,6 +1750,8 @@ check('semantic manifest and C++ fixture replay every browser section atomically
   }
   const replayed = applySessionDeltaCopy(base, delta);
   assert.ok(replayed);
+  delete target.focus;
+  delete target.external_focus_held;
   assert.equal(normalizeTreeActiveBinding(target.tree), true);
   assert.deepEqual(replayed, target);
 
@@ -1748,6 +1787,9 @@ check('semantic manifest and C++ fixture replay every browser section atomically
   });
   rejectsWithoutMutation((malformed) => {
     delete malformed.ui_frame_delta.frame;
+  });
+  rejectsWithoutMutation((malformed) => {
+    malformed.focus = 1n;
   });
 });
 
@@ -1874,15 +1916,6 @@ check('a click on an external action sends a typed validated invocation', () => 
         action.action, file.id, 11n).buffer).payload,
     { kind: 5n, button: 0n, phase: 0n, basis_revision: 11n,
       invocation: { file_id: 'external:src/a:b.cpp', action: 0n } });
-});
-
-check('the web suppresses document echo when external_focus_held is true, never comparing a focus ordinal', () => {
-  // The wire focus never carries ExternalModification; the additive bool is the
-  // only signal, so a section with focus=Editor(0) but the bool set is external.
-  assert.equal(externalFocusHeld(null), false);
-  assert.equal(externalFocusHeld({ focus: 0 }), false);
-  assert.equal(externalFocusHeld({ focus: 0, external_focus_held: 1 }), true);
-  assert.equal(externalFocusHeld({ external_focus_held: 0 }), false);
 });
 
 check('applyExternalModificationDelta merges upserts, removes, and re-homes the selection', () => {

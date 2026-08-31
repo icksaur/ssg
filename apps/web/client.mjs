@@ -1581,6 +1581,8 @@ function applyProtocolFrame(buffer) {
       reconnect('state snapshot rejected');
       return false;
     }
+    delete sections.focus;
+    delete sections.external_focus_held;
     state.sections = sections;
     state.revision = BigInt(payload.revision);
     reconnectAttempts = 0;

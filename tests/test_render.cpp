@@ -1536,7 +1536,15 @@ TEST(inputLineCaretUsesTheLoweredPromptInputGeometry) {
                                 }
                             })
                             .sections([](ssg::SessionSnapshotSections& sections) {
-                                sections.focus = ssg::FocusTarget::Prompt;
+                                auto state = sections.uiFrame.state();
+                                state.focusPath = std::vector<ssg::UiNodeId>{
+                                    ssg::UiNodeId{std::string{
+                                        ssg::kEditorNodeId}},
+                                    ssg::UiNodeId{std::string{
+                                        ssg::kHeaderPromptInputNodeId}}};
+                                sections.uiFrame = ssg::UiFrame::require(
+                                    sections.uiFrame.schema(), std::move(state),
+                                    sections.uiFrame.presence());
                             })
                             .build();
         ASSERT_TRUE(snapshot.header().has_value());

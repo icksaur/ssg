@@ -75,10 +75,6 @@ struct SessionSnapshotSections {
     LspSyncViewState lspSync;
     LspFeatureViewState lspFeatures;
     ThemeSnapshot theme;
-    // Semantic interaction: which surface has keyboard focus. A client routes
-    // input by this; it is not grid geometry. The shell's layout projection lives
-    // in PresentationSnapshot.
-    FocusTarget focus = FocusTarget::Editor;
     PaletteViewState palette;
     // One validated, atomically published UI-VM frame: schema, resolved values,
     // presence basis, and authoritative focus path cannot diverge.
@@ -100,27 +96,7 @@ struct SessionSnapshotSections {
     // changes are not being watched" from library truth rather than inventing it.
     // Additive on the wire; an absent field decodes to available (true).
     bool watcherAvailable = true;
-    // Whether the external-modification bar is the EFFECTIVE (top) focus, not
-    // merely present on the capture stack. When it is, the legacy `focus` field
-    // above projects to its underlying base so an old client still decodes it, and
-    // this flag lets a new client reconstruct ExternalModification. A Prompt
-    // captured above the external capture makes this FALSE while `focus` publishes
-    // Prompt, so Prompt correctly wins. Additive on the wire; an absent field
-    // decodes to false.
-    bool externalFocusHeld = false;
 };
-
-// The effective keyboard focus a CURRENT host resolves the keymap context and
-// input routing against. The wire `focus` field is projected to the legacy set
-// {Editor,Panel,Prompt} for old-client compatibility and never carries
-// ExternalModification; the additive externalFocusHeld flag lets a new host
-// reconstruct it. A host that resolved the keymap from the raw `focus` would
-// never enter the external context while the external bar holds focus.
-[[nodiscard]] inline FocusTarget effectiveFocusFromSections(
-    SessionSnapshotSections const& sections) noexcept {
-    return sections.externalFocusHeld ? FocusTarget::ExternalModification
-                                      : sections.focus;
-}
 
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,
                               SessionSnapshotSections const& right);
@@ -146,8 +122,8 @@ struct PresentationSnapshot {
     // Current grid rendering and hit testing use PromptView plus solved UI nodes.
     std::optional<PromptViewState> prompt;
     // The shell's grid layout: viewport GridSize, chrome rects, panes, tab hits,
-    // accessibility geometry, palette projection. Pure projection; the semantic
-    // focus is SessionSnapshotSections::focus.
+    // accessibility geometry, palette projection. Pure projection; semantic
+    // focus is the UiFrame focus stack.
     ShellViewState shell;
     // The selection's grid scroll projection (scroll anchor + desired cell); the
     // semantic selection set is SessionSnapshotSections::selection.
@@ -392,8 +368,9 @@ public:
     [[nodiscard]] std::optional<bool> const& watcherAvailable() const noexcept {
         return watcherAvailable_;
     }
-    [[nodiscard]] std::optional<bool> const& externalFocusHeld() const noexcept {
-        return externalFocusHeld_;
+    [[nodiscard]] std::optional<bool> const& legacyExternalFocusHeld()
+        const noexcept {
+        return legacyExternalFocusHeld_;
     }
     [[nodiscard]] StyleSectionDelta const& style() const noexcept {
         return style_;
@@ -404,8 +381,8 @@ public:
     [[nodiscard]] ViewportDelta const& viewport() const noexcept {
         return viewport_;
     }
-    [[nodiscard]] std::optional<FocusTarget> const& focus() const noexcept {
-        return focus_;
+    [[nodiscard]] std::optional<FocusTarget> const& legacyFocus() const noexcept {
+        return legacyFocus_;
     }
 
 private:
@@ -431,7 +408,7 @@ private:
         ThemeSectionDelta theme, StyleSectionDelta style,
         ShellSectionDelta shell, ViewportDelta viewport,
         UiFrameDelta uiFrameDelta,
-        std::optional<FocusTarget> focus = std::nullopt,
+        std::optional<FocusTarget> legacyFocus = std::nullopt,
         SelectionNavigationDelta selectionNav = {},
         PromptProjectionDelta promptProjection = {},
         TreeWindowsDelta treeWindows = {},
@@ -439,7 +416,7 @@ private:
         PromptViewSectionDelta promptView = {},
         NoticeViewSectionDelta noticeView = {},
         std::optional<bool> watcherAvailable = {},
-        std::optional<bool> externalFocusHeld = {});
+        std::optional<bool> legacyExternalFocusHeld = {});
 
     Revision baseRevision_;
     Revision revision_;
@@ -471,7 +448,7 @@ private:
     ShellSectionDelta shell_;
     ViewportDelta viewport_;
     UiFrameDelta uiFrameDelta_;
-    std::optional<FocusTarget> focus_;
+    std::optional<FocusTarget> legacyFocus_;
     SelectionNavigationDelta selectionNav_;
     PromptProjectionDelta promptProjection_;
     TreeWindowsDelta treeWindows_;
@@ -479,7 +456,7 @@ private:
     PromptViewSectionDelta promptView_;
     NoticeViewSectionDelta noticeView_;
     std::optional<bool> watcherAvailable_;
-    std::optional<bool> externalFocusHeld_;
+    std::optional<bool> legacyExternalFocusHeld_;
 };
 
 struct SessionReplayResult {
@@ -526,7 +503,7 @@ public:
         ThemeSectionDelta theme, StyleSectionDelta style,
         ShellSectionDelta shell, ViewportDelta viewport,
         UiFrameDelta uiFrameDelta,
-        std::optional<FocusTarget> focus = std::nullopt,
+        std::optional<FocusTarget> legacyFocus = std::nullopt,
         SelectionNavigationDelta selectionNav = {},
         PromptProjectionDelta promptProjection = {},
         TreeWindowsDelta treeWindows = {},
@@ -534,7 +511,7 @@ public:
         PromptViewSectionDelta promptView = {},
         NoticeViewSectionDelta noticeView = {},
         std::optional<bool> watcherAvailable = {},
-        std::optional<bool> externalFocusHeld = {}) const;
+        std::optional<bool> legacyExternalFocusHeld = {}) const;
 };
 
 }  // namespace ssg

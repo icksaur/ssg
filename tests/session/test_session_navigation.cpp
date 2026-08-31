@@ -1337,14 +1337,16 @@ TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->semantic().sections().focus, ssg::FocusTarget::Prompt);
+    ASSERT_EQ(snapshot->semantic().sections().uiFrame.effectiveFocus(),
+              ssg::FocusTarget::Prompt);
     ASSERT_FALSE(snapshot->semantic().sections().palette.commandCandidates.empty());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.close", runtime.revision(), {}}).accepted());
     auto closed = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(closed.has_value());
     if (!closed) return;
-    ASSERT_EQ(closed->semantic().sections().focus, ssg::FocusTarget::Editor);
+    ASSERT_EQ(closed->semantic().sections().uiFrame.effectiveFocus(),
+              ssg::FocusTarget::Editor);
 }
 
 // The open-picker kind is derived from the prompt after every dispatch rather
@@ -1615,7 +1617,9 @@ TEST(websocketPickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
     ASSERT_TRUE(commandSubmitted.has_value());
     if (!commandSubmitted) return;
     ASSERT_FALSE(commandSubmitted->semantic().sections().palette.activePicker.has_value());
-    ASSERT_TRUE(commandSubmitted->semantic().sections().focus == ssg::FocusTarget::Panel);
+    ASSERT_TRUE(
+        commandSubmitted->semantic().sections().uiFrame.effectiveFocus() ==
+        ssg::FocusTarget::Panel);
 
     ASSERT_TRUE(runtime
             .dispatch(ssg::ClientId{1},
@@ -1633,7 +1637,8 @@ TEST(websocketPickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
     ASSERT_TRUE(submitted.has_value());
     if (!submitted) return;
     ASSERT_FALSE(submitted->semantic().sections().palette.activePicker.has_value());
-    ASSERT_TRUE(submitted->semantic().sections().focus == ssg::FocusTarget::Panel);
+    ASSERT_TRUE(submitted->semantic().sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::Panel);
 }
 
 TEST(commandPickerSubmissionHasOriginParity) {
@@ -2561,7 +2566,8 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
         if (!snapshot) return;
         ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
                     std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
-        ASSERT_TRUE(snapshot->semantic().sections().focus == ssg::FocusTarget::Prompt);
+        ASSERT_TRUE(snapshot->semantic().sections().uiFrame.effectiveFocus() ==
+                    ssg::FocusTarget::Prompt);
 
         ASSERT_FALSE(
             runtime
@@ -2576,7 +2582,8 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
         if (!snapshot) return;
         ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
                     std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
-        ASSERT_TRUE(snapshot->semantic().sections().focus == ssg::FocusTarget::Prompt);
+        ASSERT_TRUE(snapshot->semantic().sections().uiFrame.effectiveFocus() ==
+                    ssg::FocusTarget::Prompt);
 
         ASSERT_FALSE(
             runtime
@@ -2591,7 +2598,8 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
         if (!snapshot) return;
         ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
                     std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
-        ASSERT_TRUE(snapshot->semantic().sections().focus == ssg::FocusTarget::Prompt);
+        ASSERT_TRUE(snapshot->semantic().sections().uiFrame.effectiveFocus() ==
+                    ssg::FocusTarget::Prompt);
     }
 }
 
@@ -2631,7 +2639,8 @@ TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
                     std::optional<ssg::SearchMode>{ssg::SearchMode::File});
         ASSERT_TRUE(snapshot->semantic().sections().promptStatus.activeKind ==
                     std::optional<ssg::PromptKind>{ssg::PromptKind::Palette});
-        ASSERT_TRUE(snapshot->semantic().sections().focus == ssg::FocusTarget::Prompt);
+        ASSERT_TRUE(snapshot->semantic().sections().uiFrame.effectiveFocus() ==
+                    ssg::FocusTarget::Prompt);
 }
 
 TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
@@ -2669,7 +2678,8 @@ TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
     ASSERT_TRUE(after->semantic().sections().palette.activePicker->mode ==
                 ssg::SearchMode::Command);
     ASSERT_FALSE(after->semantic().sections().palette.activePicker->id == first.id);
-    ASSERT_TRUE(after->semantic().sections().focus == ssg::FocusTarget::Prompt);
+    ASSERT_TRUE(after->semantic().sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::Prompt);
 }
 
 TEST(paletteExecuteValidatesCandidateMembership) {
@@ -2692,7 +2702,8 @@ TEST(paletteExecuteValidatesCandidateMembership) {
     auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->semantic().sections().focus, ssg::FocusTarget::Editor);
+    ASSERT_EQ(snapshot->semantic().sections().uiFrame.effectiveFocus(),
+              ssg::FocusTarget::Editor);
 }
 
 TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
@@ -2904,7 +2915,8 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = runtime.present(ssg::ClientId{1}, dims);
-        return snap ? snap->semantic().sections().focus : ssg::FocusTarget::Editor;
+        return snap ? snap->semantic().sections().uiFrame.effectiveFocus()
+                    : ssg::FocusTarget::Editor;
     };
     // Showing the panel now focuses it (QOL); expand the root so a directory node
     // and a file node are both visible/selectable.

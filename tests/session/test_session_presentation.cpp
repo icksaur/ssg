@@ -1343,7 +1343,8 @@ TEST(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot) {
     ASSERT_TRUE(shown.has_value());
     if (!shown) return;
     ASSERT_TRUE(shown->presentation().shell.panel.has_value());
-    ASSERT_TRUE(shown->semantic().sections().focus == ssg::FocusTarget::Panel);
+    ASSERT_TRUE(shown->semantic().sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::Panel);
     ASSERT_TRUE(shown->semantic().sections().uiFrame.focusPath() ==
                 std::vector<ssg::UiNodeId>{
                     ssg::UiNodeId{std::string{ssg::kPanelNodeId}}});
@@ -1355,7 +1356,8 @@ TEST(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot) {
     auto open = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(open.has_value());
     if (!open) return;
-    ASSERT_TRUE(open->semantic().sections().focus == ssg::FocusTarget::Prompt);
+    ASSERT_TRUE(open->semantic().sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::Prompt);
     ASSERT_TRUE(open->presentation().shell.palette.has_value());
     ASSERT_TRUE((open->semantic().sections().uiFrame.focusPath() ==
                  std::vector<ssg::UiNodeId>{
@@ -1370,7 +1372,8 @@ TEST(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot) {
     auto closed = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(closed.has_value());
     if (!closed) return;
-    ASSERT_TRUE(closed->semantic().sections().focus == ssg::FocusTarget::Panel);
+    ASSERT_TRUE(closed->semantic().sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::Panel);
     ASSERT_FALSE(closed->presentation().shell.palette.has_value());
     ASSERT_TRUE(closed->semantic().sections().uiFrame.focusPath() ==
                 std::vector<ssg::UiNodeId>{
@@ -1400,7 +1403,8 @@ TEST(aRejectedFinderCloseIsReportedAndMutatesNothing) {
     auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snap.has_value());
     if (!snap) return;
-    ASSERT_TRUE(snap->semantic().sections().focus == ssg::FocusTarget::Editor);
+    ASSERT_TRUE(snap->semantic().sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::Editor);
     ASSERT_FALSE(snap->presentation().shell.palette.has_value());
 }
 
@@ -1427,7 +1431,8 @@ TEST(providerTransitionsPreservePanelVisibilityAndFocusLive) {
     ASSERT_TRUE(git.has_value());
     if (!git) return;
     ASSERT_TRUE(git->presentation().shell.panel.has_value());
-    ASSERT_TRUE(git->semantic().sections().focus == ssg::FocusTarget::Panel);
+    ASSERT_TRUE(git->semantic().sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::Panel);
     ASSERT_FALSE(git->semantic().sections().tree.providers.empty());
     ASSERT_TRUE(git->semantic().sections().tree.providers.front().kind ==
                 ssg::TreeProviderKind::Git);
@@ -1441,7 +1446,8 @@ TEST(providerTransitionsPreservePanelVisibilityAndFocusLive) {
     ASSERT_TRUE(symbols.has_value());
     if (!symbols) return;
     ASSERT_TRUE(symbols->presentation().shell.panel.has_value());
-    ASSERT_TRUE(symbols->semantic().sections().focus == ssg::FocusTarget::Panel);
+    ASSERT_TRUE(symbols->semantic().sections().uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::Panel);
     ASSERT_TRUE(symbols->semantic().sections().tree.providers.front().kind ==
                 ssg::TreeProviderKind::Symbols);
 }

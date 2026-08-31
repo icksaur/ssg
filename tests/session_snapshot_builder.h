@@ -229,7 +229,6 @@ public:
             LspSyncViewState{},
             LspFeatureViewState{},
             defaultTheme(),
-            focus,
             PaletteViewState{}};
         const ChromeProviderResolver resolver =
             [configured = chromeProviderResolver_,

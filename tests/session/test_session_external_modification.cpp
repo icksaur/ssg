@@ -1026,10 +1026,8 @@ TEST(externalPresenceAndSelectionRefreshInTheWatcherDrainNotOnlyOnDispatch) {
 
 TEST(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld) {
     // The library keymap authors external.select_next in the "external" context.
-    // A host must resolve the keymap against the EFFECTIVE focus reconstructed from
-    // externalFocusHeld, not the legacy wire `focus` (which never carries
-    // ExternalModification), or the external select/action keys fall through to the
-    // editor while the external bar holds focus.
+    // A host resolves directly from the authoritative frame endpoint, or the
+    // external select/action keys fall through to the editor.
     auto session = Session::open("host_ext_context", "hi\n", true);
     writeFile(session.workspacePath("note.txt"), "external\n");
     session.runtime->reconcileExternalWatchEventsForTest(
@@ -1044,22 +1042,16 @@ TEST(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld) {
         session.runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     const auto& sections = snapshot->semantic().sections();
-    ASSERT_TRUE(sections.externalFocusHeld);
-    ASSERT_TRUE(sections.focus != ssg::FocusTarget::ExternalModification);
+    ASSERT_TRUE(sections.uiFrame.effectiveFocus() ==
+                ssg::FocusTarget::ExternalModification);
 
     ssg::CompiledKeymap keymap{sections.keymap, *session.runtime->commandCatalog()};
     ssg::KeyStroke down;
     down.code = ssg::KeyCode::ArrowDown;
     const auto stroke = ssg::CompiledKeymap::compile(down);
 
-    // Resolving from the raw wire focus stays in the editor context and never
-    // reaches external.select_next; reconstructing the effective focus routes the
-    // key in the external context.
-    const auto raw = keymap.resolve(std::array{stroke}, sections.focus);
-    ASSERT_TRUE(raw.command.name() != std::string_view{"external.select_next"});
-
     const auto effective = keymap.resolve(
-        std::array{stroke}, ssg::effectiveFocusFromSections(sections));
+        std::array{stroke}, sections.uiFrame.effectiveFocus());
     ASSERT_TRUE(effective.kind == ssg::KeymapMatchKind::Resolved);
     ASSERT_TRUE(effective.command.name() == std::string_view{"external.select_next"});
 }
