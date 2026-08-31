@@ -1,4 +1,5 @@
 #include <ssg/UiTreeProtocol.h>
+#include <ssg/Style.h>
 
 #include <array>
 #include <cstdint>
@@ -58,10 +59,24 @@ std::optional<int> boundedInt(std::optional<std::uint64_t> raw) {
 // --- Size / Inset / Gap ---------------------------------------------------
 
 ProtocolValue encodeSize(const Size& size) {
-    return ProtocolValue::makeObject(
-        {{"kind", enumValue(size.kind())},
-         {"extent", ProtocolValue::makeUint(
-                        static_cast<std::uint64_t>(size.extent()))}});
+    ProtocolValue::Object fields{
+        {"kind", enumValue(size.kind())},
+        // Responsive reuses the legacy extent slot as its preferred size.
+        {"extent", ProtocolValue::makeUint(
+                       static_cast<std::uint64_t>(size.extent()))}};
+    if (size.kind() == SizeKind::Responsive) {
+        fields.emplace_back(
+            "minimum",
+            ProtocolValue::makeUint(
+                static_cast<std::uint64_t>(size.minimum())));
+        fields.emplace_back(
+            "growth",
+            ProtocolValue::makeUint(
+                static_cast<std::uint64_t>(size.growth())));
+        fields.emplace_back("optional",
+                            ProtocolValue::makeBool(size.optional()));
+    }
+    return ProtocolValue::makeObject(std::move(fields));
 }
 
 // Decode an enum value validated against a closed set of allowed enumerators,
@@ -82,7 +97,7 @@ std::optional<Enum> decodeEnumIn(std::optional<std::uint64_t> raw,
 constexpr std::array kAllAxes{Axis::Row, Axis::Column};
 constexpr std::array kAllScrollAxes{ScrollAxis::None, ScrollAxis::Vertical};
 constexpr std::array kAllSizeKinds{SizeKind::Exact, SizeKind::Flex,
-                                   SizeKind::Auto};
+                                   SizeKind::Auto, SizeKind::Responsive};
 constexpr std::array kAllOverflows{Overflow::None, Overflow::Truncate,
                                    Overflow::ScrollTail};
 
@@ -98,6 +113,20 @@ std::optional<Size> decodeSize(const ProtocolValue& value) {
         return Size::autoSize();
     case SizeKind::Exact:
         return Size::exact(*extent);
+    case SizeKind::Responsive: {
+        const auto minimum = boundedInt(uintField(value, "minimum"));
+        const auto growth = boundedInt(uintField(value, "growth"));
+        const auto optional = boolField(value, "optional");
+        if (!minimum || !growth || !optional) return std::nullopt;
+        if (*optional && *growth == 0 && *extent > 0 &&
+            *minimum <= *extent) {
+            return Size::optionalPreferred(*extent, *minimum);
+        }
+        if (!*optional && *growth == 1 && *extent == *minimum) {
+            return Size::minimumFlex(*minimum);
+        }
+        return std::nullopt;
+    }
     }
     return std::nullopt;  // unreachable: decodeEnumIn already bounded the domain
 }
@@ -389,6 +418,11 @@ bool normalizePrecedingWholeScreenTopology(UiSchema& schema) {
     auto& bodyContainer = std::get<UiContainer>(body.content);
     auto& panel = bodyContainer.children[0];
     auto& content = bodyContainer.children[1];
+    const StyleDimensions legacyDimensions;
+    if (panel.size != Size::exact(legacyDimensions.panelTargetWidth) ||
+        content.size != Size::flex()) {
+        return false;
+    }
     if (!hasChildren(panel,
                      {kFileTreeNodeId, kGitStatusNodeId, kSymbolsNodeId}) ||
         !hasChildren(content, {kEditorNodeId, kFindResultsViewportNodeId})) {
@@ -413,6 +447,11 @@ bool normalizePrecedingWholeScreenTopology(UiSchema& schema) {
     UiNode footer = std::move(root.children[5]);
 
     auto& movedBodyContainer = std::get<UiContainer>(movedBody.content);
+    movedBodyContainer.children[0].size = Size::optionalPreferred(
+        legacyDimensions.panelTargetWidth,
+        legacyDimensions.panelMinimumWidth);
+    movedBodyContainer.children[1].size =
+        Size::minimumFlex(legacyDimensions.editorMinimumWidth);
     auto& movedContent =
         std::get<UiContainer>(movedBodyContainer.children[1].content);
     UiNode movedEditor = std::move(movedContent.children[0]);

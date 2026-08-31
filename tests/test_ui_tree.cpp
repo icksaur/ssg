@@ -97,6 +97,24 @@ TEST(minimalRootValidates) {
     ASSERT_TRUE(validateUiSchema(schema).ok());
 }
 
+TEST(responsiveAndAutoDirectSiblingsAreRejected) {
+    UiSchema schema;
+    schema.root = container(
+        "root",
+        {UiNode{UiNodeId{"responsive"}, Size::minimumFlex(10),
+                UiContainer{}},
+         UiNode{UiNodeId{"auto"}, Size::autoSize(), UiContainer{}}});
+    ASSERT_FALSE(validateUiSchema(schema).ok());
+
+    schema.root = container(
+        "root",
+        {UiNode{UiNodeId{"responsive"}, Size::minimumFlex(10),
+                UiContainer{Axis::Column, {}, {},
+                            {UiNode{UiNodeId{"nested-auto"},
+                                    Size::autoSize(), UiContainer{}}}}}});
+    ASSERT_TRUE(validateUiSchema(schema).ok());
+}
+
 // A node is exactly one of container or leaf, by construction (the variant).
 TEST(nodeIsExactlyContainerOrLeaf) {
     const UiNode c = container("c", {});
@@ -272,6 +290,7 @@ int main() {
     RUN(duplicateNodeIdAmongSiblingsIsRejected);
     RUN(emptyNodeIdIsRejected);
     RUN(minimalRootValidates);
+    RUN(responsiveAndAutoDirectSiblingsAreRejected);
     RUN(nodeIsExactlyContainerOrLeaf);
     RUN(nodeStyleResolvesEachChannelFromTheNearestAssignment);
     RUN(wellFormedViewLeafValidates);

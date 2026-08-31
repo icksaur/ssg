@@ -110,6 +110,9 @@ TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
     UiNode footerPrompt = std::move(root.children[2]);
     UiNode footer = std::move(root.children[3]);
     auto& bodyContainer = std::get<ssg::UiContainer>(body.content);
+    bodyContainer.children[0].size =
+        ssg::Size::exact(ssg::StyleDimensions{}.panelTargetWidth);
+    bodyContainer.children[1].size = ssg::Size::flex();
     auto& content =
         std::get<ssg::UiContainer>(bodyContainer.children[1].content);
     UiNode tabBar = std::move(content.children[0]);
@@ -136,6 +139,16 @@ TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
         ssg::UiContainer{ssg::Axis::Column, {}, {}, {}};
     ASSERT_FALSE(
         decodeUiSchema(encodeUiSchema(malformedInterior)).has_value());
+
+    UiSchema wrongLegacySize = preceding;
+    auto& wrongRoot =
+        std::get<ssg::UiContainer>(wrongLegacySize.root.content);
+    auto& wrongBody =
+        std::get<ssg::UiContainer>(wrongRoot.children[3].content);
+    wrongBody.children[0].size =
+        ssg::Size::exact(ssg::StyleDimensions{}.panelTargetWidth + 1);
+    ASSERT_FALSE(
+        decodeUiSchema(encodeUiSchema(wrongLegacySize)).has_value());
 
     auto& precedingRoot =
         std::get<ssg::UiContainer>(preceding.root.content);
@@ -183,6 +196,58 @@ TEST(nodeStyleRoundTripsAndFieldAdditionRemainsCompatible) {
     const ProtocolValue unstyledEncoded = encodeUiSchema(unstyled);
     ASSERT_TRUE(unstyledEncoded.field("root")->field("style") == nullptr);
     ASSERT_TRUE(decodeUiSchema(unstyledEncoded) == unstyled);
+}
+
+TEST(responsiveSizeRoundTripsAndMalformedFormsAreRejected) {
+    UiSchema schema = corpus().back();
+    schema.generation = Generation{9};
+    schema.root.size = ssg::Size::optionalPreferred(24, 12);
+    const auto encoded = encodeUiSchema(schema);
+    const auto* size = encoded.field("root")->field("size");
+    ASSERT_TRUE(size != nullptr);
+    if (!size) return;
+    ASSERT_EQ(size->field("kind")->asUint(),
+              std::optional<std::uint64_t>{
+                  static_cast<std::uint64_t>(ssg::SizeKind::Responsive)});
+    ASSERT_EQ(size->field("extent")->asUint(),
+              std::optional<std::uint64_t>{24});
+    ASSERT_EQ(size->field("minimum")->asUint(),
+              std::optional<std::uint64_t>{12});
+    ASSERT_EQ(size->field("growth")->asUint(),
+              std::optional<std::uint64_t>{0});
+    ASSERT_EQ(size->field("optional")->asBool(), std::optional<bool>{true});
+    ASSERT_EQ(decodeUiSchema(encoded), std::optional<UiSchema>{schema});
+
+    UiSchema legacy = schema;
+    legacy.root.size = ssg::Size::exact(24);
+    const auto encodedLegacy = encodeUiSchema(legacy);
+    const auto* legacySize = encodedLegacy.field("root")->field("size");
+    ASSERT_TRUE(legacySize != nullptr);
+    if (legacySize) {
+        ASSERT_EQ(legacySize->asObject()->size(), std::size_t{2});
+        ASSERT_TRUE(legacySize->field("minimum") == nullptr);
+        ASSERT_TRUE(legacySize->field("growth") == nullptr);
+        ASSERT_TRUE(legacySize->field("optional") == nullptr);
+    }
+
+    const auto malformed = ProtocolValue::makeObject({
+        {"kind", ProtocolValue::makeUint(
+                     static_cast<std::uint64_t>(
+                         ssg::SizeKind::Responsive))},
+        {"extent", ProtocolValue::makeUint(24)},
+        {"minimum", ProtocolValue::makeUint(12)},
+        {"growth", ProtocolValue::makeUint(1)},
+        {"optional", ProtocolValue::makeBool(true)},
+    });
+    ASSERT_FALSE(
+        decodeUiSchema(withRootField(encoded, "size", malformed)).has_value());
+    ASSERT_FALSE(decodeUiSchema(withRootField(
+                                   encoded, "size",
+                                   ProtocolValue::makeObject({
+                                       {"kind", ProtocolValue::makeUint(255)},
+                                       {"extent", ProtocolValue::makeUint(0)},
+                                   })))
+                     .has_value());
 }
 
 TEST(malformedOrUnknownNodeStyleRejectsTheWholeSchema) {
@@ -385,6 +450,7 @@ int main() {
     RUN(uiSchemaRoundTripsThroughTheWire);
     RUN(precedingCanonicalTopologyDecodesToTheCurrentArrangement);
     RUN(nodeStyleRoundTripsAndFieldAdditionRemainsCompatible);
+    RUN(responsiveSizeRoundTripsAndMalformedFormsAreRejected);
     RUN(malformedOrUnknownNodeStyleRejectsTheWholeSchema);
     RUN(scrollAxisRoundTripsAndCanonicalViewportRejectsUnknownOrAbsentValues);
     RUN(malformedWireDecodesToNullopt);

@@ -256,8 +256,21 @@ void solveNode(const LayoutNode& node, Rect frame,
     const bool row = node.axis == Axis::Row;
     const int extent = row ? content.width : content.height;
 
-    std::int64_t exactTotal = 0;
-    int flexCount = 0;
+    std::vector<bool> active(node.children.size(), true);
+    const auto floor = [](const Size& size) -> std::int64_t {
+        switch (size.kind()) {
+        case SizeKind::Exact:
+            return size.extent();
+        case SizeKind::Flex:
+            return 0;
+        case SizeKind::Responsive:
+            return size.minimum();
+        case SizeKind::Auto:
+            break;
+        }
+        throw std::invalid_argument(
+            "solveGridTree: Auto size is not supported by the grid solver");
+    };
     for (const auto& child : node.children) {
         // The grid box solver distributes Exact and Flex space; it does not do
         // intrinsic (Auto) content sizing. Auto reaching here is a misuse (a
@@ -267,49 +280,142 @@ void solveNode(const LayoutNode& node, Rect frame,
             throw std::invalid_argument(
                 "solveGridTree: Auto size is not supported by the grid solver");
         }
-        if (child.size.kind() == SizeKind::Exact) {
-            exactTotal += child.size.extent();
-        } else {
-            ++flexCount;
+    }
+
+    const auto required = [&] {
+        std::int64_t total = 0;
+        std::size_t count = 0;
+        for (std::size_t index = 0; index < node.children.size(); ++index) {
+            if (!active[index]) continue;
+            total += floor(node.children[index].size);
+            ++count;
         }
+        if (count > 1) {
+            total += static_cast<std::int64_t>(node.gap.extent()) *
+                     static_cast<std::int64_t>(count - 1);
+        }
+        return total;
+    };
+    while (required() > extent) {
+        auto drop = node.children.size();
+        for (std::size_t index = node.children.size(); index-- > 0;) {
+            if (active[index] &&
+                node.children[index].size.kind() == SizeKind::Responsive &&
+                node.children[index].size.optional()) {
+                drop = index;
+                break;
+            }
+        }
+        if (drop == node.children.size()) {
+            ok = false;
+            return;
+        }
+        active[drop] = false;
+    }
+
+    std::size_t activeCount = 0;
+    std::int64_t floorTotal = 0;
+    for (std::size_t index = 0; index < node.children.size(); ++index) {
+        if (!active[index]) continue;
+        ++activeCount;
+        floorTotal += floor(node.children[index].size);
     }
     const auto gapTotal =
-        node.children.size() > 1
+        activeCount > 1
             ? static_cast<std::int64_t>(node.gap.extent()) *
-                  static_cast<std::int64_t>(node.children.size() - 1)
+                  static_cast<std::int64_t>(activeCount - 1)
             : 0;
-    if (exactTotal + gapTotal > extent) {
-        ok = false;
-        return;
+    std::vector<int> allocations(node.children.size(), 0);
+    for (std::size_t index = 0; index < node.children.size(); ++index) {
+        if (active[index]) {
+            allocations[index] =
+                static_cast<int>(floor(node.children[index].size));
+        }
+    }
+    std::int64_t remainder = extent - gapTotal - floorTotal;
+
+    std::int64_t preferredTotal = 0;
+    for (std::size_t index = 0; index < node.children.size(); ++index) {
+        if (!active[index]) continue;
+        const auto& size = node.children[index].size;
+        if (size.kind() == SizeKind::Responsive && size.optional()) {
+            preferredTotal += size.extent() - size.minimum();
+        }
+    }
+    const auto preferredAllocation = std::min(remainder, preferredTotal);
+    std::int64_t preferredDistributed = 0;
+    if (preferredTotal > 0) {
+        for (std::size_t index = 0; index < node.children.size(); ++index) {
+            if (!active[index]) continue;
+            const auto& size = node.children[index].size;
+            if (size.kind() != SizeKind::Responsive || !size.optional()) {
+                continue;
+            }
+            const auto range = size.extent() - size.minimum();
+            const auto share = preferredAllocation * range / preferredTotal;
+            allocations[index] += static_cast<int>(share);
+            preferredDistributed += share;
+        }
+        auto extra = preferredAllocation - preferredDistributed;
+        for (std::size_t index = node.children.size();
+             index-- > 0 && extra > 0;) {
+            if (!active[index]) continue;
+            const auto& size = node.children[index].size;
+            if (size.kind() != SizeKind::Responsive || !size.optional()) {
+                continue;
+            }
+            const auto capacity = size.extent() - allocations[index];
+            const auto add = std::min<std::int64_t>(capacity, extra);
+            allocations[index] += static_cast<int>(add);
+            extra -= add;
+        }
+    }
+    remainder -= preferredAllocation;
+
+    int growthTotal = 0;
+    std::size_t finalGrowing = node.children.size();
+    for (std::size_t index = 0; index < node.children.size(); ++index) {
+        if (!active[index]) continue;
+        const auto& size = node.children[index].size;
+        const int growth =
+            size.kind() == SizeKind::Flex
+                ? 1
+                : (size.kind() == SizeKind::Responsive ? size.growth() : 0);
+        growthTotal += growth;
+        if (growth > 0) finalGrowing = index;
+    }
+    std::int64_t growthDistributed = 0;
+    if (growthTotal > 0) {
+        for (std::size_t index = 0; index < node.children.size(); ++index) {
+            if (!active[index]) continue;
+            const auto& size = node.children[index].size;
+            const int growth =
+                size.kind() == SizeKind::Flex
+                    ? 1
+                    : (size.kind() == SizeKind::Responsive ? size.growth() : 0);
+            if (growth == 0) continue;
+            const auto share = remainder * growth / growthTotal;
+            allocations[index] += static_cast<int>(share);
+            growthDistributed += share;
+        }
+        allocations[finalGrowing] +=
+            static_cast<int>(remainder - growthDistributed);
     }
 
-    // Equal split of the remainder among the flex children; cells that do not
-    // divide evenly go to the LAST flex child (matches the old pane rule
-    // `rect.width - firstWidth`). A container may legally have no flex child, in
-    // which case the remainder is simply unused.
-    const int remainder =
-        extent - static_cast<int>(exactTotal + gapTotal);
-    const int flexBase = flexCount > 0 ? remainder / flexCount : 0;
-    const int flexExtra = flexCount > 0 ? remainder % flexCount : 0;
-
     int cursor = row ? content.x : content.y;
-    int flexSeen = 0;
+    std::size_t placed = 0;
     for (std::size_t index = 0; index < node.children.size(); ++index) {
+        if (!active[index]) continue;
         const auto& child = node.children[index];
-        int mainSize = 0;
-        if (child.size.kind() == SizeKind::Exact) {
-            mainSize = child.size.extent();
-        } else {
-            ++flexSeen;
-            mainSize = flexBase + (flexSeen == flexCount ? flexExtra : 0);
-        }
+        const int mainSize = allocations[index];
         const Rect childFrame =
             row ? Rect{cursor, content.y, mainSize, content.height}
                 : Rect{content.x, cursor, content.width, mainSize};
         solveNode(child, childFrame, out, identities, ok);
         if (!ok) return;
         cursor += mainSize;
-        if (index + 1 < node.children.size()) {
+        ++placed;
+        if (placed < activeCount) {
             cursor += node.gap.extent();
         }
     }

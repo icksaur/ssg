@@ -6,8 +6,8 @@
 //   root
 //   ├─ header            (composed override, else built-in from header)
 //   ├─ body   Row Flex
-//   │  ├─ panel   Col Exact(dimensions.panelTargetWidth) [ filetree, gitstatus ]
-//   │  └─ content Col Flex [ tabbar, notice, externalmod,
+//   │  ├─ panel   Col OptionalPreferred(panel target/minimum) [ filetree, gitstatus ]
+//   │  └─ content Col MinimumFlex(editor minimum) [ tabbar, notice, externalmod,
 //   │                        editor>document.viewport>document,
 //   │                        findresults.viewport>findresults ]
 //   └─ footer            (composed override, else built-in from footer + hint)

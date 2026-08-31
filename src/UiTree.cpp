@@ -1,5 +1,6 @@
 #include <ssg/UiTree.h>
 
+#include <algorithm>
 #include <array>
 #include <set>
 #include <span>
@@ -45,6 +46,19 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
     }
 
     if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        const bool hasResponsive = std::ranges::any_of(
+            container->children, [](const UiNode& child) {
+                return child.size.kind() == SizeKind::Responsive;
+            });
+        const bool hasAuto = std::ranges::any_of(
+            container->children, [](const UiNode& child) {
+                return child.size.kind() == SizeKind::Auto;
+            });
+        if (hasResponsive && hasAuto) {
+            error = here +
+                    ": Responsive and Auto direct children cannot be mixed";
+            return;
+        }
         for (const auto& child : container->children) {
             walk(child, here, seen, error);
             if (error) return;
@@ -53,7 +67,7 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
         const WidgetDescriptor& w = leaf->widget;
         if (w.kind == WidgetKind::View) {
             // A View names its client-rendered surface, and has no content to hug,
-            // so its size must be Exact or Flex -- never Auto.
+            // so its size must be explicit rather than Auto.
             if (!w.surface) {
                 error = here + ": a \"view\" leaf requires a surface";
                 return;
@@ -72,7 +86,7 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
                 // whose intrinsic (reservation-sized) footprints the runtime
                 // sizes, so they alone may be Auto.
                 // validateWellKnownAreas pins each allowance to its canonical node.
-                error = here + ": a \"view\" leaf must be Exact- or Flex-sized";
+                error = here + ": a \"view\" leaf must not be Auto-sized";
                 return;
             }
             // A View is opaque: it carries only its id + surface. Any widget-only

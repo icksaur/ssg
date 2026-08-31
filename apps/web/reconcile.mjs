@@ -1069,7 +1069,10 @@ export function applySessionDeltaCopy(sections, delta) {
   if (delta.document) {
     const document = delta.document;
     if (BigInt(document.base_revision) !== BigInt(sections.document.revision) ||
-        BigInt(document.revision) <= BigInt(document.base_revision)) return null;
+        BigInt(document.revision) === BigInt(document.base_revision) &&
+          (num(document.erased_bytes) !== 0 || document.inserted_text !== '')) {
+      return null;
+    }
     const start = num(document.start);
     const erased = num(document.erased_bytes);
     const total = utf8Bytes(sections.document.text);
@@ -1189,6 +1192,18 @@ export function applySessionDeltaCopy(sections, delta) {
   return next;
 }
 
+export function applySessionDelta(sections, revision, delta) {
+  if (!sections) return { kind: 'missing-state' };
+  if (!deltaIsContiguous(revision, delta)) return { kind: 'revision-gap' };
+  const next = applySessionDeltaCopy(sections, delta);
+  if (!next) return { kind: 'semantic-rejection' };
+  return {
+    kind: 'accepted',
+    sections: next,
+    revision: BigInt(delta.revision),
+  };
+}
+
 // The draft-conflict notice's geometry-free semantic projection normalized for the
 // renderer, or null when the active document raises no notice. Owns the snake_case
 // wire coupling (command) so the client draws the notice bar and its clickable
@@ -1267,7 +1282,7 @@ export function externalFocusHeld(sections) {
 // `size`; containers carry `axis`.
 export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPUT: 4, SPACER: 5, VIEW: 6, STATUS_ACTIONS: 7 };
 export const AXIS = { ROW: 0, COLUMN: 1 };
-export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2 };
+export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2, RESPONSIVE: 3 };
 // Whether a node is an independent scroll viewport, pinned to the C++ ScrollAxis
 // enum. An unrecognized value is treated as NONE (a future axis degrades to "not
 // a viewport"), matching the wire decoder's forward-compat rule.
@@ -1308,6 +1323,7 @@ export function browserRenderPlan(delta) {
     rebuild: !!delta.ui,
     reconcile: !!(delta.ui || delta.ui_state || delta.ui_presence ||
                    replacementChanged(delta.prompt_status) || repaintTheme),
+    responsive: !!(delta.ui || delta.ui_presence),
     repaintTheme,
     surfaces: [...surfaces].sort((a, b) => a - b),
   };
@@ -1317,6 +1333,7 @@ export function mergeBrowserRenderPlans(left, right) {
   return {
     rebuild: !!left.rebuild || !!right.rebuild,
     reconcile: !!left.reconcile || !!right.reconcile,
+    responsive: !!left.responsive || !!right.responsive,
     repaintTheme: !!left.repaintTheme || !!right.repaintTheme,
     surfaces: [...new Set([...(left.surfaces || []), ...(right.surfaces || [])])],
   };
@@ -1403,6 +1420,60 @@ export function webExtentCss(value, axis) {
   return axis === AXIS.COLUMN
     ? `calc(${value} * var(--ssg-row))`
     : `${value}ch`;
+}
+
+export function responsiveFlexCss(size, axis) {
+  const minimum = size.minimum || 0;
+  const preferred = size.extent || minimum;
+  const shrink = size.optional && preferred > 0
+    ? (preferred - minimum) / preferred : 0;
+  return {
+    flex: `${size.growth || 0} ${shrink} ${webExtentCss(preferred, axis)}`,
+    minimumProperty: axis === AXIS.COLUMN ? 'minHeight' : 'minWidth',
+    minimumValue: webExtentCss(minimum, axis),
+  };
+}
+
+export function responsiveSurvivors(children, availableExtent, gap) {
+  const responsive = children.some((child) =>
+    child.size && child.size.kind === SIZE.RESPONSIVE);
+  if (!responsive) return new Set(children.map((child) => child.id));
+  if (!Number.isSafeInteger(availableExtent) || availableExtent < 0 ||
+      !Number.isSafeInteger(gap) || gap < 0 ||
+      children.some((child) => child.size && child.size.kind === SIZE.AUTO)) {
+    return null;
+  }
+  const active = children.map(() => true);
+  const floor = (child) => {
+    const size = child.size || {};
+    if (size.kind === SIZE.EXACT) return size.extent || 0;
+    if (size.kind === SIZE.FLEX) return 0;
+    return size.minimum || 0;
+  };
+  const required = () => {
+    let count = 0;
+    let total = 0;
+    for (let index = 0; index < children.length; index++) {
+      if (!active[index]) continue;
+      count++;
+      total += floor(children[index]);
+    }
+    return total + Math.max(count - 1, 0) * gap;
+  };
+  while (required() > availableExtent) {
+    let drop = -1;
+    for (let index = children.length - 1; index >= 0; index--) {
+      const size = children[index].size || {};
+      if (active[index] && size.kind === SIZE.RESPONSIVE && size.optional) {
+        drop = index;
+        break;
+      }
+    }
+    if (drop < 0) return null;
+    active[drop] = false;
+  }
+  return new Set(children.filter((_, index) => active[index])
+                         .map((child) => child.id));
 }
 
 export class GenerationRetainedCache {
@@ -1514,18 +1585,21 @@ const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL
 export const WEB_UI_PROFILE = {
   widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.TEXT_INPUT, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
   surfaces: new Set([SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.FINDRESULTS, SURFACE.SYMBOLS, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT]),
+  sizes: new Set(Object.values(SIZE)),
 };
 
 // The first schema primitive `profile` does not support, as
-// { kind: 'widget'|'surface', ordinal }, or null when every leaf widget kind and
-// view surface is supported. Placement is a property of tree structure + well-known
-// node ids, so there is no region-role check. The interpreter runs only when this
-// returns null.
+// { kind: 'widget'|'surface'|'size', ordinal }, or null when every leaf widget,
+// view surface, and size kind is supported.
 export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
   if (!schema || !schema.root) return null;
   const surfaces = profile.surfaces || new Set();
+  const sizes = profile.sizes || new Set();
   const walk = (node) => {
     if (!node) return null;
+    const size = node.size && node.size.kind != null
+      ? num(node.size.kind) : SIZE.EXACT;
+    if (!sizes.has(size)) return { kind: 'size', ordinal: size };
     if (node.leaf && typeof node.leaf === 'object') {
       const kind = num(node.leaf.kind);
       if (!profile.widgets.has(kind)) return { kind: 'widget', ordinal: kind };
@@ -1625,11 +1699,34 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
   for (const id of schemaIds) { if (!stateById.has(id) || !presentById.has(id)) return null; }
 
   let shapeOk = true;
-  // The published sizing, carried verbatim so the DOM builder honors every constraint:
-  // { kind, extent } (Exact => a fixed extent, Flex => a grow weight, Auto => content).
+  // The published sizing, validated before the DOM builder consumes it.
   const sizeOf = (node) => {
     const s = node.size && typeof node.size === 'object' ? node.size : {};
-    return { kind: num(s.kind), extent: s.extent != null ? num(s.extent) : 0 };
+    const uint = (value, fallback = null) => {
+      if (value === undefined) return fallback;
+      const converted = num(value);
+      return Number.isSafeInteger(converted) && converted >= 0
+        ? converted : null;
+    };
+    const kind = uint(s.kind, SIZE.EXACT);
+    const extent = uint(s.extent, 0);
+    if (kind === null || extent === null) return null;
+    if (kind === SIZE.EXACT || kind === SIZE.FLEX || kind === SIZE.AUTO) {
+      return { kind, extent };
+    }
+    if (kind !== SIZE.RESPONSIVE ||
+        s.extent === undefined ||
+        typeof s.optional !== 'boolean') return null;
+    const minimum = uint(s.minimum);
+    const growth = uint(s.growth);
+    if (minimum === null || growth === null) return null;
+    const validOptional =
+      s.optional && growth === 0 && extent > 0 && minimum <= extent;
+    const validFlex =
+      !s.optional && growth === 1 && extent === minimum;
+    if (!validOptional && !validFlex) return null;
+    // Responsive reuses the legacy extent slot as its preferred size.
+    return { kind, extent, minimum, growth, optional: s.optional };
   };
   const insetOf = (container) => {
     const i = container.inset && typeof container.inset === 'object' ? container.inset : {};
@@ -1664,12 +1761,20 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
   const build = (node, inheritedStyle = {}) => {
     const style = styleOf(node, inheritedStyle);
     if (style === null) { shapeOk = false; return null; }
+    const size = sizeOf(node);
+    if (size === null) { shapeOk = false; return null; }
     const st = stateById.get(node.id);
     const hasLeafState = st.leaf != null && typeof st.leaf === 'object';
     const isContainer = node.container != null && typeof node.container === 'object';
     // Shape validation runs regardless of presence, so a malformed frame is caught.
     if (isContainer) {
       if (hasLeafState) { shapeOk = false; return null; }
+      const directSizes = (node.container.children || []).map(sizeOf);
+      if (directSizes.some((childSize) => childSize === null) ||
+          (directSizes.some((childSize) => childSize.kind === SIZE.RESPONSIVE) &&
+           directSizes.some((childSize) => childSize.kind === SIZE.AUTO))) {
+        shapeOk = false; return null;
+      }
       const scroll = scrollOf(node.container);
       if (scroll === null) { shapeOk = false; return null; }  // malformed scroll type
       const children = [];
@@ -1679,7 +1784,7 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
       }
       if (!presentById.get(node.id)) return null;  // hidden subtree not drawn
       return { id: node.id, kind: 'container', axis: num(node.container.axis),
-               gap: num(node.container.gap) || 0, size: sizeOf(node),
+               gap: num(node.container.gap) || 0, size,
                scroll, inset: insetOf(node.container), style, children };
     }
     if (!node.leaf || typeof node.leaf !== 'object') { shapeOk = false; return null; }
@@ -1710,19 +1815,19 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     if (wk === WIDGET.SPACER) {
       const w = node.leaf.width != null ? num(node.leaf.width) : null;
       return { id: node.id, kind: 'leaf', widget: wk, spacer: true,
-               width: w, size: sizeOf(node), style };
+               width: w, size, style };
     }
     if (wk === WIDGET.VIEW) {
-      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+      return { id: node.id, kind: 'leaf', widget: wk, size,
                surface: num(node.leaf.surface), style };
     }
     if (wk === WIDGET.STATUS_ACTIONS) {
-      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+      return { id: node.id, kind: 'leaf', widget: wk, size,
                actions: [], style };
     }
     if (wk === WIDGET.TEXT_INPUT) {
       if (hasLeafState) {
-        return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+        return { id: node.id, kind: 'leaf', widget: wk, size,
                  controlId: node.leaf.id, text: st.leaf.value || '',
                  label: st.leaf.label || '', active: !!num(st.leaf.active),
                  command: st.leaf.command != null ? st.leaf.command : null,
@@ -1732,12 +1837,12 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
       }
       // The header query anchor remains state-free: browser-owned local text
       // produces no per-keystroke tree delta.
-      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+      return { id: node.id, kind: 'leaf', widget: wk, size,
                role: structuralRole(node.leaf.role),
                sigil: node.leaf.sigil || '', style };
     }
     if (wk === WIDGET.CHECKBOX) {
-      return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+      return { id: node.id, kind: 'leaf', widget: wk, size,
                role: node.leaf.role != null || style.foreground == null
                  ? num(st.leaf.role) : null,
                text: st.leaf.value || '', checked: !!num(st.leaf.checked),
@@ -1746,7 +1851,7 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     }
     // Label/Field: no leaf state is the resolved drop (not drawn, not an error).
     if (!hasLeafState) return null;
-    return { id: node.id, kind: 'leaf', widget: wk, size: sizeOf(node),
+    return { id: node.id, kind: 'leaf', widget: wk, size,
              role: node.leaf.role != null || style.foreground == null
                ? num(st.leaf.role) : null,
              text: st.leaf.value || '',

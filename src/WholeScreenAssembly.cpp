@@ -223,7 +223,9 @@ UiComposition assembleWholeScreen(
     insertPromptInput(header, promptSigil);
     UiNode panel = withStyle(
         container(
-            kPanelNodeId, Axis::Column, Size::exact(dimensions.panelTargetWidth),
+            kPanelNodeId, Axis::Column,
+            Size::optionalPreferred(dimensions.panelTargetWidth,
+                                    dimensions.panelMinimumWidth),
             {viewLeaf(kFileTreeNodeId, ViewSurface::FileTree, Size::flex()),
              viewLeaf(kGitStatusNodeId, ViewSurface::GitStatus, Size::flex()),
              viewLeaf(kSymbolsNodeId, ViewSurface::Symbols, Size::flex())},
@@ -253,7 +255,8 @@ UiComposition assembleWholeScreen(
                    SemanticRole::Text, SemanticRole::Canvas)},
         ScrollAxis::Vertical);
     UiNode content = container(
-        kContentNodeId, Axis::Column, Size::flex(),
+        kContentNodeId, Axis::Column,
+        Size::minimumFlex(dimensions.editorMinimumWidth),
         {withStyle(viewLeaf(kTabBarNodeId, ViewSurface::TabBar,
                             Size::exact(dimensions.tabBarHeight)),
                    SemanticRole::TabInactive,

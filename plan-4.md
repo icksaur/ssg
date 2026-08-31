@@ -14,6 +14,50 @@ node identity. Surface renderers and hit derivation consume those solved nodes.
 Delete the independently assembled shell tree and feature-specific layout
 sidecars.
 
+Responsive siblings use one additional `SizeKind::Responsive` shape with
+minimum, preferred, growth, and optional fields. Only two factory-produced forms
+are valid:
+
+- `Size::minimumFlex(minimum)` produces required state with preferred equal to
+  minimum and the same positive unit growth used by legacy Flex.
+- `Size::optionalPreferred(preferred, minimum)` produces optional state with
+  zero growth and requires a positive preferred value no smaller than minimum.
+
+Responsive state with optional growth, preferred below minimum, non-positive
+required growth, or any other field combination not produced by those factories
+is rejected at construction and decode. A container with a Responsive direct
+child may not have an Auto direct child because responsive feasibility must be
+computable from published constraints without client-specific intrinsic child
+measurement; schema validation rejects that combination without restricting
+Auto descendants inside nested children. Existing Exact, Flex, and Auto
+meanings and encodings remain unchanged. The body authors panel as optional preferred between
+`StyleDimensions::panelMinimumWidth` and
+`StyleDimensions::panelTargetWidth`, and content as required flexible from
+`StyleDimensions::editorMinimumWidth`. The generic solver first removes optional
+responsive children, last declared first, until every surviving child's floor
+and every gap between survivors fit. Exact contributes its extent, legacy Flex
+contributes no floor, Auto contributes its resolved intrinsic extent, and
+Responsive contributes its minimum. The solver then allocates each survivor its
+floor, distributes available space toward optional preferred targets
+proportionally to each target's `preferred - minimum` range without exceeding
+the target, and distributes the remainder among legacy Flex and required
+minimum-flex children by growth. Integer remainder goes to the final eligible
+child, preserving legacy Flex behavior. A dropped child and its subtree have no
+solved nodes; if required floors cannot fit after every optional child is
+dropped, solving fails.
+
+The browser interprets the same responsive shape without surface identities.
+On schema, presence, or container-size changes, generic retained-tree code
+chooses the optional children that fit using only published constraints and the
+measured container main-axis content extent, never child layout measurements.
+Dropped children receive `display: none`. Surviving children use the existing
+medium conversion for minimum and preferred extents: minimum becomes the
+main-axis CSS minimum, preferred becomes flex basis, growth becomes flex grow,
+and optional shrink is weighted by its `preferred - minimum` range so CSS
+reaches the same floors. Existing size-kind CSS mappings remain unchanged. This
+work is independent of document content and does not run on caret, selection,
+or text-input updates.
+
 ## Invariants
 
 - UITREE-1: Whole-screen node placement, ordering, visibility, and focusability
@@ -30,6 +74,10 @@ sidecars.
   dormant solved rectangle equals the legacy shell rectangle still consumed for
   that surface. State at each transitional parity oracle; delete this temporary
   invariant with the last legacy placement reader.
+- UITREE-6: Responsive removal and sizing derive only from published `Size`
+  constraints and available parent extent; neither grid nor browser code names
+  the panel or another product surface when resolving them. State at `Size` and
+  each responsive interpreter entry point.
 
 ## Considerations
 
@@ -47,6 +95,54 @@ moving the panel, and never span it. This matches the established terminal
 placement and gives native clients the same responsive composition without a
 client-specific exception.
 
+Responsive allocation is an ordered operation over a container's main axis:
+
+1. Resolve Auto children to their intrinsic main-axis extents and collect all
+   children still admitted by semantic presence.
+2. Compute feasibility from the parent's post-inset main-axis extent, every
+   surviving child's floor, and gaps only between surviving adjacent children.
+3. While infeasible, remove the last declared optional Responsive child and
+   recompute floors and gaps. Both gaps adjacent to a removed child disappear,
+   and one declared gap separates the survivors that become adjacent. Fail when
+   infeasible and no optional child remains.
+4. Allocate each survivor its floor. Give the available amount up to the sum of
+   optional preferred ranges proportionally to those ranges, with integer
+   remainder assigned to the final still-under-target child. If every optional
+   child reaches its target, no preferred remainder remains and surplus passes
+   to the growth phase.
+5. Divide remaining space by growth among legacy Flex and required
+   minimum-flex children; assign integer remainder to the final growing child.
+   Leave surplus unused when no child grows.
+
+Cross-axis stretching is unchanged. Existing Exact children therefore retain
+their fixed extent, existing Flex children retain equal growth, and Auto
+children retain intrinsic sizing.
+
+`SizeKind::Responsive` has a distinct enum value within
+`kProtocolWireVersion`; message framing does not change. Exact, Flex, and Auto
+continue to encode exactly the existing `kind` and `extent` fields.
+Responsive encodes `kind`, `extent` as preferred, `minimum`, `growth`, and
+`optional` as separate fields, in that object-field order. Exact, Flex, and Auto
+omit the final three fields rather than encoding ignored defaults. The
+Responsive decoder requires every field and accepts only the two factory forms
+above. Any C++ or browser decoder that does not
+understand Responsive rejects the schema entirely rather than interpreting it
+as Flex or Auto; the web interpreter likewise rejects every unknown size kind.
+
+Panel interior projection follows the existing atomic-surface pattern.
+`SolvedPanelSurface` derives the provider label row, visible tree rows, selected
+state, and scrollbar gutter from the solved panel node, semantic
+`TreeViewState`, presenter-owned first-visible state, and style dimensions.
+`GridPresenter` recomputes the tree window against the solved panel height;
+legacy `TreeWindow` values and shell panel rectangles are not geometry inputs.
+When responsive solving drops the panel, the frame carries no panel window,
+panel scrolling is unavailable, and presenter-owned `treeFirstVisible` is
+preserved. When the panel reappears, projection clamps that retained offset to
+the new solved height and performs the existing selection reveal. Renderer and
+HitTester consume the same solved surface. The provider label is derived from
+the active semantic `TreeProviderKind` through the existing authoritative panel
+provider mapping, not copied from `ShellLayoutRequest`.
+
 The schema move does not reposition the established shell layout: in the same
 commit, a parity oracle compares both notice and external-modification solved
 rectangles with the legacy rectangles the shell already projects. Notice then
@@ -63,8 +159,12 @@ modification, editor, find-results viewport]`, and editor `[document viewport]`.
 UI-schema decode normalizes only a schema whose node-id order and container
 relationships exactly match that preceding arrangement, preserving node
 payloads while moving the named nodes, before current well-known-area
-validation. Every other structural mismatch remains rejected without
-normalization, and newly encoded schemas always use the current arrangement.
+validation. The frozen preceding schema's exact default panel and flex content
+sizes are part of that exact match and normalize to the corresponding
+`Size::optionalPreferred` and `Size::minimumFlex` values from default
+`StyleDimensions`; no other legacy size tuple is guessed. Every other
+structural or size mismatch remains rejected without normalization, and newly
+encoded schemas always use the current arrangement.
 
 ## Risks and Mitigations
 
@@ -82,15 +182,33 @@ normalization, and newly encoded schemas always use the current arrangement.
 - Widening that normalization could silently admit obsolete topology beyond its
   compatibility window: require the complete preceding arrangement, not a
   partial or approximate structural match.
+- A responsive kind could silently degrade in an older interpreter: use a
+  distinct kind, reject unknown kinds at decode/interpretation, and preserve
+  legacy size encodings exactly.
+- Responsive checks could become a cursor-path DOM cost: run generic optional
+  child selection only when schema, presence, or measured container extent
+  changes, leaving retained content updates untouched.
+- Panel scrolling could remain coupled to the legacy panel height: derive the
+  presenter-owned window from the solved panel surface and prove corrupted
+  legacy panel geometry cannot affect cells or hits.
 
 ## Acceptance (Definition of Done)
 
 - Observable: terminal layout and interactions remain behaviorally equivalent;
-  UI-tree changes affect both clients without TUI layout edits.
+  the panel grows, shrinks, and disappears at the same semantic thresholds in
+  grid and browser clients; UI-tree changes affect both clients without
+  surface-specific layout edits.
 - Budgets: solving scales with UI-node count and visible surface projection, not
-  document size.
+  document size; browser responsive resolution does not run on caret, selection,
+  or text-input updates.
 - Gates: `scripts/check.sh` and `scripts/check.sh push`.
-- Oracles: generic constraint hand cases; current terminal cell/hit parity;
+- Oracles: independent responsive-allocation hand cases covering wide,
+  between-floor-and-preferred, below-floor removal, multiple optional children,
+  gaps, and unsatisfied required floors; legacy Exact/Flex/Auto byte fixtures;
+  responsive wire round trip and malformed-combination rejection; pure browser
+  responsive-selection cases using the same inputs but an independently stated
+  expected result; panel cell/hit parity with deliberately corrupted legacy
+  panel geometry and tree-window metrics; current terminal cell/hit parity;
   generated-schema constraint properties; library and client unsupported-widget
   refusal; each migrated feature deletes its shell branch; while any legacy
   surface reader remains, its dormant solved rectangle equals that reader's
@@ -131,12 +249,20 @@ typed backing migrates with the status surface in Step 4.
 | 1 | Define solved grid-tree values and generic constraint cases | `include/ssg/UiTree.h`, layout headers/sources, focused layout tests | hand cases: axis/size/inset/gap/scroll | UITREE-1, UITREE-2 |
 | 2 | Solve validated UI frames into grid nodes | `src/WholeScreenAssembly.cpp`, layout/chrome lowering sources | property: every present renderable node has one solved result | UITREE-1, UITREE-4 |
 | 3 | Thread Step 2's existing solver output into one tree owned by each `GridFrame` and atomically move header/footer render-hit placement to it | `include/ssg/GridPresenter.h`, `src/GridPresenter.cpp`, `src/Renderer.cpp`, `src/HitTester.cpp`, related tests | parity: one solved node yields matching header/footer cells and hits; no header/footer consumer reads legacy placement | UITREE-2, UITREE-3 |
-| 4 | Migrate prompt, picker, notice, external modification, tab bar, tree providers/panel, document, search results, status, and remaining header/footer backing through generic placement, one atomic surface commit at a time; normalize only a decoded UI schema whose complete node-id order and container structure equal the preceding canonical arrangement | surface presentation sources, `src/UiTreeProtocol.cpp`, protocol and focused render/hit tests | each named surface has cell/hit parity and its commit deletes that surface's feature geometry reads; the frozen legacy delta still decodes and replays to current canonical semantic state while every other malformed topology remains rejected; when Plan 6 deletes the shim, its compatibility-fixture inventory removes the frozen fixture or replaces it with a current semantic fixture | UITREE-1, UITREE-3 |
-| 5 | After every Step 4 inventory entry passes, construct frames directly from semantic state and the grid request; then delete `buildShellTree`, feature geometry sidecars, obsolete shell node kinds, and the presenter's bridge call while retaining the wrapper-only bridge for Plan 6 | `src/GridPresenter.cpp`, `src/ShellState.cpp`, `include/ssg/ShellState.h`, callers/tests | inventory is complete, no parallel whole-screen layout path remains, and `GridPresenter` no longer references `projectForBridgedPresenterDeprecated` | UITREE-1 |
+| 4 | Add the generic responsive size shape, grid allocation, strict wire support, and identity-free browser interpretation before migrating a surface that depends on it | `include/ssg/LayoutConstraints.h`, `src/Layout.cpp`, `src/UiTreeProtocol.cpp`, `src/WholeScreenAssembly.cpp`, `apps/web/reconcile.mjs`, `apps/web/client.mjs`, focused C++/web/protocol tests | independent allocation hand cases; old size fixture bytes unchanged; responsive round trip and malformed rejection; browser optional-child selection matches stated hand results and is not invoked by retained content updates | UITREE-1, UITREE-4, UITREE-6 |
+| 5 | Migrate prompt, picker, notice, external modification, tab bar, tree providers/panel, document, search results, status, and remaining header/footer backing through generic placement, one atomic surface commit at a time; normalize only a decoded UI schema whose complete node-id order and container structure equal the preceding canonical arrangement | surface presentation sources, `src/UiTreeProtocol.cpp`, protocol and focused render/hit tests | each named surface has cell/hit parity and its commit deletes that surface's feature geometry reads; panel width/removal matches responsive hand cases and ignores corrupted legacy geometry; the frozen legacy delta still decodes and replays to current canonical semantic state while every other malformed topology remains rejected; when Plan 6 deletes the shim, its compatibility-fixture inventory removes the frozen fixture or replaces it with a current semantic fixture | UITREE-1, UITREE-3, UITREE-6 |
+| 6 | After every Step 5 inventory entry passes, construct frames directly from semantic state and the grid request; then delete `buildShellTree`, feature geometry sidecars, obsolete shell node kinds, and the presenter's bridge call while retaining the wrapper-only bridge for Plan 6 | `src/GridPresenter.cpp`, `src/ShellState.cpp`, `include/ssg/ShellState.h`, callers/tests | inventory is complete, no parallel whole-screen layout path remains, and `GridPresenter` no longer references `projectForBridgedPresenterDeprecated` | UITREE-1 |
 
 ## Rationale
 
 The UI tree already expresses the intended product composition. Executing it
 in both clients removes a whole parallel architecture rather than wrapping it.
+Keeping responsive behavior as a shell or panel special case would preserve the
+parallel policy path. A distinct responsive size shape is preferred over
+changing Flex or Auto because legacy values retain their meanings and bytes,
+older consumers reject the new requirement rather than rendering a plausible
+but wrong layout, and the same small vocabulary serves future optional
+sidebars. Reverse declaration order is the drop tie-breaker so schema order is
+the only additional fact and no separate priority inventory is introduced.
 Plan 3 is complete. Its grid-projection type is the ownership seam this plan's
 solved grid tree implements.

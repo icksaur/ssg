@@ -39,6 +39,91 @@ TEST(columnStackPlacesExactThenFillsFlex) {
     ASSERT_EQ(box(*solved, "footer").rect, (Rect{0, 4, 10, 1}));
 }
 
+TEST(responsivePreferredShrinksBeforeRequiredFlex) {
+    LayoutNode root{
+        UiNodeId{"root"}, Size::flex(), Axis::Row, {},
+        {leaf("panel", Size::optionalPreferred(24, 12)),
+         leaf("content", Size::minimumFlex(20))}};
+
+    auto wide = solveGridTree(root, {0, 0, 100, 5});
+    ASSERT_TRUE(wide.has_value());
+    if (wide) {
+        ASSERT_EQ(box(*wide, "panel").rect, (Rect{0, 0, 24, 5}));
+        ASSERT_EQ(box(*wide, "content").rect, (Rect{24, 0, 76, 5}));
+    }
+
+    auto narrow = solveGridTree(root, {0, 0, 35, 5});
+    ASSERT_TRUE(narrow.has_value());
+    if (narrow) {
+        ASSERT_EQ(box(*narrow, "panel").rect, (Rect{0, 0, 15, 5}));
+        ASSERT_EQ(box(*narrow, "content").rect, (Rect{15, 0, 20, 5}));
+    }
+}
+
+TEST(responsiveOptionalChildDropsBelowCombinedFloors) {
+    LayoutNode root{
+        UiNodeId{"root"}, Size::flex(), Axis::Row, {},
+        {leaf("panel", Size::optionalPreferred(24, 12)),
+         leaf("content", Size::minimumFlex(20))}};
+    auto solved = solveGridTree(root, {0, 0, 31, 5});
+    ASSERT_TRUE(solved.has_value());
+    if (!solved) return;
+    ASSERT_TRUE(solved->find(UiNodeId{"panel"}) == nullptr);
+    ASSERT_EQ(box(*solved, "content").rect, (Rect{0, 0, 31, 5}));
+}
+
+TEST(responsiveDropRecomputesGapsAndUsesReverseDeclarationOrder) {
+    LayoutNode root{
+        UiNodeId{"root"}, Size::flex(), Axis::Row, {}, {},
+        Gap::of(2)};
+    root.children = {
+        leaf("left", Size::optionalPreferred(15, 5)),
+        leaf("content", Size::minimumFlex(10)),
+        leaf("right", Size::optionalPreferred(15, 5)),
+    };
+
+    auto oneDropped = solveGridTree(root, {0, 0, 17, 5});
+    ASSERT_TRUE(oneDropped.has_value());
+    if (oneDropped) {
+        ASSERT_TRUE(oneDropped->find(UiNodeId{"right"}) == nullptr);
+        ASSERT_EQ(box(*oneDropped, "left").rect, (Rect{0, 0, 5, 5}));
+        ASSERT_EQ(box(*oneDropped, "content").rect, (Rect{7, 0, 10, 5}));
+    }
+
+    auto bothDropped = solveGridTree(root, {0, 0, 10, 5});
+    ASSERT_TRUE(bothDropped.has_value());
+    if (bothDropped) {
+        ASSERT_TRUE(bothDropped->find(UiNodeId{"left"}) == nullptr);
+        ASSERT_TRUE(bothDropped->find(UiNodeId{"right"}) == nullptr);
+        ASSERT_EQ(box(*bothDropped, "content").rect, (Rect{0, 0, 10, 5}));
+    }
+}
+
+TEST(responsivePreferredRangesShareScarceSpaceProportionally) {
+    LayoutNode root{
+        UiNodeId{"root"}, Size::flex(), Axis::Row, {},
+        {leaf("left", Size::optionalPreferred(15, 5)),
+         leaf("right", Size::optionalPreferred(25, 5)),
+         leaf("content", Size::minimumFlex(10))}};
+    auto solved = solveGridTree(root, {0, 0, 40, 5});
+    ASSERT_TRUE(solved.has_value());
+    if (!solved) return;
+    ASSERT_EQ(box(*solved, "left").rect, (Rect{0, 0, 11, 5}));
+    ASSERT_EQ(box(*solved, "right").rect, (Rect{11, 0, 19, 5}));
+    ASSERT_EQ(box(*solved, "content").rect, (Rect{30, 0, 10, 5}));
+}
+
+TEST(responsiveRequiredFloorsStillFailLoudly) {
+    LayoutNode root{
+        UiNodeId{"root"}, Size::flex(), Axis::Row, {},
+        {leaf("left", Size::minimumFlex(10)),
+         leaf("right", Size::minimumFlex(10))}};
+    ASSERT_FALSE(solveGridTree(root, {0, 0, 19, 5}).has_value());
+    ASSERT_THROWS(Size::optionalPreferred(0, 0), std::invalid_argument);
+    ASSERT_THROWS(Size::optionalPreferred(10, 11), std::invalid_argument);
+    ASSERT_THROWS(Size::minimumFlex(-1), std::invalid_argument);
+}
+
 TEST(externalModificationSurfaceIsBoundedAndKeepsSelectionVisible) {
     ExternalModificationViewState external;
     external.message = "Files changed on disk";
@@ -534,9 +619,17 @@ TEST(solveGridTreeRejectsAutoSizeDistinctly) {
 
 int main() {
     RUN(columnStackPlacesExactThenFillsFlex);
+    RUN(responsivePreferredShrinksBeforeRequiredFlex);
+    RUN(responsiveOptionalChildDropsBelowCombinedFloors);
+    RUN(responsiveDropRecomputesGapsAndUsesReverseDeclarationOrder);
+    RUN(responsivePreferredRangesShareScarceSpaceProportionally);
+    RUN(responsiveRequiredFloorsStillFailLoudly);
     RUN(externalModificationSurfaceIsBoundedAndKeepsSelectionVisible);
     RUN(tabBarWindowsAroundTheActiveTabAndClipsAtTheBandEdge);
     RUN(paletteSurfaceCarvesOneGutterAndKeepsAbsoluteRows);
+    RUN(emptyPaletteSurfaceKeepsItsBandsAndHasNoRows);
+    RUN(paletteSurfaceClipsRowsToItsHeight);
+    RUN(zeroSizePaletteSurfaceProducesNoPaintableGeometry);
     RUN(rowFlexSplitsEquallyRemainderToLast);
     RUN(singleFlexTakesAllRemainder);
     RUN(insetReservesTheFrameOnEveryEdge);

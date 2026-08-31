@@ -239,6 +239,30 @@ TEST(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay) {
     ASSERT_EQ(*replayed.snapshot, after.semantic());
 }
 
+TEST(activeDocumentTransitionMayMoveToAnOlderDocumentRevision) {
+    auto oldSections = sections(ssg::Revision{4}, "dirty scratch");
+    auto newSections = sections(ssg::Revision{1}, "older buffer");
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{10}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(oldSections));
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{11}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(newSections));
+
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+        before.semantic(), after.semantic());
+    ASSERT_EQ(delta.document()->baseRevision, ssg::Revision{4});
+    ASSERT_EQ(delta.document()->revision, ssg::Revision{1});
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_EQ(*replayed.snapshot, after.semantic());
+}
+
 // A document's text changing WITHOUT its document revision advancing is not
 // expressible as a session delta: DocumentSnapshotCodec keys a document delta on
 // the revision (and diff identity), so an equal-revision text change yields no

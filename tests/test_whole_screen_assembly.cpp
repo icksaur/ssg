@@ -99,9 +99,14 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     const UiNode* content = childById(*body, kContentNodeId);
     ASSERT_TRUE(panel != nullptr);
     ASSERT_TRUE(content != nullptr);
-    ASSERT_TRUE(panel->size.kind() == SizeKind::Exact);
+    ASSERT_TRUE(panel->size.kind() == SizeKind::Responsive);
     ASSERT_EQ(panel->size.extent(), d.panelTargetWidth);
-    ASSERT_TRUE(content->size.kind() == SizeKind::Flex);
+    ASSERT_EQ(panel->size.minimum(), d.panelMinimumWidth);
+    ASSERT_TRUE(panel->size.optional());
+    ASSERT_TRUE(content->size.kind() == SizeKind::Responsive);
+    ASSERT_EQ(content->size.minimum(), d.editorMinimumWidth);
+    ASSERT_TRUE(content->size.grows());
+    ASSERT_FALSE(content->size.optional());
     const UiNode* editor = childById(*content, kEditorNodeId);
     const UiNode* notice = childById(*content, kNoticeNodeId);
     const UiNode* external = childById(*content, kExternalModNodeId);

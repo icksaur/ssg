@@ -15,9 +15,10 @@ import {
   resolveKeyCommand, predictPickerInput, applyPickerInputPrediction,
   CLIENT_OWNED_INPUT,
   encodeDocumentPointerInput, encodeTabPointerInput, markedTextByteOffset,
-  applySessionDeltaCopy, applyTreeDelta,
+  applySessionDelta, applyTreeDelta,
   interpretChrome, firstUnsupportedPrimitive, SIZE, AXIS, WIDGET, SURFACE, SCROLL,
   webExtentCss, applyNodeSemanticStyle, getOrCreateStyledNode,
+  responsiveSurvivors, responsiveFlexCss,
   firstMalformedNodeStyle, roleColor,
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, mergeBrowserRenderPlans,
@@ -35,7 +36,6 @@ import {
   externalModificationFromSections, externalFocusHeld,
   encodeExternalActionPointerInput,
   settleCommandResult, settleInput, isCurrentGeneration, replayAttachFrame,
-  deltaIsContiguous,
   clearUncertainInputs, reconnectDelay,
   predictPromptValue,
   settlePromptPresentation, deferPromptDocumentSurface,
@@ -92,6 +92,16 @@ const state = {
   },
 };
 const retainedNodes = new GenerationRetainedCache();
+const responsiveObserver = typeof ResizeObserver === 'undefined'
+  ? null
+  : new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const node = entry.target._ssgResponsiveNode;
+        const pixels = node && node.axis === AXIS.COLUMN
+          ? entry.contentRect.height : entry.contentRect.width;
+        applyResponsiveChildren(entry.target, pixels);
+      }
+    });
 let renderedSurfaceKinds = new Set();
 let renderedFooterPromptHost = null;
 let renderedFooterPromptActiveId = null;
@@ -101,12 +111,14 @@ const allSurfaceKinds = Object.values(SURFACE);
 const fullRenderPlan = () => ({
   rebuild: true,
   reconcile: true,
+  responsive: true,
   repaintTheme: true,
   surfaces: allSurfaceKinds,
 });
 const surfaceRenderPlan = (...surfaces) => ({
   rebuild: false,
   reconcile: false,
+  responsive: false,
   repaintTheme: false,
   surfaces,
 });
@@ -173,6 +185,75 @@ function renderPickerInput(el, sigil) {
   el.appendChild(caret);
 }
 
+function responsiveUnitPixels(parent, axis) {
+  const probe = document.createElement('span');
+  probe.style.position = 'absolute';
+  probe.style.visibility = 'hidden';
+  probe.style.pointerEvents = 'none';
+  probe.style.width = axis === AXIS.ROW ? '1ch' : '1px';
+  probe.style.height = axis === AXIS.COLUMN ? 'var(--ssg-row)' : '1px';
+  parent.appendChild(probe);
+  const rect = probe.getBoundingClientRect();
+  probe.remove();
+  return axis === AXIS.ROW ? rect.width : rect.height;
+}
+
+function applyResponsiveChildren(parent, measuredPixels = null) {
+  const node = parent._ssgResponsiveNode;
+  if (!node) return;
+  let pixels = measuredPixels;
+  if (pixels === null) {
+    const style = getComputedStyle(parent);
+    const vertical = node.axis === AXIS.COLUMN;
+    pixels = vertical
+      ? parent.clientHeight - parseFloat(style.paddingTop) -
+          parseFloat(style.paddingBottom)
+      : parent.clientWidth - parseFloat(style.paddingLeft) -
+          parseFloat(style.paddingRight);
+  }
+  const unit = parent._ssgResponsiveUnitPixels ||
+    responsiveUnitPixels(parent, node.axis);
+  if (!(unit > 0)) return;
+  parent._ssgResponsiveUnitPixels = unit;
+  const survivors = responsiveSurvivors(
+    node.children, Math.max(0, Math.floor(pixels / unit)), node.gap || 0);
+  if (survivors === null) return;
+  for (let index = 0; index < parent.children.length; index++) {
+    const child = parent.children[index];
+    const interpreted = node.children[index];
+    if (!interpreted) break;
+    const baseDisplay = interpreted.kind === 'container'
+      ? 'flex' : (interpreted.spacer ? 'inline-block' : '');
+    child.style.display = survivors.has(interpreted.id) ? baseDisplay : 'none';
+  }
+}
+
+function releaseResponsiveObservers(node) {
+  if (node._ssgResponsiveObserved && responsiveObserver) {
+    responsiveObserver.unobserve(node);
+  }
+  node._ssgResponsiveObserved = false;
+  node._ssgResponsiveNode = null;
+  node._ssgResponsiveUnitPixels = null;
+  for (const child of node.children || []) releaseResponsiveObservers(child);
+}
+
+function configureResponsiveChildren(parent, node, refresh) {
+  if (!node.children.some((child) => child.size.kind === SIZE.RESPONSIVE)) {
+    releaseResponsiveObservers(parent);
+    return;
+  }
+  parent._ssgResponsiveNode = node;
+  if (refresh) {
+    parent._ssgResponsiveUnitPixels = null;
+    applyResponsiveChildren(parent);
+  }
+  if (responsiveObserver && !parent._ssgResponsiveObserved) {
+    responsiveObserver.observe(parent);
+    parent._ssgResponsiveObserved = true;
+  }
+}
+
 // Build the DOM for one interpreted render node, mirroring the generic tree: a
 // container becomes a flex div on its axis (a Flex node grows, a gap spaces its
 // children); a leaf becomes a span. `parentAxis` is the axis the node's own Size
@@ -181,7 +262,10 @@ function renderPickerInput(el, sigil) {
 function reconcileChildren(parent, children) {
   const retained = new Set(children);
   for (const child of [...parent.childNodes]) {
-    if (!retained.has(child)) child.remove();
+    if (!retained.has(child)) {
+      releaseResponsiveObservers(child);
+      child.remove();
+    }
   }
   let cursor = parent.firstChild;
   for (const child of children) {
@@ -236,6 +320,7 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
         child, theme, plan, node.axis, inFooterPrompt || isFooterPrompt))
       .filter(Boolean);
     reconcileChildren(div, children);
+    configureResponsiveChildren(div, node, plan.responsive);
     return div;
   }
   // leaf
@@ -657,8 +742,9 @@ function renderStatusActionsNode(el, theme) {
 // Apply a published Size to a flex child ALONG the parent's main axis: Exact => a
 // fixed extent that neither grows nor shrinks (including a literal zero extent, whose
 // content is CLIPPED so it truly occupies zero), Flex => grow to fill (extent is the
-// grow weight, default 1), Auto => content-sized. A Row parent measures width; a
-// Column parent measures height. SIZE ordinals mirror the C++ SizeKind enum.
+// grow weight, default 1), Auto => content-sized, Responsive => published
+// minimum/preferred/growth. A Row parent measures width; a Column parent measures
+// height. SIZE ordinals mirror the C++ SizeKind enum.
 function extentCss(value, axis) {
   return webExtentCss(value, axis);
 }
@@ -672,8 +758,12 @@ function applySize(el, size, parentAxis) {
     el.style.overflow = 'hidden';  // content beyond the extent is clipped, not overflowed
   } else if (size.kind === SIZE.FLEX) {
     el.style.flex = (size.extent > 0 ? size.extent : 1) + ' 1 0';
-  } else {
+  } else if (size.kind === SIZE.AUTO) {
     el.style.flex = '0 0 auto';  // Auto: content extent
+  } else if (size.kind === SIZE.RESPONSIVE) {
+    const responsive = responsiveFlexCss(size, parentAxis);
+    el.style.flex = responsive.flex;
+    el.style[responsive.minimumProperty] = responsive.minimumValue;
   }
 }
 
@@ -907,16 +997,15 @@ function refreshFinder() {
 }
 
 function applyDelta(d) {
-  if (!state.sections || !deltaIsContiguous(state.revision, d)) return false;
+  const applied = applySessionDelta(state.sections, state.revision, d);
+  if (applied.kind !== 'accepted') return applied.kind;
   const pointerBasis = currentPointerBasis();
-  const next = applySessionDeltaCopy(state.sections, d);
-  if (!next) return false;
-  state.sections = next;
-  state.revision = BigInt(d.revision);
+  state.sections = applied.sections;
+  state.revision = applied.revision;
   if (!samePointerBasis(pointerBasis, currentPointerBasis())) {
     invalidatePointerOffsets();
   }
-  return true;
+  return applied.kind;
 }
 
 // Segment the projected text at every syntax-span edge, selection edge, and the
@@ -1531,8 +1620,11 @@ function applyProtocolFrame(buffer) {
     invalidatePointerOffsets();
     syncPickerFromAuthority();
   } else if (inbound === 'delta') {
-    if (!applyDelta(payload)) {
-      reconnect('state gap');
+    const applied = applyDelta(payload);
+    if (applied !== 'accepted') {
+      if (applied !== 'revision-gap') state.sections = null;
+      reconnect(applied === 'revision-gap'
+        ? 'state revision gap' : 'state delta rejected');
       return false;
     }
     frameRenderPlan = browserRenderPlan(payload);

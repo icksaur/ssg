@@ -24,7 +24,8 @@ import {
   encodeScrollLinesInput, encodeScrollFractionInput,
   encodeTabPointerInput, markedTextByteOffset, encodeTreePointerInput,
   applyTreeDelta,
-  applySessionDeltaSections, applySessionDeltaCopy, findSections,
+  applySessionDeltaSections, applySessionDeltaCopy, applySessionDelta,
+  findSections,
   encodeStatusActionPointerInput, encodePromptControlPointerInput,
   encodePublishedUiActionPointerInput, encodeNoticeActionPointerInput,
   externalModificationFromSections, externalFocusHeld,
@@ -650,13 +651,15 @@ check('applyTreeDelta splices the retained tree and resyncs only when inexpressi
 
 // --- UI-VM: profile rejection + schema/state interpretation ---
 import {
-  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, SIZE, SURFACE, SCROLL,
+  firstUnsupportedPrimitive, interpretChrome, WEB_UI_PROFILE, WIDGET, SIZE,
+  SURFACE, SCROLL, AXIS,
   webExtentCss, applyNodeSemanticStyle, firstMalformedNodeStyle,
   getOrCreateStyledNode,
   GenerationRetainedCache, gitAffordanceFromNode,
   preferredKeyboardSurface, browserRenderPlan, settlePointerSelection,
   applyPalettePresenceOverlay, PALETTE_PRESENCE_OP,
   predictedFocusCapture, resolveUiFocusPath, focusUiNode,
+  responsiveSurvivors, responsiveFlexCss,
 } from '../../apps/web/reconcile.mjs';
 
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
@@ -1134,29 +1137,29 @@ check('session deltas dirty only their dependent browser surfaces', () => {
     prompt_status: { changed: false, replacement: null },
     syntax: { spans: null },
   }), {
-    rebuild: false, reconcile: false, repaintTheme: false,
+    rebuild: false, reconcile: false, responsive: false, repaintTheme: false,
     surfaces: [],
   });
   assert.deepEqual(browserRenderPlan({ selection: { replacement: {} } }), {
-    rebuild: false, reconcile: false, repaintTheme: false,
+    rebuild: false, reconcile: false, responsive: false, repaintTheme: false,
     surfaces: [SURFACE.DOCUMENT],
   });
   assert.deepEqual(browserRenderPlan({
     tree: { base_revision: 1n, revision: 2n, providers: [] },
   }), {
-    rebuild: false, reconcile: false, repaintTheme: false,
+    rebuild: false, reconcile: false, responsive: false, repaintTheme: false,
     surfaces: [SURFACE.FILETREE, SURFACE.GITSTATUS, SURFACE.SYMBOLS],
   });
   assert.deepEqual(browserRenderPlan({ ui_presence: { nodes: [] } }), {
-    rebuild: false, reconcile: true, repaintTheme: false,
+    rebuild: false, reconcile: true, responsive: true, repaintTheme: false,
     surfaces: [],
   });
   assert.deepEqual(browserRenderPlan({ palette: {} }), {
-    rebuild: false, reconcile: false, repaintTheme: false,
+    rebuild: false, reconcile: false, responsive: false, repaintTheme: false,
     surfaces: [SURFACE.FINDRESULTS],
   });
   assert.deepEqual(browserRenderPlan({ theme: { replacement: {} } }), {
-    rebuild: false, reconcile: true, repaintTheme: true,
+    rebuild: false, reconcile: true, responsive: false, repaintTheme: true,
     surfaces: [
       SURFACE.TABBAR, SURFACE.FILETREE, SURFACE.GITSTATUS,
       SURFACE.FINDRESULTS, SURFACE.SYMBOLS,
@@ -1260,6 +1263,79 @@ check('interpretChrome preserves the left/middle/right grouping and its sizing',
   assert.equal(center.size.extent, 12);
   // The published role ordinal flows through to the leaf.
   assert.equal(center.role, 11);
+});
+
+check('responsive child selection preserves floors and drops optional children last-first', () => {
+  const optional = (id, minimum, preferred) => ({
+    id, size: { kind: SIZE.RESPONSIVE, minimum, extent: preferred,
+                growth: 0, optional: true },
+  });
+  const required = (id, minimum) => ({
+    id, size: { kind: SIZE.RESPONSIVE, minimum, extent: minimum,
+                growth: 1, optional: false },
+  });
+  const children = [optional('left', 5, 15), required('content', 10),
+                    optional('right', 5, 15)];
+  assert.deepEqual([...responsiveSurvivors(children, 100, 2)],
+                   ['left', 'content', 'right']);
+  assert.deepEqual([...responsiveSurvivors(children, 35, 2)],
+                   ['left', 'content', 'right']);
+  assert.deepEqual([...responsiveSurvivors(children, 17, 2)],
+                   ['left', 'content']);
+  assert.deepEqual([...responsiveSurvivors(children, 10, 2)], ['content']);
+  assert.equal(responsiveSurvivors(
+    [required('a', 10), required('b', 10)], 19, 0), null);
+  assert.deepEqual(
+    responsiveFlexCss(optional('panel', 12, 24).size, AXIS.ROW),
+    { flex: '0 0.5 24ch', minimumProperty: 'minWidth',
+      minimumValue: '12ch' });
+  assert.deepEqual(
+    responsiveFlexCss(required('content', 20).size, AXIS.ROW),
+    { flex: '1 0 20ch', minimumProperty: 'minWidth',
+      minimumValue: '20ch' });
+});
+
+check('legacy UI fixture retains Exact panel and Flex content sizes', () => {
+  const sections = findSections(fixtureMessage('session_semantic_base.hex'));
+  const body = sections.ui.root.container.children.find((node) => node.id === 'body');
+  const panel = body.container.children.find((node) => node.id === 'panel');
+  const content = body.container.children.find((node) => node.id === 'content');
+  assert.deepEqual(panel.size, { kind: 0n, extent: 24n });
+  assert.deepEqual(content.size, { kind: 1n, extent: 0n });
+});
+
+check('interpretChrome rejects unknown and malformed responsive sizes', () => {
+  const make = (size) => {
+    const root = rowNode('root', [leafNode('a', WIDGET.FIELD)]);
+    root.size = size;
+    return interpretChrome(
+      schemaOf(31, root),
+      { generation: 31, nodes: [st('root'), st('a', { value: 'a', label: 'a' })] },
+      presenceForSchema(31, root));
+  };
+  const unknown = rowNode('unknown', []);
+  unknown.size = { kind: 99, extent: 0 };
+  assert.deepEqual(
+    firstUnsupportedPrimitive(schemaOf(31, unknown)),
+    { kind: 'size', ordinal: 99 });
+  assert.equal(make({ kind: 99, extent: 0 }), null);
+  assert.equal(make({ kind: SIZE.RESPONSIVE, extent: 20, minimum: 10,
+                      growth: 1, optional: true }), null);
+  assert.ok(make({ kind: SIZE.RESPONSIVE, extent: 20, minimum: 10,
+                   growth: 0, optional: true }));
+  const mixed = rowNode('mixed', [
+    { ...leafNode('responsive', WIDGET.FIELD),
+      size: { kind: SIZE.RESPONSIVE, extent: 20, minimum: 10,
+              growth: 0, optional: true } },
+    { ...leafNode('auto', WIDGET.FIELD), size: { kind: SIZE.AUTO } },
+  ]);
+  assert.equal(interpretChrome(
+    schemaOf(32, mixed),
+    { generation: 32, nodes: [
+      st('mixed'), st('responsive', { value: 'r', label: 'r' }),
+      st('auto', { value: 'a', label: 'a' }),
+    ] },
+    presenceForSchema(32, mixed)), null);
 });
 
 check('interpretChrome returns null on a generation or node-id mismatch', () => {
@@ -1446,6 +1522,42 @@ check('applySessionDeltaCopy retains unchanged large sections for a caret update
   assert.equal(next.palette, palette);
 });
 
+check('session delta replay permits switching to an older document revision', () => {
+  const sections = {
+    document: {
+      revision: 2n, text: 'dirty scratch', caret: 13n,
+      diff_file_identity: null,
+    },
+  };
+  const delta = {
+    base_revision: 10n,
+    revision: 11n,
+    document: {
+      base_revision: 2n,
+      revision: 1n,
+      start: 0n,
+      erased_bytes: 13n,
+      inserted_text: 'older buffer',
+      diff_file_identity: null,
+    },
+    document_caret: 0n,
+  };
+  const replayed = applySessionDelta(sections, 10n, delta);
+  assert.equal(replayed.kind, 'accepted');
+  assert.deepEqual(replayed.sections.document, {
+    revision: 1n, text: 'older buffer', caret: 0n,
+    diff_file_identity: null,
+  });
+
+  assert.equal(
+    applySessionDelta(sections, 9n, delta).kind, 'revision-gap');
+  const malformed = structuredClone(delta);
+  malformed.document.revision = 2n;
+  assert.equal(
+    applySessionDelta(sections, 10n, malformed).kind,
+    'semantic-rejection');
+});
+
 check('semantic manifest and C++ fixture replay every browser section atomically', () => {
   const manifest = JSON.parse(fs.readFileSync(
     new URL('../fixtures/protocol/session_semantic_fields.json', import.meta.url),
@@ -1503,7 +1615,8 @@ check('mergeBrowserRenderPlans preserves every dirty surface and strongest work'
     mergeBrowserRenderPlans(
       { rebuild: false, reconcile: true, repaintTheme: false, surfaces: [8] },
       { rebuild: true, reconcile: false, repaintTheme: true, surfaces: [3, 8] }),
-    { rebuild: true, reconcile: true, repaintTheme: true, surfaces: [8, 3] });
+    { rebuild: true, reconcile: true, responsive: false,
+      repaintTheme: true, surfaces: [8, 3] });
 });
 
 check('prompt focus uses a typed revision-checked semantic input', () => {

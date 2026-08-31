@@ -33,7 +33,7 @@ enum class Axis : std::uint8_t { Row, Column };
 // axis degrades to "not a viewport" rather than failing.
 enum class ScrollAxis : std::uint8_t { None, Vertical };
 
-enum class SizeKind : std::uint8_t { Exact, Flex, Auto };
+enum class SizeKind : std::uint8_t { Exact, Flex, Auto, Responsive };
 
 // A node's size along its PARENT's axis. Exact reserves `extent` units of the
 // consumer's medium; Flex takes an equal share of whatever remains after the
@@ -57,17 +57,44 @@ public:
         }
         return Size{SizeKind::Exact, extent};
     }
+    [[nodiscard]] static Size minimumFlex(int minimum) {
+        if (minimum < 0) {
+            throw std::invalid_argument(
+                "Size::minimumFlex: negative minimum");
+        }
+        return Size{minimum, minimum, 1, false};
+    }
+    [[nodiscard]] static Size optionalPreferred(int preferred, int minimum) {
+        if (preferred <= 0 || minimum < 0 || minimum > preferred) {
+            throw std::invalid_argument(
+                "Size::optionalPreferred: invalid preferred range");
+        }
+        return Size{minimum, preferred, 0, true};
+    }
 
     [[nodiscard]] SizeKind kind() const noexcept { return kind_; }
     [[nodiscard]] int extent() const noexcept { return extent_; }
+    [[nodiscard]] int minimum() const noexcept { return minimum_; }
+    [[nodiscard]] int growth() const noexcept { return growth_; }
+    [[nodiscard]] bool grows() const noexcept { return growth_ > 0; }
+    [[nodiscard]] bool optional() const noexcept { return optional_; }
 
     bool operator==(const Size&) const = default;
 
 private:
     Size(SizeKind kind, int extent) noexcept : kind_(kind), extent_(extent) {}
+    Size(int minimum, int preferred, int growth, bool optional) noexcept
+        : kind_(SizeKind::Responsive),
+          extent_(preferred),
+          minimum_(minimum),
+          growth_(growth),
+          optional_(optional) {}
 
     SizeKind kind_ = SizeKind::Flex;
     int extent_ = 0;
+    int minimum_ = 0;
+    int growth_ = 0;
+    bool optional_ = false;
 };
 
 // Units reserved inside a node's frame before its children are laid out, in the
