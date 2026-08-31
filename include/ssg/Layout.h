@@ -13,11 +13,14 @@
 // layout.
 
 #include <ssg/Geometry.h>
+#include <ssg/UiNodeState.h>
+#include <ssg/UiPresence.h>
+#include <ssg/UiProfile.h>
 #include <ssg/UiTree.h>
 
+#include <map>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace ssg {
@@ -37,6 +40,9 @@ struct SolvedGridNode {
     Rect rect;
     Rect content;
     ScrollAxis scroll = ScrollAxis::None;
+    ResolvedUiNodeStyle style;
+    std::optional<WidgetDescriptor> widget;
+    std::optional<UiLeafState> leafState;
 
     friend bool operator==(const SolvedGridNode&,
                            const SolvedGridNode&) = default;
@@ -54,5 +60,27 @@ struct SolvedGridTree {
 // throw std::invalid_argument.
 [[nodiscard]] std::optional<SolvedGridTree> solveGridTree(
     const LayoutNode& root, Rect bounds);
+
+struct GridIntrinsicSize {
+    UiNodeId id;
+    GridSize size;
+
+    friend bool operator==(const GridIntrinsicSize&,
+                           const GridIntrinsicSize&) = default;
+};
+
+struct SolveUiFrameResult {
+    std::optional<SolvedGridTree> tree;
+    std::string error;
+
+    [[nodiscard]] bool accepted() const noexcept { return tree.has_value(); }
+};
+
+// Solves one corresponding schema/state/presence frame. Auto leaves require one
+// caller-measured intrinsic size; Auto containers derive theirs from children.
+[[nodiscard]] SolveUiFrameResult solveUiFrame(
+    const ValidatedSchema& schema, const UiStateSection& state,
+    const UiPresenceSection& presence, const ClientUiProfile& profile,
+    const std::vector<GridIntrinsicSize>& intrinsicSizes, Rect bounds);
 
 }  // namespace ssg

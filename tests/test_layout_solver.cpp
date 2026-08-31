@@ -1,7 +1,9 @@
 #include "ssg/Layout.h"
+#include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
 #include <optional>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -183,6 +185,185 @@ TEST(invalidNodeIdentityIsRejected) {
                   std::invalid_argument);
 }
 
+ValidatedSchema validated(UiNode root) {
+    auto result =
+        ValidatedSchema::validate(UiSchema{Generation{4}, std::move(root)});
+    ASSERT_TRUE(result.ok());
+    return result.takeSchema();
+}
+
+UiStateSection stateFor(const ValidatedSchema& schema) {
+    UiStateSection state;
+    state.generation = schema.generation();
+    for (const auto& id : schema.nodeIds()) state.nodes.push_back({id, {}});
+    return state;
+}
+
+UiPresenceSection presenceFor(const ValidatedSchema& schema) {
+    return buildPresenceSection(
+        schema, PresenceConfig::allPresent(schema));
+}
+
+UiNode view(std::string id, Size size = Size::flex(),
+            ViewSurface surface = ViewSurface::Document) {
+    WidgetDescriptor widget;
+    widget.kind = WidgetKind::View;
+    widget.id = id;
+    widget.surface = surface;
+    return {UiNodeId{std::move(id)}, size, UiLeaf{std::move(widget)}};
+}
+
+TEST(uiFrameSolvesOnlyEffectivelyPresentNodes) {
+    UiNode hiddenParent{
+        UiNodeId{"hidden"}, Size::exact(2),
+        UiContainer{Axis::Column, {}, {},
+                    {view("hidden.child", Size::flex())}}};
+    UiNode root{
+        UiNodeId{"root"}, Size::flex(),
+        UiContainer{Axis::Column, {}, Gap::of(1),
+                    {view("header", Size::exact(1)),
+                     std::move(hiddenParent), view("body", Size::flex())}}};
+    auto schema = validated(std::move(root));
+    auto state = stateFor(schema);
+    auto presence = presenceFor(schema);
+    for (auto& record : presence.nodes) {
+        if (record.id == UiNodeId{"hidden"}) record.present = false;
+    }
+
+    auto solved = solveUiFrame(schema, state, presence,
+                               ClientUiProfile::full(), {}, {0, 0, 12, 8});
+    ASSERT_TRUE(solved.accepted());
+    if (!solved.tree) return;
+    ASSERT_EQ(solved.tree->nodes.size(), std::size_t{3});
+    ASSERT_TRUE(solved.tree->find(UiNodeId{"hidden"}) == nullptr);
+    ASSERT_TRUE(solved.tree->find(UiNodeId{"hidden.child"}) == nullptr);
+    ASSERT_EQ(solved.tree->find(UiNodeId{"header"})->rect,
+              (Rect{0, 0, 12, 1}));
+    ASSERT_EQ(solved.tree->find(UiNodeId{"body"})->rect,
+              (Rect{0, 2, 12, 6}));
+}
+
+TEST(uiFrameCarriesResolvedStateStyleAndScrollOwnership) {
+    auto document = view("document");
+    document.style.foreground = SemanticRole::Text;
+    UiNode root{
+        UiNodeId{"root"}, Size::flex(),
+        UiContainer{Axis::Column, Inset::of(1, 1, 1, 1), {},
+                    {std::move(document)}, ScrollAxis::Vertical}};
+    root.style.background = SemanticRole::Canvas;
+    auto schema = validated(std::move(root));
+    auto state = stateFor(schema);
+    for (auto& node : state.nodes) {
+        if (node.id == UiNodeId{"document"}) {
+            node.leaf = UiLeafState{"text", "Document", {}, {}, SemanticRole::Text};
+        }
+    }
+
+    auto solved = solveUiFrame(schema, state, presenceFor(schema),
+                               ClientUiProfile::full(), {}, {0, 0, 10, 6});
+    ASSERT_TRUE(solved.accepted());
+    if (!solved.tree) return;
+    const auto* rootNode = solved.tree->find(UiNodeId{"root"});
+    const auto* documentNode = solved.tree->find(UiNodeId{"document"});
+    ASSERT_TRUE(rootNode != nullptr && documentNode != nullptr);
+    if (!rootNode || !documentNode) return;
+    ASSERT_EQ(rootNode->scroll, ScrollAxis::Vertical);
+    ASSERT_EQ(documentNode->rect, (Rect{1, 1, 8, 4}));
+    ASSERT_EQ(documentNode->style.background,
+              std::optional{SemanticRole::Canvas});
+    ASSERT_EQ(documentNode->style.foreground,
+              std::optional{SemanticRole::Text});
+    ASSERT_TRUE(documentNode->leafState.has_value());
+    ASSERT_TRUE(documentNode->widget.has_value());
+}
+
+TEST(uiFrameResolvesAutoLeavesFromIntrinsicSizes) {
+    UiNode root{
+        UiNodeId{"root"}, Size::flex(),
+        UiContainer{Axis::Row, {}, Gap::of(1),
+                    {view("auto", Size::autoSize(), ViewSurface::Notice),
+                     view("rest", Size::flex())}}};
+    auto schema = validated(std::move(root));
+    auto solved = solveUiFrame(
+        schema, stateFor(schema), presenceFor(schema),
+        ClientUiProfile::full(),
+        {{UiNodeId{"auto"}, GridSize{4, 2}}}, {0, 0, 10, 3});
+    ASSERT_TRUE(solved.accepted());
+    if (!solved.tree) return;
+    ASSERT_EQ(solved.tree->find(UiNodeId{"auto"})->rect,
+              (Rect{0, 0, 4, 3}));
+    ASSERT_EQ(solved.tree->find(UiNodeId{"rest"})->rect,
+              (Rect{5, 0, 5, 3}));
+}
+
+TEST(uiFrameRejectsInconsistentOrUnsupportedFramesVisibly) {
+    UiNode root{
+        UiNodeId{"root"}, Size::flex(),
+        UiContainer{Axis::Column, {}, {}, {view("document")}}};
+    auto schema = validated(std::move(root));
+    auto state = stateFor(schema);
+    state.generation = Generation{9};
+    auto mismatch = solveUiFrame(schema, state, presenceFor(schema),
+                                 ClientUiProfile::full(), {}, {0, 0, 8, 4});
+    ASSERT_FALSE(mismatch.accepted());
+    ASSERT_FALSE(mismatch.error.empty());
+
+    ClientUiProfile unsupported;
+    unsupported.allow(WidgetKind::View);
+    auto rejected = solveUiFrame(schema, stateFor(schema), presenceFor(schema),
+                                 unsupported, {}, {0, 0, 8, 4});
+    ASSERT_FALSE(rejected.accepted());
+    ASSERT_TRUE(rejected.error.find("document") != std::string::npos);
+}
+
+TEST(uiFrameRejectsUnrepresentableIntrinsicExtent) {
+    UiNode root{
+        UiNodeId{"root"}, Size::flex(),
+        UiContainer{
+            Axis::Row, {}, {},
+            {view("a", Size::exact(std::numeric_limits<int>::max())),
+             view("b", Size::exact(std::numeric_limits<int>::max()))}}};
+    auto schema = validated(std::move(root));
+    auto solved = solveUiFrame(schema, stateFor(schema), presenceFor(schema),
+                               ClientUiProfile::full(), {}, {0, 0, 8, 4});
+    ASSERT_FALSE(solved.accepted());
+    ASSERT_FALSE(solved.error.empty());
+}
+
+TEST(generatedWholeScreenSolvesEveryPresentNodeExactlyOnce) {
+    UiSchema authored{
+        Generation{4},
+        assembleWholeScreen({}, "help.open", StyleDimensions{}, "> ",
+                            std::nullopt)
+            .root};
+    auto result = ValidatedSchema::validate(std::move(authored));
+    ASSERT_TRUE(result.ok());
+    if (!result.ok()) return;
+    auto schema = result.takeSchema();
+    std::vector<GridIntrinsicSize> intrinsic;
+    const auto collect = [&](const auto& self, const UiNode& node) -> void {
+        if (node.size.kind() == SizeKind::Auto && node.isLeaf()) {
+            intrinsic.push_back({node.id, {1, 1}});
+        }
+        if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+            for (const auto& child : container->children) self(self, child);
+        }
+    };
+    collect(collect, schema.schema().root);
+
+    auto solved =
+        solveUiFrame(schema, stateFor(schema), presenceFor(schema),
+                     ClientUiProfile::full(), intrinsic, {0, 0, 200, 80});
+    ASSERT_TRUE(solved.accepted());
+    if (!solved.tree) return;
+    ASSERT_EQ(solved.tree->nodes.size(), schema.nodeIds().size());
+    std::set<UiNodeId> solvedIds;
+    for (const auto& node : solved.tree->nodes) {
+        ASSERT_TRUE(solvedIds.insert(node.id).second);
+    }
+    ASSERT_EQ(solvedIds, schema.nodeIds());
+}
+
 // The lifted constraint vocabulary excludes invalid geometry at construction: a
 // negative extent or inset edge would make the solver emit a negative or enlarged
 // rectangle, so it can never be built.
@@ -234,6 +415,12 @@ int main() {
     RUN(scrollOwnershipSurvivesSolving);
     RUN(insetAndGapOverflowReturnFailure);
     RUN(invalidNodeIdentityIsRejected);
+    RUN(uiFrameSolvesOnlyEffectivelyPresentNodes);
+    RUN(uiFrameCarriesResolvedStateStyleAndScrollOwnership);
+    RUN(uiFrameResolvesAutoLeavesFromIntrinsicSizes);
+    RUN(uiFrameRejectsInconsistentOrUnsupportedFramesVisibly);
+    RUN(uiFrameRejectsUnrepresentableIntrinsicExtent);
+    RUN(generatedWholeScreenSolvesEveryPresentNodeExactlyOnce);
     RUN(constraintsRejectNegativeGeometryAtConstruction);
     RUN(solveGridTreeRejectsAutoSizeDistinctly);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
