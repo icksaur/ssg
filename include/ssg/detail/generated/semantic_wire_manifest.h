@@ -403,6 +403,15 @@
     X(Show, 0) \
     X(Hide, 1)
 
+#define SSG_SETTING_VALUE_KIND_ENUMERATORS(X) \
+    X(Boolean, 0) \
+    X(Uint32, 1) \
+    X(Uint64, 2) \
+    X(IndentStyle, 3) \
+    X(LineEnding, 4) \
+    X(TextEncoding, 5) \
+    X(Text, 6)
+
 namespace ssg::detail::generated {
 
 enum class ManifestLifecycle : std::uint8_t {
@@ -1931,6 +1940,37 @@ inline constexpr std::array kPalettePresenceOpKindWireReservations{
 inline constexpr std::array kPalettePresenceOpKindCurrentWireNames{
     std::string_view{"show"},
     std::string_view{"hide"},
+};
+
+inline constexpr WireEnumFact kSettingValueKindWireEnum{
+    "SettingValueKind", UnknownEnumPolicy::Reject, 0,
+};
+inline constexpr std::array kSettingValueKindWireValues{
+    WireEnumValueFact{"Boolean", "boolean", 0, ManifestLifecycle::Current},
+    WireEnumValueFact{"Uint32", "uint32", 1, ManifestLifecycle::Current},
+    WireEnumValueFact{"Uint64", "uint64", 2, ManifestLifecycle::Current},
+    WireEnumValueFact{"IndentStyle", "indent_style", 3, ManifestLifecycle::Current},
+    WireEnumValueFact{"LineEnding", "line_ending", 4, ManifestLifecycle::Current},
+    WireEnumValueFact{"TextEncoding", "text_encoding", 5, ManifestLifecycle::Current},
+    WireEnumValueFact{"Text", "text", 6, ManifestLifecycle::Current},
+};
+inline constexpr std::array kSettingValueKindWireReservations{
+    WireEnumValueFact{"Boolean", "boolean", 0, ManifestLifecycle::Current},
+    WireEnumValueFact{"Uint32", "uint32", 1, ManifestLifecycle::Current},
+    WireEnumValueFact{"Uint64", "uint64", 2, ManifestLifecycle::Current},
+    WireEnumValueFact{"IndentStyle", "indent_style", 3, ManifestLifecycle::Current},
+    WireEnumValueFact{"LineEnding", "line_ending", 4, ManifestLifecycle::Current},
+    WireEnumValueFact{"TextEncoding", "text_encoding", 5, ManifestLifecycle::Current},
+    WireEnumValueFact{"Text", "text", 6, ManifestLifecycle::Current},
+};
+inline constexpr std::array kSettingValueKindCurrentWireNames{
+    std::string_view{"boolean"},
+    std::string_view{"uint32"},
+    std::string_view{"uint64"},
+    std::string_view{"indent_style"},
+    std::string_view{"line_ending"},
+    std::string_view{"text_encoding"},
+    std::string_view{"text"},
 };
 
 }  // namespace ssg::detail::generated

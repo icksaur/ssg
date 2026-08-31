@@ -700,6 +700,19 @@ export const wireEnums = Object.freeze([
     ],
     unknown: { policy: 'reject' },
   },
+  {
+    symbol: 'SettingValueKind', jsName: 'SETTING_VALUE_KIND',
+    values: [
+      { symbol: 'Boolean', wireName: 'boolean', ordinal: 0, lifecycle: lifecycle.CURRENT },
+      { symbol: 'Uint32', wireName: 'uint32', ordinal: 1, lifecycle: lifecycle.CURRENT },
+      { symbol: 'Uint64', wireName: 'uint64', ordinal: 2, lifecycle: lifecycle.CURRENT },
+      { symbol: 'IndentStyle', wireName: 'indent_style', ordinal: 3, lifecycle: lifecycle.CURRENT },
+      { symbol: 'LineEnding', wireName: 'line_ending', ordinal: 4, lifecycle: lifecycle.CURRENT },
+      { symbol: 'TextEncoding', wireName: 'text_encoding', ordinal: 5, lifecycle: lifecycle.CURRENT },
+      { symbol: 'Text', wireName: 'text', ordinal: 6, lifecycle: lifecycle.CURRENT },
+    ],
+    unknown: { policy: 'reject' },
+  },
 ]);
 
 const optional = (wireName, type) =>
@@ -1028,6 +1041,879 @@ const clientInputResultSchema = record([
   required('picker_activation', nullable(ref('PickerActivation'))),
 ]);
 
+const uint8 = Object.freeze({ kind: 'uint', maxValue: 255 });
+const fixedBytes = (length) => Object.freeze({ kind: 'bytes', length });
+const enumSizedArrayOf = (items, enumName) =>
+  arrayOf(items, { length: { enum: enumName, values: 'current' } });
+
+const sessionTopologySchema = record([
+  optional('active_workspace', nullable('uint')),
+  optional('active_view', nullable('uint')),
+]);
+
+const clientSnapshotStateSchema = record([
+  required('client_id', 'uint'),
+  required('view_id', 'uint'),
+  required('capabilities', arrayOf('text')),
+]);
+
+const documentPositionSchema = record([
+  required('byte_offset', 'uint'),
+  required('line', 'uint'),
+  required('cell', 'uint'),
+]);
+
+const documentViewStateSchema = record([
+  required('revision', 'uint'),
+  required('text', 'text'),
+  required('caret', 'uint'),
+  optional('diff_file_identity', nullable('text')),
+]);
+
+const documentDeltaSchema = record([
+  required('base_revision', 'uint'),
+  required('revision', 'uint'),
+  required('start', 'uint'),
+  required('erased_bytes', 'uint'),
+  required('inserted_text', 'text'),
+  optional('diff_file_identity', nullable('text')),
+]);
+
+const selectionSchema = record([
+  required('anchor', ref('DocumentPosition')),
+  required('active', ref('DocumentPosition')),
+]);
+
+const selectionSetSchema = record([
+  required('selections', arrayOf(ref('Selection'), { nonEmpty: true })),
+]);
+
+const selectionSetDeltaSchema = record([
+  required('changed', 'bool'),
+  optional('replacement', nullable(ref('SelectionSet'))),
+]);
+
+const historyViewStateSchema = record([
+  required('can_undo', 'bool'),
+  required('can_redo', 'bool'),
+  required('retained_bytes', 'uint'),
+]);
+
+const historyDeltaSchema = record([
+  required('changed', 'bool'),
+  optional('replacement', nullable(ref('HistoryViewState'))),
+]);
+
+const clipboardWriteSchema = record([
+  required('id', 'uint'),
+  required('request_revision', 'uint'),
+  required('text', 'text'),
+]);
+
+const clipboardViewStateSchema = record([
+  required('fragments', arrayOf('text')),
+  required('plain_text', 'text'),
+  optional('system_write', nullable(ref('ClipboardWrite'))),
+]);
+
+const clipboardDeltaSchema = record([
+  required('changed', 'bool'),
+  optional('replacement', nullable(ref('ClipboardViewState'))),
+]);
+
+const statusActionSchema = record([
+  required('id', 'text'),
+  required('accessible_label', 'text'),
+  required('command_id', 'text'),
+]);
+
+const statusItemViewSchema = record([
+  required('id', 'uint'),
+  required('priority', enumType('StatusPriority')),
+  required('generation', 'uint'),
+  required('accessible_label', 'text'),
+  required('actions', arrayOf(ref('StatusAction'))),
+]);
+
+const statusViewStateSchema = record([
+  required('items', arrayOf(ref('StatusItemView'))),
+  required('selected', 'uint'),
+]);
+
+const promptStatusViewStateSchema = record([
+  optional('active_kind', nullable(enumType('PromptKind'))),
+  required('status', ref('StatusViewState')),
+]);
+
+const promptStatusDeltaSchema = record([
+  required('changed', 'bool'),
+  optional('replacement', nullable(ref('PromptStatusViewState'))),
+]);
+
+const searchResultSchema = record([
+  required('mode', enumType('SearchMode')),
+  required('path', 'text'),
+  required('label', 'text'),
+  optional('line', nullable('uint')),
+  required('column', 'uint'),
+  required('score', boundedInt),
+]);
+
+const searchViewStateSchema = record([
+  required('revision', 'uint'),
+  required('palette_open', 'bool'),
+  required('query', 'text'),
+  required('mode', enumType('SearchMode')),
+  required('results', arrayOf(ref('SearchResult'))),
+  optional('selected_index', nullable('uint')),
+  required('search_generation', 'uint'),
+  required('searching', 'bool'),
+]);
+
+const searchDeltaSchema = record([
+  required('base_revision', 'uint'),
+  required('revision', 'uint'),
+  optional('state', nullable(ref('SearchViewState'))),
+]);
+
+const findOptionsSchema = record([
+  required('case_sensitive', 'bool'),
+  required('whole_word', 'bool'),
+  required('regex', 'bool'),
+  required('selection_only', 'bool'),
+]);
+
+const findMatchSchema = record([
+  required('begin', 'uint'),
+  required('end', 'uint'),
+]);
+
+const findReplaceViewStateSchema = record([
+  required('generation', 'uint'),
+  required('open', 'bool'),
+  required('replace_mode', 'bool'),
+  required('source_revision', 'uint'),
+  required('query', 'text'),
+  required('replacement', 'text'),
+  required('options', ref('FindOptions')),
+  required('matches', arrayOf(ref('FindMatch'))),
+  optional('active_match', nullable('uint')),
+  required('error', enumType('FindReplaceError')),
+  required('message', 'text'),
+]);
+
+const findReplaceDeltaSchema = record([
+  required('changed', 'bool'),
+  required('base_generation', 'uint'),
+  optional('replacement', nullable(ref('FindReplaceViewState'))),
+]);
+
+const settingValueSchema = Object.freeze({
+  kind: 'discriminated-record',
+  unknownFields: 'allow',
+  discriminator: { wireName: 'index', enum: 'SettingValueKind' },
+  fields: [],
+  variants: [
+    { value: 'Boolean', fields: [required('value', 'bool')] },
+    { value: 'Uint32', fields: [required('value', uint32)] },
+    { value: 'Uint64', fields: [required('value', 'uint')] },
+    {
+      value: 'IndentStyle',
+      fields: [required('value', enumType('IndentStyle'))],
+    },
+    {
+      value: 'LineEnding',
+      fields: [required('value', enumType('LineEnding'))],
+    },
+    {
+      value: 'TextEncoding',
+      fields: [required('value', enumType('TextEncoding'))],
+    },
+    { value: 'Text', fields: [required('value', 'text')] },
+  ],
+});
+
+const effectiveSettingSchema = record([
+  required('value', ref('SettingValue')),
+  required('source', enumType('SettingScope')),
+]);
+
+const settingViewEntrySchema = record([
+  required('key', enumType('SettingKey')),
+  required('effective', ref('EffectiveSetting')),
+]);
+
+const settingsViewStateSchema = record([
+  required('entries', enumSizedArrayOf(ref('SettingViewEntry'), 'SettingKey')),
+]);
+
+const settingsDeltaSchema = record([
+  required('key', enumType('SettingKey')),
+  required('before', ref('EffectiveSetting')),
+  required('after', ref('EffectiveSetting')),
+]);
+
+const settingsSectionDeltaSchema = record([
+  required('changes', arrayOf(ref('SettingsDelta'))),
+]);
+
+const keyBindingSchema = record([
+  required('sequence', arrayOf(ref('KeyStroke'))),
+  required('command_id', 'text'),
+  required('context', 'text'),
+]);
+
+const keymapViewStateSchema = record([
+  required('name', 'text'),
+  required('bindings', arrayOf(ref('KeyBinding'))),
+]);
+
+const keymapDeltaSchema = record([
+  required('changed', 'bool'),
+  optional('replacement', nullable(ref('KeymapViewState'))),
+]);
+
+const textEncodingStatusSchema = record([
+  required('encoding', enumType('TextEncoding')),
+  required('line_ending', enumType('LineEnding')),
+  required('had_bom', 'bool'),
+  required('final_newline', 'bool'),
+]);
+
+const textEncodingViewStateSchema = record([
+  required('status', ref('TextEncodingStatus')),
+]);
+
+const textEncodingDeltaSchema = record([
+  required('before', ref('TextEncodingViewState')),
+  required('after', ref('TextEncodingViewState')),
+]);
+
+const journalDocumentKeySchema = Object.freeze({
+  kind: 'discriminated-record',
+  unknownFields: 'allow',
+  discriminator: { wireName: 'kind', enum: 'JournalDocumentKeyKind' },
+  fields: [],
+  variants: [
+    { value: 'Saved', fields: [required('path', 'text')] },
+    {
+      value: 'Untitled',
+      fields: [required('untitled_id', ref('UntitledDocumentId'))],
+    },
+  ],
+});
+
+const tabStateSchema = record([
+  required('id', 'uint'),
+  required('kind', enumType('TabKind')),
+  optional('document', nullable('uint')),
+  optional('document_key', nullable(ref('JournalDocumentKey'))),
+  required('content_identity', 'text'),
+  required('label', 'text'),
+  required('mode', enumType('DocumentMode')),
+  required('dirty', 'bool'),
+  required('recovery', enumType('TabRecoveryBadge')),
+]);
+
+const tabViewStateSchema = record([
+  required('tabs', arrayOf(ref('TabState'))),
+  optional('active', nullable('uint')),
+]);
+
+const tabDeltaSchema = record([
+  optional('state', nullable(ref('TabViewState'))),
+]);
+
+const diffWordRangeSchema = record([
+  required('byte_start', 'uint'),
+  required('byte_length', 'uint'),
+]);
+
+const diffLineChangeSchema = record([
+  required('kind', enumType('DiffLineKind')),
+  optional('baseline_line', nullable('uint')),
+  optional('target_line', nullable('uint')),
+  // These additive fields accept absence but reject an explicit null.
+  optional('target_added_word_ranges', arrayOf(ref('DiffWordRange'))),
+  optional('baseline_removed_word_ranges', arrayOf(ref('DiffWordRange'))),
+  optional('target_modified_word_ranges', arrayOf(ref('DiffWordRange'))),
+]);
+
+const diffHunkSchema = record([
+  required('baseline_start', 'uint'),
+  required('target_start', 'uint'),
+  required('baseline_lines', arrayOf('text')),
+  required('target_lines', arrayOf('text')),
+]);
+
+const diffFileViewSchema = record([
+  required('id', 'text'),
+  required('path', 'text'),
+  optional('previous_path', nullable('text')),
+  required('deleted', 'bool'),
+  // Absent/null is the exact predecessor form; typed conversion infers it.
+  optional('status', nullable(enumType('DiffFileStatus'))),
+  required('baseline_identity', 'text'),
+  required('current_content', 'text'),
+  required('hunks', arrayOf(ref('DiffHunk'))),
+  required('changed_lines', arrayOf(ref('DiffLineChange'))),
+]);
+
+const diffViewStateSchema = record([
+  required('revision', 'uint'),
+  required('files', arrayOf(ref('DiffFileView'))),
+]);
+
+const diffDeltaSchema = record([
+  required('base_revision', 'uint'),
+  required('revision', 'uint'),
+  required('upserted', arrayOf(ref('DiffFileView'))),
+  required('removed', arrayOf('text')),
+]);
+
+const externalActionAffordanceSchema = record([
+  required('action', enumType('ExternalAction')),
+  required('label', 'text'),
+  required('command', 'text'),
+]);
+
+const externalDocumentViewSchema = record([
+  required('id', 'text'),
+  required('path', 'text'),
+  required('status', enumType('ExternalDocumentStatus')),
+  required('accessible_status', 'text'),
+  required('status_label', 'text'),
+  required('actions', arrayOf(ref('ExternalActionAffordance'))),
+]);
+
+const externalModificationViewStateSchema = record([
+  required('revision', 'uint'),
+  required('message', 'text'),
+  required('files', arrayOf(ref('ExternalDocumentView'))),
+  optional('selected', nullable('text')),
+]);
+
+const externalModificationDeltaSchema = record([
+  required('base_revision', 'uint'),
+  required('revision', 'uint'),
+  required('message', 'text'),
+  required('upserted', arrayOf(ref('ExternalDocumentView'))),
+  required('removed', arrayOf('text')),
+  optional('selected', nullable('text')),
+]);
+
+const viewportDimensionsSchema = record([
+  required('columns', uint32),
+  required('rows', uint32),
+]);
+
+const followScrollOffsetSchema = record([
+  required('first_row', 'uint'),
+  required('first_column', 'uint'),
+]);
+
+const followTargetSchema = record([
+  required('id', 'text'),
+  required('path', 'text'),
+  required('deleted', 'bool'),
+  required('newest_hunk_line', 'uint'),
+  required('source_revision', 'uint'),
+]);
+
+const followClientViewSchema = record([
+  required('client', 'uint'),
+  required('dimensions', ref('ViewportDimensions')),
+  required('offset', ref('FollowScrollOffset')),
+]);
+
+const followEditsViewStateSchema = record([
+  required('generation', 'uint'),
+  required('mode', enumType('FollowMode')),
+  required('active_pane', uint32),
+  optional('active_target', nullable(ref('FollowTarget'))),
+  required('queued_targets', arrayOf(ref('FollowTarget'))),
+  required('clients', arrayOf(ref('FollowClientView'))),
+]);
+
+const followEditsDeltaSchema = record([
+  required('base_generation', 'uint'),
+  required('generation', 'uint'),
+  optional('replacement', nullable(ref('FollowEditsViewState'))),
+]);
+
+const treeProviderBindingSchema = record([
+  required('provider_id', 'text'),
+  required('kind', enumType('TreeProviderKind')),
+]);
+
+const treeNodeCommandSchema = record([
+  required('id', 'text'),
+  required('label', 'text'),
+]);
+
+const gitTreeAffordanceSchema = record([
+  required('status', enumType('GitTreeStatus')),
+  required('short_label', 'text'),
+  required('role', enumType('SemanticRole')),
+]);
+
+const treeNodeSchema = record([
+  required('id', 'text'),
+  optional('parent_id', nullable('text')),
+  required('label', 'text'),
+  required('kind', enumType('TreeNodeKind')),
+  optional('icon', nullable('text')),
+  required('commands', arrayOf(ref('TreeNodeCommand'))),
+  optional('git_status', nullable(ref('GitTreeAffordance'))),
+  optional('workspace_path', nullable('text')),
+  optional('source_line', nullable(uint32)),
+  required('expandable', 'bool'),
+]);
+
+const treeNodeViewSchema = record([
+  required('node', ref('TreeNode')),
+  required('depth', 'uint'),
+  required('expanded', 'bool'),
+]);
+
+const treeProviderViewSchema = record([
+  required('provider_id', 'text'),
+  required('kind', enumType('TreeProviderKind')),
+  required('nodes', arrayOf(ref('TreeNodeView'))),
+  optional('selected', nullable('text')),
+]);
+
+const treeViewStateSchema = record([
+  required('revision', 'uint'),
+  required('providers', arrayOf(ref('TreeProviderView'))),
+  // Absence invokes predecessor normalization; explicit null remains no binding.
+  optional('active_binding', nullable(ref('TreeProviderBinding'))),
+]);
+
+const treeProviderDeltaSchema = record([
+  required('provider_id', 'text'),
+  required('kind', enumType('TreeProviderKind')),
+  required('remove_provider', 'bool'),
+  required('start', 'uint'),
+  required('erase_count', 'uint'),
+  required('insert', arrayOf(ref('TreeNodeView'))),
+  optional('selected', nullable('text')),
+]);
+
+const treeDeltaSchema = record([
+  required('base_revision', 'uint'),
+  required('revision', 'uint'),
+  required('snapshot_required', 'bool'),
+  required('providers', arrayOf(ref('TreeProviderDelta'))),
+  required('provider_order', arrayOf('text')),
+  optional('active_binding', nullable(ref('TreeProviderBinding'))),
+]);
+
+const syntaxRangeSchema = record([
+  required('begin', 'uint'),
+  required('end', 'uint'),
+]);
+
+const syntaxSpanSchema = record([
+  required('begin', 'uint'),
+  required('end', 'uint'),
+  required('scope', enumType('SyntaxScope')),
+]);
+
+const syntaxBracketPairSchema = record([
+  required('open', 'uint'),
+  required('close', 'uint'),
+  required('kind', enumType('BracketKind')),
+  required('depth', uint32),
+]);
+
+const unmatchedBracketSchema = record([
+  required('offset', 'uint'),
+  required('kind', enumType('BracketKind')),
+  required('role', enumType('BracketRole')),
+]);
+
+const commentTokenSchema = record([
+  required('range', ref('SyntaxRange')),
+  required('role', enumType('CommentTokenRole')),
+]);
+
+const commentRangeSchema = record([
+  required('range', ref('SyntaxRange')),
+  required('kind', enumType('CommentKind')),
+]);
+
+const lineIndentationSchema = record([
+  required('line', 'uint'),
+  required('line_start', 'uint'),
+  required('content_start', 'uint'),
+  required('spaces', uint32),
+  required('tabs', uint32),
+  required('columns', uint32),
+  required('blank', 'bool'),
+]);
+
+const syntaxViewStateSchema = record([
+  required('revision', 'uint'),
+  required('language', 'text'),
+  required('text_bytes', 'uint'),
+  required('spans', arrayOf(ref('SyntaxSpan'))),
+  required('bracket_pairs', arrayOf(ref('SyntaxBracketPair'))),
+  required('unmatched_brackets', arrayOf(ref('UnmatchedBracket'))),
+  required('comment_tokens', arrayOf(ref('CommentToken'))),
+  required('comment_ranges', arrayOf(ref('CommentRange'))),
+  required('indentation', arrayOf(ref('LineIndentation'))),
+]);
+
+const syntaxDeltaSchema = record([
+  required('base_revision', 'uint'),
+  required('revision', 'uint'),
+  optional('language', nullable('text')),
+  optional('text_bytes', nullable('uint')),
+  optional('spans', nullable(arrayOf(ref('SyntaxSpan')))),
+  optional('bracket_pairs', nullable(arrayOf(ref('SyntaxBracketPair')))),
+  optional('unmatched_brackets', nullable(arrayOf(ref('UnmatchedBracket')))),
+  optional('comment_tokens', nullable(arrayOf(ref('CommentToken')))),
+  optional('comment_ranges', nullable(arrayOf(ref('CommentRange')))),
+  optional('indentation', nullable(arrayOf(ref('LineIndentation')))),
+]);
+
+const lspPositionSchema = record([
+  required('line', 'uint'),
+  required('character', 'uint'),
+]);
+
+const lspRangeSchema = record([
+  required('start', ref('LspPosition')),
+  required('end', ref('LspPosition')),
+]);
+
+const lspDiagnosticSchema = record([
+  required('range', ref('LspRange')),
+  optional('severity', nullable(enumType('LspDiagnosticSeverity'))),
+  required('code', 'text'),
+  required('message', 'text'),
+]);
+
+const lspDocumentDiagnosticsSchema = record([
+  required('uri', 'text'),
+  required('revision', 'uint'),
+  required('diagnostics', arrayOf(ref('LspDiagnostic'))),
+]);
+
+const lspSyncViewStateSchema = record([
+  required('revision', 'uint'),
+  required('documents', arrayOf(ref('LspDocumentDiagnostics'))),
+]);
+
+const lspSyncDeltaSchema = record([
+  required('base_revision', 'uint'),
+  required('revision', 'uint'),
+  optional('state', nullable(ref('LspSyncViewState'))),
+]);
+
+const lspCompletionItemSchema = record([
+  required('label', 'text'),
+  required('detail', 'text'),
+  required('sort_text', 'text'),
+  required('insert_text', 'text'),
+  optional('replacement_range', nullable(ref('LspRange'))),
+]);
+
+const lspCompletionViewStateSchema = record([
+  required('visible', 'bool'),
+  required('loading', 'bool'),
+  required('items', arrayOf(ref('LspCompletionItem'))),
+  optional('selected_index', nullable('uint')),
+]);
+
+const lspHoverSchema = record([
+  required('contents', 'text'),
+  optional('range', nullable(ref('LspRange'))),
+]);
+
+const lspNavigationTargetSchema = record([
+  required('uri', 'text'),
+  required('range', ref('LspRange')),
+]);
+
+const lspNavigationViewStateSchema = record([
+  required('targets', arrayOf(ref('LspNavigationTarget'))),
+  optional('selected_index', nullable('uint')),
+  required('user_navigation', 'bool'),
+  required('reveal_primary_caret', 'bool'),
+]);
+
+const lspFeatureViewStateSchema = record([
+  required('revision', 'uint'),
+  required('completion', ref('LspCompletionViewState')),
+  optional('hover', nullable(ref('LspHover'))),
+  required('navigation', ref('LspNavigationViewState')),
+  required('status', 'text'),
+]);
+
+const lspFeatureDeltaSchema = record([
+  required('base_revision', 'uint'),
+  required('revision', 'uint'),
+  optional('state', nullable(ref('LspFeatureViewState'))),
+]);
+
+const srgbColorSchema = record([
+  required('red', uint8),
+  required('green', uint8),
+  required('blue', uint8),
+]);
+
+const themeSnapshotSchema = record([
+  required(
+    'role_colors',
+    enumSizedArrayOf(ref('SrgbColor'), 'SemanticRole')),
+  required(
+    'syntax_colors',
+    enumSizedArrayOf(ref('SrgbColor'), 'SyntaxScope')),
+]);
+
+const themeSectionDeltaSchema = record([
+  optional('replacement', nullable(ref('ThemeSnapshot'))),
+]);
+
+const paletteCandidateSchema = record([
+  required('id', 'text'),
+  required('label', 'text'),
+  required('detail', 'text'),
+]);
+
+const matcherParametersSchema = record([
+  required('base_score', boundedInt),
+  required('word_boundary_bonus', boundedInt),
+  required('contiguity_bonus', boundedInt),
+  required('exact_case_bonus', boundedInt),
+  required('length_cap', boundedInt),
+]);
+
+const paletteViewStateSchema = record([
+  // Pairing, the File/Command subset, and nonzero activation are semantic checks.
+  required('active_mode', nullable(enumType('SearchMode'))),
+  required('activation_id', nullable('uint')),
+  required('command_candidates', arrayOf(ref('PaletteCandidate'))),
+  required('command_open_command_id', nonEmptyText),
+  required('file_candidates', arrayOf(ref('PaletteCandidate'))),
+  required('file_open_command_id', nonEmptyText),
+  required('presence_overlay', ref('PalettePresenceOverlay')),
+  required('parameters', ref('MatcherParameters')),
+  required('max_parameter_magnitude', 'int'),
+  required('max_candidate_bytes', 'int'),
+]);
+
+const noticeActionSchema = record([
+  required('id', nonEmptyText),
+  required('label', nonEmptyText),
+  required('command', nonEmptyText),
+]);
+
+const noticeViewSchema = record([
+  required('text', nonEmptyText),
+  required('actions', arrayOf(ref('NoticeAction'), { nonEmpty: true })),
+]);
+
+const noticeViewSectionDeltaSchema = record([
+  required('changed', 'bool'),
+  optional('replacement', nullable(ref('NoticeView'))),
+]);
+
+const sessionSnapshotSectionsSchema = record([
+  required('document', ref('DocumentViewState')),
+  required('selection', ref('SelectionSet')),
+  required('history', ref('HistoryViewState')),
+  required('clipboard', ref('ClipboardViewState')),
+  required('prompt_status', ref('PromptStatusViewState')),
+  required('search', ref('SearchViewState')),
+  required('find_replace', ref('FindReplaceViewState')),
+  required('settings', ref('SettingsViewState')),
+  required('keymap', ref('KeymapViewState')),
+  required('text_encoding', ref('TextEncodingViewState')),
+  required('tabs', ref('TabViewState')),
+  required('diff', ref('DiffViewState')),
+  required('external_modification', ref('ExternalModificationViewState')),
+  required('follow_edits', ref('FollowEditsViewState')),
+  required('tree', ref('TreeViewState')),
+  required('syntax', ref('SyntaxViewState')),
+  required('lsp_sync', ref('LspSyncViewState')),
+  required('lsp_features', ref('LspFeatureViewState')),
+  required('theme', ref('ThemeSnapshot')),
+  required('palette', ref('PaletteViewState')),
+  // Optional because the exact predecessor carries ui/ui_state/ui_presence.
+  optional('ui_frame', ref('UiFrame')),
+  // Additive predecessor-tolerant fields: absent has its documented default.
+  optional('notice_view', nullable(ref('NoticeView'))),
+  optional('watcher_available', 'bool'),
+  // Deliberately omitted and therefore permissive unknown fields:
+  // focus, prompt_view, external_focus_held, ui, ui_state, ui_presence.
+]);
+
+const sessionSnapshotSchema = record([
+  required('revision', 'uint'),
+  required('topology', ref('SessionTopology')),
+  required('client', ref('ClientSnapshotState')),
+  required('sections', ref('SessionSnapshotSections')),
+  // The frozen optional presentation field is deliberately omitted. record()
+  // preserves its permissive root treatment as an unknown field.
+]);
+
+const sessionDeltaSchema = record([
+  required('base_revision', 'uint'),
+  required('revision', 'uint'),
+  required('client_id', 'uint'),
+  required('view_id', 'uint'),
+  required('capabilities', arrayOf('text')),
+  optional('topology', nullable(ref('SessionTopology'))),
+  optional('document', nullable(ref('DocumentDelta'))),
+  optional('document_caret', nullable('uint')),
+  required('selection', ref('SelectionSetDelta')),
+  required('history', ref('HistoryDelta')),
+  required('clipboard', ref('ClipboardDelta')),
+  required('prompt_status', ref('PromptStatusDelta')),
+  required('search', ref('SearchDelta')),
+  required('find_replace', ref('FindReplaceDelta')),
+  required('settings', ref('SettingsSectionDelta')),
+  required('keymap', ref('KeymapDelta')),
+  optional('text_encoding', nullable(ref('TextEncodingDelta'))),
+  required('tabs', ref('TabDelta')),
+  required('diff', ref('DiffDelta')),
+  required('external_modification', ref('ExternalModificationDelta')),
+  required('follow_edits', ref('FollowEditsDelta')),
+  required('tree', ref('TreeDelta')),
+  required('syntax', ref('SyntaxDelta')),
+  required('lsp_sync', ref('LspSyncDelta')),
+  required('lsp_features', ref('LspFeatureDelta')),
+  required('theme', ref('ThemeSectionDelta')),
+  // Both fields are absent on predecessors and absent means unchanged.
+  optional('palette', nullable(ref('PaletteViewState'))),
+  optional('ui_frame_delta', ref('UiFrameDelta')),
+  optional('notice_view', ref('NoticeViewSectionDelta')),
+  optional('watcher_available', nullable('bool')),
+  // Deliberately omitted and therefore permissive unknown fields:
+  // focus, prompt_view, external_focus_held, ui, ui_state, ui_presence,
+  // style, shell, viewport, selection_nav, prompt_projection, tree_windows.
+]);
+
+const semanticSectionWireTypesToAppend = Object.freeze([
+  { symbol: 'SessionTopology', schema: sessionTopologySchema },
+  { symbol: 'ClientSnapshotState', schema: clientSnapshotStateSchema },
+  { symbol: 'DocumentPosition', schema: documentPositionSchema },
+  { symbol: 'DocumentViewState', schema: documentViewStateSchema },
+  { symbol: 'DocumentDelta', schema: documentDeltaSchema },
+  { symbol: 'Selection', schema: selectionSchema },
+  { symbol: 'SelectionSet', schema: selectionSetSchema },
+  { symbol: 'SelectionSetDelta', schema: selectionSetDeltaSchema },
+  { symbol: 'HistoryViewState', schema: historyViewStateSchema },
+  { symbol: 'HistoryDelta', schema: historyDeltaSchema },
+  { symbol: 'ClipboardWrite', schema: clipboardWriteSchema },
+  { symbol: 'ClipboardViewState', schema: clipboardViewStateSchema },
+  { symbol: 'ClipboardDelta', schema: clipboardDeltaSchema },
+  { symbol: 'StatusAction', schema: statusActionSchema },
+  { symbol: 'StatusItemView', schema: statusItemViewSchema },
+  { symbol: 'StatusViewState', schema: statusViewStateSchema },
+  { symbol: 'PromptStatusViewState', schema: promptStatusViewStateSchema },
+  { symbol: 'PromptStatusDelta', schema: promptStatusDeltaSchema },
+  { symbol: 'SearchResult', schema: searchResultSchema },
+  { symbol: 'SearchViewState', schema: searchViewStateSchema },
+  { symbol: 'SearchDelta', schema: searchDeltaSchema },
+  { symbol: 'FindOptions', schema: findOptionsSchema },
+  { symbol: 'FindMatch', schema: findMatchSchema },
+  { symbol: 'FindReplaceViewState', schema: findReplaceViewStateSchema },
+  { symbol: 'FindReplaceDelta', schema: findReplaceDeltaSchema },
+  { symbol: 'SettingValue', schema: settingValueSchema },
+  { symbol: 'EffectiveSetting', schema: effectiveSettingSchema },
+  { symbol: 'SettingViewEntry', schema: settingViewEntrySchema },
+  { symbol: 'SettingsViewState', schema: settingsViewStateSchema },
+  { symbol: 'SettingsDelta', schema: settingsDeltaSchema },
+  { symbol: 'SettingsSectionDelta', schema: settingsSectionDeltaSchema },
+  { symbol: 'KeyBinding', schema: keyBindingSchema },
+  { symbol: 'KeymapViewState', schema: keymapViewStateSchema },
+  { symbol: 'KeymapDelta', schema: keymapDeltaSchema },
+  { symbol: 'TextEncodingStatus', schema: textEncodingStatusSchema },
+  { symbol: 'TextEncodingViewState', schema: textEncodingViewStateSchema },
+  { symbol: 'TextEncodingDelta', schema: textEncodingDeltaSchema },
+  { symbol: 'UntitledDocumentId', schema: fixedBytes(16) },
+  { symbol: 'JournalDocumentKey', schema: journalDocumentKeySchema },
+  { symbol: 'TabState', schema: tabStateSchema },
+  { symbol: 'TabViewState', schema: tabViewStateSchema },
+  { symbol: 'TabDelta', schema: tabDeltaSchema },
+  { symbol: 'DiffWordRange', schema: diffWordRangeSchema },
+  { symbol: 'DiffLineChange', schema: diffLineChangeSchema },
+  { symbol: 'DiffHunk', schema: diffHunkSchema },
+  { symbol: 'DiffFileView', schema: diffFileViewSchema },
+  { symbol: 'DiffViewState', schema: diffViewStateSchema },
+  { symbol: 'DiffDelta', schema: diffDeltaSchema },
+  {
+    symbol: 'ExternalActionAffordance',
+    schema: externalActionAffordanceSchema,
+  },
+  { symbol: 'ExternalDocumentView', schema: externalDocumentViewSchema },
+  {
+    symbol: 'ExternalModificationViewState',
+    schema: externalModificationViewStateSchema,
+  },
+  {
+    symbol: 'ExternalModificationDelta',
+    schema: externalModificationDeltaSchema,
+  },
+  { symbol: 'ViewportDimensions', schema: viewportDimensionsSchema },
+  { symbol: 'FollowScrollOffset', schema: followScrollOffsetSchema },
+  { symbol: 'FollowTarget', schema: followTargetSchema },
+  { symbol: 'FollowClientView', schema: followClientViewSchema },
+  { symbol: 'FollowEditsViewState', schema: followEditsViewStateSchema },
+  { symbol: 'FollowEditsDelta', schema: followEditsDeltaSchema },
+  { symbol: 'TreeProviderBinding', schema: treeProviderBindingSchema },
+  { symbol: 'TreeNodeCommand', schema: treeNodeCommandSchema },
+  { symbol: 'GitTreeAffordance', schema: gitTreeAffordanceSchema },
+  { symbol: 'TreeNode', schema: treeNodeSchema },
+  { symbol: 'TreeNodeView', schema: treeNodeViewSchema },
+  { symbol: 'TreeProviderView', schema: treeProviderViewSchema },
+  { symbol: 'TreeViewState', schema: treeViewStateSchema },
+  { symbol: 'TreeProviderDelta', schema: treeProviderDeltaSchema },
+  { symbol: 'TreeDelta', schema: treeDeltaSchema },
+  { symbol: 'SyntaxRange', schema: syntaxRangeSchema },
+  { symbol: 'SyntaxSpan', schema: syntaxSpanSchema },
+  { symbol: 'SyntaxBracketPair', schema: syntaxBracketPairSchema },
+  { symbol: 'UnmatchedBracket', schema: unmatchedBracketSchema },
+  { symbol: 'CommentToken', schema: commentTokenSchema },
+  { symbol: 'CommentRange', schema: commentRangeSchema },
+  { symbol: 'LineIndentation', schema: lineIndentationSchema },
+  { symbol: 'SyntaxViewState', schema: syntaxViewStateSchema },
+  { symbol: 'SyntaxDelta', schema: syntaxDeltaSchema },
+  { symbol: 'LspPosition', schema: lspPositionSchema },
+  { symbol: 'LspRange', schema: lspRangeSchema },
+  { symbol: 'LspDiagnostic', schema: lspDiagnosticSchema },
+  { symbol: 'LspDocumentDiagnostics', schema: lspDocumentDiagnosticsSchema },
+  { symbol: 'LspSyncViewState', schema: lspSyncViewStateSchema },
+  { symbol: 'LspSyncDelta', schema: lspSyncDeltaSchema },
+  { symbol: 'LspCompletionItem', schema: lspCompletionItemSchema },
+  { symbol: 'LspCompletionViewState', schema: lspCompletionViewStateSchema },
+  { symbol: 'LspHover', schema: lspHoverSchema },
+  { symbol: 'LspNavigationTarget', schema: lspNavigationTargetSchema },
+  {
+    symbol: 'LspNavigationViewState',
+    schema: lspNavigationViewStateSchema,
+  },
+  { symbol: 'LspFeatureViewState', schema: lspFeatureViewStateSchema },
+  { symbol: 'LspFeatureDelta', schema: lspFeatureDeltaSchema },
+  { symbol: 'SrgbColor', schema: srgbColorSchema },
+  { symbol: 'ThemeSnapshot', schema: themeSnapshotSchema },
+  { symbol: 'ThemeSectionDelta', schema: themeSectionDeltaSchema },
+  { symbol: 'PaletteCandidate', schema: paletteCandidateSchema },
+  { symbol: 'MatcherParameters', schema: matcherParametersSchema },
+  { symbol: 'PaletteViewState', schema: paletteViewStateSchema },
+  { symbol: 'NoticeAction', schema: noticeActionSchema },
+  { symbol: 'NoticeView', schema: noticeViewSchema },
+  { symbol: 'NoticeViewSectionDelta', schema: noticeViewSectionDeltaSchema },
+  { symbol: 'SessionSnapshotSections', schema: sessionSnapshotSectionsSchema },
+  { symbol: 'SessionSnapshot', schema: sessionSnapshotSchema },
+  { symbol: 'SessionDelta', schema: sessionDeltaSchema },
+]);
+
+
 export const wireTypes = Object.freeze([
   { symbol: 'KeyStroke', schema: keyStrokeSchema, jsBuilder: true },
   {
@@ -1127,6 +2013,7 @@ export const wireTypes = Object.freeze([
       ],
     },
   },
+  ...semanticSectionWireTypesToAppend,
 ]);
 
 export default Object.freeze({

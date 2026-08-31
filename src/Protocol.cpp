@@ -6560,9 +6560,9 @@ DecodeSessionSnapshotResult ProtocolCodec::decodeSessionSnapshot(std::string_vie
         return {decoded.error, std::nullopt, decoded.message};
     }
     auto const& payload = *decoded.payload;
-    if (!payload.asObject()) {
+    if (!detail::generated::validateSessionSnapshotWire(payload)) {
         return {ProtocolError::MalformedMessage, std::nullopt,
-                "session snapshot payload is not an object"};
+                "session snapshot payload is malformed"};
     }
     auto revision = requireField<Revision>(payload.field("revision"));
     auto topology = requireField<SessionTopology>(payload.field("topology"));
@@ -6609,9 +6609,9 @@ ProtocolCodec::decodeLegacyPresentationSnapshot(
         return {decoded.error, std::nullopt, decoded.message};
     }
     auto const& payload = *decoded.payload;
-    if (!payload.asObject()) {
+    if (!detail::generated::validateSessionSnapshotWire(payload)) {
         return {ProtocolError::MalformedMessage, std::nullopt,
-                "session snapshot payload is not an object"};
+                "session snapshot payload is malformed"};
     }
     auto revision = requireField<Revision>(payload.field("revision"));
     auto topology = requireField<SessionTopology>(payload.field("topology"));
@@ -6702,9 +6702,9 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
         return {decoded.error, std::nullopt, decoded.message};
     }
     auto const& payload = *decoded.payload;
-    if (!payload.asObject()) {
+    if (!detail::generated::validateSessionDeltaWire(payload)) {
         return {ProtocolError::MalformedMessage, std::nullopt,
-                "session delta payload is not an object"};
+                "session delta payload is malformed"};
     }
 
     auto baseRevision = requireField<Revision>(payload.field("base_revision"));

@@ -227,6 +227,19 @@ try {
       () => validateManifest(mismatchedCompatibility),
       /invalid section declaration/);
 
+    const invalidBytes = structuredClone(manifest);
+    invalidBytes.wireTypes.find(
+      (wireType) => wireType.symbol === 'UntitledDocumentId').schema.length = 0;
+    assert.throws(
+      () => validateManifest(invalidBytes), /invalid wire bytes length/);
+
+    const invalidArrayLength = structuredClone(manifest);
+    invalidArrayLength.wireTypes.find(
+      (wireType) => wireType.symbol === 'ThemeSnapshot')
+      .schema.fields[0].type.length = -1;
+    assert.throws(
+      () => validateManifest(invalidArrayLength), /invalid wire array length/);
+
     const invalidManifest = path.join(temporary, 'invalid-manifest.mjs');
     const invalidDestinations = path.join(temporary, 'invalid-output');
     await fsp.writeFile(invalidManifest, `
@@ -463,6 +476,7 @@ export default {
       'PaneDirection=Left/left/0/current,Right/right/1/current,Up/up/2/current,Down/down/3/current',
       'PointerEdgeDirection=Before/before/0/current,After/after/1/current',
       'PalettePresenceOpKind=Show/show/0/current,Hide/hide/1/current',
+      'SettingValueKind=Boolean/boolean/0/current,Uint32/uint32/1/current,Uint64/uint64/2/current,IndentStyle/indent_style/3/current,LineEnding/line_ending/4/current,TextEncoding/text_encoding/5/current,Text/text/6/current',
     ]);
   });
 
@@ -499,6 +513,11 @@ export default {
     assert.match(reconcile, /buildClientInputDocumentWire/);
     assert.match(client, /validateClientInputResultWire\(payload\)/);
     assert.match(client, /validateCommandResultWire\(payload\)/);
+    assert.match(client, /validateSessionSnapshotWire\(payload\)/);
+    assert.match(client, /validateSessionDeltaWire\(payload\)/);
+    assert.match(
+      protocol, /validateSessionSnapshotWire\(payload\)/);
+    assert.match(protocol, /validateSessionDeltaWire\(payload\)/);
     assert.match(protocol, /ShellNodeKind::Header/);
     assert.match(protocol, /FocusTarget::Editor/);
     assert.doesNotMatch(protocol, /\bhasExactly\b|\bviewEnumField\b/);

@@ -30,7 +30,7 @@ const fixedJsExports = new Set([
   'SEMANTIC_SNAPSHOT_FIELDS',
   'SEMANTIC_DELTA_FIELDS',
 ]);
-const wirePrimitiveKinds = new Set(['bool', 'int', 'uint', 'text']);
+const wirePrimitiveKinds = new Set(['bool', 'bytes', 'int', 'uint', 'text']);
 const wireCompositeKinds = new Set([
   'array', 'discriminated-record', 'enum', 'field-union', 'nullable', 'record',
   'ref', 'text-discriminated-record',
@@ -152,16 +152,23 @@ export function validateManifest(manifest) {
       throw new Error(`invalid wire type expression: ${owner}`);
     }
     if (wirePrimitiveKinds.has(kind)) {
+      if (kind === 'bytes' && typeof expression !== 'object') {
+        throw new Error(`invalid wire bytes length: ${owner}`);
+      }
       if (typeof expression === 'object') {
         const options = {
           bool: ['kind'],
+          bytes: ['kind', 'length'],
           int: ['kind', 'hostInt'],
-          uint: ['kind', 'maxHostInt', 'maxUint32', 'allowedValues'],
+          uint: [
+            'kind', 'maxHostInt', 'maxUint32', 'maxValue', 'allowedValues',
+          ],
           text: ['kind', 'nonEmpty'],
         }[kind];
         requireOnlyKeys(expression, options, 'wire primitive');
         for (const key of options.slice(1)) {
-          if (key === 'allowedValues') continue;
+          if (key === 'allowedValues' || key === 'length' ||
+              key === 'maxValue') continue;
           if (expression[key] != null && typeof expression[key] !== 'boolean') {
             throw new Error(`invalid wire primitive option: ${owner}`);
           }
@@ -172,6 +179,16 @@ export function validateManifest(manifest) {
              expression.allowedValues.some(
                (value) => !Number.isSafeInteger(value) || value < 0))) {
           throw new Error(`invalid wire primitive values: ${owner}`);
+        }
+        if (expression.maxValue != null &&
+            (!Number.isSafeInteger(expression.maxValue) ||
+             expression.maxValue < 0)) {
+          throw new Error(`invalid wire primitive maximum: ${owner}`);
+        }
+        if (kind === 'bytes' &&
+            (!Number.isSafeInteger(expression.length) ||
+             expression.length <= 0)) {
+          throw new Error(`invalid wire bytes length: ${owner}`);
         }
       }
       return;
@@ -200,10 +217,19 @@ export function validateManifest(manifest) {
       requireOnlyKeys(expression, ['kind', 'value'], 'wire nullable');
       validateExpression(expression.value, owner);
     } else if (kind === 'array') {
-      requireOnlyKeys(expression, ['kind', 'items', 'nonEmpty'], 'wire array');
+      requireOnlyKeys(
+        expression, ['kind', 'items', 'nonEmpty', 'length'], 'wire array');
       if (expression.nonEmpty != null &&
           typeof expression.nonEmpty !== 'boolean') {
         throw new Error(`invalid wire array option: ${owner}`);
+      }
+      if (expression.length != null) {
+        const length = expression.length;
+        if ((!Number.isSafeInteger(length) || length < 0) &&
+            (!enumSymbols.has(length?.enum) ||
+             (length.values != null && length.values !== 'current'))) {
+          throw new Error(`invalid wire array length: ${owner}`);
+        }
       }
       validateExpression(expression.items, owner);
     } else if (kind === 'record') {
@@ -272,7 +298,7 @@ export function validateManifest(manifest) {
       }
       requireUnique(expression.variants, 'value', 'wire discriminator value');
       const declaration = kind === 'discriminated-record'
-        ? wireEnums.find(
+        ? manifest.wireEnums.find(
           (wireEnum) => wireEnum.symbol === expression.discriminator.enum)
         : null;
       const commonFields = new Set([
@@ -533,7 +559,18 @@ function flattenWireExpressions(manifest) {
       ...field, validator: add(field.type, owner),
     }));
     if (kind === 'nullable') node.value = add(expression.value, owner);
-    else if (kind === 'array') node.items = add(expression.items, owner);
+    else if (kind === 'array') {
+      node.items = add(expression.items, owner);
+      node.length = Number.isSafeInteger(expression.length)
+        ? expression.length
+        : expression.length
+          ? manifest.wireEnums.find(
+            (wireEnum) => wireEnum.symbol === expression.length.enum)
+            .values.filter((value) =>
+              expression.length.values !== 'current' ||
+              value.lifecycle === 'current').length
+          : null;
+    }
     else if (kind === 'record') node.fields = addFields(expression.fields);
     else if (kind === 'field-union') {
       node.fields = addFields(expression.fields);
@@ -579,6 +616,10 @@ function renderCppWireValidators(manifest) {
   const bodies = functions.map((node) => {
     const { expression, kind } = node;
     if (kind === 'bool') return '    return value.asBool().has_value();';
+    if (kind === 'bytes') {
+      return `    const auto* bytes = value.asBytes();\n` +
+        `    return bytes && bytes->size() == ${expression.length};`;
+    }
     if (kind === 'int') {
       const base = 'value.asInt().has_value()';
       return expression.hostInt === true
@@ -596,6 +637,9 @@ function renderCppWireValidators(manifest) {
       }
       if (expression.maxUint32 === true) {
         conditions.push('*raw <= std::numeric_limits<std::uint32_t>::max()');
+      }
+      if (expression.maxValue != null) {
+        conditions.push(`*raw <= ${expression.maxValue}`);
       }
       if (expression.allowedValues) {
         conditions.push(`(${expression.allowedValues.map(
@@ -627,7 +671,8 @@ function renderCppWireValidators(manifest) {
     }
     if (kind === 'array') {
       return `    const auto* array = value.asArray();\n` +
-        `    if (!array${expression.nonEmpty === true ? ' || array->empty()' : ''}) return false;\n` +
+        `    if (!array${expression.nonEmpty === true ? ' || array->empty()' : ''}${
+          node.length != null ? ` || array->size() != ${node.length}` : ''}) return false;\n` +
         `    return std::ranges::all_of(*array, [](const ProtocolValue& item) {\n` +
         `        return ${call(node.items, 'item')};\n    });`;
     }
@@ -749,6 +794,10 @@ function renderJsWireValidators(manifest) {
   const bodies = functions.map((node) => {
     const { expression, kind } = node;
     if (kind === 'bool') return '    return typeof value === \'boolean\';';
+    if (kind === 'bytes') {
+      return `    return value instanceof Uint8Array && value.length === ${
+        expression.length};`;
+    }
     if (kind === 'int') {
       return expression.hostInt === true
         ? '    if (typeof value !== \'number\' && typeof value !== \'bigint\') return false;\n' +
@@ -772,6 +821,10 @@ function renderJsWireValidators(manifest) {
       if (expression.maxUint32 === true) {
         numberConditions.push('value <= 4294967295');
         bigintConditions.push('value <= 4294967295n');
+      }
+      if (expression.maxValue != null) {
+        numberConditions.push(`value <= ${expression.maxValue}`);
+        bigintConditions.push(`value <= ${expression.maxValue}n`);
       }
       if (expression.allowedValues) {
         numberConditions.push(`(${expression.allowedValues.map(
@@ -804,6 +857,7 @@ function renderJsWireValidators(manifest) {
     if (kind === 'array') {
       return `    return Array.isArray(value)${
         expression.nonEmpty === true ? ' && value.length > 0' : ''} &&\n` +
+        `${node.length != null ? `      value.length === ${node.length} &&\n` : ''}` +
         `      value.every((item) => ${call(node.items, 'item')});`;
     }
     if (kind === 'record') {

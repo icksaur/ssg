@@ -13,6 +13,8 @@ import {
   SEMANTIC_DELTA_FIELDS,
   SEMANTIC_SECTIONS,
   SEMANTIC_SNAPSHOT_FIELDS,
+  validateSessionDeltaWire,
+  validateSessionSnapshotWire,
 } from '../../apps/web/generated/semantic_wire_manifest.mjs';
 import {
   applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput, cssColor,
@@ -107,6 +109,46 @@ const fixtureBytes = (name) => {
     hex.match(/../g).map((pair) => Number.parseInt(pair, 16)));
 };
 const fixtureMessage = (name) => decodeMessage(fixtureBytes(name).buffer).payload;
+
+check('generated semantic validators cover nested snapshot and delta structure', () => {
+  const snapshot = fixtureMessage('session_semantic_base.hex');
+  const delta = fixtureMessage('session_semantic_delta.hex');
+  assert.equal(validateSessionSnapshotWire(snapshot), true);
+  assert.equal(validateSessionDeltaWire(delta), true);
+  assert.equal(validateSessionSnapshotWire({
+    ...snapshot,
+    sections: {
+      ...snapshot.sections,
+      document: { ...snapshot.sections.document, revision: '0' },
+    },
+  }), false);
+  assert.equal(validateSessionSnapshotWire({
+    ...snapshot,
+    sections: {
+      ...snapshot.sections,
+      theme: {
+        ...snapshot.sections.theme,
+        role_colors: snapshot.sections.theme.role_colors.slice(1),
+      },
+    },
+  }), false);
+  assert.equal(validateSessionSnapshotWire({
+    ...snapshot,
+    sections: {
+      ...snapshot.sections,
+      theme: {
+        ...snapshot.sections.theme,
+        role_colors: snapshot.sections.theme.role_colors.map(
+          (color, index) => index === 0 ? { ...color, red: 256 } : color),
+      },
+    },
+  }), false);
+  assert.equal(validateSessionDeltaWire({
+    ...delta,
+    selection: { ...delta.selection, changed: 1 },
+  }), false);
+});
+
 const rawSections = (node) => {
   if (Array.isArray(node)) {
     for (const item of node) {

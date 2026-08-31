@@ -701,6 +701,15 @@ export const PALETTE_PRESENCE_OP_KIND = deepFreeze({
   SHOW: 0,
   HIDE: 1,
 });
+export const SETTING_VALUE_KIND = deepFreeze({
+  BOOLEAN: 0,
+  UINT32: 1,
+  UINT64: 2,
+  INDENT_STYLE: 3,
+  LINE_ENDING: 4,
+  TEXT_ENCODING: 5,
+  TEXT: 6,
+});
 
 function validateWireNode0(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -2187,6 +2196,3646 @@ function validateWireNode213(value) {
     return validateWireNode187(value);
 }
 
+function validateWireNode214(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["active_workspace"] !== undefined && !validateWireNode215(value["active_workspace"])) return false;
+    if (value["active_view"] !== undefined && !validateWireNode217(value["active_view"])) return false;
+    return true;
+}
+
+function validateWireNode215(value) {
+    return value === null || validateWireNode216(value);
+}
+
+function validateWireNode216(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode217(value) {
+    return value === null || validateWireNode218(value);
+}
+
+function validateWireNode218(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode219(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["client_id"] === undefined || !validateWireNode220(value["client_id"])) return false;
+    if (value["view_id"] === undefined || !validateWireNode221(value["view_id"])) return false;
+    if (value["capabilities"] === undefined || !validateWireNode222(value["capabilities"])) return false;
+    return true;
+}
+
+function validateWireNode220(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode221(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode222(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode223(item));
+}
+
+function validateWireNode223(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode224(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["byte_offset"] === undefined || !validateWireNode225(value["byte_offset"])) return false;
+    if (value["line"] === undefined || !validateWireNode226(value["line"])) return false;
+    if (value["cell"] === undefined || !validateWireNode227(value["cell"])) return false;
+    return true;
+}
+
+function validateWireNode225(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode226(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode227(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode228(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode229(value["revision"])) return false;
+    if (value["text"] === undefined || !validateWireNode230(value["text"])) return false;
+    if (value["caret"] === undefined || !validateWireNode231(value["caret"])) return false;
+    if (value["diff_file_identity"] !== undefined && !validateWireNode232(value["diff_file_identity"])) return false;
+    return true;
+}
+
+function validateWireNode229(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode230(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode231(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode232(value) {
+    return value === null || validateWireNode233(value);
+}
+
+function validateWireNode233(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode234(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode235(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode236(value["revision"])) return false;
+    if (value["start"] === undefined || !validateWireNode237(value["start"])) return false;
+    if (value["erased_bytes"] === undefined || !validateWireNode238(value["erased_bytes"])) return false;
+    if (value["inserted_text"] === undefined || !validateWireNode239(value["inserted_text"])) return false;
+    if (value["diff_file_identity"] !== undefined && !validateWireNode240(value["diff_file_identity"])) return false;
+    return true;
+}
+
+function validateWireNode235(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode236(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode237(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode238(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode239(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode240(value) {
+    return value === null || validateWireNode241(value);
+}
+
+function validateWireNode241(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode242(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["anchor"] === undefined || !validateWireNode243(value["anchor"])) return false;
+    if (value["active"] === undefined || !validateWireNode244(value["active"])) return false;
+    return true;
+}
+
+function validateWireNode243(value) {
+    return validateWireNode224(value);
+}
+
+function validateWireNode244(value) {
+    return validateWireNode224(value);
+}
+
+function validateWireNode245(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["selections"] === undefined || !validateWireNode246(value["selections"])) return false;
+    return true;
+}
+
+function validateWireNode246(value) {
+    return Array.isArray(value) && value.length > 0 &&
+      value.every((item) => validateWireNode247(item));
+}
+
+function validateWireNode247(value) {
+    return validateWireNode242(value);
+}
+
+function validateWireNode248(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode249(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode250(value["replacement"])) return false;
+    return true;
+}
+
+function validateWireNode249(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode250(value) {
+    return value === null || validateWireNode251(value);
+}
+
+function validateWireNode251(value) {
+    return validateWireNode245(value);
+}
+
+function validateWireNode252(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["can_undo"] === undefined || !validateWireNode253(value["can_undo"])) return false;
+    if (value["can_redo"] === undefined || !validateWireNode254(value["can_redo"])) return false;
+    if (value["retained_bytes"] === undefined || !validateWireNode255(value["retained_bytes"])) return false;
+    return true;
+}
+
+function validateWireNode253(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode254(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode255(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode256(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode257(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode258(value["replacement"])) return false;
+    return true;
+}
+
+function validateWireNode257(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode258(value) {
+    return value === null || validateWireNode259(value);
+}
+
+function validateWireNode259(value) {
+    return validateWireNode252(value);
+}
+
+function validateWireNode260(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode261(value["id"])) return false;
+    if (value["request_revision"] === undefined || !validateWireNode262(value["request_revision"])) return false;
+    if (value["text"] === undefined || !validateWireNode263(value["text"])) return false;
+    return true;
+}
+
+function validateWireNode261(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode262(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode263(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode264(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["fragments"] === undefined || !validateWireNode265(value["fragments"])) return false;
+    if (value["plain_text"] === undefined || !validateWireNode267(value["plain_text"])) return false;
+    if (value["system_write"] !== undefined && !validateWireNode268(value["system_write"])) return false;
+    return true;
+}
+
+function validateWireNode265(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode266(item));
+}
+
+function validateWireNode266(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode267(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode268(value) {
+    return value === null || validateWireNode269(value);
+}
+
+function validateWireNode269(value) {
+    return validateWireNode260(value);
+}
+
+function validateWireNode270(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode271(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode272(value["replacement"])) return false;
+    return true;
+}
+
+function validateWireNode271(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode272(value) {
+    return value === null || validateWireNode273(value);
+}
+
+function validateWireNode273(value) {
+    return validateWireNode264(value);
+}
+
+function validateWireNode274(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode275(value["id"])) return false;
+    if (value["accessible_label"] === undefined || !validateWireNode276(value["accessible_label"])) return false;
+    if (value["command_id"] === undefined || !validateWireNode277(value["command_id"])) return false;
+    return true;
+}
+
+function validateWireNode275(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode276(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode277(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode278(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode279(value["id"])) return false;
+    if (value["priority"] === undefined || !validateWireNode280(value["priority"])) return false;
+    if (value["generation"] === undefined || !validateWireNode281(value["generation"])) return false;
+    if (value["accessible_label"] === undefined || !validateWireNode282(value["accessible_label"])) return false;
+    if (value["actions"] === undefined || !validateWireNode283(value["actions"])) return false;
+    return true;
+}
+
+function validateWireNode279(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode280(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+}
+
+function validateWireNode281(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode282(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode283(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode284(item));
+}
+
+function validateWireNode284(value) {
+    return validateWireNode274(value);
+}
+
+function validateWireNode285(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["items"] === undefined || !validateWireNode286(value["items"])) return false;
+    if (value["selected"] === undefined || !validateWireNode288(value["selected"])) return false;
+    return true;
+}
+
+function validateWireNode286(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode287(item));
+}
+
+function validateWireNode287(value) {
+    return validateWireNode278(value);
+}
+
+function validateWireNode288(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode289(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["active_kind"] !== undefined && !validateWireNode290(value["active_kind"])) return false;
+    if (value["status"] === undefined || !validateWireNode292(value["status"])) return false;
+    return true;
+}
+
+function validateWireNode290(value) {
+    return value === null || validateWireNode291(value);
+}
+
+function validateWireNode291(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
+}
+
+function validateWireNode292(value) {
+    return validateWireNode285(value);
+}
+
+function validateWireNode293(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode294(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode295(value["replacement"])) return false;
+    return true;
+}
+
+function validateWireNode294(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode295(value) {
+    return value === null || validateWireNode296(value);
+}
+
+function validateWireNode296(value) {
+    return validateWireNode289(value);
+}
+
+function validateWireNode297(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["mode"] === undefined || !validateWireNode298(value["mode"])) return false;
+    if (value["path"] === undefined || !validateWireNode299(value["path"])) return false;
+    if (value["label"] === undefined || !validateWireNode300(value["label"])) return false;
+    if (value["line"] !== undefined && !validateWireNode301(value["line"])) return false;
+    if (value["column"] === undefined || !validateWireNode303(value["column"])) return false;
+    if (value["score"] === undefined || !validateWireNode304(value["score"])) return false;
+    return true;
+}
+
+function validateWireNode298(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+}
+
+function validateWireNode299(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode300(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode301(value) {
+    return value === null || validateWireNode302(value);
+}
+
+function validateWireNode302(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode303(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode304(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+}
+
+function validateWireNode305(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode306(value["revision"])) return false;
+    if (value["palette_open"] === undefined || !validateWireNode307(value["palette_open"])) return false;
+    if (value["query"] === undefined || !validateWireNode308(value["query"])) return false;
+    if (value["mode"] === undefined || !validateWireNode309(value["mode"])) return false;
+    if (value["results"] === undefined || !validateWireNode310(value["results"])) return false;
+    if (value["selected_index"] !== undefined && !validateWireNode312(value["selected_index"])) return false;
+    if (value["search_generation"] === undefined || !validateWireNode314(value["search_generation"])) return false;
+    if (value["searching"] === undefined || !validateWireNode315(value["searching"])) return false;
+    return true;
+}
+
+function validateWireNode306(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode307(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode308(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode309(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+}
+
+function validateWireNode310(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode311(item));
+}
+
+function validateWireNode311(value) {
+    return validateWireNode297(value);
+}
+
+function validateWireNode312(value) {
+    return value === null || validateWireNode313(value);
+}
+
+function validateWireNode313(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode314(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode315(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode316(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode317(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode318(value["revision"])) return false;
+    if (value["state"] !== undefined && !validateWireNode319(value["state"])) return false;
+    return true;
+}
+
+function validateWireNode317(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode318(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode319(value) {
+    return value === null || validateWireNode320(value);
+}
+
+function validateWireNode320(value) {
+    return validateWireNode305(value);
+}
+
+function validateWireNode321(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["case_sensitive"] === undefined || !validateWireNode322(value["case_sensitive"])) return false;
+    if (value["whole_word"] === undefined || !validateWireNode323(value["whole_word"])) return false;
+    if (value["regex"] === undefined || !validateWireNode324(value["regex"])) return false;
+    if (value["selection_only"] === undefined || !validateWireNode325(value["selection_only"])) return false;
+    return true;
+}
+
+function validateWireNode322(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode323(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode324(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode325(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode326(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["begin"] === undefined || !validateWireNode327(value["begin"])) return false;
+    if (value["end"] === undefined || !validateWireNode328(value["end"])) return false;
+    return true;
+}
+
+function validateWireNode327(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode328(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode329(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["generation"] === undefined || !validateWireNode330(value["generation"])) return false;
+    if (value["open"] === undefined || !validateWireNode331(value["open"])) return false;
+    if (value["replace_mode"] === undefined || !validateWireNode332(value["replace_mode"])) return false;
+    if (value["source_revision"] === undefined || !validateWireNode333(value["source_revision"])) return false;
+    if (value["query"] === undefined || !validateWireNode334(value["query"])) return false;
+    if (value["replacement"] === undefined || !validateWireNode335(value["replacement"])) return false;
+    if (value["options"] === undefined || !validateWireNode336(value["options"])) return false;
+    if (value["matches"] === undefined || !validateWireNode337(value["matches"])) return false;
+    if (value["active_match"] !== undefined && !validateWireNode339(value["active_match"])) return false;
+    if (value["error"] === undefined || !validateWireNode341(value["error"])) return false;
+    if (value["message"] === undefined || !validateWireNode342(value["message"])) return false;
+    return true;
+}
+
+function validateWireNode330(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode331(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode332(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode333(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode334(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode335(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode336(value) {
+    return validateWireNode321(value);
+}
+
+function validateWireNode337(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode338(item));
+}
+
+function validateWireNode338(value) {
+    return validateWireNode326(value);
+}
+
+function validateWireNode339(value) {
+    return value === null || validateWireNode340(value);
+}
+
+function validateWireNode340(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode341(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10);
+}
+
+function validateWireNode342(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode343(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode344(value["changed"])) return false;
+    if (value["base_generation"] === undefined || !validateWireNode345(value["base_generation"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode346(value["replacement"])) return false;
+    return true;
+}
+
+function validateWireNode344(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode345(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode346(value) {
+    return value === null || validateWireNode347(value);
+}
+
+function validateWireNode347(value) {
+    return validateWireNode329(value);
+}
+
+function validateWireNode348(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+
+    const discriminatorValue = value["index"];
+    if (typeof discriminatorValue !== 'number' &&
+        typeof discriminatorValue !== 'bigint') return false;
+    const discriminator = Number(discriminatorValue);
+    if (!Number.isSafeInteger(discriminator) || discriminator < 0) return false;
+    switch (discriminator) {
+    case 0:
+    if (value["value"] === undefined || !validateWireNode349(value["value"])) return false;
+      return true;
+    case 1:
+    if (value["value"] === undefined || !validateWireNode350(value["value"])) return false;
+      return true;
+    case 2:
+    if (value["value"] === undefined || !validateWireNode351(value["value"])) return false;
+      return true;
+    case 3:
+    if (value["value"] === undefined || !validateWireNode352(value["value"])) return false;
+      return true;
+    case 4:
+    if (value["value"] === undefined || !validateWireNode353(value["value"])) return false;
+      return true;
+    case 5:
+    if (value["value"] === undefined || !validateWireNode354(value["value"])) return false;
+      return true;
+    case 6:
+    if (value["value"] === undefined || !validateWireNode355(value["value"])) return false;
+      return true;
+    default: return false;
+    }
+}
+
+function validateWireNode349(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode350(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode351(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode352(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
+function validateWireNode353(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+}
+
+function validateWireNode354(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
+}
+
+function validateWireNode355(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode356(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["value"] === undefined || !validateWireNode357(value["value"])) return false;
+    if (value["source"] === undefined || !validateWireNode358(value["source"])) return false;
+    return true;
+}
+
+function validateWireNode357(value) {
+    return validateWireNode348(value);
+}
+
+function validateWireNode358(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+}
+
+function validateWireNode359(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["key"] === undefined || !validateWireNode360(value["key"])) return false;
+    if (value["effective"] === undefined || !validateWireNode361(value["effective"])) return false;
+    return true;
+}
+
+function validateWireNode360(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18);
+}
+
+function validateWireNode361(value) {
+    return validateWireNode356(value);
+}
+
+function validateWireNode362(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["entries"] === undefined || !validateWireNode363(value["entries"])) return false;
+    return true;
+}
+
+function validateWireNode363(value) {
+    return Array.isArray(value) &&
+      value.length === 19 &&
+      value.every((item) => validateWireNode364(item));
+}
+
+function validateWireNode364(value) {
+    return validateWireNode359(value);
+}
+
+function validateWireNode365(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["key"] === undefined || !validateWireNode366(value["key"])) return false;
+    if (value["before"] === undefined || !validateWireNode367(value["before"])) return false;
+    if (value["after"] === undefined || !validateWireNode368(value["after"])) return false;
+    return true;
+}
+
+function validateWireNode366(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18);
+}
+
+function validateWireNode367(value) {
+    return validateWireNode356(value);
+}
+
+function validateWireNode368(value) {
+    return validateWireNode356(value);
+}
+
+function validateWireNode369(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changes"] === undefined || !validateWireNode370(value["changes"])) return false;
+    return true;
+}
+
+function validateWireNode370(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode371(item));
+}
+
+function validateWireNode371(value) {
+    return validateWireNode365(value);
+}
+
+function validateWireNode372(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["sequence"] === undefined || !validateWireNode373(value["sequence"])) return false;
+    if (value["command_id"] === undefined || !validateWireNode375(value["command_id"])) return false;
+    if (value["context"] === undefined || !validateWireNode376(value["context"])) return false;
+    return true;
+}
+
+function validateWireNode373(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode374(item));
+}
+
+function validateWireNode374(value) {
+    return validateWireNode0(value);
+}
+
+function validateWireNode375(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode376(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode377(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["name"] === undefined || !validateWireNode378(value["name"])) return false;
+    if (value["bindings"] === undefined || !validateWireNode379(value["bindings"])) return false;
+    return true;
+}
+
+function validateWireNode378(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode379(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode380(item));
+}
+
+function validateWireNode380(value) {
+    return validateWireNode372(value);
+}
+
+function validateWireNode381(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode382(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode383(value["replacement"])) return false;
+    return true;
+}
+
+function validateWireNode382(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode383(value) {
+    return value === null || validateWireNode384(value);
+}
+
+function validateWireNode384(value) {
+    return validateWireNode377(value);
+}
+
+function validateWireNode385(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["encoding"] === undefined || !validateWireNode386(value["encoding"])) return false;
+    if (value["line_ending"] === undefined || !validateWireNode387(value["line_ending"])) return false;
+    if (value["had_bom"] === undefined || !validateWireNode388(value["had_bom"])) return false;
+    if (value["final_newline"] === undefined || !validateWireNode389(value["final_newline"])) return false;
+    return true;
+}
+
+function validateWireNode386(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
+}
+
+function validateWireNode387(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+}
+
+function validateWireNode388(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode389(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode390(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["status"] === undefined || !validateWireNode391(value["status"])) return false;
+    return true;
+}
+
+function validateWireNode391(value) {
+    return validateWireNode385(value);
+}
+
+function validateWireNode392(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["before"] === undefined || !validateWireNode393(value["before"])) return false;
+    if (value["after"] === undefined || !validateWireNode394(value["after"])) return false;
+    return true;
+}
+
+function validateWireNode393(value) {
+    return validateWireNode390(value);
+}
+
+function validateWireNode394(value) {
+    return validateWireNode390(value);
+}
+
+function validateWireNode395(value) {
+    return value instanceof Uint8Array && value.length === 16;
+}
+
+function validateWireNode396(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+
+    const discriminatorValue = value["kind"];
+    if (typeof discriminatorValue !== 'number' &&
+        typeof discriminatorValue !== 'bigint') return false;
+    const discriminator = Number(discriminatorValue);
+    if (!Number.isSafeInteger(discriminator) || discriminator < 0) return false;
+    switch (discriminator) {
+    case 0:
+    if (value["path"] === undefined || !validateWireNode397(value["path"])) return false;
+      return true;
+    case 1:
+    if (value["untitled_id"] === undefined || !validateWireNode398(value["untitled_id"])) return false;
+      return true;
+    default: return false;
+    }
+}
+
+function validateWireNode397(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode398(value) {
+    return validateWireNode395(value);
+}
+
+function validateWireNode399(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode400(value["id"])) return false;
+    if (value["kind"] === undefined || !validateWireNode401(value["kind"])) return false;
+    if (value["document"] !== undefined && !validateWireNode402(value["document"])) return false;
+    if (value["document_key"] !== undefined && !validateWireNode404(value["document_key"])) return false;
+    if (value["content_identity"] === undefined || !validateWireNode406(value["content_identity"])) return false;
+    if (value["label"] === undefined || !validateWireNode407(value["label"])) return false;
+    if (value["mode"] === undefined || !validateWireNode408(value["mode"])) return false;
+    if (value["dirty"] === undefined || !validateWireNode409(value["dirty"])) return false;
+    if (value["recovery"] === undefined || !validateWireNode410(value["recovery"])) return false;
+    return true;
+}
+
+function validateWireNode400(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode401(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+}
+
+function validateWireNode402(value) {
+    return value === null || validateWireNode403(value);
+}
+
+function validateWireNode403(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode404(value) {
+    return value === null || validateWireNode405(value);
+}
+
+function validateWireNode405(value) {
+    return validateWireNode396(value);
+}
+
+function validateWireNode406(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode407(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode408(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode409(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode410(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+}
+
+function validateWireNode411(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["tabs"] === undefined || !validateWireNode412(value["tabs"])) return false;
+    if (value["active"] !== undefined && !validateWireNode414(value["active"])) return false;
+    return true;
+}
+
+function validateWireNode412(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode413(item));
+}
+
+function validateWireNode413(value) {
+    return validateWireNode399(value);
+}
+
+function validateWireNode414(value) {
+    return value === null || validateWireNode415(value);
+}
+
+function validateWireNode415(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode416(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["state"] !== undefined && !validateWireNode417(value["state"])) return false;
+    return true;
+}
+
+function validateWireNode417(value) {
+    return value === null || validateWireNode418(value);
+}
+
+function validateWireNode418(value) {
+    return validateWireNode411(value);
+}
+
+function validateWireNode419(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["byte_start"] === undefined || !validateWireNode420(value["byte_start"])) return false;
+    if (value["byte_length"] === undefined || !validateWireNode421(value["byte_length"])) return false;
+    return true;
+}
+
+function validateWireNode420(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode421(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode422(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["kind"] === undefined || !validateWireNode423(value["kind"])) return false;
+    if (value["baseline_line"] !== undefined && !validateWireNode424(value["baseline_line"])) return false;
+    if (value["target_line"] !== undefined && !validateWireNode426(value["target_line"])) return false;
+    if (value["target_added_word_ranges"] !== undefined && !validateWireNode428(value["target_added_word_ranges"])) return false;
+    if (value["baseline_removed_word_ranges"] !== undefined && !validateWireNode430(value["baseline_removed_word_ranges"])) return false;
+    if (value["target_modified_word_ranges"] !== undefined && !validateWireNode432(value["target_modified_word_ranges"])) return false;
+    return true;
+}
+
+function validateWireNode423(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode424(value) {
+    return value === null || validateWireNode425(value);
+}
+
+function validateWireNode425(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode426(value) {
+    return value === null || validateWireNode427(value);
+}
+
+function validateWireNode427(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode428(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode429(item));
+}
+
+function validateWireNode429(value) {
+    return validateWireNode419(value);
+}
+
+function validateWireNode430(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode431(item));
+}
+
+function validateWireNode431(value) {
+    return validateWireNode419(value);
+}
+
+function validateWireNode432(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode433(item));
+}
+
+function validateWireNode433(value) {
+    return validateWireNode419(value);
+}
+
+function validateWireNode434(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["baseline_start"] === undefined || !validateWireNode435(value["baseline_start"])) return false;
+    if (value["target_start"] === undefined || !validateWireNode436(value["target_start"])) return false;
+    if (value["baseline_lines"] === undefined || !validateWireNode437(value["baseline_lines"])) return false;
+    if (value["target_lines"] === undefined || !validateWireNode439(value["target_lines"])) return false;
+    return true;
+}
+
+function validateWireNode435(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode436(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode437(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode438(item));
+}
+
+function validateWireNode438(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode439(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode440(item));
+}
+
+function validateWireNode440(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode441(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode442(value["id"])) return false;
+    if (value["path"] === undefined || !validateWireNode443(value["path"])) return false;
+    if (value["previous_path"] !== undefined && !validateWireNode444(value["previous_path"])) return false;
+    if (value["deleted"] === undefined || !validateWireNode446(value["deleted"])) return false;
+    if (value["status"] !== undefined && !validateWireNode447(value["status"])) return false;
+    if (value["baseline_identity"] === undefined || !validateWireNode449(value["baseline_identity"])) return false;
+    if (value["current_content"] === undefined || !validateWireNode450(value["current_content"])) return false;
+    if (value["hunks"] === undefined || !validateWireNode451(value["hunks"])) return false;
+    if (value["changed_lines"] === undefined || !validateWireNode453(value["changed_lines"])) return false;
+    return true;
+}
+
+function validateWireNode442(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode443(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode444(value) {
+    return value === null || validateWireNode445(value);
+}
+
+function validateWireNode445(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode446(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode447(value) {
+    return value === null || validateWireNode448(value);
+}
+
+function validateWireNode448(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+}
+
+function validateWireNode449(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode450(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode451(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode452(item));
+}
+
+function validateWireNode452(value) {
+    return validateWireNode434(value);
+}
+
+function validateWireNode453(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode454(item));
+}
+
+function validateWireNode454(value) {
+    return validateWireNode422(value);
+}
+
+function validateWireNode455(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode456(value["revision"])) return false;
+    if (value["files"] === undefined || !validateWireNode457(value["files"])) return false;
+    return true;
+}
+
+function validateWireNode456(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode457(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode458(item));
+}
+
+function validateWireNode458(value) {
+    return validateWireNode441(value);
+}
+
+function validateWireNode459(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode460(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode461(value["revision"])) return false;
+    if (value["upserted"] === undefined || !validateWireNode462(value["upserted"])) return false;
+    if (value["removed"] === undefined || !validateWireNode464(value["removed"])) return false;
+    return true;
+}
+
+function validateWireNode460(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode461(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode462(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode463(item));
+}
+
+function validateWireNode463(value) {
+    return validateWireNode441(value);
+}
+
+function validateWireNode464(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode465(item));
+}
+
+function validateWireNode465(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode466(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["action"] === undefined || !validateWireNode467(value["action"])) return false;
+    if (value["label"] === undefined || !validateWireNode468(value["label"])) return false;
+    if (value["command"] === undefined || !validateWireNode469(value["command"])) return false;
+    return true;
+}
+
+function validateWireNode467(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode468(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode469(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode470(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode471(value["id"])) return false;
+    if (value["path"] === undefined || !validateWireNode472(value["path"])) return false;
+    if (value["status"] === undefined || !validateWireNode473(value["status"])) return false;
+    if (value["accessible_status"] === undefined || !validateWireNode474(value["accessible_status"])) return false;
+    if (value["status_label"] === undefined || !validateWireNode475(value["status_label"])) return false;
+    if (value["actions"] === undefined || !validateWireNode476(value["actions"])) return false;
+    return true;
+}
+
+function validateWireNode471(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode472(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode473(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
+function validateWireNode474(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode475(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode476(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode477(item));
+}
+
+function validateWireNode477(value) {
+    return validateWireNode466(value);
+}
+
+function validateWireNode478(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode479(value["revision"])) return false;
+    if (value["message"] === undefined || !validateWireNode480(value["message"])) return false;
+    if (value["files"] === undefined || !validateWireNode481(value["files"])) return false;
+    if (value["selected"] !== undefined && !validateWireNode483(value["selected"])) return false;
+    return true;
+}
+
+function validateWireNode479(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode480(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode481(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode482(item));
+}
+
+function validateWireNode482(value) {
+    return validateWireNode470(value);
+}
+
+function validateWireNode483(value) {
+    return value === null || validateWireNode484(value);
+}
+
+function validateWireNode484(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode485(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode486(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode487(value["revision"])) return false;
+    if (value["message"] === undefined || !validateWireNode488(value["message"])) return false;
+    if (value["upserted"] === undefined || !validateWireNode489(value["upserted"])) return false;
+    if (value["removed"] === undefined || !validateWireNode491(value["removed"])) return false;
+    if (value["selected"] !== undefined && !validateWireNode493(value["selected"])) return false;
+    return true;
+}
+
+function validateWireNode486(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode487(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode488(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode489(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode490(item));
+}
+
+function validateWireNode490(value) {
+    return validateWireNode470(value);
+}
+
+function validateWireNode491(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode492(item));
+}
+
+function validateWireNode492(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode493(value) {
+    return value === null || validateWireNode494(value);
+}
+
+function validateWireNode494(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode495(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["columns"] === undefined || !validateWireNode496(value["columns"])) return false;
+    if (value["rows"] === undefined || !validateWireNode497(value["rows"])) return false;
+    return true;
+}
+
+function validateWireNode496(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode497(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode498(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["first_row"] === undefined || !validateWireNode499(value["first_row"])) return false;
+    if (value["first_column"] === undefined || !validateWireNode500(value["first_column"])) return false;
+    return true;
+}
+
+function validateWireNode499(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode500(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode501(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode502(value["id"])) return false;
+    if (value["path"] === undefined || !validateWireNode503(value["path"])) return false;
+    if (value["deleted"] === undefined || !validateWireNode504(value["deleted"])) return false;
+    if (value["newest_hunk_line"] === undefined || !validateWireNode505(value["newest_hunk_line"])) return false;
+    if (value["source_revision"] === undefined || !validateWireNode506(value["source_revision"])) return false;
+    return true;
+}
+
+function validateWireNode502(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode503(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode504(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode505(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode506(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode507(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["client"] === undefined || !validateWireNode508(value["client"])) return false;
+    if (value["dimensions"] === undefined || !validateWireNode509(value["dimensions"])) return false;
+    if (value["offset"] === undefined || !validateWireNode510(value["offset"])) return false;
+    return true;
+}
+
+function validateWireNode508(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode509(value) {
+    return validateWireNode495(value);
+}
+
+function validateWireNode510(value) {
+    return validateWireNode498(value);
+}
+
+function validateWireNode511(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["generation"] === undefined || !validateWireNode512(value["generation"])) return false;
+    if (value["mode"] === undefined || !validateWireNode513(value["mode"])) return false;
+    if (value["active_pane"] === undefined || !validateWireNode514(value["active_pane"])) return false;
+    if (value["active_target"] !== undefined && !validateWireNode515(value["active_target"])) return false;
+    if (value["queued_targets"] === undefined || !validateWireNode517(value["queued_targets"])) return false;
+    if (value["clients"] === undefined || !validateWireNode519(value["clients"])) return false;
+    return true;
+}
+
+function validateWireNode512(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode513(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
+function validateWireNode514(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode515(value) {
+    return value === null || validateWireNode516(value);
+}
+
+function validateWireNode516(value) {
+    return validateWireNode501(value);
+}
+
+function validateWireNode517(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode518(item));
+}
+
+function validateWireNode518(value) {
+    return validateWireNode501(value);
+}
+
+function validateWireNode519(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode520(item));
+}
+
+function validateWireNode520(value) {
+    return validateWireNode507(value);
+}
+
+function validateWireNode521(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_generation"] === undefined || !validateWireNode522(value["base_generation"])) return false;
+    if (value["generation"] === undefined || !validateWireNode523(value["generation"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode524(value["replacement"])) return false;
+    return true;
+}
+
+function validateWireNode522(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode523(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode524(value) {
+    return value === null || validateWireNode525(value);
+}
+
+function validateWireNode525(value) {
+    return validateWireNode511(value);
+}
+
+function validateWireNode526(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["provider_id"] === undefined || !validateWireNode527(value["provider_id"])) return false;
+    if (value["kind"] === undefined || !validateWireNode528(value["kind"])) return false;
+    return true;
+}
+
+function validateWireNode527(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode528(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode529(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode530(value["id"])) return false;
+    if (value["label"] === undefined || !validateWireNode531(value["label"])) return false;
+    return true;
+}
+
+function validateWireNode530(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode531(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode532(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["status"] === undefined || !validateWireNode533(value["status"])) return false;
+    if (value["short_label"] === undefined || !validateWireNode534(value["short_label"])) return false;
+    if (value["role"] === undefined || !validateWireNode535(value["role"])) return false;
+    return true;
+}
+
+function validateWireNode533(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+}
+
+function validateWireNode534(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode535(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
+}
+
+function validateWireNode536(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode537(value["id"])) return false;
+    if (value["parent_id"] !== undefined && !validateWireNode538(value["parent_id"])) return false;
+    if (value["label"] === undefined || !validateWireNode540(value["label"])) return false;
+    if (value["kind"] === undefined || !validateWireNode541(value["kind"])) return false;
+    if (value["icon"] !== undefined && !validateWireNode542(value["icon"])) return false;
+    if (value["commands"] === undefined || !validateWireNode544(value["commands"])) return false;
+    if (value["git_status"] !== undefined && !validateWireNode546(value["git_status"])) return false;
+    if (value["workspace_path"] !== undefined && !validateWireNode548(value["workspace_path"])) return false;
+    if (value["source_line"] !== undefined && !validateWireNode550(value["source_line"])) return false;
+    if (value["expandable"] === undefined || !validateWireNode552(value["expandable"])) return false;
+    return true;
+}
+
+function validateWireNode537(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode538(value) {
+    return value === null || validateWireNode539(value);
+}
+
+function validateWireNode539(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode540(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode541(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
+}
+
+function validateWireNode542(value) {
+    return value === null || validateWireNode543(value);
+}
+
+function validateWireNode543(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode544(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode545(item));
+}
+
+function validateWireNode545(value) {
+    return validateWireNode529(value);
+}
+
+function validateWireNode546(value) {
+    return value === null || validateWireNode547(value);
+}
+
+function validateWireNode547(value) {
+    return validateWireNode532(value);
+}
+
+function validateWireNode548(value) {
+    return value === null || validateWireNode549(value);
+}
+
+function validateWireNode549(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode550(value) {
+    return value === null || validateWireNode551(value);
+}
+
+function validateWireNode551(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode552(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode553(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["node"] === undefined || !validateWireNode554(value["node"])) return false;
+    if (value["depth"] === undefined || !validateWireNode555(value["depth"])) return false;
+    if (value["expanded"] === undefined || !validateWireNode556(value["expanded"])) return false;
+    return true;
+}
+
+function validateWireNode554(value) {
+    return validateWireNode536(value);
+}
+
+function validateWireNode555(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode556(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode557(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["provider_id"] === undefined || !validateWireNode558(value["provider_id"])) return false;
+    if (value["kind"] === undefined || !validateWireNode559(value["kind"])) return false;
+    if (value["nodes"] === undefined || !validateWireNode560(value["nodes"])) return false;
+    if (value["selected"] !== undefined && !validateWireNode562(value["selected"])) return false;
+    return true;
+}
+
+function validateWireNode558(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode559(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode560(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode561(item));
+}
+
+function validateWireNode561(value) {
+    return validateWireNode553(value);
+}
+
+function validateWireNode562(value) {
+    return value === null || validateWireNode563(value);
+}
+
+function validateWireNode563(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode564(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode565(value["revision"])) return false;
+    if (value["providers"] === undefined || !validateWireNode566(value["providers"])) return false;
+    if (value["active_binding"] !== undefined && !validateWireNode568(value["active_binding"])) return false;
+    return true;
+}
+
+function validateWireNode565(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode566(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode567(item));
+}
+
+function validateWireNode567(value) {
+    return validateWireNode557(value);
+}
+
+function validateWireNode568(value) {
+    return value === null || validateWireNode569(value);
+}
+
+function validateWireNode569(value) {
+    return validateWireNode526(value);
+}
+
+function validateWireNode570(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["provider_id"] === undefined || !validateWireNode571(value["provider_id"])) return false;
+    if (value["kind"] === undefined || !validateWireNode572(value["kind"])) return false;
+    if (value["remove_provider"] === undefined || !validateWireNode573(value["remove_provider"])) return false;
+    if (value["start"] === undefined || !validateWireNode574(value["start"])) return false;
+    if (value["erase_count"] === undefined || !validateWireNode575(value["erase_count"])) return false;
+    if (value["insert"] === undefined || !validateWireNode576(value["insert"])) return false;
+    if (value["selected"] !== undefined && !validateWireNode578(value["selected"])) return false;
+    return true;
+}
+
+function validateWireNode571(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode572(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode573(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode574(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode575(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode576(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode577(item));
+}
+
+function validateWireNode577(value) {
+    return validateWireNode553(value);
+}
+
+function validateWireNode578(value) {
+    return value === null || validateWireNode579(value);
+}
+
+function validateWireNode579(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode580(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode581(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode582(value["revision"])) return false;
+    if (value["snapshot_required"] === undefined || !validateWireNode583(value["snapshot_required"])) return false;
+    if (value["providers"] === undefined || !validateWireNode584(value["providers"])) return false;
+    if (value["provider_order"] === undefined || !validateWireNode586(value["provider_order"])) return false;
+    if (value["active_binding"] !== undefined && !validateWireNode588(value["active_binding"])) return false;
+    return true;
+}
+
+function validateWireNode581(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode582(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode583(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode584(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode585(item));
+}
+
+function validateWireNode585(value) {
+    return validateWireNode570(value);
+}
+
+function validateWireNode586(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode587(item));
+}
+
+function validateWireNode587(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode588(value) {
+    return value === null || validateWireNode589(value);
+}
+
+function validateWireNode589(value) {
+    return validateWireNode526(value);
+}
+
+function validateWireNode590(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["begin"] === undefined || !validateWireNode591(value["begin"])) return false;
+    if (value["end"] === undefined || !validateWireNode592(value["end"])) return false;
+    return true;
+}
+
+function validateWireNode591(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode592(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode593(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["begin"] === undefined || !validateWireNode594(value["begin"])) return false;
+    if (value["end"] === undefined || !validateWireNode595(value["end"])) return false;
+    if (value["scope"] === undefined || !validateWireNode596(value["scope"])) return false;
+    return true;
+}
+
+function validateWireNode594(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode595(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode596(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10);
+}
+
+function validateWireNode597(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["open"] === undefined || !validateWireNode598(value["open"])) return false;
+    if (value["close"] === undefined || !validateWireNode599(value["close"])) return false;
+    if (value["kind"] === undefined || !validateWireNode600(value["kind"])) return false;
+    if (value["depth"] === undefined || !validateWireNode601(value["depth"])) return false;
+    return true;
+}
+
+function validateWireNode598(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode599(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode600(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode601(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode602(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["offset"] === undefined || !validateWireNode603(value["offset"])) return false;
+    if (value["kind"] === undefined || !validateWireNode604(value["kind"])) return false;
+    if (value["role"] === undefined || !validateWireNode605(value["role"])) return false;
+    return true;
+}
+
+function validateWireNode603(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode604(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode605(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
+function validateWireNode606(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["range"] === undefined || !validateWireNode607(value["range"])) return false;
+    if (value["role"] === undefined || !validateWireNode608(value["role"])) return false;
+    return true;
+}
+
+function validateWireNode607(value) {
+    return validateWireNode590(value);
+}
+
+function validateWireNode608(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode609(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["range"] === undefined || !validateWireNode610(value["range"])) return false;
+    if (value["kind"] === undefined || !validateWireNode611(value["kind"])) return false;
+    return true;
+}
+
+function validateWireNode610(value) {
+    return validateWireNode590(value);
+}
+
+function validateWireNode611(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
+function validateWireNode612(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["line"] === undefined || !validateWireNode613(value["line"])) return false;
+    if (value["line_start"] === undefined || !validateWireNode614(value["line_start"])) return false;
+    if (value["content_start"] === undefined || !validateWireNode615(value["content_start"])) return false;
+    if (value["spaces"] === undefined || !validateWireNode616(value["spaces"])) return false;
+    if (value["tabs"] === undefined || !validateWireNode617(value["tabs"])) return false;
+    if (value["columns"] === undefined || !validateWireNode618(value["columns"])) return false;
+    if (value["blank"] === undefined || !validateWireNode619(value["blank"])) return false;
+    return true;
+}
+
+function validateWireNode613(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode614(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode615(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode616(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode617(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode618(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode619(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode620(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode621(value["revision"])) return false;
+    if (value["language"] === undefined || !validateWireNode622(value["language"])) return false;
+    if (value["text_bytes"] === undefined || !validateWireNode623(value["text_bytes"])) return false;
+    if (value["spans"] === undefined || !validateWireNode624(value["spans"])) return false;
+    if (value["bracket_pairs"] === undefined || !validateWireNode626(value["bracket_pairs"])) return false;
+    if (value["unmatched_brackets"] === undefined || !validateWireNode628(value["unmatched_brackets"])) return false;
+    if (value["comment_tokens"] === undefined || !validateWireNode630(value["comment_tokens"])) return false;
+    if (value["comment_ranges"] === undefined || !validateWireNode632(value["comment_ranges"])) return false;
+    if (value["indentation"] === undefined || !validateWireNode634(value["indentation"])) return false;
+    return true;
+}
+
+function validateWireNode621(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode622(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode623(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode624(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode625(item));
+}
+
+function validateWireNode625(value) {
+    return validateWireNode593(value);
+}
+
+function validateWireNode626(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode627(item));
+}
+
+function validateWireNode627(value) {
+    return validateWireNode597(value);
+}
+
+function validateWireNode628(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode629(item));
+}
+
+function validateWireNode629(value) {
+    return validateWireNode602(value);
+}
+
+function validateWireNode630(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode631(item));
+}
+
+function validateWireNode631(value) {
+    return validateWireNode606(value);
+}
+
+function validateWireNode632(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode633(item));
+}
+
+function validateWireNode633(value) {
+    return validateWireNode609(value);
+}
+
+function validateWireNode634(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode635(item));
+}
+
+function validateWireNode635(value) {
+    return validateWireNode612(value);
+}
+
+function validateWireNode636(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode637(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode638(value["revision"])) return false;
+    if (value["language"] !== undefined && !validateWireNode639(value["language"])) return false;
+    if (value["text_bytes"] !== undefined && !validateWireNode641(value["text_bytes"])) return false;
+    if (value["spans"] !== undefined && !validateWireNode643(value["spans"])) return false;
+    if (value["bracket_pairs"] !== undefined && !validateWireNode646(value["bracket_pairs"])) return false;
+    if (value["unmatched_brackets"] !== undefined && !validateWireNode649(value["unmatched_brackets"])) return false;
+    if (value["comment_tokens"] !== undefined && !validateWireNode652(value["comment_tokens"])) return false;
+    if (value["comment_ranges"] !== undefined && !validateWireNode655(value["comment_ranges"])) return false;
+    if (value["indentation"] !== undefined && !validateWireNode658(value["indentation"])) return false;
+    return true;
+}
+
+function validateWireNode637(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode638(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode639(value) {
+    return value === null || validateWireNode640(value);
+}
+
+function validateWireNode640(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode641(value) {
+    return value === null || validateWireNode642(value);
+}
+
+function validateWireNode642(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode643(value) {
+    return value === null || validateWireNode644(value);
+}
+
+function validateWireNode644(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode645(item));
+}
+
+function validateWireNode645(value) {
+    return validateWireNode593(value);
+}
+
+function validateWireNode646(value) {
+    return value === null || validateWireNode647(value);
+}
+
+function validateWireNode647(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode648(item));
+}
+
+function validateWireNode648(value) {
+    return validateWireNode597(value);
+}
+
+function validateWireNode649(value) {
+    return value === null || validateWireNode650(value);
+}
+
+function validateWireNode650(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode651(item));
+}
+
+function validateWireNode651(value) {
+    return validateWireNode602(value);
+}
+
+function validateWireNode652(value) {
+    return value === null || validateWireNode653(value);
+}
+
+function validateWireNode653(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode654(item));
+}
+
+function validateWireNode654(value) {
+    return validateWireNode606(value);
+}
+
+function validateWireNode655(value) {
+    return value === null || validateWireNode656(value);
+}
+
+function validateWireNode656(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode657(item));
+}
+
+function validateWireNode657(value) {
+    return validateWireNode609(value);
+}
+
+function validateWireNode658(value) {
+    return value === null || validateWireNode659(value);
+}
+
+function validateWireNode659(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode660(item));
+}
+
+function validateWireNode660(value) {
+    return validateWireNode612(value);
+}
+
+function validateWireNode661(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["line"] === undefined || !validateWireNode662(value["line"])) return false;
+    if (value["character"] === undefined || !validateWireNode663(value["character"])) return false;
+    return true;
+}
+
+function validateWireNode662(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode663(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode664(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["start"] === undefined || !validateWireNode665(value["start"])) return false;
+    if (value["end"] === undefined || !validateWireNode666(value["end"])) return false;
+    return true;
+}
+
+function validateWireNode665(value) {
+    return validateWireNode661(value);
+}
+
+function validateWireNode666(value) {
+    return validateWireNode661(value);
+}
+
+function validateWireNode667(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["range"] === undefined || !validateWireNode668(value["range"])) return false;
+    if (value["severity"] !== undefined && !validateWireNode669(value["severity"])) return false;
+    if (value["code"] === undefined || !validateWireNode671(value["code"])) return false;
+    if (value["message"] === undefined || !validateWireNode672(value["message"])) return false;
+    return true;
+}
+
+function validateWireNode668(value) {
+    return validateWireNode664(value);
+}
+
+function validateWireNode669(value) {
+    return value === null || validateWireNode670(value);
+}
+
+function validateWireNode670(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 1 || raw === 2 || raw === 3 || raw === 4);
+}
+
+function validateWireNode671(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode672(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode673(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["uri"] === undefined || !validateWireNode674(value["uri"])) return false;
+    if (value["revision"] === undefined || !validateWireNode675(value["revision"])) return false;
+    if (value["diagnostics"] === undefined || !validateWireNode676(value["diagnostics"])) return false;
+    return true;
+}
+
+function validateWireNode674(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode675(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode676(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode677(item));
+}
+
+function validateWireNode677(value) {
+    return validateWireNode667(value);
+}
+
+function validateWireNode678(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode679(value["revision"])) return false;
+    if (value["documents"] === undefined || !validateWireNode680(value["documents"])) return false;
+    return true;
+}
+
+function validateWireNode679(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode680(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode681(item));
+}
+
+function validateWireNode681(value) {
+    return validateWireNode673(value);
+}
+
+function validateWireNode682(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode683(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode684(value["revision"])) return false;
+    if (value["state"] !== undefined && !validateWireNode685(value["state"])) return false;
+    return true;
+}
+
+function validateWireNode683(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode684(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode685(value) {
+    return value === null || validateWireNode686(value);
+}
+
+function validateWireNode686(value) {
+    return validateWireNode678(value);
+}
+
+function validateWireNode687(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["label"] === undefined || !validateWireNode688(value["label"])) return false;
+    if (value["detail"] === undefined || !validateWireNode689(value["detail"])) return false;
+    if (value["sort_text"] === undefined || !validateWireNode690(value["sort_text"])) return false;
+    if (value["insert_text"] === undefined || !validateWireNode691(value["insert_text"])) return false;
+    if (value["replacement_range"] !== undefined && !validateWireNode692(value["replacement_range"])) return false;
+    return true;
+}
+
+function validateWireNode688(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode689(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode690(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode691(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode692(value) {
+    return value === null || validateWireNode693(value);
+}
+
+function validateWireNode693(value) {
+    return validateWireNode664(value);
+}
+
+function validateWireNode694(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["visible"] === undefined || !validateWireNode695(value["visible"])) return false;
+    if (value["loading"] === undefined || !validateWireNode696(value["loading"])) return false;
+    if (value["items"] === undefined || !validateWireNode697(value["items"])) return false;
+    if (value["selected_index"] !== undefined && !validateWireNode699(value["selected_index"])) return false;
+    return true;
+}
+
+function validateWireNode695(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode696(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode697(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode698(item));
+}
+
+function validateWireNode698(value) {
+    return validateWireNode687(value);
+}
+
+function validateWireNode699(value) {
+    return value === null || validateWireNode700(value);
+}
+
+function validateWireNode700(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode701(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["contents"] === undefined || !validateWireNode702(value["contents"])) return false;
+    if (value["range"] !== undefined && !validateWireNode703(value["range"])) return false;
+    return true;
+}
+
+function validateWireNode702(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode703(value) {
+    return value === null || validateWireNode704(value);
+}
+
+function validateWireNode704(value) {
+    return validateWireNode664(value);
+}
+
+function validateWireNode705(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["uri"] === undefined || !validateWireNode706(value["uri"])) return false;
+    if (value["range"] === undefined || !validateWireNode707(value["range"])) return false;
+    return true;
+}
+
+function validateWireNode706(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode707(value) {
+    return validateWireNode664(value);
+}
+
+function validateWireNode708(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["targets"] === undefined || !validateWireNode709(value["targets"])) return false;
+    if (value["selected_index"] !== undefined && !validateWireNode711(value["selected_index"])) return false;
+    if (value["user_navigation"] === undefined || !validateWireNode713(value["user_navigation"])) return false;
+    if (value["reveal_primary_caret"] === undefined || !validateWireNode714(value["reveal_primary_caret"])) return false;
+    return true;
+}
+
+function validateWireNode709(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode710(item));
+}
+
+function validateWireNode710(value) {
+    return validateWireNode705(value);
+}
+
+function validateWireNode711(value) {
+    return value === null || validateWireNode712(value);
+}
+
+function validateWireNode712(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode713(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode714(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode715(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode716(value["revision"])) return false;
+    if (value["completion"] === undefined || !validateWireNode717(value["completion"])) return false;
+    if (value["hover"] !== undefined && !validateWireNode718(value["hover"])) return false;
+    if (value["navigation"] === undefined || !validateWireNode720(value["navigation"])) return false;
+    if (value["status"] === undefined || !validateWireNode721(value["status"])) return false;
+    return true;
+}
+
+function validateWireNode716(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode717(value) {
+    return validateWireNode694(value);
+}
+
+function validateWireNode718(value) {
+    return value === null || validateWireNode719(value);
+}
+
+function validateWireNode719(value) {
+    return validateWireNode701(value);
+}
+
+function validateWireNode720(value) {
+    return validateWireNode708(value);
+}
+
+function validateWireNode721(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode722(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode723(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode724(value["revision"])) return false;
+    if (value["state"] !== undefined && !validateWireNode725(value["state"])) return false;
+    return true;
+}
+
+function validateWireNode723(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode724(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode725(value) {
+    return value === null || validateWireNode726(value);
+}
+
+function validateWireNode726(value) {
+    return validateWireNode715(value);
+}
+
+function validateWireNode727(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["red"] === undefined || !validateWireNode728(value["red"])) return false;
+    if (value["green"] === undefined || !validateWireNode729(value["green"])) return false;
+    if (value["blue"] === undefined || !validateWireNode730(value["blue"])) return false;
+    return true;
+}
+
+function validateWireNode728(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 255n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 255;
+}
+
+function validateWireNode729(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 255n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 255;
+}
+
+function validateWireNode730(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 255n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 255;
+}
+
+function validateWireNode731(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["role_colors"] === undefined || !validateWireNode732(value["role_colors"])) return false;
+    if (value["syntax_colors"] === undefined || !validateWireNode734(value["syntax_colors"])) return false;
+    return true;
+}
+
+function validateWireNode732(value) {
+    return Array.isArray(value) &&
+      value.length === 28 &&
+      value.every((item) => validateWireNode733(item));
+}
+
+function validateWireNode733(value) {
+    return validateWireNode727(value);
+}
+
+function validateWireNode734(value) {
+    return Array.isArray(value) &&
+      value.length === 11 &&
+      value.every((item) => validateWireNode735(item));
+}
+
+function validateWireNode735(value) {
+    return validateWireNode727(value);
+}
+
+function validateWireNode736(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["replacement"] !== undefined && !validateWireNode737(value["replacement"])) return false;
+    return true;
+}
+
+function validateWireNode737(value) {
+    return value === null || validateWireNode738(value);
+}
+
+function validateWireNode738(value) {
+    return validateWireNode731(value);
+}
+
+function validateWireNode739(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode740(value["id"])) return false;
+    if (value["label"] === undefined || !validateWireNode741(value["label"])) return false;
+    if (value["detail"] === undefined || !validateWireNode742(value["detail"])) return false;
+    return true;
+}
+
+function validateWireNode740(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode741(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode742(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode743(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_score"] === undefined || !validateWireNode744(value["base_score"])) return false;
+    if (value["word_boundary_bonus"] === undefined || !validateWireNode745(value["word_boundary_bonus"])) return false;
+    if (value["contiguity_bonus"] === undefined || !validateWireNode746(value["contiguity_bonus"])) return false;
+    if (value["exact_case_bonus"] === undefined || !validateWireNode747(value["exact_case_bonus"])) return false;
+    if (value["length_cap"] === undefined || !validateWireNode748(value["length_cap"])) return false;
+    return true;
+}
+
+function validateWireNode744(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+}
+
+function validateWireNode745(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+}
+
+function validateWireNode746(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+}
+
+function validateWireNode747(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+}
+
+function validateWireNode748(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+}
+
+function validateWireNode749(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["active_mode"] === undefined || !validateWireNode750(value["active_mode"])) return false;
+    if (value["activation_id"] === undefined || !validateWireNode752(value["activation_id"])) return false;
+    if (value["command_candidates"] === undefined || !validateWireNode754(value["command_candidates"])) return false;
+    if (value["command_open_command_id"] === undefined || !validateWireNode756(value["command_open_command_id"])) return false;
+    if (value["file_candidates"] === undefined || !validateWireNode757(value["file_candidates"])) return false;
+    if (value["file_open_command_id"] === undefined || !validateWireNode759(value["file_open_command_id"])) return false;
+    if (value["presence_overlay"] === undefined || !validateWireNode760(value["presence_overlay"])) return false;
+    if (value["parameters"] === undefined || !validateWireNode761(value["parameters"])) return false;
+    if (value["max_parameter_magnitude"] === undefined || !validateWireNode762(value["max_parameter_magnitude"])) return false;
+    if (value["max_candidate_bytes"] === undefined || !validateWireNode763(value["max_candidate_bytes"])) return false;
+    return true;
+}
+
+function validateWireNode750(value) {
+    return value === null || validateWireNode751(value);
+}
+
+function validateWireNode751(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+}
+
+function validateWireNode752(value) {
+    return value === null || validateWireNode753(value);
+}
+
+function validateWireNode753(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode754(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode755(item));
+}
+
+function validateWireNode755(value) {
+    return validateWireNode739(value);
+}
+
+function validateWireNode756(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode757(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode758(item));
+}
+
+function validateWireNode758(value) {
+    return validateWireNode739(value);
+}
+
+function validateWireNode759(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode760(value) {
+    return validateWireNode194(value);
+}
+
+function validateWireNode761(value) {
+    return validateWireNode743(value);
+}
+
+function validateWireNode762(value) {
+    if (typeof value === 'bigint') {
+      return value >= -9223372036854775808n &&
+        value <= 9223372036854775807n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value);
+}
+
+function validateWireNode763(value) {
+    if (typeof value === 'bigint') {
+      return value >= -9223372036854775808n &&
+        value <= 9223372036854775807n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value);
+}
+
+function validateWireNode764(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode765(value["id"])) return false;
+    if (value["label"] === undefined || !validateWireNode766(value["label"])) return false;
+    if (value["command"] === undefined || !validateWireNode767(value["command"])) return false;
+    return true;
+}
+
+function validateWireNode765(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode766(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode767(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode768(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["text"] === undefined || !validateWireNode769(value["text"])) return false;
+    if (value["actions"] === undefined || !validateWireNode770(value["actions"])) return false;
+    return true;
+}
+
+function validateWireNode769(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode770(value) {
+    return Array.isArray(value) && value.length > 0 &&
+      value.every((item) => validateWireNode771(item));
+}
+
+function validateWireNode771(value) {
+    return validateWireNode764(value);
+}
+
+function validateWireNode772(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode773(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode774(value["replacement"])) return false;
+    return true;
+}
+
+function validateWireNode773(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode774(value) {
+    return value === null || validateWireNode775(value);
+}
+
+function validateWireNode775(value) {
+    return validateWireNode768(value);
+}
+
+function validateWireNode776(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["document"] === undefined || !validateWireNode777(value["document"])) return false;
+    if (value["selection"] === undefined || !validateWireNode778(value["selection"])) return false;
+    if (value["history"] === undefined || !validateWireNode779(value["history"])) return false;
+    if (value["clipboard"] === undefined || !validateWireNode780(value["clipboard"])) return false;
+    if (value["prompt_status"] === undefined || !validateWireNode781(value["prompt_status"])) return false;
+    if (value["search"] === undefined || !validateWireNode782(value["search"])) return false;
+    if (value["find_replace"] === undefined || !validateWireNode783(value["find_replace"])) return false;
+    if (value["settings"] === undefined || !validateWireNode784(value["settings"])) return false;
+    if (value["keymap"] === undefined || !validateWireNode785(value["keymap"])) return false;
+    if (value["text_encoding"] === undefined || !validateWireNode786(value["text_encoding"])) return false;
+    if (value["tabs"] === undefined || !validateWireNode787(value["tabs"])) return false;
+    if (value["diff"] === undefined || !validateWireNode788(value["diff"])) return false;
+    if (value["external_modification"] === undefined || !validateWireNode789(value["external_modification"])) return false;
+    if (value["follow_edits"] === undefined || !validateWireNode790(value["follow_edits"])) return false;
+    if (value["tree"] === undefined || !validateWireNode791(value["tree"])) return false;
+    if (value["syntax"] === undefined || !validateWireNode792(value["syntax"])) return false;
+    if (value["lsp_sync"] === undefined || !validateWireNode793(value["lsp_sync"])) return false;
+    if (value["lsp_features"] === undefined || !validateWireNode794(value["lsp_features"])) return false;
+    if (value["theme"] === undefined || !validateWireNode795(value["theme"])) return false;
+    if (value["palette"] === undefined || !validateWireNode796(value["palette"])) return false;
+    if (value["ui_frame"] !== undefined && !validateWireNode797(value["ui_frame"])) return false;
+    if (value["notice_view"] !== undefined && !validateWireNode798(value["notice_view"])) return false;
+    if (value["watcher_available"] !== undefined && !validateWireNode800(value["watcher_available"])) return false;
+    return true;
+}
+
+function validateWireNode777(value) {
+    return validateWireNode228(value);
+}
+
+function validateWireNode778(value) {
+    return validateWireNode245(value);
+}
+
+function validateWireNode779(value) {
+    return validateWireNode252(value);
+}
+
+function validateWireNode780(value) {
+    return validateWireNode264(value);
+}
+
+function validateWireNode781(value) {
+    return validateWireNode289(value);
+}
+
+function validateWireNode782(value) {
+    return validateWireNode305(value);
+}
+
+function validateWireNode783(value) {
+    return validateWireNode329(value);
+}
+
+function validateWireNode784(value) {
+    return validateWireNode362(value);
+}
+
+function validateWireNode785(value) {
+    return validateWireNode377(value);
+}
+
+function validateWireNode786(value) {
+    return validateWireNode390(value);
+}
+
+function validateWireNode787(value) {
+    return validateWireNode411(value);
+}
+
+function validateWireNode788(value) {
+    return validateWireNode455(value);
+}
+
+function validateWireNode789(value) {
+    return validateWireNode478(value);
+}
+
+function validateWireNode790(value) {
+    return validateWireNode511(value);
+}
+
+function validateWireNode791(value) {
+    return validateWireNode564(value);
+}
+
+function validateWireNode792(value) {
+    return validateWireNode620(value);
+}
+
+function validateWireNode793(value) {
+    return validateWireNode678(value);
+}
+
+function validateWireNode794(value) {
+    return validateWireNode715(value);
+}
+
+function validateWireNode795(value) {
+    return validateWireNode731(value);
+}
+
+function validateWireNode796(value) {
+    return validateWireNode749(value);
+}
+
+function validateWireNode797(value) {
+    return validateWireNode203(value);
+}
+
+function validateWireNode798(value) {
+    return value === null || validateWireNode799(value);
+}
+
+function validateWireNode799(value) {
+    return validateWireNode768(value);
+}
+
+function validateWireNode800(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode801(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode802(value["revision"])) return false;
+    if (value["topology"] === undefined || !validateWireNode803(value["topology"])) return false;
+    if (value["client"] === undefined || !validateWireNode804(value["client"])) return false;
+    if (value["sections"] === undefined || !validateWireNode805(value["sections"])) return false;
+    return true;
+}
+
+function validateWireNode802(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode803(value) {
+    return validateWireNode214(value);
+}
+
+function validateWireNode804(value) {
+    return validateWireNode219(value);
+}
+
+function validateWireNode805(value) {
+    return validateWireNode776(value);
+}
+
+function validateWireNode806(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode807(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode808(value["revision"])) return false;
+    if (value["client_id"] === undefined || !validateWireNode809(value["client_id"])) return false;
+    if (value["view_id"] === undefined || !validateWireNode810(value["view_id"])) return false;
+    if (value["capabilities"] === undefined || !validateWireNode811(value["capabilities"])) return false;
+    if (value["topology"] !== undefined && !validateWireNode813(value["topology"])) return false;
+    if (value["document"] !== undefined && !validateWireNode815(value["document"])) return false;
+    if (value["document_caret"] !== undefined && !validateWireNode817(value["document_caret"])) return false;
+    if (value["selection"] === undefined || !validateWireNode819(value["selection"])) return false;
+    if (value["history"] === undefined || !validateWireNode820(value["history"])) return false;
+    if (value["clipboard"] === undefined || !validateWireNode821(value["clipboard"])) return false;
+    if (value["prompt_status"] === undefined || !validateWireNode822(value["prompt_status"])) return false;
+    if (value["search"] === undefined || !validateWireNode823(value["search"])) return false;
+    if (value["find_replace"] === undefined || !validateWireNode824(value["find_replace"])) return false;
+    if (value["settings"] === undefined || !validateWireNode825(value["settings"])) return false;
+    if (value["keymap"] === undefined || !validateWireNode826(value["keymap"])) return false;
+    if (value["text_encoding"] !== undefined && !validateWireNode827(value["text_encoding"])) return false;
+    if (value["tabs"] === undefined || !validateWireNode829(value["tabs"])) return false;
+    if (value["diff"] === undefined || !validateWireNode830(value["diff"])) return false;
+    if (value["external_modification"] === undefined || !validateWireNode831(value["external_modification"])) return false;
+    if (value["follow_edits"] === undefined || !validateWireNode832(value["follow_edits"])) return false;
+    if (value["tree"] === undefined || !validateWireNode833(value["tree"])) return false;
+    if (value["syntax"] === undefined || !validateWireNode834(value["syntax"])) return false;
+    if (value["lsp_sync"] === undefined || !validateWireNode835(value["lsp_sync"])) return false;
+    if (value["lsp_features"] === undefined || !validateWireNode836(value["lsp_features"])) return false;
+    if (value["theme"] === undefined || !validateWireNode837(value["theme"])) return false;
+    if (value["palette"] !== undefined && !validateWireNode838(value["palette"])) return false;
+    if (value["ui_frame_delta"] !== undefined && !validateWireNode840(value["ui_frame_delta"])) return false;
+    if (value["notice_view"] !== undefined && !validateWireNode841(value["notice_view"])) return false;
+    if (value["watcher_available"] !== undefined && !validateWireNode842(value["watcher_available"])) return false;
+    return true;
+}
+
+function validateWireNode807(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode808(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode809(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode810(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode811(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode812(item));
+}
+
+function validateWireNode812(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode813(value) {
+    return value === null || validateWireNode814(value);
+}
+
+function validateWireNode814(value) {
+    return validateWireNode214(value);
+}
+
+function validateWireNode815(value) {
+    return value === null || validateWireNode816(value);
+}
+
+function validateWireNode816(value) {
+    return validateWireNode234(value);
+}
+
+function validateWireNode817(value) {
+    return value === null || validateWireNode818(value);
+}
+
+function validateWireNode818(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode819(value) {
+    return validateWireNode248(value);
+}
+
+function validateWireNode820(value) {
+    return validateWireNode256(value);
+}
+
+function validateWireNode821(value) {
+    return validateWireNode270(value);
+}
+
+function validateWireNode822(value) {
+    return validateWireNode293(value);
+}
+
+function validateWireNode823(value) {
+    return validateWireNode316(value);
+}
+
+function validateWireNode824(value) {
+    return validateWireNode343(value);
+}
+
+function validateWireNode825(value) {
+    return validateWireNode369(value);
+}
+
+function validateWireNode826(value) {
+    return validateWireNode381(value);
+}
+
+function validateWireNode827(value) {
+    return value === null || validateWireNode828(value);
+}
+
+function validateWireNode828(value) {
+    return validateWireNode392(value);
+}
+
+function validateWireNode829(value) {
+    return validateWireNode416(value);
+}
+
+function validateWireNode830(value) {
+    return validateWireNode459(value);
+}
+
+function validateWireNode831(value) {
+    return validateWireNode485(value);
+}
+
+function validateWireNode832(value) {
+    return validateWireNode521(value);
+}
+
+function validateWireNode833(value) {
+    return validateWireNode580(value);
+}
+
+function validateWireNode834(value) {
+    return validateWireNode636(value);
+}
+
+function validateWireNode835(value) {
+    return validateWireNode682(value);
+}
+
+function validateWireNode836(value) {
+    return validateWireNode722(value);
+}
+
+function validateWireNode837(value) {
+    return validateWireNode736(value);
+}
+
+function validateWireNode838(value) {
+    return value === null || validateWireNode839(value);
+}
+
+function validateWireNode839(value) {
+    return validateWireNode749(value);
+}
+
+function validateWireNode840(value) {
+    return validateWireNode208(value);
+}
+
+function validateWireNode841(value) {
+    return validateWireNode772(value);
+}
+
+function validateWireNode842(value) {
+    return value === null || validateWireNode843(value);
+}
+
+function validateWireNode843(value) {
+    return typeof value === 'boolean';
+}
+
 export const validateKeyStrokeWire = (value) => validateWireNode0(value);
 export const validateExternalActionInvocationWire = (value) => validateWireNode6(value);
 export const validateStatusActionInvocationWire = (value) => validateWireNode9(value);
@@ -2207,6 +5856,107 @@ export const validatePalettePresenceOverlayWire = (value) => validateWireNode194
 export const validateUiFrameVersionWire = (value) => validateWireNode200(value);
 export const validateUiFrameWire = (value) => validateWireNode203(value);
 export const validateUiFrameDeltaWire = (value) => validateWireNode208(value);
+export const validateSessionTopologyWire = (value) => validateWireNode214(value);
+export const validateClientSnapshotStateWire = (value) => validateWireNode219(value);
+export const validateDocumentPositionWire = (value) => validateWireNode224(value);
+export const validateDocumentViewStateWire = (value) => validateWireNode228(value);
+export const validateDocumentDeltaWire = (value) => validateWireNode234(value);
+export const validateSelectionWire = (value) => validateWireNode242(value);
+export const validateSelectionSetWire = (value) => validateWireNode245(value);
+export const validateSelectionSetDeltaWire = (value) => validateWireNode248(value);
+export const validateHistoryViewStateWire = (value) => validateWireNode252(value);
+export const validateHistoryDeltaWire = (value) => validateWireNode256(value);
+export const validateClipboardWriteWire = (value) => validateWireNode260(value);
+export const validateClipboardViewStateWire = (value) => validateWireNode264(value);
+export const validateClipboardDeltaWire = (value) => validateWireNode270(value);
+export const validateStatusActionWire = (value) => validateWireNode274(value);
+export const validateStatusItemViewWire = (value) => validateWireNode278(value);
+export const validateStatusViewStateWire = (value) => validateWireNode285(value);
+export const validatePromptStatusViewStateWire = (value) => validateWireNode289(value);
+export const validatePromptStatusDeltaWire = (value) => validateWireNode293(value);
+export const validateSearchResultWire = (value) => validateWireNode297(value);
+export const validateSearchViewStateWire = (value) => validateWireNode305(value);
+export const validateSearchDeltaWire = (value) => validateWireNode316(value);
+export const validateFindOptionsWire = (value) => validateWireNode321(value);
+export const validateFindMatchWire = (value) => validateWireNode326(value);
+export const validateFindReplaceViewStateWire = (value) => validateWireNode329(value);
+export const validateFindReplaceDeltaWire = (value) => validateWireNode343(value);
+export const validateSettingValueWire = (value) => validateWireNode348(value);
+export const validateEffectiveSettingWire = (value) => validateWireNode356(value);
+export const validateSettingViewEntryWire = (value) => validateWireNode359(value);
+export const validateSettingsViewStateWire = (value) => validateWireNode362(value);
+export const validateSettingsDeltaWire = (value) => validateWireNode365(value);
+export const validateSettingsSectionDeltaWire = (value) => validateWireNode369(value);
+export const validateKeyBindingWire = (value) => validateWireNode372(value);
+export const validateKeymapViewStateWire = (value) => validateWireNode377(value);
+export const validateKeymapDeltaWire = (value) => validateWireNode381(value);
+export const validateTextEncodingStatusWire = (value) => validateWireNode385(value);
+export const validateTextEncodingViewStateWire = (value) => validateWireNode390(value);
+export const validateTextEncodingDeltaWire = (value) => validateWireNode392(value);
+export const validateUntitledDocumentIdWire = (value) => validateWireNode395(value);
+export const validateJournalDocumentKeyWire = (value) => validateWireNode396(value);
+export const validateTabStateWire = (value) => validateWireNode399(value);
+export const validateTabViewStateWire = (value) => validateWireNode411(value);
+export const validateTabDeltaWire = (value) => validateWireNode416(value);
+export const validateDiffWordRangeWire = (value) => validateWireNode419(value);
+export const validateDiffLineChangeWire = (value) => validateWireNode422(value);
+export const validateDiffHunkWire = (value) => validateWireNode434(value);
+export const validateDiffFileViewWire = (value) => validateWireNode441(value);
+export const validateDiffViewStateWire = (value) => validateWireNode455(value);
+export const validateDiffDeltaWire = (value) => validateWireNode459(value);
+export const validateExternalActionAffordanceWire = (value) => validateWireNode466(value);
+export const validateExternalDocumentViewWire = (value) => validateWireNode470(value);
+export const validateExternalModificationViewStateWire = (value) => validateWireNode478(value);
+export const validateExternalModificationDeltaWire = (value) => validateWireNode485(value);
+export const validateViewportDimensionsWire = (value) => validateWireNode495(value);
+export const validateFollowScrollOffsetWire = (value) => validateWireNode498(value);
+export const validateFollowTargetWire = (value) => validateWireNode501(value);
+export const validateFollowClientViewWire = (value) => validateWireNode507(value);
+export const validateFollowEditsViewStateWire = (value) => validateWireNode511(value);
+export const validateFollowEditsDeltaWire = (value) => validateWireNode521(value);
+export const validateTreeProviderBindingWire = (value) => validateWireNode526(value);
+export const validateTreeNodeCommandWire = (value) => validateWireNode529(value);
+export const validateGitTreeAffordanceWire = (value) => validateWireNode532(value);
+export const validateTreeNodeWire = (value) => validateWireNode536(value);
+export const validateTreeNodeViewWire = (value) => validateWireNode553(value);
+export const validateTreeProviderViewWire = (value) => validateWireNode557(value);
+export const validateTreeViewStateWire = (value) => validateWireNode564(value);
+export const validateTreeProviderDeltaWire = (value) => validateWireNode570(value);
+export const validateTreeDeltaWire = (value) => validateWireNode580(value);
+export const validateSyntaxRangeWire = (value) => validateWireNode590(value);
+export const validateSyntaxSpanWire = (value) => validateWireNode593(value);
+export const validateSyntaxBracketPairWire = (value) => validateWireNode597(value);
+export const validateUnmatchedBracketWire = (value) => validateWireNode602(value);
+export const validateCommentTokenWire = (value) => validateWireNode606(value);
+export const validateCommentRangeWire = (value) => validateWireNode609(value);
+export const validateLineIndentationWire = (value) => validateWireNode612(value);
+export const validateSyntaxViewStateWire = (value) => validateWireNode620(value);
+export const validateSyntaxDeltaWire = (value) => validateWireNode636(value);
+export const validateLspPositionWire = (value) => validateWireNode661(value);
+export const validateLspRangeWire = (value) => validateWireNode664(value);
+export const validateLspDiagnosticWire = (value) => validateWireNode667(value);
+export const validateLspDocumentDiagnosticsWire = (value) => validateWireNode673(value);
+export const validateLspSyncViewStateWire = (value) => validateWireNode678(value);
+export const validateLspSyncDeltaWire = (value) => validateWireNode682(value);
+export const validateLspCompletionItemWire = (value) => validateWireNode687(value);
+export const validateLspCompletionViewStateWire = (value) => validateWireNode694(value);
+export const validateLspHoverWire = (value) => validateWireNode701(value);
+export const validateLspNavigationTargetWire = (value) => validateWireNode705(value);
+export const validateLspNavigationViewStateWire = (value) => validateWireNode708(value);
+export const validateLspFeatureViewStateWire = (value) => validateWireNode715(value);
+export const validateLspFeatureDeltaWire = (value) => validateWireNode722(value);
+export const validateSrgbColorWire = (value) => validateWireNode727(value);
+export const validateThemeSnapshotWire = (value) => validateWireNode731(value);
+export const validateThemeSectionDeltaWire = (value) => validateWireNode736(value);
+export const validatePaletteCandidateWire = (value) => validateWireNode739(value);
+export const validateMatcherParametersWire = (value) => validateWireNode743(value);
+export const validatePaletteViewStateWire = (value) => validateWireNode749(value);
+export const validateNoticeActionWire = (value) => validateWireNode764(value);
+export const validateNoticeViewWire = (value) => validateWireNode768(value);
+export const validateNoticeViewSectionDeltaWire = (value) => validateWireNode772(value);
+export const validateSessionSnapshotSectionsWire = (value) => validateWireNode776(value);
+export const validateSessionSnapshotWire = (value) => validateWireNode801(value);
+export const validateSessionDeltaWire = (value) => validateWireNode806(value);
 
 export const buildKeyStrokeWire = (code, control, alt, meta, shift) => ({
   code: String(code),

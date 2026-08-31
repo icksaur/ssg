@@ -48,6 +48,8 @@ import {
   VISUAL_SELECTION_DIRECTION,
   validateCommandResultWire,
   validateClientInputResultWire,
+  validateSessionDeltaWire,
+  validateSessionSnapshotWire,
   validateViewActionRequestWire,
 } from '/generated/semantic_wire_manifest.mjs';
 
@@ -1574,6 +1576,10 @@ function applyProtocolFrame(buffer) {
   const { kind, payload } = decodeMessage(buffer);
   const inbound = browserInboundKind(kind);
   if (inbound === 'snapshot') {
+    if (!validateSessionSnapshotWire(payload)) {
+      reconnect('malformed state snapshot');
+      return false;
+    }
     const sections = findSections(payload);
     if (!sections || !normalizeTreeActiveBinding(sections.tree)) {
       reconnect('state snapshot rejected');
@@ -1588,6 +1594,10 @@ function applyProtocolFrame(buffer) {
     invalidatePointerOffsets();
     syncPickerFromAuthority();
   } else if (inbound === 'delta') {
+    if (!validateSessionDeltaWire(payload)) {
+      reconnect('malformed state delta');
+      return false;
+    }
     const applied = applyDelta(payload);
     if (applied !== 'accepted') {
       if (applied !== 'revision-gap') state.sections = null;
