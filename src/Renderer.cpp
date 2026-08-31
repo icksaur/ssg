@@ -394,7 +394,6 @@ void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
 // point belongs on top of it.  The caret is therefore bounded by the HEADER row,
 // not by the query node.
 std::optional<GridPosition> inputLineCaret(ShellViewState const& shell) {
-    if (!shell.header) return std::nullopt;
     for (auto const& node : shell.accessibilityNodes) {
         if (node.id != "input_line.query") continue;
         // Walk the same spans paintText walks, stopping where it stops: the
@@ -1295,16 +1294,18 @@ CellGrid Renderer::render(GridFrame const& snapshot,
     // so fill their whole rows first; the field text then paints on the band and
     // the gaps between fields carry the band colour rather than the document
     // background.
-    if (shell.header) {
+    if (const auto* header =
+            snapshot.layout().find(UiNodeId{std::string{kHeaderNodeId}})) {
         const auto role =
             nodeBackground(ui, kHeaderNodeId, SemanticRole::HeaderBackground);
-        fillRect(grid, *shell.header, foreground,
+        fillRect(grid, header->rect, foreground,
                  semanticIndex(theme, role), role);
     }
-    if (shell.footer) {
+    if (const auto* footer =
+            snapshot.layout().find(UiNodeId{std::string{kFooterNodeId}})) {
         const auto role =
             nodeBackground(ui, kFooterNodeId, SemanticRole::FooterBackground);
-        fillRect(grid, *shell.footer, foreground,
+        fillRect(grid, footer->rect, foreground,
                  semanticIndex(theme, role), role);
     }
     // The tab bar shares the inactive-tab background across its whole width, so

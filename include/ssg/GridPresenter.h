@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ssg/Layout.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Viewport.h>
 #include <ssg/ClientInput.h>
@@ -67,21 +68,25 @@ public:
     [[nodiscard]] PresentationSnapshot const& presentation() const noexcept {
         return presentation_;
     }
+    [[nodiscard]] SolvedGridTree const& layout() const noexcept {
+        return layout_;
+    }
+    // CONTRACT: Direct value construction requires a corresponding, solvable
+    // semantic UI frame and throws std::logic_error otherwise. GridPresenter
+    // reports the same rejection through project()'s nullopt result.
     GridFrame(SessionSnapshot semantic, PresentationSnapshot presentation,
-              GridBasis basis)
-        : semantic_{std::move(semantic)},
-          presentation_{std::move(presentation)},
-          basis_{basis} {}
+              GridBasis basis);
 
 private:
     friend class GridPresenter;
-    GridFrame(LegacyPresentationSnapshot legacy, GridBasis basis)
-        : semantic_{std::move(legacy.semantic_)},
-          presentation_{std::move(legacy.presentation_)},
-          basis_{basis} {}
+    GridFrame(SessionSnapshot semantic, PresentationSnapshot presentation,
+              SolvedGridTree layout, GridBasis basis);
+    [[nodiscard]] static std::optional<GridFrame> fromLegacy(
+        LegacyPresentationSnapshot legacy, GridBasis basis);
 
     SessionSnapshot semantic_;
     PresentationSnapshot presentation_;
+    SolvedGridTree layout_;
     GridBasis basis_;
 };
 

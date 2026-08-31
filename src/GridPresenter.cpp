@@ -5,9 +5,109 @@
 #include "grid_projection_state.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <type_traits>
 
 namespace ssg {
+namespace {
+
+std::vector<GridIntrinsicSize> transitionalIntrinsicSizes(
+    const UiNode& root) {
+    std::vector<GridIntrinsicSize> sizes;
+    const auto collect = [&](const auto& self, const UiNode& node) -> void {
+        if (node.size.kind() == SizeKind::Auto && node.isLeaf()) {
+            sizes.push_back({node.id, {1, 1}});
+        }
+        if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+            for (const auto& child : container->children) self(self, child);
+        }
+    };
+    collect(collect, root);
+    return sizes;
+}
+
+SolveUiFrameResult trySolveFrameLayout(
+    const SessionSnapshot& semantic,
+    const PresentationSnapshot& presentation) {
+    const auto& shell = presentation.shell;
+    if (shell.viewport.columns <= 0 || shell.viewport.rows <= 0) {
+        return {SolvedGridTree{}, {}};
+    }
+
+    auto validated = ValidatedSchema::validate(semantic.sections().ui);
+    if (!validated.ok()) {
+        return {std::nullopt,
+                "invalid UI schema: " + validated.error()};
+    }
+
+    auto presence = semantic.sections().uiPresence;
+    if (!shell.panel) {
+        // Removed with the panel surface migration. Until then, the legacy grid
+        // projection owns the panel's responsive collapse decision.
+        for (auto& node : presence.nodes) {
+            if (node.id == UiNodeId{std::string{kPanelNodeId}}) {
+                node.present = false;
+            }
+        }
+    }
+
+    const auto& root = validated.schema().schema().root;
+    auto result = solveUiFrame(
+        validated.schema(), semantic.sections().uiState, presence,
+        ClientUiProfile::full(), transitionalIntrinsicSizes(root),
+        {0, 0, shell.viewport.columns, shell.viewport.rows});
+    if (!result.tree) return result;
+
+    // Only migrated placements are exposed. Unit intrinsic sizes let the outer
+    // tree solve while unmigrated surfaces still own their legacy projections;
+    // erasing those provisional nodes prevents a later consumer from treating
+    // placeholder geometry as authoritative.
+    std::erase_if(result.tree->nodes, [](const SolvedGridNode& node) {
+        const auto id = node.id.value();
+        return id != kRootNodeId && id != kHeaderNodeId &&
+               id != kFooterNodeId;
+    });
+    return result;
+}
+
+SolvedGridTree requireFrameLayout(
+    const SessionSnapshot& semantic,
+    const PresentationSnapshot& presentation) {
+    auto result = trySolveFrameLayout(semantic, presentation);
+    if (!result.tree) {
+        throw std::logic_error(
+            "GridFrame: semantic UI frame cannot be solved: " + result.error);
+    }
+    return std::move(*result.tree);
+}
+
+}  // namespace
+
+GridFrame::GridFrame(SessionSnapshot semantic,
+                     PresentationSnapshot presentation, GridBasis basis)
+    : semantic_{std::move(semantic)},
+      presentation_{std::move(presentation)},
+      layout_{requireFrameLayout(semantic_, presentation_)},
+      basis_{basis} {}
+
+GridFrame::GridFrame(SessionSnapshot semantic,
+                     PresentationSnapshot presentation,
+                     SolvedGridTree layout, GridBasis basis)
+    : semantic_{std::move(semantic)},
+      presentation_{std::move(presentation)},
+      layout_{std::move(layout)},
+      basis_{basis} {}
+
+std::optional<GridFrame> GridFrame::fromLegacy(
+    LegacyPresentationSnapshot legacy, GridBasis basis) {
+    auto result =
+        trySolveFrameLayout(legacy.semantic_, legacy.presentation_);
+    if (!result.tree) return std::nullopt;
+    return GridFrame{std::move(legacy.semantic_),
+                     std::move(legacy.presentation_),
+                     std::move(*result.tree),
+                     basis};
+}
 
 GridPresenter::GridPresenter(ViewId viewId)
     : viewId_{viewId},
@@ -91,10 +191,13 @@ std::optional<GridFrame> GridPresenter::project(
         presentation = &snapshot->presentation();
     }
     state.adoptedRevision = snapshot->semantic().revision();
-    auto frame = GridFrame{
+    const auto nextGeneration = state.generation + 1;
+    auto frame = GridFrame::fromLegacy(
         std::move(*snapshot),
-        GridBasis{viewId_, *state.adoptedRevision, ++state.generation}};
-    presentation = &frame.presentation();
+        GridBasis{viewId_, *state.adoptedRevision, nextGeneration});
+    if (!frame) return std::nullopt;
+    state.generation = nextGeneration;
+    presentation = &frame->presentation();
     state.navigation = presentation->selectionNav;
     state.navigation.firstVisualRow =
         presentation->viewport.firstVisualRow;

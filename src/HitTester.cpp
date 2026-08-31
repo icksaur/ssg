@@ -141,6 +141,12 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
+    for (const auto id : {kHeaderNodeId, kFooterNodeId}) {
+        const auto* node =
+            snapshot.layout().find(UiNodeId{std::string{id}});
+        if (node && contains(node->rect, column, row)) return {};
+    }
+
     if (snapshot.presentation().prompt) {
         auto const& prompt = *snapshot.presentation().prompt;
         for (auto const& projected : prompt.controls) {

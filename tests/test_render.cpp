@@ -2,6 +2,7 @@
 
 #include <ssg/EditorSession.h>
 #include <ssg/FindReplace.h>
+#include <ssg/HitTester.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/StatusFields.h>
 #include <ssg/StatusQueue.h>
@@ -212,11 +213,54 @@ TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
             activeTabX = node.rect.x;
             break;
         }
+
     }
     ASSERT_NE(activeTabX, -1);
     if (activeTabX >= 0) {
         ASSERT_EQ(colorOf(activeTabX, shell.tabBar->y), docColor);
     }
+}
+
+TEST(headerAndFooterCellsAndHitsUseTheSolvedTree) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "doc.txt"} << "one\n";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"doc.txt"}});
+    auto projected = runtime->present(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(projected.has_value());
+    if (!projected) return;
+
+    auto presentation = projected->presentation();
+    presentation.shell.header = ssg::Rect{0, 5, 80, 1};
+    presentation.shell.footer = ssg::Rect{0, 6, 80, 1};
+    auto frame = deprecatedGridFrame(ssg::LegacyPresentationSnapshot{
+        projected->semantic().revision(), projected->semantic().topology(),
+        projected->semantic().client(), projected->semantic().sections(),
+        std::move(presentation)});
+
+    const auto* header =
+        frame.layout().find(ssg::UiNodeId{std::string{ssg::kHeaderNodeId}});
+    const auto* footer =
+        frame.layout().find(ssg::UiNodeId{std::string{ssg::kFooterNodeId}});
+    ASSERT_TRUE(header != nullptr);
+    ASSERT_TRUE(footer != nullptr);
+    if (!header || !footer) return;
+    ASSERT_EQ(header->rect, (ssg::Rect{0, 0, 80, 1}));
+    ASSERT_EQ(footer->rect, (ssg::Rect{0, 23, 80, 1}));
+
+    const auto grid = ssg::Renderer{}.render(frame);
+    const auto headerCell = grid.at(79, header->rect.y);
+    const auto footerCell = grid.at(40, footer->rect.y);
+    ASSERT_EQ(headerCell.role, ssg::SemanticRole::HeaderBackground);
+    ASSERT_EQ(footerCell.role, ssg::SemanticRole::FooterBackground);
+    ASSERT_EQ(ssg::HitTester{frame}.at(79, header->rect.y).region,
+              ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{frame}.at(40, footer->rect.y).region,
+              ssg::HitRegion::None);
 }
 
 TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
@@ -1955,6 +1999,7 @@ TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
 int main() {
     RUN(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer);
     RUN(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument);
+    RUN(headerAndFooterCellsAndHitsUseTheSolvedTree);
     RUN(rendererGetsRegionBackgroundsFromTheUiTree);
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine);
