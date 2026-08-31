@@ -130,11 +130,6 @@ UiNode promptInputLeaf(std::string_view promptSigil) {
                   UiLeaf{widget}};
 }
 
-std::string promptControlNodeId(std::string_view controlId) {
-    return std::string{kFooterPromptNodeId} + ".control." +
-           std::string{controlId};
-}
-
 UiNode footerPromptInput(const PromptControl& control) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::TextInput;
@@ -142,7 +137,7 @@ UiNode footerPromptInput(const PromptControl& control) {
     widget.value = ValueSource{true, "", control.id};
     widget.command = control.command;
     widget.role = "prompt";
-    return UiNode{UiNodeId{promptControlNodeId(control.id)}, Size::exact(1),
+    return UiNode{footerPromptControlNodeId(control.id), Size::exact(1),
                   UiLeaf{std::move(widget)}};
 }
 
@@ -154,7 +149,7 @@ UiNode footerPromptToggle(const PromptControl& control, int width) {
     widget.checked = ValueSource{true, "", control.id};
     widget.command = control.command;
     widget.role = "prompt";
-    return UiNode{UiNodeId{promptControlNodeId(control.id)}, Size::exact(width),
+    return UiNode{footerPromptControlNodeId(control.id), Size::exact(width),
                   UiLeaf{std::move(widget)}};
 }
 
@@ -164,7 +159,7 @@ UiNode footerPromptCount(const PromptControl& control) {
     widget.id = control.id;
     widget.value = ValueSource{true, "", control.id};
     widget.role = "prompt";
-    return UiNode{UiNodeId{promptControlNodeId(control.id)}, Size::flex(),
+    return UiNode{footerPromptControlNodeId(control.id), Size::flex(),
                   UiLeaf{std::move(widget)}};
 }
 

@@ -1137,12 +1137,12 @@ int main(int argc, char** argv) {
             // The AUTHORITATIVE active-prompt kind: present even for a
             // header-hosted prompt (palette / file
             // finder) whose query renders in the header input line and so
-            // produces no footer `prompt` layout view. Deriving the open-flags
+            // produces no footer semantic prompt view. Deriving the open-flags
             // from this -- rather than from `promptStatus.prompt->kind`, which is
             // nullopt for a header-hosted prompt -- is what lets typed text reach
             // the picker query.
             auto const activeKind = snapshot->sections().promptStatus.activeKind;
-            auto const& activePrompt = snapshot->presentation().prompt;
+            auto const& activePrompt = snapshot->sections().promptView;
             bool const wasPickerOpen = pickerOpen;
             pickerOpen = activeKind == ssg::PromptKind::Palette;
             if (pickerOpen && !wasPickerOpen) {

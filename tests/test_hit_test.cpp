@@ -183,53 +183,73 @@ TEST(footerActionHitCarriesExactStatusActionInvocation) {
 }
 
 TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
-    auto sections = minimalSections();
-    sections.promptView = ssg::PromptView{
-        ssg::PromptKind::Find, "Find",
-        {{ssg::PromptControlKind::Input, "query", "Query", "abc", false,
-          "find.update_query"},
-         {ssg::PromptControlKind::Toggle, "case", "Case", "", true,
-          "find.toggle_case"},
-         {ssg::PromptControlKind::Count, "matches", "Matches", "1/3", false,
-          ""}},
-        0};
-    ssg::PromptViewState prompt{
-        ssg::PromptKind::Find, "Find", {0, 3, 20, 1},
-        {{ssg::PromptControlKind::Input, "query", "Query", "abc", false,
-          {0, 3, 8, 1}},
-         {ssg::PromptControlKind::Toggle, "case", "Case", "", true,
-          {9, 3, 5, 1}},
-         {ssg::PromptControlKind::Count, "matches", "Matches", "1/3", false,
-          {15, 3, 3, 1}}},
-        0};
-    ssg::ShellViewState shell;
-    shell.viewport = {20, 5};
-    ssg::LegacyPresentationSnapshot snapshot{
-        ssg::Revision{1}, ssg::SessionTopology{},
-        ssg::ClientSnapshotState{ssg::ClientId{1}, ssg::ViewId{1}, {}},
-        std::move(sections),
-        ssg::PresentationSnapshot{
-            ssg::ViewportViewState{ssg::ViewportDimensions{20, 5}},
-            ssg::Style{}, std::move(prompt), std::move(shell),
-            ssg::SelectionNavigation{}}};
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(snapshot));
+    auto root = uniqueRoot();
+    std::ofstream{root / "doc.txt"} << "alpha\n";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"doc.txt"}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1}, {"find.open", runtime->revision(), {}});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto presentation = snapshot->presentation();
+    if (presentation.prompt) {
+        for (auto& control : presentation.prompt->controls) {
+            control.rect = {0, 2, 1, 1};
+        }
+    }
+    auto frame = ssg::test::gridFrameFromLegacy(
+        ssg::LegacyPresentationSnapshot{
+            snapshot->semantic().revision(), snapshot->semantic().topology(),
+            snapshot->semantic().client(), snapshot->semantic().sections(),
+            std::move(presentation)});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
-    auto input = ssg::HitTester{*frame}.at(2, 3);
+    const auto* inputNode = frame->layout().find(
+        ssg::footerPromptControlNodeId("find.query"));
+    const auto* toggleNode = frame->layout().find(
+        ssg::footerPromptControlNodeId("find.toggle_case"));
+    const auto* countNode = frame->layout().find(
+        ssg::footerPromptControlNodeId("find.count"));
+    ASSERT_TRUE(inputNode != nullptr);
+    ASSERT_TRUE(toggleNode != nullptr);
+    ASSERT_TRUE(countNode != nullptr);
+    if (!inputNode || !toggleNode || !countNode) return;
+    bool overlapsLegacyFooter = false;
+    for (const auto& node : frame->presentation().shell.accessibilityNodes) {
+        if (node.kind != ssg::ShellNodeKind::FooterField) continue;
+        overlapsLegacyFooter =
+            toggleNode->rect.x >= node.rect.x &&
+            toggleNode->rect.x < node.rect.right() &&
+            toggleNode->rect.y >= node.rect.y &&
+            toggleNode->rect.y < node.rect.bottom();
+        if (overlapsLegacyFooter) break;
+    }
+    ASSERT_TRUE(overlapsLegacyFooter);
+
+    auto input =
+        ssg::HitTester{*frame}.at(inputNode->rect.x, inputNode->rect.y);
     ASSERT_EQ(input.region, ssg::HitRegion::PromptControl);
-    ASSERT_EQ(input.fieldId, std::optional<std::string>{"query"});
+    ASSERT_EQ(input.fieldId, std::optional<std::string>{"find.query"});
     ASSERT_EQ(input.commandId,
               std::optional<std::string>{"find.update_query"});
-    auto toggle = ssg::HitTester{*frame}.at(10, 3);
+    auto toggle =
+        ssg::HitTester{*frame}.at(toggleNode->rect.x, toggleNode->rect.y);
     ASSERT_EQ(toggle.region, ssg::HitRegion::PromptControl);
-    ASSERT_EQ(toggle.fieldId, std::optional<std::string>{"case"});
+    ASSERT_EQ(toggle.fieldId,
+              std::optional<std::string>{"find.toggle_case"});
     ASSERT_EQ(toggle.commandId,
               std::optional<std::string>{"find.toggle_case"});
-    ASSERT_EQ(ssg::HitTester{*frame}.at(16, 3).region,
+    ASSERT_EQ(ssg::HitTester{*frame}.at(countNode->rect.x,
+                                       countNode->rect.y).region,
               ssg::HitRegion::None);
-    ASSERT_EQ(ssg::HitTester{*frame}.at(19, 3).region,
+    ASSERT_EQ(ssg::HitTester{*frame}.at(countNode->rect.right() - 1,
+                                       countNode->rect.y).region,
               ssg::HitRegion::None);
 }
 

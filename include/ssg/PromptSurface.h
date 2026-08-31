@@ -126,10 +126,10 @@ struct PromptCommandResult {
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
 
-// A geometry-free prompt control: the semantic PromptView's element. The grid
-// PromptControlView is this same content plus a Rect; both are resolved by the one
-// resolvePromptControls authority, so a client renders inputs/toggles/count without
-// a rect. `command` is the library command that OPERATES the control (an input's
+// A geometry-free prompt control: the semantic PromptView's element. Grid
+// rendering combines it with the matching solved UI node; PromptControlView is
+// retained only for legacy compatibility. `command` is the library command that
+// OPERATES the control (an input's
 // update-value command, a toggle's toggle command), so a client dispatches it
 // generically without knowing find-vs-replace ids; empty for a Count.
 struct PromptControl {

@@ -1,6 +1,6 @@
 #include <ssg/HitTester.h>
 
-#include <algorithm>
+#include <stdexcept>
 
 namespace ssg {
 namespace {
@@ -100,6 +100,37 @@ RegionHit HitTester::at(int column, int row) const {
         return {};
     }
 
+    if (snapshot.sections().promptView) {
+        const auto* prompt =
+            snapshot.layout().find(UiNodeId{std::string{kFooterPromptNodeId}});
+        if (!prompt) {
+            throw std::logic_error(
+                "HitTester: prompt has no solved UI node");
+        }
+        if (contains(prompt->rect, column, row)) {
+            for (auto const& control :
+                 snapshot.sections().promptView->controls) {
+                const auto* solved = snapshot.layout().find(
+                    footerPromptControlNodeId(control.id));
+                if (!solved) {
+                    throw std::logic_error(
+                        "HitTester: prompt control has no solved UI node");
+                }
+                if (!contains(solved->rect, column, row)) continue;
+                if (control.kind == PromptControlKind::Count ||
+                    control.command.empty()) {
+                    return {};
+                }
+                RegionHit hit;
+                hit.region = HitRegion::PromptControl;
+                hit.fieldId = control.id;
+                hit.commandId = control.command;
+                return hit;
+            }
+            return {};
+        }
+    }
+
     for (auto const& node : shell.accessibilityNodes) {
         if (!contains(node.rect, column, row)) continue;
         if (node.kind == ShellNodeKind::HeaderField) {
@@ -145,32 +176,6 @@ RegionHit HitTester::at(int column, int row) const {
         const auto* node =
             snapshot.layout().find(UiNodeId{std::string{id}});
         if (node && contains(node->rect, column, row)) return {};
-    }
-
-    if (snapshot.presentation().prompt) {
-        auto const& prompt = *snapshot.presentation().prompt;
-        for (auto const& projected : prompt.controls) {
-            if (projected.kind == PromptControlKind::Count ||
-                !contains(projected.rect, column, row)) {
-                continue;
-            }
-            auto const& semantic = snapshot.sections().promptView;
-            if (!semantic) return {};
-            auto const found = std::find_if(
-                semantic->controls.begin(), semantic->controls.end(),
-                [&](PromptControl const& control) {
-                    return control.id == projected.id &&
-                           control.kind == projected.kind;
-                });
-            if (found == semantic->controls.end() || found->command.empty()) {
-                return {};
-            }
-            RegionHit hit;
-            hit.region = HitRegion::PromptControl;
-            hit.fieldId = found->id;
-            hit.commandId = found->command;
-            return hit;
-        }
     }
 
     // The external-modification bar's action sub-regions map a cell to a

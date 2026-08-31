@@ -155,6 +155,11 @@ inline constexpr std::string_view kHeaderPromptInputNodeId = "input_line";
 inline constexpr std::string_view kFooterPromptNodeId = "footer.prompt";
 inline constexpr std::string_view kFooterPromptOptionsNodeId =
     "footer.prompt.options";
+[[nodiscard]] inline UiNodeId footerPromptControlNodeId(
+    std::string_view controlId) {
+    return UiNodeId{std::string{kFooterPromptNodeId} + ".control." +
+                    std::string{controlId}};
+}
 // The draft-conflict notice's semantic surface: a View leaf naming
 // ViewSurface::Notice, placed between the header and the body (one reserved chrome
 // row above the document, M15), hidden by presence unless the active document has an

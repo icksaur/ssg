@@ -5,6 +5,7 @@
 #include "grid_projection_state.h"
 
 #include <algorithm>
+#include <set>
 #include <stdexcept>
 #include <type_traits>
 
@@ -62,11 +63,49 @@ SolveUiFrameResult trySolveFrameLayout(
     // tree solve while unmigrated surfaces still own their legacy projections;
     // erasing those provisional nodes prevents a later consumer from treating
     // placeholder geometry as authoritative.
-    std::erase_if(result.tree->nodes, [](const SolvedGridNode& node) {
-        const auto id = node.id.value();
-        return id != kRootNodeId && id != kHeaderNodeId &&
-               id != kFooterNodeId;
+    std::set<UiNodeId> retained{
+        UiNodeId{std::string{kRootNodeId}},
+        UiNodeId{std::string{kHeaderNodeId}},
+        UiNodeId{std::string{kFooterNodeId}},
+    };
+    if (semantic.sections().promptView) {
+        retained.insert(UiNodeId{std::string{kFooterPromptNodeId}});
+        retained.insert(UiNodeId{std::string{kFooterPromptOptionsNodeId}});
+        for (const auto& control :
+             semantic.sections().promptView->controls) {
+            retained.insert(footerPromptControlNodeId(control.id));
+        }
+    }
+    std::erase_if(result.tree->nodes, [&](const SolvedGridNode& node) {
+        return !retained.contains(node.id);
     });
+    if (semantic.sections().promptView) {
+        for (const auto& control :
+             semantic.sections().promptView->controls) {
+            const auto* node =
+                result.tree->find(footerPromptControlNodeId(control.id));
+            const auto expectedKind = [&] {
+                switch (control.kind) {
+                case PromptControlKind::Input:
+                    return WidgetKind::TextInput;
+                case PromptControlKind::Toggle:
+                    return WidgetKind::Checkbox;
+                case PromptControlKind::Count:
+                    return WidgetKind::Label;
+                }
+                throw std::logic_error(
+                    "GridFrame: corrupt prompt control kind");
+            }();
+            if (!node || !node->widget ||
+                node->widget->id != control.id ||
+                node->widget->kind != expectedKind ||
+                (control.kind == PromptControlKind::Count &&
+                 node->rect.width <= 0)) {
+                return {std::nullopt,
+                        "prompt backing does not correspond to UI nodes"};
+            }
+        }
+    }
     return result;
 }
 

@@ -1113,12 +1113,11 @@ void paintLineNumbers(CellGrid& grid, GridFrame const& snapshot,
     }
 }
 
-// Paint the reserved prompt rows (find/replace/settings/command_argument).  The
-// palette is excluded: it renders its query in the header and reserves no rows.
-// Returns the screen cell for the text cursor at the end of the first input, so
-// the caller can place the hardware cursor when the prompt is focused.
+// Paint the semantic prompt controls in their solved UI-tree nodes. The palette
+// is excluded: it renders its query in the header and has no PromptView.
 std::optional<GridPosition> paintPrompt(CellGrid& grid,
-                                         PromptViewState const& prompt,
+                                         PromptView const& prompt,
+                                         SolvedGridTree const& layout,
                                          ThemeSnapshot const& theme,
                                          SemanticRole foregroundRole,
                                          SemanticRole backgroundRole,
@@ -1128,6 +1127,13 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
     std::optional<GridPosition> caret;
     std::size_t inputIndex = 0;
     for (auto const& control : prompt.controls) {
+        const auto* solved =
+            layout.find(footerPromptControlNodeId(control.id));
+        if (!solved) {
+            throw std::logic_error(
+                "Renderer: prompt control has no solved UI node");
+        }
+        const Rect& rect = solved->rect;
         std::string text;
         switch (control.kind) {
             case PromptControlKind::Input:
@@ -1144,11 +1150,11 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
         }
         // Clear the row region first so a shrinking value does not leave stale
         // glyphs behind, then paint the control text.
-        for (int column = control.rect.x; column < control.rect.right(); ++column) {
-            put(grid, column, control.rect.y, " ", promptFg, promptBg,
+        for (int column = rect.x; column < rect.right(); ++column) {
+            put(grid, column, rect.y, " ", promptFg, promptBg,
                 SemanticRole::Prompt);
         }
-        paintText(grid, control.rect.x, control.rect.y, control.rect.right(),
+        paintText(grid, rect.x, rect.y, rect.right(),
                    text, promptFg, promptBg, SemanticRole::Prompt, style);
         const bool activeInput =
             control.kind == PromptControlKind::Input &&
@@ -1163,9 +1169,8 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
             auto const valueWidth =
                 static_cast<int>(GraphemeLayout{}.computeRun(control.value).totalCells);
             auto const cursorColumn =
-                std::min(control.rect.x + labelWidth + valueWidth,
-                         control.rect.right() - 1);
-            caret = GridPosition{cursorColumn, control.rect.y};
+                std::min(rect.x + labelWidth + valueWidth, rect.right() - 1);
+            caret = GridPosition{cursorColumn, rect.y};
         }
         if (control.kind == PromptControlKind::Input) ++inputIndex;
     }
@@ -1357,7 +1362,7 @@ CellGrid Renderer::render(GridFrame const& snapshot,
 
             // Paint the reserved prompt rows (find/replace/settings) and place
             // the hardware cursor at the query when the prompt is focused.
-            auto const& prompt = snapshot.presentation().prompt;
+            auto const& prompt = snapshot.sections().promptView;
             if (prompt) {
                 const auto promptForegroundRole =
                     nodeForeground(ui, kFooterPromptNodeId,
@@ -1366,8 +1371,9 @@ CellGrid Renderer::render(GridFrame const& snapshot,
                     nodeBackground(ui, kFooterPromptNodeId,
                                    SemanticRole::Canvas);
                 auto promptCaret =
-                    paintPrompt(grid, *prompt, theme, promptForegroundRole,
-                                promptBackgroundRole, style);
+                    paintPrompt(grid, *prompt, snapshot.layout(), theme,
+                                promptForegroundRole, promptBackgroundRole,
+                                style);
                 if (snapshot.sections().focus == FocusTarget::Prompt && promptCaret) {
                     grid.caret = *promptCaret;
                 }

@@ -982,7 +982,29 @@ TEST(renderFindPromptShowsOptionIndicators) {
         auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
-        auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
+        auto presentation = snapshot->presentation();
+        if (presentation.prompt) {
+            for (auto& control : presentation.prompt->controls) {
+                control.rect = {0, 2, 1, 1};
+            }
+        }
+        auto frame = deprecatedGridFrame(ssg::LegacyPresentationSnapshot{
+            snapshot->semantic().revision(),
+            snapshot->semantic().topology(),
+            snapshot->semantic().client(),
+            snapshot->semantic().sections(), std::move(presentation)});
+        const auto* input = frame.layout().find(
+            ssg::footerPromptControlNodeId("find.query"));
+        const auto* toggle = frame.layout().find(
+            ssg::footerPromptControlNodeId("find.toggle_case"));
+        ASSERT_TRUE(input != nullptr);
+        ASSERT_TRUE(toggle != nullptr);
+        if (!input || !toggle) return;
+        auto grid = ssg::Renderer{}.render(frame);
+        ASSERT_EQ(grid.at(input->rect.x, input->rect.y).text,
+                  std::string{"f"});
+        ASSERT_EQ(grid.at(toggle->rect.x, toggle->rect.y).text,
+                  std::string{"["});
         ASSERT_TRUE(gridContains(grid, "[ ] case"));
         ASSERT_TRUE(gridContains(grid, "[ ] word"));
         ASSERT_TRUE(gridContains(grid, "[ ] regex"));

@@ -101,9 +101,8 @@ struct SessionSnapshotSections {
     // The geometry-free semantic projection of the active footer-region prompt
     // (find/replace/goto/save-path/settings): its controls, per-control commands,
     // and active input. Absent unless a footer-region prompt is open. A native
-    // client renders and drives the prompt from this; the grid client instead
-    // lowers the parallel PresentationSnapshot::prompt with rects. Both derive
-    // from the one resolvePromptControls authority.
+    // client renders and drives the prompt from this. The grid client combines
+    // the same semantic controls with solved footer-prompt nodes.
     std::optional<PromptView> promptView;
     // The geometry-free semantic projection of the active document's draft-conflict
     // notice (M15). Absent unless the active document has an unresolved conflict. A
@@ -159,8 +158,8 @@ struct PresentationSnapshot {
     Style style;
     // The footer-anchored prompt's layout view (kind, rect, controls). Absent for
     // a header-hosted prompt (palette/file finder) and when no prompt is active.
-    // Pure grid projection; "which prompt is open" is the semantic
-    // PromptStatusViewState::activeKind.
+    // Frozen legacy grid projection retained for compatibility until Plan 6.
+    // Current grid rendering and hit testing use PromptView plus solved UI nodes.
     std::optional<PromptViewState> prompt;
     // The shell's grid layout: viewport GridSize, chrome rects, panes, tab hits,
     // accessibility geometry, palette projection. Pure projection; the semantic

@@ -84,6 +84,7 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
         throw std::logic_error("footer prompt requires the footer.prompt node");
     }
     if (hasFooterPrompt && !footerPromptOpen) hidden.push_back(footerPrompt);
+    if (footerPromptOpen) hidden.push_back(nodeId(kFooterNodeId));
 
     // The notice region mirrors the header input line and footer prompt: always
     // assembled, present only while the active document raises a draft-conflict

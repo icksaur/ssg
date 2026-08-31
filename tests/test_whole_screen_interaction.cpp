@@ -340,14 +340,17 @@ TEST(theInputLineIsVisibleOnlyForAHeaderPromptAndCapturesTheInputNode) {
         buildWholeScreenInteraction(schemaOf({}), closed, PromptRegion::Footer);
     ASSERT_FALSE(present(f, kHeaderPromptInputNodeId));
     // It reveals the footer prompt surface and captures that node, not the footer
-    // container.
+    // container. The prompt replaces the ordinary footer in the same bottom
+    // region rather than stacking another row above it.
     ASSERT_TRUE(present(f, kFooterPromptNodeId));
+    ASSERT_FALSE(present(f, kFooterNodeId));
     ASSERT_TRUE(f.focus().top() != nullptr);
     if (f.focus().top())
         ASSERT_EQ(f.focus().top()->node.value(),
                   std::string{kFooterPromptNodeId});
     // With no footer prompt open, the footer prompt surface is hidden.
     ASSERT_FALSE(present(a, kFooterPromptNodeId));
+    ASSERT_TRUE(present(a, kFooterNodeId));
 
     // A header-region prompt reveals the input line AND anchors the capture on the
     // input_line NODE itself, so keystrokes route to the query node, not merely to
