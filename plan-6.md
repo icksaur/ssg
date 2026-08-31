@@ -60,6 +60,27 @@ versioning and additive compatibility explicit.
   fixtures; malformed/stale atomic replay; existing and extended protocol
   benchmark results compared against the named ratio budgets.
 
+## Plan 3 bridge-removal inventory
+
+Plan 4 first replaces the bridge's layout consumers with the solved grid tree.
+When that handoff is complete, Step 6 removes all entries below in one wire
+version change; none is a retained protocol concept.
+
+| Compatibility entry | Current location | Step 6 action and oracle |
+|---|---|---|
+| `LegacyPresentationSnapshot` and the legacy-taking `GridFrame` constructor | `include/ssg/session_snapshot.h`, `include/ssg/GridPresenter.h` | delete both; `GridFrame` is constructed from semantic state plus solved grid output |
+| `EditorSession::present`, `EditorSession::projectForBridgedPresenterDeprecated`, and presentation-bearing `SessionSnapshotCodec::assemble` | `include/ssg/EditorSession.h`, `src/EditorSession.cpp`, snapshot codec | delete the public wrapper and private bridge; semantic callers use `snapshot`, grid callers use `GridPresenter` |
+| `encodeLegacyPresentationSnapshot`, `decodeLegacyPresentationSnapshot`, and presentation value codecs | `include/ssg/Protocol.h`, `src/Protocol.cpp` | delete at `kSemanticUiWireVersion`; prior-version messages reject through normal version negotiation |
+| Frozen snapshot field `presentation` | session snapshot encoder/decoder and `session_snapshot.hex` | remove from the new-version manifest and replace the legacy fixture with a current-version semantic fixture |
+| Frozen delta fields `style`, `shell`, `viewport`, `selection_nav`, `prompt_projection`, and `tree_windows` | `SessionDelta`, delta encoder/decoder, JavaScript replay compatibility, and `session_delta.hex` | remove fields, types used only by them, and client replay branches; cross-language fixtures prove exact current-version shape |
+| Semantic fixed-default fixtures | `session_semantic_base.hex`, `session_semantic_target.hex`, `session_semantic_delta.hex` | regenerate only for the activated version and retain semantic replay equality |
+| Legacy test builders and wrapper callers | `tests/legacy_grid_frame.h`, direct `EditorSession::present` tests, protocol legacy round trips | migrate remaining grid tests during Plan 4, then delete compatibility-only fixtures and helpers in this step |
+| Stale protocol documentation and field manifests | `protocol/schema/README.md`, generated manifest inputs | generate the current-version field inventory and make regenerate-and-diff detect any handwritten mirror |
+
+The deletion condition is executable: after `kSemanticUiWireVersion` is
+activated, source inventory must find none of the compatibility symbols or
+field names above outside prior-version rejection fixtures.
+
 ## Plan
 
 | # | Step | Files | Oracle | Invariants |

@@ -60,19 +60,26 @@ Payload shapes (object field names, all required unless noted optional):
 - `command_result`: `{error: uint, revision: uint, message: text}`. This carries
   failure-atomic dispatch rejection such as stale revision or denied
   capability without disconnecting a valid connection.
-- `session_snapshot`: `{revision, topology, client, sections}` — one field
-  per `SessionSnapshot` accessor, each recursively encoded.
+- `session_snapshot`: `{revision, topology, client, sections, presentation}`.
+  `presentation` is a frozen compatibility field. Semantic encoding writes
+  `null`; the explicitly named legacy codec may write the old presentation
+  value. Plan 6 removes the field when `kSemanticUiWireVersion` is activated.
 - `session_delta`: one field per `SessionDelta` accessor (`base_revision`,
   `revision`, `client_id`, `view_id`, `capabilities`, `topology` (optional),
   `document` (optional), `document_caret` (optional), `selection`,
   `history`, `clipboard`, `prompt_status`, `search`, `find_replace`,
   `settings`, `keymap`, `text_encoding` (optional), `tabs`, `diff`,
   `external_modification`, `follow_edits`, `tree`, `syntax`, `lsp_sync`,
-  `lsp_features`, `theme`, `shell`, `viewport`). Decoding reconstructs the
-  aggregate via the `decode_wire_session_delta` friend factory declared in
-  `session_snapshot.h`, so this is the only construction path outside
-  `derive_session_delta`.
-  (`status_id`, `action_id`, `generation`).
+  `lsp_features`, `theme`, `style`, `shell`, `viewport`, `focus`,
+  `selection_nav`, `prompt_projection`, `tree_windows`, `ui`, `ui_state`,
+  `ui_presence`, `palette`, `prompt_view`, `notice_view`,
+  `watcher_available`, `external_focus_held`). `style`, `shell`, `viewport`,
+  `selection_nav`, `prompt_projection`, and `tree_windows` are frozen
+  compatibility fields: semantic encoding writes their unchanged/default
+  forms and semantic replay ignores decoded values. Plan 6 removes them with
+  the snapshot compatibility field. Decoding reconstructs the aggregate through
+  `SessionSnapshotCodec::decodeWire`, so this is the only construction path
+  outside `SessionSnapshotCodec::deriveDelta`.
 - `client_input`: `{stroke, committed_text}`. `stroke` is either null or a
   `{code, control, alt, meta, shift}` object. The key code is its stable name.
 - `client_input_result`: `{outcome, client_owned, command}`. `client_owned` is

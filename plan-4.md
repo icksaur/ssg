@@ -55,6 +55,28 @@ stays at rendering edges.
   generated-schema constraint properties; library and client unsupported-widget
   refusal; each migrated feature deletes its shell branch.
 
+## Plan 3 bridge handoff
+
+Plan 3 leaves one deprecated grid-projection bridge. The table below assigns
+every presentation consumer that must change before the bridge can be removed.
+Plan 6 owns the compatibility API and wire deletions after these migrations
+finish.
+
+| Current consumer | Presentation input | Plan 4 destination | Removal oracle |
+|---|---|---|---|
+| `GridPresenter::project` and `EditorSession::projectForBridgedPresenterDeprecated` | semantic sections plus viewport dimensions and presenter state | Step 2 solves a `GridFrame` from a moved semantic snapshot and grid request; the presenter no longer calls an `EditorSession` projection bridge | `GridPresenter` no longer references `projectForBridgedPresenterDeprecated`; the deprecated `present` wrapper is its sole remaining caller until Plan 6 deletes both |
+| `Renderer` | shell rectangles, viewport rows, style, prompt projection, and tree windows | Step 3 reads node rectangles and typed surface backing from one solved grid tree | renderer has no `ShellViewState`, `PromptViewState`, or `TreeWindow` branch |
+| `HitTester` | shell rectangles, viewport hit targets, prompt controls, and tree windows | Step 3 derives hits from the same solved nodes consumed by `Renderer` | one solved-node parity oracle covers both render and hit results |
+| Header, footer/status, tabs, panel/tree, document, prompt, picker, notice, external-modification, and search-result projection | feature-specific members of `ShellViewState`, `ViewportViewState`, `PromptViewState`, and `TreeWindow` | Step 4 migrates each named surface through generic placement and typed surface backing | each surface retains cell/hit parity and deletes its feature geometry branch |
+| `buildShellTree`, shell accessibility/hit sidecars, and obsolete shell node kinds | independently assembled whole-screen geometry | Step 5 deletes them after every Step 4 row is complete | source inventory finds no parallel whole-screen layout path |
+| Grid tests and `tests/legacy_grid_frame.h` | manually assembled legacy presentation values | Steps 1–4 move focused solver/render/hit tests to direct `GridFrame` construction; terminal parity remains the end-to-end oracle | Plan 6 removal does not require replacing a test-only presentation architecture |
+
+`PresentationSnapshot::selectionNav` remains presenter-owned navigation state,
+not a UI-tree input. Step 4's document migration consumes its projected result;
+Plan 6 removes only its frozen legacy wire field. `PresentationSnapshot::style`
+remains the grid medium's glyph configuration while semantic colors and node
+roles originate in the UI tree.
+
 ## Plan
 
 | # | Step | Files | Oracle | Invariants |
