@@ -15,7 +15,7 @@
 #include <ssg/PresenceProtocol.h>
 #include <ssg/PaletteProtocol.h>
 #include <ssg/PaletteSearcher.h>
-#include <ssg/detail/generated/ui_wire_schema.h>
+#include <ssg/detail/generated/wire_schema.h>
 
 #include "legacy_focus_compat.h"
 #include "legacy_prompt_compat.h"

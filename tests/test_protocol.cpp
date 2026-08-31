@@ -2513,6 +2513,52 @@ std::string readFixtureBytes(std::string const& name) {
     return bytes;
 }
 
+TEST(sharedStructuralWireCorpus) {
+    const auto root =
+        std::filesystem::path{SSG_PROTOCOL_FIXTURES_DIR} / "structural";
+    std::set<std::string> policies;
+    std::size_t cases = 0;
+    for (const auto& entry : std::filesystem::directory_iterator{root}) {
+        if (entry.path().extension() != ".hex") continue;
+        const auto name = entry.path().filename().string();
+        const auto first = name.find('.');
+        const auto second = name.find('.', first + 1);
+        const auto third = name.find('.', second + 1);
+        ASSERT_NE(first, std::string::npos);
+        ASSERT_NE(second, std::string::npos);
+        ASSERT_NE(third, std::string::npos);
+        const auto expectation = name.substr(0, first);
+        const auto decoder = name.substr(first + 1, second - first - 1);
+        policies.insert(name.substr(second + 1, third - second - 1));
+        const auto bytes = readFixtureBytes("structural/" + name);
+
+        ssg::ProtocolError error = ssg::ProtocolError::MalformedMessage;
+        bool accepted = false;
+        if (decoder == "client_input") {
+            const auto result = ssg::ProtocolCodec{}.decodeClientInput(bytes);
+            accepted = result.accepted();
+            error = result.error;
+        } else if (decoder == "command_result") {
+            const auto result = ssg::ProtocolCodec{}.decodeCommandResult(bytes);
+            accepted = result.accepted();
+            error = result.error;
+        } else {
+            ASSERT_TRUE(false);
+        }
+        ASSERT_EQ(accepted, expectation == "accept");
+        if (!accepted) ASSERT_EQ(error, ssg::ProtocolError::MalformedMessage);
+        ++cases;
+    }
+    ASSERT_EQ(cases, std::size_t{10});
+    ASSERT_EQ(
+        policies,
+        (std::set<std::string>{
+            "integer_bounds", "missing_required", "nonnullable_reject",
+            "nullable_accept", "union_discriminator", "union_variant_fields",
+            "unknown_enum", "unknown_field_allow", "unknown_field_reject",
+            "wrong_primitive_kind"}));
+}
+
 TEST(semanticFieldManifestExactlyMatchesTheSnapshotCodec) {
     const std::vector<std::string> snapshots{
         "document", "selection", "history", "clipboard", "prompt_status",

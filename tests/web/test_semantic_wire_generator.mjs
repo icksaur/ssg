@@ -29,7 +29,7 @@ try {
     assert.deepEqual(first, second);
     const destinations = {
       cpp: path.join(temporary, 'generated', 'manifest.h'),
-      uiCpp: path.join(temporary, 'generated', 'ui-schema.h'),
+      wireCpp: path.join(temporary, 'generated', 'wire-schema.h'),
       js: path.join(temporary, 'generated', 'manifest.mjs'),
     };
     await writeOutputs(first, destinations);
@@ -257,7 +257,7 @@ export default {
       '--write',
       '--manifest', invalidManifest,
       '--cpp', path.join(invalidDestinations, 'manifest.h'),
-      '--ui-cpp', path.join(invalidDestinations, 'ui-schema.h'),
+      '--wire-cpp', path.join(invalidDestinations, 'wire-schema.h'),
       '--js', path.join(invalidDestinations, 'manifest.mjs'),
     ]), /duplicate message symbol/);
     await assert.rejects(fsp.access(invalidDestinations), { code: 'ENOENT' });
@@ -496,9 +496,15 @@ export default {
     const protocol = fs.readFileSync(path.join(root, 'src/Protocol.cpp'), 'utf8');
     const uiTree =
       fs.readFileSync(path.join(root, 'src/UiTreeProtocol.cpp'), 'utf8');
+    const palette =
+      fs.readFileSync(path.join(root, 'src/PaletteProtocol.cpp'), 'utf8');
     const reconcile =
       fs.readFileSync(path.join(root, 'apps/web/reconcile.mjs'), 'utf8');
     const client = fs.readFileSync(path.join(root, 'apps/web/client.mjs'), 'utf8');
+    assert.equal(fs.existsSync(path.join(
+      root, 'include/ssg/detail/generated/ui_wire_schema.h')), false);
+    assert.equal(fs.existsSync(path.join(
+      root, 'include/ssg/detail/generated/wire_schema.h')), true);
     assert.doesNotMatch(
       uiTree, /kAll(?:Axes|ScrollAxes|SizeKinds|Overflows)/);
     assert.doesNotMatch(
@@ -509,6 +515,8 @@ export default {
       /const (?:ROLE|FOCUS_EDITOR|VIEW_ACTION|VIEW_SCROLL_TARGET)\s*=/);
     assert.doesNotMatch(reconcile, /\bkind:\s*[0-9]+n?\b/);
     assert.doesNotMatch(
+      reconcile, /const (?:ALL_SURFACES|TREE_SURFACES)\b|Wire ordinals, pinned/);
+    assert.doesNotMatch(
       reconcile, /\bkind:\s*BigInt\(CLIENT_INPUT_KIND\./);
     assert.match(reconcile, /buildClientInputDocumentWire/);
     assert.match(client, /validateClientInputResultWire\(payload\)/);
@@ -518,9 +526,14 @@ export default {
     assert.match(
       protocol, /validateSessionSnapshotWire\(payload\)/);
     assert.match(protocol, /validateSessionDeltaWire\(payload\)/);
+    assert.match(palette, /validatePaletteViewStateWire\(value\)/);
+    assert.doesNotMatch(palette, /\bkAllSearchModes\b/);
     assert.match(protocol, /ShellNodeKind::Header/);
     assert.match(protocol, /FocusTarget::Editor/);
     assert.doesNotMatch(protocol, /\bhasExactly\b|\bviewEnumField\b/);
+    const compatibilityArrays =
+      protocol.match(/static constexpr std::array values/g) ?? [];
+    assert.equal(compatibilityArrays.length, 2);
     for (const symbol of [
       'StatusActionInvocation',
       'ResolvedSelectionRange',

@@ -1,5 +1,5 @@
 #include <ssg/UiStateProtocol.h>
-#include <ssg/detail/generated/ui_wire_schema.h>
+#include <ssg/detail/generated/wire_schema.h>
 
 #include <cassert>
 #include <set>

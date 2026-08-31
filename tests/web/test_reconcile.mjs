@@ -13,6 +13,8 @@ import {
   SEMANTIC_DELTA_FIELDS,
   SEMANTIC_SECTIONS,
   SEMANTIC_SNAPSHOT_FIELDS,
+  validateClientInputWire,
+  validateCommandResultWire,
   validateSessionDeltaWire,
   validateSessionSnapshotWire,
 } from '../../apps/web/generated/semantic_wire_manifest.mjs';
@@ -109,6 +111,38 @@ const fixtureBytes = (name) => {
     hex.match(/../g).map((pair) => Number.parseInt(pair, 16)));
 };
 const fixtureMessage = (name) => decodeMessage(fixtureBytes(name).buffer).payload;
+
+check('shared structural wire corpus has cross-language outcomes', () => {
+  const names = fs.readdirSync(
+    new URL('../fixtures/protocol/structural/', import.meta.url))
+    .filter((name) => name.endsWith('.hex'))
+    .sort();
+  const policies = new Set();
+  for (const name of names) {
+    const [expectation, decoder, policy] = name.split('.');
+    policies.add(policy);
+    const message = decodeMessage(fixtureBytes('structural/' + name).buffer);
+    const accepted = decoder === 'client_input'
+      ? message.kind === 7 && validateClientInputWire(message.payload)
+      : decoder === 'command_result'
+        ? message.kind === 6 && validateCommandResultWire(message.payload)
+        : false;
+    assert.equal(accepted, expectation === 'accept', name);
+  }
+  assert.equal(names.length, 10);
+  assert.deepEqual([...policies].sort(), [
+    'integer_bounds',
+    'missing_required',
+    'nonnullable_reject',
+    'nullable_accept',
+    'union_discriminator',
+    'union_variant_fields',
+    'unknown_enum',
+    'unknown_field_allow',
+    'unknown_field_reject',
+    'wrong_primitive_kind',
+  ]);
+});
 
 check('generated semantic validators cover nested snapshot and delta structure', () => {
   const snapshot = fixtureMessage('session_semantic_base.hex');

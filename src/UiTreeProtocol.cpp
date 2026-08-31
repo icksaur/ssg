@@ -1,6 +1,6 @@
 #include <ssg/UiTreeProtocol.h>
 #include <ssg/Style.h>
-#include <ssg/detail/generated/ui_wire_schema.h>
+#include <ssg/detail/generated/wire_schema.h>
 
 #include <array>
 #include <cstdint>

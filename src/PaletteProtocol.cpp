@@ -1,8 +1,6 @@
 #include <ssg/PaletteProtocol.h>
-#include <ssg/detail/generated/ui_wire_schema.h>
+#include <ssg/detail/generated/wire_schema.h>
 
-#include <array>
-#include <limits>
 #include <set>
 #include <string>
 
@@ -18,21 +16,17 @@ ProtocolValue encodeCandidate(const PaletteCandidate& candidate) {
 }
 
 std::optional<PaletteCandidate> decodeCandidate(const ProtocolValue& value) {
-    if (!value.asObject()) return std::nullopt;
-    const ProtocolValue* id = value.field("id");
-    const ProtocolValue* label = value.field("label");
-    const ProtocolValue* detail = value.field("detail");
-    if (!id || !id->asText()) return std::nullopt;
-    if (!label || !label->asText()) return std::nullopt;
-    if (!detail || !detail->asText()) return std::nullopt;
+    const auto& id = *value.field("id")->asText();
+    const auto& label = *value.field("label")->asText();
+    const auto& detail = *value.field("detail")->asText();
     // A candidate scored by the matcher must be within the proven-safe byte length, or
     // the score's exactness (and cross-client parity) is not guaranteed. An oversized
     // candidate is rejected, never truncated -- the match contract is a full-byte
     // subsequence over the whole id/label.
     const std::size_t cap = static_cast<std::size_t>(kMaxCandidateBytes);
-    if (id->asText()->size() > cap || label->asText()->size() > cap)
+    if (id.size() > cap || label.size() > cap)
         return std::nullopt;
-    return PaletteCandidate{*id->asText(), *label->asText(), *detail->asText()};
+    return PaletteCandidate{id, label, detail};
 }
 
 ProtocolValue encodeParameters(const MatcherParameters& params) {
@@ -44,40 +38,19 @@ ProtocolValue encodeParameters(const MatcherParameters& params) {
          {"length_cap", ProtocolValue::makeInt(params.lengthCap)}});
 }
 
-std::optional<int> intField(const ProtocolValue& object, const char* key) {
-    const ProtocolValue* field = object.field(key);
-    if (!field || !field->asInt()) return std::nullopt;
-    std::int64_t raw = *field->asInt();
-    if (raw < std::numeric_limits<int>::min() ||
-        raw > std::numeric_limits<int>::max()) {
-        return std::nullopt;  // out of int range is malformed, not silently narrowed
-    }
-    return static_cast<int>(raw);
-}
-
 std::optional<MatcherParameters> decodeParameters(const ProtocolValue& value) {
-    if (!value.asObject()) return std::nullopt;
-    auto base = intField(value, "base_score");
-    auto word = intField(value, "word_boundary_bonus");
-    auto contiguity = intField(value, "contiguity_bonus");
-    auto exact = intField(value, "exact_case_bonus");
-    auto cap = intField(value, "length_cap");
-    if (!base || !word || !contiguity || !exact || !cap) return std::nullopt;
-    MatcherParameters params{*base, *word, *contiguity, *exact, *cap};
+    MatcherParameters params{
+        static_cast<int>(*value.field("base_score")->asInt()),
+        static_cast<int>(*value.field("word_boundary_bonus")->asInt()),
+        static_cast<int>(*value.field("contiguity_bonus")->asInt()),
+        static_cast<int>(*value.field("exact_case_bonus")->asInt()),
+        static_cast<int>(*value.field("length_cap")->asInt())};
     if (!matcherParametersInDomain(params)) return std::nullopt;
     return params;
 }
 
-std::optional<SearchMode> decodeMode(const ProtocolValue& value) {
-    // Wire form mirrors the shared enum codec: the SearchMode underlying value,
-    // validated against Search.h's single closed domain (kAllSearchModes).
-    auto raw = value.asUint();
-    if (!raw) return std::nullopt;
-    for (SearchMode mode : kAllSearchModes) {
-        if (static_cast<std::uint64_t>(static_cast<std::uint8_t>(mode)) == *raw)
-            return mode;
-    }
-    return std::nullopt;
+SearchMode decodeMode(const ProtocolValue& value) {
+    return static_cast<SearchMode>(*value.asUint());
 }
 
 ProtocolValue encodePresenceOverlay(const PalettePresenceOverlay& overlay) {
@@ -158,7 +131,9 @@ ProtocolValue encodePalette(const PaletteViewState& palette) {
 }
 
 std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
-    if (!value.asObject()) return std::nullopt;
+    if (!detail::generated::validatePaletteViewStateWire(value)) {
+        return std::nullopt;
+    }
     const ProtocolValue* activeModeField = value.field("active_mode");
     const ProtocolValue* activationIdField = value.field("activation_id");
     const ProtocolValue* commandCandidatesField =
@@ -173,20 +148,6 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
         value.field("presence_overlay");
     const ProtocolValue* magnitudeField = value.field("max_parameter_magnitude");
     const ProtocolValue* candidateBytesField = value.field("max_candidate_bytes");
-    if (!activeModeField || !activationIdField ||
-        (!activeModeField->asUint() &&
-         activeModeField->kind() != ProtocolValue::Kind::NullValue) ||
-        (!activationIdField->asUint() &&
-         activationIdField->kind() != ProtocolValue::Kind::NullValue) ||
-        !commandOpenCommandIdField || !commandOpenCommandIdField->asText() ||
-        !commandCandidatesField || !commandCandidatesField->asArray() ||
-        !fileOpenCommandIdField || !fileOpenCommandIdField->asText() ||
-        !fileCandidatesField || !fileCandidatesField->asArray() ||
-        !parametersField || !presenceOverlayField || !magnitudeField ||
-        !magnitudeField->asInt() ||
-        !candidateBytesField || !candidateBytesField->asInt()) {
-        return std::nullopt;
-    }
     // The published bounds must equal the library's own -- a frame claiming a different
     // domain is a mismatch the C++ authority rejects (the C++ side scores with the
     // compiled constants, so it must not admit a frame stamped with other bounds).
@@ -199,9 +160,7 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
     PaletteViewState palette;
     palette.commandOpenCommandId = *commandOpenCommandIdField->asText();
     palette.fileOpenCommandId = *fileOpenCommandIdField->asText();
-    if (palette.commandOpenCommandId.empty() ||
-        palette.fileOpenCommandId.empty() ||
-        palette.commandOpenCommandId == palette.fileOpenCommandId) {
+    if (palette.commandOpenCommandId == palette.fileOpenCommandId) {
         return std::nullopt;
     }
     const bool hasMode =
@@ -210,16 +169,15 @@ std::optional<PaletteViewState> decodePalette(const ProtocolValue& value) {
         activationIdField->kind() != ProtocolValue::Kind::NullValue;
     if (hasMode != hasActivation) return std::nullopt;
     if (hasMode) {
-        auto activeMode = decodeMode(*activeModeField);
-        auto const activationValue = activationIdField->asUint();
-        if (!activeMode ||
-            (*activeMode != SearchMode::Command &&
-             *activeMode != SearchMode::File) ||
-            !activationValue || *activationValue == 0) {
+        const auto activeMode = decodeMode(*activeModeField);
+        const auto activationValue = *activationIdField->asUint();
+        if ((activeMode != SearchMode::Command &&
+             activeMode != SearchMode::File) ||
+            activationValue == 0) {
             return std::nullopt;
         }
         palette.activePicker = PickerActivation{
-            *activeMode, PickerActivationId{*activationValue}};
+            activeMode, PickerActivationId{activationValue}};
     }
     palette.parameters = *parameters;
     palette.presenceOverlay = std::move(*presenceOverlay);

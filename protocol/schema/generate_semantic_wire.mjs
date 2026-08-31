@@ -9,8 +9,8 @@ const defaults = Object.freeze({
   manifest: path.join(here, 'semantic_wire.mjs'),
   cpp: path.join(
     root, 'include/ssg/detail/generated/semantic_wire_manifest.h'),
-  uiCpp: path.join(
-    root, 'include/ssg/detail/generated/ui_wire_schema.h'),
+  wireCpp: path.join(
+    root, 'include/ssg/detail/generated/wire_schema.h'),
   js: path.join(root, 'apps/web/generated/semantic_wire_manifest.mjs'),
 });
 
@@ -1040,7 +1040,7 @@ export function renderOutputs(manifest) {
   validateManifest(manifest);
   return {
     cpp: renderCpp(manifest),
-    uiCpp: renderCppWireValidators(manifest),
+    wireCpp: renderCppWireValidators(manifest),
     js: renderJs(manifest),
   };
 }
@@ -1115,7 +1115,7 @@ function parseArguments(args) {
     else if (argument === '--write') options.mode = 'write';
     else if (argument === '--manifest') options.manifest = args[++index];
     else if (argument === '--cpp') options.cpp = args[++index];
-    else if (argument === '--ui-cpp') options.uiCpp = args[++index];
+    else if (argument === '--wire-cpp') options.wireCpp = args[++index];
     else if (argument === '--js') options.js = args[++index];
     else throw new Error(`unknown argument: ${argument}`);
   }
@@ -1125,7 +1125,9 @@ function parseArguments(args) {
 export async function run(args) {
   const options = parseArguments(args);
   const outputs = renderOutputs(await loadManifest(options.manifest));
-  const destinations = { cpp: options.cpp, uiCpp: options.uiCpp, js: options.js };
+  const destinations = {
+    cpp: options.cpp, wireCpp: options.wireCpp, js: options.js,
+  };
   if (options.mode === 'write') await writeOutputs(outputs, destinations);
   else await checkOutputs(outputs, destinations);
 }

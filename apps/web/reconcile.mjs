@@ -1733,28 +1733,6 @@ export function externalModificationFromSections(sections) {
   return { message: String(section.message == null ? '' : section.message), files };
 }
 
-// Whether the external-modification bar holds the effective keyboard focus. The
-// wire `focus` field is NEVER ExternalModification (it is legacy-projected to
-// Editor/Panel/Prompt for older clients); this additive bool is the ONLY signal,
-// so the client MUST read it rather than compare the focus ordinal to a value
-// that never appears on the wire.
-// --- UI-VM: the web interpreter over the published schema + dynamic node state ---
-//
-// Wire ordinals, pinned by the C++ enums (WidgetKind, RegionRole, Axis, SizeKind,
-// SemanticRole). The schema's leaves carry `kind`; regions carry `role`; nodes carry
-// `size`; containers carry `axis`.
-// Whether a node is an independent scroll viewport, pinned to the C++ ScrollAxis
-// enum. An unrecognized value is treated as NONE (a future axis degrades to "not
-// a viewport"), matching the wire decoder's forward-compat rule.
-// Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
-const ALL_SURFACES = Object.freeze([
-  SURFACE.TAB_BAR, SURFACE.TREE, SURFACE.FIND_RESULTS, SURFACE.NOTICE,
-  SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
-]);
-const TREE_SURFACES = Object.freeze([
-  SURFACE.TREE,
-]);
-
 export function browserRenderPlan(delta) {
   const surfaces = new Set();
   const add = (...values) => values.forEach((value) => surfaces.add(value));
@@ -1769,7 +1747,7 @@ export function browserRenderPlan(delta) {
     add(SURFACE.DOCUMENT);
   }
   if (delta.tabs && delta.tabs.state != null) add(SURFACE.TAB_BAR);
-  if (revisionChanged(delta.tree)) add(...TREE_SURFACES);
+  if (revisionChanged(delta.tree)) add(SURFACE.TREE);
   if (delta.palette) add(SURFACE.FIND_RESULTS);
   if (delta.notice_view && !!num(delta.notice_view.changed))
     add(SURFACE.NOTICE);
@@ -1777,7 +1755,7 @@ export function browserRenderPlan(delta) {
     add(SURFACE.EXTERNAL_MODIFICATION);
   const repaintTheme =
     !!(delta.theme && delta.theme.replacement != null);
-  if (repaintTheme) add(...ALL_SURFACES);
+  if (repaintTheme) add(...WEB_UI_PROFILE.surfaces);
   return {
     rebuild: delta.ui_frame_delta?.kind === 'replacement',
     reconcile: !!(delta.ui_frame_delta ||

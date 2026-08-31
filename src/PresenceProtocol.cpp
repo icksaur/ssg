@@ -1,5 +1,5 @@
 #include <ssg/PresenceProtocol.h>
-#include <ssg/detail/generated/ui_wire_schema.h>
+#include <ssg/detail/generated/wire_schema.h>
 
 #include <set>
 #include <string>
