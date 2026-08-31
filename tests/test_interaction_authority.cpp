@@ -139,10 +139,11 @@ TEST(applyShowProviderCreatesTreeBackingFromTheOwnedSource) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree, 5};
     ASSERT_FALSE(revisionOf(tree, "git").has_value());
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::GitStatus}));
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Git)}));
     ASSERT_TRUE(authority.truth().panelPresent);
     ASSERT_TRUE(tree.activeProviderBinding() ==
-                panelProviderTreeBinding(PanelProvider::GitStatus));
+                builtInPanelTreeProvider(TreeProviderKind::Git));
     // The git provider was created and stamped from the authority's revision source (5).
     const auto gitRevision = revisionOf(tree, "git");
     ASSERT_TRUE(gitRevision.has_value());
@@ -156,7 +157,8 @@ TEST(applyRejectionMutatesNothing) {
     InteractionAuthority authority{assemble(StyleDimensions{}), empty};
     const WholeScreenTruth before = authority.truth();
     const FocusTarget focusBefore = authority.effectiveFocus();
-    ASSERT_FALSE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_FALSE(authority.apply(ShowPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
     ASSERT_TRUE(authority.truth() == before);
     ASSERT_TRUE(authority.effectiveFocus() == focusBefore);
     ASSERT_FALSE(authority.prompt().active());
@@ -296,7 +298,8 @@ TEST(constructionRejectsARevisionSourceBehindAProvider) {
 TEST(updateCompositionMigratesPreservingPanelAndPromptTruth) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
     ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::Command}));
     ASSERT_TRUE(authority.truth().panelPresent);
     ASSERT_TRUE(authority.openPicker().has_value());
@@ -360,7 +363,8 @@ TEST(statusOverlaySurvivesPromptAndComposedFooterRebuilds) {
 TEST(promptOverPanelClosesBackToPanelFocus) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Panel);
     ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::Command}));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
@@ -371,7 +375,8 @@ TEST(promptOverPanelClosesBackToPanelFocus) {
 TEST(panelHideWhilePromptCapturedRestoresBaseUnderThePrompt) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
     ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::Command}));
     // Hide the panel while the prompt is captured: the prompt still routes focus, but the
     // base focus underneath is restored to the panel-return focus (Editor).
@@ -386,17 +391,19 @@ TEST(providerCyclingWhileHiddenAndEditorFocusedPreservesBoth) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
     // Panel hidden, editor-focused: switching provider changes only the selection.
-    ASSERT_TRUE(authority.apply(SwitchPanelProvider{PanelProvider::GitStatus}));
+    ASSERT_TRUE(authority.apply(SwitchPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Git)}));
     ASSERT_FALSE(authority.truth().panelPresent);
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
     ASSERT_TRUE(tree.activeProviderBinding() ==
-                panelProviderTreeBinding(PanelProvider::GitStatus));
+                builtInPanelTreeProvider(TreeProviderKind::Git));
 }
 
 TEST(editorFocusWithThePanelVisibleKeepsThePanelPresent) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
     authority.focusEditor();
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
     ASSERT_TRUE(authority.truth().panelPresent);  // focus moved, panel stayed
@@ -409,7 +416,8 @@ TEST(focusPanelRequiresThePanelThenFocusEditorReturns) {
     ASSERT_FALSE(authority.focusPanel());
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
 
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Panel);
     authority.focusEditor();
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
@@ -420,7 +428,8 @@ TEST(focusPanelRequiresThePanelThenFocusEditorReturns) {
 TEST(focusChangeUnderAnOpenPromptSurfacesWhenThePromptCloses) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{PanelProvider::FileTree}));
+    ASSERT_TRUE(authority.apply(ShowPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
     ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
     // The prompt capture routes effective focus regardless of the base change.
     authority.focusEditor();

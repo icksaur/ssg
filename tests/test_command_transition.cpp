@@ -4,8 +4,8 @@
 // the tree-backing plan it prepares (activate a matching id+kind provider, create-replace
 // one that is absent OR present under the wrong kind, reject a missing Filesystem
 // provider), replacing an already-active prompt without a new rejection, refusing a
-// close whose cancel fails, rejecting corrupt provider enumerators, and the provider cycle
-// order. The against-live grid-parity and rejection-mutates-nothing wiring oracles belong
+// close whose cancel fails, rejecting bindings outside the built-in catalog, and the
+// provider cycle order. The against-live grid-parity and rejection-mutates-nothing oracles belong
 // to the activation cutover, not here.
 
 #include "ssg/CommandTransition.h"
@@ -16,6 +16,8 @@
 #include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
+#include <algorithm>
+#include <array>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -43,7 +45,17 @@ ValidatedSchema schema() {
 }
 
 TreeProviderBinding filesystem() {
-    return panelProviderTreeBinding(PanelProvider::FileTree);
+    return TreeProviderBinding{TreeProviderId{"filesystem"},
+                               TreeProviderKind::Filesystem};
+}
+
+TreeProviderBinding git() {
+    return TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git};
+}
+
+TreeProviderBinding symbols() {
+    return TreeProviderBinding{TreeProviderId{"symbols"},
+                               TreeProviderKind::Symbols};
 }
 
 TreeProviderPresence presence(TreeProviderBinding binding, std::uint64_t revision) {
@@ -103,7 +115,7 @@ TEST(togglePanelFromShownRestoresPanelReturnFocus) {
 TEST(showProviderPreparesACreateSnapshotForAnAbsentGitProvider) {
     WholeScreenTruth truth;  // hidden, files selected
     const auto prepared = prepareTransition(
-        ShowPanelProvider{PanelProvider::GitStatus}, inputs(truth, {presence(filesystem(), 1)}));
+        ShowPanelProvider{git()}, inputs(truth, {presence(filesystem(), 1)}));
     ASSERT_TRUE(prepared.has_value());
     ASSERT_TRUE(prepared->truth().panelPresent);
     ASSERT_TRUE(prepared->tree().has_value());
@@ -116,7 +128,7 @@ TEST(showProviderPreparesACreateSnapshotForAnAbsentGitProvider) {
 TEST(showProviderActivatesAMatchingProviderWithoutCreating) {
     WholeScreenTruth truth;
     const auto prepared = prepareTransition(
-        ShowPanelProvider{PanelProvider::GitStatus},
+        ShowPanelProvider{git()},
         inputs(truth, {presence(filesystem(), 1),
                        presence(TreeProviderBinding{TreeProviderId{"git"},
                                                     TreeProviderKind::Git}, 2)}));
@@ -130,30 +142,17 @@ TEST(showProviderRejectsAnIdPresentUnderTheWrongKind) {
     WholeScreenTruth truth;
     // A "git" id backing a Symbols-kind tree is not the GitStatus provider.
     const auto prepared = prepareTransition(
-        ShowPanelProvider{PanelProvider::GitStatus},
+        ShowPanelProvider{git()},
         inputs(truth, {presence(filesystem(), 1),
                        presence(TreeProviderBinding{TreeProviderId{"git"},
                                                     TreeProviderKind::Symbols}, 5)}));
     ASSERT_FALSE(prepared.has_value());
 }
 
-TEST(showProviderRejectsARecreateWhenTheRevisionSourceHasDesynced) {
-    WholeScreenTruth truth;
-    // The revision source (nextTreeRevision == 7) no longer leads the existing provider
-    // (revision 9): stamping a replacement from it would be rejected by replaceProvider,
-    // so preflight refuses rather than let commit throw.
-    const auto prepared = prepareTransition(
-        ShowPanelProvider{PanelProvider::GitStatus},
-        inputs(truth, {presence(filesystem(), 1),
-                       presence(TreeProviderBinding{TreeProviderId{"git"},
-                                                    TreeProviderKind::Symbols}, 9)}));
-    ASSERT_FALSE(prepared.has_value());
-}
-
 TEST(showAMissingFilesystemProviderIsRejected) {
     WholeScreenTruth truth;
     const auto prepared = prepareTransition(
-        ShowPanelProvider{PanelProvider::FileTree}, inputs(truth, {}));
+        ShowPanelProvider{filesystem()}, inputs(truth, {}));
     ASSERT_FALSE(prepared.has_value());
 }
 
@@ -163,7 +162,7 @@ TEST(reselectingTheShownProviderHidesThePanel) {
     truth.baseFocus = BaseFocus::Panel;
     truth.panelReturnFocus = BaseFocus::Editor;
     const auto prepared = prepareTransition(
-        ShowPanelProvider{PanelProvider::FileTree}, inputs(truth, {presence(filesystem(), 1)}));
+        ShowPanelProvider{filesystem()}, inputs(truth, {presence(filesystem(), 1)}));
     ASSERT_TRUE(prepared.has_value());
     ASSERT_FALSE(prepared->truth().panelPresent);
     ASSERT_TRUE(prepared->truth().baseFocus == BaseFocus::Editor);
@@ -175,7 +174,7 @@ TEST(reselectingTheShownProviderHidesThePanel) {
 TEST(switchProviderWhileHiddenPreservesHiddenAndFocus) {
     WholeScreenTruth truth;  // hidden, Editor-focused, FileTree selected
     const auto prepared = prepareTransition(
-        SwitchPanelProvider{PanelProvider::GitStatus},
+        SwitchPanelProvider{git()},
         inputs(truth, {presence(filesystem(), 1),
                        presence(TreeProviderBinding{TreeProviderId{"git"},
                                                     TreeProviderKind::Git}, 2)}));
@@ -190,7 +189,7 @@ TEST(switchProviderWhileShownPreservesShownAndFocus) {
     truth.panelPresent = true;
     truth.baseFocus = BaseFocus::Panel;
     const auto prepared = prepareTransition(
-        SwitchPanelProvider{PanelProvider::Symbols}, inputs(truth, {presence(filesystem(), 1)}));
+        SwitchPanelProvider{symbols()}, inputs(truth, {presence(filesystem(), 1)}));
     ASSERT_TRUE(prepared.has_value());
     ASSERT_TRUE(prepared->truth().panelPresent);             // stayed shown
     ASSERT_TRUE(prepared->truth().baseFocus == BaseFocus::Panel);   // focus untouched
@@ -202,7 +201,7 @@ TEST(switchProviderNeverTogglesOffOnReselect) {
     truth.panelPresent = true;
     // ShowPanelProvider would hide here; SwitchPanelProvider keeps it shown.
     const auto prepared = prepareTransition(
-        SwitchPanelProvider{PanelProvider::FileTree}, inputs(truth, {presence(filesystem(), 1)}));
+        SwitchPanelProvider{filesystem()}, inputs(truth, {presence(filesystem(), 1)}));
     ASSERT_TRUE(prepared.has_value());
     ASSERT_TRUE(prepared->truth().panelPresent);
 }
@@ -210,7 +209,7 @@ TEST(switchProviderNeverTogglesOffOnReselect) {
 TEST(switchProviderRejectsMissingFilesystem) {
     WholeScreenTruth truth;
     const auto prepared = prepareTransition(
-        SwitchPanelProvider{PanelProvider::FileTree}, inputs(truth, {}));
+        SwitchPanelProvider{filesystem()}, inputs(truth, {}));
     ASSERT_FALSE(prepared.has_value());
 }
 
@@ -260,23 +259,55 @@ TEST(closeFinderIsRejectedWhenCancelRefuses) {
 
 // --- Provider domain ----------------------------------------------------------------
 
-TEST(cyclePanelProviderWalksTheProviderOrder) {
-    ASSERT_TRUE(cyclePanelProvider(PanelProvider::FileTree, CycleDirection::Next) ==
-                PanelProvider::GitStatus);
-    ASSERT_TRUE(cyclePanelProvider(PanelProvider::Symbols, CycleDirection::Next) ==
-                PanelProvider::FileTree);
-    ASSERT_TRUE(cyclePanelProvider(PanelProvider::FileTree, CycleDirection::Previous) ==
-                PanelProvider::Symbols);
+TEST(cyclePanelTreeProviderWalksTheEstablishedBindingOrder) {
+    const std::array expected{filesystem(), git(), symbols()};
+    ASSERT_TRUE(std::ranges::equal(builtInPanelTreeProviders(), expected));
+    ASSERT_EQ(cyclePanelTreeProvider(filesystem(), CycleDirection::Next), git());
+    ASSERT_EQ(cyclePanelTreeProvider(git(), CycleDirection::Next), symbols());
+    ASSERT_EQ(cyclePanelTreeProvider(symbols(), CycleDirection::Next), filesystem());
+    ASSERT_EQ(cyclePanelTreeProvider(filesystem(), CycleDirection::Previous),
+              symbols());
+    ASSERT_EQ(cyclePanelTreeProvider(git(), CycleDirection::Previous),
+              filesystem());
+    ASSERT_EQ(cyclePanelTreeProvider(symbols(), CycleDirection::Previous), git());
 }
 
-TEST(corruptProviderEnumeratorsAreRejected) {
-    const auto corrupt = static_cast<PanelProvider>(200);
-    ASSERT_THROWS(panelProviderLabel(corrupt), std::logic_error);
-    ASSERT_THROWS(panelProviderTreeBinding(corrupt), std::logic_error);
-    ASSERT_THROWS(cyclePanelProvider(corrupt, CycleDirection::Next), std::logic_error);
+TEST(bindingsOutsideTheBuiltInCatalogAreRejected) {
+    const TreeProviderBinding unknown{TreeProviderId{"other"},
+                                      TreeProviderKind::Git};
+    ASSERT_FALSE(prepareTransition(
+        ShowPanelProvider{unknown}, inputs({}, {presence(filesystem(), 1)})));
+    ASSERT_THROWS(cyclePanelTreeProvider(unknown, CycleDirection::Next),
+                  std::logic_error);
     ASSERT_THROWS(
-        cyclePanelProvider(PanelProvider::FileTree, static_cast<CycleDirection>(200)),
+        cyclePanelTreeProvider(filesystem(), static_cast<CycleDirection>(200)),
         std::logic_error);
+}
+
+TEST(requestBindingWithKnownIdAndWrongKindIsRejected) {
+    const TreeProviderBinding wrongKind{TreeProviderId{"git"},
+                                        TreeProviderKind::Symbols};
+    ASSERT_FALSE(prepareTransition(
+        ShowPanelProvider{wrongKind},
+        inputs({}, {presence(filesystem(), 1)})));
+}
+
+TEST(nonCatalogReselectCannotHideThePanel) {
+    const TreeProviderBinding unknown{TreeProviderId{"other"},
+                                      TreeProviderKind::Git};
+    WholeScreenTruth truth;
+    truth.panelPresent = true;
+    truth.baseFocus = BaseFocus::Panel;
+    auto transitionInputs = inputs(truth, {presence(unknown, 1)});
+    ASSERT_TRUE(transitionInputs.activeProvider == unknown);
+    ASSERT_FALSE(prepareTransition(
+        ShowPanelProvider{unknown}, transitionInputs));
+}
+
+TEST(emptyProviderCreatabilityIsOwnedByTreeProviderKind) {
+    ASSERT_FALSE(treeProviderCanBeCreatedEmpty(TreeProviderKind::Filesystem));
+    ASSERT_TRUE(treeProviderCanBeCreatedEmpty(TreeProviderKind::Git));
+    ASSERT_TRUE(treeProviderCanBeCreatedEmpty(TreeProviderKind::Symbols));
 }
 
 }  // namespace
@@ -287,7 +318,6 @@ int main() {
     RUN(showProviderPreparesACreateSnapshotForAnAbsentGitProvider);
     RUN(showProviderActivatesAMatchingProviderWithoutCreating);
     RUN(showProviderRejectsAnIdPresentUnderTheWrongKind);
-    RUN(showProviderRejectsARecreateWhenTheRevisionSourceHasDesynced);
     RUN(showAMissingFilesystemProviderIsRejected);
     RUN(reselectingTheShownProviderHidesThePanel);
     RUN(switchProviderWhileHiddenPreservesHiddenAndFocus);
@@ -298,7 +328,10 @@ int main() {
     RUN(openFinderReplacesAnAlreadyActivePromptWithoutNewRejection);
     RUN(closeFinderClearsThePickerAndCancelsThePrompt);
     RUN(closeFinderIsRejectedWhenCancelRefuses);
-    RUN(cyclePanelProviderWalksTheProviderOrder);
-    RUN(corruptProviderEnumeratorsAreRejected);
+    RUN(cyclePanelTreeProviderWalksTheEstablishedBindingOrder);
+    RUN(bindingsOutsideTheBuiltInCatalogAreRejected);
+    RUN(requestBindingWithKnownIdAndWrongKindIsRejected);
+    RUN(nonCatalogReselectCannotHideThePanel);
+    RUN(emptyProviderCreatabilityIsOwnedByTreeProviderKind);
     return failed;
 }

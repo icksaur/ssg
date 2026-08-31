@@ -24,6 +24,17 @@ std::string_view treeProviderLabel(TreeProviderKind kind) {
     throw std::logic_error{"corrupt TreeProviderKind enumerator"};
 }
 
+bool treeProviderCanBeCreatedEmpty(TreeProviderKind kind) {
+    switch (kind) {
+    case TreeProviderKind::Filesystem:
+        return false;
+    case TreeProviderKind::Git:
+    case TreeProviderKind::Symbols:
+        return true;
+    }
+    throw std::logic_error{"corrupt TreeProviderKind enumerator"};
+}
+
 namespace {
 
 void validateProviderId(std::string_view value) {
@@ -624,11 +635,7 @@ bool TreeModel::activateOrCreate(
         if (existing->snapshot.kind() != binding.kind) return false;
         return activateProvider(binding.id);
     }
-    // Not present. Only Git/Symbols may be created on demand; a Filesystem
-    // provider is seeded at construction, so a missing one is a real failure.
-    if (binding.kind == TreeProviderKind::Filesystem) {
-        return false;
-    }
+    if (!treeProviderCanBeCreatedEmpty(binding.kind)) return false;
     replaceProvider(
         TreeProviderSnapshot{binding.id, binding.kind, revisionForCreate(), {}});
     return activateProvider(binding.id);

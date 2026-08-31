@@ -15,6 +15,7 @@
 // tree provider, or picker + prompt) are transitions.
 
 #include <optional>
+#include <span>
 #include <string_view>
 #include <variant>
 
@@ -23,27 +24,23 @@
 #include <ssg/TreeModel.h>       // TreeProviderBinding, TreeProviderSnapshot, TreeRevision
 #include <ssg/UiTree.h>          // ValidatedSchema, UiSchema, node id constants
 #include <ssg/InteractionState.h>       // UiInteractionState
-#include <ssg/WholeScreenInteraction.h> // PanelProvider, WholeScreenTruth
+#include <ssg/WholeScreenInteraction.h> // WholeScreenTruth
 
 namespace ssg {
 
 // --- The panel-provider domain ------------------------------------------------------
 
-// The presentation label a panel provider is known by ("files"/"git"/"symbols").
-[[nodiscard]] std::string_view panelProviderLabel(PanelProvider provider);
-
-// The tree-provider backing a panel provider activates. This is the one place the
-// PanelProvider -> tree-provider correspondence lives.
-[[nodiscard]] TreeProviderBinding panelProviderTreeBinding(PanelProvider provider);
+// The only bindings accepted by panel-provider transitions, in cycle order.
+[[nodiscard]] std::span<const TreeProviderBinding> builtInPanelTreeProviders();
+[[nodiscard]] TreeProviderBinding builtInPanelTreeProvider(
+    TreeProviderKind kind);
 
 enum class CycleDirection : std::uint8_t { Next, Previous };
 
 // The next provider when cycling the panel selection. Cycling belongs to the provider
 // domain, so next/previous-provider commands resolve to a SwitchPanelProvider transition
 // (which preserves panel visibility and focus) rather than being transition variants.
-[[nodiscard]] PanelProvider cyclePanelProvider(PanelProvider provider,
-                                               CycleDirection direction);
-[[nodiscard]] PanelProvider cyclePanelProvider(
+[[nodiscard]] TreeProviderBinding cyclePanelTreeProvider(
     const TreeProviderBinding& provider, CycleDirection direction);
 
 // The region the active prompt's focus anchors on, derived from the prompt (never stored),
@@ -56,13 +53,13 @@ struct TogglePanel {};
 // Show the panel on a chosen provider (clicking the path/branch): shows and focuses the
 // panel, and reselecting the shown provider hides it.
 struct ShowPanelProvider {
-    PanelProvider provider = PanelProvider::FileTree;
+    TreeProviderBinding binding;
 };
 // Change the panel's provider backing WITHOUT changing its visibility or focus (cycling
 // next/previous provider): the panel stays hidden if hidden, shown if shown, and focus is
 // untouched. Never toggles the panel off.
 struct SwitchPanelProvider {
-    PanelProvider provider = PanelProvider::FileTree;
+    TreeProviderBinding binding;
 };
 struct OpenFinder {
     PickerKind picker = PickerKind::Command;
@@ -75,9 +72,9 @@ using CommandTransition = std::variant<TogglePanel, ShowPanelProvider,
 // --- The tree-provider backing a commit installs ------------------------------------
 
 // The fully-formed tree-provider state a commit installs. `create`, when set, is a
-// complete snapshot the commit installs (a Git/Symbols provider that was absent, or one
-// present under the wrong kind); `activate` names the provider that becomes active.
-// Preflight rejects a missing Filesystem provider, so a create snapshot is never one.
+// complete snapshot the commit installs for an absent creatable provider;
+// `activate` names the provider that becomes active. Preflight rejects a
+// missing Filesystem provider and any id present under the wrong kind.
 struct TreeBackingPlan {
     TreeProviderId activate;
     std::optional<TreeProviderSnapshot> create;

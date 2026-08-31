@@ -9,63 +9,58 @@ namespace ssg {
 
 namespace {
 
-// The provider cycle order -- the order next/previous walks. Matches the panel provider
-// order the shell is constructed with.
-constexpr std::array<PanelProvider, 3> kCycle{
-    PanelProvider::FileTree, PanelProvider::GitStatus, PanelProvider::Symbols};
+const std::array<TreeProviderBinding, 3> kPanelTreeProviders{
+    TreeProviderBinding{TreeProviderId{"filesystem"},
+                        TreeProviderKind::Filesystem},
+    TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
+    TreeProviderBinding{TreeProviderId{"symbols"}, TreeProviderKind::Symbols},
+};
 
 [[noreturn]] void rejectCorrupt(const char* what) {
     throw std::logic_error(what);
 }
 
+bool isBuiltInPanelTreeProvider(const TreeProviderBinding& binding) {
+    return std::ranges::find(kPanelTreeProviders, binding) !=
+           kPanelTreeProviders.end();
+}
+
 }  // namespace
 
-std::string_view panelProviderLabel(PanelProvider provider) {
-    return treeProviderLabel(panelProviderTreeBinding(provider).kind);
+std::span<const TreeProviderBinding> builtInPanelTreeProviders() {
+    return kPanelTreeProviders;
 }
 
-TreeProviderBinding panelProviderTreeBinding(PanelProvider provider) {
-    switch (provider) {
-    case PanelProvider::FileTree:
-        return TreeProviderBinding{TreeProviderId{"filesystem"},
-                                   TreeProviderKind::Filesystem};
-    case PanelProvider::GitStatus:
-        return TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git};
-    case PanelProvider::Symbols:
-        return TreeProviderBinding{TreeProviderId{"symbols"},
-                                   TreeProviderKind::Symbols};
+TreeProviderBinding builtInPanelTreeProvider(TreeProviderKind kind) {
+    const auto found = std::ranges::find(
+        kPanelTreeProviders, kind, &TreeProviderBinding::kind);
+    if (found == kPanelTreeProviders.end()) {
+        rejectCorrupt("corrupt TreeProviderKind enumerator");
     }
-    rejectCorrupt("corrupt PanelProvider enumerator");
+    return *found;
 }
 
-PanelProvider cyclePanelProvider(PanelProvider provider, CycleDirection direction) {
-    const auto at = std::find(kCycle.begin(), kCycle.end(), provider);
-    if (at == kCycle.end()) rejectCorrupt("corrupt PanelProvider enumerator");
+TreeProviderBinding cyclePanelTreeProvider(
+    const TreeProviderBinding& provider, CycleDirection direction) {
+    const auto at = std::ranges::find(kPanelTreeProviders, provider);
+    if (at == kPanelTreeProviders.end()) {
+        rejectCorrupt("active tree provider is outside the panel cycle");
+    }
     std::size_t step = 0;
     switch (direction) {
     case CycleDirection::Next:
         step = 1;
         break;
     case CycleDirection::Previous:
-        step = kCycle.size() - 1;
+        step = kPanelTreeProviders.size() - 1;
         break;
     default:
         rejectCorrupt("corrupt CycleDirection enumerator");
     }
-    const std::size_t index = static_cast<std::size_t>(at - kCycle.begin());
-    return kCycle[(index + step) % kCycle.size()];
-}
-
-PanelProvider cyclePanelProvider(const TreeProviderBinding& provider,
-                                 CycleDirection direction) {
-    const auto current = std::find_if(
-        kCycle.begin(), kCycle.end(), [&](PanelProvider candidate) {
-            return panelProviderTreeBinding(candidate) == provider;
-        });
-    if (current == kCycle.end()) {
-        rejectCorrupt("active tree provider is outside the panel cycle");
-    }
-    return cyclePanelProvider(*current, direction);
+    const std::size_t index =
+        static_cast<std::size_t>(at - kPanelTreeProviders.begin());
+    return kPanelTreeProviders[
+        (index + step) % kPanelTreeProviders.size()];
 }
 
 std::optional<PromptRegion> activePromptRegion(const PromptSurface& prompt) {
@@ -132,13 +127,12 @@ struct TransitionBuilder {
     // binding and is rejected, never activated or replaced. An absent Filesystem provider
     // is also a genuine rejection -- it is seeded with real nodes, never created empty.
     // A new snapshot's revision comes from the single revision source, never
-    // invented as existing+1 (which could overflow or run ahead of that source and make a
-    // later replacement reject); preflight rejects a source that cannot lead the provider
-    // it replaces (desync) or has no successor (exhaustion), so both replaceProvider and
-    // the source's post-install advance are infallible. Returns false on rejection.
+    // invented as existing+1. Preflight rejects exhaustion so installing the
+    // prepared snapshot and advancing the source remain infallible.
     static bool prepareTreeBacking(const TreeProviderBinding& binding,
                                    const TransitionInputs& inputs,
                                    std::optional<TreeBackingPlan>& out) {
+        if (!isBuiltInPanelTreeProvider(binding)) return false;
         const auto existing = std::find_if(
             inputs.presentProviders.begin(), inputs.presentProviders.end(),
             [&](const TreeProviderPresence& p) { return p.binding.id == binding.id; });
@@ -147,7 +141,7 @@ struct TransitionBuilder {
         TreeBackingPlan plan{binding.id, std::nullopt};
         if (!matching) {
             if (existing != inputs.presentProviders.end()) return false;
-            if (binding.kind == TreeProviderKind::Filesystem) return false;
+            if (!treeProviderCanBeCreatedEmpty(binding.kind)) return false;
             const std::uint64_t next = inputs.nextTreeRevision.value();
             if (next == std::numeric_limits<std::uint64_t>::max()) return false;
             plan.create =
@@ -160,8 +154,8 @@ struct TransitionBuilder {
     static std::optional<PreparedTransition> prepare(ShowPanelProvider request,
                                                      const TransitionInputs& inputs) {
         const WholeScreenTruth& truth = inputs.truth;
-        const TreeProviderBinding binding =
-            panelProviderTreeBinding(request.provider);
+        const TreeProviderBinding& binding = request.binding;
+        if (!isBuiltInPanelTreeProvider(binding)) return std::nullopt;
         // Reselecting the shown provider hides the panel -- this command's semantics.
         if (truth.panelPresent && inputs.activeProvider == binding) {
             return hidePanel(truth, inputs);
@@ -181,8 +175,7 @@ struct TransitionBuilder {
                                                      const TransitionInputs& inputs) {
         // Change the provider backing only; panel visibility and focus are preserved (this
         // is cycling next/previous, not a show). Never toggles off on reselect.
-        const TreeProviderBinding binding =
-            panelProviderTreeBinding(request.provider);
+        const TreeProviderBinding& binding = request.binding;
         std::optional<TreeBackingPlan> plan;
         if (!prepareTreeBacking(binding, inputs, plan)) return std::nullopt;
         WholeScreenTruth next = inputs.truth;

@@ -189,7 +189,7 @@ TEST(surfaceOnNonViewLeafIsRejected) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::Label;
     widget.id = "lbl";
-    widget.surface = ssg::ViewSurface::GitStatus;
+    widget.surface = static_cast<ssg::ViewSurface>(2);
     UiSchema schema;
     schema.root = container(
         "root",
@@ -269,7 +269,7 @@ TEST(wellKnownAreasRejectAPanelViewWithTheWrongSurface) {
     auto& body = std::get<UiContainer>(root.children[1].content);
     auto& panel = std::get<UiContainer>(body.children[0].content);
     auto& tree = std::get<UiLeaf>(panel.children[0].content);
-    tree.widget.surface = ssg::ViewSurface::GitStatus;
+    tree.widget.surface = static_cast<ssg::ViewSurface>(2);
     ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
 }
 

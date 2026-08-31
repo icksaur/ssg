@@ -631,3 +631,167 @@ rejected. It is not a client projection: it records the user's focus choice so a
 pure interaction rebuild can reconstruct the capture. Replacing it requires a
 different transition model and is separable from removing snapshot and wire
 duplication.
+
+## Step 5 design: one provider identity vocabulary
+
+### Goals
+
+Panel commands, transitions, tree state, and current UI schemas use
+`TreeProviderBinding` and `ViewSurface::Tree` directly. The duplicate
+`PanelProvider` domain and provider-specific current view surfaces disappear
+without changing panel behavior or breaking the frozen preceding schema during
+the Plan 6 compatibility window.
+
+### Design
+
+`TreeProviderBinding` becomes the only value carried by `ShowPanelProvider`,
+`SwitchPanelProvider`, provider cycling, transition preflight, and runtime
+command dispatch. `CommandTransition` retains one built-in panel-provider
+catalog expressed as bindings in the established Filesystem, Git, Symbols
+cycle order. Lookup by `TreeProviderKind`, exact-binding validation, and cycle
+movement all consume that catalog. This keeps the product inventory and
+canonical id-and-kind correspondence in one library-owned place without
+introducing a replacement enum. A request whose binding is absent from the
+catalog, including a known id paired with the wrong kind, rejects during
+preflight before provider lookup or mutation. `treeProviderLabel` remains the
+label conversion for the binding's kind.
+
+`PanelProvider`, `panelProviderLabel`, and `panelProviderTreeBinding` are
+deleted. Transition preflight receives the final binding and continues to
+validate both id and kind before preparing any replacement. The named
+show-files and show-git commands resolve their built-in bindings at the runtime
+command boundary; next/previous commands resolve the adjacent binding from the
+same catalog. No client learns the catalog or maps a provider to layout.
+
+Whether a missing provider may be created empty remains a `TreeProviderKind`
+rule owned by `TreeModel`, exposed through one named query used by both
+`TreeModel::activateOrCreate` and transition preflight. Filesystem returns false;
+Git and Symbols return true. A missing non-creatable binding rejects preflight;
+creatable bindings receive the existing revision-stamped empty replacement.
+The catalog does not duplicate this policy as another flag.
+
+The current `ViewSurface` vocabulary removes `FileTree`, `GitStatus`, and
+`Symbols`. Each retained enumerator keeps exactly its pre-Step-5 underlying wire
+value through an explicit enum assignment; the frozen current-schema fixture
+and the independent hand-authored ordinal table are the value oracles. The gaps formerly occupied by retired
+surfaces remain reserved and are not compacted. `kAllViewSurfaces` and
+`ClientUiProfile` enumerate only TabBar, FindResults, FooterPrompt, Notice,
+ExternalModification, Document, and Tree densely. Name lookup, support
+validation, and backing-section lookup reject values outside that current set.
+
+The frozen preceding schema still uses the retired surface ordinals. During the
+compatibility window, `decodeUiSchema` recognizes those ordinals only in a
+decode-local compatibility representation. The accepted panel sequence is
+exactly `(kFileTreeNodeId, retired FileTree ordinal)`,
+`(kGitStatusNodeId, retired GitStatus ordinal)`,
+`(kSymbolsNodeId, retired Symbols ordinal)`, as constructed independently in
+the UI-schema codec oracle, with no additional panel child. Only that
+complete ordered sequence normalizes directly to the canonical
+`kTreeNodeId`/`ViewSurface::Tree` leaf before a `UiSchema` is published. A
+current `ViewSurface` value never represents a retired provider surface, and a
+partial, reordered, mixed, or stray legacy shape rejects. Current encoding
+never emits a retired ordinal. Plan 6 deletes this decode-local representation
+when it activates the new semantic wire version.
+
+The browser removes retired provider-surface constants from its current
+`SURFACE` vocabulary and profile without compacting retained values; every
+retained browser surface value remains equal to the corresponding C++ wire
+value. It continues to receive only server-normalized current schemas; there is
+no browser-side provider-surface compatibility path.
+
+### Invariants
+
+- **PROVIDER-IDENTITY-1** — tree-provider selection crosses command and
+  transition seams only as an exact `TreeProviderBinding`; id and kind are
+  validated together before mutation. State at `ShowPanelProvider`,
+  `SwitchPanelProvider`, and transition preflight.
+- **PROVIDER-IDENTITY-2** — the built-in panel-provider inventory and cycle
+  order have one library-owned binding catalog in Filesystem, Git, Symbols
+  order. State at the catalog accessor in `CommandTransition`.
+- **PROVIDER-IDENTITY-3** — empty-provider creatability is one
+  `TreeProviderKind` rule consumed by tree activation and transition preflight.
+  State at the named query in `TreeModel`.
+- **PROVIDER-SURFACE-1** — current schema, profile, render, and backing
+  vocabulary has only generic `ViewSurface::Tree`; provider identity comes from
+  `TreeViewState::activeBinding`. State at `ViewSurface` and
+  `TreeViewState`.
+- **PROVIDER-COMPAT-1** — retired provider-surface ordinals are accepted only
+  by the exact preceding-schema decoder and cannot escape as current typed
+  values. State at `decodeUiSchema` until Plan 6.
+
+### Considerations
+
+- Removing enum members must not renumber retained wire surfaces. Explicit
+  `ViewSurface` values preserve all retained ordinals; dense profile indexing
+  must not cast those sparse wire values directly to array positions.
+- A binding whose id exists under another kind is malformed and rejects; it is
+  never treated as a request to replace that provider. Catalog membership is
+  checked by transition preflight before inspecting present providers.
+- The filesystem provider remains non-creatable when absent. Git and symbols
+  retain lazy empty creation with revisions allocated by the existing
+  transition preflight.
+- Cycling from a binding outside the built-in catalog is a hard corruption
+  error, not an inferred position or fallback.
+- `ShellNodeKind::PanelProvider` names a frozen legacy presentation node, not
+  provider identity. It remains until Plan 6 removes the presentation envelope.
+  The forbidden-symbol oracle explicitly excludes this qualified symbol.
+- Provider-specific node-id constants remain only where the exact preceding
+  schema decoder identifies its frozen shape; they are not current schema
+  vocabulary.
+
+### Risks and Mitigations
+
+- **Risk:** enum deletion silently changes wire values. **Mitigation:** retain
+  explicit ordinals and compare encoded current surfaces with frozen fixtures.
+- **Risk:** canonicalizing each retired ordinal independently admits malformed
+  legacy schemas. **Mitigation:** collect decode-local retired meanings and
+  normalize only after the complete exact panel sequence matches.
+- **Risk:** replacing `PanelProvider` with loose ids loses kind validation.
+  **Mitigation:** carry `TreeProviderBinding` through every command transition
+  and retain mismatch rejection before mutation.
+- **Risk:** browser current vocabulary continues advertising dead widgets.
+  **Mitigation:** pin the exported surface key set and profile against the
+  current C++ inventory.
+
+### Acceptance (Definition of Done)
+
+- **Observable:** files, git, and symbols panel commands, reselect-to-hide,
+  next/previous cycling, focus preservation, and lazy provider creation behave
+  unchanged in terminal and web clients.
+- **Budgets:** provider switches remain ordinary tree-binding/state changes and
+  do not replace the UI schema or add protocol fields.
+- **Gates:** `scripts/check.sh` and `scripts/check.sh push`.
+- **Oracles:** binding-based transition truth tables cover show, switch,
+  unavailable filesystem, kind mismatch, lazy creation, reselect, and cycle;
+  an independent current-surface name inventory excludes retired surfaces and
+  frozen current-schema bytes and a hand-authored ordinal table pin retained
+  wire values; the independently constructed preceding schema decodes to one generic
+  tree leaf while partial, reordered, mixed, and stray retired forms reject;
+  browser inventory/profile parity contains no retired provider surfaces; source
+  inventory contains no unqualified `PanelProvider`,
+  `panelProviderLabel`, `panelProviderTreeBinding`, or provider-specific
+  `ViewSurface` member; `ShellNodeKind::PanelProvider` is an explicit
+  compatibility exception.
+
+### Plan
+
+| # | Step | Files | Oracle | Invariants |
+|---|------|-------|--------|------------|
+| 1 | Add current-provider and surface-inventory oracles | `tests/test_command_transition.cpp`, `tests/test_ui_view_surface.cpp`, `tests/test_ui_tree_protocol.cpp`, `tests/web/test_reconcile.mjs` | independent binding transition table, current surface names, frozen exact/malformed schemas, browser key set | PROVIDER-IDENTITY-1, PROVIDER-IDENTITY-2, PROVIDER-SURFACE-1, PROVIDER-COMPAT-1 |
+| 2 | Replace panel enum boundaries with exact bindings and one catalog | `include/ssg/WholeScreenInteraction.h`, `include/ssg/CommandTransition.h`, `include/ssg/TreeModel.h`, `src/CommandTransition.cpp`, `src/TreeModel.cpp`, `src/runtime/presentation.cpp`, interaction/transition/session tests | binding transition table, cycle cases, and shared creatability truth table | PROVIDER-IDENTITY-1, PROVIDER-IDENTITY-2, PROVIDER-IDENTITY-3 |
+| 3 | Remove provider-specific current surfaces while preserving exact decode compatibility | `include/ssg/Widget.h`, `include/ssg/UiProfile.h`, `src/Widget.cpp`, `src/UiTree.cpp`, `src/UiTreeProtocol.cpp`, `src/ViewSurfaceBacking.cpp`, surface/schema/profile tests | current name/ordinal inventory plus frozen schema decode/rejection | PROVIDER-SURFACE-1, PROVIDER-COMPAT-1 |
+| 4 | Remove dead browser vocabulary and enforce source inventory | `apps/web/reconcile.mjs`, browser and source-inventory tests | C++/browser current surface parity and forbidden-symbol scan | PROVIDER-IDENTITY-1, PROVIDER-SURFACE-1 |
+
+### Rationale
+
+Keeping provider selection as an enum at the command boundary would preserve
+the same duplicate identity under a smaller scope: every new provider would
+still require an enum case plus a binding map. Carrying the binding itself makes
+the transition API reuse the value already owned and published by `TreeModel`.
+
+Renumbering `ViewSurface` or dropping old schema decode now would create an
+unrelated wire break before Plan 6. Decode-local retired meanings preserve that
+single compatibility obligation without allowing retired provider surfaces
+back into current product types or clients. Compacting retained surface values
+now is rejected for the same reason: Plan 6, not this cleanup, owns any wire
+break.

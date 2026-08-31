@@ -201,7 +201,18 @@ ProtocolValue encodeWidget(const WidgetDescriptor& w) {
          {"sigil", ProtocolValue::makeText(w.sigil)}});
 }
 
-std::optional<WidgetDescriptor> decodeWidget(const ProtocolValue& value) {
+enum class RetiredTreeSurface : std::uint64_t {
+    FileTree = 1,
+    GitStatus = 2,
+    Symbols = 4,
+};
+
+struct DecodedWidget {
+    WidgetDescriptor widget;
+    std::optional<RetiredTreeSurface> retiredTreeSurface;
+};
+
+std::optional<DecodedWidget> decodeWidget(const ProtocolValue& value) {
     if (!value.asObject()) return std::nullopt;
     const auto kind = decodeEnumIn(uintField(value, "kind"), kAllWidgetKinds);
     const auto id = textField(value, "id");
@@ -215,7 +226,8 @@ std::optional<WidgetDescriptor> decodeWidget(const ProtocolValue& value) {
         return std::nullopt;
     }
 
-    WidgetDescriptor w;
+    DecodedWidget decoded;
+    WidgetDescriptor& w = decoded.widget;
     w.kind = *kind;
     w.id = *id;
     if (*rank > std::numeric_limits<int>::max() ||
@@ -254,12 +266,26 @@ std::optional<WidgetDescriptor> decodeWidget(const ProtocolValue& value) {
         w.command = *value.field("command")->asText();
     }
     if (!isNull(value.field("surface"))) {
-        const auto surface =
-            decodeEnumIn(uintField(value, "surface"), kAllViewSurfaces);
-        if (!surface) return std::nullopt;
-        w.surface = *surface;
+        const auto raw = uintField(value, "surface");
+        if (const auto surface = decodeEnumIn(raw, kAllViewSurfaces)) {
+            w.surface = *surface;
+        } else if (raw && *raw == static_cast<std::uint64_t>(
+                                      RetiredTreeSurface::FileTree)) {
+            w.surface = ViewSurface::Tree;
+            decoded.retiredTreeSurface = RetiredTreeSurface::FileTree;
+        } else if (raw && *raw == static_cast<std::uint64_t>(
+                                      RetiredTreeSurface::GitStatus)) {
+            w.surface = ViewSurface::Tree;
+            decoded.retiredTreeSurface = RetiredTreeSurface::GitStatus;
+        } else if (raw && *raw == static_cast<std::uint64_t>(
+                                      RetiredTreeSurface::Symbols)) {
+            w.surface = ViewSurface::Tree;
+            decoded.retiredTreeSurface = RetiredTreeSurface::Symbols;
+        } else {
+            return std::nullopt;
+        }
     }
-    return w;
+    return decoded;
 }
 
 // --- UiNode (recursive) ---------------------------------------------------
@@ -332,7 +358,17 @@ ProtocolValue encodeNode(const UiNode& node) {
     return ProtocolValue::makeObject(std::move(fields));
 }
 
-std::optional<UiNode> decodeNode(const ProtocolValue& value) {
+struct RetiredTreeSurfaceUse {
+    UiNodeId nodeId;
+    RetiredTreeSurface surface;
+
+    friend bool operator==(const RetiredTreeSurfaceUse&,
+                           const RetiredTreeSurfaceUse&) = default;
+};
+
+std::optional<UiNode> decodeNode(
+    const ProtocolValue& value,
+    std::vector<RetiredTreeSurfaceUse>& retiredTreeSurfaces) {
     if (!value.asObject()) return std::nullopt;
     const auto id = textField(value, "id");
     const ProtocolValue* sizeField = value.field("size");
@@ -391,7 +427,7 @@ std::optional<UiNode> decodeNode(const ProtocolValue& value) {
                 decodeEnumIn(raw, kAllScrollAxes).value_or(ScrollAxis::None);
         }
         for (const auto& childValue : *childrenField->asArray()) {
-            auto child = decodeNode(childValue);
+            auto child = decodeNode(childValue, retiredTreeSurfaces);
             if (!child) return std::nullopt;
             container.children.push_back(std::move(*child));
         }
@@ -399,7 +435,11 @@ std::optional<UiNode> decodeNode(const ProtocolValue& value) {
     } else {
         auto widget = decodeWidget(*leafField);
         if (!widget) return std::nullopt;
-        node.content = UiLeaf{std::move(*widget)};
+        if (widget->retiredTreeSurface) {
+            retiredTreeSurfaces.push_back(
+                {node.id, *widget->retiredTreeSurface});
+        }
+        node.content = UiLeaf{std::move(widget->widget)};
     }
     return node;
 }
@@ -490,7 +530,21 @@ bool normalizePrecedingWholeScreenTopology(UiSchema& schema) {
     return true;
 }
 
-bool normalizePrecedingTreeSurface(UiSchema& schema) {
+bool normalizePrecedingTreeSurface(
+    UiSchema& schema,
+    const std::vector<RetiredTreeSurfaceUse>& retiredTreeSurfaces) {
+    const std::vector expected{
+        RetiredTreeSurfaceUse{
+            UiNodeId{std::string{kFileTreeNodeId}},
+            RetiredTreeSurface::FileTree},
+        RetiredTreeSurfaceUse{
+            UiNodeId{std::string{kGitStatusNodeId}},
+            RetiredTreeSurface::GitStatus},
+        RetiredTreeSurfaceUse{
+            UiNodeId{std::string{kSymbolsNodeId}},
+            RetiredTreeSurface::Symbols},
+    };
+    if (retiredTreeSurfaces != expected) return false;
     if (!hasChildren(schema.root, {kHeaderNodeId, kBodyNodeId,
                                    kFooterPromptNodeId, kFooterNodeId})) {
         return false;
@@ -504,9 +558,9 @@ bool normalizePrecedingTreeSurface(UiSchema& schema) {
         return false;
     }
     auto& children = std::get<UiContainer>(panel.content).children;
-    if (!isViewLeaf(children[0], kFileTreeNodeId, ViewSurface::FileTree) ||
-        !isViewLeaf(children[1], kGitStatusNodeId, ViewSurface::GitStatus) ||
-        !isViewLeaf(children[2], kSymbolsNodeId, ViewSurface::Symbols)) {
+    if (!isViewLeaf(children[0], kFileTreeNodeId, ViewSurface::Tree) ||
+        !isViewLeaf(children[1], kGitStatusNodeId, ViewSurface::Tree) ||
+        !isViewLeaf(children[2], kSymbolsNodeId, ViewSurface::Tree)) {
         return false;
     }
     children[0].id = UiNodeId{std::string{kTreeNodeId}};
@@ -531,7 +585,8 @@ std::optional<UiSchema> decodeUiSchema(const ProtocolValue& value) {
     const ProtocolValue* rootField = value.field("root");
     if (!generation || !rootField) return std::nullopt;
 
-    auto root = decodeNode(*rootField);
+    std::vector<RetiredTreeSurfaceUse> retiredTreeSurfaces;
+    auto root = decodeNode(*rootField, retiredTreeSurfaces);
     if (!root) return std::nullopt;
 
     UiSchema schema;
@@ -543,14 +598,13 @@ std::optional<UiSchema> decodeUiSchema(const ProtocolValue& value) {
     // as a plausible schema.
     if (!validateUiSchema(schema).ok()) return std::nullopt;
     if (!validateWellKnownAreas(schema).ok()) {
-        const bool topologyNormalized =
-            normalizePrecedingWholeScreenTopology(schema);
-        const bool treeNormalized = normalizePrecedingTreeSurface(schema);
-        if ((!topologyNormalized && !treeNormalized) ||
-            !validateWellKnownAreas(schema).ok()) {
-            return std::nullopt;
-        }
+        (void)normalizePrecedingWholeScreenTopology(schema);
     }
+    if (!retiredTreeSurfaces.empty() &&
+        !normalizePrecedingTreeSurface(schema, retiredTreeSurfaces)) {
+        return std::nullopt;
+    }
+    if (!validateWellKnownAreas(schema).ok()) return std::nullopt;
     return schema;
 }
 

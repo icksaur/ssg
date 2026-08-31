@@ -82,7 +82,8 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
                 error = here + ": a \"view\" leaf requires a surface";
                 return;
             }
-            if (static_cast<std::size_t>(*w.surface) >= kViewSurfaceCount) {
+            if (std::ranges::find(kAllViewSurfaces, *w.surface) ==
+                kAllViewSurfaces.end()) {
                 error = here + ": a \"view\" leaf names an unknown surface";
                 return;
             }

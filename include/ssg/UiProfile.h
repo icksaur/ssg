@@ -96,12 +96,13 @@ private:
         return position;
     }
     static std::size_t index(ViewSurface surface) {
-        const auto position = static_cast<std::size_t>(surface);
-        if (position >= kViewSurfaceCount) {
+        const auto found = std::ranges::find(kAllViewSurfaces, surface);
+        if (found == kAllViewSurfaces.end()) {
             throw std::invalid_argument(
                 "ClientUiProfile: unrecognized ViewSurface");
         }
-        return position;
+        return static_cast<std::size_t>(
+            std::ranges::distance(kAllViewSurfaces.begin(), found));
     }
 
     std::array<bool, kWidgetKindCount> widgets_{};

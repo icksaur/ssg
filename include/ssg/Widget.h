@@ -57,24 +57,20 @@ static_assert(kAllWidgetKinds.size() == kWidgetKindCount);
 // declares which surfaces it implements, so this enum, its count, and its name
 // array are bound like WidgetKind's.
 enum class ViewSurface : std::uint8_t {
-    TabBar,       // the fixed tab strip
-    FileTree,     // the filesystem tree provider
-    GitStatus,    // the git tree provider
-    FindResults,  // the finder candidate universe (client filters locally)
-    Symbols,      // the symbols tree provider (a panel provider like files/git)
-    FooterPrompt, // the footer-region prompt's controls (semantic PromptView)
-    Notice,       // the draft-conflict notice above the document (semantic NoticeView)
-    ExternalModification,  // the external-modification bar above the document (7A-5b)
-    Document,     // the active document body, selection, caret, and syntax
-    Tree,         // the active tree provider named by TreeViewState
+    TabBar = 0,       // the fixed tab strip
+    FindResults = 3,  // the finder candidate universe (client filters locally)
+    FooterPrompt = 5, // the footer-region prompt's controls (semantic PromptView)
+    Notice = 6,       // the draft-conflict notice above the document (semantic NoticeView)
+    ExternalModification = 7,  // the external-modification bar above the document
+    Document = 8,     // the active document body, selection, caret, and syntax
+    Tree = 9,         // the active tree provider named by TreeViewState
 };
 
-inline constexpr std::size_t kViewSurfaceCount = 10;
+inline constexpr std::size_t kViewSurfaceCount = 7;
 inline constexpr std::array kAllViewSurfaces{
-    ViewSurface::TabBar,       ViewSurface::FileTree,     ViewSurface::GitStatus,
-    ViewSurface::FindResults,  ViewSurface::Symbols,      ViewSurface::FooterPrompt,
-    ViewSurface::Notice,       ViewSurface::ExternalModification,
-    ViewSurface::Document,     ViewSurface::Tree,
+    ViewSurface::TabBar, ViewSurface::FindResults, ViewSurface::FooterPrompt,
+    ViewSurface::Notice, ViewSurface::ExternalModification,
+    ViewSurface::Document, ViewSurface::Tree,
 };
 static_assert(kAllViewSurfaces.size() == kViewSurfaceCount);
 

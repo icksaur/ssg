@@ -108,27 +108,29 @@ CommandHandlerResult shellCommand(EditorSession::Impl& runtime,
     if (id == "panel.toggle") (void)runtime.interaction.apply(TogglePanel{});
     else if (id == "panel.focus") (void)runtime.interaction.focusPanel();
     else if (id == "panel.show_files") {
-        if (!runtime.interaction.apply(ShowPanelProvider{PanelProvider::FileTree})) {
+        if (!runtime.interaction.apply(ShowPanelProvider{
+                builtInPanelTreeProvider(TreeProviderKind::Filesystem)})) {
             return failure("files tree provider is unavailable");
         }
     } else if (id == "panel.show_git_status") {
-        if (!runtime.interaction.apply(ShowPanelProvider{PanelProvider::GitStatus})) {
+        if (!runtime.interaction.apply(ShowPanelProvider{
+                builtInPanelTreeProvider(TreeProviderKind::Git)})) {
             return failure("git tree provider is unavailable");
         }
     }
     else if (id == "panel.next_provider") {
         const auto active = runtime.tree.activeProviderBinding();
         if (!active) return failure("no active tree provider");
-        const PanelProvider target =
-            cyclePanelProvider(*active, CycleDirection::Next);
+        const TreeProviderBinding target =
+            cyclePanelTreeProvider(*active, CycleDirection::Next);
         if (!runtime.interaction.apply(SwitchPanelProvider{target})) {
             return failure("next tree provider is unavailable");
         }
     } else if (id == "panel.previous_provider") {
         const auto active = runtime.tree.activeProviderBinding();
         if (!active) return failure("no active tree provider");
-        const PanelProvider target =
-            cyclePanelProvider(*active, CycleDirection::Previous);
+        const TreeProviderBinding target =
+            cyclePanelTreeProvider(*active, CycleDirection::Previous);
         if (!runtime.interaction.apply(SwitchPanelProvider{target})) {
             return failure("previous tree provider is unavailable");
         }

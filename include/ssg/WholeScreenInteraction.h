@@ -9,7 +9,6 @@
 // schema (the migration contract: recompute presence from truth, reconcile captures,
 // reset the basis, and never strand base focus on an absent panel).
 
-#include <cstdint>
 #include <optional>
 
 #include <ssg/InteractionState.h>  // UiInteractionState
@@ -19,11 +18,6 @@
 #include <ssg/PromptSurface.h>     // PromptRegion
 
 namespace ssg {
-
-// The closed set of panel providers -- the only surfaces that can occupy the side panel.
-// A dedicated domain (not ViewSurface, which also admits Document/FindResults) makes an
-// out-of-domain selection unconstructable rather than silently coerced.
-enum class PanelProvider : std::uint8_t { FileTree, GitStatus, Symbols };
 
 // The semantic inputs that determine whole-screen presence and focus, owned by the
 // interaction aggregate (not read from scattered subsystems). A plain value;

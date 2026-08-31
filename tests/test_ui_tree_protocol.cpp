@@ -146,6 +146,9 @@ TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
     auto& panel =
         std::get<ssg::UiContainer>(bodyContainer.children[0].content);
     const UiNode genericTree = panel.children.front();
+    constexpr auto retiredFileTree = static_cast<ssg::ViewSurface>(1);
+    constexpr auto retiredGitStatus = static_cast<ssg::ViewSurface>(2);
+    constexpr auto retiredSymbols = static_cast<ssg::ViewSurface>(4);
     const auto legacyTree = [&](std::string_view id, ssg::ViewSurface surface) {
         UiNode node = genericTree;
         node.id = ssg::UiNodeId{std::string{id}};
@@ -153,9 +156,9 @@ TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
         return node;
     };
     panel.children = {
-        legacyTree(ssg::kFileTreeNodeId, ssg::ViewSurface::FileTree),
-        legacyTree(ssg::kGitStatusNodeId, ssg::ViewSurface::GitStatus),
-        legacyTree(ssg::kSymbolsNodeId, ssg::ViewSurface::Symbols)};
+        legacyTree(ssg::kFileTreeNodeId, retiredFileTree),
+        legacyTree(ssg::kGitStatusNodeId, retiredGitStatus),
+        legacyTree(ssg::kSymbolsNodeId, retiredSymbols)};
     bodyContainer.children[0].size =
         ssg::Size::exact(ssg::StyleDimensions{}.panelTargetWidth);
     bodyContainer.children[1].size = ssg::Size::flex();
@@ -193,9 +196,9 @@ TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
             return node;
         };
     currentPanel.children = {
-        precedingLeaf(ssg::kFileTreeNodeId, ssg::ViewSurface::FileTree),
-        precedingLeaf(ssg::kGitStatusNodeId, ssg::ViewSurface::GitStatus),
-        precedingLeaf(ssg::kSymbolsNodeId, ssg::ViewSurface::Symbols)};
+        precedingLeaf(ssg::kFileTreeNodeId, retiredFileTree),
+        precedingLeaf(ssg::kGitStatusNodeId, retiredGitStatus),
+        precedingLeaf(ssg::kSymbolsNodeId, retiredSymbols)};
     const auto treeDecoded = decodeUiSchema(encodeUiSchema(precedingTree));
     ASSERT_TRUE(treeDecoded.has_value());
     if (treeDecoded) ASSERT_EQ(*treeDecoded, current);

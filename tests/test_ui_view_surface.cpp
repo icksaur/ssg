@@ -11,6 +11,7 @@
 #include "test_helpers.h"
 
 #include <optional>
+#include <array>
 #include <string>
 #include <variant>
 #include <vector>
@@ -61,6 +62,26 @@ TEST(everyViewSurfaceHasANonEmptyBacking) {
     }
 }
 
+TEST(currentViewSurfaceInventoryExcludesProviderSpecificSurfaces) {
+    constexpr std::array<std::string_view, 7> expected{
+        "tabbar", "findresults", "footer_prompt", "notice",
+        "external_modification", "document", "tree"};
+    ASSERT_EQ(kAllViewSurfaces.size(), expected.size());
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        ASSERT_EQ(ssg::viewSurfaceName(kAllViewSurfaces[i]), expected[i]);
+    }
+}
+
+TEST(retainedViewSurfaceWireValuesStaySparseAndStable) {
+    ASSERT_EQ(static_cast<std::uint8_t>(ViewSurface::TabBar), 0);
+    ASSERT_EQ(static_cast<std::uint8_t>(ViewSurface::FindResults), 3);
+    ASSERT_EQ(static_cast<std::uint8_t>(ViewSurface::FooterPrompt), 5);
+    ASSERT_EQ(static_cast<std::uint8_t>(ViewSurface::Notice), 6);
+    ASSERT_EQ(static_cast<std::uint8_t>(ViewSurface::ExternalModification), 7);
+    ASSERT_EQ(static_cast<std::uint8_t>(ViewSurface::Document), 8);
+    ASSERT_EQ(static_cast<std::uint8_t>(ViewSurface::Tree), 9);
+}
+
 // The mapping is the specific, stable contract each client renders against.
 TEST(theSurfaceBackingMappingIsTheSpecifiedContract) {
     const auto has = [](ViewSurface surface, SnapshotSection section) {
@@ -72,10 +93,7 @@ TEST(theSurfaceBackingMappingIsTheSpecifiedContract) {
     ASSERT_TRUE(has(ViewSurface::Document, SnapshotSection::Document));
     ASSERT_TRUE(has(ViewSurface::Document, SnapshotSection::Selection));
     ASSERT_TRUE(has(ViewSurface::Document, SnapshotSection::Syntax));
-    ASSERT_TRUE(has(ViewSurface::FileTree, SnapshotSection::Tree));
-    ASSERT_TRUE(has(ViewSurface::GitStatus, SnapshotSection::Tree));
     ASSERT_TRUE(has(ViewSurface::FindResults, SnapshotSection::Palette));
-    ASSERT_TRUE(has(ViewSurface::Symbols, SnapshotSection::Tree));
     ASSERT_TRUE(has(ViewSurface::Tree, SnapshotSection::Tree));
     ASSERT_TRUE(has(ViewSurface::FooterPrompt, SnapshotSection::PromptView));
     ASSERT_TRUE(has(ViewSurface::Notice, SnapshotSection::NoticeView));
@@ -131,6 +149,8 @@ TEST(gridChromeLoweringRefusesAViewCenter) {
 
 int main() {
     RUN(everyViewSurfaceHasANonEmptyBacking);
+    RUN(currentViewSurfaceInventoryExcludesProviderSpecificSurfaces);
+    RUN(retainedViewSurfaceWireValuesStaySparseAndStable);
     RUN(theSurfaceBackingMappingIsTheSpecifiedContract);
     RUN(externalModSurfaceIsBackedOnlyByTheExternalModSection);
     RUN(statusActionsIsBackedByPromptStatus);

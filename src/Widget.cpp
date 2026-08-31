@@ -23,12 +23,10 @@ constexpr std::array kWidgetKindNames{
 static_assert(kWidgetKindNames.size() == kWidgetKindCount);
 
 constexpr std::array kViewSurfaceNames{
-    std::string_view{"tabbar"}, std::string_view{"filetree"},
-    std::string_view{"gitstatus"}, std::string_view{"findresults"},
-    std::string_view{"symbols"}, std::string_view{"footer_prompt"},
-    std::string_view{"notice"}, std::string_view{"external_modification"},
-    std::string_view{"document"}, std::string_view{"tree"},
-};
+    std::string_view{"tabbar"}, std::string_view{"findresults"},
+    std::string_view{"footer_prompt"}, std::string_view{"notice"},
+    std::string_view{"external_modification"}, std::string_view{"document"},
+    std::string_view{"tree"}};
 static_assert(kViewSurfaceNames.size() == kViewSurfaceCount);
 }  // namespace
 
@@ -41,11 +39,12 @@ std::string_view widgetKindName(WidgetKind kind) {
 }
 
 std::string_view viewSurfaceName(ViewSurface surface) {
-    const auto index = static_cast<std::size_t>(surface);
-    if (index >= kViewSurfaceCount) {
+    const auto found = std::ranges::find(kAllViewSurfaces, surface);
+    if (found == kAllViewSurfaces.end()) {
         throw std::invalid_argument("viewSurfaceName: unrecognized ViewSurface");
     }
-    return kViewSurfaceNames[index];
+    return kViewSurfaceNames[static_cast<std::size_t>(
+        std::ranges::distance(kAllViewSurfaces.begin(), found))];
 }
 
 RowFit fitRow(const std::vector<FitItem>& items, int extent, int separator,

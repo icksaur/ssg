@@ -43,6 +43,40 @@ import {
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; };
 
+check('browser surface vocabulary contains only current sparse surfaces', () => {
+  assert.deepEqual(SURFACE, {
+    TABBAR: 0,
+    FINDRESULTS: 3,
+    FOOTER_PROMPT: 5,
+    NOTICE: 6,
+    EXTERNAL_MODIFICATION: 7,
+    DOCUMENT: 8,
+    TREE: 9,
+  });
+});
+
+check('current sources contain no retired provider identity vocabulary', () => {
+  const source = (relative) => fs.readFileSync(
+    new URL(relative, import.meta.url), 'utf8');
+  const commandSources = [
+    source('../../include/ssg/WholeScreenInteraction.h'),
+    source('../../include/ssg/CommandTransition.h'),
+    source('../../src/CommandTransition.cpp'),
+  ].join('\n');
+  assert.doesNotMatch(commandSources, /\bPanelProvider\b/);
+  assert.doesNotMatch(commandSources, /panelProvider(?:Label|TreeBinding)/);
+
+  const surfaceSources = [
+    source('../../include/ssg/Widget.h'),
+    source('../../src/ViewSurfaceBacking.cpp'),
+    source('../../apps/web/reconcile.mjs'),
+  ].join('\n');
+  assert.doesNotMatch(
+    surfaceSources, /ViewSurface::(?:FileTree|GitStatus|Symbols)/);
+  assert.doesNotMatch(
+    surfaceSources, /SURFACE\.(?:FILETREE|GITSTATUS|SYMBOLS)/);
+});
+
 const fixtureBytes = (name) => {
   const hex = fs.readFileSync(
     new URL('../fixtures/protocol/' + name, import.meta.url), 'utf8').trim();

@@ -1606,7 +1606,15 @@ export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2, RESPONSIVE: 3 };
 // a viewport"), matching the wire decoder's forward-compat rule.
 export const SCROLL = { NONE: 0, VERTICAL: 1 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
-export const SURFACE = { TABBAR: 0, FILETREE: 1, GITSTATUS: 2, FINDRESULTS: 3, SYMBOLS: 4, FOOTER_PROMPT: 5, NOTICE: 6, EXTERNAL_MODIFICATION: 7, DOCUMENT: 8, TREE: 9 };
+export const SURFACE = {
+  TABBAR: 0,
+  FINDRESULTS: 3,
+  FOOTER_PROMPT: 5,
+  NOTICE: 6,
+  EXTERNAL_MODIFICATION: 7,
+  DOCUMENT: 8,
+  TREE: 9,
+};
 export const PALETTE_PRESENCE_OP = { SHOW: 0, HIDE: 1 };
 const ALL_SURFACES = Object.freeze([
   SURFACE.TABBAR, SURFACE.TREE, SURFACE.FINDRESULTS, SURFACE.NOTICE,
