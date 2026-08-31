@@ -111,55 +111,1020 @@ inline bool validateWireNode96(const ProtocolValue& value);
 inline bool validateWireNode97(const ProtocolValue& value);
 inline bool validateWireNode98(const ProtocolValue& value);
 inline bool validateWireNode99(const ProtocolValue& value);
+inline bool validateWireNode100(const ProtocolValue& value);
+inline bool validateWireNode101(const ProtocolValue& value);
+inline bool validateWireNode102(const ProtocolValue& value);
+inline bool validateWireNode103(const ProtocolValue& value);
+inline bool validateWireNode104(const ProtocolValue& value);
+inline bool validateWireNode105(const ProtocolValue& value);
+inline bool validateWireNode106(const ProtocolValue& value);
+inline bool validateWireNode107(const ProtocolValue& value);
+inline bool validateWireNode108(const ProtocolValue& value);
+inline bool validateWireNode109(const ProtocolValue& value);
+inline bool validateWireNode110(const ProtocolValue& value);
+inline bool validateWireNode111(const ProtocolValue& value);
+inline bool validateWireNode112(const ProtocolValue& value);
+inline bool validateWireNode113(const ProtocolValue& value);
+inline bool validateWireNode114(const ProtocolValue& value);
+inline bool validateWireNode115(const ProtocolValue& value);
+inline bool validateWireNode116(const ProtocolValue& value);
+inline bool validateWireNode117(const ProtocolValue& value);
+inline bool validateWireNode118(const ProtocolValue& value);
+inline bool validateWireNode119(const ProtocolValue& value);
+inline bool validateWireNode120(const ProtocolValue& value);
+inline bool validateWireNode121(const ProtocolValue& value);
+inline bool validateWireNode122(const ProtocolValue& value);
+inline bool validateWireNode123(const ProtocolValue& value);
+inline bool validateWireNode124(const ProtocolValue& value);
+inline bool validateWireNode125(const ProtocolValue& value);
+inline bool validateWireNode126(const ProtocolValue& value);
+inline bool validateWireNode127(const ProtocolValue& value);
+inline bool validateWireNode128(const ProtocolValue& value);
+inline bool validateWireNode129(const ProtocolValue& value);
+inline bool validateWireNode130(const ProtocolValue& value);
+inline bool validateWireNode131(const ProtocolValue& value);
+inline bool validateWireNode132(const ProtocolValue& value);
+inline bool validateWireNode133(const ProtocolValue& value);
+inline bool validateWireNode134(const ProtocolValue& value);
+inline bool validateWireNode135(const ProtocolValue& value);
+inline bool validateWireNode136(const ProtocolValue& value);
+inline bool validateWireNode137(const ProtocolValue& value);
+inline bool validateWireNode138(const ProtocolValue& value);
+inline bool validateWireNode139(const ProtocolValue& value);
+inline bool validateWireNode140(const ProtocolValue& value);
+inline bool validateWireNode141(const ProtocolValue& value);
+inline bool validateWireNode142(const ProtocolValue& value);
+inline bool validateWireNode143(const ProtocolValue& value);
+inline bool validateWireNode144(const ProtocolValue& value);
+inline bool validateWireNode145(const ProtocolValue& value);
+inline bool validateWireNode146(const ProtocolValue& value);
+inline bool validateWireNode147(const ProtocolValue& value);
+inline bool validateWireNode148(const ProtocolValue& value);
+inline bool validateWireNode149(const ProtocolValue& value);
+inline bool validateWireNode150(const ProtocolValue& value);
+inline bool validateWireNode151(const ProtocolValue& value);
+inline bool validateWireNode152(const ProtocolValue& value);
+inline bool validateWireNode153(const ProtocolValue& value);
+inline bool validateWireNode154(const ProtocolValue& value);
+inline bool validateWireNode155(const ProtocolValue& value);
+inline bool validateWireNode156(const ProtocolValue& value);
+inline bool validateWireNode157(const ProtocolValue& value);
+inline bool validateWireNode158(const ProtocolValue& value);
+inline bool validateWireNode159(const ProtocolValue& value);
+inline bool validateWireNode160(const ProtocolValue& value);
+inline bool validateWireNode161(const ProtocolValue& value);
+inline bool validateWireNode162(const ProtocolValue& value);
+inline bool validateWireNode163(const ProtocolValue& value);
+inline bool validateWireNode164(const ProtocolValue& value);
+inline bool validateWireNode165(const ProtocolValue& value);
+inline bool validateWireNode166(const ProtocolValue& value);
+inline bool validateWireNode167(const ProtocolValue& value);
+inline bool validateWireNode168(const ProtocolValue& value);
+inline bool validateWireNode169(const ProtocolValue& value);
+inline bool validateWireNode170(const ProtocolValue& value);
+inline bool validateWireNode171(const ProtocolValue& value);
+inline bool validateWireNode172(const ProtocolValue& value);
+inline bool validateWireNode173(const ProtocolValue& value);
+inline bool validateWireNode174(const ProtocolValue& value);
+inline bool validateWireNode175(const ProtocolValue& value);
+inline bool validateWireNode176(const ProtocolValue& value);
+inline bool validateWireNode177(const ProtocolValue& value);
+inline bool validateWireNode178(const ProtocolValue& value);
+inline bool validateWireNode179(const ProtocolValue& value);
+inline bool validateWireNode180(const ProtocolValue& value);
+inline bool validateWireNode181(const ProtocolValue& value);
+inline bool validateWireNode182(const ProtocolValue& value);
+inline bool validateWireNode183(const ProtocolValue& value);
+inline bool validateWireNode184(const ProtocolValue& value);
+inline bool validateWireNode185(const ProtocolValue& value);
+inline bool validateWireNode186(const ProtocolValue& value);
+inline bool validateWireNode187(const ProtocolValue& value);
+inline bool validateWireNode188(const ProtocolValue& value);
+inline bool validateWireNode189(const ProtocolValue& value);
+inline bool validateWireNode190(const ProtocolValue& value);
+inline bool validateWireNode191(const ProtocolValue& value);
+inline bool validateWireNode192(const ProtocolValue& value);
+inline bool validateWireNode193(const ProtocolValue& value);
+inline bool validateWireNode194(const ProtocolValue& value);
+inline bool validateWireNode195(const ProtocolValue& value);
+inline bool validateWireNode196(const ProtocolValue& value);
+inline bool validateWireNode197(const ProtocolValue& value);
+inline bool validateWireNode198(const ProtocolValue& value);
+inline bool validateWireNode199(const ProtocolValue& value);
+inline bool validateWireNode200(const ProtocolValue& value);
+inline bool validateWireNode201(const ProtocolValue& value);
+inline bool validateWireNode202(const ProtocolValue& value);
+inline bool validateWireNode203(const ProtocolValue& value);
+inline bool validateWireNode204(const ProtocolValue& value);
+inline bool validateWireNode205(const ProtocolValue& value);
+inline bool validateWireNode206(const ProtocolValue& value);
+inline bool validateWireNode207(const ProtocolValue& value);
+inline bool validateWireNode208(const ProtocolValue& value);
+inline bool validateWireNode209(const ProtocolValue& value);
+inline bool validateWireNode210(const ProtocolValue& value);
+inline bool validateWireNode211(const ProtocolValue& value);
+inline bool validateWireNode212(const ProtocolValue& value);
+inline bool validateWireNode213(const ProtocolValue& value);
 
 inline bool validateWireNode0(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    if (const ProtocolValue* field1 = value.field("foreground"); field1 && !validateWireNode1(*field1)) return false;
-    if (const ProtocolValue* field2 = value.field("background"); field2 && !validateWireNode2(*field2)) return false;
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field1 = value.field("code");
+    if (!field1 || !validateWireNode1(*field1)) return false;
+    const ProtocolValue* field2 = value.field("control");
+    if (!field2 || !validateWireNode2(*field2)) return false;
+    const ProtocolValue* field3 = value.field("alt");
+    if (!field3 || !validateWireNode3(*field3)) return false;
+    const ProtocolValue* field4 = value.field("meta");
+    if (!field4 || !validateWireNode4(*field4)) return false;
+    const ProtocolValue* field5 = value.field("shift");
+    if (!field5 || !validateWireNode5(*field5)) return false;
     return true;
 }
 
 inline bool validateWireNode1(const ProtocolValue& value) {
-    const auto raw = value.asUint();
-    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4 || *raw == 5 || *raw == 6 || *raw == 7 || *raw == 8 || *raw == 9 || *raw == 10 || *raw == 11 || *raw == 12 || *raw == 13 || *raw == 14 || *raw == 15 || *raw == 16 || *raw == 17 || *raw == 18 || *raw == 19 || *raw == 20 || *raw == 21 || *raw == 22 || *raw == 23 || *raw == 24 || *raw == 25 || *raw == 26 || *raw == 27);
+    return value.asText() != nullptr;
 }
 
 inline bool validateWireNode2(const ProtocolValue& value) {
+    return value.asBool().has_value();
+}
+
+inline bool validateWireNode3(const ProtocolValue& value) {
+    return value.asBool().has_value();
+}
+
+inline bool validateWireNode4(const ProtocolValue& value) {
+    return value.asBool().has_value();
+}
+
+inline bool validateWireNode5(const ProtocolValue& value) {
+    return value.asBool().has_value();
+}
+
+inline bool validateWireNode6(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object || object->size() != 2) return false;
+    const ProtocolValue* field7 = value.field("file_id");
+    if (!field7 || !validateWireNode7(*field7)) return false;
+    const ProtocolValue* field8 = value.field("action");
+    if (!field8 || !validateWireNode8(*field8)) return false;
+    return true;
+}
+
+inline bool validateWireNode7(const ProtocolValue& value) {
+    return value.asText() != nullptr;
+}
+
+inline bool validateWireNode8(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode9(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object || object->size() != 3) return false;
+    const ProtocolValue* field10 = value.field("status_id");
+    if (!field10 || !validateWireNode10(*field10)) return false;
+    const ProtocolValue* field11 = value.field("action_id");
+    if (!field11 || !validateWireNode11(*field11)) return false;
+    const ProtocolValue* field12 = value.field("generation");
+    if (!field12 || !validateWireNode12(*field12)) return false;
+    return true;
+}
+
+inline bool validateWireNode10(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode11(const ProtocolValue& value) {
+    return value.asText() != nullptr;
+}
+
+inline bool validateWireNode12(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode13(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object || object->size() != 2) return false;
+    const ProtocolValue* field14 = value.field("anchor");
+    if (!field14 || !validateWireNode14(*field14)) return false;
+    const ProtocolValue* field15 = value.field("active");
+    if (!field15 || !validateWireNode15(*field15)) return false;
+    return true;
+}
+
+inline bool validateWireNode14(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode15(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode16(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+
+    const ProtocolValue* discriminator = value.field("kind");
+    if (!discriminator || !discriminator->asUint()) return false;
+    switch (*discriminator->asUint()) {
+    case 0: {
+
+    const ProtocolValue* field17 = value.field("target");
+    if (!field17 || !validateWireNode17(*field17)) return false;
+    const ProtocolValue* field18 = value.field("rows");
+    if (!field18 || !validateWireNode18(*field18)) return false;
+        return true;
+    }
+    case 1: {
+
+    const ProtocolValue* field19 = value.field("pages");
+    if (!field19 || !validateWireNode19(*field19)) return false;
+        return true;
+    }
+    case 2: {
+
+    const ProtocolValue* field20 = value.field("target");
+    if (!field20 || !validateWireNode20(*field20)) return false;
+    const ProtocolValue* field21 = value.field("numerator");
+    if (!field21 || !validateWireNode21(*field21)) return false;
+    const ProtocolValue* field22 = value.field("denominator");
+    if (!field22 || !validateWireNode22(*field22)) return false;
+        return true;
+    }
+    case 3: {
+
+    const ProtocolValue* field23 = value.field("direction");
+    if (!field23 || !validateWireNode23(*field23)) return false;
+    const ProtocolValue* field24 = value.field("extend");
+    if (!field24 || !validateWireNode24(*field24)) return false;
+        return true;
+    }
+    case 4: {
+
+        return true;
+    }
+    case 5: {
+
+        return true;
+    }
+    case 6: {
+
+    const ProtocolValue* field25 = value.field("axis");
+    if (!field25 || !validateWireNode25(*field25)) return false;
+        return true;
+    }
+    case 7: {
+
+        return true;
+    }
+    case 8: {
+
+    const ProtocolValue* field26 = value.field("direction");
+    if (!field26 || !validateWireNode26(*field26)) return false;
+        return true;
+    }
+    case 9: {
+
+    const ProtocolValue* field27 = value.field("direction");
+    if (!field27 || !validateWireNode27(*field27)) return false;
+        return true;
+    }
+    case 10: {
+
+    const ProtocolValue* field28 = value.field("direction");
+    if (!field28 || !validateWireNode28(*field28)) return false;
+        return true;
+    }
+    default: return false;
+    }
+}
+
+inline bool validateWireNode17(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1);
+}
+
+inline bool validateWireNode18(const ProtocolValue& value) {
+    return value.asInt().has_value();
+}
+
+inline bool validateWireNode19(const ProtocolValue& value) {
+    return value.asInt().has_value();
+}
+
+inline bool validateWireNode20(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1);
+}
+
+inline bool validateWireNode21(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && *raw <= std::numeric_limits<std::uint32_t>::max();
+}
+
+inline bool validateWireNode22(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && *raw <= std::numeric_limits<std::uint32_t>::max();
+}
+
+inline bool validateWireNode23(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode24(const ProtocolValue& value) {
+    return value.asBool().has_value();
+}
+
+inline bool validateWireNode25(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1);
+}
+
+inline bool validateWireNode26(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1);
+}
+
+inline bool validateWireNode27(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode28(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1);
+}
+
+inline bool validateWireNode29(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field30 = value.field("view_id");
+    if (!field30 || !validateWireNode30(*field30)) return false;
+    const ProtocolValue* field31 = value.field("semantic_revision");
+    if (!field31 || !validateWireNode31(*field31)) return false;
+    const ProtocolValue* field32 = value.field("action");
+    if (!field32 || !validateWireNode32(*field32)) return false;
+    return true;
+}
+
+inline bool validateWireNode30(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode31(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode32(const ProtocolValue& value) {
+    return validateWireNode16(value);
+}
+
+inline bool validateWireNode33(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field34 = value.field("error");
+    if (!field34 || !validateWireNode34(*field34)) return false;
+    const ProtocolValue* field35 = value.field("revision");
+    if (!field35 || !validateWireNode35(*field35)) return false;
+    const ProtocolValue* field36 = value.field("message");
+    if (!field36 || !validateWireNode36(*field36)) return false;
+    if (const ProtocolValue* field37 = value.field("routingChanged"); field37 && !validateWireNode37(*field37)) return false;
+    if (const ProtocolValue* field38 = value.field("geometryChanged"); field38 && !validateWireNode38(*field38)) return false;
+    if (const ProtocolValue* field39 = value.field("view_action"); field39 && !validateWireNode39(*field39)) return false;
+    return true;
+}
+
+inline bool validateWireNode34(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4 || *raw == 5 || *raw == 6);
+}
+
+inline bool validateWireNode35(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode36(const ProtocolValue& value) {
+    return value.asText() != nullptr;
+}
+
+inline bool validateWireNode37(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && *raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max()) && *raw <= std::numeric_limits<std::uint32_t>::max() && (*raw == 0 || *raw == 1);
+}
+
+inline bool validateWireNode38(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && *raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max()) && *raw <= std::numeric_limits<std::uint32_t>::max() && (*raw == 0 || *raw == 1);
+}
+
+inline bool validateWireNode39(const ProtocolValue& value) {
+    return validateWireNode29(value);
+}
+
+inline bool validateWireNode40(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+
+    const ProtocolValue* discriminator = value.field("kind");
+    if (!discriminator || !discriminator->asUint()) return false;
+    const auto fieldCount = object->size();
+    switch (*discriminator->asUint()) {
+    case 0: {
+        if (fieldCount != 3) return false;
+
+    const ProtocolValue* field41 = value.field("stroke");
+    if (!field41 || !validateWireNode41(*field41)) return false;
+    const ProtocolValue* field43 = value.field("committed_text");
+    if (!field43 || !validateWireNode43(*field43)) return false;
+        return true;
+    }
+    case 1: {
+        if (fieldCount != 5) return false;
+
+    const ProtocolValue* field44 = value.field("button");
+    if (!field44 || !validateWireNode44(*field44)) return false;
+    const ProtocolValue* field45 = value.field("phase");
+    if (!field45 || !validateWireNode45(*field45)) return false;
+    const ProtocolValue* field46 = value.field("basis_revision");
+    if (!field46 || !validateWireNode46(*field46)) return false;
+    const ProtocolValue* field47 = value.field("tab_id");
+    if (!field47 || !validateWireNode47(*field47)) return false;
+        return true;
+    }
+    case 2: {
+        if (fieldCount != 5) return false;
+
+    const ProtocolValue* field48 = value.field("button");
+    if (!field48 || !validateWireNode48(*field48)) return false;
+    const ProtocolValue* field49 = value.field("phase");
+    if (!field49 || !validateWireNode49(*field49)) return false;
+    const ProtocolValue* field50 = value.field("basis_revision");
+    if (!field50 || !validateWireNode50(*field50)) return false;
+    const ProtocolValue* field51 = value.field("node_id");
+    if (!field51 || !validateWireNode51(*field51)) return false;
+        return true;
+    }
+    case 3: {
+        if (fieldCount != 6) return false;
+
+    const ProtocolValue* field52 = value.field("button");
+    if (!field52 || !validateWireNode52(*field52)) return false;
+    const ProtocolValue* field53 = value.field("phase");
+    if (!field53 || !validateWireNode53(*field53)) return false;
+    const ProtocolValue* field54 = value.field("picker_mode");
+    if (!field54 || !validateWireNode54(*field54)) return false;
+    const ProtocolValue* field55 = value.field("activation_id");
+    if (!field55 || !validateWireNode55(*field55)) return false;
+    const ProtocolValue* field56 = value.field("candidate_id");
+    if (!field56 || !validateWireNode56(*field56)) return false;
+        return true;
+    }
+    case 4: {
+        if (fieldCount != 5) return false;
+
+    const ProtocolValue* field57 = value.field("button");
+    if (!field57 || !validateWireNode57(*field57)) return false;
+    const ProtocolValue* field58 = value.field("phase");
+    if (!field58 || !validateWireNode58(*field58)) return false;
+    const ProtocolValue* field59 = value.field("basis_revision");
+    if (!field59 || !validateWireNode59(*field59)) return false;
+    const ProtocolValue* field60 = value.field("control_id");
+    if (!field60 || !validateWireNode60(*field60)) return false;
+        return true;
+    }
+    case 5: {
+        if (fieldCount != 5) return false;
+
+    const ProtocolValue* field61 = value.field("button");
+    if (!field61 || !validateWireNode61(*field61)) return false;
+    const ProtocolValue* field62 = value.field("phase");
+    if (!field62 || !validateWireNode62(*field62)) return false;
+    const ProtocolValue* field63 = value.field("basis_revision");
+    if (!field63 || !validateWireNode63(*field63)) return false;
+    const ProtocolValue* field64 = value.field("invocation");
+    if (!field64 || !validateWireNode64(*field64)) return false;
+        return true;
+    }
+    case 6: {
+        if (fieldCount != 5) return false;
+
+    const ProtocolValue* field65 = value.field("button");
+    if (!field65 || !validateWireNode65(*field65)) return false;
+    const ProtocolValue* field66 = value.field("phase");
+    if (!field66 || !validateWireNode66(*field66)) return false;
+    const ProtocolValue* field67 = value.field("basis_revision");
+    if (!field67 || !validateWireNode67(*field67)) return false;
+    const ProtocolValue* field68 = value.field("invocation");
+    if (!field68 || !validateWireNode68(*field68)) return false;
+        return true;
+    }
+    case 7: {
+        if (fieldCount != 6) return false;
+
+    const ProtocolValue* field69 = value.field("button");
+    if (!field69 || !validateWireNode69(*field69)) return false;
+    const ProtocolValue* field70 = value.field("phase");
+    if (!field70 || !validateWireNode70(*field70)) return false;
+    const ProtocolValue* field71 = value.field("basis_revision");
+    if (!field71 || !validateWireNode71(*field71)) return false;
+    const ProtocolValue* field72 = value.field("schema_generation");
+    if (!field72 || !validateWireNode72(*field72)) return false;
+    const ProtocolValue* field73 = value.field("node_id");
+    if (!field73 || !validateWireNode73(*field73)) return false;
+        return true;
+    }
+    case 8: {
+        if (fieldCount != 5) return false;
+
+    const ProtocolValue* field74 = value.field("button");
+    if (!field74 || !validateWireNode74(*field74)) return false;
+    const ProtocolValue* field75 = value.field("phase");
+    if (!field75 || !validateWireNode75(*field75)) return false;
+    const ProtocolValue* field76 = value.field("basis_revision");
+    if (!field76 || !validateWireNode76(*field76)) return false;
+    const ProtocolValue* field77 = value.field("action_id");
+    if (!field77 || !validateWireNode77(*field77)) return false;
+        return true;
+    }
+    case 9: {
+        if (fieldCount != 8) return false;
+
+    const ProtocolValue* field78 = value.field("button");
+    if (!field78 || !validateWireNode78(*field78)) return false;
+    const ProtocolValue* field79 = value.field("phase");
+    if (!field79 || !validateWireNode79(*field79)) return false;
+    const ProtocolValue* field80 = value.field("basis_revision");
+    if (!field80 || !validateWireNode80(*field80)) return false;
+    const ProtocolValue* field81 = value.field("position");
+    if (!field81 || !validateWireNode81(*field81)) return false;
+    const ProtocolValue* field83 = value.field("additive");
+    if (!field83 || !validateWireNode83(*field83)) return false;
+    const ProtocolValue* field84 = value.field("select_word");
+    if (!field84 || !validateWireNode84(*field84)) return false;
+    const ProtocolValue* field85 = value.field("edge");
+    if (!field85 || !validateWireNode85(*field85)) return false;
+        return true;
+    }
+    case 10: {
+        if (fieldCount != 4) return false;
+
+    const ProtocolValue* field86 = value.field("basis_revision");
+    if (!field86 || !validateWireNode86(*field86)) return false;
+    const ProtocolValue* field87 = value.field("target");
+    if (!field87 || !validateWireNode87(*field87)) return false;
+    const ProtocolValue* field88 = value.field("rows");
+    if (!field88 || !validateWireNode88(*field88)) return false;
+        return true;
+    }
+    case 11: {
+        if (fieldCount != 5) return false;
+
+    const ProtocolValue* field89 = value.field("basis_revision");
+    if (!field89 || !validateWireNode89(*field89)) return false;
+    const ProtocolValue* field90 = value.field("target");
+    if (!field90 || !validateWireNode90(*field90)) return false;
+    const ProtocolValue* field91 = value.field("numerator");
+    if (!field91 || !validateWireNode91(*field91)) return false;
+    const ProtocolValue* field92 = value.field("denominator");
+    if (!field92 || !validateWireNode92(*field92)) return false;
+        return true;
+    }
+    case 12: {
+        if (fieldCount != 2) return false;
+
+    const ProtocolValue* field93 = value.field("basis_revision");
+    if (!field93 || !validateWireNode93(*field93)) return false;
+        return true;
+    }
+    case 13: {
+        if (fieldCount != 2) return false;
+
+    const ProtocolValue* field94 = value.field("basis_revision");
+    if (!field94 || !validateWireNode94(*field94)) return false;
+        return true;
+    }
+    case 14: {
+        if (fieldCount != 5) return false;
+
+    const ProtocolValue* field95 = value.field("basis_revision");
+    if (!field95 || !validateWireNode95(*field95)) return false;
+    const ProtocolValue* field96 = value.field("active_tab");
+    if (!field96 || !validateWireNode96(*field96)) return false;
+    const ProtocolValue* field97 = value.field("document_revision");
+    if (!field97 || !validateWireNode97(*field97)) return false;
+    const ProtocolValue* field98 = value.field("selections");
+    if (!field98 || !validateWireNode98(*field98)) return false;
+        return true;
+    }
+    default: return false;
+    }
+}
+
+inline bool validateWireNode41(const ProtocolValue& value) {
+    return value.kind() == ProtocolValue::Kind::NullValue ||
+           validateWireNode42(value);
+}
+
+inline bool validateWireNode42(const ProtocolValue& value) {
+    return validateWireNode0(value);
+}
+
+inline bool validateWireNode43(const ProtocolValue& value) {
+    return value.asText() != nullptr;
+}
+
+inline bool validateWireNode44(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode45(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode46(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode47(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode48(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode49(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode50(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode51(const ProtocolValue& value) {
+    return value.asText() != nullptr;
+}
+
+inline bool validateWireNode52(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode53(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode54(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4);
+}
+
+inline bool validateWireNode55(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode56(const ProtocolValue& value) {
+    return value.asText() != nullptr;
+}
+
+inline bool validateWireNode57(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode58(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode59(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode60(const ProtocolValue& value) {
+    return value.asText() != nullptr;
+}
+
+inline bool validateWireNode61(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode62(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode63(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode64(const ProtocolValue& value) {
+    return validateWireNode6(value);
+}
+
+inline bool validateWireNode65(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode66(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode67(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode68(const ProtocolValue& value) {
+    return validateWireNode9(value);
+}
+
+inline bool validateWireNode69(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode70(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode71(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode72(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode73(const ProtocolValue& value) {
+    return value.asText() != nullptr;
+}
+
+inline bool validateWireNode74(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode75(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode76(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode77(const ProtocolValue& value) {
+    return value.asText() != nullptr;
+}
+
+inline bool validateWireNode78(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode79(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
+}
+
+inline bool validateWireNode80(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode81(const ProtocolValue& value) {
+    return value.kind() == ProtocolValue::Kind::NullValue ||
+           validateWireNode82(value);
+}
+
+inline bool validateWireNode82(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode83(const ProtocolValue& value) {
+    return value.asBool().has_value();
+}
+
+inline bool validateWireNode84(const ProtocolValue& value) {
+    return value.asBool().has_value();
+}
+
+inline bool validateWireNode85(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2);
+}
+
+inline bool validateWireNode86(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode87(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1);
+}
+
+inline bool validateWireNode88(const ProtocolValue& value) {
+    return value.asInt().has_value();
+}
+
+inline bool validateWireNode89(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode90(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1);
+}
+
+inline bool validateWireNode91(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && *raw <= std::numeric_limits<std::uint32_t>::max();
+}
+
+inline bool validateWireNode92(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && *raw <= std::numeric_limits<std::uint32_t>::max();
+}
+
+inline bool validateWireNode93(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode94(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode95(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode96(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode97(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode98(const ProtocolValue& value) {
+    const auto* array = value.asArray();
+    if (!array) return false;
+    return std::ranges::all_of(*array, [](const ProtocolValue& item) {
+        return validateWireNode99(item);
+    });
+}
+
+inline bool validateWireNode99(const ProtocolValue& value) {
+    return validateWireNode13(value);
+}
+
+inline bool validateWireNode100(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field101 = value.field("kind");
+    if (!field101 || !validateWireNode101(*field101)) return false;
+    const ProtocolValue* field102 = value.field("text");
+    if (!field102 || !validateWireNode102(*field102)) return false;
+    return true;
+}
+
+inline bool validateWireNode101(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4 || *raw == 5);
+}
+
+inline bool validateWireNode102(const ProtocolValue& value) {
+    return value.asText() != nullptr;
+}
+
+inline bool validateWireNode103(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field104 = value.field("mode");
+    if (!field104 || !validateWireNode104(*field104)) return false;
+    const ProtocolValue* field105 = value.field("activation_id");
+    if (!field105 || !validateWireNode105(*field105)) return false;
+    return true;
+}
+
+inline bool validateWireNode104(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4);
+}
+
+inline bool validateWireNode105(const ProtocolValue& value) {
+    return value.asUint().has_value();
+}
+
+inline bool validateWireNode106(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field107 = value.field("outcome");
+    if (!field107 || !validateWireNode107(*field107)) return false;
+    const ProtocolValue* field108 = value.field("client_owned");
+    if (!field108 || !validateWireNode108(*field108)) return false;
+    const ProtocolValue* field110 = value.field("command");
+    if (!field110 || !validateWireNode110(*field110)) return false;
+    const ProtocolValue* field112 = value.field("picker_activation");
+    if (!field112 || !validateWireNode112(*field112)) return false;
+    return true;
+}
+
+inline bool validateWireNode107(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4);
+}
+
+inline bool validateWireNode108(const ProtocolValue& value) {
+    return value.kind() == ProtocolValue::Kind::NullValue ||
+           validateWireNode109(value);
+}
+
+inline bool validateWireNode109(const ProtocolValue& value) {
+    return validateWireNode100(value);
+}
+
+inline bool validateWireNode110(const ProtocolValue& value) {
+    return value.kind() == ProtocolValue::Kind::NullValue ||
+           validateWireNode111(value);
+}
+
+inline bool validateWireNode111(const ProtocolValue& value) {
+    return validateWireNode33(value);
+}
+
+inline bool validateWireNode112(const ProtocolValue& value) {
+    return value.kind() == ProtocolValue::Kind::NullValue ||
+           validateWireNode113(value);
+}
+
+inline bool validateWireNode113(const ProtocolValue& value) {
+    return validateWireNode103(value);
+}
+
+inline bool validateWireNode114(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    if (const ProtocolValue* field115 = value.field("foreground"); field115 && !validateWireNode115(*field115)) return false;
+    if (const ProtocolValue* field116 = value.field("background"); field116 && !validateWireNode116(*field116)) return false;
+    return true;
+}
+
+inline bool validateWireNode115(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4 || *raw == 5 || *raw == 6 || *raw == 7 || *raw == 8 || *raw == 9 || *raw == 10 || *raw == 11 || *raw == 12 || *raw == 13 || *raw == 14 || *raw == 15 || *raw == 16 || *raw == 17 || *raw == 18 || *raw == 19 || *raw == 20 || *raw == 21 || *raw == 22 || *raw == 23 || *raw == 24 || *raw == 25 || *raw == 26 || *raw == 27);
 }
 
-inline bool validateWireNode3(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field4 = value.field("id");
-    if (!field4 || !validateWireNode4(*field4)) return false;
-    const ProtocolValue* field5 = value.field("size");
-    if (!field5 || !validateWireNode5(*field5)) return false;
-    if (const ProtocolValue* field10 = value.field("style"); field10 && !validateWireNode10(*field10)) return false;
-    if (const ProtocolValue* field13 = value.field("focus_context"); field13 && !validateWireNode13(*field13)) return false;
-    if (const ProtocolValue* field14 = value.field("accessible_label"); field14 && !validateWireNode14(*field14)) return false;
+inline bool validateWireNode116(const ProtocolValue& value) {
+    const auto raw = value.asUint();
+    return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4 || *raw == 5 || *raw == 6 || *raw == 7 || *raw == 8 || *raw == 9 || *raw == 10 || *raw == 11 || *raw == 12 || *raw == 13 || *raw == 14 || *raw == 15 || *raw == 16 || *raw == 17 || *raw == 18 || *raw == 19 || *raw == 20 || *raw == 21 || *raw == 22 || *raw == 23 || *raw == 24 || *raw == 25 || *raw == 26 || *raw == 27);
+}
+
+inline bool validateWireNode117(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field118 = value.field("id");
+    if (!field118 || !validateWireNode118(*field118)) return false;
+    const ProtocolValue* field119 = value.field("size");
+    if (!field119 || !validateWireNode119(*field119)) return false;
+    if (const ProtocolValue* field124 = value.field("style"); field124 && !validateWireNode124(*field124)) return false;
+    if (const ProtocolValue* field127 = value.field("focus_context"); field127 && !validateWireNode127(*field127)) return false;
+    if (const ProtocolValue* field128 = value.field("accessible_label"); field128 && !validateWireNode128(*field128)) return false;
     std::size_t variantCount = 0;
-    if (const ProtocolValue* variant15 = value.field("container"); variant15 &&
-        variant15->kind() != ProtocolValue::Kind::NullValue) {
+    if (const ProtocolValue* variant129 = value.field("container"); variant129 &&
+        variant129->kind() != ProtocolValue::Kind::NullValue) {
         ++variantCount;
-        if (!validateWireNode15(*variant15)) return false;
+        if (!validateWireNode129(*variant129)) return false;
     }
-    if (const ProtocolValue* variant26 = value.field("leaf"); variant26 &&
-        variant26->kind() != ProtocolValue::Kind::NullValue) {
+    if (const ProtocolValue* variant140 = value.field("leaf"); variant140 &&
+        variant140->kind() != ProtocolValue::Kind::NullValue) {
         ++variantCount;
-        if (!validateWireNode26(*variant26)) return false;
+        if (!validateWireNode140(*variant140)) return false;
     }
     return variantCount == 1;
 }
 
-inline bool validateWireNode4(const ProtocolValue& value) {
+inline bool validateWireNode118(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode5(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field6 = value.field("extent");
-    if (!field6 || !validateWireNode6(*field6)) return false;
+inline bool validateWireNode119(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field120 = value.field("extent");
+    if (!field120 || !validateWireNode120(*field120)) return false;
     const ProtocolValue* discriminator = value.field("kind");
     if (!discriminator || !discriminator->asUint()) return false;
     switch (*discriminator->asUint()) {
@@ -176,239 +1141,238 @@ inline bool validateWireNode5(const ProtocolValue& value) {
         return true;
     }
     case 3: {
-    const ProtocolValue* field7 = value.field("minimum");
-    if (!field7 || !validateWireNode7(*field7)) return false;
-    const ProtocolValue* field8 = value.field("growth");
-    if (!field8 || !validateWireNode8(*field8)) return false;
-    const ProtocolValue* field9 = value.field("optional");
-    if (!field9 || !validateWireNode9(*field9)) return false;
+
+    const ProtocolValue* field121 = value.field("minimum");
+    if (!field121 || !validateWireNode121(*field121)) return false;
+    const ProtocolValue* field122 = value.field("growth");
+    if (!field122 || !validateWireNode122(*field122)) return false;
+    const ProtocolValue* field123 = value.field("optional");
+    if (!field123 || !validateWireNode123(*field123)) return false;
         return true;
     }
     default: return false;
     }
 }
 
-inline bool validateWireNode6(const ProtocolValue& value) {
+inline bool validateWireNode120(const ProtocolValue& value) {
     const auto raw = value.asUint();
-    return raw && *raw <= static_cast<std::uint64_t>(
-        std::numeric_limits<int>::max());
+    return raw && *raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max());
 }
 
-inline bool validateWireNode7(const ProtocolValue& value) {
+inline bool validateWireNode121(const ProtocolValue& value) {
     const auto raw = value.asUint();
-    return raw && *raw <= static_cast<std::uint64_t>(
-        std::numeric_limits<int>::max());
+    return raw && *raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max());
 }
 
-inline bool validateWireNode8(const ProtocolValue& value) {
+inline bool validateWireNode122(const ProtocolValue& value) {
     const auto raw = value.asUint();
-    return raw && *raw <= static_cast<std::uint64_t>(
-        std::numeric_limits<int>::max());
+    return raw && *raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max());
 }
 
-inline bool validateWireNode9(const ProtocolValue& value) {
+inline bool validateWireNode123(const ProtocolValue& value) {
     return value.asBool().has_value();
 }
 
-inline bool validateWireNode10(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    if (const ProtocolValue* field11 = value.field("foreground"); field11 && !validateWireNode11(*field11)) return false;
-    if (const ProtocolValue* field12 = value.field("background"); field12 && !validateWireNode12(*field12)) return false;
+inline bool validateWireNode124(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    if (const ProtocolValue* field125 = value.field("foreground"); field125 && !validateWireNode125(*field125)) return false;
+    if (const ProtocolValue* field126 = value.field("background"); field126 && !validateWireNode126(*field126)) return false;
     return true;
 }
 
-inline bool validateWireNode11(const ProtocolValue& value) {
+inline bool validateWireNode125(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4 || *raw == 5 || *raw == 6 || *raw == 7 || *raw == 8 || *raw == 9 || *raw == 10 || *raw == 11 || *raw == 12 || *raw == 13 || *raw == 14 || *raw == 15 || *raw == 16 || *raw == 17 || *raw == 18 || *raw == 19 || *raw == 20 || *raw == 21 || *raw == 22 || *raw == 23 || *raw == 24 || *raw == 25 || *raw == 26 || *raw == 27);
 }
 
-inline bool validateWireNode12(const ProtocolValue& value) {
+inline bool validateWireNode126(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4 || *raw == 5 || *raw == 6 || *raw == 7 || *raw == 8 || *raw == 9 || *raw == 10 || *raw == 11 || *raw == 12 || *raw == 13 || *raw == 14 || *raw == 15 || *raw == 16 || *raw == 17 || *raw == 18 || *raw == 19 || *raw == 20 || *raw == 21 || *raw == 22 || *raw == 23 || *raw == 24 || *raw == 25 || *raw == 26 || *raw == 27);
 }
 
-inline bool validateWireNode13(const ProtocolValue& value) {
+inline bool validateWireNode127(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3);
 }
 
-inline bool validateWireNode14(const ProtocolValue& value) {
+inline bool validateWireNode128(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode15(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field16 = value.field("axis");
-    if (!field16 || !validateWireNode16(*field16)) return false;
-    const ProtocolValue* field17 = value.field("inset");
-    if (!field17 || !validateWireNode17(*field17)) return false;
-    const ProtocolValue* field22 = value.field("gap");
-    if (!field22 || !validateWireNode22(*field22)) return false;
-    const ProtocolValue* field23 = value.field("children");
-    if (!field23 || !validateWireNode23(*field23)) return false;
-    if (const ProtocolValue* field25 = value.field("scroll"); field25 && !validateWireNode25(*field25)) return false;
+inline bool validateWireNode129(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field130 = value.field("axis");
+    if (!field130 || !validateWireNode130(*field130)) return false;
+    const ProtocolValue* field131 = value.field("inset");
+    if (!field131 || !validateWireNode131(*field131)) return false;
+    const ProtocolValue* field136 = value.field("gap");
+    if (!field136 || !validateWireNode136(*field136)) return false;
+    const ProtocolValue* field137 = value.field("children");
+    if (!field137 || !validateWireNode137(*field137)) return false;
+    if (const ProtocolValue* field139 = value.field("scroll"); field139 && !validateWireNode139(*field139)) return false;
     return true;
 }
 
-inline bool validateWireNode16(const ProtocolValue& value) {
+inline bool validateWireNode130(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (*raw == 0 || *raw == 1);
 }
 
-inline bool validateWireNode17(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field18 = value.field("left");
-    if (!field18 || !validateWireNode18(*field18)) return false;
-    const ProtocolValue* field19 = value.field("right");
-    if (!field19 || !validateWireNode19(*field19)) return false;
-    const ProtocolValue* field20 = value.field("top");
-    if (!field20 || !validateWireNode20(*field20)) return false;
-    const ProtocolValue* field21 = value.field("bottom");
-    if (!field21 || !validateWireNode21(*field21)) return false;
+inline bool validateWireNode131(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field132 = value.field("left");
+    if (!field132 || !validateWireNode132(*field132)) return false;
+    const ProtocolValue* field133 = value.field("right");
+    if (!field133 || !validateWireNode133(*field133)) return false;
+    const ProtocolValue* field134 = value.field("top");
+    if (!field134 || !validateWireNode134(*field134)) return false;
+    const ProtocolValue* field135 = value.field("bottom");
+    if (!field135 || !validateWireNode135(*field135)) return false;
     return true;
 }
 
-inline bool validateWireNode18(const ProtocolValue& value) {
+inline bool validateWireNode132(const ProtocolValue& value) {
     const auto raw = value.asUint();
-    return raw && *raw <= static_cast<std::uint64_t>(
-        std::numeric_limits<int>::max());
+    return raw && *raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max());
 }
 
-inline bool validateWireNode19(const ProtocolValue& value) {
+inline bool validateWireNode133(const ProtocolValue& value) {
     const auto raw = value.asUint();
-    return raw && *raw <= static_cast<std::uint64_t>(
-        std::numeric_limits<int>::max());
+    return raw && *raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max());
 }
 
-inline bool validateWireNode20(const ProtocolValue& value) {
+inline bool validateWireNode134(const ProtocolValue& value) {
     const auto raw = value.asUint();
-    return raw && *raw <= static_cast<std::uint64_t>(
-        std::numeric_limits<int>::max());
+    return raw && *raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max());
 }
 
-inline bool validateWireNode21(const ProtocolValue& value) {
+inline bool validateWireNode135(const ProtocolValue& value) {
     const auto raw = value.asUint();
-    return raw && *raw <= static_cast<std::uint64_t>(
-        std::numeric_limits<int>::max());
+    return raw && *raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max());
 }
 
-inline bool validateWireNode22(const ProtocolValue& value) {
+inline bool validateWireNode136(const ProtocolValue& value) {
     const auto raw = value.asUint();
-    return raw && *raw <= static_cast<std::uint64_t>(
-        std::numeric_limits<int>::max());
+    return raw && *raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max());
 }
 
-inline bool validateWireNode23(const ProtocolValue& value) {
+inline bool validateWireNode137(const ProtocolValue& value) {
     const auto* array = value.asArray();
     if (!array) return false;
     return std::ranges::all_of(*array, [](const ProtocolValue& item) {
-        return validateWireNode24(item);
+        return validateWireNode138(item);
     });
 }
 
-inline bool validateWireNode24(const ProtocolValue& value) {
-    return validateWireNode3(value);
+inline bool validateWireNode138(const ProtocolValue& value) {
+    return validateWireNode117(value);
 }
 
-inline bool validateWireNode25(const ProtocolValue& value) {
+inline bool validateWireNode139(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (true);
 }
 
-inline bool validateWireNode26(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field27 = value.field("kind");
-    if (!field27 || !validateWireNode27(*field27)) return false;
-    const ProtocolValue* field28 = value.field("id");
-    if (!field28 || !validateWireNode28(*field28)) return false;
-    if (const ProtocolValue* field29 = value.field("value"); field29 && !validateWireNode29(*field29)) return false;
-    if (const ProtocolValue* field34 = value.field("checked"); field34 && !validateWireNode34(*field34)) return false;
-    if (const ProtocolValue* field39 = value.field("width"); field39 && !validateWireNode39(*field39)) return false;
-    if (const ProtocolValue* field41 = value.field("role"); field41 && !validateWireNode41(*field41)) return false;
-    if (const ProtocolValue* field43 = value.field("command"); field43 && !validateWireNode43(*field43)) return false;
-    if (const ProtocolValue* field45 = value.field("surface"); field45 && !validateWireNode45(*field45)) return false;
-    const ProtocolValue* field47 = value.field("rank");
-    if (!field47 || !validateWireNode47(*field47)) return false;
-    const ProtocolValue* field48 = value.field("keep");
-    if (!field48 || !validateWireNode48(*field48)) return false;
-    const ProtocolValue* field49 = value.field("overflow");
-    if (!field49 || !validateWireNode49(*field49)) return false;
-    const ProtocolValue* field50 = value.field("sigil");
-    if (!field50 || !validateWireNode50(*field50)) return false;
+inline bool validateWireNode140(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field141 = value.field("kind");
+    if (!field141 || !validateWireNode141(*field141)) return false;
+    const ProtocolValue* field142 = value.field("id");
+    if (!field142 || !validateWireNode142(*field142)) return false;
+    if (const ProtocolValue* field143 = value.field("value"); field143 && !validateWireNode143(*field143)) return false;
+    if (const ProtocolValue* field148 = value.field("checked"); field148 && !validateWireNode148(*field148)) return false;
+    if (const ProtocolValue* field153 = value.field("width"); field153 && !validateWireNode153(*field153)) return false;
+    if (const ProtocolValue* field155 = value.field("role"); field155 && !validateWireNode155(*field155)) return false;
+    if (const ProtocolValue* field157 = value.field("command"); field157 && !validateWireNode157(*field157)) return false;
+    if (const ProtocolValue* field159 = value.field("surface"); field159 && !validateWireNode159(*field159)) return false;
+    const ProtocolValue* field161 = value.field("rank");
+    if (!field161 || !validateWireNode161(*field161)) return false;
+    const ProtocolValue* field162 = value.field("keep");
+    if (!field162 || !validateWireNode162(*field162)) return false;
+    const ProtocolValue* field163 = value.field("overflow");
+    if (!field163 || !validateWireNode163(*field163)) return false;
+    const ProtocolValue* field164 = value.field("sigil");
+    if (!field164 || !validateWireNode164(*field164)) return false;
     return true;
 }
 
-inline bool validateWireNode27(const ProtocolValue& value) {
+inline bool validateWireNode141(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4 || *raw == 5 || *raw == 6 || *raw == 7);
 }
 
-inline bool validateWireNode28(const ProtocolValue& value) {
+inline bool validateWireNode142(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode29(const ProtocolValue& value) {
+inline bool validateWireNode143(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode30(value);
+           validateWireNode144(value);
 }
 
-inline bool validateWireNode30(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field31 = value.field("is_provider");
-    if (!field31 || !validateWireNode31(*field31)) return false;
-    const ProtocolValue* field32 = value.field("literal");
-    if (!field32 || !validateWireNode32(*field32)) return false;
-    const ProtocolValue* field33 = value.field("provider");
-    if (!field33 || !validateWireNode33(*field33)) return false;
+inline bool validateWireNode144(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field145 = value.field("is_provider");
+    if (!field145 || !validateWireNode145(*field145)) return false;
+    const ProtocolValue* field146 = value.field("literal");
+    if (!field146 || !validateWireNode146(*field146)) return false;
+    const ProtocolValue* field147 = value.field("provider");
+    if (!field147 || !validateWireNode147(*field147)) return false;
     return true;
 }
 
-inline bool validateWireNode31(const ProtocolValue& value) {
+inline bool validateWireNode145(const ProtocolValue& value) {
     return value.asBool().has_value();
 }
 
-inline bool validateWireNode32(const ProtocolValue& value) {
+inline bool validateWireNode146(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode33(const ProtocolValue& value) {
+inline bool validateWireNode147(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode34(const ProtocolValue& value) {
+inline bool validateWireNode148(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode35(value);
+           validateWireNode149(value);
 }
 
-inline bool validateWireNode35(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field36 = value.field("is_provider");
-    if (!field36 || !validateWireNode36(*field36)) return false;
-    const ProtocolValue* field37 = value.field("literal");
-    if (!field37 || !validateWireNode37(*field37)) return false;
-    const ProtocolValue* field38 = value.field("provider");
-    if (!field38 || !validateWireNode38(*field38)) return false;
+inline bool validateWireNode149(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field150 = value.field("is_provider");
+    if (!field150 || !validateWireNode150(*field150)) return false;
+    const ProtocolValue* field151 = value.field("literal");
+    if (!field151 || !validateWireNode151(*field151)) return false;
+    const ProtocolValue* field152 = value.field("provider");
+    if (!field152 || !validateWireNode152(*field152)) return false;
     return true;
 }
 
-inline bool validateWireNode36(const ProtocolValue& value) {
+inline bool validateWireNode150(const ProtocolValue& value) {
     return value.asBool().has_value();
 }
 
-inline bool validateWireNode37(const ProtocolValue& value) {
+inline bool validateWireNode151(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode38(const ProtocolValue& value) {
+inline bool validateWireNode152(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode39(const ProtocolValue& value) {
+inline bool validateWireNode153(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode40(value);
+           validateWireNode154(value);
 }
 
-inline bool validateWireNode40(const ProtocolValue& value) {
+inline bool validateWireNode154(const ProtocolValue& value) {
     if (const auto raw = value.asInt()) {
         return *raw >= std::numeric_limits<int>::min() &&
                *raw <= std::numeric_limits<int>::max();
@@ -416,35 +1380,35 @@ inline bool validateWireNode40(const ProtocolValue& value) {
     return false;
 }
 
-inline bool validateWireNode41(const ProtocolValue& value) {
+inline bool validateWireNode155(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode42(value);
+           validateWireNode156(value);
 }
 
-inline bool validateWireNode42(const ProtocolValue& value) {
+inline bool validateWireNode156(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode43(const ProtocolValue& value) {
+inline bool validateWireNode157(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode44(value);
+           validateWireNode158(value);
 }
 
-inline bool validateWireNode44(const ProtocolValue& value) {
+inline bool validateWireNode158(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode45(const ProtocolValue& value) {
+inline bool validateWireNode159(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode46(value);
+           validateWireNode160(value);
 }
 
-inline bool validateWireNode46(const ProtocolValue& value) {
+inline bool validateWireNode160(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4 || *raw == 5 || *raw == 6 || *raw == 7 || *raw == 8 || *raw == 9);
 }
 
-inline bool validateWireNode47(const ProtocolValue& value) {
+inline bool validateWireNode161(const ProtocolValue& value) {
     if (const auto raw = value.asInt()) {
         return *raw >= std::numeric_limits<int>::min() &&
                *raw <= std::numeric_limits<int>::max();
@@ -452,357 +1416,414 @@ inline bool validateWireNode47(const ProtocolValue& value) {
     return false;
 }
 
-inline bool validateWireNode48(const ProtocolValue& value) {
+inline bool validateWireNode162(const ProtocolValue& value) {
     return value.asBool().has_value();
 }
 
-inline bool validateWireNode49(const ProtocolValue& value) {
+inline bool validateWireNode163(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (*raw == 0 || *raw == 1 || *raw == 2);
 }
 
-inline bool validateWireNode50(const ProtocolValue& value) {
+inline bool validateWireNode164(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode51(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field52 = value.field("generation");
-    if (!field52 || !validateWireNode52(*field52)) return false;
-    const ProtocolValue* field53 = value.field("root");
-    if (!field53 || !validateWireNode53(*field53)) return false;
+inline bool validateWireNode165(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field166 = value.field("generation");
+    if (!field166 || !validateWireNode166(*field166)) return false;
+    const ProtocolValue* field167 = value.field("root");
+    if (!field167 || !validateWireNode167(*field167)) return false;
     return true;
 }
 
-inline bool validateWireNode52(const ProtocolValue& value) {
+inline bool validateWireNode166(const ProtocolValue& value) {
     return value.asUint().has_value();
 }
 
-inline bool validateWireNode53(const ProtocolValue& value) {
-    return validateWireNode3(value);
+inline bool validateWireNode167(const ProtocolValue& value) {
+    return validateWireNode117(value);
 }
 
-inline bool validateWireNode54(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field55 = value.field("generation");
-    if (!field55 || !validateWireNode55(*field55)) return false;
-    const ProtocolValue* field56 = value.field("nodes");
-    if (!field56 || !validateWireNode56(*field56)) return false;
-    if (const ProtocolValue* field70 = value.field("focus_path"); field70 && !validateWireNode70(*field70)) return false;
+inline bool validateWireNode168(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field169 = value.field("generation");
+    if (!field169 || !validateWireNode169(*field169)) return false;
+    const ProtocolValue* field170 = value.field("nodes");
+    if (!field170 || !validateWireNode170(*field170)) return false;
+    if (const ProtocolValue* field184 = value.field("focus_path"); field184 && !validateWireNode184(*field184)) return false;
     return true;
 }
 
-inline bool validateWireNode55(const ProtocolValue& value) {
+inline bool validateWireNode169(const ProtocolValue& value) {
     return value.asUint().has_value();
 }
 
-inline bool validateWireNode56(const ProtocolValue& value) {
+inline bool validateWireNode170(const ProtocolValue& value) {
     const auto* array = value.asArray();
     if (!array) return false;
     return std::ranges::all_of(*array, [](const ProtocolValue& item) {
-        return validateWireNode57(item);
+        return validateWireNode171(item);
     });
 }
 
-inline bool validateWireNode57(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field58 = value.field("id");
-    if (!field58 || !validateWireNode58(*field58)) return false;
-    if (const ProtocolValue* field59 = value.field("leaf"); field59 && !validateWireNode59(*field59)) return false;
+inline bool validateWireNode171(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field172 = value.field("id");
+    if (!field172 || !validateWireNode172(*field172)) return false;
+    if (const ProtocolValue* field173 = value.field("leaf"); field173 && !validateWireNode173(*field173)) return false;
     return true;
 }
 
-inline bool validateWireNode58(const ProtocolValue& value) {
+inline bool validateWireNode172(const ProtocolValue& value) {
     const auto* text = value.asText();
     return text && !text->empty();
 }
 
-inline bool validateWireNode59(const ProtocolValue& value) {
+inline bool validateWireNode173(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode60(value);
+           validateWireNode174(value);
 }
 
-inline bool validateWireNode60(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field61 = value.field("value");
-    if (!field61 || !validateWireNode61(*field61)) return false;
-    const ProtocolValue* field62 = value.field("label");
-    if (!field62 || !validateWireNode62(*field62)) return false;
-    if (const ProtocolValue* field63 = value.field("command"); field63 && !validateWireNode63(*field63)) return false;
-    if (const ProtocolValue* field65 = value.field("checked"); field65 && !validateWireNode65(*field65)) return false;
-    const ProtocolValue* field67 = value.field("role");
-    if (!field67 || !validateWireNode67(*field67)) return false;
-    if (const ProtocolValue* field68 = value.field("active"); field68 && !validateWireNode68(*field68)) return false;
+inline bool validateWireNode174(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field175 = value.field("value");
+    if (!field175 || !validateWireNode175(*field175)) return false;
+    const ProtocolValue* field176 = value.field("label");
+    if (!field176 || !validateWireNode176(*field176)) return false;
+    if (const ProtocolValue* field177 = value.field("command"); field177 && !validateWireNode177(*field177)) return false;
+    if (const ProtocolValue* field179 = value.field("checked"); field179 && !validateWireNode179(*field179)) return false;
+    const ProtocolValue* field181 = value.field("role");
+    if (!field181 || !validateWireNode181(*field181)) return false;
+    if (const ProtocolValue* field182 = value.field("active"); field182 && !validateWireNode182(*field182)) return false;
     return true;
 }
 
-inline bool validateWireNode61(const ProtocolValue& value) {
+inline bool validateWireNode175(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode62(const ProtocolValue& value) {
+inline bool validateWireNode176(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode63(const ProtocolValue& value) {
+inline bool validateWireNode177(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode64(value);
+           validateWireNode178(value);
 }
 
-inline bool validateWireNode64(const ProtocolValue& value) {
+inline bool validateWireNode178(const ProtocolValue& value) {
     return value.asText() != nullptr;
 }
 
-inline bool validateWireNode65(const ProtocolValue& value) {
+inline bool validateWireNode179(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode66(value);
+           validateWireNode180(value);
 }
 
-inline bool validateWireNode66(const ProtocolValue& value) {
+inline bool validateWireNode180(const ProtocolValue& value) {
     return value.asBool().has_value();
 }
 
-inline bool validateWireNode67(const ProtocolValue& value) {
+inline bool validateWireNode181(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (*raw == 0 || *raw == 1 || *raw == 2 || *raw == 3 || *raw == 4 || *raw == 5 || *raw == 6 || *raw == 7 || *raw == 8 || *raw == 9 || *raw == 10 || *raw == 11 || *raw == 12 || *raw == 13 || *raw == 14 || *raw == 15 || *raw == 16 || *raw == 17 || *raw == 18 || *raw == 19 || *raw == 20 || *raw == 21 || *raw == 22 || *raw == 23 || *raw == 24 || *raw == 25 || *raw == 26 || *raw == 27);
 }
 
-inline bool validateWireNode68(const ProtocolValue& value) {
+inline bool validateWireNode182(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode69(value);
+           validateWireNode183(value);
 }
 
-inline bool validateWireNode69(const ProtocolValue& value) {
+inline bool validateWireNode183(const ProtocolValue& value) {
     return value.asBool().has_value();
 }
 
-inline bool validateWireNode70(const ProtocolValue& value) {
+inline bool validateWireNode184(const ProtocolValue& value) {
     return value.kind() == ProtocolValue::Kind::NullValue ||
-           validateWireNode71(value);
+           validateWireNode185(value);
 }
 
-inline bool validateWireNode71(const ProtocolValue& value) {
+inline bool validateWireNode185(const ProtocolValue& value) {
     const auto* array = value.asArray();
     if (!array || array->empty()) return false;
     return std::ranges::all_of(*array, [](const ProtocolValue& item) {
-        return validateWireNode72(item);
+        return validateWireNode186(item);
     });
 }
 
-inline bool validateWireNode72(const ProtocolValue& value) {
+inline bool validateWireNode186(const ProtocolValue& value) {
     const auto* text = value.asText();
     return text && !text->empty();
 }
 
-inline bool validateWireNode73(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field74 = value.field("generation");
-    if (!field74 || !validateWireNode74(*field74)) return false;
-    const ProtocolValue* field75 = value.field("basis");
-    if (!field75 || !validateWireNode75(*field75)) return false;
-    const ProtocolValue* field76 = value.field("nodes");
-    if (!field76 || !validateWireNode76(*field76)) return false;
+inline bool validateWireNode187(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field188 = value.field("generation");
+    if (!field188 || !validateWireNode188(*field188)) return false;
+    const ProtocolValue* field189 = value.field("basis");
+    if (!field189 || !validateWireNode189(*field189)) return false;
+    const ProtocolValue* field190 = value.field("nodes");
+    if (!field190 || !validateWireNode190(*field190)) return false;
     return true;
 }
 
-inline bool validateWireNode74(const ProtocolValue& value) {
+inline bool validateWireNode188(const ProtocolValue& value) {
     return value.asUint().has_value();
 }
 
-inline bool validateWireNode75(const ProtocolValue& value) {
+inline bool validateWireNode189(const ProtocolValue& value) {
     return value.asUint().has_value();
 }
 
-inline bool validateWireNode76(const ProtocolValue& value) {
+inline bool validateWireNode190(const ProtocolValue& value) {
     const auto* array = value.asArray();
     if (!array) return false;
     return std::ranges::all_of(*array, [](const ProtocolValue& item) {
-        return validateWireNode77(item);
+        return validateWireNode191(item);
     });
 }
 
-inline bool validateWireNode77(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field78 = value.field("id");
-    if (!field78 || !validateWireNode78(*field78)) return false;
-    const ProtocolValue* field79 = value.field("present");
-    if (!field79 || !validateWireNode79(*field79)) return false;
+inline bool validateWireNode191(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field192 = value.field("id");
+    if (!field192 || !validateWireNode192(*field192)) return false;
+    const ProtocolValue* field193 = value.field("present");
+    if (!field193 || !validateWireNode193(*field193)) return false;
     return true;
 }
 
-inline bool validateWireNode78(const ProtocolValue& value) {
+inline bool validateWireNode192(const ProtocolValue& value) {
     const auto* text = value.asText();
     return text && !text->empty();
 }
 
-inline bool validateWireNode79(const ProtocolValue& value) {
+inline bool validateWireNode193(const ProtocolValue& value) {
     return value.asBool().has_value();
 }
 
-inline bool validateWireNode80(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field81 = value.field("generation");
-    if (!field81 || !validateWireNode81(*field81)) return false;
-    const ProtocolValue* field82 = value.field("ops");
-    if (!field82 || !validateWireNode82(*field82)) return false;
+inline bool validateWireNode194(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field195 = value.field("generation");
+    if (!field195 || !validateWireNode195(*field195)) return false;
+    const ProtocolValue* field196 = value.field("ops");
+    if (!field196 || !validateWireNode196(*field196)) return false;
     return true;
 }
 
-inline bool validateWireNode81(const ProtocolValue& value) {
+inline bool validateWireNode195(const ProtocolValue& value) {
     return value.asUint().has_value();
 }
 
-inline bool validateWireNode82(const ProtocolValue& value) {
+inline bool validateWireNode196(const ProtocolValue& value) {
     const auto* array = value.asArray();
     if (!array) return false;
     return std::ranges::all_of(*array, [](const ProtocolValue& item) {
-        return validateWireNode83(item);
+        return validateWireNode197(item);
     });
 }
 
-inline bool validateWireNode83(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field84 = value.field("kind");
-    if (!field84 || !validateWireNode84(*field84)) return false;
-    const ProtocolValue* field85 = value.field("target");
-    if (!field85 || !validateWireNode85(*field85)) return false;
+inline bool validateWireNode197(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field198 = value.field("kind");
+    if (!field198 || !validateWireNode198(*field198)) return false;
+    const ProtocolValue* field199 = value.field("target");
+    if (!field199 || !validateWireNode199(*field199)) return false;
     return true;
 }
 
-inline bool validateWireNode84(const ProtocolValue& value) {
+inline bool validateWireNode198(const ProtocolValue& value) {
     const auto raw = value.asUint();
     return raw && (*raw == 0 || *raw == 1);
 }
 
-inline bool validateWireNode85(const ProtocolValue& value) {
+inline bool validateWireNode199(const ProtocolValue& value) {
     const auto* text = value.asText();
     return text && !text->empty();
 }
 
-inline bool validateWireNode86(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field87 = value.field("generation");
-    if (!field87 || !validateWireNode87(*field87)) return false;
-    const ProtocolValue* field88 = value.field("presence_basis");
-    if (!field88 || !validateWireNode88(*field88)) return false;
+inline bool validateWireNode200(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field201 = value.field("generation");
+    if (!field201 || !validateWireNode201(*field201)) return false;
+    const ProtocolValue* field202 = value.field("presence_basis");
+    if (!field202 || !validateWireNode202(*field202)) return false;
     return true;
 }
 
-inline bool validateWireNode87(const ProtocolValue& value) {
+inline bool validateWireNode201(const ProtocolValue& value) {
     return value.asUint().has_value();
 }
 
-inline bool validateWireNode88(const ProtocolValue& value) {
+inline bool validateWireNode202(const ProtocolValue& value) {
     return value.asUint().has_value();
 }
 
-inline bool validateWireNode89(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field90 = value.field("version");
-    if (!field90 || !validateWireNode90(*field90)) return false;
-    const ProtocolValue* field91 = value.field("schema");
-    if (!field91 || !validateWireNode91(*field91)) return false;
-    const ProtocolValue* field92 = value.field("state");
-    if (!field92 || !validateWireNode92(*field92)) return false;
-    const ProtocolValue* field93 = value.field("presence");
-    if (!field93 || !validateWireNode93(*field93)) return false;
+inline bool validateWireNode203(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field204 = value.field("version");
+    if (!field204 || !validateWireNode204(*field204)) return false;
+    const ProtocolValue* field205 = value.field("schema");
+    if (!field205 || !validateWireNode205(*field205)) return false;
+    const ProtocolValue* field206 = value.field("state");
+    if (!field206 || !validateWireNode206(*field206)) return false;
+    const ProtocolValue* field207 = value.field("presence");
+    if (!field207 || !validateWireNode207(*field207)) return false;
     return true;
 }
 
-inline bool validateWireNode90(const ProtocolValue& value) {
-    return validateWireNode86(value);
+inline bool validateWireNode204(const ProtocolValue& value) {
+    return validateWireNode200(value);
 }
 
-inline bool validateWireNode91(const ProtocolValue& value) {
-    return validateWireNode51(value);
+inline bool validateWireNode205(const ProtocolValue& value) {
+    return validateWireNode165(value);
 }
 
-inline bool validateWireNode92(const ProtocolValue& value) {
-    return validateWireNode54(value);
+inline bool validateWireNode206(const ProtocolValue& value) {
+    return validateWireNode168(value);
 }
 
-inline bool validateWireNode93(const ProtocolValue& value) {
-    return validateWireNode73(value);
+inline bool validateWireNode207(const ProtocolValue& value) {
+    return validateWireNode187(value);
 }
 
-inline bool validateWireNode94(const ProtocolValue& value) {
-    if (!value.asObject()) return false;
-    const ProtocolValue* field95 = value.field("base");
-    if (!field95 || !validateWireNode95(*field95)) return false;
-    const ProtocolValue* field96 = value.field("target");
-    if (!field96 || !validateWireNode96(*field96)) return false;
+inline bool validateWireNode208(const ProtocolValue& value) {
+    const auto* object = value.asObject();
+    if (!object) return false;
+    const ProtocolValue* field209 = value.field("base");
+    if (!field209 || !validateWireNode209(*field209)) return false;
+    const ProtocolValue* field210 = value.field("target");
+    if (!field210 || !validateWireNode210(*field210)) return false;
     const ProtocolValue* discriminatorField = value.field("kind");
     if (!discriminatorField || !discriminatorField->asText()) return false;
     const std::string& discriminator = *discriminatorField->asText();
     if (discriminator == "replacement") {
-    const ProtocolValue* field97 = value.field("frame");
-    if (!field97 || !validateWireNode97(*field97)) return false;
+
+    const ProtocolValue* field211 = value.field("frame");
+    if (!field211 || !validateWireNode211(*field211)) return false;
         return true;
     }
     if (discriminator == "changes") {
-    const ProtocolValue* field98 = value.field("state");
-    if (!field98 || !validateWireNode98(*field98)) return false;
-    const ProtocolValue* field99 = value.field("presence");
-    if (!field99 || !validateWireNode99(*field99)) return false;
+
+    const ProtocolValue* field212 = value.field("state");
+    if (!field212 || !validateWireNode212(*field212)) return false;
+    const ProtocolValue* field213 = value.field("presence");
+    if (!field213 || !validateWireNode213(*field213)) return false;
         return true;
     }
     return false;
 }
 
-inline bool validateWireNode95(const ProtocolValue& value) {
-    return validateWireNode86(value);
+inline bool validateWireNode209(const ProtocolValue& value) {
+    return validateWireNode200(value);
 }
 
-inline bool validateWireNode96(const ProtocolValue& value) {
-    return validateWireNode86(value);
+inline bool validateWireNode210(const ProtocolValue& value) {
+    return validateWireNode200(value);
 }
 
-inline bool validateWireNode97(const ProtocolValue& value) {
-    return validateWireNode89(value);
+inline bool validateWireNode211(const ProtocolValue& value) {
+    return validateWireNode203(value);
 }
 
-inline bool validateWireNode98(const ProtocolValue& value) {
-    return validateWireNode54(value);
+inline bool validateWireNode212(const ProtocolValue& value) {
+    return validateWireNode168(value);
 }
 
-inline bool validateWireNode99(const ProtocolValue& value) {
-    return validateWireNode73(value);
+inline bool validateWireNode213(const ProtocolValue& value) {
+    return validateWireNode187(value);
 }
 
-inline bool validateUiNodeStyleWire(const ProtocolValue& value) {
+inline bool validateKeyStrokeWire(const ProtocolValue& value) {
     return validateWireNode0(value);
 }
 
+inline bool validateExternalActionInvocationWire(const ProtocolValue& value) {
+    return validateWireNode6(value);
+}
+
+inline bool validateStatusActionInvocationWire(const ProtocolValue& value) {
+    return validateWireNode9(value);
+}
+
+inline bool validateResolvedSelectionRangeWire(const ProtocolValue& value) {
+    return validateWireNode13(value);
+}
+
+inline bool validateViewActionWire(const ProtocolValue& value) {
+    return validateWireNode16(value);
+}
+
+inline bool validateViewActionRequestWire(const ProtocolValue& value) {
+    return validateWireNode29(value);
+}
+
+inline bool validateCommandResultWire(const ProtocolValue& value) {
+    return validateWireNode33(value);
+}
+
+inline bool validateClientInputWire(const ProtocolValue& value) {
+    return validateWireNode40(value);
+}
+
+inline bool validateClientOwnedInputWire(const ProtocolValue& value) {
+    return validateWireNode100(value);
+}
+
+inline bool validatePickerActivationWire(const ProtocolValue& value) {
+    return validateWireNode103(value);
+}
+
+inline bool validateClientInputResultWire(const ProtocolValue& value) {
+    return validateWireNode106(value);
+}
+
+inline bool validateUiNodeStyleWire(const ProtocolValue& value) {
+    return validateWireNode114(value);
+}
+
 inline bool validateUiNodeWire(const ProtocolValue& value) {
-    return validateWireNode3(value);
+    return validateWireNode117(value);
 }
 
 inline bool validateUiSchemaWire(const ProtocolValue& value) {
-    return validateWireNode51(value);
+    return validateWireNode165(value);
 }
 
 inline bool validateUiStateSectionWire(const ProtocolValue& value) {
-    return validateWireNode54(value);
+    return validateWireNode168(value);
 }
 
 inline bool validateUiPresenceSectionWire(const ProtocolValue& value) {
-    return validateWireNode73(value);
+    return validateWireNode187(value);
 }
 
 inline bool validatePalettePresenceOverlayWire(const ProtocolValue& value) {
-    return validateWireNode80(value);
+    return validateWireNode194(value);
 }
 
 inline bool validateUiFrameVersionWire(const ProtocolValue& value) {
-    return validateWireNode86(value);
+    return validateWireNode200(value);
 }
 
 inline bool validateUiFrameWire(const ProtocolValue& value) {
-    return validateWireNode89(value);
+    return validateWireNode203(value);
 }
 
 inline bool validateUiFrameDeltaWire(const ProtocolValue& value) {
-    return validateWireNode94(value);
+    return validateWireNode208(value);
 }
 
 }  // namespace ssg::detail::generated

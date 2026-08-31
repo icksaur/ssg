@@ -5,7 +5,6 @@
 
 import {
   AXIS,
-  CLIENT_INPUT_KIND,
   CLIENT_OWNED_INPUT_KIND as CLIENT_OWNED_INPUT,
   DOCUMENT_POINTER_EDGE,
   INPUT_POINTER_BUTTON,
@@ -18,6 +17,21 @@ import {
   SIZE_KIND as SIZE,
   VIEW_SURFACE as SURFACE,
   WIDGET_KIND as WIDGET,
+  buildClientInputDocumentWire,
+  buildClientInputExternalActionWire,
+  buildClientInputKeyWire,
+  buildClientInputNoticeActionWire,
+  buildClientInputPickerWire,
+  buildClientInputPromptControlWire,
+  buildClientInputPublishedUiActionWire,
+  buildClientInputResolvedSelectionWire,
+  buildClientInputScrollFractionWire,
+  buildClientInputScrollLinesWire,
+  buildClientInputStatusActionWire,
+  buildClientInputTabWire,
+  buildClientInputTreeWire,
+  buildClientInputViewNavigationWire,
+  buildKeyStrokeWire,
   validatePalettePresenceOverlayWire,
   validateUiFrameWire,
   validateUiFrameDeltaWire,
@@ -283,31 +297,26 @@ export const encodeUiNodeActivationCommand = (
 
 export function encodeClientInput({ code = '', control = false, alt = false,
                                     meta = false, shift = false, text = '' }) {
-  const stroke = code ? { code, control, alt, meta, shift } : null;
-  return encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
-    kind: BigInt(CLIENT_INPUT_KIND.KEY), stroke, committed_text: text,
-  });
+  const stroke = code
+    ? buildKeyStrokeWire(code, control, alt, meta, shift)
+    : null;
+  return encodeMessage(
+    PROTOCOL_MESSAGE_KIND.CLIENT_INPUT,
+    buildClientInputKeyWire(stroke, text));
 }
 
 export function encodeViewNavigationInput(observedRevision) {
-  return encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
-    kind: BigInt(CLIENT_INPUT_KIND.VIEW_NAVIGATION),
-    basis_revision: BigInt(observedRevision),
-  });
+  return encodeMessage(
+    PROTOCOL_MESSAGE_KIND.CLIENT_INPUT,
+    buildClientInputViewNavigationWire(observedRevision));
 }
 
 export function encodeResolvedSelectionInput(
     observedRevision, activeTab, documentRevision, selections) {
-  return encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
-    kind: BigInt(CLIENT_INPUT_KIND.RESOLVED_SELECTION),
-    basis_revision: BigInt(observedRevision),
-    active_tab: BigInt(activeTab),
-    document_revision: BigInt(documentRevision),
-    selections: selections.map(({ anchor, active }) => ({
-      anchor: BigInt(anchor),
-      active: BigInt(active),
-    })),
-  });
+  return encodeMessage(
+    PROTOCOL_MESSAGE_KIND.CLIENT_INPUT,
+    buildClientInputResolvedSelectionWire(
+      observedRevision, activeTab, documentRevision, selections));
 }
 
 const MODIFIER_CODES = new Set([
@@ -344,60 +353,35 @@ export class BrowserKeyDispatchTracker {
   }
 }
 
-const encodePointerInput = (
-    kind, fields, button = INPUT_POINTER_BUTTON.PRIMARY,
-    phase = INPUT_POINTER_PHASE.PRESS) =>
-  encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
-    kind: BigInt(kind),
-    button: BigInt(button),
-    phase: BigInt(phase),
-    ...fields,
-  });
+const encodeInput = (payload) =>
+  encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, payload);
 
 export const encodePickerPointerInput = (activation, candidateId) =>
-  encodePointerInput(CLIENT_INPUT_KIND.PICKER, {
-    picker_mode: BigInt(activation.mode),
-    activation_id: BigInt(activation.id),
-    candidate_id: String(candidateId),
-  });
+  encodeInput(buildClientInputPickerWire(
+    INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS,
+    activation.mode, activation.id, candidateId));
 
 export const encodeDocumentPointerInput = (
     position, revision,
     { additive = false, selectWord = false,
       phase = INPUT_POINTER_PHASE.PRESS,
       edge = DOCUMENT_POINTER_EDGE.NONE } = {}) =>
-  encodePointerInput(CLIENT_INPUT_KIND.DOCUMENT, {
-    basis_revision: BigInt(revision),
-    position: position == null ? null : BigInt(position),
-    additive,
-    select_word: selectWord,
-    edge: BigInt(edge),
-  }, INPUT_POINTER_BUTTON.PRIMARY, phase);
+  encodeInput(buildClientInputDocumentWire(
+    INPUT_POINTER_BUTTON.PRIMARY, phase, revision, position,
+    additive, selectWord, edge));
 
 export const encodeScrollLinesInput = (target, rows, revision) =>
-  encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
-    kind: BigInt(CLIENT_INPUT_KIND.SCROLL_LINES),
-    basis_revision: BigInt(revision),
-    target: BigInt(target),
-    rows: BigInt(rows),
-  });
+  encodeInput(buildClientInputScrollLinesWire(revision, target, rows));
 
 export const encodeScrollFractionInput = (
     target, numerator, denominator, revision) =>
-  encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
-    kind: BigInt(CLIENT_INPUT_KIND.SCROLL_FRACTION),
-    basis_revision: BigInt(revision),
-    target: BigInt(target),
-    numerator: BigInt(numerator),
-    denominator: BigInt(denominator),
-  });
+  encodeInput(buildClientInputScrollFractionWire(
+    revision, target, numerator, denominator));
 
 export const encodeTabPointerInput = (
     tabId, revision, button = INPUT_POINTER_BUTTON.PRIMARY) =>
-  encodePointerInput(CLIENT_INPUT_KIND.TAB, {
-    basis_revision: BigInt(revision),
-    tab_id: BigInt(tabId),
-  }, button);
+  encodeInput(buildClientInputTabWire(
+    button, INPUT_POINTER_PHASE.PRESS, revision, tabId));
 
 export function markedTextByteOffset(byteStart, text, utf16Offset) {
   if (!Number.isSafeInteger(byteStart) || byteStart < 0 ||
@@ -417,47 +401,36 @@ export function markedTextByteOffset(byteStart, text, utf16Offset) {
 }
 
 export const encodeTreePointerInput = (nodeId, revision) =>
-  encodePointerInput(CLIENT_INPUT_KIND.TREE, {
-    basis_revision: BigInt(revision),
-    node_id: String(nodeId),
-  });
+  encodeInput(buildClientInputTreeWire(
+    INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS,
+    revision, nodeId));
 
 export const encodePromptControlPointerInput = (controlId, revision) =>
-  encodePointerInput(CLIENT_INPUT_KIND.PROMPT_CONTROL, {
-    basis_revision: BigInt(revision),
-    control_id: String(controlId),
-  });
+  encodeInput(buildClientInputPromptControlWire(
+    INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS,
+    revision, controlId));
 
 export const encodeExternalActionPointerInput = (action, fileId, revision) =>
-  encodePointerInput(CLIENT_INPUT_KIND.EXTERNAL_ACTION, {
-    basis_revision: BigInt(revision),
-    invocation: { file_id: String(fileId), action: BigInt(action) },
-  });
+  encodeInput(buildClientInputExternalActionWire(
+    INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS, revision,
+    { fileId, action }));
 
 export const encodeStatusActionPointerInput = (
     { statusId, actionId, generation }, revision) =>
-  encodePointerInput(CLIENT_INPUT_KIND.STATUS_ACTION, {
-    basis_revision: BigInt(revision),
-    invocation: {
-      status_id: BigInt(statusId),
-      action_id: String(actionId),
-      generation: BigInt(generation),
-    },
-  });
+  encodeInput(buildClientInputStatusActionWire(
+    INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS, revision,
+    { statusId, actionId, generation }));
 
 export const encodePublishedUiActionPointerInput = (
     nodeId, schemaGeneration, revision) =>
-  encodePointerInput(CLIENT_INPUT_KIND.PUBLISHED_UI_ACTION, {
-    basis_revision: BigInt(revision),
-    schema_generation: BigInt(schemaGeneration),
-    node_id: String(nodeId),
-  });
+  encodeInput(buildClientInputPublishedUiActionWire(
+    INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS,
+    revision, schemaGeneration, nodeId));
 
 export const encodeNoticeActionPointerInput = (actionId, revision) =>
-  encodePointerInput(CLIENT_INPUT_KIND.NOTICE_ACTION, {
-    basis_revision: BigInt(revision),
-    action_id: String(actionId),
-  });
+  encodeInput(buildClientInputNoticeActionWire(
+    INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS,
+    revision, actionId));
 
 export function settleInput(inputQueue, pending, result, appliedRevision) {
   if (inputQueue.length === 0) return null;

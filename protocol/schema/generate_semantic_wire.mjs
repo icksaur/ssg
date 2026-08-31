@@ -16,6 +16,7 @@ const defaults = Object.freeze({
 
 const cppIdentifier = /^[A-Z][A-Za-z0-9]*$/;
 const wireName = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const wireFieldName = /^[a-z][A-Za-z0-9_]*$/;
 const lifecycles = new Set(['current', 'compatibility', 'retired']);
 const replayPolicies = new Set([
   'replacement', 'changed-replacement', 'specialized', 'compatibility',
@@ -138,7 +139,7 @@ export function validateManifest(manifest) {
     }
     requireUnique(fields, 'wireName', 'wire type field');
     for (const field of fields) {
-      if (!wireName.test(field.wireName) ||
+      if (!wireFieldName.test(field.wireName) ||
           typeof field.required !== 'boolean') {
         throw new Error(`invalid wire type field: ${owner}`);
       }
@@ -155,14 +156,22 @@ export function validateManifest(manifest) {
         const options = {
           bool: ['kind'],
           int: ['kind', 'hostInt'],
-          uint: ['kind', 'maxHostInt'],
+          uint: ['kind', 'maxHostInt', 'maxUint32', 'allowedValues'],
           text: ['kind', 'nonEmpty'],
         }[kind];
         requireOnlyKeys(expression, options, 'wire primitive');
         for (const key of options.slice(1)) {
+          if (key === 'allowedValues') continue;
           if (expression[key] != null && typeof expression[key] !== 'boolean') {
             throw new Error(`invalid wire primitive option: ${owner}`);
           }
+        }
+        if (expression.allowedValues != null &&
+            (!Array.isArray(expression.allowedValues) ||
+             expression.allowedValues.length === 0 ||
+             expression.allowedValues.some(
+               (value) => !Number.isSafeInteger(value) || value < 0))) {
+          throw new Error(`invalid wire primitive values: ${owner}`);
         }
       }
       return;
@@ -200,26 +209,36 @@ export function validateManifest(manifest) {
     } else if (kind === 'record') {
       requireOnlyKeys(
         expression, ['kind', 'fields', 'unknownFields'], 'wire record');
-      if (expression.unknownFields !== 'allow') {
+      if (expression.unknownFields !== 'allow' &&
+          expression.unknownFields !== 'reject') {
         throw new Error(`invalid unknown-field policy: ${owner}`);
       }
       validateFields(expression.fields, owner);
+      if (expression.unknownFields === 'reject' &&
+          expression.fields.some((field) => !field.required)) {
+        throw new Error(`optional field in exact wire record: ${owner}`);
+      }
     } else if (kind === 'field-union') {
       requireOnlyKeys(
         expression,
         ['kind', 'fields', 'variants', 'unknownFields'],
         'wire field union');
-      if (expression.unknownFields !== 'allow') {
+      if (expression.unknownFields !== 'allow' &&
+          expression.unknownFields !== 'reject') {
         throw new Error(`invalid unknown-field policy: ${owner}`);
       }
       validateFields(expression.fields ?? [], owner);
+      if (expression.unknownFields === 'reject' &&
+          (expression.fields ?? []).some((field) => !field.required)) {
+        throw new Error(`optional field in exact wire union: ${owner}`);
+      }
       if (!Array.isArray(expression.variants) ||
           expression.variants.length < 2) {
         throw new Error(`invalid wire field union: ${owner}`);
       }
       requireUnique(expression.variants, 'wireName', 'wire union variant');
       for (const variant of expression.variants) {
-        if (!wireName.test(variant.wireName)) {
+        if (!wireFieldName.test(variant.wireName)) {
           throw new Error(`invalid wire union variant: ${owner}`);
         }
         validateExpression(variant.type, owner);
@@ -235,11 +254,16 @@ export function validateManifest(manifest) {
         kind === 'discriminated-record'
           ? ['wireName', 'enum'] : ['wireName'],
         'wire discriminator');
-      if (expression.unknownFields !== 'allow') {
+      if (expression.unknownFields !== 'allow' &&
+          expression.unknownFields !== 'reject') {
         throw new Error(`invalid unknown-field policy: ${owner}`);
       }
       validateFields(expression.fields ?? [], owner);
-      if (!wireName.test(expression.discriminator?.wireName) ||
+      if (expression.unknownFields === 'reject' &&
+          (expression.fields ?? []).some((field) => !field.required)) {
+        throw new Error(`optional field in exact discriminated wire record: ${owner}`);
+      }
+      if (!wireFieldName.test(expression.discriminator?.wireName) ||
           (kind === 'discriminated-record' &&
            !enumSymbols.has(expression.discriminator?.enum)) ||
           !Array.isArray(expression.variants) ||
@@ -265,6 +289,11 @@ export function validateManifest(manifest) {
           throw new Error(`invalid wire discriminator value: ${owner}`);
         }
         validateFields(variant.fields ?? [], owner);
+        if (expression.unknownFields === 'reject' &&
+            (variant.fields ?? []).some((field) => !field.required)) {
+          throw new Error(
+            `optional variant field in exact discriminated wire record: ${owner}`);
+        }
         if ((variant.fields ?? []).some(
           (field) => commonFields.has(field.wireName))) {
           throw new Error(`duplicate discriminated wire field: ${owner}`);
@@ -275,6 +304,11 @@ export function validateManifest(manifest) {
   for (const wireType of wireTypes) {
     if (!cppIdentifier.test(wireType.symbol)) {
       throw new Error(`invalid wire type declaration: ${wireType.symbol ?? '?'}`);
+    }
+    requireOnlyKeys(
+      wireType, ['symbol', 'schema', 'jsBuilder'], 'wire type declaration');
+    if (wireType.jsBuilder != null && typeof wireType.jsBuilder !== 'boolean') {
+      throw new Error(`invalid wire type builder: ${wireType.symbol}`);
     }
     validateExpression(wireType.schema, wireType.symbol);
   }
@@ -555,10 +589,21 @@ function renderCppWireValidators(manifest) {
         : `    return ${base};`;
     }
     if (kind === 'uint') {
-      return expression.maxHostInt === true
-        ? '    const auto raw = value.asUint();\n' +
-          '    return raw && *raw <= static_cast<std::uint64_t>(\n' +
-          '        std::numeric_limits<int>::max());'
+      const conditions = [];
+      if (expression.maxHostInt === true) {
+        conditions.push(
+          '*raw <= static_cast<std::uint64_t>(std::numeric_limits<int>::max())');
+      }
+      if (expression.maxUint32 === true) {
+        conditions.push('*raw <= std::numeric_limits<std::uint32_t>::max()');
+      }
+      if (expression.allowedValues) {
+        conditions.push(`(${expression.allowedValues.map(
+          (value) => `*raw == ${value}`).join(' || ')})`);
+      }
+      return conditions.length > 0
+        ? `    const auto raw = value.asUint();\n` +
+          `    return raw && ${conditions.join(' && ')};`
         : '    return value.asUint().has_value();';
     }
     if (kind === 'text') {
@@ -587,7 +632,10 @@ function renderCppWireValidators(manifest) {
         `        return ${call(node.items, 'item')};\n    });`;
     }
     if (kind === 'record') {
-      return `    if (!value.asObject()) return false;\n${
+      return `    const auto* object = value.asObject();\n` +
+        `    if (!object${
+          expression.unknownFields === 'reject'
+            ? ` || object->size() != ${node.fields.length}` : ''}) return false;\n${
         node.fields.map(renderField).join('\n')}\n    return true;`;
     }
     if (kind === 'field-union') {
@@ -600,7 +648,10 @@ function renderCppWireValidators(manifest) {
           `        if (!${call(variant.validator, `*${variable}`)}) return false;\n` +
           `    }`;
       }).join('\n');
-      return `    if (!value.asObject()) return false;\n${
+      return `    const auto* object = value.asObject();\n` +
+        `    if (!object${
+          expression.unknownFields === 'reject'
+            ? ` || object->size() != ${node.fields.length + 1}` : ''}) return false;\n${
         node.fields.map(renderField).join('\n')}\n` +
         `    std::size_t variantCount = 0;\n${variantChecks}\n` +
         `    return variantCount == 1;`;
@@ -611,32 +662,45 @@ function renderCppWireValidators(manifest) {
         ? manifest.wireEnums.find(
           (wireEnum) => wireEnum.symbol === expression.discriminator.enum)
         : null;
-      const cases = node.variants.map((variant) => {
-        if (kind === 'discriminated-record') {
-          const ordinal = declaration.values.find(
-            (value) => value.symbol === variant.value).ordinal;
-          return `    case ${ordinal}: {\n${
-            variant.fields.map(renderField).join('\n')}\n        return true;\n    }`;
-        }
-        return `    if (discriminator == ${quote(variant.value)}) {\n${
-          variant.fields.map(renderField).join('\n')}\n        return true;\n    }`;
-      }).join('\n');
       if (kind === 'discriminated-record') {
-        return `    if (!value.asObject()) return false;\n${
+        return `    const auto* object = value.asObject();\n` +
+          `    if (!object) return false;\n${
           node.fields.map(renderField).join('\n')}\n` +
           `    const ProtocolValue* discriminator = value.field(${
             quote(expression.discriminator.wireName)});\n` +
           `    if (!discriminator || !discriminator->asUint()) return false;\n` +
-          `    switch (*discriminator->asUint()) {\n${cases}\n` +
+          (expression.unknownFields === 'reject'
+            ? `    const auto fieldCount = object->size();\n` : '') +
+          `    switch (*discriminator->asUint()) {\n${node.variants.map(
+            (variant) => {
+              const ordinal = declaration.values.find(
+                (value) => value.symbol === variant.value).ordinal;
+              const checks = variant.fields.map(renderField).join('\n');
+              const count = 1 + node.fields.length + variant.fields.length;
+              return `    case ${ordinal}: {\n${
+                expression.unknownFields === 'reject'
+                  ? `        if (fieldCount != ${count}) return false;\n` : ''}${
+                checks ? `\n${checks}` : ''}\n        return true;\n    }`;
+            }).join('\n')}\n` +
           `    default: return false;\n    }`;
       }
-      return `    if (!value.asObject()) return false;\n${
+      return `    const auto* object = value.asObject();\n` +
+        `    if (!object) return false;\n${
         node.fields.map(renderField).join('\n')}\n` +
         `    const ProtocolValue* discriminatorField = value.field(${
           quote(expression.discriminator.wireName)});\n` +
         `    if (!discriminatorField || !discriminatorField->asText()) return false;\n` +
         `    const std::string& discriminator = *discriminatorField->asText();\n` +
-        `${cases}\n    return false;`;
+        (expression.unknownFields === 'reject'
+          ? `    const auto fieldCount = object->size();\n` : '') +
+        `${node.variants.map((variant) => {
+          const checks = variant.fields.map(renderField).join('\n');
+          const count = 1 + node.fields.length + variant.fields.length;
+          return `    if (discriminator == ${quote(variant.value)}) {\n${
+            expression.unknownFields === 'reject'
+              ? `        if (fieldCount != ${count}) return false;\n` : ''}${
+            checks ? `\n${checks}` : ''}\n        return true;\n    }`;
+        }).join('\n')}\n    return false;`;
     }
     throw new Error(`unsupported C++ wire validator kind: ${kind}`);
   });
@@ -690,20 +754,36 @@ function renderJsWireValidators(manifest) {
         ? '    if (typeof value !== \'number\' && typeof value !== \'bigint\') return false;\n' +
           '    const raw = Number(value);\n' +
           '    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;'
-        : '    return (typeof value === \'number\' || typeof value === \'bigint\') &&\n' +
-          '      Number.isSafeInteger(Number(value));';
+        : `    if (typeof value === 'bigint') {\n` +
+          `      return value >= -9223372036854775808n &&\n` +
+          `        value <= 9223372036854775807n;\n` +
+          `    }\n` +
+          `    return typeof value === 'number' && Number.isSafeInteger(value);`;
     }
     if (kind === 'uint') {
+      const numberConditions = ['Number.isSafeInteger(value)', 'value >= 0'];
+      const bigintConditions = [
+        'value >= 0n', 'value <= 18446744073709551615n',
+      ];
       if (expression.maxHostInt === true) {
-        return '    if (typeof value !== \'number\' && typeof value !== \'bigint\') return false;\n' +
-          '    const raw = Number(value);\n' +
-          '    return Number.isSafeInteger(raw) && raw >= 0 && raw <= 2147483647;';
+        numberConditions.push('value <= 2147483647');
+        bigintConditions.push('value <= 2147483647n');
+      }
+      if (expression.maxUint32 === true) {
+        numberConditions.push('value <= 4294967295');
+        bigintConditions.push('value <= 4294967295n');
+      }
+      if (expression.allowedValues) {
+        numberConditions.push(`(${expression.allowedValues.map(
+          (allowed) => `value === ${allowed}`).join(' || ')})`);
+        bigintConditions.push(`(${expression.allowedValues.map(
+          (allowed) => `value === ${allowed}n`).join(' || ')})`);
       }
       return `    if (typeof value === 'bigint') {\n` +
-        `      return value >= 0n && value <= 18446744073709551615n;\n` +
+        `      return ${bigintConditions.join(' && ')};\n` +
         `    }\n` +
-        `    return typeof value === 'number' && Number.isSafeInteger(value) &&\n` +
-        `      value >= 0;`;
+        `    return typeof value === 'number' &&\n` +
+        `      ${numberConditions.join(' && ')};`;
     }
     if (kind === 'text') {
       return `    return typeof value === 'string'${
@@ -727,7 +807,9 @@ function renderJsWireValidators(manifest) {
         `      value.every((item) => ${call(node.items, 'item')});`;
     }
     if (kind === 'record') {
-      return `    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;\n${
+      return `    if (!value || typeof value !== 'object' || Array.isArray(value)${
+        expression.unknownFields === 'reject'
+          ? ` || Object.keys(value).length !== ${node.fields.length}` : ''}) return false;\n${
         node.fields.map(renderField).join('\n')}\n    return true;`;
     }
     if (kind === 'field-union') {
@@ -737,7 +819,9 @@ function renderJsWireValidators(manifest) {
           `      ++variantCount;\n` +
           `      if (!${call(variant.validator, access)}) return false;\n    }`;
       }).join('\n');
-      return `    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;\n${
+      return `    if (!value || typeof value !== 'object' || Array.isArray(value)${
+        expression.unknownFields === 'reject'
+          ? ` || Object.keys(value).length !== ${node.fields.length + 1}` : ''}) return false;\n${
         node.fields.map(renderField).join('\n')}\n` +
         `    let variantCount = 0;\n${checks}\n` +
         `    return variantCount === 1;`;
@@ -768,16 +852,95 @@ function renderJsWireValidators(manifest) {
           : `    if (typeof discriminatorValue !== 'string') return false;\n` +
             `    const discriminator = discriminatorValue;\n`) +
         `    switch (discriminator) {\n${
-          cases}\n    default: return false;\n    }`;
+          node.variants.map((variant) => {
+            const label = kind === 'discriminated-record'
+              ? declaration.values.find(
+                (value) => value.symbol === variant.value).ordinal
+              : quote(variant.value);
+            const checks = variant.fields.map(renderField).join('\n');
+            const count = 1 + node.fields.length + variant.fields.length;
+            return `    case ${label}:\n${
+              expression.unknownFields === 'reject'
+                ? `      if (Object.keys(value).length !== ${count}) return false;\n`
+                : ''}${checks}\n      return true;`;
+          }).join('\n')}\n    default: return false;\n    }`;
     }
     throw new Error(`unsupported JavaScript wire validator kind: ${kind}`);
+  });
+  const camelName = (name) => name.replace(
+    /_([a-z0-9])/g, (_, character) => character.toUpperCase());
+  const convert = (index, source, seen = new Set()) => {
+    const node = functions[index];
+    const { expression, kind } = node;
+    if (kind === 'bool') return source;
+    if (kind === 'int' || kind === 'uint' || kind === 'enum') {
+      return `BigInt(${source})`;
+    }
+    if (kind === 'text') return `String(${source})`;
+    if (kind === 'nullable') {
+      return `(${source} == null ? null : ${
+        convert(node.value, source, seen)})`;
+    }
+    if (kind === 'array') {
+      return `${source}.map((item) => ${convert(node.items, 'item', seen)})`;
+    }
+    if (kind === 'record') {
+      return `({ ${node.fields.map((field) =>
+        `${field.wireName}: ${convert(
+          field.validator, `${source}.${camelName(field.wireName)}`, seen)}`)
+        .join(', ')} })`;
+    }
+    if (kind === 'ref') {
+      const target = roots.get(expression.type);
+      if (seen.has(target)) {
+        throw new Error(`cannot generate recursive JavaScript builder: ${expression.type}`);
+      }
+      return convert(target, source, new Set([...seen, target]));
+    }
+    throw new Error(`cannot generate JavaScript builder for ${kind}`);
+  };
+  const builders = manifest.wireTypes.flatMap((wireType) => {
+    if (!wireType.jsBuilder) return [];
+    const root = functions[roots.get(wireType.symbol)];
+    if (root.kind === 'record') {
+      const params = root.fields.map(
+        (field) => camelName(field.wireName));
+      return [
+        `export const build${wireType.symbol}Wire = (${
+          params.join(', ')}) => ({\n${root.fields.map((field) =>
+          `  ${field.wireName}: ${convert(
+            field.validator, camelName(field.wireName))},`).join('\n')}\n});`,
+      ];
+    }
+    if (root.kind === 'discriminated-record' ||
+        root.kind === 'text-discriminated-record') {
+      const declaration = root.kind === 'discriminated-record'
+        ? manifest.wireEnums.find(
+          (wireEnum) => wireEnum.symbol === root.expression.discriminator.enum)
+        : null;
+      return root.variants.map((variant) => {
+        const fields = [...root.fields, ...variant.fields];
+        const params = fields.map((field) => camelName(field.wireName));
+        const discriminator = root.kind === 'discriminated-record'
+          ? `${declaration.values.find(
+            (value) => value.symbol === variant.value).ordinal}n`
+          : quote(variant.value);
+        return `export const build${wireType.symbol}${variant.value}Wire = (${
+          params.join(', ')}) => ({\n` +
+          `  ${root.expression.discriminator.wireName}: ${discriminator},\n${
+            fields.map((field) => `  ${field.wireName}: ${
+              convert(field.validator, camelName(field.wireName))},`).join('\n')}\n});`;
+      });
+    }
+    throw new Error(`unsupported JavaScript builder type: ${wireType.symbol}`);
   });
   return `\n${functions.map((node) =>
     `function ${jsWireValidatorName(node.index)}(value) {\n${
       bodies[node.index]}\n}`).join('\n\n')}\n\n${
     manifest.wireTypes.map((wireType) =>
       `export const validate${wireType.symbol}Wire = (value) => ${
-        call(roots.get(wireType.symbol), 'value')};`).join('\n')}\n`;
+        call(roots.get(wireType.symbol), 'value')};`).join('\n')}\n\n${
+    builders.join('\n\n')}\n`;
 }
 
 function renderJs(manifest) {

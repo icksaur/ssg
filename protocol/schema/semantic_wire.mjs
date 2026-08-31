@@ -711,6 +711,8 @@ const enumType = (name, options = {}) =>
   Object.freeze({ kind: 'enum', enum: name, ...options });
 const record = (fields) =>
   Object.freeze({ kind: 'record', fields, unknownFields: 'allow' });
+const exactRecord = (fields) =>
+  Object.freeze({ kind: 'record', fields, unknownFields: 'reject' });
 const arrayOf = (items, options = {}) =>
   Object.freeze({ kind: 'array', items, ...options });
 const ref = (type, recursive = false) =>
@@ -807,8 +809,246 @@ const uiPresenceRecordSchema = record([
   required('id', nonEmptyText),
   required('present', 'bool'),
 ]);
+const uint32 = Object.freeze({ kind: 'uint', maxUint32: true });
+const encodedBool = Object.freeze({
+  kind: 'uint',
+  maxHostInt: true,
+  maxUint32: true,
+  allowedValues: [0, 1],
+});
+const keyStrokeSchema = record([
+  required('code', 'text'),
+  required('control', 'bool'),
+  required('alt', 'bool'),
+  required('meta', 'bool'),
+  required('shift', 'bool'),
+]);
+const externalActionInvocationSchema = exactRecord([
+  required('file_id', 'text'),
+  required('action', enumType('ExternalAction')),
+]);
+const statusActionInvocationSchema = exactRecord([
+  required('status_id', 'uint'),
+  required('action_id', 'text'),
+  required('generation', 'uint'),
+]);
+const resolvedSelectionRangeSchema = exactRecord([
+  required('anchor', 'uint'),
+  required('active', 'uint'),
+]);
+const viewActionSchema = Object.freeze({
+  kind: 'discriminated-record',
+  unknownFields: 'allow',
+  discriminator: { wireName: 'kind', enum: 'ViewActionKind' },
+  fields: [],
+  variants: [
+    {
+      value: 'ScrollLines',
+      fields: [
+        required('target', enumType('ViewScrollTarget')),
+        required('rows', 'int'),
+      ],
+    },
+    { value: 'ScrollPages', fields: [required('pages', 'int')] },
+    {
+      value: 'ScrollFraction',
+      fields: [
+        required('target', enumType('ViewScrollTarget')),
+        required('numerator', uint32),
+        required('denominator', uint32),
+      ],
+    },
+    {
+      value: 'MoveVisualSelection',
+      fields: [
+        required('direction', enumType('VisualSelectionDirection')),
+        required('extend', 'bool'),
+      ],
+    },
+    { value: 'RevealSelection', fields: [] },
+    { value: 'CenterSelection', fields: [] },
+    {
+      value: 'SplitPane',
+      fields: [required('axis', enumType('SplitAxis'))],
+    },
+    { value: 'ClosePane', fields: [] },
+    {
+      value: 'CyclePane',
+      fields: [required('direction', enumType('PaneCycleDirection'))],
+    },
+    {
+      value: 'FocusPane',
+      fields: [required('direction', enumType('PaneDirection'))],
+    },
+    {
+      value: 'ContinuePointerEdge',
+      fields: [required('direction', enumType('PointerEdgeDirection'))],
+    },
+  ],
+});
+const viewActionRequestSchema = record([
+  required('view_id', 'uint'),
+  required('semantic_revision', 'uint'),
+  required('action', ref('ViewAction')),
+]);
+const commandResultSchema = record([
+  required('error', enumType('CommandError')),
+  required('revision', 'uint'),
+  required('message', 'text'),
+  optional('routingChanged', encodedBool),
+  optional('geometryChanged', encodedBool),
+  optional('view_action', ref('ViewActionRequest')),
+]);
+const pointerFields = () => [
+  required('button', enumType('InputPointerButton')),
+  required('phase', enumType('InputPointerPhase')),
+];
+const basedPointerFields = () => [
+  ...pointerFields(),
+  required('basis_revision', 'uint'),
+];
+const clientInputSchema = Object.freeze({
+  kind: 'discriminated-record',
+  unknownFields: 'reject',
+  discriminator: { wireName: 'kind', enum: 'ClientInputKind' },
+  fields: [],
+  variants: [
+    {
+      value: 'Key',
+      fields: [
+        required('stroke', nullable(ref('KeyStroke'))),
+        required('committed_text', 'text'),
+      ],
+    },
+    {
+      value: 'Tab',
+      fields: [...basedPointerFields(), required('tab_id', 'uint')],
+    },
+    {
+      value: 'Tree',
+      fields: [...basedPointerFields(), required('node_id', 'text')],
+    },
+    {
+      value: 'Picker',
+      fields: [
+        ...pointerFields(),
+        required('picker_mode', enumType('SearchMode')),
+        required('activation_id', 'uint'),
+        required('candidate_id', 'text'),
+      ],
+    },
+    {
+      value: 'PromptControl',
+      fields: [...basedPointerFields(), required('control_id', 'text')],
+    },
+    {
+      value: 'ExternalAction',
+      fields: [
+        ...basedPointerFields(),
+        required('invocation', ref('ExternalActionInvocation')),
+      ],
+    },
+    {
+      value: 'StatusAction',
+      fields: [
+        ...basedPointerFields(),
+        required('invocation', ref('StatusActionInvocation')),
+      ],
+    },
+    {
+      value: 'PublishedUiAction',
+      fields: [
+        ...basedPointerFields(),
+        required('schema_generation', 'uint'),
+        required('node_id', 'text'),
+      ],
+    },
+    {
+      value: 'NoticeAction',
+      fields: [...basedPointerFields(), required('action_id', 'text')],
+    },
+    {
+      value: 'Document',
+      fields: [
+        ...basedPointerFields(),
+        required('position', nullable('uint')),
+        required('additive', 'bool'),
+        required('select_word', 'bool'),
+        required('edge', enumType('DocumentPointerEdge')),
+      ],
+    },
+    {
+      value: 'ScrollLines',
+      fields: [
+        required('basis_revision', 'uint'),
+        required('target', enumType('SemanticScrollTarget')),
+        required('rows', 'int'),
+      ],
+    },
+    {
+      value: 'ScrollFraction',
+      fields: [
+        required('basis_revision', 'uint'),
+        required('target', enumType('SemanticScrollTarget')),
+        required('numerator', uint32),
+        required('denominator', uint32),
+      ],
+    },
+    {
+      value: 'ViewNavigation',
+      fields: [required('basis_revision', 'uint')],
+    },
+    {
+      value: 'ResolvedPaneFocus',
+      fields: [required('basis_revision', 'uint')],
+    },
+    {
+      value: 'ResolvedSelection',
+      fields: [
+        required('basis_revision', 'uint'),
+        required('active_tab', 'uint'),
+        required('document_revision', 'uint'),
+        required('selections', arrayOf(ref('ResolvedSelectionRange'))),
+      ],
+    },
+  ],
+});
+const clientOwnedInputSchema = record([
+  required('kind', enumType('ClientOwnedInputKind')),
+  required('text', 'text'),
+]);
+const pickerActivationSchema = record([
+  required('mode', enumType('SearchMode')),
+  required('activation_id', 'uint'),
+]);
+const clientInputResultSchema = record([
+  required('outcome', enumType('ClientInputOutcome')),
+  required('client_owned', nullable(ref('ClientOwnedInput'))),
+  required('command', nullable(ref('CommandResult'))),
+  required('picker_activation', nullable(ref('PickerActivation'))),
+]);
 
 export const wireTypes = Object.freeze([
+  { symbol: 'KeyStroke', schema: keyStrokeSchema, jsBuilder: true },
+  {
+    symbol: 'ExternalActionInvocation',
+    schema: externalActionInvocationSchema,
+  },
+  {
+    symbol: 'StatusActionInvocation',
+    schema: statusActionInvocationSchema,
+  },
+  {
+    symbol: 'ResolvedSelectionRange',
+    schema: resolvedSelectionRangeSchema,
+  },
+  { symbol: 'ViewAction', schema: viewActionSchema },
+  { symbol: 'ViewActionRequest', schema: viewActionRequestSchema },
+  { symbol: 'CommandResult', schema: commandResultSchema },
+  { symbol: 'ClientInput', schema: clientInputSchema, jsBuilder: true },
+  { symbol: 'ClientOwnedInput', schema: clientOwnedInputSchema },
+  { symbol: 'PickerActivation', schema: pickerActivationSchema },
+  { symbol: 'ClientInputResult', schema: clientInputResultSchema },
   { symbol: 'UiNodeStyle', schema: nodeStyleSchema },
   { symbol: 'UiNode', schema: uiNodeSchema },
   {

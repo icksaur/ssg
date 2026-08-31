@@ -46,6 +46,9 @@ import {
   VIEW_ACTION_KIND as VIEW_ACTION,
   VIEW_SCROLL_TARGET,
   VISUAL_SELECTION_DIRECTION,
+  validateCommandResultWire,
+  validateClientInputResultWire,
+  validateViewActionRequestWire,
 } from '/generated/semantic_wire_manifest.mjs';
 
 const statusEl = document.getElementById('status');
@@ -1322,7 +1325,8 @@ function scrollLineHeight(target, viewport) {
 }
 
 function applyViewAction(request) {
-  if (!request || BigInt(request.semantic_revision) !== state.revision) {
+  if (!validateViewActionRequestWire(request) ||
+      BigInt(request.semantic_revision) !== state.revision) {
     return 'invalid';
   }
   const action = request.action;
@@ -1594,6 +1598,10 @@ function applyProtocolFrame(buffer) {
     frameRenderPlan = browserRenderPlan(payload);
     syncPickerFromAuthority();
   } else if (inbound === 'command-result') {
+    if (!validateCommandResultWire(payload)) {
+      reconnect('malformed command result');
+      return false;
+    }
     if (payload.revision != null && BigInt(payload.revision) > state.revision) {
       reconnect('command result preceded state');
       return false;
@@ -1609,6 +1617,10 @@ function applyProtocolFrame(buffer) {
     }
     commandRequests = settled.queue;
   } else if (inbound === 'input-result') {
+    if (!validateClientInputResultWire(payload)) {
+      reconnect('malformed input result');
+      return false;
+    }
     const completedInput = state.inputQueue[0];
     if (payload.command?.view_action &&
         applyViewAction(payload.command.view_action) === 'invalid') {

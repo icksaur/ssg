@@ -156,6 +156,56 @@ try {
       ...presence,
       nodes: [{ id: 'root', present: 1 }],
     }), false);
+    const stroke = generated.buildKeyStrokeWire(
+      'KeyA', true, false, false, true);
+    const keyInput = generated.buildClientInputKeyWire(stroke, 'a');
+    assert.equal(generated.validateClientInputWire(keyInput), true);
+    assert.equal(generated.validateClientInputWire(
+      { ...keyInput, unexpected: 1n }), false);
+    assert.equal(generated.validateClientInputWire(
+      { ...keyInput, kind: '0' }), false);
+    const documentInput = generated.buildClientInputDocumentWire(
+      0, 1, 7, null, false, false, 0);
+    assert.equal(generated.validateClientInputWire(documentInput), true);
+    const externalInvocation = { file_id: 'file', action: 0n };
+    assert.equal(
+      generated.validateExternalActionInvocationWire(externalInvocation), true);
+    assert.equal(generated.validateExternalActionInvocationWire(
+      { ...externalInvocation, extra: true }), false);
+    const resolved = generated.buildClientInputResolvedSelectionWire(
+      9, 3, 8, [{ anchor: 2, active: 4 }]);
+    assert.equal(generated.validateClientInputWire(resolved), true);
+    assert.equal(generated.validateViewActionWire({
+      kind: 0n, target: 0n, rows: -9223372036854775808n,
+    }), true);
+    assert.equal(generated.validateViewActionWire({
+      kind: 0n, target: 0n, rows: 9223372036854775807n,
+    }), true);
+    assert.equal(generated.validateViewActionWire({
+      kind: 0n, target: 0n, rows: -9223372036854775809n,
+    }), false);
+    assert.equal(generated.validateViewActionWire({
+      kind: 2n, target: 0n,
+      numerator: 4294967295n, denominator: 4294967295n,
+    }), true);
+    assert.equal(generated.validateViewActionWire({
+      kind: 2n, target: 0n, numerator: 0n, denominator: 4294967296n,
+    }), false);
+    const command = {
+      error: 0n, revision: 4n, message: '',
+      routingChanged: 1n, geometryChanged: 0n,
+    };
+    assert.equal(generated.validateCommandResultWire(command), true);
+    assert.equal(generated.validateCommandResultWire(
+      { ...command, routingChanged: 2n }), false);
+    assert.equal(generated.validateCommandResultWire(
+      { ...command, routingChanged: 4294967295n }), false);
+    assert.equal(generated.validateClientInputResultWire({
+      outcome: 0n,
+      client_owned: null,
+      command,
+      picker_activation: null,
+    }), true);
     await fsp.appendFile(destinations.js, '// stale\n');
     await assert.rejects(
       checkOutputs(second, destinations), /output is stale/);
@@ -232,30 +282,38 @@ export default {
       () => validateManifest(multiTypeCycle), /multi-type wire cycle/);
 
     const duplicateField = structuredClone(manifest);
-    duplicateField.wireTypes[1].schema.fields.push(
-      structuredClone(duplicateField.wireTypes[1].schema.fields[0]));
+    const duplicateNode = duplicateField.wireTypes.find(
+      (wireType) => wireType.symbol === 'UiNode');
+    duplicateNode.schema.fields.push(
+      structuredClone(duplicateNode.schema.fields[0]));
     assert.throws(
       () => validateManifest(duplicateField), /duplicate wire type field/);
 
     const implicitPresence = structuredClone(manifest);
-    delete implicitPresence.wireTypes[1].schema.fields[0].required;
+    const implicitNode = implicitPresence.wireTypes.find(
+      (wireType) => wireType.symbol === 'UiNode');
+    delete implicitNode.schema.fields[0].required;
     assert.throws(
       () => validateManifest(implicitPresence), /invalid wire type field/);
 
     const invalidUnknownPolicy = structuredClone(manifest);
-    invalidUnknownPolicy.wireTypes[1].schema.unknownFields = 'reject';
+    invalidUnknownPolicy.wireTypes.find(
+      (wireType) => wireType.symbol === 'UiNode').schema.unknownFields = 'ignore';
     assert.throws(
       () => validateManifest(invalidUnknownPolicy), /invalid unknown-field policy/);
 
     const unknownPrimitiveProperty = structuredClone(manifest);
-    unknownPrimitiveProperty.wireTypes[1].schema.fields[1]
+    unknownPrimitiveProperty.wireTypes.find(
+      (wireType) => wireType.symbol === 'UiNode').schema.fields[1]
       .type.fields[0].type.extra = true;
     assert.throws(
       () => validateManifest(unknownPrimitiveProperty),
       /unknown wire primitive property/);
 
     const broadenedEnumFallback = structuredClone(manifest);
-    broadenedEnumFallback.wireTypes[1].schema.fields[3].type.acceptUnknown = true;
+    broadenedEnumFallback.wireTypes.find(
+      (wireType) => wireType.symbol === 'UiNode')
+      .schema.fields[3].type.acceptUnknown = true;
     assert.throws(
       () => validateManifest(broadenedEnumFallback), /invalid wire type enum/);
 
@@ -264,6 +322,14 @@ export default {
       (wireType) => wireType.symbol === 'UiNode').schema.variants.length = 1;
     assert.throws(
       () => validateManifest(invalidUnion), /invalid wire field union/);
+
+    const optionalExactField = structuredClone(manifest);
+    optionalExactField.wireTypes.find(
+      (wireType) => wireType.symbol === 'ExternalActionInvocation')
+      .schema.fields[0].required = false;
+    assert.throws(
+      () => validateManifest(optionalExactField),
+      /optional field in exact wire record/);
   });
 
   await check('wire enum declarations reject drift and invalid fallbacks', () => {
@@ -428,8 +494,26 @@ export default {
       client,
       /const (?:ROLE|FOCUS_EDITOR|VIEW_ACTION|VIEW_SCROLL_TARGET)\s*=/);
     assert.doesNotMatch(reconcile, /\bkind:\s*[0-9]+n?\b/);
+    assert.doesNotMatch(
+      reconcile, /\bkind:\s*BigInt\(CLIENT_INPUT_KIND\./);
+    assert.match(reconcile, /buildClientInputDocumentWire/);
+    assert.match(client, /validateClientInputResultWire\(payload\)/);
+    assert.match(client, /validateCommandResultWire\(payload\)/);
     assert.match(protocol, /ShellNodeKind::Header/);
     assert.match(protocol, /FocusTarget::Editor/);
+    assert.doesNotMatch(protocol, /\bhasExactly\b|\bviewEnumField\b/);
+    for (const symbol of [
+      'StatusActionInvocation',
+      'ResolvedSelectionRange',
+      'ExternalActionInvocation',
+    ]) {
+      const start = protocol.indexOf(
+        `std::optional<${symbol}>& out)`);
+      const end = protocol.indexOf('\n}', start);
+      assert.ok(start >= 0 && end > start);
+      assert.doesNotMatch(
+        protocol.slice(start, end), /object->size\(\)\s*[!=]=?\s*\d/);
+    }
   });
 } finally {
   await fsp.rm(temporary, { recursive: true, force: true });

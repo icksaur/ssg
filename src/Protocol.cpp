@@ -2368,9 +2368,7 @@ ProtocolValue toValue(StatusActionInvocation const& value) {
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<StatusActionInvocation>& out) {
-    auto const* object = value.asObject();
-    if (!object || object->size() != 3 || !value.field("status_id") ||
-        !value.field("action_id") || !value.field("generation")) {
+    if (!detail::generated::validateStatusActionInvocationWire(value)) {
         return false;
     }
     auto statusId = requireField<StatusId>(value.field("status_id"));
@@ -3747,8 +3745,9 @@ ProtocolValue toValue(ResolvedSelectionRange const& value) {
 
 bool decodePresent(ProtocolValue const& value,
                    std::optional<ResolvedSelectionRange>& out) {
-    const auto* object = value.asObject();
-    if (object == nullptr || object->size() != 2) return false;
+    if (!detail::generated::validateResolvedSelectionRangeWire(value)) {
+        return false;
+    }
     auto anchor = requireField<ByteOffset>(value.field("anchor"));
     auto active = requireField<ByteOffset>(value.field("active"));
     if (!anchor || !active) return false;
@@ -5293,19 +5292,15 @@ ProtocolValue toValue(ExternalActionInvocation const& value) {
 }
 bool decodePresent(ProtocolValue const& value,
                    std::optional<ExternalActionInvocation>& out) {
-    auto const* object = value.asObject();
-    if (!object || object->size() != 2 || !value.field("file_id") ||
-        !value.field("action")) {
+    if (!detail::generated::validateExternalActionInvocationWire(value)) {
         return false;
     }
     auto fileId = requireField<DiffFileId>(value.field("file_id"));
-    auto action = requireField<std::uint8_t>(value.field("action"));
-    if (!fileId || !action ||
-        *action > static_cast<std::uint8_t>(ExternalAction::OpenDiff)) {
-        return false;
-    }
+    const auto action =
+        static_cast<ExternalAction>(*value.field("action")->asUint());
+    if (!fileId) return false;
     out.emplace(ExternalActionInvocation{
-        *fileId, static_cast<ExternalAction>(*action)});
+        *fileId, action});
     return true;
 }
 
@@ -5843,13 +5838,8 @@ DecodeCommandRequestResult ProtocolCodec::decodeCommandRequest(
 namespace {
 
 template <typename Enum>
-std::optional<Enum> viewEnumField(ProtocolValue const* value, Enum maximum) {
-    const auto raw = requireField<std::uint8_t>(value);
-    if (!raw ||
-        *raw > static_cast<std::uint8_t>(maximum)) {
-        return std::nullopt;
-    }
-    return static_cast<Enum>(*raw);
+Enum validatedEnumField(ProtocolValue const* value) {
+    return static_cast<Enum>(*value->asUint());
 }
 
 ProtocolValue viewActionValue(ViewAction const& action) {
@@ -5903,20 +5893,18 @@ ProtocolValue viewActionValue(ViewAction const& action) {
 }
 
 std::optional<ViewAction> viewActionFromValue(ProtocolValue const& value) {
-    if (!value.asObject()) return std::nullopt;
-    const auto kind = viewEnumField(
-        value.field("kind"), ViewActionKind::ContinuePointerEdge);
-    if (!kind) {
+    if (!detail::generated::validateViewActionWire(value)) {
         return std::nullopt;
     }
-    switch (*kind) {
+    const auto kind = validatedEnumField<ViewActionKind>(value.field("kind"));
+    switch (kind) {
     case ViewActionKind::ScrollLines: {
-        const auto target = viewEnumField(
-            value.field("target"), ViewScrollTarget::Tree);
+        const auto target =
+            validatedEnumField<ViewScrollTarget>(value.field("target"));
         const auto rows = requireField<std::int64_t>(value.field("rows"));
-        if (!target || !rows || *rows == 0)
+        if (!rows || *rows == 0)
             return std::nullopt;
-        return ViewScrollLines{*target, *rows};
+        return ViewScrollLines{target, *rows};
     }
     case ViewActionKind::ScrollPages: {
         const auto pages = requireField<std::int64_t>(value.field("pages"));
@@ -5924,59 +5912,51 @@ std::optional<ViewAction> viewActionFromValue(ProtocolValue const& value) {
         return ViewScrollPages{*pages};
     }
     case ViewActionKind::ScrollFraction: {
-        const auto target = viewEnumField(
-            value.field("target"), ViewScrollTarget::Tree);
+        const auto target =
+            validatedEnumField<ViewScrollTarget>(value.field("target"));
         const auto numerator =
             requireField<std::uint32_t>(value.field("numerator"));
         const auto denominator =
             requireField<std::uint32_t>(value.field("denominator"));
-        if (!target || !numerator || !denominator || *denominator == 0 ||
+        if (!numerator || !denominator || *denominator == 0 ||
             *numerator > *denominator) {
             return std::nullopt;
         }
-        return ViewScrollFraction{*target, *numerator, *denominator};
+        return ViewScrollFraction{target, *numerator, *denominator};
     }
     case ViewActionKind::MoveVisualSelection: {
-        const auto direction = viewEnumField(
-            value.field("direction"), VisualSelectionDirection::PageDown);
+        const auto direction =
+            validatedEnumField<VisualSelectionDirection>(
+                value.field("direction"));
         const auto extend = requireField<bool>(value.field("extend"));
-        if (!direction || !extend) {
+        if (!extend) {
             return std::nullopt;
         }
-        return MoveVisualSelection{*direction, *extend};
+        return MoveVisualSelection{direction, *extend};
     }
     case ViewActionKind::RevealSelection:
         return RevealSelection{};
     case ViewActionKind::CenterSelection:
         return CenterSelection{};
     case ViewActionKind::SplitPane: {
-        const auto axis =
-            viewEnumField(value.field("axis"), SplitAxis::Vertical);
-        if (!axis) return std::nullopt;
-        return SplitPane{*axis};
+        return SplitPane{
+            validatedEnumField<SplitAxis>(value.field("axis"))};
     }
     case ViewActionKind::ClosePane:
         return ClosePane{};
     case ViewActionKind::CyclePane: {
-        const auto direction = viewEnumField(
-            value.field("direction"), PaneCycleDirection::Previous);
-        if (!direction)
-            return std::nullopt;
-        return CyclePane{*direction};
+        return CyclePane{
+            validatedEnumField<PaneCycleDirection>(
+                value.field("direction"))};
     }
     case ViewActionKind::FocusPane: {
-        const auto direction =
-            viewEnumField(value.field("direction"), PaneDirection::Down);
-        if (!direction)
-            return std::nullopt;
-        return FocusPane{*direction};
+        return FocusPane{
+            validatedEnumField<PaneDirection>(value.field("direction"))};
     }
     case ViewActionKind::ContinuePointerEdge: {
-        const auto direction = viewEnumField(
-            value.field("direction"), PointerEdgeDirection::After);
-        if (!direction)
-            return std::nullopt;
-        return ContinuePointerEdge{*direction};
+        return ContinuePointerEdge{
+            validatedEnumField<PointerEdgeDirection>(
+                value.field("direction"))};
     }
     }
     return std::nullopt;
@@ -5991,7 +5971,9 @@ ProtocolValue viewActionRequestValue(ViewActionRequest const& request) {
 
 std::optional<ViewActionRequest> viewActionRequestFromValue(
     ProtocolValue const& value) {
-    if (!value.asObject()) return std::nullopt;
+    if (!detail::generated::validateViewActionRequestWire(value)) {
+        return std::nullopt;
+    }
     const auto viewId = requireField<ViewId>(value.field("view_id"));
     const auto revision =
         requireField<Revision>(value.field("semantic_revision"));
@@ -6027,35 +6009,25 @@ ProtocolValue commandResultValue(CommandResult const& result) {
 
 std::optional<CommandResult> commandResultFromValue(
     ProtocolValue const& payload) {
-    if (!payload.asObject()) {
+    if (!detail::generated::validateCommandResultWire(payload)) {
         return std::nullopt;
     }
-    auto error = requireField<std::uint8_t>(payload.field("error"));
+    const auto error =
+        validatedEnumField<CommandError>(payload.field("error"));
     auto revision = requireField<Revision>(payload.field("revision"));
     auto message = requireField<std::string>(payload.field("message"));
-    if (!error || *error > static_cast<std::uint8_t>(
-                              CommandError::RevisionExhausted) ||
-        !revision || !message) {
+    if (!revision || !message) {
         return std::nullopt;
     }
     // Additive effects fields: absent on an old peer, so default to false; but a
     // PRESENT field must be a valid boolean 0/1 -- a malformed or out-of-range
     // value is a corrupt message, not a silent false.
-    CommandResult result{static_cast<CommandError>(*error), *revision,
-                         std::move(*message)};
+    CommandResult result{error, *revision, std::move(*message)};
     if (auto const* routingField = payload.field("routingChanged")) {
-        auto routing = requireField<std::uint8_t>(routingField);
-        if (!routing || *routing > 1) {
-            return std::nullopt;
-        }
-        result.effects.routingChanged = *routing != 0;
+        result.effects.routingChanged = *routingField->asUint() != 0;
     }
     if (auto const* geometryField = payload.field("geometryChanged")) {
-        auto geometry = requireField<std::uint8_t>(geometryField);
-        if (!geometry || *geometry > 1) {
-            return std::nullopt;
-        }
-        result.effects.geometryChanged = *geometry != 0;
+        result.effects.geometryChanged = *geometryField->asUint() != 0;
     }
     if (auto const* actionField = payload.field("view_action")) {
         result.viewAction = viewActionRequestFromValue(*actionField);
@@ -6235,23 +6207,13 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         return {decoded.error, std::nullopt, decoded.message};
     }
     auto const& payload = *decoded.payload;
-    auto kind = requireField<ClientInputKind>(payload.field("kind"));
-    if (!payload.asObject() || !kind) {
+    if (!detail::generated::validateClientInputWire(payload)) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "client input payload is malformed"};
     }
-    const auto hasExactly = [&](std::initializer_list<std::string_view> names) {
-        const auto* fields = payload.asObject();
-        if (fields == nullptr || fields->size() != names.size()) return false;
-        return std::all_of(
-            names.begin(), names.end(),
-            [&](std::string_view name) { return payload.field(name) != nullptr; });
-    };
-    if (*kind == ClientInputKind::Key) {
-        if (!hasExactly({"kind", "stroke", "committed_text"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client key input fields are malformed"};
-        }
+    const auto kind =
+        validatedEnumField<ClientInputKind>(payload.field("kind"));
+    if (kind == ClientInputKind::Key) {
         auto const* strokeField = payload.field("stroke");
         auto text = requireField<std::string>(payload.field("committed_text"));
         if (strokeField == nullptr || !text) {
@@ -6270,39 +6232,29 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         return {ProtocolError::None,
                 ClientInput{ClientKeyInput{stroke, std::move(*text)}}, {}};
     }
-    if (*kind == ClientInputKind::ScrollLines) {
-        if (!hasExactly(
-                {"kind", "basis_revision", "target", "rows"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client line-scroll input fields are malformed"};
-        }
+    if (kind == ClientInputKind::ScrollLines) {
         auto basis =
             requireField<Revision>(payload.field("basis_revision"));
-        auto target =
-            requireField<SemanticScrollTarget>(payload.field("target"));
+        const auto target = validatedEnumField<SemanticScrollTarget>(
+            payload.field("target"));
         auto rows = requireField<std::int64_t>(payload.field("rows"));
-        if (!basis || !target || !rows || *rows == 0) {
+        if (!basis || !rows || *rows == 0) {
             return {ProtocolError::MalformedMessage, std::nullopt,
                     "client line-scroll input is malformed"};
         }
         return {ProtocolError::None,
-                ClientInput{ScrollLinesInput{{*basis}, *target, *rows}}, {}};
+                ClientInput{ScrollLinesInput{{*basis}, target, *rows}}, {}};
     }
-    if (*kind == ClientInputKind::ScrollFraction) {
-        if (!hasExactly({"kind", "basis_revision", "target", "numerator",
-                         "denominator"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client fraction-scroll input fields are malformed"};
-        }
+    if (kind == ClientInputKind::ScrollFraction) {
         auto basis =
             requireField<Revision>(payload.field("basis_revision"));
-        auto target =
-            requireField<SemanticScrollTarget>(payload.field("target"));
+        const auto target = validatedEnumField<SemanticScrollTarget>(
+            payload.field("target"));
         auto numerator =
             requireField<std::uint32_t>(payload.field("numerator"));
         auto denominator =
             requireField<std::uint32_t>(payload.field("denominator"));
-        if (!basis || !target || !numerator || !denominator ||
+        if (!basis || !numerator || !denominator ||
             *denominator == 0 || *numerator > *denominator) {
             return {ProtocolError::MalformedMessage, std::nullopt,
                     "client fraction-scroll input is malformed"};
@@ -6310,14 +6262,10 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         return {
             ProtocolError::None,
             ClientInput{ScrollFractionInput{
-                {*basis}, *target, *numerator, *denominator}},
+                {*basis}, target, *numerator, *denominator}},
             {}};
     }
-    if (*kind == ClientInputKind::ViewNavigation) {
-        if (!hasExactly({"kind", "basis_revision"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client view-navigation input fields are malformed"};
-        }
+    if (kind == ClientInputKind::ViewNavigation) {
         auto basis =
             requireField<Revision>(payload.field("basis_revision"));
         if (!basis) {
@@ -6327,11 +6275,7 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         return {ProtocolError::None,
                 ClientInput{ViewNavigationInput{{*basis}}}, {}};
     }
-    if (*kind == ClientInputKind::ResolvedPaneFocus) {
-        if (!hasExactly({"kind", "basis_revision"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client resolved-pane-focus input fields are malformed"};
-        }
+    if (kind == ClientInputKind::ResolvedPaneFocus) {
         auto basis =
             requireField<Revision>(payload.field("basis_revision"));
         if (!basis) {
@@ -6341,12 +6285,7 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         return {ProtocolError::None,
                 ClientInput{ResolvedPaneFocusInput{{*basis}}}, {}};
     }
-    if (*kind == ClientInputKind::ResolvedSelection) {
-        if (!hasExactly({"kind", "basis_revision", "active_tab",
-                        "document_revision", "selections"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                   "client resolved-selection input fields are malformed"};
-        }
+    if (kind == ClientInputKind::ResolvedSelection) {
         auto basis =
             requireField<Revision>(payload.field("basis_revision"));
         auto activeTab =
@@ -6368,25 +6307,18 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
                 std::move(*selections)}},
             {}};
     }
-    auto button =
-        requireField<InputPointerButton>(payload.field("button"));
-    auto phase = requireField<InputPointerPhase>(payload.field("phase"));
-    if (!button || !phase) {
-        return {ProtocolError::MalformedMessage, std::nullopt,
-                "client pointer input gesture is malformed"};
-    }
-    if (*kind == ClientInputKind::Picker) {
-        if (!hasExactly({"kind", "button", "phase", "picker_mode",
-                         "activation_id", "candidate_id"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client picker input fields are malformed"};
-        }
-        auto mode = requireField<SearchMode>(payload.field("picker_mode"));
+    const auto button = validatedEnumField<InputPointerButton>(
+        payload.field("button"));
+    const auto phase =
+        validatedEnumField<InputPointerPhase>(payload.field("phase"));
+    if (kind == ClientInputKind::Picker) {
+        const auto mode =
+            validatedEnumField<SearchMode>(payload.field("picker_mode"));
         auto activationId =
             requireField<std::uint64_t>(payload.field("activation_id"));
         auto candidate =
             requireField<std::string>(payload.field("candidate_id"));
-        if (!mode || !activationId || *activationId == 0 || !candidate ||
+        if (!activationId || *activationId == 0 || !candidate ||
             candidate->empty()) {
             return {ProtocolError::MalformedMessage, std::nullopt,
                    "client picker input target is malformed"};
@@ -6394,8 +6326,8 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         return {
             ProtocolError::None,
             ClientInput{PickerPointerInput{
-                PickerActivation{*mode, PickerActivationId{*activationId}},
-                std::move(*candidate), *button, *phase}},
+                PickerActivation{mode, PickerActivationId{*activationId}},
+                std::move(*candidate), button, phase}},
             {}};
     }
     auto basis =
@@ -6405,79 +6337,49 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
                 "client pointer input basis is malformed"};
     }
     const SemanticInputBasis semanticBasis{*basis};
-    if (*kind == ClientInputKind::Tab) {
-        if (!hasExactly(
-                {"kind", "button", "phase", "basis_revision", "tab_id"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client tab input fields are malformed"};
-        }
+    if (kind == ClientInputKind::Tab) {
         auto id = requireField<TabId>(payload.field("tab_id"));
         if (id) {
             return {ProtocolError::None,
                    ClientInput{TabPointerInput{
-                       semanticBasis, *id, *button, *phase}},
+                       semanticBasis, *id, button, phase}},
                    {}};
         }
-    } else if (*kind == ClientInputKind::Tree) {
-        if (!hasExactly(
-                {"kind", "button", "phase", "basis_revision", "node_id"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client tree input fields are malformed"};
-        }
+    } else if (kind == ClientInputKind::Tree) {
         auto id = requireField<TreeNodeId>(payload.field("node_id"));
         if (id) {
             return {ProtocolError::None,
                    ClientInput{TreePointerInput{
-                       semanticBasis, std::move(*id), *button, *phase}},
+                       semanticBasis, std::move(*id), button, phase}},
                    {}};
         }
-    } else if (*kind == ClientInputKind::PromptControl) {
-        if (!hasExactly({"kind", "button", "phase", "basis_revision",
-                         "control_id"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client prompt-control input fields are malformed"};
-        }
+    } else if (kind == ClientInputKind::PromptControl) {
         auto id = requireField<std::string>(payload.field("control_id"));
         if (id && !id->empty()) {
             return {ProtocolError::None,
                    ClientInput{PromptControlPointerInput{
-                       semanticBasis, std::move(*id), *button, *phase}},
+                       semanticBasis, std::move(*id), button, phase}},
                    {}};
         }
-    } else if (*kind == ClientInputKind::ExternalAction) {
-        if (!hasExactly({"kind", "button", "phase", "basis_revision",
-                         "invocation"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client external-action input fields are malformed"};
-        }
+    } else if (kind == ClientInputKind::ExternalAction) {
         auto invocation = requireField<ExternalActionInvocation>(
             payload.field("invocation"));
         if (invocation) {
             return {ProtocolError::None,
                    ClientInput{ExternalActionPointerInput{
-                       semanticBasis, std::move(*invocation), *button, *phase}},
+                       semanticBasis, std::move(*invocation), button, phase}},
                    {}};
         }
-    } else if (*kind == ClientInputKind::StatusAction) {
-        if (!hasExactly({"kind", "button", "phase", "basis_revision",
-                         "invocation"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client status-action input fields are malformed"};
-        }
+    } else if (kind == ClientInputKind::StatusAction) {
         auto invocation = requireField<StatusActionInvocation>(
             payload.field("invocation"));
         if (invocation) {
             return {ProtocolError::None,
                    ClientInput{StatusActionPointerInput{
-                       semanticBasis, std::move(*invocation), *button, *phase}},
+                       semanticBasis, std::move(*invocation), button, phase}},
                    {}};
         }
-    } else if (*kind == ClientInputKind::PublishedUiAction) {
-        if (!hasExactly({"kind", "button", "phase", "basis_revision",
-                         "schema_generation", "node_id"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client UI-action input fields are malformed"};
-        }
+    } else if (kind == ClientInputKind::PublishedUiAction) {
         auto generation =
             requireField<std::uint64_t>(payload.field("schema_generation"));
         auto id = requireField<std::string>(payload.field("node_id"));
@@ -6485,28 +6387,18 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
             return {ProtocolError::None,
                    ClientInput{PublishedUiActionPointerInput{
                        semanticBasis, Generation{*generation},
-                       UiNodeId{std::move(*id)}, *button, *phase}},
+                       UiNodeId{std::move(*id)}, button, phase}},
                    {}};
         }
-    } else if (*kind == ClientInputKind::NoticeAction) {
-        if (!hasExactly({"kind", "button", "phase", "basis_revision",
-                         "action_id"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client notice-action input fields are malformed"};
-        }
+    } else if (kind == ClientInputKind::NoticeAction) {
         auto id = requireField<std::string>(payload.field("action_id"));
         if (id && !id->empty()) {
             return {ProtocolError::None,
                    ClientInput{NoticeActionPointerInput{
-                       semanticBasis, std::move(*id), *button, *phase}},
+                       semanticBasis, std::move(*id), button, phase}},
                    {}};
         }
-    } else if (*kind == ClientInputKind::Document) {
-        if (!hasExactly({"kind", "button", "phase", "basis_revision",
-                         "position", "additive", "select_word", "edge"})) {
-            return {ProtocolError::MalformedMessage, std::nullopt,
-                    "client document input fields are malformed"};
-        }
+    } else if (kind == ClientInputKind::Document) {
         std::optional<ByteOffset> position;
         auto const* positionField = payload.field("position");
         if (positionField == nullptr) {
@@ -6523,17 +6415,17 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         }
         auto additive = requireField<bool>(payload.field("additive"));
         auto selectWord = requireField<bool>(payload.field("select_word"));
-        auto edge =
-            requireField<DocumentPointerEdge>(payload.field("edge"));
-        const auto hasEdge = edge && *edge != DocumentPointerEdge::None;
-        if (!additive || !selectWord || !edge ||
-            (*phase == InputPointerPhase::Press && (!position || hasEdge)) ||
-            (*phase == InputPointerPhase::Move &&
+        const auto edge = validatedEnumField<DocumentPointerEdge>(
+            payload.field("edge"));
+        const auto hasEdge = edge != DocumentPointerEdge::None;
+        if (!additive || !selectWord ||
+            (phase == InputPointerPhase::Press && (!position || hasEdge)) ||
+            (phase == InputPointerPhase::Move &&
              (position.has_value() == hasEdge)) ||
-            ((*phase == InputPointerPhase::Release ||
-              *phase == InputPointerPhase::Cancel) &&
+            ((phase == InputPointerPhase::Release ||
+              phase == InputPointerPhase::Cancel) &&
              (position || hasEdge)) ||
-            (*phase != InputPointerPhase::Press &&
+            (phase != InputPointerPhase::Press &&
              (*selectWord || *additive))) {
             return {ProtocolError::MalformedMessage, std::nullopt,
                     "client document input gesture is malformed"};
@@ -6541,7 +6433,7 @@ DecodeClientInputResult ProtocolCodec::decodeClientInput(
         return {ProtocolError::None,
                 ClientInput{DocumentPointerInput{
                     semanticBasis, position, *additive, *selectWord,
-                    *button, *phase, *edge}},
+                    button, phase, edge}},
                 {}};
     }
     return {ProtocolError::MalformedMessage, std::nullopt,
@@ -6592,53 +6484,40 @@ DecodeClientInputResultResult ProtocolCodec::decodeClientInputResult(
         return {decoded.error, std::nullopt, decoded.message};
     }
     auto const& payload = *decoded.payload;
-    auto outcome = requireField<std::uint8_t>(payload.field("outcome"));
-    if (!payload.asObject() || !outcome ||
-        *outcome > static_cast<std::uint8_t>(ClientInputOutcome::ViewOwned)) {
+    if (!detail::generated::validateClientInputResultWire(payload)) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "client input result payload is malformed"};
     }
-    ClientInputResult result{static_cast<ClientInputOutcome>(*outcome),
+    const auto outcome =
+        validatedEnumField<ClientInputOutcome>(payload.field("outcome"));
+    ClientInputResult result{outcome,
                              std::nullopt, std::nullopt, std::nullopt};
     auto const* ownedField = payload.field("client_owned");
-    if (ownedField == nullptr) {
-        return {ProtocolError::MalformedMessage, std::nullopt,
-                "client input result is missing client_owned"};
-    }
     if (ownedField->kind() != ProtocolValue::Kind::NullValue) {
-        auto kind = requireField<std::uint8_t>(ownedField->field("kind"));
+        const auto kind = validatedEnumField<ClientOwnedInputKind>(
+            ownedField->field("kind"));
         auto text = requireField<std::string>(ownedField->field("text"));
-        if (!ownedField->asObject() || !kind || !text ||
-            *kind > static_cast<std::uint8_t>(
-                        ClientOwnedInputKind::Submit)) {
+        if (!text) {
             return {ProtocolError::MalformedMessage, std::nullopt,
                     "client input result client_owned is malformed"};
         }
-        result.clientOwned = ClientOwnedInput{
-            static_cast<ClientOwnedInputKind>(*kind), std::move(*text)};
+        result.clientOwned = ClientOwnedInput{kind, std::move(*text)};
     }
     auto const* activationField = payload.field("picker_activation");
-    if (activationField == nullptr) {
-        return {ProtocolError::MalformedMessage, std::nullopt,
-                "client input result is missing picker_activation"};
-    }
     if (activationField->kind() != ProtocolValue::Kind::NullValue) {
-        auto mode = requireField<SearchMode>(activationField->field("mode"));
+        const auto mode =
+            validatedEnumField<SearchMode>(activationField->field("mode"));
         auto id =
             requireField<std::uint64_t>(activationField->field("activation_id"));
-        if (!activationField->asObject() || !mode || !id || *id == 0 ||
-            (*mode != SearchMode::Command && *mode != SearchMode::File)) {
+        if (!id || *id == 0 ||
+            (mode != SearchMode::Command && mode != SearchMode::File)) {
             return {ProtocolError::MalformedMessage, std::nullopt,
                     "client input result picker activation is malformed"};
         }
         result.pickerActivation =
-            PickerActivation{*mode, PickerActivationId{*id}};
+            PickerActivation{mode, PickerActivationId{*id}};
     }
     auto const* commandField = payload.field("command");
-    if (commandField == nullptr) {
-        return {ProtocolError::MalformedMessage, std::nullopt,
-                "client input result is missing command"};
-    }
     if (commandField->kind() != ProtocolValue::Kind::NullValue) {
         result.command = commandResultFromValue(*commandField);
         if (!result.command) {
