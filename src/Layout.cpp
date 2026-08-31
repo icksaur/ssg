@@ -115,6 +115,92 @@ SolvedExternalModificationSurface solveExternalModificationSurface(
     return solved;
 }
 
+std::string gridTabTitle(const TabState& tab, const TabGlyphs& glyphs) {
+    if (tab.kind == TabKind::LiveDiff) {
+        return glyphs.liveDiffPrefix + tab.label;
+    }
+    if (tab.mode == DocumentMode::ReadOnly) {
+        return tab.label + glyphs.readOnlySuffix;
+    }
+    return tab.label;
+}
+
+std::string gridTabDisplay(std::string_view title, bool dirty,
+                           const TabGlyphs& glyphs) {
+    std::string display = glyphs.leftEdge + std::string{title};
+    if (dirty) display += glyphs.dirtySuffix;
+    display += glyphs.rightEdge;
+    return display;
+}
+
+SolvedTabBar solveTabBar(const TabViewState& tabs,
+                         const TabGlyphs& glyphs, Rect rect) {
+    SolvedTabBar solved{rect, {}, {}};
+    if (rect.width <= 0 || rect.height <= 0) return solved;
+    const auto display = [&](const TabState& tab) {
+        return gridTabDisplay(gridTabTitle(tab, glyphs), tab.dirty,
+                              glyphs);
+    };
+    const auto width = [&](const TabState& tab) {
+        return std::max(
+            1, static_cast<int>(
+                   GraphemeLayout{}.computeRun(display(tab)).totalCells));
+    };
+    const int separatorWidth = static_cast<int>(
+        GraphemeLayout{}.computeRun(glyphs.separator).totalCells);
+    std::size_t active = 0;
+    if (tabs.active) {
+        const auto found =
+            std::find_if(tabs.tabs.begin(), tabs.tabs.end(),
+                         [&](const TabState& tab) {
+                             return tab.id == *tabs.active;
+                         });
+        if (found != tabs.tabs.end()) {
+            active = static_cast<std::size_t>(
+                std::distance(tabs.tabs.begin(), found));
+        }
+    }
+    std::size_t first = 0;
+    int used = 0;
+    for (std::size_t index = 0;
+         index < tabs.tabs.size() && index <= active; ++index) {
+        used += width(tabs.tabs[index]);
+    }
+    used += static_cast<int>(active) * separatorWidth;
+    while (first < active && used > rect.width) {
+        used -= width(tabs.tabs[first]) + separatorWidth;
+        ++first;
+    }
+
+    int x = rect.x;
+    bool placedAny = false;
+    for (std::size_t index = first; index < tabs.tabs.size(); ++index) {
+        const int separatorReserve =
+            placedAny && separatorWidth > 0
+                ? std::min(rect.right() - x, separatorWidth)
+                : 0;
+        const int chipX = x + separatorReserve;
+        std::string text = display(tabs.tabs[index]);
+        const int chipWidth = std::min(
+            rect.right() - chipX,
+            std::max(1, static_cast<int>(
+                            GraphemeLayout{}.computeRun(text).totalCells)));
+        if (chipWidth <= 0) break;
+        if (separatorReserve > 0) {
+            solved.separators.push_back(
+                {glyphs.separator,
+                 {x, rect.y, separatorReserve, rect.height}});
+        }
+        solved.tabs.push_back(
+            {index, tabs.tabs[index].id, std::move(text),
+             {chipX, rect.y, chipWidth, rect.height},
+             tabs.active && tabs.tabs[index].id == *tabs.active});
+        x = chipX + chipWidth;
+        placedAny = true;
+    }
+    return solved;
+}
+
 namespace {
 
 void solveNode(const LayoutNode& node, Rect frame,

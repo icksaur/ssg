@@ -176,6 +176,22 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
+    if (const auto* node = snapshot.layout().find(
+            UiNodeId{std::string{kTabBarNodeId}});
+        node && contains(node->rect, column, row)) {
+        const auto solved = solveTabBar(
+            snapshot.sections().tabs, snapshot.presentation().style.tab,
+            node->rect);
+        for (const auto& tab : solved.tabs) {
+            if (!contains(tab.rect, column, row)) continue;
+            RegionHit hit;
+            hit.region = HitRegion::Tab;
+            hit.tabIndex = static_cast<std::uint32_t>(tab.index);
+            return hit;
+        }
+        return {};
+    }
+
     for (auto const& node : shell.accessibilityNodes) {
         if (!contains(node.rect, column, row)) continue;
         if (node.kind == ShellNodeKind::HeaderField) {
@@ -222,18 +238,6 @@ RegionHit HitTester::at(int column, int row) const {
     if (shell.panel && contains(*shell.panel, column, row)) {
         return panelHit(snapshot, *shell.panel, shell.panelScrollbar, column,
                          row);
-    }
-
-    // The tab bar sits above the editor pane (disjoint from the panel and the
-    // pane content), so a tab click resolves here even while the palette
-    // overlays the pane below.
-    for (auto const& tab : shell.tabHits) {
-        if (contains(tab.rect, column, row)) {
-            RegionHit hit;
-            hit.region = HitRegion::Tab;
-            hit.tabIndex = tab.index;
-            return hit;
-        }
     }
 
     // The palette overlays the editor pane while it is open, so it takes

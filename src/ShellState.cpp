@@ -444,10 +444,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             // parted by the separator glyph, emitted as its own non-interactive
             // node.
             auto const chipDisplay = [&](TabLabel const& tab) {
-                std::string display = request.style.tab.leftEdge + tab.title;
-                if (tab.dirty) display += request.style.tab.dirtySuffix;
-                display += request.style.tab.rightEdge;
-                return display;
+                return gridTabDisplay(tab.title, tab.dirty,
+                                      request.style.tab);
             };
             auto const tabWidth = [&](TabLabel const& tab) {
                 return std::max(1, displayCells(chipDisplay(tab)));

@@ -730,7 +730,14 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
         }
         return std::size_t{0};
     }();
-    auto const& hits = frame->presentation().shell.tabHits;
+    const auto* tabBar = frame->layout().find(
+        ssg::UiNodeId{std::string{ssg::kTabBarNodeId}});
+    ASSERT_TRUE(tabBar != nullptr);
+    if (!tabBar) return;
+    const auto solved = ssg::solveTabBar(
+        frame->sections().tabs, frame->presentation().style.tab,
+        tabBar->rect);
+    auto const& hits = solved.tabs;
     ASSERT_FALSE(hits.empty());
     bool activeIsHittable = false;
     for (auto const& hit : hits) {
@@ -745,8 +752,7 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
         if (hit.index != activeIndex) continue;
         auto const& label = tabs[activeIndex].label;
         ASSERT_TRUE(hit.rect.width >= static_cast<int>(label.size()));
-        ASSERT_TRUE(hit.rect.right() <=
-                    frame->presentation().shell.tabBar->right());
+        ASSERT_TRUE(hit.rect.right() <= tabBar->rect.right());
     }
 
     // Not every tab fits -- otherwise this proves nothing about scrolling.
@@ -769,8 +775,20 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     auto scrolledBack = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(scrolledBack.has_value());
     if (!scrolledBack) return;
+    auto scrolledBackFrame =
+        ssg::test::gridFrameFromLegacy(std::move(*scrolledBack));
+    ASSERT_TRUE(scrolledBackFrame.has_value());
+    if (!scrolledBackFrame) return;
+    const auto* scrolledBackBar = scrolledBackFrame->layout().find(
+        ssg::UiNodeId{std::string{ssg::kTabBarNodeId}});
+    ASSERT_TRUE(scrolledBackBar != nullptr);
+    if (!scrolledBackBar) return;
+    const auto scrolledBackTabs = ssg::solveTabBar(
+        scrolledBackFrame->sections().tabs,
+        scrolledBackFrame->presentation().style.tab,
+        scrolledBackBar->rect);
     bool firstIsHittable = false;
-    for (auto const& hit : scrolledBack->presentation().shell.tabHits) {
+    for (auto const& hit : scrolledBackTabs.tabs) {
         if (hit.index == 0) firstIsHittable = true;
     }
     ASSERT_TRUE(firstIsHittable);
@@ -782,15 +800,26 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     auto narrow = runtime->present(ssg::ClientId{1}, {20, 24});
     ASSERT_TRUE(narrow.has_value());
     if (!narrow) return;
-    auto const& narrowHits = narrow->presentation().shell.tabHits;
+    auto narrowFrame =
+        ssg::test::gridFrameFromLegacy(std::move(*narrow));
+    ASSERT_TRUE(narrowFrame.has_value());
+    if (!narrowFrame) return;
+    const auto* narrowBar = narrowFrame->layout().find(
+        ssg::UiNodeId{std::string{ssg::kTabBarNodeId}});
+    ASSERT_TRUE(narrowBar != nullptr);
+    if (!narrowBar) return;
+    const auto narrowSolved = ssg::solveTabBar(
+        narrowFrame->sections().tabs, narrowFrame->presentation().style.tab,
+        narrowBar->rect);
+    auto const& narrowHits = narrowSolved.tabs;
     ASSERT_FALSE(narrowHits.empty());
     // And it is the ACTIVE tab that is shown, not whichever happens to follow
     // it: scrolling past the active tab would leave the user looking at a bar
     // that cannot reach the document they are editing.
     auto const narrowActive = [&] {
-        auto const& list = narrow->semantic().sections().tabs.tabs;
+        auto const& list = narrowFrame->sections().tabs.tabs;
         for (std::size_t i = 0; i < list.size(); ++i) {
-            if (narrow->semantic().sections().tabs.active == list[i].id) return i;
+            if (narrowFrame->sections().tabs.active == list[i].id) return i;
         }
         return std::size_t{0};
     }();
@@ -821,22 +850,74 @@ TEST(tabBarCellMapsToItsTabIndex) {
         ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation().shell;
-    ASSERT_TRUE(shell.tabHits.size() >= 2);
-    if (shell.tabHits.size() < 2) return;
+    const auto* tabBar = frame->layout().find(
+        ssg::UiNodeId{std::string{ssg::kTabBarNodeId}});
+    ASSERT_TRUE(tabBar != nullptr);
+    if (!tabBar) return;
+    const auto solved = ssg::solveTabBar(
+        frame->sections().tabs, frame->presentation().style.tab,
+        tabBar->rect);
+    ASSERT_TRUE(solved.tabs.size() >= 2);
+    if (solved.tabs.size() < 2) return;
 
     // A cell inside each published tab rect resolves to that tab's index.
-    for (auto const& tab : shell.tabHits) {
+    for (auto const& tab : solved.tabs) {
         auto hit = ssg::HitTester{*frame}.at(tab.rect.x, tab.rect.y);
         ASSERT_EQ(hit.region, ssg::HitRegion::Tab);
         ASSERT_EQ(hit.tabIndex, tab.index);
     }
 
     // The tab-bar row past the last tab is padding, not a tab.
-    auto const& last = shell.tabHits.back();
-    ASSERT_TRUE(last.rect.right() < shell.viewport.columns);
+    auto const& last = solved.tabs.back();
+    ASSERT_TRUE(last.rect.right() < tabBar->rect.right());
     auto pad = ssg::HitTester{*frame}.at(last.rect.right(), last.rect.y);
     ASSERT_TRUE(pad.region != ssg::HitRegion::Tab);
+}
+
+TEST(tabHitsUseSemanticTabsAndSolvedGeometry) {
+    auto frame =
+        ssg::test::SessionSnapshotBuilder{}
+            .viewport(50, 10)
+            .shellRequest([](ssg::ShellLayoutRequest& request) {
+                request.tabs = {{"alpha.txt", "Alpha", true, false},
+                                {"beta.txt", "Beta", false, false}};
+            })
+            .shellProjection([](ssg::ShellViewState& shell) {
+                shell.tabBar = ssg::Rect{0, 0, 1, 1};
+                for (auto& hit : shell.tabHits) {
+                    hit.index = 99;
+                }
+                for (auto& node : shell.accessibilityNodes) {
+                    if (node.kind == ssg::ShellNodeKind::Tab ||
+                        node.kind == ssg::ShellNodeKind::TabSeparator) {
+                        node.rect = {0, 0, 1, 1};
+                    }
+                }
+            })
+            .build();
+    ASSERT_EQ(frame.sections().tabs.tabs.size(), std::size_t{2});
+    ASSERT_EQ(frame.sections().tabs.tabs[0].label,
+              std::string{"alpha.txt"});
+    ASSERT_EQ(frame.sections().tabs.active,
+              std::optional<ssg::TabId>{ssg::TabId{1}});
+    const auto* node = frame.layout().find(
+        ssg::UiNodeId{std::string{ssg::kTabBarNodeId}});
+    ASSERT_TRUE(node != nullptr);
+    if (!node) return;
+    const auto solved = ssg::solveTabBar(
+        frame.sections().tabs, frame.presentation().style.tab, node->rect);
+    ASSERT_EQ(solved.tabs.size(), std::size_t{2});
+    if (solved.tabs.size() < 2) return;
+    for (const auto& tab : solved.tabs) {
+        const auto hit =
+            ssg::HitTester{frame}.at(tab.rect.x, tab.rect.y);
+        ASSERT_EQ(hit.region, ssg::HitRegion::Tab);
+        ASSERT_EQ(hit.tabIndex,
+                  static_cast<std::uint32_t>(tab.index));
+    }
+    const auto padding = ssg::HitTester{frame}.at(
+        solved.tabs.back().rect.right(), node->rect.y);
+    ASSERT_EQ(padding.region, ssg::HitRegion::None);
 }
 
 TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
@@ -1038,6 +1119,7 @@ int main() {
     RUN(aGutterHitFollowsTheRowWhereverTheColumnWent);
     RUN(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen);
     RUN(tabBarCellMapsToItsTabIndex);
+    RUN(tabHitsUseSemanticTabsAndSolvedGeometry);
     RUN(footerActionHitCarriesExactStatusActionInvocation);
     RUN(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert);
     RUN(externalActionHitCarriesPublishedFileAndCommandIdentity);

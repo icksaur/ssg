@@ -14,6 +14,8 @@
 
 #include <ssg/Geometry.h>
 #include <ssg/ExternalModificationFlow.h>
+#include <ssg/Style.h>
+#include <ssg/TabManager.h>
 #include <ssg/UiNodeState.h>
 #include <ssg/UiPresence.h>
 #include <ssg/UiProfile.h>
@@ -118,6 +120,41 @@ struct SolvedExternalModificationSurface {
 [[nodiscard]] SolvedExternalModificationSurface
 solveExternalModificationSurface(
     const ExternalModificationViewState& external, Rect rect);
+
+struct SolvedTab {
+    std::size_t index = 0;
+    TabId id;
+    std::string text;
+    Rect rect;
+    bool active = false;
+
+    friend bool operator==(const SolvedTab&, const SolvedTab&) = default;
+};
+
+struct SolvedTabSeparator {
+    std::string text;
+    Rect rect;
+
+    friend bool operator==(const SolvedTabSeparator&,
+                           const SolvedTabSeparator&) = default;
+};
+
+struct SolvedTabBar {
+    Rect rect;
+    std::vector<SolvedTab> tabs;
+    std::vector<SolvedTabSeparator> separators;
+
+    friend bool operator==(const SolvedTabBar&, const SolvedTabBar&) = default;
+};
+
+[[nodiscard]] std::string gridTabTitle(const TabState& tab,
+                                       const TabGlyphs& glyphs);
+[[nodiscard]] std::string gridTabDisplay(std::string_view title, bool dirty,
+                                         const TabGlyphs& glyphs);
+// CONTRACT: This is the single authoritative visible tab window and chip
+// placement for grid rendering and hit testing.
+[[nodiscard]] SolvedTabBar solveTabBar(const TabViewState& tabs,
+                                       const TabGlyphs& glyphs, Rect rect);
 
 // Returns nullopt when nonnegative bounds cannot contain an inset, gaps, or
 // exact children. Invalid identities and unsupported Auto sizes are misuse and

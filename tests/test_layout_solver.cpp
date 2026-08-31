@@ -51,6 +51,7 @@ TEST(externalModificationSurfaceIsBoundedAndKeepsSelectionVisible) {
             externalActionAffordance(ExternalAction::Reload));
         external.files.push_back(std::move(file));
     }
+
     external.selected = DiffFileId{"file-4"};
 
     ASSERT_EQ(measureExternalModificationSurface(external),
@@ -80,6 +81,50 @@ TEST(externalModificationSurfaceIsBoundedAndKeepsSelectionVisible) {
         [](const SolvedExternalModificationRow& row) {
             return row.selected;
         }));
+}
+
+TEST(tabBarWindowsAroundTheActiveTabAndClipsAtTheBandEdge) {
+    TabViewState tabs;
+    for (std::uint64_t index = 1; index <= 4; ++index) {
+        TabState tab;
+        tab.id = TabId{index};
+        tab.label = "document-" + std::to_string(index);
+        tab.dirty = index == 4;
+        tabs.tabs.push_back(std::move(tab));
+    }
+    tabs.active = TabId{4};
+    TabGlyphs glyphs;
+    const auto solved = solveTabBar(tabs, glyphs, {2, 3, 18, 1});
+    ASSERT_TRUE(!solved.tabs.empty());
+    if (solved.tabs.empty()) return;
+    ASSERT_TRUE(solved.tabs.size() < tabs.tabs.size());
+    ASSERT_TRUE(solved.tabs.front().index > 0);
+    ASSERT_EQ(solved.tabs.back().id, TabId{4});
+    ASSERT_TRUE(solved.tabs.back().active);
+    ASSERT_TRUE(solved.tabs.back().rect.right() <= solved.rect.right());
+
+    tabs.active = TabId{1};
+    const auto firstActive = solveTabBar(tabs, glyphs, {2, 3, 18, 1});
+    ASSERT_TRUE(!firstActive.tabs.empty());
+    if (!firstActive.tabs.empty()) {
+        ASSERT_EQ(firstActive.tabs.front().index, std::size_t{0});
+        ASSERT_TRUE(firstActive.tabs.front().active);
+    }
+
+    tabs.active = TabId{3};
+    const auto middleActive = solveTabBar(tabs, glyphs, {2, 3, 18, 1});
+    ASSERT_TRUE(std::any_of(
+        middleActive.tabs.begin(), middleActive.tabs.end(),
+        [](const SolvedTab& tab) { return tab.id == TabId{3} && tab.active; }));
+
+    tabs.active = TabId{4};
+    const auto clipped = solveTabBar(tabs, glyphs, {2, 3, 3, 1});
+    ASSERT_EQ(clipped.tabs.size(), std::size_t{1});
+    if (!clipped.tabs.empty()) {
+        ASSERT_EQ(clipped.tabs.front().id, TabId{4});
+        ASSERT_EQ(clipped.tabs.front().rect.width, 3);
+    }
+    ASSERT_TRUE(solveTabBar(tabs, glyphs, {2, 3, 18, 0}).tabs.empty());
 }
 
 // Two flex siblings split the width equally; the odd cell goes to the LAST child
@@ -448,6 +493,7 @@ TEST(solveGridTreeRejectsAutoSizeDistinctly) {
 int main() {
     RUN(columnStackPlacesExactThenFillsFlex);
     RUN(externalModificationSurfaceIsBoundedAndKeepsSelectionVisible);
+    RUN(tabBarWindowsAroundTheActiveTabAndClipsAtTheBandEdge);
     RUN(rowFlexSplitsEquallyRemainderToLast);
     RUN(singleFlexTakesAllRemainder);
     RUN(insetReservesTheFrameOnEveryEdge);

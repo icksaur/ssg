@@ -104,6 +104,7 @@ SolveUiFrameResult trySolveFrameLayout(
         UiNodeId{std::string{kFooterNodeId}},
         UiNodeId{std::string{kNoticeNodeId}},
         UiNodeId{std::string{kExternalModNodeId}},
+        UiNodeId{std::string{kTabBarNodeId}},
     };
     if (semantic.sections().promptView) {
         retained.insert(UiNodeId{std::string{kFooterPromptNodeId}});

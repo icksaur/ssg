@@ -461,19 +461,41 @@ void paintExternalModification(
     }
 }
 
+void paintTabBar(CellGrid& grid, const SolvedTabBar& solved,
+                 ThemeSnapshot const& theme, Style const& style,
+                 SemanticRole backgroundRole,
+                 std::uint8_t bandForeground,
+                 std::uint8_t documentBackground) {
+    const auto bandBackground = semanticIndex(theme, backgroundRole);
+    fillRect(grid, solved.rect, bandForeground, bandBackground,
+             backgroundRole);
+    for (const auto& separator : solved.separators) {
+        paintText(grid, separator.rect.x, separator.rect.y,
+                  separator.rect.right(), separator.text,
+                  semanticIndex(theme, SemanticRole::TabInactive),
+                  bandBackground, SemanticRole::TabInactive, style);
+    }
+    for (const auto& tab : solved.tabs) {
+        const auto role =
+            tab.active ? SemanticRole::TabActive : SemanticRole::TabInactive;
+        const auto background =
+            tab.active ? documentBackground : bandBackground;
+        fillRect(grid, tab.rect, semanticIndex(theme, role), background, role);
+        paintText(grid, tab.rect.x, tab.rect.y, tab.rect.right(), tab.text,
+                  semanticIndex(theme, role), background, role, style);
+    }
+}
+
 void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                         ThemeSnapshot const& theme, const UiSchema& ui,
                         std::uint8_t background, std::uint8_t panelBackground,
-                        std::uint8_t documentBackground, Style const& style) {
+                        Style const& style) {
     auto const headerBackground = semanticIndex(
         theme,
         nodeBackground(ui, kHeaderNodeId, SemanticRole::HeaderBackground));
     auto const footerBackground = semanticIndex(
         theme,
         nodeBackground(ui, kFooterNodeId, SemanticRole::FooterBackground));
-    auto const tabInactiveBackground = semanticIndex(
-        theme, nodeBackground(ui, kTabBarNodeId,
-                              SemanticRole::TabInactiveBackground));
     for (auto const& node : shell.accessibilityNodes) {
         std::uint8_t nodeBackground = background;
         switch (node.kind) {
@@ -484,8 +506,6 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
         case ShellNodeKind::FooterField:
         case ShellNodeKind::FooterAction:
         case ShellNodeKind::FooterHint:
-        case ShellNodeKind::Tab:
-        case ShellNodeKind::TabSeparator:
         case ShellNodeKind::EmptyState:
             // Chrome backgrounds (M-theme): header/footer fields sit on their
             // distinct band; an inactive tab is a light chip, while the active
@@ -496,15 +516,6 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                        node.kind == ShellNodeKind::FooterAction ||
                        node.kind == ShellNodeKind::FooterHint) {
                 nodeBackground = footerBackground;
-            } else if (node.kind == ShellNodeKind::Tab ||
-                       node.kind == ShellNodeKind::TabSeparator) {
-                nodeBackground = node.role == SemanticRole::TabInactive
-                                     ? tabInactiveBackground
-                                     : documentBackground;
-                // Fill the whole chip so the background reads as a solid tab, not
-                // just behind the text; the separator fills its gap the same way.
-                fillRect(grid, node.rect, semanticIndex(theme, node.role),
-                         nodeBackground, node.role);
             }
             if (!node.content.empty()) {
                 auto foregroundRole = node.role;
@@ -1308,21 +1319,19 @@ CellGrid Renderer::render(GridFrame const& snapshot,
         fillRect(grid, footer->rect, foreground,
                  semanticIndex(theme, role), role);
     }
-    // The tab bar shares the inactive-tab background across its whole width, so
-    // its empty region (past the last tab) reads as inactive chrome rather than
-    // as the active tab. Each tab then overpaints its own chip: an inactive tab
-    // blends into this band; the active tab cuts a Background-coloured notch that
-    // merges with the document.
-    if (shell.tabBar) {
+    if (const auto* tabBar = snapshot.layout().find(
+            UiNodeId{std::string{kTabBarNodeId}})) {
         const auto role =
             nodeBackground(ui, kTabBarNodeId,
                            SemanticRole::TabInactiveBackground);
-        fillRect(grid, *shell.tabBar, foreground,
-                 semanticIndex(theme, role), role);
+        paintTabBar(
+            grid,
+            solveTabBar(snapshot.sections().tabs, style.tab, tabBar->rect),
+            theme, style, role, foreground, documentBackground);
     }
 
     paintShellLeaves(grid, shell, theme, ui, background, panelBackground,
-                     documentBackground, style);
+                     style);
     if (snapshot.sections().noticeView) {
         const auto* node =
             snapshot.layout().find(UiNodeId{std::string{kNoticeNodeId}});

@@ -231,6 +231,16 @@ public:
         sections.uiState.focusPath = interaction.focusPath();
         sections.uiPresence =
             buildPresenceSection(schema, interaction.presence());
+        for (std::size_t index = 0; index < request.tabs.size(); ++index) {
+            TabState tab;
+            tab.id = TabId{index + 1};
+            tab.label = request.tabs[index].title;
+            tab.dirty = request.tabs[index].dirty;
+            sections.tabs.tabs.push_back(std::move(tab));
+            if (request.tabs[index].active) {
+                sections.tabs.active = TabId{index + 1};
+            }
+        }
 
         for (auto const& mutate : mutators_) mutate(sections);
 

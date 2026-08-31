@@ -5,6 +5,7 @@
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/ChromeLowering.h>
+#include <ssg/Layout.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/UiTree.h>
 
@@ -104,20 +105,6 @@ std::string helpHintLabel(const KeymapViewState& keymap) {
         keys = KeyCodec{}.formatSequence(*sequence);
     }
     return keys.empty() ? std::string{"help"} : keys + "  help";
-}
-
-std::string composedTabTitle(const TabState& tab, const Style& style) {
-    // Per-mode affordance: a live-diff tab keeps its prefix; a read-only tab
-    // (help, generated output, or a binary/decode-failure buffer) gets a
-    // trailing marker so the user knows why editing does nothing. An ordinary
-    // editable tab is unadorned.
-    if (tab.kind == TabKind::LiveDiff) {
-        return style.tab.liveDiffPrefix + tab.label;
-    }
-    if (tab.mode == DocumentMode::ReadOnly) {
-        return tab.label + style.tab.readOnlySuffix;
-    }
-    return tab.label;
 }
 
 std::optional<std::string> statusFieldCommandId(
@@ -282,7 +269,7 @@ ShellViewState EditorSession::Impl::shellView(
     PaletteReport const& paletteReport) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.viewState().tabs) {
-        labels.push_back({composedTabTitle(tab, style), tab.label,
+        labels.push_back({gridTabTitle(tab, style.tab), tab.label,
                           tabs.viewState().active == tab.id, tab.dirty});
     }
     auto statusFields = chromeStatusFields(ChromeFieldMode::Grid);

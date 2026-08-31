@@ -1874,6 +1874,48 @@ TEST(sessionSnapshotBuilderOrdersUiStateBySchemaPreorder) {
               ssg::UiNodeId{std::string{ssg::kHeaderNodeId}});
 }
 
+TEST(tabRenderingUsesSemanticTabsAndSolvedGeometry) {
+    auto frame =
+        ssg::test::SessionSnapshotBuilder{}
+            .viewport(50, 10)
+            .shellRequest([](ssg::ShellLayoutRequest& request) {
+                request.tabs = {{"alpha.txt", "Alpha", true, false},
+                                {"beta.txt", "Beta", false, false}};
+            })
+            .shellProjection([](ssg::ShellViewState& shell) {
+                shell.tabBar = ssg::Rect{0, 0, 1, 1};
+                for (auto& node : shell.accessibilityNodes) {
+                    if (node.kind == ssg::ShellNodeKind::Tab ||
+                        node.kind == ssg::ShellNodeKind::TabSeparator) {
+                        node.rect = {0, 0, 1, 1};
+                        node.content = "stale";
+                    }
+                }
+            })
+            .build();
+    const auto* node = frame.layout().find(
+        ssg::UiNodeId{std::string{ssg::kTabBarNodeId}});
+    ASSERT_TRUE(node != nullptr);
+    if (!node) return;
+    const auto solved = ssg::solveTabBar(
+        frame.sections().tabs, frame.presentation().style.tab, node->rect);
+    ASSERT_EQ(solved.tabs.size(), std::size_t{2});
+    if (solved.tabs.size() < 2) return;
+    const auto grid = ssg::Renderer{}.render(frame);
+    ASSERT_EQ(grid.at(solved.tabs[0].rect.x,
+                      solved.tabs[0].rect.y).text,
+              std::string{"a"});
+    ASSERT_EQ(grid.at(solved.tabs[0].rect.x,
+                      solved.tabs[0].rect.y).role,
+              ssg::SemanticRole::TabActive);
+    ASSERT_EQ(grid.at(solved.tabs[1].rect.x,
+                      solved.tabs[1].rect.y).text,
+              std::string{"b"});
+    ASSERT_EQ(grid.at(solved.tabs[1].rect.x,
+                      solved.tabs[1].rect.y).role,
+              ssg::SemanticRole::TabInactive);
+}
+
 TEST(externalIntrinsicShrinksToPreserveAnEditorRow) {
     auto snapshot =
         ssg::test::SessionSnapshotBuilder{}
@@ -2207,6 +2249,7 @@ int main() {
     RUN(urlsInTheDocumentBecomeClickableRuns);
     RUN(urlDetectionStopsAtSentenceAndBracketBoundaries);
     RUN(sessionSnapshotBuilderOrdersUiStateBySchemaPreorder);
+    RUN(tabRenderingUsesSemanticTabsAndSolvedGeometry);
     RUN(externalIntrinsicShrinksToPreserveAnEditorRow);
     RUN(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects);
     RUN(lspDiagnosticsUnderlineExactlyTheirRange);
