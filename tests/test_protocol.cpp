@@ -110,6 +110,39 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
     return result;
 }
 
+ssg::SessionSnapshotSections sectionsFocusedOn(ssg::FocusTarget target) {
+    auto result = sections(ssg::Revision{4}, "focus");
+    auto state = result.uiFrame.state();
+    const auto id = [](std::string_view value) {
+        return ssg::UiNodeId{std::string{value}};
+    };
+    switch (target) {
+    case ssg::FocusTarget::Editor:
+        state.focusPath = std::vector{id(ssg::kEditorNodeId)};
+        result.focus = ssg::FocusTarget::Editor;
+        break;
+    case ssg::FocusTarget::Panel:
+        state.focusPath = std::vector{id(ssg::kPanelNodeId)};
+        result.focus = ssg::FocusTarget::Panel;
+        break;
+    case ssg::FocusTarget::Prompt:
+        state.focusPath = std::vector{id(ssg::kEditorNodeId),
+                                      id(ssg::kHeaderPromptInputNodeId)};
+        result.focus = ssg::FocusTarget::Prompt;
+        break;
+    case ssg::FocusTarget::ExternalModification:
+        state.focusPath = std::vector{id(ssg::kEditorNodeId),
+                                      id(ssg::kExternalModNodeId)};
+        result.focus = ssg::FocusTarget::Editor;
+        result.externalFocusHeld = true;
+        break;
+    }
+    result.uiFrame = ssg::UiFrame::require(
+        result.uiFrame.schema(), std::move(state),
+        result.uiFrame.presence());
+    return result;
+}
+
 // A sections fixture whose medium-agnostic ui section is non-empty, so the wire
 // round-trip actually exercises the tree encoding.
 ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
@@ -2384,6 +2417,22 @@ TEST(regenerateCanonicalFixtures) {
         ssg::ProtocolCodec{}.encodeSessionDelta(
             ssg::SessionSnapshotCodec{}.deriveDelta(
                 before.semantic(), after.semantic())));
+    const std::array focusFixtures{
+        std::pair{"session_focus_editor.hex", ssg::FocusTarget::Editor},
+        std::pair{"session_focus_panel.hex", ssg::FocusTarget::Panel},
+        std::pair{"session_focus_prompt.hex", ssg::FocusTarget::Prompt},
+        std::pair{"session_focus_external.hex",
+                  ssg::FocusTarget::ExternalModification},
+    };
+    for (const auto& [name, target] : focusFixtures) {
+        auto focused = ssg::SessionSnapshotCodec{}.assemble(
+            ssg::Revision{4}, {},
+            ssg::InvocationPrincipal{ssg::ClientId{7},
+                                     ssg::InvocationOrigin::InProcess},
+            ssg::ViewId{9}, clientView(1), sectionsFocusedOn(target));
+        writeFixtureHex(name, ssg::ProtocolCodec{}.encodeSessionSnapshot(
+                                  focused.semantic()));
+    }
     for (auto const& [name, input] : canonicalClientInputFixtures()) {
         writeFixtureHex(name, ssg::ProtocolCodec{}.encodeClientInput(input));
     }
@@ -2393,6 +2442,25 @@ TEST(regenerateCanonicalFixtures) {
             {ssg::ClientInputOutcome::Dispatched, std::nullopt,
              ssg::CommandResult{ssg::CommandError::None,
                                 ssg::Revision{5}, ""}}));
+}
+
+TEST(sharedFocusFixturesResolveEveryContextInCpp) {
+    const std::array focusFixtures{
+        std::pair{"session_focus_editor.hex", ssg::FocusTarget::Editor},
+        std::pair{"session_focus_panel.hex", ssg::FocusTarget::Panel},
+        std::pair{"session_focus_prompt.hex", ssg::FocusTarget::Prompt},
+        std::pair{"session_focus_external.hex",
+                  ssg::FocusTarget::ExternalModification},
+    };
+    for (const auto& [name, expected] : focusFixtures) {
+        const auto decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+            readFixtureBytes(name));
+        ASSERT_TRUE(decoded.accepted());
+        if (decoded.snapshot) {
+            ASSERT_TRUE(decoded.snapshot->sections().uiFrame.effectiveFocus() ==
+                        expected);
+        }
+    }
 }
 
 TEST(canonicalFixturesDecodeToTheExpectedValues) {
@@ -2776,6 +2844,7 @@ int main() {
     RUN(protocolMessageKindOrdinalsAreNeverRenumbered);
     RUN(valueBoundsAreEnforcedOnDecode);
     RUN(regenerateCanonicalFixtures);
+    RUN(sharedFocusFixturesResolveEveryContextInCpp);
     RUN(canonicalFixturesDecodeToTheExpectedValues);
     RUN(precedingSplitUiSnapshotDecodesToOneValidatedFrame);
     RUN(semanticFixtureDeltaReplaysToItsCheckedInTarget);

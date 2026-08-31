@@ -3,6 +3,7 @@
 #include <ssg/UiNodeState.h>
 #include <ssg/UiPresence.h>
 #include <ssg/UiTree.h>
+#include <ssg/focus.h>
 
 #include <optional>
 #include <utility>
@@ -37,6 +38,7 @@ public:
     [[nodiscard]] const std::vector<UiNodeId>& focusPath() const noexcept {
         return *state_.focusPath;
     }
+    [[nodiscard]] FocusTarget effectiveFocus() const noexcept;
     [[nodiscard]] UiFrameVersion version() const noexcept {
         return {schema_.generation, presence_.basis};
     }

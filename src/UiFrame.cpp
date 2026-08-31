@@ -51,7 +51,10 @@ bool validFocusPath(const UiSchema& schema, const UiStateSection& state,
     if (!effectivePresence(schema.root, true, direct, effective)) return false;
     const bool everyNodeExists = std::all_of(
         state.focusPath->begin(), state.focusPath->end(),
-        [&](const UiNodeId& id) { return effective.contains(id); });
+        [&](const UiNodeId& id) {
+            const UiNode* node = findUiNode(schema, id);
+            return effective.contains(id) && node && node->focusContext;
+        });
     const auto active = effective.find(state.focusPath->back());
     return everyNodeExists && active != effective.end() && active->second;
 }
@@ -90,6 +93,7 @@ UiFrame::UiFrame() {
     for (const auto& id : validated.schema().nodeIds()) {
         state.nodes.push_back(UiNodeState{id, std::nullopt});
     }
+
     state.focusPath =
         std::vector<UiNodeId>{UiNodeId{std::string{kEditorNodeId}}};
     UiPresenceSection presence = buildPresenceSection(
@@ -98,6 +102,10 @@ UiFrame::UiFrame() {
                         std::move(presence));
     if (!frame) throw std::logic_error("default UI frame is invalid");
     *this = std::move(*frame);
+}
+
+FocusTarget UiFrame::effectiveFocus() const noexcept {
+    return *findUiNode(schema_, focusPath().back())->focusContext;
 }
 
 std::optional<UiFrame> UiFrame::create(UiSchema schema, UiStateSection state,

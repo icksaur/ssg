@@ -1021,9 +1021,36 @@ function uiNodeIds(schema) {
     for (const child of (node.container?.children || [])) {
       if (!visit(child)) return false;
     }
+
     return true;
   };
   return visit(schema.root) ? ids : null;
+}
+
+function uiNodeById(node, id) {
+  if (!node || typeof node.id !== 'string') return null;
+  if (node.id === id) return node;
+  for (const child of (node.container?.children || [])) {
+    const found = uiNodeById(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function effectiveUiPresence(schema, presence) {
+  const direct = new Map((presence?.nodes || []).map((record) =>
+    [record.id, !!record.present]));
+  const effective = new Map();
+  const visit = (node, ancestorsPresent) => {
+    if (!node || typeof node.id !== 'string' || !direct.has(node.id)) {
+      return false;
+    }
+    const present = ancestorsPresent && direct.get(node.id) === true;
+    effective.set(node.id, present);
+    return (node.container?.children || []).every(
+      (child) => visit(child, present));
+  };
+  return visit(schema?.root, true) ? effective : null;
 }
 
 function validUiFrame(frame) {
@@ -1049,17 +1076,13 @@ function validUiFrame(frame) {
 
   const path = state.focus_path;
   if (!Array.isArray(path) || path.length === 0 ||
-      path.some((id) => !expected.has(id))) return false;
-  const direct = new Map(presence.nodes.map((record) =>
-    [record.id, !!record.present]));
-  const effective = new Map();
-  const visit = (node, ancestorsPresent) => {
-    const present = ancestorsPresent && direct.get(node.id) === true;
-    effective.set(node.id, present);
-    for (const child of (node.container?.children || [])) visit(child, present);
-  };
-  visit(schema.root, true);
-  return effective.get(path[path.length - 1]) === true;
+      path.some((id) => {
+        const context = num(uiNodeById(schema.root, id)?.focus_context);
+        return !expected.has(id) || !Number.isInteger(context) ||
+          context < 0 || context > 3;
+      })) return false;
+  const effective = effectiveUiPresence(schema, presence);
+  return effective?.get(path[path.length - 1]) === true;
 }
 
 function sameUiFrameVersion(left, right) {
@@ -1713,19 +1736,23 @@ export function resolveUiFocusPath(schema, state, presence, predictedNode = null
   if (!Array.isArray(state.focus_path) || state.focus_path.length === 0) {
     return null;
   }
-  const schemaIds = new Set();
+  const schemaNodes = new Map();
   const collect = (node) => {
     if (!node || typeof node.id !== 'string') return;
-    schemaIds.add(node.id);
+    schemaNodes.set(node.id, node);
     for (const child of (node.container && node.container.children) || []) {
       collect(child);
     }
   };
   collect(schema.root);
-  const present = new Map(
-    (presence.nodes || []).map((node) => [node.id, !!num(node.present)]));
-  if (state.focus_path.some(
-        (id) => typeof id !== 'string' || !schemaIds.has(id))) {
+  const present = effectiveUiPresence(schema, presence);
+  if (!present) return null;
+  const validContext = (node) => {
+    const context = num(node?.focus_context);
+    return Number.isInteger(context) && context >= 0 && context <= 3;
+  };
+  if (state.focus_path.some((id) =>
+        typeof id !== 'string' || !validContext(schemaNodes.get(id)))) {
     return null;
   }
   if (state.focus_path[0] !== 'editor' &&
@@ -1733,7 +1760,8 @@ export function resolveUiFocusPath(schema, state, presence, predictedNode = null
     return null;
   }
   if (predictedNode != null &&
-      (!schemaIds.has(predictedNode) || !present.get(predictedNode))) {
+      (!validContext(schemaNodes.get(predictedNode)) ||
+       !present.get(predictedNode))) {
     return null;
   }
   const effectivePath = [...state.focus_path];
@@ -1746,6 +1774,8 @@ export function resolveUiFocusPath(schema, state, presence, predictedNode = null
   return {
     path: effectivePath,
     effective,
+    context: ['editor', 'panel', 'prompt', 'external'][
+      num(schemaNodes.get(effective).focus_context)],
     captured: effectivePath.length > 1,
   };
 }

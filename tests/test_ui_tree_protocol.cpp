@@ -97,6 +97,39 @@ TEST(uiSchemaRoundTripsThroughTheWire) {
     }
 }
 
+TEST(focusHostContextRoundTripsThroughTheWire) {
+    const auto schema = corpus().back();
+    const auto decoded = decodeUiSchema(encodeUiSchema(schema));
+    ASSERT_TRUE(decoded.has_value());
+    ASSERT_TRUE(decoded->root.focusContext == std::nullopt);
+
+    const std::array expected{
+        std::pair{ssg::kEditorNodeId, ssg::FocusTarget::Editor},
+        std::pair{ssg::kPanelNodeId, ssg::FocusTarget::Panel},
+        std::pair{ssg::kHeaderPromptInputNodeId, ssg::FocusTarget::Prompt},
+        std::pair{ssg::kFooterPromptNodeId, ssg::FocusTarget::Prompt},
+        std::pair{ssg::kExternalModNodeId,
+                  ssg::FocusTarget::ExternalModification},
+    };
+    for (const auto& [id, context] : expected) {
+        const UiNode* node =
+            ssg::findUiNode(*decoded, ssg::UiNodeId{std::string{id}});
+        ASSERT_TRUE(node != nullptr);
+        ASSERT_TRUE(node->focusContext == context);
+    }
+
+    std::size_t declared = 0;
+    const auto countDeclared = [&](const auto& self, const UiNode& node) -> void {
+        if (node.focusContext) ++declared;
+        if (const auto* container =
+                std::get_if<ssg::UiContainer>(&node.content)) {
+            for (const auto& child : container->children) self(self, child);
+        }
+    };
+    countDeclared(countDeclared, decoded->root);
+    ASSERT_EQ(declared, expected.size());
+}
+
 TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
     UiSchema current{
         Generation{1},
@@ -513,6 +546,7 @@ TEST(malformedSurfaceDecodesToNullopt) {
 
 int main() {
     RUN(uiSchemaRoundTripsThroughTheWire);
+    RUN(focusHostContextRoundTripsThroughTheWire);
     RUN(precedingCanonicalTopologyDecodesToTheCurrentArrangement);
     RUN(nodeStyleRoundTripsAndFieldAdditionRemainsCompatible);
     RUN(responsiveSizeRoundTripsAndMalformedFormsAreRejected);

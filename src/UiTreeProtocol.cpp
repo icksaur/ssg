@@ -320,6 +320,9 @@ ProtocolValue encodeNode(const UiNode& node) {
     if (node.style.foreground || node.style.background) {
         fields.emplace_back("style", encodeStyle(node.style));
     }
+    if (node.focusContext) {
+        fields.emplace_back("focus_context", enumValue(*node.focusContext));
+    }
     if (const auto* container = std::get_if<UiContainer>(&node.content)) {
         fields.emplace_back("container", encodeContainer(*container));
     } else {
@@ -344,6 +347,14 @@ std::optional<UiNode> decodeNode(const ProtocolValue& value) {
         auto style = decodeStyle(*styleField);
         if (!style) return std::nullopt;
         node.style = std::move(*style);
+    }
+    if (value.field("focus_context")) {
+        static constexpr std::array focusTargets{
+            FocusTarget::Editor, FocusTarget::Panel, FocusTarget::Prompt,
+            FocusTarget::ExternalModification};
+        node.focusContext =
+            decodeEnumIn(uintField(value, "focus_context"), focusTargets);
+        if (!node.focusContext) return std::nullopt;
     }
     const ProtocolValue* containerField = value.field("container");
     const ProtocolValue* leafField = value.field("leaf");

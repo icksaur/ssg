@@ -107,6 +107,46 @@ TEST(frameRejectsMismatchedRecordsGenerationsAndHiddenFocus) {
                                 hiddenRetainedBase.state,
                                 hiddenRetainedBase.presence)
                     .has_value());
+
+    auto undeclaredFocusHost = valid;
+    auto& root = std::get<UiContainer>(undeclaredFocusHost.schema.root.content);
+    auto& body = std::get<UiContainer>(root.children[1].content);
+    auto& contentContainer =
+        std::get<UiContainer>(body.children[1].content);
+    contentContainer.children[3].focusContext.reset();
+    ASSERT_FALSE(UiFrame::create(undeclaredFocusHost.schema,
+                                 undeclaredFocusHost.state,
+                                 undeclaredFocusHost.presence)
+                     .has_value());
+
+    auto nonFocusNode = valid;
+    nonFocusNode.state.focusPath =
+        std::vector<UiNodeId>{UiNodeId{std::string{kNoticeNodeId}}};
+    ASSERT_FALSE(UiFrame::create(nonFocusNode.schema, nonFocusNode.state,
+                                 nonFocusNode.presence)
+                     .has_value());
+
+    auto unknownFocusNode = valid;
+    unknownFocusNode.state.focusPath =
+        std::vector<UiNodeId>{UiNodeId{"missing"}};
+    ASSERT_FALSE(UiFrame::create(unknownFocusNode.schema,
+                                 unknownFocusNode.state,
+                                 unknownFocusNode.presence)
+                     .has_value());
+}
+
+TEST(frameDerivesEffectiveContextFromTheEndpointHost) {
+    const UiFrame editor = frame();
+    ASSERT_TRUE(editor.effectiveFocus() == FocusTarget::Editor);
+
+    auto promptParts = parts();
+    promptParts.state.focusPath->push_back(
+        UiNodeId{std::string{kHeaderPromptInputNodeId}});
+    const UiFrame prompt =
+        UiFrame::require(std::move(promptParts.schema),
+                         std::move(promptParts.state),
+                         std::move(promptParts.presence));
+    ASSERT_TRUE(prompt.effectiveFocus() == FocusTarget::Prompt);
 }
 
 TEST(deltaChangesOnlyNamedRecordsAndRejectsStaleOrMalformedChanges) {
@@ -219,6 +259,7 @@ TEST(focusRestorationRequiresVisibleEndpointInTheSameCommit) {
 
 int main() {
     RUN(frameRejectsMismatchedRecordsGenerationsAndHiddenFocus);
+    RUN(frameDerivesEffectiveContextFromTheEndpointHost);
     RUN(deltaChangesOnlyNamedRecordsAndRejectsStaleOrMalformedChanges);
     RUN(presenceChangesAdvanceBasisAndReplayAtomically);
     RUN(focusRestorationRequiresVisibleEndpointInTheSameCommit);

@@ -32,7 +32,7 @@ import {
   encodeTreePointerInput,
   encodeNoticeActionPointerInput,
   noticeViewFromSections,
-  externalModificationFromSections, externalFocusHeld,
+  externalModificationFromSections,
   encodeExternalActionPointerInput,
   settleCommandResult, settleInput, isCurrentGeneration, replayAttachFrame,
   clearUncertainInputs, reconnectDelay,
@@ -814,7 +814,7 @@ function renderChrome(sections, plan) {
   });
   const focusPath = resolveUiFocusPath(
     schema, stateSection, presenceSection, predictedCapture);
-  if (focusPath === null && stateSection.focus_path != null) {
+  if (!focusPath) {
     chromeErrorEl.textContent =
       'malformed UI focus path -- this client cannot reconcile keyboard focus';
     uiRootEl.textContent = '';
@@ -837,34 +837,15 @@ function renderChrome(sections, plan) {
   }
   reconcileFooterPromptAria(renderedFooterPromptHost,
                             renderedFooterPromptActiveId);
-  if (focusPath) {
-    const current = document.activeElement;
-    const target = retainedNodes.get(focusPath.effective);
-    if (current !== target &&
-        !focusUiNode(focusPath.effective, (id) => retainedNodes.get(id))) {
-      chromeErrorEl.textContent =
-        'UI focus target is not renderable -- this client cannot reconcile keyboard focus';
-      return false;
-    }
-    lastAppliedFocusNode = focusPath.effective;
-  } else {
-    const legacyFocus = num(sections.focus);
-    const legacyTarget = legacyFocus === 1
-      ? 'panel'
-      : legacyFocus === 2
-        ? (effectivePickerMode(sections.palette, state.palette.mode) != null
-            ? 'input_line' : 'footer.prompt')
-        : 'editor';
-    const current = document.activeElement;
-    const target = retainedNodes.get(legacyTarget);
-    const shouldFocus = legacyFocus === 2 ||
-      legacyTarget !== lastAppliedFocusNode ||
-      current === document.body || current === statusEl || !current.isConnected;
-    if (shouldFocus && current !== target) {
-      focusUiNode(legacyTarget, (id) => retainedNodes.get(id));
-    }
-    lastAppliedFocusNode = legacyTarget;
+  const current = document.activeElement;
+  const target = retainedNodes.get(focusPath.effective);
+  if (current !== target &&
+      !focusUiNode(focusPath.effective, (id) => retainedNodes.get(id))) {
+    chromeErrorEl.textContent =
+      'UI focus target is not renderable -- this client cannot reconcile keyboard focus';
+    return false;
   }
+  lastAppliedFocusNode = focusPath.effective;
   return true;
 }
 
@@ -877,6 +858,17 @@ function editorFocusElement() {
     (el) => Number(el.dataset.surface) === preferred);
   if (target) return target;
   return uiRootEl;
+}
+
+function effectiveFocusContext() {
+  const frame = state.sections?.ui_frame;
+  if (!frame) return null;
+  const predicted = predictedFocusCapture({
+    localMode: state.palette.mode,
+    authoritativeActivation: authoritativePickerActivation(),
+  });
+  return resolveUiFocusPath(
+    frame.schema, frame.state, frame.presence, predicted)?.context ?? null;
 }
 
 function reconcileFooterPromptAria(host, activeInput) {
@@ -1835,12 +1827,7 @@ function handleKeydown(ev) {
     meta: ev.metaKey, shift: ev.shiftKey,
   };
   if (ev.ctrlKey || ev.metaKey) {
-    const focus = paletteOpen()
-      ? 'prompt'
-      : (state.sections && externalFocusHeld(state.sections)
-          ? 'external'
-          : ['editor', 'panel', 'prompt', 'external'][
-              num(state.sections?.focus)]);
+    const focus = effectiveFocusContext();
     if (resolveKeyCommand(state.sections?.keymap, inputStroke, focus) == null) {
       return;
     }
@@ -1855,9 +1842,7 @@ function handleKeydown(ev) {
     state.sections.prompt_status &&
     state.sections.prompt_status.active_kind != null;
   if (!paletteOpen() && !promptActive && state.sections) {
-    const focus = externalFocusHeld(state.sections)
-      ? 'external'
-      : ['editor', 'panel', 'prompt', 'external'][num(state.sections.focus)];
+    const focus = effectiveFocusContext();
     const mode = resolvePickerLifecycle(
       state.sections.keymap, state.sections.palette, inputStroke, focus);
     if (mode != null) {
@@ -1940,13 +1925,8 @@ function handleKeydown(ev) {
   let predictionId = null;
   const priorPromptPrediction = state.promptPrediction;
   let promptPrediction = null;
-  const focus = state.sections ? num(state.sections.focus) : -1;
-  // Suppress local echo when the external-modification bar is the effective focus:
-  // the wire `focus` field never carries ExternalModification (it is legacy-
-  // projected), so the additive external_focus_held bool is the only signal that
-  // the keystroke drives the bar's selection/actions, not a document insert.
-  if (printable && !ev.altKey && focus === FOCUS_EDITOR &&
-      !externalFocusHeld(state.sections)) {
+  const focus = effectiveFocusContext();
+  if (printable && !ev.altKey && focus === 'editor') {
     const id = state.nextEditId++;
     state.pending.push({ id, text });
     predictionId = id;

@@ -11,6 +11,16 @@ namespace ssg {
 
 namespace {
 
+const UiNode* findNode(const UiNode& node, const UiNodeId& id) noexcept {
+    if (node.id == id) return &node;
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            if (const UiNode* found = findNode(child, id)) return found;
+        }
+    }
+    return nullptr;
+}
+
 std::optional<ResolvedUiNodeStyle> resolveStyle(
     const UiNode& node, std::string_view target,
     ResolvedUiNodeStyle inherited) {
@@ -123,6 +133,11 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
 std::optional<ResolvedUiNodeStyle> resolveUiNodeStyle(
     const UiSchema& schema, std::string_view nodeId) {
     return resolveStyle(schema.root, nodeId, {});
+}
+
+const UiNode* findUiNode(const UiSchema& schema,
+                         const UiNodeId& id) noexcept {
+    return findNode(schema.root, id);
 }
 
 namespace {

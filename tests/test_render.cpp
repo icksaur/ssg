@@ -180,10 +180,15 @@ void showPicker(ssg::SessionSnapshotSections& sections) {
                    ssg::UiNodeId{
                        std::string{ssg::kFindResultsViewportNodeId}}) {
             record.present = true;
+        } else if (record.id ==
+                   ssg::UiNodeId{
+                       std::string{ssg::kHeaderPromptInputNodeId}}) {
+            record.present = true;
         }
     }
     state.focusPath = std::vector<ssg::UiNodeId>{
-        ssg::UiNodeId{std::string{ssg::kFindResultsViewportNodeId}}};
+        ssg::UiNodeId{std::string{ssg::kEditorNodeId}},
+        ssg::UiNodeId{std::string{ssg::kHeaderPromptInputNodeId}}};
     sections.uiFrame = ssg::UiFrame::require(
         sections.uiFrame.schema(), std::move(state), std::move(presence));
 }

@@ -1188,6 +1188,8 @@ CellGrid Renderer::render(GridFrame const& snapshot,
                           LineLayoutCache* lineCache) const {
     auto const& theme = snapshot.sections().theme;
     auto const& style = snapshot.presentation().style;
+    const FocusTarget effectiveFocus =
+        snapshot.sections().uiFrame.effectiveFocus();
     const auto* root =
         snapshot.layout().find(UiNodeId{std::string{kRootNodeId}});
     if (!root) {
@@ -1310,7 +1312,7 @@ CellGrid Renderer::render(GridFrame const& snapshot,
 
     if (snapshot.panel()) {
         paintPanelTree(grid, *snapshot.panel(), theme, panelBackground,
-                       snapshot.sections().focus == FocusTarget::Panel, style);
+                       effectiveFocus == FocusTarget::Panel, style);
     }
     if (snapshot.document() ||
         snapshot.layout().find(
@@ -1364,7 +1366,7 @@ CellGrid Renderer::render(GridFrame const& snapshot,
                                 snapshot.layout(), theme,
                                 promptForegroundRole, promptBackgroundRole,
                                 style);
-                if (snapshot.sections().focus == FocusTarget::Prompt && promptCaret) {
+                if (effectiveFocus == FocusTarget::Prompt && promptCaret) {
                     grid.caret = *promptCaret;
                 }
             }
@@ -1378,7 +1380,7 @@ CellGrid Renderer::render(GridFrame const& snapshot,
             // a terminal cursor there, and paint any secondary carets as cells
             // (a terminal has one hardware cursor), but only when the editor is
             // focused.
-            if (snapshot.sections().focus == FocusTarget::Editor) {
+            if (effectiveFocus == FocusTarget::Editor) {
                 auto const& content = document.content;
                 auto const& viewport = snapshot.presentation().viewport;
                 auto const& selections =
@@ -1422,7 +1424,7 @@ CellGrid Renderer::render(GridFrame const& snapshot,
     // would never be reached while a picker is open.  The cursor is the primary
     // way a user can tell a text input has focus, so it must
     // not depend on which pane branch ran.
-    if (snapshot.sections().focus == FocusTarget::Prompt &&
+    if (effectiveFocus == FocusTarget::Prompt &&
         snapshot.header() && snapshot.header()->input) {
         const auto& caret = snapshot.header()->input->caret;
         grid.caret = GridPosition{caret.x, caret.y};

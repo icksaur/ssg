@@ -4180,7 +4180,7 @@ PresentationSnapshot adaptLegacyPresentation(const GridFrame& frame) {
         addLegacyNode(shell, ShellNodeKind::Panel, "panel", "Side panel",
                       panel.rect, SemanticRole::PanelInactive);
         const auto panelRole =
-            sections.focus == FocusTarget::Panel
+            sections.uiFrame.effectiveFocus() == FocusTarget::Panel
                 ? SemanticRole::PanelActive
                 : SemanticRole::PanelInactive;
         addLegacyNode(shell, ShellNodeKind::PanelProvider, "panel.provider",

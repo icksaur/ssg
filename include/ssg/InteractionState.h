@@ -37,19 +37,25 @@ public:
         return presence_;
     }
     [[nodiscard]] const KeyboardFocus& focus() const noexcept { return focus_; }
-    [[nodiscard]] FocusTarget effectiveFocus() const noexcept {
-        return focus_.effectiveTarget();
+    [[nodiscard]] FocusTarget effectiveFocus() const {
+        if (const FocusCapture* capture = focus_.top()) {
+            return focusContext(capture->node);
+        }
+        return focusContext(baseNode(focus_.base()));
     }
-    [[nodiscard]] FocusTarget legacyEffectiveFocus() const noexcept {
-        return focus_.legacyEffectiveTarget();
+    [[nodiscard]] FocusTarget legacyEffectiveFocus() const {
+        for (auto it = focus_.captures().rbegin();
+             it != focus_.captures().rend(); ++it) {
+            const FocusTarget context = focusContext(it->node);
+            if (context != FocusTarget::ExternalModification) return context;
+        }
+        return focusContext(baseNode(focus_.base()));
     }
     // CONTRACT: The path is ordered base-to-top, contains only nodes from this
     // schema, and ends at a present node. The base may be temporarily hidden by
     // the transient surface that captured focus above it.
     [[nodiscard]] std::vector<UiNodeId> focusPath() const {
-        UiNodeId base{std::string{focus_.base() == BaseFocus::Editor
-                                      ? kEditorNodeId
-                                      : kPanelNodeId}};
+        UiNodeId base = baseNode(focus_.base());
         if (!schema_.contains(base)) {
             throw std::logic_error(
                 "UiInteractionState: base focus host is outside the schema");
@@ -59,6 +65,7 @@ public:
         path.push_back(std::move(base));
         for (const FocusCapture& capture : focus_.captures()) {
             if (!schema_.contains(capture.node) ||
+                !schema_.find(capture.node)->focusContext ||
                 !presence_.isPresent(capture.node)) {
                 throw std::logic_error(
                     "UiInteractionState: focus capture host is absent");
@@ -72,7 +79,16 @@ public:
         return path;
     }
 
-    void setBaseFocus(BaseFocus base) noexcept { focus_.setBase(base); }
+    void setBaseFocus(BaseFocus base) {
+        const FocusTarget expected = base == BaseFocus::Editor
+                                         ? FocusTarget::Editor
+                                         : FocusTarget::Panel;
+        if (focusContext(baseNode(base)) != expected) {
+            throw std::logic_error(
+                "UiInteractionState: base host has the wrong focus context");
+        }
+        focus_.setBase(base);
+    }
 
     // Capture focus onto a transient surface. The node must be a node of this
     // schema AND present, so focus can never be placed on an unknown or hidden
@@ -86,6 +102,15 @@ public:
         if (!presence_.isPresent(capture.node)) {
             throw std::logic_error(
                 "UiInteractionState: capturing focus on an absent node");
+        }
+        const FocusTarget context = focusContext(capture.node);
+        if (context == FocusTarget::Prompt) {
+            for (const auto& held : focus_.captures()) {
+                if (focusContext(held.node) == FocusTarget::Prompt) {
+                    throw std::logic_error(
+                        "UiInteractionState: a second prompt-backed capture");
+                }
+            }
         }
         focus_.pushCapture(std::move(capture));
     }
@@ -104,6 +129,21 @@ public:
     }
 
 private:
+    [[nodiscard]] static UiNodeId baseNode(BaseFocus base) {
+        return UiNodeId{std::string{base == BaseFocus::Editor
+                                        ? kEditorNodeId
+                                        : kPanelNodeId}};
+    }
+
+    [[nodiscard]] FocusTarget focusContext(const UiNodeId& id) const {
+        const UiNode* node = schema_.find(id);
+        if (!node || !node->focusContext) {
+            throw std::logic_error(
+                "UiInteractionState: focus host has no declared context");
+        }
+        return *node->focusContext;
+    }
+
     ValidatedSchema schema_;
     PresenceConfig presence_;
     KeyboardFocus focus_;

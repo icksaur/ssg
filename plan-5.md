@@ -413,3 +413,221 @@ Focused tests must prove that:
   variants; and
 - frozen preceding client-input, prompt-view, status-view, schema, and
   accessibility fixtures continue to decode through compatibility paths.
+
+## Step 4 design: one typed focus path
+
+### Goals
+
+Current terminal and browser behavior derives keyboard routing, active-surface
+presentation, DOM focus, and local prediction eligibility from the `UiFrame`
+focus path. `SessionSnapshotSections::focus` and `externalFocusHeld` cease to be
+independent current state. Preceding peers remain wire-compatible until Plan 6.
+
+### Design
+
+`UiNode` gains an optional typed `FocusTarget` declaration. The whole-screen
+assembly assigns it only to nodes that can hold keyboard focus: the editor,
+panel, header prompt input, footer prompt, and external-modification surface.
+The declaration publishes keymap context, not geometry or client policy.
+`FocusTarget` remains the closed keymap-context vocabulary. This is deliberately
+not a second `FocusHostKind`: a host declares the context in which the existing
+keymap resolves input. Every `FocusTarget` value is a valid declaration, and
+whole-screen schema tests pin the semantic assignments of the built-in hosts.
+
+The authoritative focus value remains the ordered stack of base and captured
+`UiNodeId` values in `UiFrame`. It is not a tree-ancestor path: consecutive
+entries need not be parent and child. Its effective context is derived by
+resolving the final node through the matching schema. The complete stack is
+retained for restoration; clients do not infer context from well-known ids and
+do not combine a path with a second effective-focus flag.
+
+`FocusCapture` retains only node identity. `UiInteractionState` admits a base or
+capture only when the addressed node belongs to its schema and declares the
+required focus role. It derives `effectiveFocus()` from the current endpoint.
+`WholeScreenTruth::externalFocusHeld` remains internal operational truth while
+the pure whole-screen rebuild uses it to restore the external capture across
+unrelated schema and presence rebuilds. It is not published as current client
+state. Removing that internal rebuilding input would require replacing the
+truth-driven interaction transition seam and is outside this projection step.
+
+Implementation is staged:
+
+**Current-path migration.** Schema encoding carries optional focus context.
+`UiFrame` requires each focus-path entry to be a declared focus host and the
+effective endpoint to be effectively present; hidden restoration entries remain
+valid. Terminal routing and rendering, legacy shell adaptation, browser keymap
+routing, picker opening, local text prediction, and DOM focus all resolve the
+frame endpoint and its declared context. Picker prediction remains a
+client-local overlay that appends the published header-input host and reads its
+published context. The browser removes its root-focus fallback for a current
+frame.
+
+**Compatibility isolation.** `SessionSnapshotSections` drops `focus` and
+`externalFocusHeld`; current `SessionDelta` behavior no longer replays them
+beside a frame delta. The protocol codec continues to emit preceding root
+`focus` and `external_focus_held` fields, derived from the frame at the transport
+edge. The legacy focus value is the last path context other than
+`ExternalModification`; the external flag is true only when the effective
+endpoint context is `ExternalModification`.
+
+Preceding snapshots that lack a frame focus path synthesize one from their root
+focus fields, schema, and effective presence using this closed algorithm:
+
+- `Editor` selects the built-in editor host;
+- `Panel` selects the built-in panel host;
+- `Prompt` selects the only effectively present built-in header or footer prompt
+  host and uses the editor host as its compatibility-only restoration base;
+- a true `external_focus_held` appends the effectively present built-in external
+  host to an `Editor` or `Panel` base; `Prompt` plus true external focus rejects
+  because a held prompt would be the effective capture.
+
+Every selected host must exist, declare the matching context, and satisfy the
+required effective presence; otherwise decode rejects. The algorithm never
+consults retained process state. The editor restoration base for a preceding
+prompt snapshot is intentional: the scalar cannot encode whether editor or
+panel was underneath, and only its effective prompt focus is a preceding wire
+promise.
+The compatibility-only editor restoration choice disappears with this decoder
+in Plan 6; until then, closing the prompt is settled by a later authoritative
+snapshot or delta rather than by client-side restoration.
+
+A preceding focus-only delta is not synthesized into an independently versioned
+`UiFrameDelta`. `SessionSnapshotCodec::replay` first replays the supplied frame
+delta against its real base. It derives the base compatibility pair from the
+base frame, applies any root `focus` and `external_focus_held` replacements, and
+runs the same closed algorithm against the replay candidate. If that frame delta
+explicitly supplied a path, the synthesized and supplied effective
+compatibility pairs must agree or the entire session delta rejects. Otherwise
+replay constructs the final frame from the candidate schema, state records,
+presence, version, and synthesized path. No partially reconciled
+`SessionSnapshotSections` escapes.
+
+Absent root compatibility fields impose no comparison and cannot conflict with
+an explicitly changed frame path; only a present root field that disagrees
+rejects. A conforming compatibility emitter nevertheless includes each root
+field whenever its derived value changes so preceding receivers observe focus.
+
+Snapshot compatibility emission derives both root fields from the frame. Delta
+compatibility emission derives the pair from the base and target frames: it
+emits `focus` exactly when derived legacy focus changes, and
+`external_focus_held` exactly when the endpoint's
+`ExternalModification`-context status changes. Legacy focus is found by scanning
+the stack from top to base for the first non-`ExternalModification` context.
+When a message carries both a current frame path and compatibility focus fields,
+they must describe the same derived pair or decoding rejects. The old root
+`focus` vocabulary remains restricted to its preceding closed set and never
+gains `ExternalModification`.
+
+Plan 6 removes the compatibility fields and normalization. Step 4 does not
+renumber wire vocabulary or retain a second current behavior path.
+
+Steps 1 through 4 form increment 4A and are reviewed and committed together.
+Steps 5 through 7 form increment 4B and receive a separate implementation review
+and commit. The compatibility fixtures remain through 4B and are removed only
+with their fields in Plan 6.
+
+### Invariants
+
+- **FOCUS-PATH-1** — `UiFrame` focus is non-empty, generation-matched, and every
+  entry names a schema node with a focus-context declaration. This remains on
+  `UiFrame::require` and its focused tests.
+- **FOCUS-PATH-2** — only the final path entry must be effectively present;
+  earlier restoration entries may be hidden. This remains on `UiFrame::require`.
+- **FOCUS-PATH-3** — effective keymap context is derived only from the final
+  authoritative node and its schema declaration. This is stated on the `UiNode`
+  focus-context field and `UiFrame` context query.
+- **FOCUS-PATH-4** — schema, presence, path, and derived context change as one
+  frame; no current snapshot or client field may override them. This is stated
+  on `UiFrame`.
+- **FOCUS-PATH-5** — external focus never appears reactively, survives unrelated
+  rebuilds while held, yields to a prompt capture, restores after prompt close,
+  and clears when its node disappears. Existing authority tests retain this
+  behavior.
+- **FOCUS-COMPAT-1** — compatibility focus is derived at the codec edge; mixed
+  current and preceding representations that disagree reject transactionally.
+  This remains on the protocol codec boundary until Plan 6.
+
+### Considerations
+
+- `UiNode` is an aggregate used by authored, decoded, and test schemas. The new
+  field is last and optional so existing aggregate construction remains source
+  compatible; current whole-screen assembly explicitly authors every focus host.
+- Existing three-argument `UiNode{id, size, content}` construction remains valid
+  because the optional declaration is the final aggregate member.
+- Frozen schemas predate node focus context. Exact preceding decode annotates
+  only the known preceding focus hosts before frame validation. Current authored
+  schemas do not receive inferred metadata.
+- A restoration entry can be hidden, so clients must not require direct or
+  effective presence for every path entry. They validate effective presence only
+  for the endpoint using ancestor-aware presence.
+- Browser-local picker prediction may append only the published header prompt
+  input on the user keystroke that opens the picker. It does not invent a
+  context or mutate retained authoritative state; later frame settlement either
+  confirms or removes the overlay.
+- The retiring browser fallback used root `focus` only when
+  `resolveUiFocusPath` reported that the retained frame had no path. Current
+  frames require a path, so absence becomes malformed current state rather than
+  selecting a second focus authority.
+- Rendering uses endpoint identity where location matters and endpoint context
+  only where semantic routing matters. Context must not become a geometry proxy.
+- Legacy shell and presentation codecs remain compatibility adapters. They may
+  derive old focus values from a frame but never feed current runtime behavior.
+
+### Risks and Mitigations
+
+- **Risk:** an old focus-only delta leaves the retained frame path stale.
+  **Mitigation:** replay the real frame delta first, resolve compatibility
+  fields against the replay base and candidate, then construct one validated
+  final frame; test the algorithm against frozen deltas.
+- **Risk:** path and context metadata disagree across schema generations.
+  **Mitigation:** frame construction rejects undeclared hosts and schema
+  replacement carries path, presence, and context together.
+- **Risk:** removing browser fallback breaks locally predicted picker focus.
+  **Mitigation:** retain the existing prediction overlay, but resolve its host
+  and context from the current schema and test open/settle/rollback.
+- **Risk:** compatibility emission widens the old `FocusTarget` wire set.
+  **Mitigation:** derive legacy focus by skipping external contexts and retain
+  the old decoder's closed-set rejection.
+
+### Acceptance (Definition of Done)
+
+- **Observable:** editor, panel, prompt, picker, and external-modification keys
+  route identically in terminal and browser; prompt-over-external restoration and
+  browser local echo behave unchanged.
+- **Budgets:** focus changes remain sparse frame-state/presence deltas and do not
+  replace an unchanged schema.
+- **Gates:** `scripts/check.sh` and `scripts/check.sh push` pass.
+- **Oracles:** schema round trip preserves optional focus context; malformed
+  paths reject undeclared hosts and hidden endpoints; restoration paths admit
+  hidden bases; capture LIFO and external/prompt behavior retain their focused
+  truth tables; terminal and browser derive the same context from a shared
+  frame; browser picker prediction overlays without mutating the frame; current
+  mixed representations reject on disagreement; a table-driven independent
+  compatibility reference maps every legal legacy focus/external/presence
+  combination and rejects ambiguous or absent-host combinations; frozen
+  preceding snapshots and focus-only deltas match that reference.
+
+### Plan
+
+| # | Step | Files | Oracle | Invariants |
+|---|------|-------|--------|------------|
+| 1 | Publish typed focus-host context and validate paths | `include/ssg/UiTree.h`, `src/UiTree.cpp`, `src/WholeScreenAssembly.cpp`, `include/ssg/UiFrame.h`, `src/UiFrame.cpp`, schema/frame/protocol tests | round trip plus malformed-host and hidden-restoration cases | FOCUS-PATH-1, FOCUS-PATH-2, FOCUS-PATH-3 |
+| 2 | Collapse capture context into schema-derived context | `include/ssg/KeyboardFocus.h`, `include/ssg/InteractionState.h`, `src/WholeScreenInteraction.cpp`, authority/focus tests | capture, prompt-over-external, hide-and-restore truth tables | FOCUS-PATH-3, FOCUS-PATH-5 |
+| 3 | Migrate terminal and shell consumers | `apps/ssg_main.cpp`, `src/Renderer.cpp`, `src/EditorSession.cpp`, terminal/render/hit tests | one frame routes and marks editor, panel, prompt, and external contexts | FOCUS-PATH-3, FOCUS-PATH-4 |
+| 4 | Migrate browser routing, focus, and prediction | `apps/web/client.mjs`, `apps/web/reconcile.mjs`, `tests/web/test_reconcile.mjs` | shared frame context, ancestor-effective endpoint, picker prediction, local-echo cases | FOCUS-PATH-2, FOCUS-PATH-3, FOCUS-PATH-4 |
+| 5 | Remove current snapshot and delta duplicates | `include/ssg/session_snapshot.h`, `src/session_snapshot.cpp`, `src/runtime/snapshot.cpp`, snapshot/delta tests | focus changes replay solely through `UiFrameDelta` | FOCUS-PATH-4 |
+| 6 | Isolate preceding wire compatibility | `src/Protocol.cpp`, protocol fixtures/tests | independent legacy-pair reference versus snapshot decode and base-to-candidate delta replay; mixed conflict rejection; frozen snapshot and focus-only delta replay | FOCUS-COMPAT-1 |
+| 7 | Regenerate current artifacts and remove dead consumers | generated command/protocol artifacts, source-inventory tests | no current read of root focus fields; frozen preceding fixtures unchanged | FOCUS-PATH-4, FOCUS-COMPAT-1 |
+
+### Rationale
+
+Deriving context from well-known ids in every client would replace two snapshot
+fields with duplicate maps and make each new focus host a coordinated client
+change. Publishing context on the authoritative host keeps identity and semantic
+routing together while leaving native layout and device focus in each client.
+
+Removing `WholeScreenTruth::externalFocusHeld` in the same increment was
+rejected. It is not a client projection: it records the user's focus choice so a
+pure interaction rebuild can reconstruct the capture. Replacing it requires a
+different transition model and is separable from removing snapshot and wire
+duplication.

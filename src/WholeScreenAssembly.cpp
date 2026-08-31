@@ -105,6 +105,11 @@ UiNode withStyle(UiNode node, SemanticRole foreground,
     return node;
 }
 
+UiNode withFocusContext(UiNode node, FocusTarget context) {
+    node.focusContext = context;
+    return node;
+}
+
 // The always-assembled header prompt input: a TextInput leaf carrying only its
 // stable identity and role. Its query/ghost never ride the schema (a client owns
 // the prediction locally); the grid lowers it to input_line.query/.ghost nodes
@@ -115,8 +120,10 @@ UiNode promptInputLeaf(std::string_view promptSigil) {
     widget.id = std::string{kHeaderPromptInputNodeId};
     widget.role = "prompt";
     widget.sigil = std::string{promptSigil};
-    return UiNode{UiNodeId{std::string{kHeaderPromptInputNodeId}}, Size::autoSize(),
-                  UiLeaf{widget}};
+    return withFocusContext(
+        UiNode{UiNodeId{std::string{kHeaderPromptInputNodeId}},
+               Size::autoSize(), UiLeaf{widget}},
+        FocusTarget::Prompt);
 }
 
 UiNode footerPromptInput(const PromptControl& control) {
@@ -215,31 +222,34 @@ UiComposition assembleWholeScreen(
         withSize(std::move(footer), Size::exact(dimensions.footerHeight)),
         SemanticRole::Footer, SemanticRole::FooterBackground);
     insertPromptInput(header, promptSigil);
-    UiNode panel = withStyle(
+    UiNode panel = withFocusContext(withStyle(
         container(
             kPanelNodeId, Axis::Column,
             Size::optionalPreferred(dimensions.panelTargetWidth,
                                     dimensions.panelMinimumWidth),
             {viewLeaf(kTreeNodeId, ViewSurface::Tree, Size::flex())},
             ScrollAxis::Vertical),
-        SemanticRole::PanelInactive, SemanticRole::TreeBackground);
+        SemanticRole::PanelInactive, SemanticRole::TreeBackground),
+        FocusTarget::Panel);
     // Editor-owned transient chrome sits after tabs and before the document. It
     // consumes document rows without spanning or moving the side panel.
     UiNode notice = withStyle(
         viewLeaf(kNoticeNodeId, ViewSurface::Notice, Size::autoSize()),
         SemanticRole::Canvas, SemanticRole::StatusWarning);
-    UiNode externalMod = withStyle(
+    UiNode externalMod = withFocusContext(withStyle(
         viewLeaf(kExternalModNodeId, ViewSurface::ExternalModification,
                  Size::autoSize()),
-        SemanticRole::Canvas, SemanticRole::StatusWarning);
+        SemanticRole::Canvas, SemanticRole::StatusWarning),
+        FocusTarget::ExternalModification);
     UiNode documentViewport = container(
         kDocumentViewportNodeId, Axis::Column, Size::flex(),
         {withStyle(viewLeaf(kDocumentNodeId, ViewSurface::Document, Size::flex()),
                    SemanticRole::Text, SemanticRole::Canvas)},
         ScrollAxis::Vertical);
-    UiNode editor = container(
-        kEditorNodeId, Axis::Column, Size::flex(),
-        {std::move(documentViewport)});
+    UiNode editor = withFocusContext(
+        container(kEditorNodeId, Axis::Column, Size::flex(),
+                  {std::move(documentViewport)}),
+        FocusTarget::Editor);
     UiNode findResultsViewport = container(
         kFindResultsViewportNodeId, Axis::Column, Size::flex(),
         {withStyle(viewLeaf(kFindResultsNodeId, ViewSurface::FindResults,
@@ -259,9 +269,10 @@ UiComposition assembleWholeScreen(
                             {std::move(panel), std::move(content)});
     // The footer prompt starts as an empty, hidden container. An accepted prompt
     // request overlays its controls before the schema owner publishes it.
-    UiNode footerPrompt = withStyle(
+    UiNode footerPrompt = withFocusContext(withStyle(
         container(kFooterPromptNodeId, Axis::Column, Size::autoSize(), {}),
-        SemanticRole::Prompt, SemanticRole::Canvas);
+        SemanticRole::Prompt, SemanticRole::Canvas),
+        FocusTarget::Prompt);
 
     UiComposition out;
     out.root = withStyle(
@@ -348,9 +359,10 @@ UiComposition withStatusActions(
 }
 
 UiNode assembleFooterPrompt(const PromptSurface& prompt) {
-    UiNode promptNode = withStyle(
+    UiNode promptNode = withFocusContext(withStyle(
         container(kFooterPromptNodeId, Axis::Column, Size::autoSize(), {}),
-        SemanticRole::Prompt, SemanticRole::Canvas);
+        SemanticRole::Prompt, SemanticRole::Canvas),
+        FocusTarget::Prompt);
     if (!prompt.request() ||
         promptFocusRegion(prompt.request()->kind) != PromptRegion::Footer) {
         return promptNode;

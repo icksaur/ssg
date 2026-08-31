@@ -20,6 +20,7 @@
 #include <ssg/LayoutConstraints.h>   // Axis, Size, Inset
 #include <ssg/Theme.h>              // SemanticRole
 #include <ssg/UiWidget.h>           // WidgetDescriptor, ValueSource
+#include <ssg/focus.h>              // FocusTarget
 
 #include <cstdint>
 #include <optional>
@@ -111,6 +112,9 @@ struct UiNode {
     Size size;
     std::variant<UiContainer, UiLeaf> content;
     UiNodeStyle style;
+    // CONTRACT: A focus-stack entry names a node with this declaration. Clients
+    // derive keymap context from the stack endpoint rather than a parallel value.
+    std::optional<FocusTarget> focusContext;
 
     [[nodiscard]] bool isContainer() const noexcept {
         return std::holds_alternative<UiContainer>(content);
@@ -272,6 +276,8 @@ struct UiSchemaValidation {
 // The set of every node id in a schema. Meaningful only for a schema whose ids are
 // unique; used by ValidatedSchema.
 [[nodiscard]] std::set<UiNodeId> uiSchemaNodeIds(const UiSchema& schema);
+[[nodiscard]] const UiNode* findUiNode(const UiSchema& schema,
+                                       const UiNodeId& id) noexcept;
 
 class ValidatedSchema;
 
@@ -296,6 +302,9 @@ public:
     }
     [[nodiscard]] bool contains(const UiNodeId& id) const {
         return nodeIds_.contains(id);
+    }
+    [[nodiscard]] const UiNode* find(const UiNodeId& id) const noexcept {
+        return findUiNode(schema_, id);
     }
 
 private:

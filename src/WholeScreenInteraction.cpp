@@ -115,13 +115,12 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     // is the prompt, and dismissing the prompt returns to the external context.
     if (truth.externalModificationPresent && hasExternalMod &&
         truth.externalFocusHeld) {
-        state.captureFocus(
-            FocusCapture{externalMod, FocusTarget::ExternalModification});
+        state.captureFocus(FocusCapture{externalMod});
     }
 
     if (promptRegion) {
         const UiNodeId host = headerPrompt ? inputLine : footerPrompt;
-        state.captureFocus(FocusCapture{host, FocusTarget::Prompt});
+        state.captureFocus(FocusCapture{host});
     }
     return state;
 }

@@ -4971,7 +4971,7 @@ std::optional<std::vector<UiNodeId>> legacyFocusPath(
             candidates = {kEditorNodeId};
             break;
         case FocusTarget::Panel:
-            candidates = {kTreeNodeId};
+            candidates = {kPanelNodeId};
             break;
         case FocusTarget::Prompt:
             candidates = {kHeaderPromptInputNodeId, kFooterPromptNodeId};
@@ -4995,6 +4995,25 @@ std::optional<std::vector<UiNodeId>> legacyFocusPath(
     }
     if (present.size() != 1) return std::nullopt;
     return present;
+}
+
+void annotateLegacyFocusHosts(UiNode& node) {
+    const std::string_view id = node.id.value();
+    if (id == kEditorNodeId) {
+        node.focusContext = FocusTarget::Editor;
+    } else if (id == kPanelNodeId) {
+        node.focusContext = FocusTarget::Panel;
+    } else if (id == kHeaderPromptInputNodeId ||
+               id == kFooterPromptNodeId) {
+        node.focusContext = FocusTarget::Prompt;
+    } else if (id == kExternalModNodeId) {
+        node.focusContext = FocusTarget::ExternalModification;
+    }
+    if (auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (auto& child : container->children) {
+            annotateLegacyFocusHosts(child);
+        }
+    }
 }
 
 constexpr auto kSemanticSessionFields = std::to_array<std::string_view>({
@@ -5188,6 +5207,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     if (const ProtocolValue* uiField = value.field("ui")) {
         ui = decodeUiSchema(*uiField);
         if (!ui) return false;
+        annotateLegacyFocusHosts(ui->root);
     }
     std::optional<UiStateSection> uiState;
     if (const ProtocolValue* uiStateField = value.field("ui_state")) {
@@ -6968,6 +6988,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 return {ProtocolError::MalformedMessage, std::nullopt,
                         "session delta payload is malformed"};
             }
+            annotateLegacyFocusHosts(ui->root);
             legacyUi.schema = std::move(*ui);
         }
     }

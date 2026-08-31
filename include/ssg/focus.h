@@ -6,8 +6,8 @@
 
 namespace ssg {
 
-// The surface that currently receives keyboard input.  One value is authoritative
-// session state; clients route keys by it.
+// The keymap context declared by a UI focus host. Effective context is derived
+// from the authoritative UiFrame focus-stack endpoint.
 enum class FocusTarget : std::uint8_t { Editor, Panel, Prompt, ExternalModification };
 
 // The lowercase keymap-context name for a focus target.  A keymap binding's

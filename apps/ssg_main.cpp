@@ -1077,7 +1077,7 @@ int main(int argc, char** argv) {
         auto snapshot = gridPresenter.project(
             runtime, client, {terminalSize(), buildReport()});
         if (snapshot) {
-            focus = effectiveFocusFromSections(snapshot->sections());
+            focus = snapshot->sections().uiFrame.effectiveFocus();
             pickerActivation = snapshot->sections().palette.activePicker;
             pickerMode = pickerActivation
                              ? pickerActivation->mode

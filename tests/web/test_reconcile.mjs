@@ -686,6 +686,10 @@ import {
 
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
 const leafNode = (id, kind, extra) => ({ id, size: {}, leaf: { kind, ...(extra || {}) } });
+const focusLeafNode = (id, kind, focusContext, extra) => ({
+  ...leafNode(id, kind, extra),
+  focus_context: focusContext,
+});
 // A Row container node over `children`.
 const rowNode = (id, children) => ({ id, size: {}, container: { axis: 0, gap: 0, children } });
 // A schema is a single root node; placement is tree structure + well-known ids.
@@ -709,8 +713,8 @@ const presenceForSchema = (generation, root, hidden = []) => {
 
 check('focus path resolves the present top while allowing a hidden base', () => {
     const root = rowNode('root', [
-      leafNode('editor', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
-      leafNode('input_line', WIDGET.TEXT_INPUT),
+      focusLeafNode('editor', WIDGET.VIEW, 0, { surface: SURFACE.DOCUMENT }),
+      focusLeafNode('input_line', WIDGET.TEXT_INPUT, 2),
     ]);
     const schema = schemaOf(21, root);
     const presence = presenceForSchema(21, root, ['editor']);
@@ -722,14 +726,15 @@ check('focus path resolves the present top while allowing a hidden base', () => 
     assert.deepEqual(resolveUiFocusPath(schema, state, presence), {
       path: ['editor', 'input_line'],
       effective: 'input_line',
+      context: 'prompt',
       captured: true,
     });
 });
 
 check('predicted picker focus is a disposable overlay on the authoritative path', () => {
     const root = rowNode('root', [
-      leafNode('editor', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
-      leafNode('input_line', WIDGET.TEXT_INPUT),
+      focusLeafNode('editor', WIDGET.VIEW, 0, { surface: SURFACE.DOCUMENT }),
+      focusLeafNode('input_line', WIDGET.TEXT_INPUT, 2),
     ]);
     const schema = schemaOf(22, root);
     const presence = presenceForSchema(22, root, ['editor']);
@@ -746,6 +751,7 @@ check('predicted picker focus is a disposable overlay on the authoritative path'
     assert.deepEqual(resolveUiFocusPath(schema, state, presence, predicted), {
       path: ['editor', 'input_line'],
       effective: 'input_line',
+      context: 'prompt',
       captured: true,
     });
     assert.equal(resolveUiFocusPath(schema, state, presence), null);
@@ -757,8 +763,8 @@ check('predicted picker focus is a disposable overlay on the authoritative path'
 
 check('focus path rejects missing nodes and a hidden effective node', () => {
     const root = rowNode('root', [
-      leafNode('editor', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
-      leafNode('input_line', WIDGET.TEXT_INPUT),
+      focusLeafNode('editor', WIDGET.VIEW, 0, { surface: SURFACE.DOCUMENT }),
+      focusLeafNode('input_line', WIDGET.TEXT_INPUT, 2),
     ]);
     const schema = schemaOf(23, root);
     const state = {
@@ -772,6 +778,44 @@ check('focus path rejects missing nodes and a hidden effective node', () => {
     assert.equal(
       resolveUiFocusPath(
         schema, state, presenceForSchema(23, root, ['input_line'])), null);
+});
+
+check('focus path rejects a directly present endpoint under a hidden ancestor', () => {
+    const root = rowNode('root', [
+      focusLeafNode('editor', WIDGET.VIEW, 0, {
+        surface: SURFACE.DOCUMENT,
+      }),
+      rowNode('prompt.host', [
+        focusLeafNode('input_line', WIDGET.TEXT_INPUT, 2),
+      ]),
+    ]);
+    const schema = schemaOf(24, root);
+    const state = {
+      generation: 24,
+      nodes: [st('root'), st('editor'), st('prompt.host'), st('input_line')],
+      focus_path: ['editor', 'input_line'],
+    };
+    const presence = presenceForSchema(24, root, ['prompt.host']);
+    assert.equal(
+      Boolean(presence.nodes.find(
+        (node) => node.id === 'input_line').present), true);
+    assert.equal(resolveUiFocusPath(schema, state, presence), null);
+});
+
+check('shared C++ focus fixtures resolve every browser keymap context', () => {
+    const fixtures = [
+      ['session_focus_editor.hex', 'editor'],
+      ['session_focus_panel.hex', 'panel'],
+      ['session_focus_prompt.hex', 'prompt'],
+      ['session_focus_external.hex', 'external'],
+    ];
+    for (const [name, expected] of fixtures) {
+      const sections = findSections(fixtureMessage(name));
+      assert.ok(sections);
+      const frame = sections.ui_frame;
+      assert.equal(resolveUiFocusPath(
+        frame.schema, frame.state, frame.presence).context, expected);
+    }
 });
 
 check('focusUiNode always prevents scroll', () => {
@@ -1572,8 +1616,8 @@ check('applySessionDeltaCopy retains unchanged large sections for a caret update
 
 check('UI frame replay restores hidden focus only in one atomic change', () => {
   const schema = schemaOf(4, rowNode('root', [
-    leafNode('editor', WIDGET.VIEW),
-    leafNode('input_line', WIDGET.TEXT_INPUT),
+    focusLeafNode('editor', WIDGET.VIEW, 0),
+    focusLeafNode('input_line', WIDGET.TEXT_INPUT, 2),
   ]));
   const frame = {
     version: { generation: 4n, presence_basis: 2n },

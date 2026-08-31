@@ -35,11 +35,15 @@ using ssg::ValidatedSchema;
 using ssg::WidgetDescriptor;
 using ssg::WidgetKind;
 
-UiNode leaf(std::string id) {
+UiNode leaf(std::string id,
+            std::optional<FocusTarget> focusContext = std::nullopt) {
     WidgetDescriptor w;
     w.kind = WidgetKind::Label;
     w.id = id;
-    return UiNode{UiNodeId{std::move(id)}, Size::flex(), UiLeaf{std::move(w)}};
+    UiNode node{
+        UiNodeId{std::move(id)}, Size::flex(), UiLeaf{std::move(w)}};
+    node.focusContext = focusContext;
+    return node;
 }
 UiNode container(std::string id, std::vector<UiNode> children) {
     return UiNode{UiNodeId{std::move(id)}, Size::flex(),
@@ -50,8 +54,11 @@ ValidatedSchema validated() {
     UiSchema s;
     s.generation = Generation{1};
     s.root = container(
-        "group", {leaf(std::string{ssg::kEditorNodeId}),
-                  container("overlay", {leaf("palette")})});
+        "group", {leaf(std::string{ssg::kEditorNodeId}, FocusTarget::Editor),
+                  container("overlay",
+                            {leaf("palette", FocusTarget::Prompt),
+                             leaf("finder", FocusTarget::Prompt),
+                             leaf("inert")})});
     auto r = ValidatedSchema::validate(s);
     if (!r.ok()) throw std::logic_error("schema must validate");
     return r.takeSchema();
@@ -68,12 +75,36 @@ TEST(captureOnAnAbsentNodeIsRejected) {
 
     bool threw = false;
     try {
-        state.captureFocus(FocusCapture{UiNodeId{"palette"}, FocusTarget::Prompt});
+        state.captureFocus(FocusCapture{UiNodeId{"palette"}});
     } catch (const std::logic_error&) {
         threw = true;
     }
 
     ASSERT_TRUE(threw);
+}
+
+TEST(captureOnANodeWithoutFocusContextIsRejected) {
+    UiInteractionState state{validated()};
+    bool threw = false;
+    try {
+        state.captureFocus(FocusCapture{UiNodeId{"inert"}});
+    } catch (const std::logic_error&) {
+        threw = true;
+    }
+    ASSERT_TRUE(threw);
+}
+
+TEST(aSecondPromptCaptureIsRejectedFromSchemaContext) {
+    UiInteractionState state{validated()};
+    state.captureFocus(FocusCapture{UiNodeId{"palette"}});
+    bool threw = false;
+    try {
+        state.captureFocus(FocusCapture{UiNodeId{"finder"}});
+    } catch (const std::logic_error&) {
+        threw = true;
+    }
+    ASSERT_TRUE(threw);
+    ASSERT_TRUE(state.focus().captures().size() == 1);
 }
 
 TEST(focusPathRejectsAnAbsentEffectiveBase) {
@@ -93,7 +124,7 @@ TEST(focusPathRejectsAnAbsentEffectiveBase) {
 // a hidden node.
 TEST(applyingAHideThatHidesTheFocusPopsItAtomically) {
     UiInteractionState state{validated()};
-    state.captureFocus(FocusCapture{UiNodeId{"palette"}, FocusTarget::Prompt});
+    state.captureFocus(FocusCapture{UiNodeId{"palette"}});
     ASSERT_TRUE(state.effectiveFocus() == FocusTarget::Prompt);
     ASSERT_TRUE((
         state.focusPath() ==
@@ -115,7 +146,7 @@ TEST(applyingAHideThatHidesTheFocusPopsItAtomically) {
 // A rejected patch leaves state unchanged (atomic: whole or nothing).
 TEST(aRejectedPatchLeavesStateUnchanged) {
     UiInteractionState state{validated()};
-    state.captureFocus(FocusCapture{UiNodeId{"palette"}, FocusTarget::Prompt});
+    state.captureFocus(FocusCapture{UiNodeId{"palette"}});
 
     // A stale-basis patch is rejected; focus and presence must be untouched.
     const auto error = state.apply(hidePatch("overlay", PresenceBasis{99}));
@@ -128,6 +159,8 @@ TEST(aRejectedPatchLeavesStateUnchanged) {
 
 int main() {
     RUN(captureOnAnAbsentNodeIsRejected);
+    RUN(captureOnANodeWithoutFocusContextIsRejected);
+    RUN(aSecondPromptCaptureIsRejectedFromSchemaContext);
     RUN(focusPathRejectsAnAbsentEffectiveBase);
     RUN(applyingAHideThatHidesTheFocusPopsItAtomically);
     RUN(aRejectedPatchLeavesStateUnchanged);
