@@ -9,6 +9,7 @@
 #include "test_helpers.h"
 
 #include <optional>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
@@ -18,6 +19,39 @@ namespace {
 using namespace ssg;
 using ssgtest::composeFooterRegion;
 using ssgtest::composeHeaderValidated;
+
+UiChromeLowerResult lowerUiChromeRegion(
+    const UiNode& region, Rect rect, ShellNodeKind kind,
+    SemanticRole role, const Style& style,
+    const ChromeProviderResolver& resolver,
+    std::vector<AccessibilityNode>& out,
+    const StatusViewState* status = nullptr,
+    const PromptInputProjection* input = nullptr) {
+    SolvedChromeSurface solved;
+    auto result = ssg::lowerUiChromeRegion(
+        region, rect, role, style, resolver, solved, status, input);
+    for (const auto& item : solved.items) {
+        auto itemKind = item.statusInvocation
+                            ? ShellNodeKind::FooterAction
+                            : item.id == "footer.hint"
+                                  ? ShellNodeKind::FooterHint
+                                  : kind;
+        out.push_back({itemKind, item.id, item.label, item.rect, item.role,
+                       item.content, item.command, item.statusInvocation});
+    }
+    if (solved.input) {
+        out.push_back({kind, "input_line.query", "Input line",
+                       solved.input->query, SemanticRole::Prompt,
+                       solved.input->queryText});
+        if (solved.input->ghost) {
+            out.push_back({kind, "input_line.ghost",
+                           "Input line completion", *solved.input->ghost,
+                           SemanticRole::LineNumber,
+                           solved.input->ghostText});
+        }
+    }
+    return result;
+}
 
 std::vector<AccessibilityNode> lowerHeaderFieldsFromAssembly(
     const std::vector<StatusFieldCatalogEntry>& catalog,
@@ -204,6 +238,42 @@ TEST(dropsProviderWithEmptyLabel) {
     ASSERT_EQ(out[0].id, std::string{"b"});
 }
 
+TEST(gridDisplayUsesProviderIdentityRatherThanDecodedWidgetId) {
+    const auto region = composeFooterRegion(
+        {providerField("header.left.field.0", "path", 0)});
+    Style style;
+    style.cwdPrefix = "cwd: ";
+    SolvedChromeSurface solved;
+    const auto lowered = ssg::lowerUiChromeRegion(
+        region, {0, 0, 80, 1}, SemanticRole::Header, style,
+        resolverFrom(
+            {{"path", {"~/project", "Current path", std::nullopt}}}),
+        solved);
+    ASSERT_TRUE(lowered.ok());
+    ASSERT_EQ(solved.items.size(), std::size_t{1});
+    if (!solved.items.empty()) {
+        ASSERT_EQ(solved.items.front().content,
+                  std::string{"cwd: ~/project"});
+    }
+}
+
+TEST(labelItemsNeverCarryCommands) {
+    auto label = literal(WidgetKind::Label, "label", "Label");
+    auto region = composeFooterRegion({label});
+    auto& left = std::get<UiContainer>(region.content).children.front();
+    auto& leaf = std::get<UiContainer>(left.content).children.front();
+    std::get<UiLeaf>(leaf.content).widget.command = "must.not.dispatch";
+    SolvedChromeSurface solved;
+    const auto lowered = ssg::lowerUiChromeRegion(
+        region, {0, 0, 80, 1}, SemanticRole::Footer,
+        defaultStyle(), resolverFrom({}), solved);
+    ASSERT_TRUE(lowered.ok());
+    ASSERT_EQ(solved.items.size(), std::size_t{1});
+    if (!solved.items.empty()) {
+        ASSERT_FALSE(solved.items.front().command.has_value());
+    }
+}
+
 TEST(composedProviderHeaderMatchesBuiltinSpanForSpan) {
     const Style style = defaultStyle();
     const std::vector<StatusFieldCatalogEntry> catalog{
@@ -289,6 +359,78 @@ TEST(statusActionItemsCollapseBeforeHintAndFieldsAtNarrowWidth) {
     ASSERT_EQ(out[0].id, std::string{"first"});
     ASSERT_EQ(out[1].kind, ShellNodeKind::FooterAction);
     ASSERT_EQ(out[1].id, std::string{"second"});
+}
+
+TEST(emptyStatusViewProducesNoActionItems) {
+    auto region =
+        chromeRegion(kFooterNodeId, {}, {statusActions()}, std::nullopt,
+                     CenterWidth::Flex, 0, 1);
+    StatusViewState empty;
+    SolvedChromeSurface solved;
+    const auto lowered = ssg::lowerUiChromeRegion(
+        region, {0, 0, 80, 1}, SemanticRole::Footer,
+        defaultStyle(), resolverFrom({}), solved, &empty);
+    ASSERT_TRUE(lowered.ok());
+    ASSERT_TRUE(solved.items.empty());
+}
+
+TEST(semanticStateChromeSolveValidatesCorrespondenceAndBuildsInput) {
+    UiSchema schema{
+        Generation{7},
+        assembleWholeScreen({}, "help.open", Style{}.dimensions,
+                            Style{}.inputLineSigil, std::nullopt)
+            .root};
+    auto validated = ValidatedSchema::validate(schema);
+    ASSERT_TRUE(validated.ok());
+    if (!validated.ok()) return;
+    const auto state =
+        resolveUiState(validated.schema(), resolverFrom({}));
+    const auto* root =
+        std::get_if<UiContainer>(&validated.schema().schema().root.content);
+    ASSERT_TRUE(root != nullptr);
+    if (!root) return;
+    const UiNode* header = nullptr;
+    for (const auto& child : root->children) {
+        if (child.id.value() == kHeaderNodeId) header = &child;
+    }
+    ASSERT_TRUE(header != nullptr);
+    if (!header) return;
+
+    PromptInputProjection input{true, "sa", "ve"};
+    SolvedChromeSurface solved;
+    const auto accepted = solveUiChromeRegion(
+        *header, {0, 0, 80, 1}, SemanticRole::Header, Style{},
+        Generation{7}, state, solved, nullptr, &input);
+    ASSERT_TRUE(accepted.ok());
+    ASSERT_TRUE(solved.input.has_value());
+    if (solved.input) {
+        ASSERT_TRUE(solved.input->queryText.find("sa") !=
+                    std::string::npos);
+        ASSERT_EQ(solved.input->ghostText, std::string{"ve"});
+    }
+
+    auto wrongGeneration = state;
+    wrongGeneration.generation = Generation{8};
+    const auto generationRejected = solveUiChromeRegion(
+        *header, {0, 0, 80, 1}, SemanticRole::Header, Style{},
+        Generation{7}, wrongGeneration, solved, nullptr, &input);
+    ASSERT_FALSE(generationRejected.ok());
+
+    auto missingNode = state;
+    const auto inputState = std::ranges::find(
+        missingNode.nodes,
+        UiNodeId{std::string{kHeaderPromptInputNodeId}},
+        &UiNodeState::id);
+    ASSERT_TRUE(inputState != missingNode.nodes.end());
+    if (inputState != missingNode.nodes.end()) {
+        missingNode.nodes.erase(inputState);
+        const auto nodeRejected = solveUiChromeRegion(
+            *header, {0, 0, 80, 1}, SemanticRole::Header, Style{},
+            Generation{7}, missingNode, solved, nullptr, &input);
+        ASSERT_FALSE(nodeRejected.ok());
+        ASSERT_TRUE(nodeRejected.error->find(kHeaderPromptInputNodeId) !=
+                    std::string::npos);
+    }
 }
 
 // Lower a real assembled header at `width` with a prompt-input projection, returning
@@ -443,10 +585,14 @@ int main() {
     RUN(lowersCheckboxWithRoleOverride);
     RUN(dropsEmptyProviderWidget);
     RUN(dropsProviderWithEmptyLabel);
+    RUN(gridDisplayUsesProviderIdentityRatherThanDecodedWidgetId);
+    RUN(labelItemsNeverCarryCommands);
     RUN(spacerCreatesGapWithoutANode);
     RUN(composedProviderHeaderMatchesBuiltinSpanForSpan);
     RUN(statusActionItemsKeepTypedInvocationAndPlainFooterWidgetsKeepRegionKind);
     RUN(statusActionItemsCollapseBeforeHintAndFieldsAtNarrowWidth);
+    RUN(emptyStatusViewProducesNoActionItems);
+    RUN(semanticStateChromeSolveValidatesCorrespondenceAndBuildsInput);
     RUN(thePromptInputFloorsTheFieldsGrowsAndScrollsItsTailAtEveryWidth);
     RUN(aVisiblePromptProjectionWithoutTheCanonicalNodeEmitsNoInputNodes);
     RUN(aTrailingTextInputWithTheWrongIdIsRejected);

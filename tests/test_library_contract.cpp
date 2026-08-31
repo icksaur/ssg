@@ -202,7 +202,7 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot), report);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -279,7 +279,7 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+        ssg::test::gridFrameFromLegacy(std::move(*snapshot), report);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);

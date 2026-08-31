@@ -161,6 +161,67 @@ interiors and the active pane identity; visual navigation uses the active
 interior while the existing single rendered pane uses the first. Split topology
 does not become UI-schema or wire geometry.
 
+The Step 5 search-results inventory is exhausted by the picker `findresults`
+surface and by `TabKind::SearchResults` tabs. The picker surface was migrated
+with the picker envelope; search-result tabs are persisted result text rendered
+through `SolvedDocumentSurface`. Neither introduces another whole-screen
+placement or hit-testing surface beyond picker and document.
+
+Header, footer, and status backing use one neutral solved-chrome vocabulary:
+
+- `SolvedChromeItem` carries a stable item id, accessible label, rectangle,
+  semantic role, displayed content, optional command, and optional typed
+  status-action invocation.
+- `SolvedChromeInput` carries the header input node id, query rectangle and
+  displayed text, optional ghost rectangle and text, and caret position.
+- `SolvedChromeSurface` carries the solved outer rectangle, ordered
+  `SolvedChromeItem` values, and an optional `SolvedChromeInput`.
+
+The same `SolvedChromeSurface` type represents each band. `GridFrame::header()`
+and `GridFrame::footer()` own their respective values; the footer input is
+always absent. Item field population follows the source leaf kind: labels carry
+content only, command-bearing fields add `command`, and expanded status actions
+add `statusInvocation` rather than a command. The header text input is represented
+only by `SolvedChromeInput`, not a synthetic chrome item.
+
+Grid-medium status-field display is separate from semantic state and generic
+chrome lowering. `StatusFields`, which owns the closed built-in field identity
+vocabulary, owns a pure
+`statusFieldGridDisplay(providerId, semanticValue, style)`
+transform. It returns the semantic value unchanged for fields without a
+grid-only decoration and applies `Style::cwdPrefix` to the path field.
+Solved-chrome lowering and the deprecated shell adapter call that one transform
+with the same inputs. Semantic `UiStateSection` continues to publish the raw
+value; the transform is not a schema or wire fact and native-layout clients do
+not consume it. Generic chrome lowering delegates built-in field display to
+`StatusFields` and contains no field-identity switch.
+
+The shared chrome lowering computes these values from the canonical header or
+footer subtree, its solved outer rectangle, the corresponding
+generation-matched `UiStateSection`, the status view, and grid style. An empty
+status view legitimately emits no action items. The header input is engaged if
+and only if the semantic palette has an active picker and the input node exists
+in the solved layout. An engaged input uses the client-owned `PaletteReport`
+query and ghost, including their valid empty-string state. Every other
+combination yields no solved input and does not render schema-default input
+content.
+
+Renderer, HitTester, and header-input caret placement consume the two
+`GridFrame` surfaces and no longer inspect shell accessibility nodes. A private
+compatibility adapter in the `ShellState` implementation maps the same neutral
+items and input to frozen `AccessibilityNode` and `ShellNodeKind` values for
+`computeShellLayout`; Step 6 deletes that adapter with the legacy shell
+representation.
+
+`trySolveFrameLayout` rejects a present header or footer whose solved node,
+schema subtree, or generation-matched `UiStateSection` correspondence is absent
+or malformed, and rejects a lowering failure. Its diagnostic names the band and
+offending node or section. Before the consumer switch, a parity oracle compares
+every solved item and input rectangle with the compatibility accessibility
+nodes. After the atomic switch, corruption oracles alter every legacy
+accessibility rectangle and prove cells, hits, and the input caret still use
+solved coordinates.
+
 The schema move does not reposition the established shell layout: in the same
 commit, a parity oracle compares both notice and external-modification solved
 rectangles with the legacy rectangles the shell already projects. Notice then

@@ -145,12 +145,13 @@ ssg::LegacyPresentationSnapshot withUiWidgetRole(
 }
 
 ssg::GridFrame deprecatedGridFrame(
-    ssg::LegacyPresentationSnapshot const& snapshot) {
+    ssg::LegacyPresentationSnapshot const& snapshot,
+    ssg::PaletteReport palette = {}) {
     auto frame = ssg::test::gridFrameFromLegacy(
         ssg::LegacyPresentationSnapshot{
         snapshot.semantic().revision(), snapshot.semantic().topology(),
         snapshot.semantic().client(), snapshot.semantic().sections(),
-        snapshot.presentation()});
+        snapshot.presentation()}, std::move(palette));
     return std::move(frame).value();
 }
 
@@ -681,7 +682,7 @@ TEST(renderShowsPaletteQueryAndGhostInHeader) {
         runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot, report));
 
     // The header shows the query (prompt role) and the dim ghost completion.
     ASSERT_TRUE(gridContains(grid, "> sa"));
@@ -1402,7 +1403,7 @@ TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot, report));
 
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
@@ -1439,7 +1440,7 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot, report));
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
 
@@ -1472,7 +1473,7 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
+    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot, report));
 
     ASSERT_TRUE(grid.caret.has_value());
     if (!grid.caret) return;
@@ -1498,26 +1499,130 @@ TEST(inputLineCaretUsesTheLoweredPromptInputGeometry) {
         auto snapshot = ssg::test::SessionSnapshotBuilder{}
                             .viewport(width, 8)
                             .promptInput(true, std::move(query))
+                            .shellProjection([](ssg::ShellViewState& shell) {
+                                for (auto& node : shell.accessibilityNodes) {
+                                    node.rect = {0, 1, 1, 1};
+                                }
+                            })
                             .sections([](ssg::SessionSnapshotSections& sections) {
                                 sections.focus = ssg::FocusTarget::Prompt;
                             })
                             .build();
-        const auto& shell = snapshot.presentation().shell;
-        const ssg::AccessibilityNode* input = nullptr;
-        for (const auto& node : shell.accessibilityNodes) {
-            if (node.id == "input_line.query") input = &node;
-        }
+        ASSERT_TRUE(snapshot.header().has_value());
+        const auto* input = snapshot.header() && snapshot.header()->input
+                                ? &*snapshot.header()->input
+                                : nullptr;
         ASSERT_TRUE(input != nullptr);
 
         auto grid = ssg::Renderer{}.render(snapshot);
         ASSERT_TRUE(grid.caret.has_value());
         if (!input || !grid.caret) return;
-        ASSERT_EQ(grid.caret->row, input->rect.y);
-        ASSERT_EQ(grid.caret->column, input->rect.x + input->rect.width);
+        ASSERT_EQ(grid.caret->row, input->caret.y);
+        ASSERT_EQ(grid.caret->column, input->caret.x);
+        ASSERT_EQ(grid.at(input->query.x, input->query.y).text,
+                  input->queryText.substr(0, 1));
     };
 
     assertCaret(80, "save");
     assertCaret(30, std::string(200, 'x'));
+}
+
+TEST(chromeRenderingIgnoresCorruptedLegacyAccessibilityNodes) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "doc.txt"} << "alpha\n";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"doc.txt"}});
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"palette.open", runtime->revision(), {}})
+                    .accepted());
+    ssg::PaletteReport report;
+    report.query = "sa";
+    report.ghost = "ve";
+    auto snapshot =
+        runtime->present(ssg::ClientId{1}, {80, 24}, report);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    auto clean = deprecatedGridFrame(*snapshot, report);
+    const auto& legacyNodes =
+        snapshot->presentation().shell.accessibilityNodes;
+    const auto assertLegacyParity =
+        [&](const std::optional<ssg::SolvedChromeSurface>& surface) {
+            ASSERT_TRUE(surface.has_value());
+            if (!surface) return;
+            for (const auto& item : surface->items) {
+                const auto legacy = std::ranges::find(
+                    legacyNodes, item.id, &ssg::AccessibilityNode::id);
+                ASSERT_TRUE(legacy != legacyNodes.end());
+                if (legacy == legacyNodes.end()) continue;
+                ASSERT_EQ(item.rect, legacy->rect);
+                ASSERT_EQ(item.content, legacy->content);
+            }
+            if (!surface->input) return;
+            const auto query = std::ranges::find(
+                legacyNodes, std::string{"input_line.query"},
+                &ssg::AccessibilityNode::id);
+            ASSERT_TRUE(query != legacyNodes.end());
+            if (query != legacyNodes.end()) {
+                ASSERT_EQ(surface->input->query, query->rect);
+                ASSERT_EQ(surface->input->queryText, query->content);
+            }
+            const auto ghost = std::ranges::find(
+                legacyNodes, std::string{"input_line.ghost"},
+                &ssg::AccessibilityNode::id);
+            ASSERT_TRUE(ghost != legacyNodes.end());
+            if (ghost != legacyNodes.end() && surface->input->ghost) {
+                ASSERT_EQ(*surface->input->ghost, ghost->rect);
+                ASSERT_EQ(surface->input->ghostText, ghost->content);
+            }
+        };
+    assertLegacyParity(clean.header());
+    assertLegacyParity(clean.footer());
+    auto presentation = snapshot->presentation();
+    for (auto& node : presentation.shell.accessibilityNodes) {
+        node.rect = {0, 1, 1, 1};
+        node.content = "corrupt";
+    }
+    auto corrupted = deprecatedGridFrame(
+        ssg::LegacyPresentationSnapshot{
+            snapshot->semantic().revision(), snapshot->semantic().topology(),
+            snapshot->semantic().client(), snapshot->semantic().sections(),
+            std::move(presentation)},
+        report);
+    ASSERT_TRUE(clean.header() == corrupted.header());
+    ASSERT_TRUE(clean.footer() == corrupted.footer());
+    const auto cleanGrid = ssg::Renderer{}.render(clean);
+    const auto corruptedGrid = ssg::Renderer{}.render(corrupted);
+    ASSERT_EQ(cleanGrid.canonical(), corruptedGrid.canonical());
+    ASSERT_EQ(cleanGrid.caret, corruptedGrid.caret);
+}
+
+TEST(emptyEditorMessageUsesSolvedDocumentGeometryWithoutLegacyNode) {
+    auto frame =
+        ssg::test::SessionSnapshotBuilder{}
+            .viewport(40, 8)
+            .revision(ssg::Revision{0})
+            .shellProjection([](ssg::ShellViewState& shell) {
+                std::erase_if(
+                    shell.accessibilityNodes,
+                    [](const ssg::AccessibilityNode& node) {
+                        return node.kind == ssg::ShellNodeKind::EmptyState;
+                    });
+            })
+            .build();
+    ASSERT_TRUE(frame.document().has_value());
+    if (!frame.document()) return;
+    const auto grid = ssg::Renderer{}.render(frame);
+    ASSERT_EQ(grid.at(frame.document()->content.x,
+                      frame.document()->content.y)
+                  .text,
+              std::string{"e"});
+    ASSERT_TRUE(gridContains(grid, "empty editor"));
 }
 
 // Proves the renderer READS the snapshot's published Style section rather than
@@ -1551,6 +1656,7 @@ TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
     style.scrollbar.bottom = "@";
     style.tree.collapsed = "+ ";
     style.tree.expanded = "- ";
+    style.cwdPrefix = "cwd: ";
     auto const grid = ssg::Renderer{}.render(
         deprecatedGridFrame(withStyle(*snapshot, style)));
 
@@ -1568,6 +1674,7 @@ TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
     }
     ASSERT_TRUE(restyledThumb);
     ASSERT_TRUE(restyledTrack);
+    ASSERT_TRUE(gridContains(grid, "cwd: "));
 
     // The tree indicator follows too, so panel painting is routed as well.
     ASSERT_TRUE(gridContains(grid, "- "));
@@ -2361,6 +2468,8 @@ int main() {
     RUN(theInputLineCaretIsPlacedByDisplayWidthNotByteCount);
     RUN(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText);
     RUN(inputLineCaretUsesTheLoweredPromptInputGeometry);
+    RUN(chromeRenderingIgnoresCorruptedLegacyAccessibilityNodes);
+    RUN(emptyEditorMessageUsesSolvedDocumentGeometryWithoutLegacyNode);
     RUN(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals);
     RUN(theDocumentReplacementGlyphComesFromStyle);
     RUN(styleDefineRestylesTheLiveSessionChrome);

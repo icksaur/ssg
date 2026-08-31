@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ssg/ShellState.h>
+#include <ssg/Style.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -56,5 +57,11 @@ defaultStatusFieldProviders();
     const std::vector<StatusFieldCatalogEntry>& catalog,
     const std::unordered_map<std::string, StatusFieldProvider>& providers,
     StatusFieldProviderContext const& context);
+
+// Grid-only decoration of a semantic status-field value. The status vocabulary
+// owns this mapping so generic chrome lowering never names individual fields.
+[[nodiscard]] std::string statusFieldGridDisplay(
+    std::string_view providerId, std::string_view semanticValue,
+    const Style& style);
 
 } // namespace ssg

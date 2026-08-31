@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ssg/ChromeLowering.h>
 #include <ssg/Layout.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Viewport.h>
@@ -74,6 +75,12 @@ public:
     [[nodiscard]] PaletteReport const& palette() const noexcept {
         return palette_;
     }
+    [[nodiscard]] std::optional<SolvedChromeSurface> const& header() const noexcept {
+        return header_;
+    }
+    [[nodiscard]] std::optional<SolvedChromeSurface> const& footer() const noexcept {
+        return footer_;
+    }
     [[nodiscard]] std::optional<SolvedPanelSurface> const& panel() const noexcept {
         return panel_;
     }
@@ -96,11 +103,14 @@ private:
         bool revealTreeSelection, const ShellState& shell);
     void solvePanel(std::uint32_t treeFirstVisible, bool revealTreeSelection);
     void solveDocument(const ShellState* shell);
+    [[nodiscard]] std::optional<std::string> solveChrome();
 
     SessionSnapshot semantic_;
     PresentationSnapshot presentation_;
     SolvedGridTree layout_;
     PaletteReport palette_;
+    std::optional<SolvedChromeSurface> header_;
+    std::optional<SolvedChromeSurface> footer_;
     std::optional<SolvedPanelSurface> panel_;
     std::optional<SolvedDocumentSurface> document_;
     GridBasis basis_;

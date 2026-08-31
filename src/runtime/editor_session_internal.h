@@ -491,9 +491,7 @@ struct EditorSession::Impl final : CommandServices,
     // the cwd with a terminal glyph; the semantic dynamic-state path takes none, so
     // a native client receives no presentation styling. A strong mode (not a raw
     // prefix) makes semantic purity a named choice at each call site.
-    enum class ChromeFieldMode { Grid, Semantic };
-    [[nodiscard]] StatusFieldProjection chromeStatusFields(
-        ChromeFieldMode mode) const;
+    [[nodiscard]] StatusFieldProjection chromeStatusFields() const;
     [[nodiscard]] PaletteViewState paletteView() const;
     // The tree view state with its scroll offset, scrollbar, and visible-window
     // hit map resolved against the last panel height (keep-selection-visible).

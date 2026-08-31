@@ -381,42 +381,6 @@ void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
     }
 }
 
-// The input line's caret cell: one column past the last typed character, so it
-// marks where the next keystroke lands.  Derived from the SAME published node
-// geometry and the same grapheme measurement that positioned the text, so the
-// two cannot drift.
-//
-// The offset is display WIDTH, not byte count: a query may hold multi-byte or
-// wide characters, and `size()` would misplace the caret for any of them.
-//
-// When the query exactly fills its node this lands on the ghost's first cell,
-// which is intended -- the ghost is unaccepted suggestion text and the insertion
-// point belongs on top of it.  The caret is therefore bounded by the HEADER row,
-// not by the query node.
-std::optional<GridPosition> inputLineCaret(ShellViewState const& shell) {
-    for (auto const& node : shell.accessibilityNodes) {
-        if (node.id != "input_line.query") continue;
-        // Walk the same spans paintText walks, stopping where it stops: the
-        // caret must sit after the last character actually DRAWN, not after the
-        // last character in the string, or an over-long query would push it off
-        // the end of the rendered text.
-        auto const run = GraphemeLayout{}.computeRun(node.content);
-        int column = node.rect.x;
-        for (auto const& span : run.spans) {
-            auto const width =
-                static_cast<int>(std::max<std::uint32_t>(span.cellWidth, 1));
-            if (column + width > node.rect.right()) break;
-            column += width;
-        }
-        // The caret sits one past the last drawn character. Layout holds a
-        // column back for it, so this normally needs no clamping; the bound is
-        // a guard against a degenerate header rather than routine behavior.
-        column = std::min(column, static_cast<int>(shell.viewport.columns) - 1);
-        return GridPosition{std::max(column, 0), node.rect.y};
-    }
-    return std::nullopt;
-}
-
 void paintNotice(CellGrid& grid, const NoticeView& notice,
                  const SolvedNoticeSurface& solved,
                  ThemeSnapshot const& theme, Style const& style,
@@ -486,54 +450,31 @@ void paintTabBar(CellGrid& grid, const SolvedTabBar& solved,
     }
 }
 
-void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
+void paintChromeSurface(CellGrid& grid, const SolvedChromeSurface& surface,
                         ThemeSnapshot const& theme, const UiSchema& ui,
-                        std::uint8_t background, Style const& style) {
-    auto const headerBackground = semanticIndex(
-        theme,
-        nodeBackground(ui, kHeaderNodeId, SemanticRole::HeaderBackground));
-    auto const footerBackground = semanticIndex(
-        theme,
-        nodeBackground(ui, kFooterNodeId, SemanticRole::FooterBackground));
-    for (auto const& node : shell.accessibilityNodes) {
-        std::uint8_t nodeBackground = background;
-        switch (node.kind) {
-        case ShellNodeKind::PanelProvider:
-            break;
-        case ShellNodeKind::HeaderField:
-        case ShellNodeKind::FooterField:
-        case ShellNodeKind::FooterAction:
-        case ShellNodeKind::FooterHint:
-        case ShellNodeKind::EmptyState:
-            // Chrome backgrounds (M-theme): header/footer fields sit on their
-            // distinct band; an inactive tab is a light chip, while the active
-            // tab keeps the shared Background so it merges into the document.
-            if (node.kind == ShellNodeKind::HeaderField) {
-                nodeBackground = headerBackground;
-            } else if (node.kind == ShellNodeKind::FooterField ||
-                       node.kind == ShellNodeKind::FooterAction ||
-                       node.kind == ShellNodeKind::FooterHint) {
-                nodeBackground = footerBackground;
-            }
-            if (!node.content.empty()) {
-                auto foregroundRole = node.role;
-                if (node.kind == ShellNodeKind::HeaderField ||
-                    node.kind == ShellNodeKind::FooterField ||
-                    node.kind == ShellNodeKind::FooterHint) {
-                    foregroundRole =
-                        chromeGlyphForeground(ui, node.id, node.role);
-                }
-                paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
-                           node.content, semanticIndex(theme, foregroundRole),
-                           nodeBackground, foregroundRole, style);
-            }
-            break;
-        case ShellNodeKind::NoticeBar:
-        case ShellNodeKind::NoticeAction:
-            break;
-        default:
-            break;  // Containers, panes, and scrollbars are painted elsewhere.
-        }
+                        SemanticRole backgroundRole, const Style& style) {
+    const auto background = semanticIndex(theme, backgroundRole);
+    for (const auto& item : surface.items) {
+        if (item.content.empty()) continue;
+        const auto foregroundRole =
+            item.statusInvocation
+                ? item.role
+                : chromeGlyphForeground(ui, item.id, item.role);
+        paintText(grid, item.rect.x, item.rect.y, item.rect.right(),
+                  item.content, semanticIndex(theme, foregroundRole),
+                  background, foregroundRole, style);
+    }
+    if (!surface.input) return;
+    paintText(grid, surface.input->query.x, surface.input->query.y,
+              surface.input->query.right(), surface.input->queryText,
+              semanticIndex(theme, SemanticRole::Prompt), background,
+              SemanticRole::Prompt, style);
+    if (surface.input->ghost) {
+        paintText(grid, surface.input->ghost->x, surface.input->ghost->y,
+                  surface.input->ghost->right(),
+                  surface.input->ghostText,
+                  semanticIndex(theme, SemanticRole::LineNumber),
+                  background, SemanticRole::LineNumber, style);
     }
 }
 
@@ -1311,7 +1252,20 @@ CellGrid Renderer::render(GridFrame const& snapshot,
             theme, style, role, foreground, documentBackground);
     }
 
-    paintShellLeaves(grid, shell, theme, ui, background, style);
+    if (snapshot.header()) {
+        paintChromeSurface(
+            grid, *snapshot.header(), theme, ui,
+            nodeBackground(ui, kHeaderNodeId,
+                           SemanticRole::HeaderBackground),
+            style);
+    }
+    if (snapshot.footer()) {
+        paintChromeSurface(
+            grid, *snapshot.footer(), theme, ui,
+            nodeBackground(ui, kFooterNodeId,
+                           SemanticRole::FooterBackground),
+            style);
+    }
     if (snapshot.sections().noticeView) {
         const auto* node =
             snapshot.layout().find(UiNodeId{std::string{kNoticeNodeId}});
@@ -1369,6 +1323,13 @@ CellGrid Renderer::render(GridFrame const& snapshot,
                      documentBackgroundRole);
             paintDocument(grid, snapshot, document.content, theme,
                            documentBackground, style, lineCache);
+            if (snapshot.sections().tabs.tabs.empty() &&
+                snapshot.sections().document.revision.value() == 0) {
+                paintText(grid, document.content.x, document.content.y,
+                          document.content.right(), "empty editor",
+                          foreground, documentBackground,
+                          documentBackgroundRole, style);
+            }
             // After the document: a diagnostic underlines whatever the cell
             // already shows rather than replacing it.
             paintDiagnostics(grid, snapshot, document.content);
@@ -1449,8 +1410,10 @@ CellGrid Renderer::render(GridFrame const& snapshot,
     // would never be reached while a picker is open.  The cursor is the primary
     // way a user can tell a text input has focus, so it must
     // not depend on which pane branch ran.
-    if (snapshot.sections().focus == FocusTarget::Prompt) {
-        if (auto caret = inputLineCaret(shell)) grid.caret = *caret;
+    if (snapshot.sections().focus == FocusTarget::Prompt &&
+        snapshot.header() && snapshot.header()->input) {
+        const auto& caret = snapshot.header()->input->caret;
+        grid.caret = GridPosition{caret.x, caret.y};
     }
     return grid;
 }

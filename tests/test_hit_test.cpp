@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <ranges>
 #include <string>
 
 namespace {
@@ -174,26 +175,52 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
 
 TEST(footerActionHitCarriesExactStatusActionInvocation) {
     ssg::StatusActionInvocation invocation{ssg::StatusId{77}, "retry", 9};
-    ssg::ShellViewState shell;
-    shell.viewport = {20, 5};
-    shell.accessibilityNodes.push_back(
-        {ssg::ShellNodeKind::FooterAction, "retry", "Retry", {2, 4, 5, 1},
-         ssg::SemanticRole::StatusInfo, "Retry", std::nullopt, invocation});
-    ssg::LegacyPresentationSnapshot snapshot{
-        ssg::Revision{1}, ssg::SessionTopology{},
-        ssg::ClientSnapshotState{ssg::ClientId{1}, ssg::ViewId{1}, {}},
-        minimalSections(),
-        ssg::PresentationSnapshot{ssg::ViewportViewState{ssg::ViewportDimensions{20, 5}},
-                                  ssg::Style{},
-                                  std::nullopt, std::move(shell),
-                                  ssg::SelectionNavigation{}}};
     auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(snapshot));
-    ASSERT_TRUE(frame.has_value());
-    if (!frame) return;
-    auto hit = ssg::HitTester{*frame}.at(3, 4);
+        ssg::test::SessionSnapshotBuilder{}
+            .viewport(40, 8)
+            .status(ssg::StatusViewState{
+                {{ssg::StatusId{77}, ssg::StatusPriority::Information, 9,
+                  "status",
+                  {ssg::StatusAction{"retry", "Retry", "ignored"}}}},
+                0})
+            .build();
+    ASSERT_TRUE(frame.footer().has_value());
+    if (!frame.footer()) return;
+    const auto found = std::ranges::find(
+        frame.footer()->items, std::string{"retry"},
+        &ssg::SolvedChromeItem::id);
+    ASSERT_TRUE(found != frame.footer()->items.end());
+    if (found == frame.footer()->items.end()) return;
+    auto hit = ssg::HitTester{frame}.at(found->rect.x, found->rect.y);
     ASSERT_EQ(hit.region, ssg::HitRegion::StatusAction);
     ASSERT_EQ(hit.statusInvocation, invocation);
+}
+
+TEST(headerInputAndGhostUseSolvedChromeHits) {
+    auto frame =
+        ssg::test::SessionSnapshotBuilder{}
+            .viewport(40, 8)
+            .promptInput(true, "sa", "ve")
+            .shellProjection([](ssg::ShellViewState& shell) {
+                for (auto& node : shell.accessibilityNodes) {
+                    node.rect = {0, 1, 1, 1};
+                }
+            })
+            .build();
+    ASSERT_TRUE(frame.header().has_value());
+    const auto* input = frame.header() && frame.header()->input
+                            ? &*frame.header()->input
+                            : nullptr;
+    ASSERT_TRUE(input != nullptr);
+    if (!input) return;
+    for (const auto& rect :
+         {input->query, input->ghost.value_or(input->query)}) {
+        const auto hit =
+            ssg::HitTester{frame}.at(rect.x, rect.y);
+        ASSERT_EQ(hit.region, ssg::HitRegion::HeaderField);
+        ASSERT_EQ(hit.fieldId,
+                  std::optional<std::string>{"input_line.query"});
+    }
 }
 
 TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
@@ -1029,21 +1056,46 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    const auto originalShell = snapshot->presentation().shell;
+    auto presentation = snapshot->presentation();
+    for (auto& node : presentation.shell.accessibilityNodes) {
+        node.rect = {0, 1, 1, 1};
+    }
+    auto frame = ssg::test::gridFrameFromLegacy(
+        ssg::LegacyPresentationSnapshot{
+            snapshot->semantic().revision(), snapshot->semantic().topology(),
+            snapshot->semantic().client(), snapshot->semantic().sections(),
+            std::move(presentation)});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation().shell;
 
-    const auto* path = findNode(shell, ssg::ShellNodeKind::HeaderField, "path");
-    const auto* branch =
-        findNode(shell, ssg::ShellNodeKind::HeaderField, "branch");
-    const auto* follow =
-        findNode(shell, ssg::ShellNodeKind::FooterField, "follow");
-    ASSERT_TRUE(path != nullptr);
-    ASSERT_TRUE(branch != nullptr);
-    ASSERT_TRUE(follow != nullptr);
-    if (!path || !branch || !follow) return;
+    const auto item = [](const std::optional<ssg::SolvedChromeSurface>& surface,
+                         std::string_view id)
+        -> const ssg::SolvedChromeItem* {
+        if (!surface) return nullptr;
+        const auto found = std::ranges::find(surface->items, id,
+                                             &ssg::SolvedChromeItem::id);
+        return found == surface->items.end() ? nullptr : &*found;
+    };
+    const auto* path = item(frame->header(), "path");
+    const auto* branch = item(frame->header(), "branch");
+    const auto* follow = item(frame->footer(), "follow");
+    const auto* legacyPath =
+        findNode(originalShell, ssg::ShellNodeKind::HeaderField, "path");
+    const auto* legacyBranch =
+        findNode(originalShell, ssg::ShellNodeKind::HeaderField, "branch");
+    const auto* legacyFollow =
+        findNode(originalShell, ssg::ShellNodeKind::FooterField, "follow");
+    ASSERT_TRUE(path != nullptr && branch != nullptr && follow != nullptr);
+    ASSERT_TRUE(legacyPath != nullptr && legacyBranch != nullptr &&
+                legacyFollow != nullptr);
+    if (!path || !branch || !follow || !legacyPath || !legacyBranch ||
+        !legacyFollow) {
+        return;
+    }
+    ASSERT_EQ(path->rect, legacyPath->rect);
+    ASSERT_EQ(branch->rect, legacyBranch->rect);
+    ASSERT_EQ(follow->rect, legacyFollow->rect);
 
     auto pathHit = ssg::HitTester{*frame}.at(path->rect.x, path->rect.y);
     ASSERT_EQ(pathHit.region, ssg::HitRegion::HeaderField);
@@ -1067,7 +1119,8 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
 
     // A chrome coordinate outside any field remains a non-field hit.
     auto chrome =
-        ssg::HitTester{*frame}.at(shell.viewport.columns - 1, 0);
+        ssg::HitTester{*frame}.at(
+            frame->presentation().shell.viewport.columns - 1, 0);
     ASSERT_TRUE(chrome.region != ssg::HitRegion::HeaderField);
     ASSERT_TRUE(chrome.region != ssg::HitRegion::FooterField);
 }
@@ -1213,6 +1266,7 @@ int main() {
     RUN(tabBarCellMapsToItsTabIndex);
     RUN(tabHitsUseSemanticTabsAndSolvedGeometry);
     RUN(footerActionHitCarriesExactStatusActionInvocation);
+    RUN(headerInputAndGhostUseSolvedChromeHits);
     RUN(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert);
     RUN(externalActionHitCarriesPublishedFileAndCommandIdentity);
     RUN(statusFieldHitCoordinatesResolvePublishedFieldCommands);

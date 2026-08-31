@@ -122,6 +122,7 @@ std::vector<StatusFieldProviderBinding> defaultStatusFieldProviders() {
              if (!context.currentBranch || context.currentBranch->empty()) {
                  return std::nullopt;
              }
+
              return composeBranchField(*context.currentBranch);
          }},
         {"status",
@@ -135,6 +136,15 @@ std::vector<StatusFieldProviderBinding> defaultStatusFieldProviders() {
              return context.followMode;
          }},
     };
+}
+
+std::string statusFieldGridDisplay(std::string_view providerId,
+                                   std::string_view semanticValue,
+                                   const Style& style) {
+    if (providerId == "path") {
+        return style.cwdPrefix + std::string{semanticValue};
+    }
+    return std::string{semanticValue};
 }
 
 StatusFieldProjection projectStatusFields(

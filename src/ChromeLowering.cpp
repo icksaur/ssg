@@ -1,11 +1,13 @@
 #include <ssg/ChromeLowering.h>
 
 #include <ssg/GraphemeLayout.h>
+#include <ssg/StatusFields.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/Theme.h>  // semanticRoleFromName
 #include <ssg/Widget.h>
 
 #include <optional>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <variant>
@@ -25,7 +27,6 @@ struct Packed {
     std::string label;
     std::optional<std::string> command;
     SemanticRole role;
-    ShellNodeKind kind = ShellNodeKind::FooterField;
     std::optional<StatusActionInvocation> statusInvocation;
 };
 
@@ -43,6 +44,7 @@ bool truthy(std::string_view value) { return value == "true"; }
 struct Sources {
     std::string value;
     std::string providerLabel;
+    std::string providerId;
     std::optional<std::string> inheritedCommand;
     std::optional<bool> active;
     bool fromProvider = false;
@@ -54,6 +56,7 @@ Sources resolveSources(const WidgetDescriptor& w,
     if (w.value) {
         if (w.value->isProvider) {
             s.fromProvider = true;
+            s.providerId = w.value->provider;
             if (const auto resolved = resolveProvider(w.value->provider)) {
                 s.value = resolved->value;
                 s.providerLabel = resolved->accessibleLabel;
@@ -97,7 +100,8 @@ Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
             r.drop = true;
             return r;
         }
-        r.content = s.value;
+        r.content =
+            statusFieldGridDisplay(s.providerId, s.value, style);
         r.label = label;
         break;
     }
@@ -116,7 +120,9 @@ Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
     }
 
     // The descriptor's own command overrides an inherited one.
-    r.command = w.command ? w.command : s.inheritedCommand;
+    if (w.kind != WidgetKind::Label) {
+        r.command = w.command ? w.command : s.inheritedCommand;
+    }
     return r;
 }
 
@@ -202,10 +208,9 @@ static int lowerChromeGroups(
     const std::vector<const WidgetDescriptor*>& left,
     const std::vector<const WidgetDescriptor*>& right,
     const WidgetDescriptor* center, int separator, CenterWidth centerWidth,
-    int centerFixed, const Rect& rect, ShellNodeKind regionNodeKind,
-    SemanticRole defaultRole, const Style& style,
+    int centerFixed, const Rect& rect, SemanticRole defaultRole, const Style& style,
     const ChromeProviderResolver& resolveProvider,
-    std::vector<AccessibilityNode>& out, const StatusViewState* statusView) {
+    std::vector<SolvedChromeItem>& out, const StatusViewState* statusView) {
     WidgetStack stack{separator};
     std::vector<Packed> packed;
 
@@ -232,10 +237,11 @@ static int lowerChromeGroups(
                 } else {
                     stack.packRight(std::move(stackItem));
                 }
-                packed.push_back({actionStackId, &w, action.id, resolved.content, resolved.label,
-                                  std::nullopt, SemanticRole::StatusInfo,
-                                  ShellNodeKind::FooterAction,
-                                  StatusActionInvocation{itemView.id, action.id, itemView.generation}});
+                packed.push_back(
+                    {actionStackId, &w, action.id, resolved.content,
+                     resolved.label, std::nullopt, SemanticRole::StatusInfo,
+                     StatusActionInvocation{itemView.id, action.id,
+                                            itemView.generation}});
             }
             return;
         }
@@ -249,16 +255,12 @@ static int lowerChromeGroups(
         } else {
             stack.packRight(std::move(item));
         }
-        const ShellNodeKind kind =
-            (w.kind == WidgetKind::Field && w.id == "footer.hint")
-                ? ShellNodeKind::FooterHint
-                : regionNodeKind;
         const SemanticRole role =
-            (kind == ShellNodeKind::FooterHint) ? SemanticRole::Footer
-            : (kind == ShellNodeKind::FooterAction) ? SemanticRole::StatusInfo
-                                                : widgetRole(w, defaultRole);
+            (w.kind == WidgetKind::Field && w.id == "footer.hint")
+                ? SemanticRole::Footer
+                : widgetRole(w, defaultRole);
         packed.push_back({stackId, &w, w.id, resolved.content, resolved.label,
-                          resolved.command, role, kind, std::nullopt});
+                          resolved.command, role, std::nullopt});
     };
 
     for (std::size_t i = 0; i < left.size(); ++i)
@@ -288,7 +290,7 @@ static int lowerChromeGroups(
         // A Spacer occupies stack space but emits no node -- it is a blank gap,
         // not an interactive element.
         if (item->descriptor->kind == WidgetKind::Spacer) return;
-        out.push_back({item->kind, item->nodeId, item->label,
+        out.push_back({item->nodeId, item->label,
                        {rect.x + placement->offset, rect.y, placement->size, 1},
                        item->role, item->content, item->command,
                        item->statusInvocation});
@@ -331,11 +333,12 @@ std::optional<std::vector<const WidgetDescriptor*>> groupLeaves(
 }  // namespace
 
 UiChromeLowerResult lowerUiChromeRegion(
-    const UiNode& regionRoot, const Rect& rect, ShellNodeKind regionNodeKind,
-    SemanticRole defaultRole, const Style& style,
+    const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
+    const Style& style,
     const ChromeProviderResolver& resolveProvider,
-    std::vector<AccessibilityNode>& out, const StatusViewState* statusView,
+    SolvedChromeSurface& out, const StatusViewState* statusView,
     const PromptInputProjection* input) {
+    out = SolvedChromeSurface{rect};
     // The canonical chrome shape: a Row root of exactly three groups --
     // left(Auto, Row), middle(Flex, Row), right(Auto, Row) -- so the packing is
     // encoded in the sizing. Every field the shape depends on is CHECKED here (no
@@ -482,7 +485,7 @@ UiChromeLowerResult lowerUiChromeRegion(
 
     const int rightEdge = lowerChromeGroups(
         *leftWidgets, *rightWidgets, center, separator, centerWidth, centerFixed,
-        groupsRect, regionNodeKind, defaultRole, style, resolveProvider, out,
+        groupsRect, defaultRole, style, resolveProvider, out.items,
         statusView);
 
     // The input line grows across the header's remaining width after the groups'
@@ -495,19 +498,98 @@ UiChromeLowerResult lowerUiChromeRegion(
         const int available = std::max(0, rect.x + rect.width - inputX);
         const auto line =
             layoutInputLine(promptInput->sigil, input->query, input->ghost, available);
-        out.push_back({regionNodeKind, "input_line.query", "Input line",
-                       {inputX, rect.y, line.width, 1}, SemanticRole::Prompt,
-                       line.text, std::nullopt, std::nullopt});
+        SolvedChromeInput solvedInput;
+        solvedInput.nodeId =
+            UiNodeId{std::string{kHeaderPromptInputNodeId}};
+        solvedInput.query = {inputX, rect.y, line.width, 1};
+        solvedInput.queryText = line.text;
+        solvedInput.caret = {inputX + line.width, rect.y, 1, 1};
         inputX += line.width;
         if (line.ghostWidth > 0) {
-            out.push_back({regionNodeKind, "input_line.ghost",
-                           "Input line completion",
-                           {inputX, rect.y, line.ghostWidth, 1},
-                           SemanticRole::LineNumber, line.ghostText, std::nullopt,
-                           std::nullopt});
+            solvedInput.ghost =
+                Rect{inputX, rect.y, line.ghostWidth, 1};
+            solvedInput.ghostText = line.ghostText;
         }
+        out.input = std::move(solvedInput);
     }
     return {std::nullopt, rightEdge};
+}
+
+UiChromeLowerResult solveUiChromeRegion(
+    const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
+    const Style& style, Generation schemaGeneration,
+    const UiStateSection& state,
+    SolvedChromeSurface& out, const StatusViewState* statusView,
+    const PromptInputProjection* input) {
+    if (state.generation != schemaGeneration) {
+        return {regionRoot.id.value() +
+                " chrome UI state generation does not match schema"};
+    }
+    struct ProviderState {
+        std::string id;
+        ResolvedProvider value;
+    };
+    std::vector<ProviderState> providers;
+    const auto stateFor = [&](const UiNodeId& id) -> const UiNodeState* {
+        const auto found = std::ranges::find(state.nodes, id, &UiNodeState::id);
+        return found == state.nodes.end() ? nullptr : &*found;
+    };
+    const auto collect = [&](const auto& self, const UiNode& node) -> void {
+        if (!stateFor(node.id)) return;
+        if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
+            const auto* nodeState = stateFor(node.id);
+            if (nodeState && nodeState->leaf) {
+                const auto& semantic = *nodeState->leaf;
+                if (leaf->widget.value &&
+                    leaf->widget.value->isProvider) {
+                    providers.push_back(
+                        {leaf->widget.value->provider,
+                         {semantic.value, semantic.label, semantic.command,
+                          semantic.active}});
+                }
+                if (leaf->widget.checked &&
+                    leaf->widget.checked->isProvider &&
+                    semantic.checked) {
+                    providers.push_back(
+                        {leaf->widget.checked->provider,
+                         {*semantic.checked ? "true" : "false", {},
+                          std::nullopt, std::nullopt}});
+                }
+            }
+        }
+        if (const auto* container =
+                std::get_if<UiContainer>(&node.content)) {
+            for (const auto& child : container->children) self(self, child);
+        }
+    };
+    const auto validate = [&](const auto& self,
+                              const UiNode& node) -> std::optional<std::string> {
+        if (!stateFor(node.id)) {
+            return regionRoot.id.value() +
+                   " chrome UI state is missing node " + node.id.value();
+        }
+        if (const auto* container =
+                std::get_if<UiContainer>(&node.content)) {
+            for (const auto& child : container->children) {
+                if (auto error = self(self, child)) return error;
+            }
+        }
+        return std::nullopt;
+    };
+    if (auto error = validate(validate, regionRoot)) {
+        return {*error};
+    }
+    collect(collect, regionRoot);
+    const ChromeProviderResolver resolver =
+        [providers = std::move(providers)](
+            std::string_view id) -> std::optional<ResolvedProvider> {
+        const auto found = std::ranges::find(providers, id, &ProviderState::id);
+        return found == providers.end()
+                   ? std::nullopt
+                   : std::optional<ResolvedProvider>{found->value};
+    };
+    return lowerUiChromeRegion(regionRoot, rect, defaultRole, style, resolver,
+                               out, statusView, input);
 }
 
 namespace {

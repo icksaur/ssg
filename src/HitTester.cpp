@@ -87,6 +87,33 @@ RegionHit panelHit(SolvedPanelSurface const& panel, int column, int row) {
     return {};
 }
 
+RegionHit chromeHit(const SolvedChromeSurface& surface, HitRegion fieldRegion,
+                    int column, int row) {
+    if (surface.input &&
+        (contains(surface.input->query, column, row) ||
+         (surface.input->ghost &&
+          contains(*surface.input->ghost, column, row)))) {
+        RegionHit hit;
+        hit.region = fieldRegion;
+        hit.fieldId = "input_line.query";
+        return hit;
+    }
+    for (const auto& item : surface.items) {
+        if (!contains(item.rect, column, row)) continue;
+        RegionHit hit;
+        hit.fieldId = item.id;
+        if (item.statusInvocation) {
+            hit.region = HitRegion::StatusAction;
+            hit.statusInvocation = item.statusInvocation;
+        } else {
+            hit.region = fieldRegion;
+            hit.commandId = item.command;
+        }
+        return hit;
+    }
+    return {};
+}
+
 }  // namespace
 
 RegionHit HitTester::at(int column, int row) const {
@@ -201,39 +228,15 @@ RegionHit HitTester::at(int column, int row) const {
         if (contains(solved.rect, column, row)) return {};
     }
 
-    for (auto const& node : shell.accessibilityNodes) {
-        if (!contains(node.rect, column, row)) continue;
-        if (node.kind == ShellNodeKind::HeaderField) {
-            RegionHit hit;
-            hit.region = HitRegion::HeaderField;
-            hit.fieldId = node.id;
-            hit.commandId = node.commandId;
-            return hit;
-        }
-        if (node.kind == ShellNodeKind::FooterField) {
-            RegionHit hit;
-            hit.region = HitRegion::FooterField;
-            hit.fieldId = node.id;
-            hit.commandId = node.commandId;
-            return hit;
-        }
-        if (node.kind == ShellNodeKind::FooterAction) {
-            RegionHit hit;
-            hit.region = HitRegion::StatusAction;
-            hit.fieldId = node.id;
-            hit.statusInvocation = node.statusInvocation;
-            return hit;
-        }
-        if (node.kind == ShellNodeKind::FooterHint) {
-            // The persistent help hint dispatches its command id directly. It is
-            // NOT a status-queue action, so it deliberately does not go through
-            // status.invoke_action's generation freshness gate.
-            RegionHit hit;
-            hit.region = HitRegion::FooterField;
-            hit.fieldId = node.id;
-            hit.commandId = node.commandId;
-            return hit;
-        }
+    if (snapshot.header() &&
+        contains(snapshot.header()->rect, column, row)) {
+        return chromeHit(*snapshot.header(), HitRegion::HeaderField,
+                         column, row);
+    }
+    if (snapshot.footer() &&
+        contains(snapshot.footer()->rect, column, row)) {
+        return chromeHit(*snapshot.footer(), HitRegion::FooterField,
+                         column, row);
     }
 
     for (const auto id : {kHeaderNodeId, kFooterNodeId}) {

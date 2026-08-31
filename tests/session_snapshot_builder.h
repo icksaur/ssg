@@ -44,16 +44,6 @@
 
 namespace ssg::test {
 
-inline void appendEmptyUiState(const UiNode& node,
-                               std::vector<UiNodeState>& out) {
-    out.push_back({node.id, {}});
-    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
-        for (const auto& child : container->children) {
-            appendEmptyUiState(child, out);
-        }
-    }
-}
-
 class SessionSnapshotBuilder {
 public:
     // The document text the viewport projects and the renderer paints.
@@ -212,7 +202,10 @@ public:
                                     caretPosition(caret)}}},
             HistoryViewState{},
             ClipboardViewState{},
-            PromptStatusViewState{},
+            PromptStatusViewState{
+                status_,
+                promptInput_ ? std::optional<PromptKind>{PromptKind::Palette}
+                             : std::nullopt},
             SearchViewState{},
             FindReplaceViewState{},
             SettingsViewState{},
@@ -231,8 +224,14 @@ public:
             focus,
             PaletteViewState{}};
         sections.ui = schema.schema();
-        sections.uiState.generation = schema.generation();
-        appendEmptyUiState(schema.schema().root, sections.uiState.nodes);
+        const ChromeProviderResolver resolver =
+            request.chromeProviderResolver
+                ? request.chromeProviderResolver
+                : [](std::string_view)
+                      -> std::optional<ResolvedProvider> {
+                      return std::nullopt;
+                  };
+        sections.uiState = resolveUiState(schema, resolver);
         sections.uiState.focusPath = interaction.focusPath();
         sections.uiPresence =
             buildPresenceSection(schema, interaction.presence());
@@ -248,6 +247,14 @@ public:
         }
 
         for (auto const& mutate : mutators_) mutate(sections);
+        PaletteReport framePalette = palette_;
+        if (promptInput_) {
+            sections.palette.activePicker =
+                PickerActivation{SearchMode::Command,
+                                 PickerActivationId{1}};
+            framePalette.query = promptInput_->query;
+            framePalette.ghost = promptInput_->ghost;
+        }
 
         ShellViewState shellView = layout.view ? *layout.view : ShellViewState{};
         for (auto const& mutate : shellProjectionMutators_) mutate(shellView);
@@ -261,7 +268,7 @@ public:
                     std::move(viewportState), style_, std::nullopt,
                     std::move(shellView),
                     SelectionNavigation{firstRow_, 0, std::nullopt}}},
-            palette_);
+            std::move(framePalette));
         return std::move(*frame);
     }
 

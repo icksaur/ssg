@@ -1,12 +1,12 @@
 #pragma once
 
-// Lowering a composed chrome region tree to accessibility nodes over a rect,
+// Lowering a composed chrome region tree to solved items over a rect,
 // reusing the shipped `WidgetStack`. The medium-agnostic UiRegion the runtime
 // publishes is lowered to the SAME `(kind,id,label,rect,role,content,commandId)`
 // nodes the built-in status-field projection emits, so a composed region is a
 // transparent replacement.
 
-#include <ssg/ShellState.h>  // AccessibilityNode, ShellNodeKind, Rect
+#include <ssg/ShellState.h>  // Rect, StatusActionInvocation
 #include <ssg/Style.h>
 #include <ssg/UiNodeState.h>  // UiStateSection
 #include <ssg/UiTree.h>      // UiRegion
@@ -31,6 +31,42 @@ struct UiChromeLowerResult {
     [[nodiscard]] bool ok() const { return !error.has_value(); }
 };
 
+struct SolvedChromeItem {
+    std::string id;
+    std::string label;
+    Rect rect;
+    SemanticRole role = SemanticRole::Text;
+    std::string content;
+    std::optional<std::string> command;
+    std::optional<StatusActionInvocation> statusInvocation;
+
+    friend bool operator==(const SolvedChromeItem&,
+                           const SolvedChromeItem&) = default;
+};
+
+struct SolvedChromeInput {
+    UiNodeId nodeId;
+    Rect query;
+    std::string queryText;
+    std::optional<Rect> ghost;
+    std::string ghostText;
+    Rect caret;
+
+    friend bool operator==(const SolvedChromeInput&,
+                           const SolvedChromeInput&) = default;
+};
+
+// CONTRACT: Header and footer use this same solved vocabulary. Footer surfaces
+// never carry input; only the present header picker input may do so.
+struct SolvedChromeSurface {
+    Rect rect;
+    std::vector<SolvedChromeItem> items;
+    std::optional<SolvedChromeInput> input;
+
+    friend bool operator==(const SolvedChromeSurface&,
+                           const SolvedChromeSurface&) = default;
+};
+
 // The header prompt input's grid-only projection: whether a picker is open on this
 // client and, when it is, the query text and its ghost completion. The strings
 // never enter the node tree (query prediction stays client-local); they are lowered
@@ -43,7 +79,7 @@ struct PromptInputProjection {
 };
 
 // Lower a medium-agnostic chrome region (the canonical tree the chrome decoder
-// produces) DIRECTLY into accessibility nodes over `rect`, reading the
+// produces) directly into solved items over `rect`, reading the
 // left/center/right groups, the separator (the left group's gap), and the center
 // width policy (the center leaf's Size) from the tree itself. The tree must be the
 // canonical chrome shape (a root container of exactly three group containers, plus
@@ -54,11 +90,20 @@ struct PromptInputProjection {
 // groups' width first, then the input grows across the header's remaining width
 // after them.
 [[nodiscard]] UiChromeLowerResult lowerUiChromeRegion(
-    const UiNode& regionRoot, const Rect& rect, ShellNodeKind regionNodeKind,
-    SemanticRole defaultRole, const Style& style,
+    const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
+    const Style& style,
     const ChromeProviderResolver& resolveProvider,
-    std::vector<AccessibilityNode>& out,
+    SolvedChromeSurface& out,
     const StatusViewState* statusView = nullptr,
+    const PromptInputProjection* input = nullptr);
+
+// Uses the generation-matched semantic node state as the value source while
+// retaining grid-only display conversion at this presentation boundary.
+[[nodiscard]] UiChromeLowerResult solveUiChromeRegion(
+    const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
+    const Style& style, Generation schemaGeneration,
+    const UiStateSection& state,
+    SolvedChromeSurface& out, const StatusViewState* statusView = nullptr,
     const PromptInputProjection* input = nullptr);
 
 // Resolve the dynamic node state for a VALIDATED composed schema: one UiNodeState

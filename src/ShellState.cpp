@@ -168,6 +168,33 @@ void addNode(ShellViewState& view, ShellNodeKind kind, std::string id,
          std::move(commandId)});
 }
 
+void appendLegacyChrome(ShellViewState& view,
+                        const SolvedChromeSurface& surface,
+                        ShellNodeKind regionKind) {
+    for (const auto& item : surface.items) {
+        auto kind = regionKind;
+        if (item.statusInvocation) {
+            kind = ShellNodeKind::FooterAction;
+        } else if (item.id == "footer.hint") {
+            kind = ShellNodeKind::FooterHint;
+        }
+        view.accessibilityNodes.push_back(
+            {kind, item.id, item.label, item.rect, item.role, item.content,
+             item.command, item.statusInvocation});
+    }
+    if (!surface.input) return;
+    view.accessibilityNodes.push_back(
+        {regionKind, "input_line.query", "Input line",
+         surface.input->query, SemanticRole::Prompt,
+         surface.input->queryText, std::nullopt, std::nullopt});
+    if (surface.input->ghost) {
+        view.accessibilityNodes.push_back(
+            {regionKind, "input_line.ghost", "Input line completion",
+             *surface.input->ghost, SemanticRole::LineNumber,
+             surface.input->ghostText, std::nullopt, std::nullopt});
+    }
+}
+
 const PaneGeometry* paneGeometry(const ShellViewState& view, PaneId id) {
     const auto found = std::ranges::find(view.panes, id, &PaneGeometry::id);
     return found == view.panes.end() ? nullptr : &*found;
@@ -407,12 +434,14 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             const PromptInputProjection promptProjection{inputVisible,
                                                          promptInput.query,
                                                          promptInput.ghost};
+            SolvedChromeSurface chrome;
             const auto lowered = lowerUiChromeRegion(
                 *headerRegion,
                 {view.header->x, view.header->y, view.header->width, 1},
-                ShellNodeKind::HeaderField, SemanticRole::Header, request.style,
-                chromeResolver, view.accessibilityNodes, nullptr, &promptProjection);
+                SemanticRole::Header, request.style, chromeResolver, chrome,
+                nullptr, &promptProjection);
             if (!lowered.ok()) throw std::invalid_argument(*lowered.error);
+            appendLegacyChrome(view, chrome, ShellNodeKind::HeaderField);
         }
         const UiNode* footerRegion = schemaArea(schema.schema(), kFooterNodeId);
         if (footerRegion) {
@@ -420,12 +449,14 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             // hint, actions). Unlike the header it supports full left/right/
             // center, so it lowers over the entire footer rect; every widget
             // becomes a FooterField node.
+            SolvedChromeSurface chrome;
             const auto lowered = lowerUiChromeRegion(
                 *footerRegion,
                 {view.footer->x, view.footer->y, view.footer->width, 1},
-                ShellNodeKind::FooterField, SemanticRole::Footer, request.style,
-                chromeResolver, view.accessibilityNodes, &statusView);
+                SemanticRole::Footer, request.style, chromeResolver, chrome,
+                &statusView);
             if (!lowered.ok()) throw std::invalid_argument(*lowered.error);
+            appendLegacyChrome(view, chrome, ShellNodeKind::FooterField);
         }
 
         if (panelWidth > 0) {

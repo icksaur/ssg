@@ -22,6 +22,21 @@ namespace {
 
 using namespace ssg;
 
+UiChromeLowerResult lowerUiChromeRegion(
+    const UiNode& region, Rect rect, ShellNodeKind kind,
+    SemanticRole role, const Style& style,
+    const ChromeProviderResolver& resolver,
+    std::vector<AccessibilityNode>& out) {
+    SolvedChromeSurface solved;
+    auto result =
+        ssg::lowerUiChromeRegion(region, rect, role, style, resolver, solved);
+    for (const auto& item : solved.items) {
+        out.push_back({kind, item.id, item.label, item.rect, item.role,
+                       item.content, item.command, item.statusInvocation});
+    }
+    return result;
+}
+
 // A wide rect: no widget rank-collapses, so the TUI emits every non-dropped widget.
 constexpr int kWideWidth = 1000;
 

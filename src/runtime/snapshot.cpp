@@ -245,8 +245,7 @@ bool EditorSession::Impl::noticePresent() const {
     return draftNotice().has_value();
 }
 
-StatusFieldProjection EditorSession::Impl::chromeStatusFields(
-    ChromeFieldMode mode) const {
+StatusFieldProjection EditorSession::Impl::chromeStatusFields() const {
     auto statusProjection = status.footerProjection();
     auto followProjection = follow.footerProjection();
     auto fields = projectStatusFields(
@@ -256,8 +255,7 @@ StatusFieldProjection EditorSession::Impl::chromeStatusFields(
          .currentBranch = currentGitBranch,
          .statusValue = statusProjection.value,
          .followMode = followProjection.mode,
-         .cwdPrefix = mode == ChromeFieldMode::Grid ? style.cwdPrefix
-                                                    : std::string{}});
+         .cwdPrefix = {}});
     bindStatusFieldCommands(fields.header, followProjection);
     bindStatusFieldCommands(fields.footer, followProjection);
     return fields;
@@ -272,7 +270,7 @@ ShellViewState EditorSession::Impl::shellView(
         labels.push_back({gridTabTitle(tab, style.tab), tab.label,
                           tabs.viewState().active == tab.id, tab.dirty});
     }
-    auto statusFields = chromeStatusFields(ChromeFieldMode::Grid);
+    auto statusFields = chromeStatusFields();
     ShellLayoutRequest request;    request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = interaction.prompt().active() ? promptRowCount(interaction.prompt().request()->kind) : 0;
     request.lineNumberGutterWidth =
@@ -412,7 +410,7 @@ SessionSnapshotSections EditorSession::Impl::sections(
             "resolveUiState: composed schema violates the well-known-area contract");
     }
     UiStateSection uiState = [&] {
-        auto fields = chromeStatusFields(ChromeFieldMode::Semantic);
+        auto fields = chromeStatusFields();
         return resolveUiState(
             validatedSchema, chromeResolverFor(std::move(fields.header),
                                                std::move(fields.footer),

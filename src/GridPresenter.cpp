@@ -13,6 +13,16 @@
 namespace ssg {
 namespace {
 
+const UiNode* findUiNode(const UiNode& node, std::string_view id) {
+    if (node.id.value() == id) return &node;
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            if (const auto* found = findUiNode(child, id)) return found;
+        }
+    }
+    return nullptr;
+}
+
 std::vector<GridIntrinsicSize> semanticIntrinsicSizes(
     const UiNode& root, const SessionSnapshotSections& sections) {
     std::vector<GridIntrinsicSize> sizes;
@@ -100,6 +110,7 @@ SolveUiFrameResult trySolveFrameLayout(
         UiNodeId{std::string{kDocumentViewportNodeId}},
         UiNodeId{std::string{kDocumentNodeId}},
         UiNodeId{std::string{kFindResultsViewportNodeId}},
+        UiNodeId{std::string{kHeaderPromptInputNodeId}},
     };
     if (semantic.sections().promptView) {
         retained.insert(UiNodeId{std::string{kFooterPromptNodeId}});
@@ -197,6 +208,9 @@ GridFrame::GridFrame(SessionSnapshot semantic,
       palette_{std::move(palette)},
       basis_{basis} {
     adoptLegacyPalette(palette_, presentation_);
+    if (auto error = solveChrome()) {
+        throw std::logic_error("GridFrame: " + *error);
+    }
     solvePanel(0, false);
     solveDocument(nullptr);
 }
@@ -210,6 +224,58 @@ GridFrame::GridFrame(SessionSnapshot semantic,
       layout_{std::move(layout)},
       palette_{std::move(palette)},
       basis_{basis} {}
+
+std::optional<std::string> GridFrame::solveChrome() {
+    const auto& schema = semantic_.sections().ui;
+    const auto& state = semantic_.sections().uiState;
+    if (schema.generation != state.generation) {
+        return "chrome schema and state generations differ";
+    }
+    const auto solve = [&](std::string_view id, SemanticRole role,
+                           std::optional<SolvedChromeSurface>& output,
+                           const StatusViewState* status,
+                           const PromptInputProjection* input)
+        -> std::optional<std::string> {
+        const auto* solved = layout_.find(UiNodeId{std::string{id}});
+        if (!solved) {
+            output.reset();
+            return std::nullopt;
+        }
+        const auto* subtree = findUiNode(schema.root, id);
+        if (!subtree) {
+            return "solved " + std::string{id} +
+                   " band has no schema subtree";
+        }
+        SolvedChromeSurface surface;
+        const auto lowered =
+            solveUiChromeRegion(*subtree, solved->rect, role,
+                                presentation_.style, schema.generation,
+                                state, surface,
+                                status, input);
+        if (!lowered.ok()) {
+            return std::string{id} + " chrome lowering failed: " +
+                   *lowered.error;
+        }
+        output = std::move(surface);
+        return std::nullopt;
+    };
+
+    PromptInputProjection input;
+    const PromptInputProjection* inputPtr = nullptr;
+    if (semantic_.sections().palette.activePicker &&
+        layout_.find(
+            UiNodeId{std::string{kHeaderPromptInputNodeId}})) {
+        input = {true, palette_.query, palette_.ghost};
+        inputPtr = &input;
+    }
+    if (auto error =
+            solve(kHeaderNodeId, SemanticRole::Header, header_, nullptr,
+                  inputPtr)) {
+        return error;
+    }
+    return solve(kFooterNodeId, SemanticRole::Footer, footer_,
+                 &semantic_.sections().promptStatus.status, nullptr);
+}
 
 void GridFrame::solvePanel(std::uint32_t treeFirstVisible,
                            bool revealTreeSelection) {
@@ -262,6 +328,7 @@ std::optional<GridFrame> GridFrame::fromLegacy(
                     std::move(legacy.presentation_),
                     std::move(*result.tree),
                     basis, std::move(palette)};
+    if (frame.solveChrome()) return std::nullopt;
     frame.solvePanel(treeFirstVisible, revealTreeSelection);
     frame.solveDocument(&shell);
     return frame;

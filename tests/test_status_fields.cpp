@@ -119,6 +119,18 @@ TEST(pathFieldPrependsTheConfiguredCwdPrefix) {
     }
 }
 
+TEST(gridDisplayDecoratesOnlyThePathField) {
+    ssg::Style style;
+    style.cwdPrefix = "cwd: ";
+    for (const auto& field : ssg::p0StatusFieldCatalog()) {
+        const auto expected = field.id == "path" ? "cwd: value" : "value";
+        ASSERT_EQ(ssg::statusFieldGridDisplay(field.id, "value", style),
+                  std::string{expected});
+    }
+    ASSERT_EQ(ssg::statusFieldGridDisplay("custom", "value", style),
+              std::string{"value"});
+}
+
 }  // namespace
 
 int main() {
@@ -128,6 +140,7 @@ int main() {
     RUN(pathEqualToHomeBecomesTilde);
     RUN(pathFieldRespectsComponentBoundary);
     RUN(pathFieldPrependsTheConfiguredCwdPrefix);
+    RUN(gridDisplayDecoratesOnlyThePathField);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

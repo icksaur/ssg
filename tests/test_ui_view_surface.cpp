@@ -17,6 +17,22 @@
 
 namespace {
 
+ssg::UiChromeLowerResult lowerLegacyChromeForTest(
+    const ssg::UiNode& region, ssg::Rect rect,
+    ssg::ShellNodeKind kind, ssg::SemanticRole role,
+    const ssg::Style& style,
+    const ssg::ChromeProviderResolver& resolver,
+    std::vector<ssg::AccessibilityNode>& out) {
+    ssg::SolvedChromeSurface solved;
+    auto result = ssg::lowerUiChromeRegion(
+        region, rect, role, style, resolver, solved);
+    for (const auto& item : solved.items) {
+        out.push_back({kind, item.id, item.label, item.rect, item.role,
+                       item.content, item.command, item.statusInvocation});
+    }
+    return result;
+}
+
 using ssg::Axis;
 using ssg::kAllViewSurfaces;
 using ssg::Size;
@@ -104,7 +120,7 @@ TEST(gridChromeLoweringRefusesAViewCenter) {
         [](std::string_view) -> std::optional<ssg::ResolvedProvider> {
         return std::nullopt;
     };
-    const auto result = ssg::lowerUiChromeRegion(
+    const auto result = lowerLegacyChromeForTest(
         regionRoot, {0, 0, 100, 1}, ssg::ShellNodeKind::FooterField,
         ssg::SemanticRole::Footer, ssg::Style{}, empty, out);
     ASSERT_TRUE(!result.ok());
