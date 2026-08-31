@@ -40,6 +40,11 @@
 namespace ssg {
 namespace {
 
+inline constexpr auto& kSemanticSessionFields =
+    detail::generated::kSemanticSnapshotFields;
+inline constexpr auto& kSemanticSessionDeltaFields =
+    detail::generated::kSemanticDeltaFields;
+
 }  // namespace
 struct ProtocolValue::Storage {
     using Value = std::variant<std::monostate, bool, std::int64_t,
@@ -4986,24 +4991,6 @@ void annotateLegacyFocusHosts(UiNode& node) {
     }
 }
 
-constexpr auto kSemanticSessionFields = std::to_array<std::string_view>({
-    "document", "selection", "history", "clipboard", "prompt_status", "search",
-    "find_replace", "settings", "keymap", "text_encoding", "tabs", "diff",
-    "external_modification", "follow_edits", "tree", "syntax", "lsp_sync",
-    "lsp_features", "theme", "focus", "palette", "ui_frame",
-    "prompt_view", "notice_view", "watcher_available",
-    "external_focus_held",
-});
-
-constexpr auto kSemanticSessionDeltaFields = std::to_array<std::string_view>({
-    "document", "document_caret", "selection", "history", "clipboard",
-    "prompt_status", "search", "find_replace", "settings", "keymap",
-    "text_encoding", "tabs", "diff", "external_modification", "follow_edits",
-    "tree", "syntax", "lsp_sync", "lsp_features", "theme", "focus", "palette",
-    "ui_frame_delta", "prompt_view", "notice_view",
-    "watcher_available", "external_focus_held",
-});
-
 template <typename Record>
 void appendRecordsInSchemaOrder(
     UiNode const& node, std::vector<Record>& records,
@@ -7096,15 +7083,19 @@ std::vector<std::string> styleWireFieldNames() {
 
 std::vector<std::string> semanticSessionWireFieldNames() {
     std::vector<std::string> names;
-    names.reserve(kSemanticSessionFields.size());
-    for (auto const name : kSemanticSessionFields) names.emplace_back(name);
+    names.reserve(detail::generated::kSemanticSnapshotFields.size());
+    for (auto const name : detail::generated::kSemanticSnapshotFields) {
+        names.emplace_back(name);
+    }
     return names;
 }
 
 std::vector<std::string> semanticSessionDeltaWireFieldNames() {
     std::vector<std::string> names;
-    names.reserve(kSemanticSessionDeltaFields.size());
-    for (auto const name : kSemanticSessionDeltaFields) names.emplace_back(name);
+    names.reserve(detail::generated::kSemanticDeltaFields.size());
+    for (auto const name : detail::generated::kSemanticDeltaFields) {
+        names.emplace_back(name);
+    }
     return names;
 }
 

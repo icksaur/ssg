@@ -112,3 +112,17 @@ message kind, generated once against the current codec and asserted stable by
 `canonical_fixtures_decode_to_the_expected_values` test. A fixture failing to
 decode, or decoding to different field values, signals an unintended wire
 format change.
+
+## Semantic wire manifest
+
+`semantic_wire.mjs` is the data-only source for protocol message kinds and
+semantic snapshot/delta root fields. Regenerate its checked-in C++ and browser
+consumers from the repository root with:
+
+```sh
+node protocol/schema/generate_semantic_wire.mjs --write
+```
+
+Use `--check` to report stale or missing generated files without writing them.
+Repository tests register check mode when Node is available; normal library and
+consumer builds compile the checked-in outputs and do not run the generator.

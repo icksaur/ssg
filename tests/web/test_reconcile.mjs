@@ -9,6 +9,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
+  MESSAGE_KINDS,
+  SEMANTIC_DELTA_FIELDS,
+  SEMANTIC_SECTIONS,
+  SEMANTIC_SNAPSHOT_FIELDS,
+} from '../../apps/web/generated/semantic_wire_manifest.mjs';
+import {
   applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput, cssColor,
   decodeMessage, browserInboundKind, encodeClientInput,
   encodeViewNavigationInput, encodeResolvedSelectionInput, encodeCommandRequest,
@@ -52,6 +58,23 @@ check('browser surface vocabulary contains only current sparse surfaces', () => 
     EXTERNAL_MODIFICATION: 7,
     DOCUMENT: 8,
     TREE: 9,
+  });
+
+  check('generated message inventory preserves current and retired ordinals', () => {
+    assert.deepEqual(
+      MESSAGE_KINDS.map(({ wireName, ordinal, lifecycle }) =>
+        [wireName, ordinal, lifecycle]),
+      [
+        ['command_request', 0, 'current'],
+        ['session_snapshot', 1, 'current'],
+        ['session_delta', 2, 'current'],
+        ['clipboard_request', 3, 'retired'],
+        ['clipboard_response', 4, 'retired'],
+        ['status_action_invocation', 5, 'retired'],
+        ['command_result', 6, 'current'],
+        ['client_input', 7, 'current'],
+        ['client_input_result', 8, 'current'],
+      ]);
   });
 });
 
@@ -1855,16 +1878,19 @@ check('session delta replay permits switching to an older document revision', ()
 });
 
 check('semantic manifest and C++ fixture replay every browser section atomically', () => {
-  const manifest = JSON.parse(fs.readFileSync(
-    new URL('../fixtures/protocol/session_semantic_fields.json', import.meta.url),
-    'utf8'));
   const base = findSections(fixtureMessage('session_semantic_base.hex'));
   const target = findSections(fixtureMessage('session_semantic_target.hex'));
   const delta = fixtureMessage('session_semantic_delta.hex');
-  const retainedManifest = manifest.filter(
+  const retainedManifest = SEMANTIC_SECTIONS.filter(
     (entry) => entry.snapshot !== 'prompt_view');
   assert.deepEqual(
     retainedManifest.map((entry) => entry.snapshot), Object.keys(base));
+  assert.deepEqual(
+    SEMANTIC_SECTIONS.flatMap((entry) => entry.delta),
+    SEMANTIC_DELTA_FIELDS);
+  assert.deepEqual(
+    SEMANTIC_SECTIONS.map((entry) => entry.snapshot),
+    SEMANTIC_SNAPSHOT_FIELDS);
   assert.equal(Object.hasOwn(base, 'prompt_view'), false);
   assert.equal(Object.hasOwn(target, 'prompt_view'), false);
   for (const { snapshot } of retainedManifest) {

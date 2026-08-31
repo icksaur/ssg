@@ -98,3 +98,164 @@ field names above outside prior-version rejection fixtures.
 The goal is fewer concepts, not merely generated copies of the current
 proliferation. Generation first prevents drift; measurement then permits safe
 deletion.
+
+## Step 1 design: manifest foundation and first ownership cut
+
+### Scope
+
+Step 1 introduces the typed manifest and deterministic generation boundary
+without changing accepted wire bytes, replay behavior, or the active wire
+version. It moves the protocol message-kind inventory and the semantic
+snapshot/delta root-field inventory out of handwritten C++, JavaScript tests,
+and fixture metadata. Deep section shapes, generated validators, and the
+remaining cross-language enum vocabularies move in Step 2 after this generation
+boundary is executable. Step 2's first enum targets are the vocabularies both
+languages currently interpret independently, including focus targets, view
+surfaces, widget/size kinds, and semantic input kinds.
+
+The authoritative declaration lives at
+`protocol/schema/semantic_wire.mjs`. It exports data only and has no filesystem,
+process, CMake, or application dependency. The declaration contains:
+
+- every current or retired protocol message kind, with one symbolic identity,
+  wire name, explicit ordinal, and lifecycle;
+- every semantic section identity, with its ordered snapshot field, ordered
+  delta fields, lifecycle, and replay policy;
+- explicit lifecycle values for current and compatibility-only semantic
+  sections and for current, compatibility-only, and retired message kinds;
+- explicit replay-policy values for replacement, changed replacement,
+  specialized delta, and compatibility validation.
+
+The section identity is not a generic runtime property key. It is generator
+input that names a closed declaration consumed at build/test time. Snapshot and
+delta fields remain separate named members because one semantic section may
+have more than one delta field. Declaration order is the snapshot order and
+each section owns the order of its delta fields. Retired message kinds remain declared permanently as ordinal reservations,
+because their numeric slots must never be reused. Retired semantic sections are
+different: a section has no numeric slot to reserve, so the version-activation
+step removes it from the active manifest in the same change that adds the
+prior-version rejection fixture. Compatibility-only sections remain declared
+until that coordinated removal.
+
+Every root field, including scalar availability/focus compatibility facts, is a
+semantic section for manifest purposes. A section may own a single snapshot
+field and a single delta field without requiring a domain aggregate type.
+`watcher_available` is therefore a current single-field section and
+`external_focus_held` is a compatibility-only single-field section; there is no
+parallel "miscellaneous root fields" inventory.
+
+### Validation and generation
+
+`protocol/schema/generate_semantic_wire.mjs` imports the declaration, validates
+it completely, renders all outputs in memory, and then either checks or writes
+them. Validation rejects:
+
+- duplicate symbolic identities, wire names, ordinals, snapshot fields, or
+  delta fields;
+- an ordinal that is not an explicitly declared nonnegative safe integer;
+- an unknown lifecycle or replay policy;
+- a retired semantic section, because retired fields belong to a prior-version
+  rejection fixture rather than the active semantic inventory;
+- a current section with no snapshot field or delta field;
+- a compatibility-only section without compatibility replay policy, or a
+  current section with compatibility replay policy;
+- invalid JavaScript/C++ identifiers and non-snake-case wire names.
+
+Every message ordinal must remain owned by exactly one declared current,
+compatibility-only, or retired message. The generator cannot infer deleted
+history, so an independent hand-authored reservation oracle pins all retired
+message identities and ordinals; deleting or reassigning a reservation fails
+that oracle even if newly generated files agree with the edited manifest.
+
+Check mode writes no repository file and reports every stale or missing output.
+Write mode validates and renders the complete set before opening an output,
+writes temporary siblings, and replaces outputs only after all temporary writes
+succeed. Reported replacement failures trigger best-effort restoration from
+temporary backups and fail loudly. A process or machine failure during the
+multi-file replacement is not claimed to be atomic; the next check reports the
+partial set. This behavior is the same on Linux and Windows and does not depend
+on rename-over-existing semantics. Output text uses fixed newlines, quoting,
+headers, and declaration order and includes a generated-file marker naming the
+source declaration.
+
+The checked-in generated consumers are:
+
+- a generated C++ detail header under
+  `include/ssg/detail/generated/` containing the enum-declaration macro,
+  constexpr typed message-kind facts, and ordered snapshot/delta field facts.
+  Its `detail` path and namespace keep it outside the embedding contract while
+  allowing the public `ProtocolMessageKind` declaration to consume the
+  generated enumerators;
+- a browser module under `apps/web/generated/` containing frozen message-kind
+  and semantic-field facts.
+
+The generated C++ facts drive `ProtocolMessageKind`,
+`semanticSessionWireFieldNames`, and
+`semanticSessionDeltaWireFieldNames`; no second arrays remain in
+`Protocol.cpp`. The generated browser facts replace the test-local field
+manifest. `tests/fixtures/protocol/session_semantic_fields.json` is deleted.
+Step 1 does not generate codecs or expose generated headers as an embedding
+contract.
+
+### Build and repository integration
+
+The protocol component registers a generator check test when repository tests
+are enabled. It invokes the same checked-in Node script and fails on a dirty,
+missing, or extra generated output. Normal library and consumer builds compile
+the checked-in C++ output and do not run Node. The existing browser test imports
+the checked-in generated module, so the normal and push gates exercise both
+languages. A documented write command is the only supported regeneration path.
+
+The generator itself is covered by a Node test that uses a temporary directory
+and hand-authored invalid declarations. The test proves deterministic repeated
+output, check-mode mismatch reporting, duplicate/invalid declaration
+rejection, sparse retired message preservation, and no output writes before
+complete validation/rendering. It does
+not compare the generator to its own output as the sole oracle: C++ and browser
+tests independently assert the known current/compatibility inventory and
+canonical wire fixtures continue to round-trip byte-for-byte.
+
+### Ownership and compatibility
+
+The manifest owns names, ordering, lifecycle, replay-policy classification, and
+message ordinals only. Domain C++ types continue to own product meaning.
+`Protocol.cpp` continues to own typed conversion during Step 1, and
+`reconcile.mjs` continues to own transactional replay. Neither consumer may
+branch on lifecycle metadata at runtime. Step 2 will generate validation and
+binding code from the same declaration rather than teaching the Step 1
+generator an untyped escape hatch.
+
+No protocol fixture is regenerated merely because ownership moved. Existing
+canonical message bytes are the compatibility oracle. Any changed byte is a
+Step 1 failure.
+
+### Invariants
+
+- **MANIFEST-FOUNDATION-1** — one typed declaration owns current and reserved
+  message kinds plus semantic root-field names, ordering, lifecycle, and replay
+  classification. State at `semantic_wire.mjs`.
+- **MANIFEST-FOUNDATION-2** — checked-in C++ and browser facts are deterministic
+  products of that declaration and cannot drift in a passing repository gate.
+  State at the generator check.
+- **MANIFEST-FOUNDATION-3** — Step 1 changes declaration ownership only; wire
+  bytes, typed conversion, validation, and replay remain behaviorally
+  identical. State at existing canonical fixtures and replay tests.
+- **MANIFEST-FOUNDATION-4** — production and embedding builds do not require
+  Node or execute a source-tree writer. State at the protocol CMake component.
+
+### Acceptance
+
+- Generator write followed by check is clean, and repeated writes are
+  byte-identical.
+- Invalid declarations fail before any output changes.
+- C++ and browser consumers enumerate the same independently asserted semantic
+  fields and message kinds from generated facts.
+- Source inventory finds no handwritten semantic root-field arrays or
+  test-local JSON field manifest. It also finds no lifecycle-metadata read
+  outside `include/ssg/detail/generated/`, `apps/web/generated/`, and
+  generator/tests.
+- Every existing current protocol fixture remains byte-identical and all
+  snapshot/delta replay tests pass.
+- The removed JSON field manifest is the only protocol fixture changed by Step
+  1; canonical hex fixtures are not regenerated.
+- `scripts/check.sh` and `scripts/check.sh push` pass.

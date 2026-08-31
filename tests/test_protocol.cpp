@@ -2513,68 +2513,51 @@ std::string readFixtureBytes(std::string const& name) {
     return bytes;
 }
 
-std::vector<std::string> semanticFieldManifestNames() {
-    std::ifstream input{std::string{SSG_PROTOCOL_FIXTURES_DIR} +
-                        "/session_semantic_fields.json"};
-    std::string const json{std::istreambuf_iterator<char>{input},
-                           std::istreambuf_iterator<char>{}};
-    std::vector<std::string> names;
-    constexpr std::string_view marker{"\"snapshot\":\""};
-    std::size_t cursor = 0;
-    while ((cursor = json.find(marker, cursor)) != std::string::npos) {
-        cursor += marker.size();
-        auto const end = json.find('"', cursor);
-        ASSERT_TRUE(end != std::string::npos);
-        if (end == std::string::npos) break;
-        names.push_back(json.substr(cursor, end - cursor));
-        cursor = end + 1;
-    }
-    return names;
-}
-
-std::vector<std::string> semanticDeltaManifestNames() {
-    std::ifstream input{std::string{SSG_PROTOCOL_FIXTURES_DIR} +
-                        "/session_semantic_fields.json"};
-    std::string const json{std::istreambuf_iterator<char>{input},
-                           std::istreambuf_iterator<char>{}};
-    std::vector<std::string> names;
-    constexpr std::string_view marker{"\"delta\":["};
-    std::size_t cursor = 0;
-    while ((cursor = json.find(marker, cursor)) != std::string::npos) {
-        cursor += marker.size();
-        auto const end = json.find(']', cursor);
-        ASSERT_TRUE(end != std::string::npos);
-        if (end == std::string::npos) break;
-        while (cursor < end) {
-            auto const beginName = json.find('"', cursor);
-            if (beginName == std::string::npos || beginName >= end) break;
-            auto const endName = json.find('"', beginName + 1);
-            ASSERT_TRUE(endName != std::string::npos && endName < end);
-            if (endName == std::string::npos || endName >= end) break;
-            names.push_back(
-                json.substr(beginName + 1, endName - beginName - 1));
-            cursor = endName + 1;
-        }
-        cursor = end + 1;
-    }
-    return names;
-}
-
 TEST(semanticFieldManifestExactlyMatchesTheSnapshotCodec) {
-    auto const manifest = semanticFieldManifestNames();
-    auto const encoded = ssg::semanticSessionWireFieldNames();
-    ASSERT_FALSE(manifest.empty());
-    ASSERT_EQ(manifest, encoded);
-    ASSERT_EQ(semanticDeltaManifestNames(),
-              ssg::semanticSessionDeltaWireFieldNames());
-    auto const unique = std::set<std::string>{manifest.begin(), manifest.end()};
-    ASSERT_EQ(unique.size(), manifest.size());
+    const std::vector<std::string> snapshots{
+        "document", "selection", "history", "clipboard", "prompt_status",
+        "search", "find_replace", "settings", "keymap", "text_encoding",
+        "tabs", "diff", "external_modification", "follow_edits", "tree",
+        "syntax", "lsp_sync", "lsp_features", "theme", "focus", "palette",
+        "ui_frame", "prompt_view", "notice_view", "watcher_available",
+        "external_focus_held"};
+    const std::vector<std::string> deltas{
+        "document", "document_caret", "selection", "history", "clipboard",
+        "prompt_status", "search", "find_replace", "settings", "keymap",
+        "text_encoding", "tabs", "diff", "external_modification",
+        "follow_edits", "tree", "syntax", "lsp_sync", "lsp_features",
+        "theme", "focus", "palette", "ui_frame_delta", "prompt_view",
+        "notice_view", "watcher_available", "external_focus_held"};
+    ASSERT_EQ(ssg::semanticSessionWireFieldNames(), snapshots);
+    ASSERT_EQ(ssg::semanticSessionDeltaWireFieldNames(), deltas);
+    auto const unique =
+        std::set<std::string>{snapshots.begin(), snapshots.end()};
+    ASSERT_EQ(unique.size(), snapshots.size());
     for (auto const presentation :
          {"style", "shell", "viewport", "selection_nav",
           "prompt_projection", "tree_windows"}) {
-        ASSERT_TRUE(std::find(manifest.begin(), manifest.end(), presentation) ==
-                    manifest.end());
+        ASSERT_TRUE(std::find(snapshots.begin(), snapshots.end(), presentation) ==
+                    snapshots.end());
     }
+}
+
+TEST(protocolMessageKindOrdinalsPreserveRetiredReservations) {
+    using Kind = ssg::ProtocolMessageKind;
+    ASSERT_EQ(static_cast<std::uint8_t>(Kind::CommandRequest), 0);
+    ASSERT_EQ(static_cast<std::uint8_t>(Kind::SessionSnapshot), 1);
+    ASSERT_EQ(static_cast<std::uint8_t>(Kind::SessionDelta), 2);
+    ASSERT_EQ(static_cast<std::uint8_t>(Kind::CommandResult), 6);
+    ASSERT_EQ(static_cast<std::uint8_t>(Kind::ClientInput), 7);
+    ASSERT_EQ(static_cast<std::uint8_t>(Kind::ClientInputResult), 8);
+    const auto& facts = ssg::detail::generated::kProtocolMessageKinds;
+    ASSERT_EQ(facts.size(), std::size_t{9});
+    ASSERT_EQ(facts[3].wireName, std::string_view{"clipboard_request"});
+    ASSERT_EQ(facts[3].ordinal, std::uint8_t{3});
+    ASSERT_EQ(facts[4].wireName, std::string_view{"clipboard_response"});
+    ASSERT_EQ(facts[4].ordinal, std::uint8_t{4});
+    ASSERT_EQ(facts[5].wireName,
+              std::string_view{"status_action_invocation"});
+    ASSERT_EQ(facts[5].ordinal, std::uint8_t{5});
 }
 
 void writeFixtureHex(std::string const& name, std::string const& bytes) {
@@ -3112,6 +3095,7 @@ int main() {
     RUN(sessionSnapshotRoundTripsANonDefaultStyle);
     RUN(styleDefineKeysExactlyMatchTheWireCodecFields);
     RUN(semanticFieldManifestExactlyMatchesTheSnapshotCodec);
+    RUN(protocolMessageKindOrdinalsPreserveRetiredReservations);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
     RUN(sessionSnapshotAndDeltaCarryTheUiSection);
     RUN(sparseUiFrameDeltaSizeIsIndependentOfSchemaInventory);

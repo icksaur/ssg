@@ -6,6 +6,7 @@
 #include <ssg/StatusQueue.h>
 #include <ssg/ClipboardRegister.h>
 #include <ssg/ClientInput.h>
+#include <ssg/detail/generated/semantic_wire_manifest.h>
 
 #include <any>
 #include <typeindex>
@@ -167,18 +168,12 @@ private:
 // renumber every kind after it and make two peers disagree about what a message
 // means while both still parse it.
 enum class ProtocolMessageKind : std::uint8_t {
-    CommandRequest = 0,
-    SessionSnapshot = 1,
-    SessionDelta = 2,
-    // 3 was clipboard_request and 4 was clipboard_response, from a design where
-    // a client acknowledged clipboard operations.  Both are retired: the
-    // register holds the text either way, so a local paste works regardless of
-    // what a system clipboard did, and a client had nothing useful to report.
-    // 5 was status_action_invocation. Status actions now use ClientInput.
-    CommandResult = 6,
-    ClientInput = 7,
-    ClientInputResult = 8,
+#define SSG_PROTOCOL_MESSAGE_KIND_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_PROTOCOL_MESSAGE_KIND_ENUMERATORS(
+        SSG_PROTOCOL_MESSAGE_KIND_ENUMERATOR)
+#undef SSG_PROTOCOL_MESSAGE_KIND_ENUMERATOR
 };
+#undef SSG_PROTOCOL_MESSAGE_KIND_ENUMERATORS
 
 inline constexpr std::uint8_t kSemanticUiWireVersion = 4;
 inline constexpr std::uint8_t kProtocolWireVersion =
