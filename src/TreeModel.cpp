@@ -11,6 +11,19 @@
 #include <utility>
 
 namespace ssg {
+
+std::string_view treeProviderLabel(TreeProviderKind kind) {
+    switch (kind) {
+    case TreeProviderKind::Filesystem:
+        return "files";
+    case TreeProviderKind::Git:
+        return "git";
+    case TreeProviderKind::Symbols:
+        return "symbols";
+    }
+    throw std::logic_error{"corrupt TreeProviderKind enumerator"};
+}
+
 namespace {
 
 void validateProviderId(std::string_view value) {

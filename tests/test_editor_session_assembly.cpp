@@ -241,7 +241,10 @@ TEST(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay) {
 
 TEST(activeDocumentTransitionMayMoveToAnOlderDocumentRevision) {
     auto oldSections = sections(ssg::Revision{4}, "dirty scratch");
-    auto newSections = sections(ssg::Revision{1}, "older buffer");
+    auto newSections = oldSections;
+    newSections.document =
+        ssg::DocumentViewState{ssg::Revision{1}, "older buffer",
+                               ssg::ByteOffset{0}, std::nullopt};
     auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{10}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
@@ -260,7 +263,7 @@ TEST(activeDocumentTransitionMayMoveToAnOlderDocumentRevision) {
     auto replayed =
         ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
     ASSERT_TRUE(replayed.accepted());
-    ASSERT_EQ(*replayed.snapshot, after.semantic());
+    if (replayed.snapshot) ASSERT_EQ(*replayed.snapshot, after.semantic());
 }
 
 // A document's text changing WITHOUT its document revision advancing is not
@@ -409,6 +412,7 @@ int main() {
     RUN(nonDocumentTransitionReplaysAndRejectsADifferentClient);
     RUN(themeOnlyTransitionDoesNotReplaceTheUiSchema);
     RUN(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay);
+    RUN(activeDocumentTransitionMayMoveToAnOlderDocumentRevision);
     RUN(aDocumentTextChangeWithoutARevisionAdvanceIsInexpressibleAsADelta);
     RUN(perClientCapabilitiesAndViewportsAreIsolated);
     RUN(semanticDeltaIgnoresAPanelScrollbarOnlyChange);

@@ -254,6 +254,20 @@ TEST(zeroSizePaletteSurfaceProducesNoPaintableGeometry) {
     ASSERT_TRUE(solved.visibleRows.empty());
 }
 
+TEST(panelSurfaceWithoutAProviderIsEmptyAndBounded) {
+    SolvedGridNode panel{
+        UiNodeId{"panel"}, {3, 2, 12, 6}, {3, 2, 12, 6},
+        ScrollAxis::Vertical};
+    const auto solved =
+        solvePanelSurface(TreeViewState{}, panel, 99, true, Style{});
+    ASSERT_EQ(solved.rect, panel.rect);
+    ASSERT_EQ(solved.providerLabel, (Rect{3, 2, 12, 1}));
+    ASSERT_TRUE(solved.providerText.empty());
+    ASSERT_TRUE(solved.rows.empty());
+    ASSERT_FALSE(solved.scrollbarGutter.has_value());
+    ASSERT_EQ(solved.firstVisible, std::uint32_t{0});
+}
+
 // Two flex siblings split the width equally; the odd cell goes to the LAST child
 // (reproduces the old pane rule `rect.width - firstWidth`).
 TEST(rowFlexSplitsEquallyRemainderToLast) {
@@ -630,6 +644,7 @@ int main() {
     RUN(emptyPaletteSurfaceKeepsItsBandsAndHasNoRows);
     RUN(paletteSurfaceClipsRowsToItsHeight);
     RUN(zeroSizePaletteSurfaceProducesNoPaintableGeometry);
+    RUN(panelSurfaceWithoutAProviderIsEmptyAndBounded);
     RUN(rowFlexSplitsEquallyRemainderToLast);
     RUN(singleFlexTakesAllRemainder);
     RUN(insetReservesTheFrameOnEveryEdge);

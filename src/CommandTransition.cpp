@@ -21,15 +21,7 @@ constexpr std::array<PanelProvider, 3> kCycle{
 }  // namespace
 
 std::string_view panelProviderLabel(PanelProvider provider) {
-    switch (provider) {
-    case PanelProvider::FileTree:
-        return "files";
-    case PanelProvider::GitStatus:
-        return "git";
-    case PanelProvider::Symbols:
-        return "symbols";
-    }
-    rejectCorrupt("corrupt PanelProvider enumerator");
+    return treeProviderLabel(panelProviderTreeBinding(provider).kind);
 }
 
 TreeProviderBinding panelProviderTreeBinding(PanelProvider provider) {

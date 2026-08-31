@@ -71,23 +71,20 @@ RegionHit paletteHit(SolvedPaletteSurface const& palette, int column, int row) {
     return {};
 }
 
-RegionHit panelHit(GridFrame const& snapshot, Rect const& panel,
-                    std::optional<Rect> const& gutter, int column, int row) {
-    if (gutter && contains(*gutter, column, row)) {
-        return scrollbarHit(HitRegion::PanelScrollbar, *gutter, row);
+RegionHit panelHit(SolvedPanelSurface const& panel, int column, int row) {
+    if (panel.scrollbarGutter &&
+        contains(*panel.scrollbarGutter, column, row)) {
+        return scrollbarHit(HitRegion::PanelScrollbar,
+                           *panel.scrollbarGutter, row);
     }
-    if (row == panel.y) return {};
-    auto const& tree = snapshot.sections().tree;
-    if (tree.providers.empty()) return {};
-    auto const& windows = snapshot.presentation().treeWindows;
-    if (windows.empty()) return {};
-    auto const& window = windows.front();
-    auto const viewportRow = static_cast<std::size_t>(row - (panel.y + 1));
-    if (viewportRow >= window.visibleNodeIds.size()) return {};
-    RegionHit hit;
-    hit.region = HitRegion::Panel;
-    hit.nodeId = window.visibleNodeIds[viewportRow];
-    return hit;
+    for (const auto& item : panel.rows) {
+        if (!contains(item.rect, column, row)) continue;
+        RegionHit hit;
+        hit.region = HitRegion::Panel;
+        hit.nodeId = item.nodeId;
+        return hit;
+    }
+    return {};
 }
 
 }  // namespace
@@ -245,11 +242,9 @@ RegionHit HitTester::at(int column, int row) const {
         if (node && contains(node->rect, column, row)) return {};
     }
 
-    // The side panel and its gutter occupy the leftmost columns, disjoint from
-    // the editor/palette pane.
-    if (shell.panel && contains(*shell.panel, column, row)) {
-        return panelHit(snapshot, *shell.panel, shell.panelScrollbar, column,
-                         row);
+    if (snapshot.panel() &&
+        contains(snapshot.panel()->rect, column, row)) {
+        return panelHit(*snapshot.panel(), column, row);
     }
 
     if (!shell.panes.empty()) {
@@ -278,10 +273,11 @@ std::optional<HitTester::GutterThumb> HitTester::gutterThumb(
         return make(shell.panes.front().scrollbar,
                     snapshot_.presentation().viewport.scrollbar);
     case HitRegion::PanelScrollbar: {
-        if (!shell.panelScrollbar) return std::nullopt;
-        auto const& windows = snapshot_.presentation().treeWindows;
-        if (windows.empty()) return std::nullopt;
-        return make(*shell.panelScrollbar, windows.front().scrollbar);
+        if (!snapshot_.panel() || !snapshot_.panel()->scrollbarGutter) {
+            return std::nullopt;
+        }
+        return make(*snapshot_.panel()->scrollbarGutter,
+                    snapshot_.panel()->scrollbar);
     }
     case HitRegion::PaletteScrollbar:
         if (const auto* node = snapshot_.layout().find(

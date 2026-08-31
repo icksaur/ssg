@@ -32,6 +32,7 @@ struct GridProjectionState {
     std::optional<TabId> activeTab;
     std::optional<SelectionSet> selections;
     std::optional<TreeNodeId> treeSelection;
+    bool panelVisible = false;
     struct PendingSelection {
         TabId activeTab;
         Revision documentRevision;

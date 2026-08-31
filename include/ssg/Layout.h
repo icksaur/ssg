@@ -17,6 +17,7 @@
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Style.h>
 #include <ssg/TabManager.h>
+#include <ssg/TreeModel.h>
 #include <ssg/UiNodeState.h>
 #include <ssg/UiPresence.h>
 #include <ssg/UiProfile.h>
@@ -181,6 +182,37 @@ struct SolvedPaletteSurface {
 // from this one solved viewport projection.
 [[nodiscard]] SolvedPaletteSurface solvePaletteSurface(
     const PaletteReport& palette, Rect rect, int scrollbarWidth);
+
+struct SolvedPanelRow {
+    std::uint32_t absoluteIndex = 0;
+    TreeNodeId nodeId;
+    std::string text;
+    Rect rect;
+    bool selected = false;
+    bool directory = false;
+
+    friend bool operator==(const SolvedPanelRow&,
+                           const SolvedPanelRow&) = default;
+};
+
+struct SolvedPanelSurface {
+    Rect rect;
+    Rect providerLabel;
+    std::string providerText;
+    std::optional<Rect> scrollbarGutter;
+    std::uint32_t firstVisible = 0;
+    ScrollbarMetrics scrollbar;
+    std::vector<SolvedPanelRow> rows;
+
+    friend bool operator==(const SolvedPanelSurface&,
+                           const SolvedPanelSurface&) = default;
+};
+
+// CONTRACT: Panel cells, row hits, and scrollbar hits consume this one window
+// derived from the solved panel node and presenter-owned first-visible state.
+[[nodiscard]] SolvedPanelSurface solvePanelSurface(
+    const TreeViewState& tree, const SolvedGridNode& panel,
+    std::uint32_t firstVisible, bool revealSelection, const Style& style);
 
 // Returns nullopt when nonnegative bounds cannot contain an inset, gaps, or
 // exact children. Invalid identities and unsupported Auto sizes are misuse and

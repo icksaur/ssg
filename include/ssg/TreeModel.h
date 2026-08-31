@@ -48,6 +48,8 @@ private:
 
 enum class TreeProviderKind { Filesystem, Git, Symbols };
 
+[[nodiscard]] std::string_view treeProviderLabel(TreeProviderKind kind);
+
 // Which tree provider a caller wants active, as a typed pair rather than a
 // string. `activateOrCreate` uses `kind` to decide whether a missing provider
 // may be lazily created (Git/Symbols) or is a genuine failure (Filesystem).

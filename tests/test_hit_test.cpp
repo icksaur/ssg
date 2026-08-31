@@ -527,31 +527,61 @@ TEST(panelRowMapsToItsTreeNodeId) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto presentation = snapshot->presentation();
+    presentation.shell.panel = ssg::Rect{60, 2, 8, 3};
+    presentation.shell.panelScrollbar = ssg::Rect{67, 3, 1, 2};
+    presentation.treeWindows = {
+        ssg::TreeWindow{5, {}, {ssg::TreeNodeId{"bogus"}}}};
+    auto frame = ssg::test::gridFrameFromLegacy(
+        ssg::LegacyPresentationSnapshot{
+            snapshot->semantic().revision(), snapshot->semantic().topology(),
+            snapshot->semantic().client(), snapshot->semantic().sections(),
+            std::move(presentation)});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation().shell;
-    ASSERT_TRUE(shell.panel.has_value());
-    if (!shell.panel) return;
-    auto const& window = frame->presentation().treeWindows.front();
-    ASSERT_FALSE(window.visibleNodeIds.empty());
-    if (window.visibleNodeIds.empty()) return;
+    ASSERT_TRUE(frame->panel().has_value());
+    if (!frame->panel()) return;
+    auto const& panel = *frame->panel();
+    ASSERT_NE(panel.rect, (ssg::Rect{60, 2, 8, 3}));
+    ASSERT_EQ(panel.providerText,
+              ssg::treeProviderLabel(
+                  frame->sections().tree.providers.front().kind));
+    ASSERT_FALSE(panel.rows.empty());
+    if (panel.rows.empty()) return;
+    ASSERT_TRUE(panel.scrollbarGutter.has_value());
+    if (!panel.scrollbarGutter) return;
+    ASSERT_TRUE(panel.scrollbarGutter->x >= panel.rect.x);
+    ASSERT_TRUE(panel.scrollbarGutter->right() <= panel.rect.right());
+    ASSERT_TRUE(panel.rows.front().rect.right() <=
+                panel.scrollbarGutter->x);
 
     // The provider-label row (panel.y) is not a node.
-    auto label = ssg::HitTester{*frame}.at(shell.panel->x, shell.panel->y);
+    auto label = ssg::HitTester{*frame}.at(panel.rect.x, panel.rect.y);
     ASSERT_EQ(label.region, ssg::HitRegion::None);
 
     // The first content row maps to the first visible node id.
-    auto hit = ssg::HitTester{*frame}.at(shell.panel->x, shell.panel->y + 1);
+    auto hit =
+        ssg::HitTester{*frame}.at(panel.rows.front().rect.x,
+                                  panel.rows.front().rect.y);
     ASSERT_EQ(hit.region, ssg::HitRegion::Panel);
     ASSERT_TRUE(hit.nodeId.has_value());
-    if (hit.nodeId) ASSERT_EQ(*hit.nodeId, window.visibleNodeIds.front());
+    if (hit.nodeId) ASSERT_EQ(*hit.nodeId, panel.rows.front().nodeId);
+
+    auto gutter = ssg::HitTester{*frame}.at(
+        panel.scrollbarGutter->x, panel.scrollbarGutter->y);
+    ASSERT_EQ(gutter.region, ssg::HitRegion::PanelScrollbar);
+    auto thumb =
+        ssg::HitTester{*frame}.gutterThumb(ssg::HitRegion::PanelScrollbar);
+    ASSERT_TRUE(thumb.has_value());
 
     // A row below the last visible node is empty.
     auto empty =
-        ssg::HitTester{*frame}.at(shell.panel->x, shell.panel->bottom() - 1);
+        ssg::HitTester{*frame}.at(panel.rect.x, panel.rect.bottom() - 1);
     ASSERT_EQ(empty.region, ssg::HitRegion::None);
+
+    auto corruptLegacy =
+        ssg::HitTester{*frame}.at(60, 3);
+    ASSERT_NE(corruptLegacy.region, ssg::HitRegion::Panel);
 }
 
 TEST(paletteRowMapsToItsAbsoluteRankIndex) {

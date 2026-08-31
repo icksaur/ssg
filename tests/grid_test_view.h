@@ -19,6 +19,10 @@ public:
             session, client_, {dimensions_, std::move(palette)});
     }
 
+    void resize(ViewportDimensions dimensions) noexcept {
+        dimensions_ = dimensions;
+    }
+
     [[nodiscard]] CommandResult dispatch(EditorSession& session,
                                          ClientCommand command) {
         auto result = session.dispatch(client_, std::move(command));

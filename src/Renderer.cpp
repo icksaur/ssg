@@ -488,8 +488,7 @@ void paintTabBar(CellGrid& grid, const SolvedTabBar& solved,
 
 void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                         ThemeSnapshot const& theme, const UiSchema& ui,
-                        std::uint8_t background, std::uint8_t panelBackground,
-                        Style const& style) {
+                        std::uint8_t background, Style const& style) {
     auto const headerBackground = semanticIndex(
         theme,
         nodeBackground(ui, kHeaderNodeId, SemanticRole::HeaderBackground));
@@ -500,8 +499,7 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
         std::uint8_t nodeBackground = background;
         switch (node.kind) {
         case ShellNodeKind::PanelProvider:
-            nodeBackground = panelBackground;
-            [[fallthrough]];
+            break;
         case ShellNodeKind::HeaderField:
         case ShellNodeKind::FooterField:
         case ShellNodeKind::FooterAction:
@@ -568,53 +566,35 @@ void paintScrollGutter(CellGrid& grid, int x, int y, int height,
     }
 }
 
-void paintPanelTree(CellGrid& grid, Rect const& panel,
-                      std::optional<Rect> const& panelScrollbar,
-                      TreeViewState const& tree, TreeWindow const& window,
+void paintPanelTree(CellGrid& grid, SolvedPanelSurface const& panel,
                       ThemeSnapshot const& theme,
                       std::uint8_t background, bool focused,
                       Style const& style) {
-    if (tree.providers.empty() || panel.width <= 0) return;
-    auto const& provider = tree.providers.front();
     auto const foreground = semanticIndex(theme, SemanticRole::Text);
     auto const directory = semanticIndex(theme, SemanticRole::PanelActive);
     auto const selectedBg = semanticIndex(theme, SemanticRole::TreeFocus);
-    int const top = panel.y + 1;
-    int const rows = panel.height - 1;
-    // Content stops before the reserved scrollbar gutter so text width is stable.
-    int const contentRight =
-        panelScrollbar ? panelScrollbar->x : panel.right();
-    // Window the visible nodes at the resolved scroll offset.
-    for (int row = 0; row < rows; ++row) {
-        std::size_t const index =
-            static_cast<std::size_t>(window.firstVisible) +
-            static_cast<std::size_t>(row);
-        if (index >= provider.nodes.size()) break;
-        auto const& view = provider.nodes[index];
-        int const y = top + row;
-        bool const isSelected =
-            provider.selected && view.node.id == *provider.selected;
-        auto const rowBackground = isSelected ? selectedBg : background;
-        if (isSelected) {
-            fillRect(grid, {panel.x, y, contentRight - panel.x, 1}, foreground,
-                      rowBackground, SemanticRole::TreeFocus);
-            if (focused) grid.caret = GridPosition{panel.x, y};
+    const auto providerRole =
+        focused ? SemanticRole::PanelActive : SemanticRole::PanelInactive;
+    paintText(grid, panel.providerLabel.x, panel.providerLabel.y,
+              panel.providerLabel.right(), panel.providerText,
+              semanticIndex(theme, providerRole), background, providerRole,
+              style);
+    for (const auto& row : panel.rows) {
+        auto const rowBackground = row.selected ? selectedBg : background;
+        if (row.selected) {
+            fillRect(grid, row.rect, foreground, rowBackground,
+                    SemanticRole::TreeFocus);
+            if (focused) grid.caret = GridPosition{row.rect.x, row.rect.y};
         }
-        std::string line(view.depth * style.tree.indentPerDepth, ' ');
-        if (view.node.expandable) {
-            line += view.expanded ? style.tree.expanded : style.tree.collapsed;
-        }
-        line += view.node.label;
-        auto const color =
-            view.node.kind == TreeNodeKind::Directory ? directory : foreground;
-        paintText(grid, panel.x, y, contentRight, line, color, rowBackground,
-                   SemanticRole::Text, style);
+        const auto color = row.directory ? directory : foreground;
+        paintText(grid, row.rect.x, row.rect.y, row.rect.right(), row.text,
+                  color, rowBackground, SemanticRole::Text, style);
     }
-    // Paint the reserved gutter (blank when the tree fits).
-    if (panelScrollbar) {
-        paintScrollGutter(grid, panelScrollbar->x, panelScrollbar->y,
-                            panelScrollbar->height, window.scrollbar, theme,
-                            background, style);
+    if (panel.scrollbarGutter) {
+        paintScrollGutter(grid, panel.scrollbarGutter->x,
+                        panel.scrollbarGutter->y,
+                        panel.scrollbarGutter->height, panel.scrollbar, theme,
+                        background, style);
     }
 }
 
@@ -1286,15 +1266,14 @@ CellGrid Renderer::render(GridFrame const& snapshot,
     grid.diffTints = themeDiffTints(theme);
     grid.selectionFill = theme.color(SemanticRole::Selection);
 
-    auto const panelBackground =
-        shell.panel ? semanticIndex(
-                          theme, nodeBackground(ui, kPanelNodeId,
-                                                SemanticRole::TreeBackground))
-                    : background;
-    if (shell.panel) {
+    auto const panelBackground = snapshot.panel()
+        ? semanticIndex(theme, nodeBackground(ui, kPanelNodeId,
+                                             SemanticRole::TreeBackground))
+        : background;
+    if (snapshot.panel()) {
         const auto panelBackgroundRole =
             nodeBackground(ui, kPanelNodeId, SemanticRole::TreeBackground);
-        fillRect(grid, *shell.panel, foreground, panelBackground,
+        fillRect(grid, snapshot.panel()->rect, foreground, panelBackground,
                   panelBackgroundRole);
     }
 
@@ -1327,8 +1306,7 @@ CellGrid Renderer::render(GridFrame const& snapshot,
             theme, style, role, foreground, documentBackground);
     }
 
-    paintShellLeaves(grid, shell, theme, ui, background, panelBackground,
-                     style);
+    paintShellLeaves(grid, shell, theme, ui, background, style);
     if (snapshot.sections().noticeView) {
         const auto* node =
             snapshot.layout().find(UiNodeId{std::string{kNoticeNodeId}});
@@ -1361,17 +1339,9 @@ CellGrid Renderer::render(GridFrame const& snapshot,
                 SemanticRole::StatusWarning));
     }
 
-    if (shell.panel) {
-        // The tree window (grid projection) lives in presentation; it holds the
-        // active provider's scroll offset and thumb. Empty when no provider or no
-        // presentation (a native-layout client never calls this renderer).
-        static TreeWindow const emptyWindow{};
-        auto const& windows = snapshot.presentation().treeWindows;
-        auto const& window = windows.empty() ? emptyWindow : windows.front();
-        paintPanelTree(grid, *shell.panel, shell.panelScrollbar,
-                         snapshot.sections().tree, window, theme,
-                         panelBackground, snapshot.sections().focus == FocusTarget::Panel,
-                         style);
+    if (snapshot.panel()) {
+        paintPanelTree(grid, *snapshot.panel(), theme, panelBackground,
+                       snapshot.sections().focus == FocusTarget::Panel, style);
     }
     if (!shell.panes.empty()) {
         fillRect(grid, shell.panes.front().content, foreground,

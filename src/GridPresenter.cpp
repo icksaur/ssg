@@ -51,15 +51,6 @@ SolveUiFrameResult trySolveFrameLayout(
     }
 
     auto presence = semantic.sections().uiPresence;
-    if (!shell.panel) {
-        // Removed with the panel surface migration. Until then, the legacy grid
-        // projection owns the panel's responsive collapse decision.
-        for (auto& node : presence.nodes) {
-            if (node.id == UiNodeId{std::string{kPanelNodeId}}) {
-                node.present = false;
-            }
-        }
-    }
 
     const auto& root = validated.schema().schema().root;
     auto intrinsicSizes =
@@ -105,6 +96,7 @@ SolveUiFrameResult trySolveFrameLayout(
         UiNodeId{std::string{kNoticeNodeId}},
         UiNodeId{std::string{kExternalModNodeId}},
         UiNodeId{std::string{kTabBarNodeId}},
+        UiNodeId{std::string{kPanelNodeId}},
         UiNodeId{std::string{kFindResultsViewportNodeId}},
     };
     if (semantic.sections().promptView) {
@@ -203,6 +195,7 @@ GridFrame::GridFrame(SessionSnapshot semantic,
       palette_{std::move(palette)},
       basis_{basis} {
     adoptLegacyPalette(palette_, presentation_);
+    solvePanel(0, false);
 }
 
 GridFrame::GridFrame(SessionSnapshot semantic,
@@ -215,17 +208,33 @@ GridFrame::GridFrame(SessionSnapshot semantic,
       palette_{std::move(palette)},
       basis_{basis} {}
 
+void GridFrame::solvePanel(std::uint32_t treeFirstVisible,
+                           bool revealTreeSelection) {
+    const auto* node =
+        layout_.find(UiNodeId{std::string{kPanelNodeId}});
+    if (!node) {
+        panel_.reset();
+        return;
+    }
+    panel_ = solvePanelSurface(semantic_.sections().tree, *node,
+                               treeFirstVisible, revealTreeSelection,
+                               presentation_.style);
+}
+
 std::optional<GridFrame> GridFrame::fromLegacy(
     LegacyPresentationSnapshot legacy, GridBasis basis,
-    PaletteReport palette) {
+    PaletteReport palette, std::uint32_t treeFirstVisible,
+    bool revealTreeSelection) {
     auto result =
         trySolveFrameLayout(legacy.semantic_, legacy.presentation_);
     if (!result.tree) return std::nullopt;
     adoptLegacyPalette(palette, legacy.presentation_);
-    return GridFrame{std::move(legacy.semantic_),
-                     std::move(legacy.presentation_),
-                     std::move(*result.tree),
-                     basis, std::move(palette)};
+    GridFrame frame{std::move(legacy.semantic_),
+                    std::move(legacy.presentation_),
+                    std::move(*result.tree),
+                    basis, std::move(palette)};
+    frame.solvePanel(treeFirstVisible, revealTreeSelection);
+    return frame;
 }
 
 GridPresenter::GridPresenter(ViewId viewId)
@@ -280,28 +289,6 @@ std::optional<GridFrame> GridPresenter::project(
         sections.tree.providers.empty()
             ? std::optional<TreeNodeId>{}
             : sections.tree.providers.front().selected;
-    if (selectedTree && selectedTree != state.treeSelection &&
-        !presentation->treeWindows.empty() &&
-        !sections.tree.providers.empty()) {
-        auto const& provider = sections.tree.providers.front();
-        const auto found = std::find_if(
-            provider.nodes.begin(), provider.nodes.end(),
-            [&](auto const& row) { return row.node.id == *selectedTree; });
-        if (found != provider.nodes.end()) {
-            const auto selected = static_cast<std::uint32_t>(
-                std::distance(provider.nodes.begin(), found));
-            auto const& scrollbar =
-                presentation->treeWindows.front().scrollbar;
-            ScrollOffset offset{state.treeFirstVisible};
-            offset.revealSelection(selected, scrollbar.totalRows,
-                                   scrollbar.viewportRows);
-            navigationChanged =
-                navigationChanged ||
-                offset.firstVisible() != state.treeFirstVisible;
-            state.treeFirstVisible = offset.firstVisible();
-        }
-    }
-    state.treeSelection = selectedTree;
 
     if (documentChanged || navigationChanged) {
         snapshot = projectCurrent(request.palette,
@@ -314,7 +301,8 @@ std::optional<GridFrame> GridPresenter::project(
     auto frame = GridFrame::fromLegacy(
         std::move(*snapshot),
         GridBasis{viewId_, *state.adoptedRevision, nextGeneration},
-        std::move(request.palette));
+        std::move(request.palette), state.treeFirstVisible,
+        selectedTree != state.treeSelection || !state.panelVisible);
     if (!frame) return std::nullopt;
     state.generation = nextGeneration;
     presentation = &frame->presentation();
@@ -323,10 +311,13 @@ std::optional<GridFrame> GridPresenter::project(
         presentation->viewport.firstVisualRow;
     state.navigation.firstVisualColumn =
         presentation->viewport.firstVisualColumn;
-    if (!presentation->treeWindows.empty()) {
-        state.treeFirstVisible =
-            presentation->treeWindows.front().firstVisible;
+    if (frame->panel()) {
+        state.treeFirstVisible = frame->panel()->firstVisible;
+        state.panelVisible = true;
+    } else {
+        state.panelVisible = false;
     }
+    state.treeSelection = selectedTree;
     return frame;
 }
 
@@ -459,8 +450,8 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                         state.navigation.firstVisualRow;
                     state.navigation.firstVisualRow =
                         offset.firstVisible();
-                } else if (!presentation->treeWindows.empty()) {
-                    auto const& tree = presentation->treeWindows.front();
+                } else if (frame.panel()) {
+                    auto const& tree = *frame.panel();
                     ScrollOffset offset{state.treeFirstVisible};
                     offset.byLines(action.rows, tree.scrollbar.totalRows,
                                    tree.scrollbar.viewportRows);
@@ -500,8 +491,8 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                         state.navigation.firstVisualRow;
                     state.navigation.firstVisualRow =
                         offset.firstVisible();
-                } else if (!presentation->treeWindows.empty()) {
-                    auto const& tree = presentation->treeWindows.front();
+                } else if (frame.panel()) {
+                    auto const& tree = *frame.panel();
                     ScrollOffset offset{state.treeFirstVisible};
                     offset.toFraction(action.numerator, action.denominator,
                                       tree.scrollbar.totalRows,

@@ -1172,6 +1172,43 @@ TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
     ASSERT_TRUE(gridContains(grid, "a.txt"));
 }
 
+TEST(renderPanelIgnoresCorruptLegacyPanelGeometryAndWindow) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "visible.txt"} << "x";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
+    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto presentation = snapshot->presentation();
+    presentation.shell.panel = ssg::Rect{60, 2, 8, 3};
+    presentation.shell.panelScrollbar = ssg::Rect{67, 3, 1, 2};
+    presentation.treeWindows = {
+        ssg::TreeWindow{9, {}, {ssg::TreeNodeId{"bogus"}}}};
+    auto frame = deprecatedGridFrame(ssg::LegacyPresentationSnapshot{
+        snapshot->semantic().revision(), snapshot->semantic().topology(),
+        snapshot->semantic().client(), snapshot->semantic().sections(),
+        std::move(presentation)});
+    ASSERT_TRUE(frame.panel().has_value());
+    if (!frame.panel()) return;
+
+    auto grid = ssg::Renderer{}.render(frame);
+    auto const& panel = *frame.panel();
+    ASSERT_EQ(rowText(grid, panel.providerLabel.y).substr(
+                  static_cast<std::size_t>(panel.providerLabel.x),
+                  panel.providerText.size()),
+              panel.providerText);
+    ASSERT_TRUE(gridContains(grid, "visible.txt"));
+    ASSERT_NE(rowText(grid, 3).substr(60, 5), std::string{"files"});
+}
+
 TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\nbeta\n";
@@ -2287,6 +2324,7 @@ int main() {
     RUN(renderPromptControlLabelsAreLowercaseChrome);
     RUN(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel);
     RUN(renderPanelTreeReservesAnEmptyGutterWhenItFits);
+    RUN(renderPanelIgnoresCorruptLegacyPanelGeometryAndWindow);
     RUN(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection);
     RUN(renderPaletteReservesAnEmptyGutterWhenTheListFits);
     RUN(renderTooSmallViewportProducesLibraryPlaceholder);
