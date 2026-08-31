@@ -4843,12 +4843,163 @@ bool decodePresent(ProtocolValue const& value, std::optional<PresentationSnapsho
     return true;
 }
 
+ProtocolValue encodeUiFrameVersion(UiFrameVersion version) {
+    return ProtocolValue::makeObject(
+        {{"generation", ProtocolValue::makeUint(version.generation.value())},
+         {"presence_basis",
+          ProtocolValue::makeUint(version.presenceBasis.value())}});
+}
+
+std::optional<UiFrameVersion> decodeUiFrameVersion(
+    const ProtocolValue& value) {
+    const auto* generation = value.field("generation");
+    const auto* presenceBasis = value.field("presence_basis");
+    if (!value.asObject() || !generation || !generation->asUint() ||
+        !presenceBasis || !presenceBasis->asUint()) {
+        return std::nullopt;
+    }
+    return UiFrameVersion{Generation{*generation->asUint()},
+                          PresenceBasis{*presenceBasis->asUint()}};
+}
+
+ProtocolValue encodeUiFrame(const UiFrame& frame) {
+    return ProtocolValue::makeObject(
+        {{"version", encodeUiFrameVersion(frame.version())},
+         {"schema", encodeUiSchema(frame.schema())},
+         {"state", encodeUiState(frame.state())},
+         {"presence", encodeUiPresence(frame.presence())}});
+}
+
+std::optional<UiFrame> decodeUiFrame(const ProtocolValue& value) {
+    if (!value.asObject()) return std::nullopt;
+    const auto version =
+        value.field("version")
+            ? decodeUiFrameVersion(*value.field("version"))
+            : std::nullopt;
+    const auto schema =
+        value.field("schema") ? decodeUiSchema(*value.field("schema"))
+                              : std::nullopt;
+    const auto state =
+        value.field("state") ? decodeUiState(*value.field("state"))
+                             : std::nullopt;
+    const auto presence =
+        value.field("presence")
+            ? decodeUiPresence(*value.field("presence"))
+            : std::nullopt;
+    if (!version || !schema || !state || !presence) return std::nullopt;
+    auto frame = UiFrame::create(*schema, *state, *presence);
+    if (!frame || frame->version() != *version) return std::nullopt;
+    return frame;
+}
+
+ProtocolValue encodeUiFrameDelta(const UiFrameDelta& delta) {
+    std::vector<ProtocolValue::Field> fields{
+        {"base", encodeUiFrameVersion(delta.base())},
+        {"target", encodeUiFrameVersion(delta.target())}};
+    if (const auto* replacement =
+            std::get_if<UiFrameReplacement>(&delta.body())) {
+        fields.emplace_back("kind", ProtocolValue::makeText("replacement"));
+        fields.emplace_back("frame", encodeUiFrame(replacement->frame));
+        return ProtocolValue::makeObject(std::move(fields));
+    }
+    const auto* changes = std::get_if<UiFrameChanges>(&delta.body());
+    if (!changes) {
+        throw std::invalid_argument(
+            "legacy UI frame changes cannot be encoded");
+    }
+    UiStateSection stateChanges{
+        delta.target().generation, changes->state,
+        changes->focusPathChanged ? changes->focusPath : std::nullopt};
+    UiPresenceSection presenceChanges{delta.target().generation,
+                                      delta.target().presenceBasis,
+                                      changes->presence};
+    fields.emplace_back("kind", ProtocolValue::makeText("changes"));
+    fields.emplace_back("state", encodeUiState(stateChanges));
+    fields.emplace_back("presence", encodeUiPresence(presenceChanges));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+
+std::optional<UiFrameDelta> decodeUiFrameDelta(const ProtocolValue& value) {
+    if (!value.asObject()) return std::nullopt;
+    const auto base =
+        value.field("base") ? decodeUiFrameVersion(*value.field("base"))
+                            : std::nullopt;
+    const auto target =
+        value.field("target") ? decodeUiFrameVersion(*value.field("target"))
+                              : std::nullopt;
+    const auto* kindField = value.field("kind");
+    if (!base || !target || !kindField || !kindField->asText()) {
+        return std::nullopt;
+    }
+    if (*kindField->asText() == "replacement") {
+        const auto frame =
+            value.field("frame") ? decodeUiFrame(*value.field("frame"))
+                                 : std::nullopt;
+        if (!frame || frame->version() != *target) return std::nullopt;
+        return UiFrameDelta::replacement(*base, *frame);
+    }
+    if (*kindField->asText() != "changes") return std::nullopt;
+    const auto state =
+        value.field("state") ? decodeUiState(*value.field("state"))
+                             : std::nullopt;
+    const auto presence =
+        value.field("presence")
+            ? decodeUiPresence(*value.field("presence"))
+            : std::nullopt;
+    if (!state || !presence || state->generation != target->generation ||
+        presence->generation != target->generation ||
+        presence->basis != target->presenceBasis) {
+        return std::nullopt;
+    }
+    UiFrameChanges changes;
+    changes.state = state->nodes;
+    changes.presence = presence->nodes;
+    changes.focusPathChanged = state->focusPath.has_value();
+    changes.focusPath = state->focusPath;
+    return UiFrameDelta::changes(*base, *target, std::move(changes));
+}
+
+std::optional<std::vector<UiNodeId>> legacyFocusPath(
+    FocusTarget focus, const UiSchema& schema,
+    const UiPresenceSection& presence) {
+    std::vector<std::string_view> candidates;
+    switch (focus) {
+        case FocusTarget::Editor:
+            candidates = {kEditorNodeId};
+            break;
+        case FocusTarget::Panel:
+            candidates = {kTreeNodeId};
+            break;
+        case FocusTarget::Prompt:
+            candidates = {kHeaderPromptInputNodeId, kFooterPromptNodeId};
+            break;
+        case FocusTarget::ExternalModification:
+            candidates = {kExternalModNodeId};
+            break;
+    }
+    std::vector<UiNodeId> present;
+    const auto schemaIds = uiSchemaNodeIds(schema);
+    for (const auto candidate : candidates) {
+        const UiNodeId id{std::string{candidate}};
+        const auto record = std::find_if(
+            presence.nodes.begin(), presence.nodes.end(),
+            [&](const UiPresenceRecord& item) {
+                return item.id == id && item.present;
+            });
+        if (schemaIds.contains(id) && record != presence.nodes.end()) {
+            present.push_back(id);
+        }
+    }
+    if (present.size() != 1) return std::nullopt;
+    return present;
+}
+
 constexpr auto kSemanticSessionFields = std::to_array<std::string_view>({
     "document", "selection", "history", "clipboard", "prompt_status", "search",
     "find_replace", "settings", "keymap", "text_encoding", "tabs", "diff",
     "external_modification", "follow_edits", "tree", "syntax", "lsp_sync",
-    "lsp_features", "theme", "focus", "palette", "ui", "ui_state",
-    "ui_presence", "prompt_view", "notice_view", "watcher_available",
+    "lsp_features", "theme", "focus", "palette", "ui_frame",
+    "prompt_view", "notice_view", "watcher_available",
     "external_focus_held",
 });
 
@@ -4857,7 +5008,7 @@ constexpr auto kSemanticSessionDeltaFields = std::to_array<std::string_view>({
     "prompt_status", "search", "find_replace", "settings", "keymap",
     "text_encoding", "tabs", "diff", "external_modification", "follow_edits",
     "tree", "syntax", "lsp_sync", "lsp_features", "theme", "focus", "palette",
-    "ui", "ui_state", "ui_presence", "prompt_view", "notice_view",
+    "ui_frame_delta", "prompt_view", "notice_view",
     "watcher_available", "external_focus_held",
 });
 
@@ -4968,26 +5119,24 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back(kSemanticSessionFields[18], toValue(value.theme));
     fields.emplace_back(kSemanticSessionFields[19], toValue(value.focus));
     fields.emplace_back(kSemanticSessionFields[20], encodePalette(value.palette));
-    fields.emplace_back(kSemanticSessionFields[21], encodeUiSchema(value.ui));
-    fields.emplace_back(kSemanticSessionFields[22], encodeUiState(value.uiState));
-    fields.emplace_back(kSemanticSessionFields[23],
-                        encodeUiPresence(value.uiPresence));
+    fields.emplace_back(kSemanticSessionFields[21],
+                        encodeUiFrame(value.uiFrame));
     // Additive: the semantic footer-prompt section. Null when no footer-region
     // prompt is open; a decoder that predates this field simply ignores it, and a
     // frame that omits it decodes to no footer prompt.
-    fields.emplace_back(kSemanticSessionFields[24], value.promptView
+    fields.emplace_back(kSemanticSessionFields[22], value.promptView
                                            ? toValue(*value.promptView)
                                            : ProtocolValue::makeNull());
     // Additive: the semantic draft-conflict notice section. Null when the active
     // document has no unresolved conflict; a decoder that predates this field simply
     // ignores it, and a frame that omits it decodes to no notice.
-    fields.emplace_back(kSemanticSessionFields[25], value.noticeView
+    fields.emplace_back(kSemanticSessionFields[23], value.noticeView
                                            ? toValue(*value.noticeView)
                                            : ProtocolValue::makeNull());
     // Additive: whether the session watches for external modification (Decision
     // 13). A decoder that predates this field ignores it; an absent field decodes
     // to available (true), so an old peer is never shown as unwatched.
-    fields.emplace_back(kSemanticSessionFields[26],
+    fields.emplace_back(kSemanticSessionFields[24],
                         toValue(value.watcherAvailable));
     // Additive: whether the external-modification bar is the EFFECTIVE (top)
     // focus, not merely present on the capture stack. A Prompt captured above the
@@ -4996,7 +5145,7 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     // else legacy focus" unambiguously. A decoder that predates this field
     // ignores it; an absent field decodes to false, so the legacy `focus` field
     // alone reconstructs focus for an old peer.
-    fields.emplace_back(kSemanticSessionFields[27],
+    fields.emplace_back(kSemanticSessionFields[25],
                         toValue(value.externalFocusHeld));
     return ProtocolValue::makeObject(std::move(fields));
 }
@@ -5027,6 +5176,11 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     auto palette = value.field("palette")
         ? decodePalette(*value.field("palette"))
         : std::optional<PaletteViewState>{};
+    std::optional<UiFrame> uiFrame;
+    if (const ProtocolValue* frameField = value.field("ui_frame")) {
+        uiFrame = decodeUiFrame(*frameField);
+        if (!uiFrame) return false;
+    }
     std::optional<UiSchema> ui;
     if (const ProtocolValue* uiField = value.field("ui")) {
         ui = decodeUiSchema(*uiField);
@@ -5075,24 +5229,21 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         if (!decoded) return false;
         externalFocusHeld = *decoded;
     }
-    // The schema and its presence section travel together and must correspond
-    // (generation + node-id set). Neither alone is a valid frame -- a lone schema
-    // would fall back to the root-only default presence, which need not correspond;
-    // a lone presence section has no schema to bind to. Both absent is the default
-    // pair, which corresponds by construction.
-    if (ui.has_value() != uiPresence.has_value()) return false;
-    if (ui && uiPresence) {
+    const bool hasLegacyUi = ui || uiState || uiPresence;
+    if (uiFrame && hasLegacyUi) return false;
+    if (hasLegacyUi && (!ui || !uiState || !uiPresence)) return false;
+    if (ui && uiState && uiPresence) {
         auto validated = ValidatedSchema::validate(*ui);
         if (!validated.ok()) return false;
         if (uiSchemaNodeIds(*ui).contains(
                 UiNodeId{std::string{kTreeNodeId}})) {
             normalizeLegacyTreeRecords(*uiPresence);
-            if (uiState) normalizeLegacyTreeRecords(*uiState);
+            normalizeLegacyTreeRecords(*uiState);
         }
         if (!uiPresenceCorrespondsToSchema(*uiPresence, validated.schema()))
             return false;
         canonicalizeUiRecordOrder(*ui, uiPresence->nodes);
-        if (uiState) canonicalizeUiRecordOrder(*ui, uiState->nodes);
+        canonicalizeUiRecordOrder(*ui, uiState->nodes);
     }
     if (!document || !selection || !history || !clipboard || !promptStatus || !search ||
         !findReplace || !settings || !keymap || !textEncoding || !tabs || !diff ||
@@ -5101,15 +5252,25 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         return false;
     }
     if (!palette) return false;
+    if (!uiFrame && ui && uiState && uiPresence) {
+        if (!uiState->focusPath) {
+            const FocusTarget effective =
+                externalFocusHeld ? FocusTarget::ExternalModification : *focus;
+            uiState->focusPath = legacyFocusPath(
+                effective, *ui, *uiPresence);
+            if (!uiState->focusPath) return false;
+        }
+        uiFrame = UiFrame::create(std::move(*ui), std::move(*uiState),
+                                  std::move(*uiPresence));
+        if (!uiFrame) return false;
+    }
     out.emplace(SessionSnapshotSections{
         *document, *selection, *history, *clipboard, *promptStatus, *search,
         *findReplace, *settings, *keymap, *textEncoding, *tabs, *diff,
         *externalModification, *followEdits, *tree, std::move(*syntax), *lspSync,
         *lspFeatures, *theme, *focus});
     out->palette = std::move(*palette);
-    if (ui) out->ui = std::move(*ui);
-    if (uiState) out->uiState = std::move(*uiState);
-    if (uiPresence) out->uiPresence = std::move(*uiPresence);
+    if (uiFrame) out->uiFrame = std::move(*uiFrame);
     out->promptView = std::move(promptView);
     out->noticeView = std::move(noticeView);
     out->watcherAvailable = watcherAvailable;
@@ -6673,30 +6834,21 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     fields.emplace_back("prompt_projection",
                         toValue(PromptProjectionDelta{}));
     fields.emplace_back("tree_windows", toValue(TreeWindowsDelta{}));
-    fields.emplace_back(kSemanticSessionDeltaFields[22], delta.ui().replacement
-                                  ? encodeUiSchema(*delta.ui().replacement)
-                                  : ProtocolValue::makeNull());
-    fields.emplace_back(kSemanticSessionDeltaFields[23],
-                        delta.uiState().replacement
-                            ? encodeUiState(*delta.uiState().replacement)
-                            : ProtocolValue::makeNull());
-    fields.emplace_back(kSemanticSessionDeltaFields[24],
-                        delta.uiPresence().replacement
-                            ? encodeUiPresence(*delta.uiPresence().replacement)
-                            : ProtocolValue::makeNull());
+    fields.emplace_back(kSemanticSessionDeltaFields[22],
+                        encodeUiFrameDelta(delta.uiFrameDelta()));
     fields.emplace_back(kSemanticSessionDeltaFields[21],
                         delta.palette().replacement
                             ? encodePalette(*delta.palette().replacement)
                             : ProtocolValue::makeNull());
-    fields.emplace_back(kSemanticSessionDeltaFields[25], toValue(delta.promptView()));
-    fields.emplace_back(kSemanticSessionDeltaFields[26], toValue(delta.noticeView()));
+    fields.emplace_back(kSemanticSessionDeltaFields[23], toValue(delta.promptView()));
+    fields.emplace_back(kSemanticSessionDeltaFields[24], toValue(delta.noticeView()));
     // Additive: present only when watcher availability flipped (Decision 13). An
     // absent field means "unchanged" for a peer that predates it.
-    fields.emplace_back(kSemanticSessionDeltaFields[27],
+    fields.emplace_back(kSemanticSessionDeltaFields[25],
                         toValue(delta.watcherAvailable()));
     // Additive: present only when the external-focus-held state flipped. An absent
     // field means "unchanged" for a peer that predates it.
-    fields.emplace_back(kSemanticSessionDeltaFields[28],
+    fields.emplace_back(kSemanticSessionDeltaFields[26],
                         toValue(delta.externalFocusHeld()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::makeObject(std::move(fields)));
@@ -6767,44 +6919,72 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
     auto selectionNav = requireField<SelectionNavigationDelta>(payload.field("selection_nav"));
     auto promptProjection = requireField<PromptProjectionDelta>(payload.field("prompt_projection"));
     auto treeWindows = requireField<TreeWindowsDelta>(payload.field("tree_windows"));
-    UiSectionDelta uiDelta;
-    if (const ProtocolValue* uiField = payload.field("ui")) {
+    const ProtocolValue* frameDeltaField = payload.field("ui_frame_delta");
+    const ProtocolValue* uiField = payload.field("ui");
+    const ProtocolValue* uiStateField = payload.field("ui_state");
+    const ProtocolValue* uiPresenceField = payload.field("ui_presence");
+    if (frameDeltaField && (uiField || uiStateField || uiPresenceField)) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
+                "session delta mixes UI frame representations"};
+    }
+    std::optional<UiFrameDelta> uiFrameDelta;
+    if (frameDeltaField) {
+        uiFrameDelta = decodeUiFrameDelta(*frameDeltaField);
+        if (!uiFrameDelta) {
+            return {ProtocolError::MalformedMessage, std::nullopt,
+                    "session delta UI frame is malformed"};
+        }
+    }
+    LegacyUiFrameChanges legacyUi;
+    if (uiField) {
         if (uiField->kind() != ProtocolValue::Kind::NullValue) {
             auto ui = decodeUiSchema(*uiField);
             if (!ui) {
                 return {ProtocolError::MalformedMessage, std::nullopt,
                         "session delta payload is malformed"};
             }
-            uiDelta.replacement = std::move(*ui);
+            legacyUi.schema = std::move(*ui);
         }
     }
-    UiStateSectionDelta uiStateDelta;
-    if (const ProtocolValue* uiStateField = payload.field("ui_state")) {
+    if (uiStateField) {
         if (uiStateField->kind() != ProtocolValue::Kind::NullValue) {
             auto uiState = decodeUiState(*uiStateField);
             if (!uiState) {
                 return {ProtocolError::MalformedMessage, std::nullopt,
                         "session delta payload is malformed"};
             }
-            uiStateDelta.replacement = std::move(*uiState);
+            legacyUi.state = std::move(*uiState);
         }
     }
-    UiPresenceSectionDelta uiPresenceDelta;
-    if (const ProtocolValue* uiPresenceField = payload.field("ui_presence")) {
+    if (uiPresenceField) {
         if (uiPresenceField->kind() != ProtocolValue::Kind::NullValue) {
             auto uiPresence = decodeUiPresence(*uiPresenceField);
             if (!uiPresence) {
                 return {ProtocolError::MalformedMessage, std::nullopt,
                         "session delta payload is malformed"};
             }
-            uiPresenceDelta.replacement = std::move(*uiPresence);
+            legacyUi.presence = std::move(*uiPresence);
         }
     }
-    if (uiStateDelta.replacement) {
-        normalizeLegacyTreeRecords(*uiStateDelta.replacement);
+    if (legacyUi.state) {
+        normalizeLegacyTreeRecords(*legacyUi.state);
     }
-    if (uiPresenceDelta.replacement) {
-        normalizeLegacyTreeRecords(*uiPresenceDelta.replacement);
+    if (legacyUi.presence) {
+        normalizeLegacyTreeRecords(*legacyUi.presence);
+    }
+    if (!uiFrameDelta) {
+        if (legacyUi.schema) {
+            if (legacyUi.state) {
+                canonicalizeUiRecordOrder(*legacyUi.schema,
+                                          legacyUi.state->nodes);
+            }
+            if (legacyUi.presence) {
+                canonicalizeUiRecordOrder(*legacyUi.schema,
+                                          legacyUi.presence->nodes);
+            }
+        }
+        uiFrameDelta =
+            UiFrameDelta::legacyChanges(std::move(legacyUi));
     }
     PaletteSectionDelta paletteDelta;
     if (const ProtocolValue* paletteField = payload.field("palette")) {
@@ -6842,17 +7022,6 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
         noticeViewDelta = std::move(*decoded);
     }
 
-    if (uiDelta.replacement) {
-        if (uiStateDelta.replacement) {
-            canonicalizeUiRecordOrder(*uiDelta.replacement,
-                                      uiStateDelta.replacement->nodes);
-        }
-        if (uiPresenceDelta.replacement) {
-            canonicalizeUiRecordOrder(*uiDelta.replacement,
-                                      uiPresenceDelta.replacement->nodes);
-        }
-    }
-
     if (!optionalOk || !baseRevision || !revision || !clientId || !viewId ||
         !capabilities || !selection || !history || !clipboard ||
         !promptStatus || !search || !findReplace || !settings || !keymap ||
@@ -6877,11 +7046,11 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*tree), std::move(*syntax), std::move(*lspSync),
                 std::move(*lspFeatures), std::move(*theme),
                 std::move(*style),
-                std::move(*shell), std::move(*viewport), std::move(focus),
+                std::move(*shell), std::move(*viewport),
+                std::move(*uiFrameDelta), std::move(focus),
                 std::move(*selectionNav), std::move(*promptProjection),
-                std::move(*treeWindows), std::move(uiDelta),
-                std::move(uiStateDelta), std::move(uiPresenceDelta),
-                std::move(paletteDelta), std::move(promptViewDelta),
+                std::move(*treeWindows), std::move(paletteDelta),
+                std::move(promptViewDelta),
                 std::move(noticeViewDelta), watcherAvailable, externalFocusHeld),
             {}};
 }

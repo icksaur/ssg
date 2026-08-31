@@ -258,6 +258,7 @@ SessionSnapshotSections EditorSession::Impl::sections(
     uiState.focusPath = interactionState.focusPath();
     UiPresenceSection uiPresence =
         buildPresenceSection(validatedSchema, interactionState.presence());
+    uiPresence.basis = PresenceBasis{session->revision().value()};
     return {documentView(),
             selection.selections,
             currentHistory,
@@ -279,9 +280,8 @@ SessionSnapshotSections EditorSession::Impl::sections(
             theme,
             interaction.legacyEffectiveFocus(),
             paletteView(),
-            std::move(uiSchema),
-            std::move(uiState),
-            std::move(uiPresence),
+            UiFrame::require(std::move(uiSchema), std::move(uiState),
+                             std::move(uiPresence)),
             promptView(),
             noticeView(),
             watcherAvailable.load(std::memory_order_relaxed),

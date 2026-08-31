@@ -205,7 +205,12 @@ TEST(themeOnlyTransitionDoesNotReplaceTheUiSchema) {
     auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
         before.semantic(), after.semantic());
     ASSERT_TRUE(delta.theme().replacement.has_value());
-    ASSERT_FALSE(delta.ui().replacement.has_value());
+    const auto* uiChanges =
+        std::get_if<ssg::UiFrameChanges>(&delta.uiFrameDelta().body());
+    ASSERT_TRUE(uiChanges != nullptr);
+    ASSERT_TRUE(uiChanges->state.empty());
+    ASSERT_TRUE(uiChanges->presence.empty());
+    ASSERT_FALSE(uiChanges->focusPathChanged);
     auto replayed =
         ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
     ASSERT_TRUE(replayed.accepted());

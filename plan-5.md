@@ -24,8 +24,9 @@ adopts that exact contract into its manifest/generator without redesigning it.
   generation/basis and apply atomically. State at the UI-frame type.
 - IDENTITY-3: User-visible actions use the normal typed command/input route with
   stale-generation rejection. State at action node/command request.
-- IDENTITY-4: There is one authoritative focus representation and hidden nodes
-  cannot retain effective focus. State at focus-path authority.
+- IDENTITY-4: There is one authoritative focus representation. Hidden nodes
+  cannot be the effectively focused endpoint; retained restoration targets
+  earlier in the path may be hidden. State at focus-path authority.
 
 ## Considerations
 
@@ -140,3 +141,118 @@ Focused tests must prove that:
 - client contract tests contain no provider-specific surface selection in the
   render, focus, or hit paths; and
 - the preceding schema shape normalizes to the same canonical generic leaf.
+
+## Step 2 design: atomic UI frame
+
+Introduce `UiFrame` as the only public semantic value that combines a
+`UiSchema`, resolved `UiStateSection`, `UiPresenceSection`, and authoritative
+focus path. `SessionSnapshotSections` stores one `UiFrame`, not independently
+replaceable `ui`, `uiState`, and `uiPresence` members. Callers receive const
+component accessors and can construct a frame only through validation; no
+public mutation path may make its components disagree.
+
+`UiFrameVersion` is a value type with `Generation generation` and
+`PresenceBasis presenceBasis`. Snapshot and delta base/target seams encode it as
+one object rather than as unrelated scalar fields. A valid frame satisfies all
+of these conditions, checked in this order:
+
+- schema validity and the whole-screen well-known-area contract hold;
+- schema, resolved state, and presence name the same generation;
+- state and presence each contain exactly one record for every schema node and
+  no other record;
+- the focus path is non-empty, every entry names a node id in the current
+  schema, and its final effective node is effectively present.
+
+A node is effectively present only when its own presence record and every
+ancestor's presence record are present. Focus validation applies that rule to
+the path's final effective node. Earlier entries are retained restoration
+targets and may be hidden while a later capture is effective, as when a picker
+hides the editor under its prompt capture. `UiFrame` therefore stores a
+non-optional focus path; absence is not a valid published state. Removing a
+focus entry and restoring the new endpoint's effective presence must happen in
+the same atomic commit. A commit that exposes a hidden endpoint rejects without
+publishing any part of the transition.
+
+The runtime constructs the schema, node values, presence, and focus path as
+local prospective values, validates one `UiFrame`, and publishes it only after
+validation succeeds. Validation failure is explicit at decode/replay
+boundaries; trusted in-process assembly fails loudly rather than publishing a
+partial frame.
+
+Introduce `UiFrameDelta` and `UiFrameDeltaCodec`. A delta carries
+`UiFrameVersion base` and `UiFrameVersion target`; replay first requires
+`base == current.version()` and reports a stale-version error separately from a
+malformed body. Its body is a tagged union of:
+
+- `UiFrameReplacement`, containing exactly one complete validated `UiFrame`;
+  or
+- `UiFrameChanges`, containing only incremental changes within one schema
+  generation.
+
+A schema-generation change requires `UiFrameReplacement`.
+`UiFrameChanges` carries only:
+
+- changed `UiNodeState` records, keyed by node id;
+- changed `UiPresenceRecord` records, keyed by node id;
+- the target presence basis; and
+- an explicit changed flag plus optional replacement for the focus path.
+
+Incremental record sets reject duplicate or unknown ids. Replay applies all
+changes to the unchanged records from the base frame in a private candidate.
+The incremental sets are subsets of the schema node set; the resulting frame
+must still contain exactly one state and presence record per schema node before
+publication. The tagged body makes replacement-plus-incremental construction
+impossible. Replay rejects a stale base generation or basis, a regressing or
+inconsistent target basis, and any final component or focus mismatch. A
+node-value-only change may retain the presence basis. Any changed presence
+record requires a strictly advancing presence basis; a basis may advance
+without a record change to acknowledge an accepted no-op presence mutation.
+
+The current encoder emits one `ui_frame` snapshot field and one
+`ui_frame_delta` field. Their nested fields carry the typed components above;
+routine deltas do not resend immutable schema or unchanged node records. The
+preceding split `ui`, `ui_state`, and `ui_presence` fields become decode-only
+compatibility vocabulary. A preceding snapshot must contain the schema, state,
+and presence triplet together. The decoder extracts the preceding optional
+focus path from `ui_state`; when absent, it derives one from the legacy
+authoritative focus and the unique present focus host, rejecting ambiguity or a
+missing host. It validates and converts the complete result into one `UiFrame`.
+
+A preceding delta may contain any subset of the three split replacement fields,
+because omitted fields meant unchanged. Decode represents that only as a third,
+decode-only `LegacyUiFrameChanges` body. Replay applies the supplied full
+component replacements to a private candidate and validates one resulting
+frame; production delta derivation and the new encoder cannot construct this
+body. The decoder rejects mixed new-and-preceding frame fields rather than
+choosing one. Plan 6 removes the split field decoders,
+`LegacyUiFrameChanges`, and their fixtures when it performs the
+`kSemanticUiWireVersion` compatibility removal.
+
+The web client retains one frame object and applies `ui_frame_delta`
+transactionally through the same base/target and final-state rules. Rendering,
+focus, and presence accessors read that frame; no client stores split mutable
+copies. The terminal path reads the same `UiFrame` components from the semantic
+snapshot.
+
+Outside compatibility codecs, inventory tests permit no
+`SessionSnapshotSections::ui`, `uiState`, or `uiPresence` members and no split
+client state. `apps/ssg_main.cpp` and `apps/web/client.mjs` consume `UiFrame`
+components through the frame contract.
+
+Focused tests must prove that:
+
+- independently mismatched schema, state, presence, or focus cannot construct
+  a frame;
+- stale generation and stale presence-basis deltas reject without mutation;
+- schema replacement is atomic and cannot mix with incremental records;
+- duplicate, unknown, hidden-effective-focus, and ancestor-hidden effective
+  focus records reject, while a hidden retained base under a visible capture is
+  accepted;
+- snapshot and delta wire round trips preserve one frame;
+- the exact preceding split triplet decodes to the same frame, while incomplete
+  snapshot or mixed forms reject, and preceding subset deltas replay atomically;
+  and
+- changing one equivalent resolved node in both a small and a much larger
+  schema emits one node record and no schema in either case, with encoded delta
+  size differing only by the encoded node identity rather than total
+  schema-node count.

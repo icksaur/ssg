@@ -226,7 +226,6 @@ public:
             defaultTheme(),
             focus,
             PaletteViewState{}};
-        sections.ui = schema.schema();
         const ChromeProviderResolver resolver =
             chromeProviderResolver_
                 ? chromeProviderResolver_
@@ -234,10 +233,11 @@ public:
                       -> std::optional<ResolvedProvider> {
                       return std::nullopt;
                   };
-        sections.uiState = resolveUiState(schema, resolver);
-        sections.uiState.focusPath = interaction.focusPath();
-        sections.uiPresence =
-            buildPresenceSection(schema, interaction.presence());
+        auto uiState = resolveUiState(schema, resolver);
+        uiState.focusPath = interaction.focusPath();
+        sections.uiFrame = UiFrame::require(
+            schema.schema(), std::move(uiState),
+            buildPresenceSection(schema, interaction.presence()));
         for (std::size_t index = 0; index < tabs_.size(); ++index) {
             TabState tab;
             tab.id = TabId{index + 1};

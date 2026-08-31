@@ -53,13 +53,14 @@ SolveUiFrameResult trySolveFrameLayout(
         return {SolvedGridTree{}, {}};
     }
 
-    auto validated = ValidatedSchema::validate(semantic.sections().ui);
+    auto validated =
+        ValidatedSchema::validate(semantic.sections().uiFrame.schema());
     if (!validated.ok()) {
         return {std::nullopt,
                 "invalid UI schema: " + validated.error()};
     }
 
-    auto presence = semantic.sections().uiPresence;
+    auto presence = semantic.sections().uiFrame.presence();
 
     const auto& root = validated.schema().schema().root;
     auto intrinsicSizes =
@@ -67,7 +68,7 @@ SolveUiFrameResult trySolveFrameLayout(
     SolveUiFrameResult result;
     for (;;) {
         result = solveUiFrame(
-            validated.schema(), semantic.sections().uiState, presence,
+            validated.schema(), semantic.sections().uiFrame.state(), presence,
             ClientUiProfile::full(), intrinsicSizes,
             {0, 0, dimensions.columns, dimensions.rows});
         // WholeScreenAssembly's exhaustive replaceable content branches are
@@ -238,8 +239,8 @@ GridFrame::GridFrame(SessionSnapshot semantic, GridProjection projection,
       basis_{basis} {}
 
 std::optional<std::string> GridFrame::solveChrome() {
-    const auto& schema = semantic_.sections().ui;
-    const auto& state = semantic_.sections().uiState;
+    const auto& schema = semantic_.sections().uiFrame.schema();
+    const auto& state = semantic_.sections().uiFrame.state();
     if (schema.generation != state.generation) {
         return "chrome schema and state generations differ";
     }

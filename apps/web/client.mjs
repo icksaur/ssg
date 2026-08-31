@@ -400,7 +400,8 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
   el.title = node.command || '';
   el.onclick = node.command ? () => sendInputFrame(
     encodePublishedUiActionPointerInput(
-      node.id, state.sections.ui.generation, state.revision)) : null;
+      node.id, state.sections.ui_frame.schema.generation,
+      state.revision)) : null;
   if (inFooterPrompt && node.checked != null) {
     el.setAttribute('role', 'checkbox');
     el.setAttribute('aria-checked', node.checked ? 'true' : 'false');
@@ -797,9 +798,9 @@ function applyInset(el, inset, size, parentAxis) {
 // build does not implement is a loud, visible refusal -- never a silently dropped
 // element.
 function renderChrome(sections, plan) {
-  const schema = sections.ui;
-  const stateSection = sections.ui_state;
-  let presenceSection = sections.ui_presence;
+  const schema = sections.ui_frame?.schema;
+  const stateSection = sections.ui_frame?.state;
+  let presenceSection = sections.ui_frame?.presence;
   chromeErrorEl.textContent = state.palette.error || '';
   if (!schema || !schema.root) return false;
 

@@ -92,19 +92,21 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         theme,
         ssg::FocusTarget::Editor,
     };
-    result.ui =
-        ssg::UiSchema{                      ssg::Generation{marker.size()},
-                      ssg::assembleWholeScreen({}, "help.open",
-                                               ssg::StyleDimensions{},
-                                               ssg::Style{}.inputLineSigil,
-                                               std::nullopt)
-                          .root};
-    const auto validated = ssg::ValidatedSchema::validate(result.ui).takeSchema();
-    result.uiState = ssg::resolveUiState(validated, [](std::string_view) {
+    ssg::UiSchema ui{
+        ssg::Generation{marker.size()},
+        ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                ssg::Style{}.inputLineSigil, std::nullopt)
+            .root};
+    const auto validated = ssg::ValidatedSchema::validate(ui).takeSchema();
+    auto uiState = ssg::resolveUiState(validated, [](std::string_view) {
         return std::optional<ssg::ResolvedProvider>{};
     });
-    result.uiPresence = ssg::buildPresenceSection(
-        validated, ssg::PresenceConfig::allPresent(validated));
+    uiState.focusPath = std::vector<ssg::UiNodeId>{
+        ssg::UiNodeId{std::string{ssg::kEditorNodeId}}};
+    result.uiFrame = ssg::UiFrame::require(
+        std::move(ui), std::move(uiState),
+        ssg::buildPresenceSection(
+            validated, ssg::PresenceConfig::allPresent(validated)));
     return result;
 }
 
@@ -127,13 +129,12 @@ ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
     (void)title;
     auto validatedComposition =
         ssgtest::composeHeaderAndFooterValidated({}, {path}, {});
-    result.ui =
-        ssg::UiSchema{ssg::Generation{marker.size()},
-                      ssg::assembleWholeScreen({}, "help.open",
-                                               ssg::StyleDimensions{},
-                                               ssg::Style{}.inputLineSigil,
-                                               validatedComposition)
-                          .root};
+    ssg::UiSchema ui{
+        ssg::Generation{marker.size()},
+        ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                 ssg::Style{}.inputLineSigil,
+                                 validatedComposition)
+            .root};
     // Resolve the dynamic state for the same schema (a resolver mapping the one
     // provider used above), so the round-trip exercises the ui_state section too.
     const auto resolver =
@@ -142,14 +143,59 @@ ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
             return ssg::ResolvedProvider{marker, "Current path", std::nullopt};
         return std::nullopt;
     };
-    result.uiState = ssg::resolveUiState(
-        ssg::ValidatedSchema::validate(result.ui).takeSchema(), resolver);
+    auto uiState = ssg::resolveUiState(
+        ssg::ValidatedSchema::validate(ui).takeSchema(), resolver);
+    uiState.focusPath = std::vector<ssg::UiNodeId>{
+        ssg::UiNodeId{std::string{ssg::kEditorNodeId}}};
     // Presence must correspond to the same schema, or the wire round-trip rejects
     // the frame as an inconsistent schema/presence pair.
-    const auto validated = ssg::ValidatedSchema::validate(result.ui).takeSchema();
-    result.uiPresence = ssg::buildPresenceSection(
-        validated, ssg::PresenceConfig::allPresent(validated));
+    const auto validated = ssg::ValidatedSchema::validate(ui).takeSchema();
+    result.uiFrame = ssg::UiFrame::require(
+        std::move(ui), std::move(uiState),
+        ssg::buildPresenceSection(
+            validated, ssg::PresenceConfig::allPresent(validated)));
     return result;
+}
+
+ssg::UiFrame uiFrameWithFillerNodes(std::size_t fillerCount,
+                                    std::string targetValue) {
+    std::vector<ssg::WidgetDescriptor> widgets;
+    ssg::WidgetDescriptor target;
+    target.kind = ssg::WidgetKind::Field;
+    target.id = "payload.target";
+    target.value = ssg::ValueSource{true, "", "payload.target"};
+    target.command = "help.open";
+    widgets.push_back(target);
+    for (std::size_t index = 0; index < fillerCount; ++index) {
+        ssg::WidgetDescriptor filler;
+        filler.kind = ssg::WidgetKind::Label;
+        filler.id = "filler." + std::to_string(index);
+        filler.value = ssg::ValueSource{false, "filler", ""};
+        widgets.push_back(std::move(filler));
+    }
+    ssg::UiSchema schema{
+        ssg::Generation{42},
+        ssg::assembleWholeScreen(
+            {}, "help.open", ssg::StyleDimensions{},
+            ssg::Style{}.inputLineSigil,
+            ssgtest::composeHeaderAndFooterValidated({}, std::move(widgets), {}))
+            .root};
+    const auto validated = ssg::ValidatedSchema::validate(schema).takeSchema();
+    auto state = ssg::resolveUiState(
+        validated,
+        [&](std::string_view id) -> std::optional<ssg::ResolvedProvider> {
+            if (id == "payload.target") {
+                return ssg::ResolvedProvider{targetValue, "Target",
+                                             std::nullopt};
+            }
+            return std::nullopt;
+        });
+    state.focusPath = std::vector<ssg::UiNodeId>{
+        ssg::UiNodeId{std::string{ssg::kEditorNodeId}}};
+    return ssg::UiFrame::require(
+        std::move(schema), std::move(state),
+        ssg::buildPresenceSection(
+            validated, ssg::PresenceConfig::allPresent(validated)));
 }
 
 std::pair<ssg::SessionSnapshotSections, ssg::SessionSnapshotSections>
@@ -1002,17 +1048,15 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), sectionsWithUi(ssg::Revision{4}, "alpha"));
     ASSERT_TRUE(!std::get<ssg::UiContainer>(
-                     snapshot.semantic().sections().ui.root.content)
+                     snapshot.semantic().sections().uiFrame.schema().root.content)
                      .children.empty());
-    ASSERT_TRUE(!snapshot.semantic().sections().uiState.nodes.empty());
+    ASSERT_TRUE(!snapshot.semantic().sections().uiFrame.state().nodes.empty());
 
     auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
         ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
     ASSERT_TRUE(decoded.snapshot.has_value());
-    ASSERT_TRUE(decoded.snapshot->sections().ui ==
-                snapshot.semantic().sections().ui);
-    ASSERT_TRUE(decoded.snapshot->sections().uiState ==
-                snapshot.semantic().sections().uiState);
+    ASSERT_TRUE(decoded.snapshot->sections().uiFrame ==
+                snapshot.semantic().sections().uiFrame);
 
     // A delta from a no-ui base to the ui snapshot carries the ui replacement.
     auto before = ssg::SessionSnapshotCodec{}.assemble(
@@ -1026,11 +1070,12 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
         ssg::InvocationPrincipal{
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
-        ssg::ViewId{9}, clientView(3), sectionsWithUi(ssg::Revision{5}, "alpha"));
+        ssg::ViewId{9}, clientView(3),
+        sectionsWithUi(ssg::Revision{5}, "changed"));
     auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
         before.semantic(), after.semantic());
-    ASSERT_TRUE(delta.ui().replacement.has_value());
-    ASSERT_TRUE(delta.uiState().replacement.has_value());
+    ASSERT_TRUE(std::holds_alternative<ssg::UiFrameReplacement>(
+        delta.uiFrameDelta().body()));
 
     auto const decodedDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(delta));
@@ -1039,10 +1084,41 @@ TEST(sessionSnapshotAndDeltaCarryTheUiSection) {
         ssg::SessionSnapshotCodec{}.replay(before.semantic(),
                                            *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
-    ASSERT_TRUE(replayed.snapshot->sections().ui ==
-                after.semantic().sections().ui);
-    ASSERT_TRUE(replayed.snapshot->sections().uiState ==
-                after.semantic().sections().uiState);
+    ASSERT_TRUE(replayed.snapshot->sections().uiFrame ==
+                after.semantic().sections().uiFrame);
+}
+
+TEST(sparseUiFrameDeltaSizeIsIndependentOfSchemaInventory) {
+    const auto encodedChange = [](std::size_t fillerCount) {
+        auto beforeSections = sections(ssg::Revision{4}, "same");
+        auto afterSections = beforeSections;
+        beforeSections.uiFrame =
+            uiFrameWithFillerNodes(fillerCount, "before");
+        afterSections.uiFrame =
+            uiFrameWithFillerNodes(fillerCount, "after");
+        auto before = ssg::SessionSnapshotCodec{}.assemble(
+            ssg::Revision{4}, {},
+            ssg::InvocationPrincipal{ssg::ClientId{7},
+                                     ssg::InvocationOrigin::InProcess},
+            ssg::ViewId{9}, clientView(1), std::move(beforeSections));
+        auto after = ssg::SessionSnapshotCodec{}.assemble(
+            ssg::Revision{5}, {},
+            ssg::InvocationPrincipal{ssg::ClientId{7},
+                                     ssg::InvocationOrigin::InProcess},
+            ssg::ViewId{9}, clientView(1), std::move(afterSections));
+        auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
+            before.semantic(), after.semantic());
+        const auto* changes =
+            std::get_if<ssg::UiFrameChanges>(&delta.uiFrameDelta().body());
+        ASSERT_TRUE(changes != nullptr);
+        ASSERT_EQ(changes->state.size(), std::size_t{1});
+        ASSERT_TRUE(changes->presence.empty());
+        return ssg::ProtocolCodec{}.encodeSessionDelta(delta);
+    };
+
+    const auto small = encodedChange(0);
+    const auto large = encodedChange(16);
+    ASSERT_EQ(small.size(), large.size());
 }
 
 // The palette section (candidate universe + matcher parameters) survives a snapshot
@@ -1253,22 +1329,6 @@ TEST(presentNoticeViewRejectsDegenerateContentAtDecode) {
     ASSERT_FALSE(decodeSnapshotWith(
                      ssg::NoticeView{"msg", {{"a", "b", ""}}}).snapshot.has_value());
 }
-// generation) is refused at decode -- an inconsistent schema/presence pair never
-// enters the semantic channel.
-TEST(snapshotDecodeRejectsNonCorrespondingPresence) {
-    auto badSections = sectionsWithUi(ssg::Revision{4}, "alpha");
-    badSections.uiPresence.generation =
-        ssg::Generation{badSections.uiPresence.generation.value() + 1};
-    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
-        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
-        ssg::InvocationPrincipal{
-            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
-            {ssg::CapabilityId{"local_file_drop"}}},
-        ssg::ViewId{9}, clientView(3), std::move(badSections));
-    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
-        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot.semantic()));
-    ASSERT_FALSE(decoded.snapshot.has_value());
-}
 
 TEST(accessibilityNodeStatusInvocationRoundTripsWhenPresent) {
     ssg::StatusActionInvocation invocation{ssg::StatusId{8}, "dismiss", 6};
@@ -1317,37 +1377,6 @@ TEST(accessibilityNodeWithoutStatusInvocationRoundTripsAsAbsent) {
     ASSERT_FALSE(nodes[0].statusInvocation.has_value());
 }
 
-
-// Replay refuses a delta that advances the schema but not its presence section
-// (a one-sided replacement): the resulting pair would not correspond. deriveDelta
-// naturally produces such a delta when only the schema generation changes.
-TEST(replayRejectsADeltaThatReplacesOnlyTheSchema) {
-    auto beforeSections = sectionsWithUi(ssg::Revision{4}, "alpha");
-    auto before = ssg::SessionSnapshotCodec{}.assemble(
-        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
-        ssg::InvocationPrincipal{
-            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
-            {ssg::CapabilityId{"local_file_drop"}}},
-        ssg::ViewId{9}, clientView(3), beforeSections);
-    auto afterSections = sectionsWithUi(ssg::Revision{5}, "alpha");
-    // Advance only the schema generation; presence stays at the original generation,
-    // so the delta carries a ui replacement but no presence replacement.
-    afterSections.ui.generation =
-        ssg::Generation{afterSections.ui.generation.value() + 1};
-    auto after = ssg::SessionSnapshotCodec{}.assemble(
-        ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
-        ssg::InvocationPrincipal{
-            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
-            {ssg::CapabilityId{"local_file_drop"}}},
-        ssg::ViewId{9}, clientView(3), afterSections);
-    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
-        before.semantic(), after.semantic());
-    ASSERT_TRUE(delta.ui().replacement.has_value());
-    ASSERT_FALSE(delta.uiPresence().replacement.has_value());
-    auto replayed =
-        ssg::SessionSnapshotCodec{}.replay(before.semantic(), delta);
-    ASSERT_FALSE(replayed.accepted());
-}
 
 TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
     auto [beforeSections, afterSections] = semanticFixtureSections();
@@ -2416,6 +2445,21 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
     }
 }
 
+TEST(precedingSplitUiSnapshotDecodesToOneValidatedFrame) {
+    auto decoded = ssg::ProtocolCodec{}.decodeLegacyPresentationSnapshot(
+        readFixtureBytes("session_split_snapshot.hex"));
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_TRUE(decoded.snapshot.has_value());
+    if (!decoded.snapshot) return;
+    const auto& frame = decoded.snapshot->semantic().sections().uiFrame;
+    const auto ids = ssg::uiSchemaNodeIds(frame.schema());
+    ASSERT_TRUE(ids.contains(
+        ssg::UiNodeId{std::string{ssg::kTreeNodeId}}));
+    ASSERT_FALSE(ids.contains(
+        ssg::UiNodeId{std::string{ssg::kFileTreeNodeId}}));
+    ASSERT_FALSE(frame.focusPath().empty());
+}
+
 TEST(semanticFixtureDeltaReplaysToItsCheckedInTarget) {
     auto const base = ssg::ProtocolCodec{}.decodeSessionSnapshot(
         readFixtureBytes("session_semantic_base.hex"));
@@ -2458,9 +2502,17 @@ TEST(semanticReplayIgnoresFrozenLegacyPresentationDeltaFields) {
     ASSERT_TRUE(delta.accepted());
     ASSERT_TRUE(delta.delta.has_value());
     if (!delta.delta) return;
+    const auto* legacy = std::get_if<ssg::LegacyUiFrameChanges>(
+        &delta.delta->uiFrameDelta().body());
+    ASSERT_TRUE(legacy != nullptr);
+    ASSERT_TRUE(legacy->schema.has_value());
+    ASSERT_TRUE(legacy->state.has_value());
+    ASSERT_TRUE(legacy->presence.has_value());
     ASSERT_TRUE(delta.delta->viewport().changed);
+    auto modern = ssg::SessionSnapshotCodec{}.deriveDelta(
+        base.semantic(), expected.semantic());
     auto sanitized = ssg::ProtocolCodec{}.decodeSessionDelta(
-        ssg::ProtocolCodec{}.encodeSessionDelta(*delta.delta));
+        ssg::ProtocolCodec{}.encodeSessionDelta(modern));
     ASSERT_TRUE(sanitized.accepted());
     ASSERT_TRUE(sanitized.delta.has_value());
     ASSERT_FALSE(sanitized.delta->viewport().changed);
@@ -2667,13 +2719,12 @@ int main() {
     RUN(semanticFieldManifestExactlyMatchesTheSnapshotCodec);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
     RUN(sessionSnapshotAndDeltaCarryTheUiSection);
+    RUN(sparseUiFrameDeltaSizeIsIndependentOfSchemaInventory);
     RUN(sessionDeltaCarriesThePaletteSection);
     RUN(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone);
     RUN(noticeViewSectionIsAdditiveAndDecodesAbsentAsNone);
-    RUN(snapshotDecodeRejectsNonCorrespondingPresence);
     RUN(accessibilityNodeStatusInvocationRoundTripsWhenPresent);
     RUN(accessibilityNodeWithoutStatusInvocationRoundTripsAsAbsent);
-    RUN(replayRejectsADeltaThatReplacesOnlyTheSchema);
     RUN(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta);
     RUN(diffWordRangesRoundTripThroughSnapshotAndDelta);
     RUN(twoClientCapabilityAndViewportIsolationSurvivesTheWire);
@@ -2689,6 +2740,7 @@ int main() {
     RUN(valueBoundsAreEnforcedOnDecode);
     RUN(regenerateCanonicalFixtures);
     RUN(canonicalFixturesDecodeToTheExpectedValues);
+    RUN(precedingSplitUiSnapshotDecodesToOneValidatedFrame);
     RUN(semanticFixtureDeltaReplaysToItsCheckedInTarget);
     RUN(semanticReplayIgnoresFrozenLegacyPresentationDeltaFields);
     return failed == 0 ? 0 : 1;

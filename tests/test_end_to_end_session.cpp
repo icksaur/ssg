@@ -32,7 +32,7 @@ CanonicalState canonical(Snapshot const& snapshot) {
     auto const* tab =
         sections.tabs.tabs.empty() ? nullptr : &sections.tabs.tabs.front();
     bool wordWrap = false;
-    for (auto const& node : sections.uiState.nodes) {
+    for (auto const& node : sections.uiFrame.state().nodes) {
         wordWrap = wordWrap ||
                    (node.leaf && node.leaf->label == "Word wrap on");
     }

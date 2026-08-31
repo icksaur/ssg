@@ -1520,7 +1520,7 @@ int main(int argc, char** argv) {
                                hit.region == ssg::HitRegion::StatusAction) {
                         if (hit.fieldId) {
                             targets.ui_generation =
-                                snapshot->sections().ui.generation;
+                                snapshot->sections().uiFrame.version().generation;
                             targets.ui_node_id = ssg::UiNodeId{*hit.fieldId};
                         }
                         targets.prompt_control_id = hit.fieldId;

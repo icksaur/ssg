@@ -3719,14 +3719,13 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                         return unhandled();
                     }
                     auto const sections = impl_->sections();
-                    if (sections.uiState.generation !=
-                            semantic.schemaGeneration ||
-                        sections.uiPresence.generation !=
-                            semantic.schemaGeneration) {
+                    const auto& frame = sections.uiFrame;
+                    if (frame.version().generation !=
+                        semantic.schemaGeneration) {
                         return rejectTarget("UI action schema is stale");
                     }
                     bool present = false;
-                    for (auto const& node : sections.uiPresence.nodes) {
+                    for (auto const& node : frame.presence().nodes) {
                         if (node.id == semantic.nodeId) {
                             present = node.present;
                             break;
@@ -3735,7 +3734,7 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                     if (!present) {
                         return rejectTarget("UI action target is not present");
                     }
-                    for (auto const& node : sections.uiState.nodes) {
+                    for (auto const& node : frame.state().nodes) {
                         if (node.id == semantic.nodeId && node.leaf &&
                             node.leaf->command &&
                             !node.leaf->command->empty()) {

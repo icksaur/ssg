@@ -4,6 +4,7 @@ target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/ViewSurfaceBacking.cpp
     ${SSG_SOURCE_DIR}/src/MutationPatch.cpp
     ${SSG_SOURCE_DIR}/src/UiPresence.cpp
+    ${SSG_SOURCE_DIR}/src/UiFrame.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenSchema.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenInteraction.cpp
     ${SSG_SOURCE_DIR}/src/CommandTransition.cpp
@@ -34,6 +35,12 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_ui_node_state PRIVATE ssg)
     add_test(NAME test_ui_node_state COMMAND test_ui_node_state)
+
+    add_executable(test_ui_frame
+        ${SSG_SOURCE_DIR}/tests/test_ui_frame.cpp
+    )
+    target_link_libraries(test_ui_frame PRIVATE ssg)
+    add_test(NAME test_ui_frame COMMAND test_ui_frame)
 
     add_executable(test_mutation_patch
         ${SSG_SOURCE_DIR}/tests/test_mutation_patch.cpp

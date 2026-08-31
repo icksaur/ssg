@@ -1876,19 +1876,20 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     ASSERT_FALSE(afterSubmit->semantic().sections().palette.activePicker.has_value());
     ASSERT_TRUE(afterSubmit->presentation().shell.panel.has_value());
 
+    const auto& actionNodes =
+        afterSubmit->semantic().sections().uiFrame.state().nodes;
     auto const actionNode = std::find_if(
-        afterSubmit->semantic().sections().uiState.nodes.begin(),
-        afterSubmit->semantic().sections().uiState.nodes.end(), [](auto const& node) {
+        actionNodes.begin(), actionNodes.end(), [](auto const& node) {
             return node.leaf && node.leaf->command &&
                    !node.leaf->command->empty();
         });
-    ASSERT_TRUE(actionNode != afterSubmit->semantic().sections().uiState.nodes.end());
-    if (actionNode == afterSubmit->semantic().sections().uiState.nodes.end()) return;
+    ASSERT_TRUE(actionNode != actionNodes.end());
+    if (actionNode == actionNodes.end()) return;
     const auto revisionBeforeInvalid = runtime.revision();
     auto invalidUiAction = runtime.input(
         client, ssg::PublishedUiActionPointerInput{
                     {revisionBeforeInvalid},
-                    afterSubmit->semantic().sections().uiState.generation,
+                    afterSubmit->semantic().sections().uiFrame.version().generation,
                     ssg::UiNodeId{"missing.action"}});
     ASSERT_EQ(invalidUiAction.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_EQ(runtime.revision(), revisionBeforeInvalid);
@@ -1896,7 +1897,7 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     auto publishedAction = runtime.input(
         client, ssg::PublishedUiActionPointerInput{
                     {runtime.revision()},
-                    afterSubmit->semantic().sections().uiState.generation,
+                    afterSubmit->semantic().sections().uiFrame.version().generation,
                     actionNode->id});
     ASSERT_TRUE(publishedAction.command.has_value() &&
                 publishedAction.command->accepted());
@@ -2439,7 +2440,7 @@ TEST(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath) {
             self(self, child);
         }
     };
-    inspectNode(inspectNode, snapshot->sections().ui.root);
+    inspectNode(inspectNode, snapshot->sections().uiFrame.schema().root);
     ASSERT_TRUE(publishedActions > 0);
 }
 

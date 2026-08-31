@@ -23,9 +23,7 @@
 #include <ssg/Theme.h>
 #include <ssg/Style.h>
 #include <ssg/TreeModel.h>
-#include <ssg/UiTree.h>
-#include <ssg/UiNodeState.h>
-#include <ssg/UiPresence.h>
+#include <ssg/UiFrame.h>
 #include <ssg/ShellState.h>
 #include <ssg/Viewport.h>
 
@@ -82,22 +80,9 @@ struct SessionSnapshotSections {
     // in PresentationSnapshot.
     FocusTarget focus = FocusTarget::Editor;
     PaletteViewState palette;
-    // The medium-agnostic UI-VM tree: the header/footer chrome as a generic node
-    // tree a native client renders directly (the grid client lowers the same tree
-    // through lowerUiChromeRegion). Published alongside the legacy grid path; a
-    // client that does not consume it simply ignores it. Defaults to a valid empty
-    // root (emptyUiRoot) when no chrome is composed.
-    UiSchema ui;
-    // The generation-scoped resolved dynamic state for the `ui` schema: one record
-    // per node with, for a renderable leaf, its resolved semantic (value, label,
-    // command, checked). A non-grid client needs this because the schema carries
-    // value SOURCES it cannot resolve. Stamped with the same generation as `ui`.
-    UiStateSection uiState;
-    // The authoritative per-node presence for the `ui` schema, basis-stamped so a
-    // client can reconcile an optimistically-predicted mutation (phase 7B). A
-    // separate authority from uiState (visibility vs. resolved content); one record
-    // per schema node, at the same generation as `ui`.
-    UiPresenceSection uiPresence = defaultUiPresence();
+    // One validated, atomically published UI-VM frame: schema, resolved values,
+    // presence basis, and authoritative focus path cannot diverge.
+    UiFrame uiFrame;
     // The geometry-free semantic projection of the active footer-region prompt
     // (find/replace/goto/save-path/settings): its controls, per-control commands,
     // and active input. Absent unless a footer-region prompt is open. A native
@@ -262,27 +247,6 @@ struct ThemeSectionDelta {
     std::optional<ThemeSnapshot> replacement;
 };
 
-// Whole-value delta of the medium-agnostic UI section (like ThemeSectionDelta):
-// the tree changes only on a chrome/generation change, so a change replaces it
-// wholesale; nullopt means unchanged.
-struct UiSectionDelta {
-    std::optional<UiSchema> replacement;
-};
-
-// Whole-value delta of the dynamic node state (like UiSectionDelta): the resolved
-// values change together each frame, so a change replaces the section wholesale;
-// nullopt means unchanged.
-struct UiStateSectionDelta {
-    std::optional<UiStateSection> replacement;
-};
-
-// Whole-value delta of the presence section: presence advances atomically through a
-// mutation patch, so a change replaces the section wholesale; nullopt means
-// unchanged.
-struct UiPresenceSectionDelta {
-    std::optional<UiPresenceSection> replacement;
-};
-
 // Whole-value delta of the palette section: the candidate universe and matcher
 // parameters change together (a picker opens/closes, a mode switches, the command
 // catalog changes), so a change replaces the section wholesale; nullopt means
@@ -413,12 +377,8 @@ public:
     [[nodiscard]] ThemeSectionDelta const& theme() const noexcept {
         return theme_;
     }
-    [[nodiscard]] UiSectionDelta const& ui() const noexcept { return ui_; }
-    [[nodiscard]] UiStateSectionDelta const& uiState() const noexcept {
-        return uiState_;
-    }
-    [[nodiscard]] UiPresenceSectionDelta const& uiPresence() const noexcept {
-        return uiPresence_;
+    [[nodiscard]] UiFrameDelta const& uiFrameDelta() const noexcept {
+        return uiFrameDelta_;
     }
     [[nodiscard]] PaletteSectionDelta const& palette() const noexcept {
         return palette_;
@@ -469,14 +429,12 @@ private:
         FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
         LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
         ThemeSectionDelta theme, StyleSectionDelta style,
-        ShellSectionDelta shell,
-        ViewportDelta viewport,
+        ShellSectionDelta shell, ViewportDelta viewport,
+        UiFrameDelta uiFrameDelta,
         std::optional<FocusTarget> focus = std::nullopt,
         SelectionNavigationDelta selectionNav = {},
         PromptProjectionDelta promptProjection = {},
-        TreeWindowsDelta treeWindows = {}, UiSectionDelta ui = {},
-        UiStateSectionDelta uiState = {},
-        UiPresenceSectionDelta uiPresence = {},
+        TreeWindowsDelta treeWindows = {},
         PaletteSectionDelta palette = {},
         PromptViewSectionDelta promptView = {},
         NoticeViewSectionDelta noticeView = {},
@@ -512,13 +470,11 @@ private:
     StyleSectionDelta style_;
     ShellSectionDelta shell_;
     ViewportDelta viewport_;
+    UiFrameDelta uiFrameDelta_;
     std::optional<FocusTarget> focus_;
     SelectionNavigationDelta selectionNav_;
     PromptProjectionDelta promptProjection_;
     TreeWindowsDelta treeWindows_;
-    UiSectionDelta ui_;
-    UiStateSectionDelta uiState_;
-    UiPresenceSectionDelta uiPresence_;
     PaletteSectionDelta palette_;
     PromptViewSectionDelta promptView_;
     NoticeViewSectionDelta noticeView_;
@@ -568,14 +524,12 @@ public:
         FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
         LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
         ThemeSectionDelta theme, StyleSectionDelta style,
-        ShellSectionDelta shell,
-        ViewportDelta viewport,
+        ShellSectionDelta shell, ViewportDelta viewport,
+        UiFrameDelta uiFrameDelta,
         std::optional<FocusTarget> focus = std::nullopt,
         SelectionNavigationDelta selectionNav = {},
         PromptProjectionDelta promptProjection = {},
-        TreeWindowsDelta treeWindows = {}, UiSectionDelta ui = {},
-        UiStateSectionDelta uiState = {},
-        UiPresenceSectionDelta uiPresence = {},
+        TreeWindowsDelta treeWindows = {},
         PaletteSectionDelta palette = {},
         PromptViewSectionDelta promptView = {},
         NoticeViewSectionDelta noticeView = {},

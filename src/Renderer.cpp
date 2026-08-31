@@ -1192,7 +1192,7 @@ CellGrid Renderer::render(GridFrame const& snapshot,
             theme, style);
     }
 
-    const auto& ui = snapshot.sections().ui;
+    const auto& ui = snapshot.sections().uiFrame.schema();
     const auto rootForeground =
         nodeForeground(ui, kRootNodeId, SemanticRole::Text);
     const auto rootBackground =

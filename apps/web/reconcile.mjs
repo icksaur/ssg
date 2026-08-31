@@ -100,7 +100,9 @@ export function findSections(node) {
     for (const item of node) { const f = findSections(item); if (f) return f; }
   } else if (node && typeof node === 'object') {
     if (node.document && typeof node.document === 'object' &&
-        typeof node.document.text === 'string') return node;
+        typeof node.document.text === 'string') {
+      return normalizeUiFrameSections(node) ? node : null;
+    }
     for (const k of Object.keys(node)) { const f = findSections(node[k]); if (f) return f; }
   }
   return null;
@@ -903,11 +905,11 @@ export function applySessionDeltaSections(sections, delta) {
   if (delta.external_focus_held != null) {
     sections.external_focus_held = !!num(delta.external_focus_held);
   }
-  const replaceDirect = (name) => { if (delta[name] != null) sections[name] = delta[name]; };
-  replaceDirect('ui');
-  replaceDirect('ui_state');
-  replaceDirect('ui_presence');
-  replaceDirect('palette');
+  if (delta.ui_frame_delta != null && sections.ui_frame != null) {
+    const frame = applyUiFrameDelta(sections.ui_frame, delta.ui_frame_delta);
+    if (frame) sections.ui_frame = frame;
+  }
+  if (delta.palette != null) sections.palette = delta.palette;
   return sections;
 }
 
@@ -1017,20 +1019,137 @@ function uiNodeIds(schema) {
   return visit(schema.root) ? ids : null;
 }
 
-function validUiFrame(schema, state, presence) {
+function validUiFrame(frame) {
+  const schema = frame?.schema;
+  const state = frame?.state;
+  const presence = frame?.presence;
   const ids = uiNodeIds(schema);
   if (!ids || !state || !presence ||
+      !frame.version ||
+      num(frame.version.generation) !== num(schema.generation) ||
+      num(frame.version.presence_basis) !== num(presence.basis) ||
       num(schema.generation) !== num(state.generation) ||
       num(schema.generation) !== num(presence.generation)) return false;
   const expected = new Set(ids);
   const stateIds = (state.nodes || []).map((node) => node.id);
   const presenceIds = (presence.nodes || []).map((node) => node.id);
-  return expected.size === ids.length &&
+  if (!(expected.size === ids.length &&
     stateIds.length === ids.length && presenceIds.length === ids.length &&
     stateIds.every((id) => expected.has(id)) &&
     presenceIds.every((id) => expected.has(id)) &&
     new Set(stateIds).size === stateIds.length &&
-    new Set(presenceIds).size === presenceIds.length;
+    new Set(presenceIds).size === presenceIds.length)) return false;
+
+  const path = state.focus_path;
+  if (!Array.isArray(path) || path.length === 0 ||
+      path.some((id) => !expected.has(id))) return false;
+  const direct = new Map(presence.nodes.map((record) =>
+    [record.id, !!record.present]));
+  const effective = new Map();
+  const visit = (node, ancestorsPresent) => {
+    const present = ancestorsPresent && direct.get(node.id) === true;
+    effective.set(node.id, present);
+    for (const child of (node.container?.children || [])) visit(child, present);
+  };
+  visit(schema.root, true);
+  return effective.get(path[path.length - 1]) === true;
+}
+
+function sameUiFrameVersion(left, right) {
+  return !!left && !!right &&
+    num(left.generation) === num(right.generation) &&
+    num(left.presence_basis) === num(right.presence_basis);
+}
+
+export function applyUiFrameDelta(frame, delta) {
+  if (!validUiFrame(frame) || !delta ||
+      !sameUiFrameVersion(frame.version, delta.base)) return null;
+  if (delta.kind === 'replacement') {
+    return validUiFrame(delta.frame) &&
+      sameUiFrameVersion(delta.frame.version, delta.target) &&
+      num(delta.target.generation) !== num(delta.base.generation)
+      ? delta.frame : null;
+  }
+  if (delta.kind !== 'changes' ||
+      num(delta.target?.generation) !== num(delta.base.generation) ||
+      num(delta.target?.presence_basis) < num(delta.base.presence_basis) ||
+      num(delta.state?.generation) !== num(delta.target.generation) ||
+      num(delta.presence?.generation) !== num(delta.target.generation) ||
+      num(delta.presence?.basis) !== num(delta.target.presence_basis)) return null;
+
+  const stateChanges = delta.state.nodes || [];
+  const presenceChanges = delta.presence.nodes || [];
+  const known = new Set(uiNodeIds(frame.schema));
+  const stateIds = stateChanges.map((record) => record.id);
+  const presenceIds = presenceChanges.map((record) => record.id);
+  if (new Set(stateIds).size !== stateIds.length ||
+      new Set(presenceIds).size !== presenceIds.length ||
+      stateIds.some((id) => !known.has(id)) ||
+      presenceIds.some((id) => !known.has(id)) ||
+      (presenceChanges.length > 0 &&
+       num(delta.target.presence_basis) <= num(delta.base.presence_basis))) {
+    return null;
+  }
+  const replace = (records, changes) => {
+    const byId = new Map(changes.map((record) => [record.id, record]));
+    return records.map((record) => byId.get(record.id) || record);
+  };
+  const candidate = {
+    version: delta.target,
+    schema: frame.schema,
+    state: {
+      ...frame.state,
+      nodes: replace(frame.state.nodes, stateChanges),
+      focus_path: delta.state.focus_path == null
+        ? frame.state.focus_path : delta.state.focus_path,
+    },
+    presence: {
+      ...frame.presence,
+      basis: delta.target.presence_basis,
+      nodes: replace(frame.presence.nodes, presenceChanges),
+    },
+  };
+  return validUiFrame(candidate) ? candidate : null;
+}
+
+function normalizeUiFrameSections(sections) {
+  const legacyNames = ['ui', 'ui_state', 'ui_presence'];
+  const legacyPresent = legacyNames.filter((name) =>
+    Object.prototype.hasOwnProperty.call(sections, name));
+  if (sections.ui_frame != null) {
+    return legacyPresent.length === 0 && validUiFrame(sections.ui_frame);
+  }
+  if (legacyPresent.length === 0) return true;
+  if (legacyPresent.length !== legacyNames.length ||
+      legacyNames.some((name) => sections[name] == null)) return false;
+  const state = { ...sections.ui_state };
+  if (state.focus_path == null) {
+    const focus = sections.external_focus_held ? 3 : num(sections.focus);
+    const candidates = focus === 0 ? ['editor']
+      : focus === 1 ? ['tree']
+      : focus === 2 ? ['input_line', 'footer.prompt']
+      : focus === 3 ? ['externalmod'] : [];
+    const schemaIds = new Set(uiNodeIds(sections.ui) || []);
+    const direct = new Map((sections.ui_presence.nodes || []).map((record) =>
+      [record.id, !!record.present]));
+    const present = candidates.filter((id) =>
+      schemaIds.has(id) && direct.get(id) === true);
+    if (present.length !== 1) return false;
+    state.focus_path = present;
+  }
+  const frame = {
+    version: {
+      generation: sections.ui.generation,
+      presence_basis: sections.ui_presence.basis,
+    },
+    schema: sections.ui,
+    state,
+    presence: sections.ui_presence,
+  };
+  if (!validUiFrame(frame)) return false;
+  sections.ui_frame = frame;
+  for (const name of legacyNames) delete sections[name];
+  return true;
 }
 
 function validSyntaxState(state) {
@@ -1210,12 +1329,34 @@ export function applySessionDeltaCopy(sections, delta) {
   }
   if (delta.theme?.replacement != null) next.theme = delta.theme.replacement;
   if (delta.focus != null) next.focus = delta.focus;
-  for (const name of ['palette', 'ui', 'ui_state', 'ui_presence']) {
-    if (delta[name] != null) next[name] = delta[name].replacement ?? delta[name];
+  if (delta.palette != null) {
+    next.palette = delta.palette.replacement ?? delta.palette;
   }
-  if ((delta.ui != null || delta.ui_state != null ||
-       delta.ui_presence != null) &&
-      !validUiFrame(next.ui, next.ui_state, next.ui_presence)) return null;
+  const legacyUiNames = ['ui', 'ui_state', 'ui_presence'];
+  const hasLegacyUi = legacyUiNames.some((name) =>
+    Object.prototype.hasOwnProperty.call(delta, name));
+  if (delta.ui_frame_delta != null && hasLegacyUi) return null;
+  if (delta.ui_frame_delta != null) {
+    next.ui_frame = applyUiFrameDelta(sections.ui_frame, delta.ui_frame_delta);
+    if (!next.ui_frame) return null;
+  } else if (hasLegacyUi) {
+    const schema = delta.ui ?? sections.ui_frame?.schema;
+    const stateReplacement = delta.ui_state ?? sections.ui_frame?.state;
+    const presence = delta.ui_presence ?? sections.ui_frame?.presence;
+    if (!schema || !stateReplacement || !presence) return null;
+    const state = stateReplacement.focus_path == null
+      ? { ...stateReplacement, focus_path: sections.ui_frame.state.focus_path }
+      : stateReplacement;
+    const frame = {
+      version: {
+        generation: schema.generation,
+        presence_basis: presence.basis,
+      },
+      schema, state, presence,
+    };
+    if (!validUiFrame(frame)) return null;
+    next.ui_frame = frame;
+  }
   if (delta.watcher_available != null) {
     next.watcher_available = !!num(delta.watcher_available);
   }
@@ -1355,10 +1496,11 @@ export function browserRenderPlan(delta) {
     !!(delta.theme && delta.theme.replacement != null);
   if (repaintTheme) add(...ALL_SURFACES);
   return {
-    rebuild: !!delta.ui,
-    reconcile: !!(delta.ui || delta.ui_state || delta.ui_presence ||
+    rebuild: delta.ui_frame_delta?.kind === 'replacement',
+    reconcile: !!(delta.ui_frame_delta ||
                    replacementChanged(delta.prompt_status) || repaintTheme),
-    responsive: !!(delta.ui || delta.ui_presence),
+    responsive: delta.ui_frame_delta?.kind === 'replacement' ||
+      (delta.ui_frame_delta?.presence?.nodes || []).length > 0,
     repaintTheme,
     surfaces: [...surfaces].sort((a, b) => a - b),
   };

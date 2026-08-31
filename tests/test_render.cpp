@@ -110,10 +110,14 @@ ssg::LegacyPresentationSnapshot withUiBackgrounds(
     std::initializer_list<std::pair<std::string_view, ssg::SemanticRole>>
         backgrounds) {
     auto sections = base.semantic().sections();
+    auto schema = sections.uiFrame.schema();
     for (const auto& [id, role] : backgrounds) {
-        auto* node = mutableUiNode(sections.ui.root, id);
+        auto* node = mutableUiNode(schema.root, id);
         if (node) node->style.background = role;
     }
+    sections.uiFrame = ssg::UiFrame::require(
+        std::move(schema), sections.uiFrame.state(),
+        sections.uiFrame.presence());
     return ssg::LegacyPresentationSnapshot{
         base.semantic().revision(), base.semantic().topology(),
         base.semantic().client(),
@@ -124,8 +128,12 @@ ssg::LegacyPresentationSnapshot withUiForeground(
     ssg::LegacyPresentationSnapshot const& base, std::string_view id,
     ssg::SemanticRole foreground) {
     auto sections = base.semantic().sections();
-    auto* node = mutableUiNode(sections.ui.root, id);
+    auto schema = sections.uiFrame.schema();
+    auto* node = mutableUiNode(schema.root, id);
     if (node) node->style.foreground = foreground;
+    sections.uiFrame = ssg::UiFrame::require(
+        std::move(schema), sections.uiFrame.state(),
+        sections.uiFrame.presence());
     return ssg::LegacyPresentationSnapshot{
         base.semantic().revision(), base.semantic().topology(),
         base.semantic().client(),
@@ -136,8 +144,12 @@ ssg::LegacyPresentationSnapshot withUiWidgetRole(
     ssg::LegacyPresentationSnapshot const& base,
     std::string_view widgetId, std::string role) {
     auto sections = base.semantic().sections();
-    auto* node = mutableUiNodeForWidget(sections.ui.root, widgetId);
+    auto schema = sections.uiFrame.schema();
+    auto* node = mutableUiNodeForWidget(schema.root, widgetId);
     if (node) std::get<ssg::UiLeaf>(node->content).widget.role = std::move(role);
+    sections.uiFrame = ssg::UiFrame::require(
+        std::move(schema), sections.uiFrame.state(),
+        sections.uiFrame.presence());
     return ssg::LegacyPresentationSnapshot{
         base.semantic().revision(), base.semantic().topology(),
         base.semantic().client(),
@@ -158,7 +170,9 @@ ssg::GridFrame deprecatedGridFrame(
 void showPicker(ssg::SessionSnapshotSections& sections) {
     sections.palette.activePicker = ssg::PickerActivation{
         ssg::SearchMode::Command, ssg::PickerActivationId{1}};
-    for (auto& record : sections.uiPresence.nodes) {
+    auto state = sections.uiFrame.state();
+    auto presence = sections.uiFrame.presence();
+    for (auto& record : presence.nodes) {
         if (record.id ==
             ssg::UiNodeId{std::string{ssg::kEditorNodeId}}) {
             record.present = false;
@@ -168,6 +182,10 @@ void showPicker(ssg::SessionSnapshotSections& sections) {
             record.present = true;
         }
     }
+    state.focusPath = std::vector<ssg::UiNodeId>{
+        ssg::UiNodeId{std::string{ssg::kFindResultsViewportNodeId}}};
+    sections.uiFrame = ssg::UiFrame::require(
+        sections.uiFrame.schema(), std::move(state), std::move(presence));
 }
 
 }  // namespace
@@ -1751,7 +1769,7 @@ TEST(styleDefineRestylesTheLiveSessionChrome) {
     ASSERT_EQ(snapshot->presentation().style.inputLineSigil, std::string{"! "});
     const ssg::UiNode* inputLine = nullptr;
     if (const auto* root = std::get_if<ssg::UiContainer>(
-            &snapshot->semantic().sections().ui.root.content)) {
+            &snapshot->semantic().sections().uiFrame.schema().root.content)) {
         for (const auto& area : root->children) {
             if (area.id.value() != ssg::kHeaderNodeId) continue;
             if (const auto* header =
@@ -2050,7 +2068,7 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
 
 TEST(sessionSnapshotBuilderOrdersUiStateBySchemaPreorder) {
     auto snapshot = ssg::test::SessionSnapshotBuilder{}.build();
-    const auto& nodes = snapshot.sections().uiState.nodes;
+    const auto& nodes = snapshot.sections().uiFrame.state().nodes;
     ASSERT_TRUE(nodes.size() >= 2);
     if (nodes.size() < 2) return;
     ASSERT_EQ(nodes[0].id,

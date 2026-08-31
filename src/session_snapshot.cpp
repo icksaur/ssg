@@ -92,8 +92,7 @@ bool operator==(SessionSnapshotSections const& left,
            left.theme == right.theme &&
            left.focus == right.focus &&
            left.palette == right.palette &&
-           left.ui == right.ui && left.uiState == right.uiState &&
-           left.uiPresence == right.uiPresence &&
+           left.uiFrame == right.uiFrame &&
            left.promptView == right.promptView &&
            left.noticeView == right.noticeView &&
            left.watcherAvailable == right.watcherAvailable &&
@@ -136,10 +135,10 @@ SessionDelta::SessionDelta(
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
     ThemeSectionDelta theme, StyleSectionDelta style,
     ShellSectionDelta shell, ViewportDelta viewport,
+    UiFrameDelta uiFrameDelta,
     std::optional<FocusTarget> focus, SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows,
-    UiSectionDelta ui, UiStateSectionDelta uiState,
-    UiPresenceSectionDelta uiPresence, PaletteSectionDelta palette,
+    PaletteSectionDelta palette,
     PromptViewSectionDelta promptView, NoticeViewSectionDelta noticeView,
     std::optional<bool> watcherAvailable, std::optional<bool> externalFocusHeld)
     : baseRevision_{baseRevision},
@@ -171,13 +170,11 @@ SessionDelta::SessionDelta(
       style_{std::move(style)},
       shell_{std::move(shell)},
       viewport_{std::move(viewport)},
+      uiFrameDelta_{std::move(uiFrameDelta)},
       focus_{focus},
       selectionNav_{std::move(selectionNav)},
       promptProjection_{std::move(promptProjection)},
       treeWindows_{std::move(treeWindows)},
-      ui_{std::move(ui)},
-      uiState_{std::move(uiState)},
-      uiPresence_{std::move(uiPresence)},
       palette_{std::move(palette)},
       promptView_{std::move(promptView)},
       noticeView_{std::move(noticeView)},
@@ -263,19 +260,12 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         {},
         {},
         {},
+        UiFrameDeltaCodec{}.derive(old.uiFrame, next.uiFrame),
         old.focus == next.focus ? std::nullopt
                                 : std::optional{next.focus},
         {},
         {},
         {},
-        UiSectionDelta{old.ui == next.ui ? std::nullopt
-                                         : std::optional{next.ui}},
-        UiStateSectionDelta{old.uiState == next.uiState
-                                ? std::nullopt
-                                : std::optional{next.uiState}},
-        UiPresenceSectionDelta{old.uiPresence == next.uiPresence
-                                   ? std::nullopt
-                                   : std::optional{next.uiPresence}},
         PaletteSectionDelta{old.palette == next.palette
                                 ? std::nullopt
                                 : std::optional{next.palette}},
@@ -377,10 +367,8 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     // pickers open/close and the command catalog changes; the delta carries a whole-
     // value replacement when it does, else the base value is preserved.
     auto palette = delta.palette_.replacement.value_or(base.sections().palette);
-    auto ui = delta.ui_.replacement.value_or(base.sections().ui);
-    auto uiState = delta.uiState_.replacement.value_or(base.sections().uiState);
-    auto uiPresence =
-        delta.uiPresence_.replacement.value_or(base.sections().uiPresence);
+    auto uiFrame =
+        UiFrameDeltaCodec{}.replay(base.sections().uiFrame, delta.uiFrameDelta_);
     // The semantic footer-prompt section is optional; the delta's `changed`
     // distinguishes "closed" (replacement nullopt) from "unchanged".
     auto promptView = delta.promptView_.changed
@@ -399,15 +387,8 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     // (nullopt otherwise), so an unchanged state preserves the base value.
     auto externalFocusHeld =
         delta.externalFocusHeld_.value_or(base.sections().externalFocusHeld);
-    // A delta may replace the schema or the presence section independently; the
-    // resulting pair must still correspond (same generation, same node-id set), or a
-    // one-sided replacement would yield an accepted-but-inconsistent snapshot.
-    {
-        auto validated = ValidatedSchema::validate(ui);
-        if (!validated.ok() ||
-            !uiPresenceCorrespondsToSchema(uiPresence, validated.schema())) {
-            return {std::nullopt, "ui presence does not correspond to ui schema"};
-        }
+    if (!uiFrame.accepted()) {
+        return {std::nullopt, "UI frame delta is inconsistent"};
     }
 
     SessionSnapshotSections sections{
@@ -432,9 +413,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(theme),
         focus,
         std::move(palette),
-        std::move(ui),
-        std::move(uiState),
-        std::move(uiPresence),
+        std::move(*uiFrame.frame),
         std::move(promptView),
         std::move(noticeView),
         watcherAvailable,
@@ -464,14 +443,13 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
     ThemeSectionDelta theme, StyleSectionDelta style,
-    ShellSectionDelta shell,
-    ViewportDelta viewport,
+    ShellSectionDelta shell, ViewportDelta viewport,
+    UiFrameDelta uiFrameDelta,
     std::optional<FocusTarget> focus,
     SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection,
-    TreeWindowsDelta treeWindows, UiSectionDelta ui,
-    UiStateSectionDelta uiState, UiPresenceSectionDelta uiPresence,
-    PaletteSectionDelta palette, PromptViewSectionDelta promptView,
+    TreeWindowsDelta treeWindows, PaletteSectionDelta palette,
+    PromptViewSectionDelta promptView,
     NoticeViewSectionDelta noticeView, std::optional<bool> watcherAvailable,
     std::optional<bool> externalFocusHeld)
     const {
@@ -504,13 +482,11 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(style),
                         std::move(shell),
                         std::move(viewport),
+                        std::move(uiFrameDelta),
                         focus,
                         std::move(selectionNav),
                         std::move(promptProjection),
                         std::move(treeWindows),
-                        std::move(ui),
-                        std::move(uiState),
-                        std::move(uiPresence),
                         std::move(palette),
                         std::move(promptView),
                         std::move(noticeView),

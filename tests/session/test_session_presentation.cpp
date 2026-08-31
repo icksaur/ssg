@@ -1344,8 +1344,7 @@ TEST(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot) {
     if (!shown) return;
     ASSERT_TRUE(shown->presentation().shell.panel.has_value());
     ASSERT_TRUE(shown->semantic().sections().focus == ssg::FocusTarget::Panel);
-    ASSERT_TRUE(shown->semantic().sections().uiState.focusPath.has_value());
-    ASSERT_TRUE(*shown->semantic().sections().uiState.focusPath ==
+    ASSERT_TRUE(shown->semantic().sections().uiFrame.focusPath() ==
                 std::vector<ssg::UiNodeId>{
                     ssg::UiNodeId{std::string{ssg::kPanelNodeId}}});
 
@@ -1358,8 +1357,7 @@ TEST(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot) {
     if (!open) return;
     ASSERT_TRUE(open->semantic().sections().focus == ssg::FocusTarget::Prompt);
     ASSERT_TRUE(open->presentation().shell.palette.has_value());
-    ASSERT_TRUE(open->semantic().sections().uiState.focusPath.has_value());
-    ASSERT_TRUE((*open->semantic().sections().uiState.focusPath ==
+    ASSERT_TRUE((open->semantic().sections().uiFrame.focusPath() ==
                  std::vector<ssg::UiNodeId>{
                      ssg::UiNodeId{std::string{ssg::kPanelNodeId}},
                      ssg::UiNodeId{
@@ -1374,8 +1372,7 @@ TEST(interactionCutoverRoutesPanelFinderAndFocusThroughTheLiveSnapshot) {
     if (!closed) return;
     ASSERT_TRUE(closed->semantic().sections().focus == ssg::FocusTarget::Panel);
     ASSERT_FALSE(closed->presentation().shell.palette.has_value());
-    ASSERT_TRUE(closed->semantic().sections().uiState.focusPath.has_value());
-    ASSERT_TRUE(*closed->semantic().sections().uiState.focusPath ==
+    ASSERT_TRUE(closed->semantic().sections().uiFrame.focusPath() ==
                 std::vector<ssg::UiNodeId>{
                     ssg::UiNodeId{std::string{ssg::kPanelNodeId}}});
 }

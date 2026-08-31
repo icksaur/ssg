@@ -25,6 +25,7 @@ import {
   encodeTabPointerInput, markedTextByteOffset, encodeTreePointerInput,
   applyTreeDelta, normalizeTreeActiveBinding,
   applySessionDeltaSections, applySessionDeltaCopy, applySessionDelta,
+  applyUiFrameDelta,
   findSections,
   encodeStatusActionPointerInput, encodePromptControlPointerInput,
   encodePublishedUiActionPointerInput, encodeNoticeActionPointerInput,
@@ -1141,9 +1142,7 @@ check('session deltas dirty only their dependent browser surfaces', () => {
     notice_view: { changed: false, replacement: null },
     external_modification: { base_revision: 5n, revision: 5n },
     theme: { replacement: null },
-    ui: null,
-    ui_state: null,
-    ui_presence: null,
+    ui_frame_delta: null,
     prompt_status: { changed: false, replacement: null },
     syntax: { spans: null },
   }), {
@@ -1160,7 +1159,11 @@ check('session deltas dirty only their dependent browser surfaces', () => {
     rebuild: false, reconcile: false, responsive: false, repaintTheme: false,
     surfaces: [SURFACE.TREE],
   });
-  assert.deepEqual(browserRenderPlan({ ui_presence: { nodes: [] } }), {
+  assert.deepEqual(browserRenderPlan({
+    ui_frame_delta: {
+      kind: 'changes', presence: { nodes: [{ id: 'panel', present: false }] },
+    },
+  }), {
     rebuild: false, reconcile: true, responsive: true, repaintTheme: false,
     surfaces: [],
   });
@@ -1304,13 +1307,18 @@ check('responsive child selection preserves floors and drops optional children l
       minimumValue: '20ch' });
 });
 
-check('legacy UI fixture retains Exact panel and Flex content sizes', () => {
+check('UI frame fixture retains responsive panel and content sizes', () => {
   const sections = findSections(fixtureMessage('session_semantic_base.hex'));
-  const body = sections.ui.root.container.children.find((node) => node.id === 'body');
+  const body = sections.ui_frame.schema.root.container.children.find(
+    (node) => node.id === 'body');
   const panel = body.container.children.find((node) => node.id === 'panel');
   const content = body.container.children.find((node) => node.id === 'content');
-  assert.deepEqual(panel.size, { kind: 0n, extent: 24n });
-  assert.deepEqual(content.size, { kind: 1n, extent: 0n });
+  assert.deepEqual(panel.size, {
+    kind: 3n, extent: 24n, minimum: 12n, growth: 0n, optional: true,
+  });
+  assert.deepEqual(content.size, {
+    kind: 3n, extent: 20n, minimum: 20n, growth: 1n, optional: false,
+  });
 });
 
 check('interpretChrome rejects unknown and malformed responsive sizes', () => {
@@ -1531,6 +1539,54 @@ check('applySessionDeltaCopy retains unchanged large sections for a caret update
   assert.equal(next.palette, palette);
 });
 
+check('UI frame replay restores hidden focus only in one atomic change', () => {
+  const schema = schemaOf(4, rowNode('root', [
+    leafNode('editor', WIDGET.VIEW),
+    leafNode('input_line', WIDGET.TEXT_INPUT),
+  ]));
+  const frame = {
+    version: { generation: 4n, presence_basis: 2n },
+    schema,
+    state: {
+      generation: 4n,
+      nodes: [st('root'), st('editor'), st('input_line')],
+      focus_path: ['editor', 'input_line'],
+    },
+    presence: {
+      generation: 4n, basis: 2n,
+      nodes: [
+        { id: 'root', present: true },
+        { id: 'editor', present: false },
+        { id: 'input_line', present: true },
+      ],
+    },
+  };
+  const restoration = {
+    base: frame.version,
+    target: { generation: 4n, presence_basis: 3n },
+    kind: 'changes',
+    state: {
+      generation: 4n, nodes: [], focus_path: ['editor'],
+    },
+    presence: {
+      generation: 4n, basis: 3n,
+      nodes: [{ id: 'editor', present: true }],
+    },
+  };
+  const restored = applyUiFrameDelta(frame, restoration);
+  assert.ok(restored);
+  assert.deepEqual(restored.state.focus_path, ['editor']);
+  assert.equal(restored.presence.nodes[1].present, true);
+
+  const invalidPop = structuredClone(restoration);
+  invalidPop.target.presence_basis = 2n;
+  invalidPop.presence.basis = 2n;
+  invalidPop.presence.nodes = [];
+  assert.equal(applyUiFrameDelta(frame, invalidPop), null);
+  assert.deepEqual(frame.state.focus_path, ['editor', 'input_line']);
+  assert.equal(frame.presence.nodes[1].present, false);
+});
+
 check('session delta replay permits switching to an older document revision', () => {
   const sections = {
     document: {
@@ -1613,10 +1669,10 @@ check('semantic manifest and C++ fixture replay every browser section atomically
     malformed.syntax.spans = [{ begin: 1n, end: 7n, scope: 0n }];
   });
   rejectsWithoutMutation((malformed) => {
-    delete malformed.ui_state;
+    malformed.ui_frame_delta.base.presence_basis = 999n;
   });
   rejectsWithoutMutation((malformed) => {
-    delete malformed.ui_presence;
+    delete malformed.ui_frame_delta.frame;
   });
 });
 

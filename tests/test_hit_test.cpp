@@ -82,7 +82,9 @@ ssg::SessionSnapshotSections minimalSections() {
 void showPicker(ssg::SessionSnapshotSections& sections) {
     sections.palette.activePicker = ssg::PickerActivation{
         ssg::SearchMode::Command, ssg::PickerActivationId{1}};
-    for (auto& record : sections.uiPresence.nodes) {
+    auto state = sections.uiFrame.state();
+    auto presence = sections.uiFrame.presence();
+    for (auto& record : presence.nodes) {
         if (record.id ==
             ssg::UiNodeId{std::string{ssg::kEditorNodeId}}) {
             record.present = false;
@@ -92,6 +94,10 @@ void showPicker(ssg::SessionSnapshotSections& sections) {
             record.present = true;
         }
     }
+    state.focusPath = std::vector<ssg::UiNodeId>{
+        ssg::UiNodeId{std::string{ssg::kFindResultsViewportNodeId}}};
+    sections.uiFrame = ssg::UiFrame::require(
+        sections.uiFrame.schema(), std::move(state), std::move(presence));
 }
 
 // ---------------------------------------------------------------------------
