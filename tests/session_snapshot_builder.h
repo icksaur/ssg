@@ -30,6 +30,7 @@
 #include <ssg/ShellState.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/WholeScreenAssembly.h>
+#include <ssg/WholeScreenInteraction.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/Theme.h>
 #include <ssg/Viewport.h>
@@ -42,6 +43,16 @@
 #include <vector>
 
 namespace ssg::test {
+
+inline void appendEmptyUiState(const UiNode& node,
+                               std::vector<UiNodeState>& out) {
+    out.push_back({node.id, {}});
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            appendEmptyUiState(child, out);
+        }
+    }
+}
 
 class SessionSnapshotBuilder {
 public:
@@ -107,6 +118,14 @@ public:
         return *this;
     }
 
+    // Mutate the projected legacy shell after layout, for migration tests that
+    // prove a solved-tree consumer no longer reads its former sidecar.
+    SessionSnapshotBuilder& shellProjection(
+        std::function<void(ShellViewState&)> mutate) {
+        shellProjectionMutators_.push_back(std::move(mutate));
+        return *this;
+    }
+
     // Override the grid-presentation Style (a projection field, not a semantic
     // section). Applied when the PresentationSnapshot is built.
     SessionSnapshotBuilder& style(Style style) {
@@ -161,12 +180,18 @@ public:
             defaultSchema = ValidatedSchema::validate(std::move(schema)).takeSchema();
         }
         const ValidatedSchema& schema = schema_ ? *schema_ : *defaultSchema;
-        std::vector<UiNodeId> hidden;
-        const UiNodeId inputId{std::string{kHeaderPromptInputNodeId}};
-        // The prompt input is present iff a picker is open (a query was supplied);
-        // otherwise it is hidden, matching the runtime's presence gating.
-        if (schema.contains(inputId) && !promptInput_) hidden.push_back(inputId);
-        UiInteractionState interaction{schema, std::move(hidden)};
+        WholeScreenTruth truth;
+        truth.panelPresent = panel_;
+        truth.baseFocus = focus == FocusTarget::Panel ? BaseFocus::Panel
+                                                      : BaseFocus::Editor;
+        truth.noticePresent = request.notice.has_value();
+        truth.externalModificationPresent =
+            request.externalBar.has_value() &&
+            !request.externalBar->rows.empty();
+        if (promptInput_) truth.openPicker = PickerKind::Command;
+        UiInteractionState interaction = buildWholeScreenInteraction(
+            schema, truth,
+            promptInput_ ? std::optional{PromptRegion::Header} : std::nullopt);
         auto layout = computeShellLayout(request, shell, interaction, status_,
                                          promptInput_.value_or(PromptInputReport{}));
 
@@ -200,10 +225,17 @@ public:
             defaultTheme(),
             focus,
             PaletteViewState{}};
+        sections.ui = schema.schema();
+        sections.uiState.generation = schema.generation();
+        appendEmptyUiState(schema.schema().root, sections.uiState.nodes);
+        sections.uiState.focusPath = interaction.focusPath();
+        sections.uiPresence =
+            buildPresenceSection(schema, interaction.presence());
 
         for (auto const& mutate : mutators_) mutate(sections);
 
         ShellViewState shellView = layout.view ? *layout.view : ShellViewState{};
+        for (auto const& mutate : shellProjectionMutators_) mutate(shellView);
         ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
         auto frame = test::gridFrameFromLegacy(LegacyPresentationSnapshot{
             SessionSnapshot{
@@ -246,6 +278,8 @@ private:
     std::vector<TabLabel> tabs_;
     std::vector<std::function<void(SessionSnapshotSections&)>> mutators_;
     std::vector<std::function<void(ShellLayoutRequest&)>> shellMutators_;
+    std::vector<std::function<void(ShellViewState&)>>
+        shellProjectionMutators_;
     Style style_{};
     std::optional<ValidatedSchema> schema_;
     std::optional<PromptInputReport> promptInput_;

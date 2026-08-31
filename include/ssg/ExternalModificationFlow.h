@@ -59,7 +59,7 @@ private:
     }};
 };
 
-[[nodiscard]] ExternalModificationCommandSet
+[[nodiscard]] const ExternalModificationCommandSet&
 externalModificationCommandSet();
 
 struct ExternalActionAffordance {

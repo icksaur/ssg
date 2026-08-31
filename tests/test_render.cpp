@@ -1725,22 +1725,41 @@ TEST(urlDetectionStopsAtSentenceAndBracketBoundaries) {
 }
 
 TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
-    auto snapshot = ssg::test::SessionSnapshotBuilder{}
-                        .document("content\n")
-                        .viewport(80, 16)
-                        .shellRequest([](ssg::ShellLayoutRequest& request) {
-                            request.notice = ssg::ShellNotice{
-                                "Draft conflict",
-                                {{"diff", "Diff", "draft.diff"}}};
-                            request.externalBar = ssg::ShellExternalBar{
-                                "Files changed on disk",
-                                {{"a", "M a.txt",
-                                  {{"Reload", "external.reload"}}},
-                                 {"b", "M b.txt",
-                                  {{"Reload", "external.reload"}}}},
-                                1};
-                        })
-                        .build();
+    const auto buildSnapshot = [](bool corruptLegacyNotice) {
+        auto builder = ssg::test::SessionSnapshotBuilder{}
+                           .document("content\n")
+                           .viewport(80, 16)
+                           .shellRequest([](ssg::ShellLayoutRequest& request) {
+                               request.notice = ssg::ShellNotice{
+                                   "Draft conflict",
+                                   {{"diff", "Diff", "draft.diff"}}};
+                               request.externalBar = ssg::ShellExternalBar{
+                                   "Files changed on disk",
+                                   {{"a", "M a.txt",
+                                     {{"Reload", "external.reload"}}},
+                                    {"b", "M b.txt",
+                                     {{"Reload", "external.reload"}}}},
+                                   1};
+                           })
+                           .sections(
+                               [](ssg::SessionSnapshotSections& sections) {
+                                   sections.noticeView = ssg::NoticeView{
+                                       "Draft conflict",
+                                       {{"diff", "Diff", "draft.diff"}}};
+                               });
+        if (corruptLegacyNotice) {
+            builder.shellProjection([](ssg::ShellViewState& shell) {
+                for (auto& node : shell.accessibilityNodes) {
+                    if (node.kind == ssg::ShellNodeKind::NoticeBar ||
+                        node.kind == ssg::ShellNodeKind::NoticeAction) {
+                        node.rect = {40, 0, 1, 1};
+                    }
+                }
+            });
+        }
+        return builder.build();
+    };
+    auto snapshot = buildSnapshot(false);
     auto const& shell = snapshot.presentation().shell;
     auto const find = [&](ssg::ShellNodeKind kind,
                           std::string_view id)
@@ -1756,31 +1775,72 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
         find(ssg::ShellNodeKind::NoticeBar, "draft.notice");
     auto const* noticeAction =
         find(ssg::ShellNodeKind::NoticeAction, "diff");
+    auto const* externalBar =
+        find(ssg::ShellNodeKind::ExternalModificationBar, "external.bar");
     auto const* unselected =
         find(ssg::ShellNodeKind::ExternalModificationRow, "a");
     auto const* selected =
         find(ssg::ShellNodeKind::ExternalModificationRow, "b");
+    const auto* solvedNotice = snapshot.layout().find(
+        ssg::UiNodeId{std::string{ssg::kNoticeNodeId}});
+    const auto* solvedExternal = snapshot.layout().find(
+        ssg::UiNodeId{std::string{ssg::kExternalModNodeId}});
     ASSERT_TRUE(notice != nullptr);
     ASSERT_TRUE(noticeAction != nullptr);
+    ASSERT_TRUE(externalBar != nullptr);
     ASSERT_TRUE(unselected != nullptr);
     ASSERT_TRUE(selected != nullptr);
-    if (!notice || !noticeAction || !unselected || !selected) return;
+    ASSERT_TRUE(solvedNotice != nullptr);
+    ASSERT_TRUE(solvedExternal != nullptr);
+    if (!notice || !noticeAction || !externalBar || !unselected || !selected ||
+        !solvedNotice || !solvedExternal) {
+        return;
+    }
+    ASSERT_EQ(solvedNotice->rect, notice->rect);
+    const ssg::Rect legacyExternalRect{
+        externalBar->rect.x, externalBar->rect.y, externalBar->rect.width,
+        selected->rect.bottom() - externalBar->rect.y};
+    ASSERT_EQ(solvedExternal->rect, legacyExternalRect);
+    const auto noticeSurface =
+        ssg::solveNoticeSurface(*snapshot.sections().noticeView,
+                                solvedNotice->rect);
+    ASSERT_TRUE(!noticeSurface.actions.empty());
+    if (noticeSurface.actions.empty()) return;
 
-    auto const grid = ssg::Renderer{}.render(snapshot);
+    auto renderFrame = buildSnapshot(true);
+    const auto* renderNotice = renderFrame.layout().find(
+        ssg::UiNodeId{std::string{ssg::kNoticeNodeId}});
+    ASSERT_TRUE(renderNotice != nullptr);
+    if (!renderNotice) return;
+    ASSERT_EQ(renderNotice->rect, solvedNotice->rect);
+    auto const grid = ssg::Renderer{}.render(renderFrame);
     ASSERT_EQ(notice->role, ssg::SemanticRole::StatusWarning);
     ASSERT_EQ(noticeAction->role, ssg::SemanticRole::StatusWarning);
-    ASSERT_EQ(grid.at(notice->rect.x, notice->rect.y).text,
+    ASSERT_EQ(grid.at(solvedNotice->rect.x, solvedNotice->rect.y).text,
               std::string{"D"});
-    ASSERT_EQ(grid.at(notice->rect.x, notice->rect.y).role,
+    ASSERT_EQ(grid.at(solvedNotice->rect.x, solvedNotice->rect.y).role,
               ssg::SemanticRole::StatusWarning);
-    ASSERT_EQ(grid.at(noticeAction->rect.x, noticeAction->rect.y).text,
+    ASSERT_EQ(grid.at(noticeSurface.actions.front().rect.x,
+                      noticeSurface.actions.front().rect.y).text,
               std::string{"["});
-    ASSERT_EQ(grid.at(noticeAction->rect.x, noticeAction->rect.y).role,
+    ASSERT_EQ(grid.at(noticeSurface.actions.front().rect.x,
+                      noticeSurface.actions.front().rect.y).role,
               ssg::SemanticRole::StatusWarning);
     ASSERT_EQ(grid.at(unselected->rect.x, unselected->rect.y).role,
               ssg::SemanticRole::StatusWarning);
     ASSERT_EQ(grid.at(selected->rect.x, selected->rect.y).role,
               ssg::SemanticRole::Selection);
+}
+
+TEST(sessionSnapshotBuilderOrdersUiStateBySchemaPreorder) {
+    auto snapshot = ssg::test::SessionSnapshotBuilder{}.build();
+    const auto& nodes = snapshot.sections().uiState.nodes;
+    ASSERT_TRUE(nodes.size() >= 2);
+    if (nodes.size() < 2) return;
+    ASSERT_EQ(nodes[0].id,
+              ssg::UiNodeId{std::string{ssg::kRootNodeId}});
+    ASSERT_EQ(nodes[1].id,
+              ssg::UiNodeId{std::string{ssg::kHeaderNodeId}});
 }
 
 // The dead-color-role guard. Proves the
@@ -1865,6 +1925,9 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
             .promptInput(pickerOpen, "needle", "ghost")
             .sections([&](ssg::SessionSnapshotSections& sections) {
                 sections.theme = theme;
+                sections.noticeView = ssg::NoticeView{
+                    "Draft conflict",
+                    {{"diff", "Diff", "draft.diff"}}};
                 // A tree with a directory node (PanelActive color) and a
                 // selected file node (TreeFocus fill); the panel provider node
                 // (PanelInactive) and panel fill (TreeBackground) come for free
@@ -2058,6 +2121,7 @@ int main() {
     RUN(styleDefineRestylesTheLiveSessionChrome);
     RUN(urlsInTheDocumentBecomeClickableRuns);
     RUN(urlDetectionStopsAtSentenceAndBracketBoundaries);
+    RUN(sessionSnapshotBuilderOrdersUiStateBySchemaPreorder);
     RUN(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects);
     RUN(lspDiagnosticsUnderlineExactlyTheirRange);
     RUN(staleDiagnosticsAreNotPainted);

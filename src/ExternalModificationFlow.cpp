@@ -46,8 +46,9 @@ auto findFile(const std::vector<ExternalDocumentView>& files,
 
 }  // namespace
 
-ExternalModificationCommandSet externalModificationCommandSet() {
-    return {};
+const ExternalModificationCommandSet& externalModificationCommandSet() {
+    static const ExternalModificationCommandSet commands;
+    return commands;
 }
 
 ExternalActionAffordance externalActionAffordance(ExternalAction action) {

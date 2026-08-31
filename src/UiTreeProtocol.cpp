@@ -2,8 +2,10 @@
 
 #include <array>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -362,6 +364,74 @@ std::optional<UiNode> decodeNode(const ProtocolValue& value) {
     return node;
 }
 
+bool hasChildren(UiNode const& node,
+                 std::initializer_list<std::string_view> ids) {
+    const auto* container = std::get_if<UiContainer>(&node.content);
+    if (!container || container->children.size() != ids.size()) return false;
+    std::size_t index = 0;
+    for (const auto id : ids) {
+        if (container->children[index++].id.value() != id) return false;
+    }
+    return true;
+}
+
+// The presentation-bearing legacy delta is frozen until Plan 6, so its schema
+// cannot be regenerated when the canonical whole-screen topology moves.
+bool normalizePrecedingWholeScreenTopology(UiSchema& schema) {
+    if (!hasChildren(schema.root,
+                     {kHeaderNodeId, kNoticeNodeId, kExternalModNodeId,
+                      kBodyNodeId, kFooterPromptNodeId, kFooterNodeId})) {
+        return false;
+    }
+    auto& root = std::get<UiContainer>(schema.root.content);
+    auto& body = root.children[3];
+    if (!hasChildren(body, {kPanelNodeId, kContentNodeId})) return false;
+    auto& bodyContainer = std::get<UiContainer>(body.content);
+    auto& panel = bodyContainer.children[0];
+    auto& content = bodyContainer.children[1];
+    if (!hasChildren(panel,
+                     {kFileTreeNodeId, kGitStatusNodeId, kSymbolsNodeId}) ||
+        !hasChildren(content, {kEditorNodeId, kFindResultsViewportNodeId})) {
+        return false;
+    }
+    auto& contentContainer = std::get<UiContainer>(content.content);
+    auto& editor = contentContainer.children[0];
+    auto& findResultsViewport = contentContainer.children[1];
+    if (!hasChildren(editor, {kTabBarNodeId, kDocumentViewportNodeId}) ||
+        !hasChildren(findResultsViewport, {kFindResultsNodeId})) {
+        return false;
+    }
+    auto& editorContainer = std::get<UiContainer>(editor.content);
+    auto& documentViewport = editorContainer.children[1];
+    if (!hasChildren(documentViewport, {kDocumentNodeId})) return false;
+
+    UiNode header = std::move(root.children[0]);
+    UiNode notice = std::move(root.children[1]);
+    UiNode externalModification = std::move(root.children[2]);
+    UiNode movedBody = std::move(root.children[3]);
+    UiNode footerPrompt = std::move(root.children[4]);
+    UiNode footer = std::move(root.children[5]);
+
+    auto& movedBodyContainer = std::get<UiContainer>(movedBody.content);
+    auto& movedContent =
+        std::get<UiContainer>(movedBodyContainer.children[1].content);
+    UiNode movedEditor = std::move(movedContent.children[0]);
+    UiNode movedFindResults = std::move(movedContent.children[1]);
+    auto& movedEditorContainer =
+        std::get<UiContainer>(movedEditor.content);
+    UiNode tabBar = std::move(movedEditorContainer.children[0]);
+    UiNode movedDocumentViewport =
+        std::move(movedEditorContainer.children[1]);
+    movedEditorContainer.children = {std::move(movedDocumentViewport)};
+    movedContent.children = {
+        std::move(tabBar), std::move(notice),
+        std::move(externalModification), std::move(movedEditor),
+        std::move(movedFindResults)};
+    root.children = {std::move(header), std::move(movedBody),
+                     std::move(footerPrompt), std::move(footer)};
+    return true;
+}
+
 }  // namespace
 
 ProtocolValue encodeUiSchema(const UiSchema& schema) {
@@ -387,7 +457,12 @@ std::optional<UiSchema> decodeUiSchema(const ProtocolValue& value) {
     // well-known-area contract; malformed wire can never enter the semantic channel
     // as a plausible schema.
     if (!validateUiSchema(schema).ok()) return std::nullopt;
-    if (!validateWellKnownAreas(schema).ok()) return std::nullopt;
+    if (!validateWellKnownAreas(schema).ok()) {
+        if (!normalizePrecedingWholeScreenTopology(schema) ||
+            !validateWellKnownAreas(schema).ok()) {
+            return std::nullopt;
+        }
+    }
     return schema;
 }
 

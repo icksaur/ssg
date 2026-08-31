@@ -93,6 +93,6 @@ private:
     }};
 };
 
-[[nodiscard]] FileCommandsCommandSet fileCommandsCommandSet();
+[[nodiscard]] const FileCommandsCommandSet& fileCommandsCommandSet();
 
 }  // namespace ssg

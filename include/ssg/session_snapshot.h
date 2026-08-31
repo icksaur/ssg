@@ -38,8 +38,8 @@ namespace ssg {
 class SessionSnapshotCodec;
 
 // One action in the draft-conflict notice: a label bound to the already-registered
-// library `command` it dispatches. Geometry-free -- the grid ShellNoticeAction is
-// this same content plus a Rect, both built from the one draftNotice resolver.
+// library `command` it dispatches. Geometry-free: grid presentation combines it
+// with the solved notice surface.
 struct NoticeAction {
     std::string id;
     std::string label;
@@ -50,7 +50,7 @@ struct NoticeAction {
 // The geometry-free semantic projection of the active document's draft-conflict
 // notice (M15): its message and ordered actions. Absent unless the active document
 // has an unresolved draft conflict. A native client renders and drives the notice
-// from this; the grid client instead lowers the parallel ShellNotice with rects.
+// from this; the grid client combines it with the solved notice node.
 struct NoticeView {
     std::string text;
     std::vector<NoticeAction> actions;
@@ -106,9 +106,8 @@ struct SessionSnapshotSections {
     std::optional<PromptView> promptView;
     // The geometry-free semantic projection of the active document's draft-conflict
     // notice (M15). Absent unless the active document has an unresolved conflict. A
-    // native client renders the notice bar from this; the grid client instead lowers
-    // the parallel ShellNotice with rects. Both derive from the one draftNotice
-    // resolver.
+    // native and grid clients render the notice bar from this; grid placement
+    // comes from the solved notice node.
     std::optional<NoticeView> noticeView;
     // Decision-13 durable capability fact: whether the session is watching the
     // workspace for external modification. False for the whole session when the

@@ -4806,6 +4806,38 @@ constexpr auto kSemanticSessionDeltaFields = std::to_array<std::string_view>({
     "watcher_available", "external_focus_held",
 });
 
+template <typename Record>
+void appendRecordsInSchemaOrder(
+    UiNode const& node, std::vector<Record>& records,
+    std::unordered_map<std::string, std::size_t> const& indexes,
+    std::vector<Record>& ordered) {
+    ordered.push_back(std::move(records[indexes.at(node.id.value())]));
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            appendRecordsInSchemaOrder(child, records, indexes, ordered);
+        }
+    }
+}
+
+template <typename Record>
+void canonicalizeUiRecordOrder(UiSchema const& schema,
+                               std::vector<Record>& records) {
+    const auto ids = uiSchemaNodeIds(schema);
+    if (records.size() != ids.size()) return;
+    std::unordered_map<std::string, std::size_t> indexes;
+    indexes.reserve(records.size());
+    for (std::size_t index = 0; index < records.size(); ++index) {
+        if (!ids.contains(records[index].id) ||
+            !indexes.emplace(records[index].id.value(), index).second) {
+            return;
+        }
+    }
+    std::vector<Record> ordered;
+    ordered.reserve(records.size());
+    appendRecordsInSchemaOrder(schema.root, records, indexes, ordered);
+    records = std::move(ordered);
+}
+
 ProtocolValue toValue(SessionSnapshotSections const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back(kSemanticSessionFields[0], toValue(value.document));
@@ -4948,6 +4980,8 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         if (!validated.ok()) return false;
         if (!uiPresenceCorrespondsToSchema(*uiPresence, validated.schema()))
             return false;
+        canonicalizeUiRecordOrder(*ui, uiPresence->nodes);
+        if (uiState) canonicalizeUiRecordOrder(*ui, uiState->nodes);
     }
     if (!document || !selection || !history || !clipboard || !promptStatus || !search ||
         !findReplace || !settings || !keymap || !textEncoding || !tabs || !diff ||
@@ -6689,6 +6723,17 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                     "session delta payload is malformed"};
         }
         noticeViewDelta = std::move(*decoded);
+    }
+
+    if (uiDelta.replacement) {
+        if (uiStateDelta.replacement) {
+            canonicalizeUiRecordOrder(*uiDelta.replacement,
+                                      uiStateDelta.replacement->nodes);
+        }
+        if (uiPresenceDelta.replacement) {
+            canonicalizeUiRecordOrder(*uiDelta.replacement,
+                                      uiPresenceDelta.replacement->nodes);
+        }
     }
 
     if (!optionalOk || !baseRevision || !revision || !clientId || !viewId ||

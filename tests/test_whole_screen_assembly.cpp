@@ -74,26 +74,9 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     ASSERT_TRUE(body != nullptr);
     ASSERT_TRUE(footer != nullptr);
     ASSERT_EQ(child(comp.root, 0).id.value(), std::string{kHeaderNodeId});
-    ASSERT_EQ(child(comp.root, 1).id.value(), std::string{kNoticeNodeId});
-    ASSERT_EQ(child(comp.root, 2).id.value(), std::string{kExternalModNodeId});
-    ASSERT_EQ(child(comp.root, 3).id.value(), std::string{kBodyNodeId});
-    ASSERT_EQ(child(comp.root, 4).id.value(), std::string{kFooterPromptNodeId});
-    ASSERT_EQ(child(comp.root, 5).id.value(), std::string{kFooterNodeId});
-    // The draft-conflict notice is an always-assembled Auto-sized View naming Notice,
-    // between the header and the body; presence (not assembly) hides it.
-    const UiNode* notice = childById(comp.root, kNoticeNodeId);
-    ASSERT_TRUE(notice != nullptr);
-    if (notice) {
-        ASSERT_TRUE(notice->size.kind() == SizeKind::Auto);
-        const auto* nLeaf = std::get_if<UiLeaf>(&notice->content);
-        ASSERT_TRUE(nLeaf != nullptr);
-        if (nLeaf) {
-            ASSERT_TRUE(nLeaf->widget.kind == WidgetKind::View);
-            ASSERT_TRUE(nLeaf->widget.surface.has_value());
-            if (nLeaf->widget.surface)
-                ASSERT_TRUE(*nLeaf->widget.surface == ViewSurface::Notice);
-        }
-    }
+    ASSERT_EQ(child(comp.root, 1).id.value(), std::string{kBodyNodeId});
+    ASSERT_EQ(child(comp.root, 2).id.value(), std::string{kFooterPromptNodeId});
+    ASSERT_EQ(child(comp.root, 3).id.value(), std::string{kFooterNodeId});
     // The footer prompt is an always-assembled Auto-sized container between the
     // body and footer; presence hides it while inactive.
     const UiNode* footerPrompt = childById(comp.root, kFooterPromptNodeId);
@@ -120,11 +103,15 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
     ASSERT_EQ(panel->size.extent(), d.panelTargetWidth);
     ASSERT_TRUE(content->size.kind() == SizeKind::Flex);
     const UiNode* editor = childById(*content, kEditorNodeId);
+    const UiNode* notice = childById(*content, kNoticeNodeId);
+    const UiNode* external = childById(*content, kExternalModNodeId);
     const UiNode* documentViewport =
         editor ? childById(*editor, kDocumentViewportNodeId) : nullptr;
     const UiNode* findResultsViewport =
         childById(*content, kFindResultsViewportNodeId);
     ASSERT_TRUE(editor != nullptr);
+    ASSERT_TRUE(notice != nullptr);
+    ASSERT_TRUE(external != nullptr);
     ASSERT_TRUE(documentViewport != nullptr);
     ASSERT_TRUE(findResultsViewport != nullptr);
     struct Leaf { std::string_view id; const UiNode* parent; ViewSurface surface; };
@@ -132,7 +119,9 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
         {kFileTreeNodeId, panel, ViewSurface::FileTree},
         {kGitStatusNodeId, panel, ViewSurface::GitStatus},
         {kSymbolsNodeId, panel, ViewSurface::Symbols},
-        {kTabBarNodeId, editor, ViewSurface::TabBar},
+        {kTabBarNodeId, content, ViewSurface::TabBar},
+        {kNoticeNodeId, content, ViewSurface::Notice},
+        {kExternalModNodeId, content, ViewSurface::ExternalModification},
         {kDocumentNodeId, documentViewport, ViewSurface::Document},
         {kFindResultsNodeId, findResultsViewport, ViewSurface::FindResults},
     };
@@ -143,6 +132,9 @@ void assertCanonicalSkeleton(const UiComposition& comp, const StyleDimensions& d
         if (leaf.surface == ViewSurface::TabBar) {
             ASSERT_TRUE(node->size.kind() == SizeKind::Exact);
             ASSERT_EQ(node->size.extent(), dims().tabBarHeight);
+        } else if (leaf.surface == ViewSurface::Notice ||
+                   leaf.surface == ViewSurface::ExternalModification) {
+            ASSERT_TRUE(node->size.kind() == SizeKind::Auto);
         } else {
             ASSERT_TRUE(node->size.kind() == SizeKind::Flex);
         }
@@ -183,8 +175,8 @@ TEST(assembledTreeNamesTheIndependentVerticalScrollViewports) {
     ASSERT_TRUE(scrollOf(documentViewport) == ScrollAxis::Vertical);
     ASSERT_TRUE(scrollOf(findResultsViewport) == ScrollAxis::Vertical);
     if (panel) ASSERT_TRUE(scrollOf(childById(*panel, kFileTreeNodeId)) == ScrollAxis::None);
-    if (editor)
-        ASSERT_TRUE(scrollOf(childById(*editor, kTabBarNodeId)) ==
+    if (content)
+        ASSERT_TRUE(scrollOf(childById(*content, kTabBarNodeId)) ==
                     ScrollAxis::None);
     if (documentViewport)
         ASSERT_TRUE(scrollOf(childById(*documentViewport, kDocumentNodeId)) ==
@@ -195,7 +187,7 @@ TEST(assembledTreeNamesTheIndependentVerticalScrollViewports) {
     // Chrome/notice regions never scroll.
     for (const auto id : {kHeaderNodeId, kFooterNodeId, kNoticeNodeId,
                           kFooterPromptNodeId, kExternalModNodeId, kBodyNodeId}) {
-        ASSERT_TRUE(scrollOf(childById(comp.root, id)) == ScrollAxis::None);
+        ASSERT_TRUE(scrollOf(findById(comp.root, id)) == ScrollAxis::None);
     }
 }
 

@@ -12,6 +12,7 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -94,6 +95,52 @@ TEST(uiSchemaRoundTripsThroughTheWire) {
         ASSERT_TRUE(decoded.has_value());
         if (decoded) ASSERT_TRUE(*decoded == schema);
     }
+}
+
+TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
+    UiSchema current{
+        Generation{1},
+        ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                 ssg::Style{}.inputLineSigil, std::nullopt)
+            .root};
+    UiSchema preceding = current;
+    auto& root = std::get<ssg::UiContainer>(preceding.root.content);
+    UiNode header = std::move(root.children[0]);
+    UiNode body = std::move(root.children[1]);
+    UiNode footerPrompt = std::move(root.children[2]);
+    UiNode footer = std::move(root.children[3]);
+    auto& bodyContainer = std::get<ssg::UiContainer>(body.content);
+    auto& content =
+        std::get<ssg::UiContainer>(bodyContainer.children[1].content);
+    UiNode tabBar = std::move(content.children[0]);
+    UiNode notice = std::move(content.children[1]);
+    UiNode externalModification = std::move(content.children[2]);
+    UiNode editor = std::move(content.children[3]);
+    UiNode findResults = std::move(content.children[4]);
+    auto& editorContainer = std::get<ssg::UiContainer>(editor.content);
+    editorContainer.children.insert(editorContainer.children.begin(),
+                                    std::move(tabBar));
+    content.children = {std::move(editor), std::move(findResults)};
+    root.children = {std::move(header), std::move(notice),
+                     std::move(externalModification), std::move(body),
+                     std::move(footerPrompt), std::move(footer)};
+
+    const auto decoded = decodeUiSchema(encodeUiSchema(preceding));
+    ASSERT_TRUE(decoded.has_value());
+    if (decoded) ASSERT_EQ(*decoded, current);
+
+    UiSchema malformedInterior = preceding;
+    auto& malformedRoot =
+        std::get<ssg::UiContainer>(malformedInterior.root.content);
+    malformedRoot.children[1].content =
+        ssg::UiContainer{ssg::Axis::Column, {}, {}, {}};
+    ASSERT_FALSE(
+        decodeUiSchema(encodeUiSchema(malformedInterior)).has_value());
+
+    auto& precedingRoot =
+        std::get<ssg::UiContainer>(preceding.root.content);
+    std::swap(precedingRoot.children[1], precedingRoot.children[2]);
+    ASSERT_FALSE(decodeUiSchema(encodeUiSchema(preceding)).has_value());
 }
 
 ProtocolValue withRootField(const ProtocolValue& encoded, std::string key,
@@ -336,6 +383,7 @@ TEST(malformedSurfaceDecodesToNullopt) {
 
 int main() {
     RUN(uiSchemaRoundTripsThroughTheWire);
+    RUN(precedingCanonicalTopologyDecodesToTheCurrentArrangement);
     RUN(nodeStyleRoundTripsAndFieldAdditionRemainsCompatible);
     RUN(malformedOrUnknownNodeStyleRejectsTheWholeSchema);
     RUN(scrollAxisRoundTripsAndCanonicalViewportRejectsUnknownOrAbsentValues);

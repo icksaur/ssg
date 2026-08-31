@@ -676,21 +676,41 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
     ASSERT_TRUE(reopenNote(runtime).accepted());
     auto snapshot = runtime.present(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    if (!snapshot) return;
+    auto presentation = snapshot->presentation();
+    for (auto& node : presentation.shell.accessibilityNodes) {
+        if (node.kind == ssg::ShellNodeKind::NoticeBar ||
+           node.kind == ssg::ShellNodeKind::NoticeAction) {
+           node.rect = {0, 0, 1, 1};
+        }
+    }
+    auto frame = ssg::test::gridFrameFromLegacy(
+        ssg::LegacyPresentationSnapshot{
+           snapshot->semantic().revision(), snapshot->semantic().topology(),
+           snapshot->semantic().client(), snapshot->semantic().sections(),
+           std::move(presentation)});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
+    const auto* noticeNode = frame->layout().find(
+        ssg::UiNodeId{std::string{ssg::kNoticeNodeId}});
+    ASSERT_TRUE(noticeNode != nullptr);
+    if (!noticeNode || !frame->sections().noticeView) return;
+    const auto solved = ssg::solveNoticeSurface(
+        *frame->sections().noticeView, noticeNode->rect);
 
-    // Each action node hit-tests to its semantic identity, not its command.
+    // Each solved action hit-tests to its semantic identity, not its command.
     for (const auto& id :
          {"draft.notice.diff", "draft.notice.use_disk",
           "draft.notice.dismiss"}) {
-        const auto* node =
-            findShellNode(*frame, ssg::ShellNodeKind::NoticeAction,
-                          id);
-        ASSERT_TRUE(node != nullptr);
-        if (!node) continue;
-        const auto hit = ssg::HitTester{*frame}.at(node->rect.x, node->rect.y);
+        const auto action = std::find_if(
+           solved.actions.begin(), solved.actions.end(),
+           [&](const ssg::SolvedNoticeAction& candidate) {
+               return candidate.id == id;
+           });
+        ASSERT_TRUE(action != solved.actions.end());
+        if (action == solved.actions.end()) continue;
+        const auto hit =
+           ssg::HitTester{*frame}.at(action->rect.x, action->rect.y);
         ASSERT_EQ(hit.fieldId, std::optional<std::string>{id});
         ASSERT_FALSE(hit.commandId.has_value());
     }

@@ -229,6 +229,15 @@ UiComposition assembleWholeScreen(
              viewLeaf(kSymbolsNodeId, ViewSurface::Symbols, Size::flex())},
             ScrollAxis::Vertical),
         SemanticRole::PanelInactive, SemanticRole::TreeBackground);
+    // Editor-owned transient chrome sits after tabs and before the document. It
+    // consumes document rows without spanning or moving the side panel.
+    UiNode notice = withStyle(
+        viewLeaf(kNoticeNodeId, ViewSurface::Notice, Size::autoSize()),
+        SemanticRole::Canvas, SemanticRole::StatusWarning);
+    UiNode externalMod = withStyle(
+        viewLeaf(kExternalModNodeId, ViewSurface::ExternalModification,
+                 Size::autoSize()),
+        SemanticRole::Canvas, SemanticRole::StatusWarning);
     UiNode documentViewport = container(
         kDocumentViewportNodeId, Axis::Column, Size::flex(),
         {withStyle(viewLeaf(kDocumentNodeId, ViewSurface::Document, Size::flex()),
@@ -236,11 +245,7 @@ UiComposition assembleWholeScreen(
         ScrollAxis::Vertical);
     UiNode editor = container(
         kEditorNodeId, Axis::Column, Size::flex(),
-        {withStyle(viewLeaf(kTabBarNodeId, ViewSurface::TabBar,
-                            Size::exact(dimensions.tabBarHeight)),
-                   SemanticRole::TabInactive,
-                   SemanticRole::TabInactiveBackground),
-         std::move(documentViewport)});
+        {std::move(documentViewport)});
     UiNode findResultsViewport = container(
         kFindResultsViewportNodeId, Axis::Column, Size::flex(),
         {withStyle(viewLeaf(kFindResultsNodeId, ViewSurface::FindResults,
@@ -249,26 +254,14 @@ UiComposition assembleWholeScreen(
         ScrollAxis::Vertical);
     UiNode content = container(
         kContentNodeId, Axis::Column, Size::flex(),
-        {std::move(editor), std::move(findResultsViewport)});
+        {withStyle(viewLeaf(kTabBarNodeId, ViewSurface::TabBar,
+                            Size::exact(dimensions.tabBarHeight)),
+                   SemanticRole::TabInactive,
+                   SemanticRole::TabInactiveBackground),
+         std::move(notice), std::move(externalMod), std::move(editor),
+         std::move(findResultsViewport)});
     UiNode body = container(kBodyNodeId, Axis::Row, Size::flex(),
                             {std::move(panel), std::move(content)});
-    // The draft-conflict notice's semantic surface, always assembled and hidden by
-    // presence (WholeScreenInteraction). Auto-sized so its footprint is the runtime's
-    // reserved chrome row above the document; the grid host ignores it and renders
-    // ShellNotice with rects.
-    UiNode notice = withStyle(
-        viewLeaf(kNoticeNodeId, ViewSurface::Notice, Size::autoSize()),
-        SemanticRole::Canvas, SemanticRole::StatusWarning);
-    // The external-modification bar's semantic surface, always assembled and
-    // hidden by presence (WholeScreenInteraction). Auto-sized so its footprint is
-    // the runtime's reserved chrome rows above the document (adjacent to the
-    // notice, fixed order); the grid host ignores it and renders the bounded
-    // ShellExternalBar with rects. 5b-1 left it a bare container to anchor the
-    // external-focus capture; 5b-2 gives it the rendered View leaf.
-    UiNode externalMod = withStyle(
-        viewLeaf(kExternalModNodeId, ViewSurface::ExternalModification,
-                 Size::autoSize()),
-        SemanticRole::Canvas, SemanticRole::StatusWarning);
     // The footer prompt starts as an empty, hidden container. An accepted prompt
     // request overlays its controls before the schema owner publishes it.
     UiNode footerPrompt = withStyle(
@@ -278,8 +271,7 @@ UiComposition assembleWholeScreen(
     UiComposition out;
     out.root = withStyle(
         container(kRootNodeId, Axis::Column, Size::flex(),
-                  {std::move(header), std::move(notice),
-                   std::move(externalMod), std::move(body),
+                  {std::move(header), std::move(body),
                    std::move(footerPrompt), std::move(footer)}),
         SemanticRole::Text, SemanticRole::Canvas);
     return out;

@@ -228,36 +228,20 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
                            "root"};
     }
     const UiContainer* root = nullptr;
-    constexpr std::array rootIds{kHeaderNodeId,        kNoticeNodeId,
-                                 kExternalModNodeId,   kBodyNodeId,
-                                 kFooterPromptNodeId,  kFooterNodeId};
+    constexpr std::array rootIds{kHeaderNodeId, kBodyNodeId,
+                                 kFooterPromptNodeId, kFooterNodeId};
     if (auto err = requireChildren(schema.root, "root", rootIds, root)) return err;
     const UiNode& header = root->children[0];
     if (header.id.value() != wellKnownAreaId(WellKnownArea::Header) ||
         !header.isContainer()) {
         return std::string{"header: must be a direct child container of root"};
     }
-    // The draft-conflict notice sits between the header and the body: a View leaf
-    // naming ViewSurface::Notice, always assembled and hidden by presence. It is
-    // the sole node permitted to carry an Auto-sized Notice View; a stray Notice
-    // View anywhere else is rejected below.
-    if (auto err = requireViewLeaf(root->children[1], kNoticeNodeId,
-                                   ViewSurface::Notice))
-        return err;
-    // The external-modification node sits between the notice and the body: a View
-    // leaf naming ViewSurface::ExternalModification, always assembled and hidden
-    // by presence. It is the sole node permitted to carry an Auto-sized
-    // ExternalModification View; a stray one anywhere else is rejected below. The
-    // node and its presence gating exist from 5b-1; 5b-2 gives it the View leaf.
-    if (auto err = requireViewLeaf(root->children[2], kExternalModNodeId,
-                                   ViewSurface::ExternalModification))
-        return err;
-    const UiNode& body = root->children[3];
+    const UiNode& body = root->children[1];
     // The footer prompt sits between the body and footer as the authoritative
     // control-layout subtree and is hidden by presence while inactive.
-    if (auto err = requireFooterPrompt(root->children[4]))
+    if (auto err = requireFooterPrompt(root->children[2]))
         return err;
-    const UiNode& footer = root->children[5];
+    const UiNode& footer = root->children[3];
     if (footer.id.value() != wellKnownAreaId(WellKnownArea::Footer) ||
         !footer.isContainer()) {
         return std::string{"footer: must be a direct child container of root"};
@@ -282,24 +266,32 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
         return err;
 
     const UiContainer* content = nullptr;
-    constexpr std::array contentIds{kEditorNodeId, kFindResultsViewportNodeId};
+    constexpr std::array contentIds{
+        kTabBarNodeId, kNoticeNodeId, kExternalModNodeId, kEditorNodeId,
+        kFindResultsViewportNodeId};
     if (auto err =
             requireChildren(bodyContainer->children[1], "content", contentIds, content))
         return err;
     if (content->scroll != ScrollAxis::None) {
         return std::string{"content: must not be a scroll viewport"};
     }
-    const UiContainer* editor = nullptr;
-    constexpr std::array editorIds{kTabBarNodeId, kDocumentViewportNodeId};
-    if (auto err =
-            requireChildren(content->children[0], "editor", editorIds, editor))
-        return err;
-    if (auto err = requireViewLeaf(editor->children[0], kTabBarNodeId,
+    if (auto err = requireViewLeaf(content->children[0], kTabBarNodeId,
                                    ViewSurface::TabBar))
+        return err;
+    if (auto err = requireViewLeaf(content->children[1], kNoticeNodeId,
+                                   ViewSurface::Notice))
+        return err;
+    if (auto err = requireViewLeaf(content->children[2], kExternalModNodeId,
+                                   ViewSurface::ExternalModification))
+        return err;
+    const UiContainer* editor = nullptr;
+    constexpr std::array editorIds{kDocumentViewportNodeId};
+    if (auto err =
+            requireChildren(content->children[3], "editor", editorIds, editor))
         return err;
     const UiContainer* documentViewport = nullptr;
     constexpr std::array documentIds{kDocumentNodeId};
-    if (auto err = requireChildren(editor->children[1], "document viewport",
+    if (auto err = requireChildren(editor->children[0], "document viewport",
                                    documentIds, documentViewport))
         return err;
     if (documentViewport->scroll != ScrollAxis::Vertical) {
@@ -310,7 +302,7 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
         return err;
     const UiContainer* findResultsViewport = nullptr;
     constexpr std::array findResultsIds{kFindResultsNodeId};
-    if (auto err = requireChildren(content->children[1], "find-results viewport",
+    if (auto err = requireChildren(content->children[4], "find-results viewport",
                                    findResultsIds, findResultsViewport))
         return err;
     if (findResultsViewport->scroll != ScrollAxis::Vertical) {

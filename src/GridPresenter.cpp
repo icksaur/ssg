@@ -5,6 +5,7 @@
 #include "grid_projection_state.h"
 
 #include <algorithm>
+#include <limits>
 #include <set>
 #include <stdexcept>
 #include <type_traits>
@@ -13,7 +14,7 @@ namespace ssg {
 namespace {
 
 std::vector<GridIntrinsicSize> transitionalIntrinsicSizes(
-    const UiNode& root) {
+    const UiNode& root, const PresentationSnapshot& presentation) {
     std::vector<GridIntrinsicSize> sizes;
     const auto collect = [&](const auto& self, const UiNode& node) -> void {
         if (node.size.kind() == SizeKind::Auto && node.isLeaf()) {
@@ -24,6 +25,24 @@ std::vector<GridIntrinsicSize> transitionalIntrinsicSizes(
         }
     };
     collect(collect, root);
+    int externalTop = std::numeric_limits<int>::max();
+    int externalBottom = 0;
+    for (const auto& node : presentation.shell.accessibilityNodes) {
+        if (node.kind != ShellNodeKind::ExternalModificationBar &&
+            node.kind != ShellNodeKind::ExternalModificationRow) {
+            continue;
+        }
+        externalTop = std::min(externalTop, node.rect.y);
+        externalBottom = std::max(externalBottom, node.rect.bottom());
+    }
+    if (externalTop != std::numeric_limits<int>::max()) {
+        for (auto& size : sizes) {
+            if (size.id == UiNodeId{std::string{kExternalModNodeId}}) {
+                size.size.rows = externalBottom - externalTop;
+                break;
+            }
+        }
+    }
     return sizes;
 }
 
@@ -55,7 +74,8 @@ SolveUiFrameResult trySolveFrameLayout(
     const auto& root = validated.schema().schema().root;
     auto result = solveUiFrame(
         validated.schema(), semantic.sections().uiState, presence,
-        ClientUiProfile::full(), transitionalIntrinsicSizes(root),
+        ClientUiProfile::full(),
+        transitionalIntrinsicSizes(root, presentation),
         {0, 0, shell.viewport.columns, shell.viewport.rows});
     if (!result.tree) return result;
 
@@ -67,6 +87,8 @@ SolveUiFrameResult trySolveFrameLayout(
         UiNodeId{std::string{kRootNodeId}},
         UiNodeId{std::string{kHeaderNodeId}},
         UiNodeId{std::string{kFooterNodeId}},
+        UiNodeId{std::string{kNoticeNodeId}},
+        UiNodeId{std::string{kExternalModNodeId}},
     };
     if (semantic.sections().promptView) {
         retained.insert(UiNodeId{std::string{kFooterPromptNodeId}});
@@ -105,6 +127,11 @@ SolveUiFrameResult trySolveFrameLayout(
                         "prompt backing does not correspond to UI nodes"};
             }
         }
+    }
+    if (semantic.sections().noticeView &&
+        !result.tree->find(UiNodeId{std::string{kNoticeNodeId}})) {
+        return {std::nullopt,
+                "notice backing has no solved UI node"};
     }
     return result;
 }

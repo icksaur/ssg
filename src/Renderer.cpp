@@ -417,6 +417,25 @@ std::optional<GridPosition> inputLineCaret(ShellViewState const& shell) {
     return std::nullopt;
 }
 
+void paintNotice(CellGrid& grid, const NoticeView& notice,
+                 const SolvedNoticeSurface& solved,
+                 ThemeSnapshot const& theme, Style const& style,
+                 SemanticRole foregroundRole,
+                 SemanticRole backgroundRole) {
+    const auto foreground = semanticIndex(theme, foregroundRole);
+    const auto background = semanticIndex(theme, backgroundRole);
+    fillRect(grid, solved.rect, foreground, background,
+             backgroundRole);
+    paintText(grid, solved.rect.x, solved.rect.y, solved.rect.right(),
+              notice.text, foreground, background,
+              backgroundRole, style);
+    for (const auto& action : solved.actions) {
+        paintText(grid, action.rect.x, action.rect.y, action.rect.right(),
+                  action.text, foreground, background,
+                  backgroundRole, style);
+    }
+}
+
 void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                         ThemeSnapshot const& theme, const UiSchema& ui,
                         std::uint8_t background, std::uint8_t panelBackground,
@@ -430,11 +449,6 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
     auto const tabInactiveBackground = semanticIndex(
         theme, nodeBackground(ui, kTabBarNodeId,
                               SemanticRole::TabInactiveBackground));
-    auto const noticeFg = semanticIndex(
-        theme, nodeForeground(ui, kNoticeNodeId, SemanticRole::Canvas));
-    auto const noticeBg = semanticIndex(
-        theme,
-        nodeBackground(ui, kNoticeNodeId, SemanticRole::StatusWarning));
     auto const externalFg = semanticIndex(
         theme, nodeForeground(ui, kExternalModNodeId, SemanticRole::Canvas));
     auto const externalBg = semanticIndex(
@@ -485,24 +499,9 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                            nodeBackground, foregroundRole, style);
             }
             break;
-        case ShellNodeKind::NoticeBar: {
-            // A full-width yellow bar (StatusWarning bg, dark text) painted
-            // before its action nodes so their bracketed labels sit on top.
-            fillRect(grid, node.rect, noticeFg, noticeBg,
-                     SemanticRole::StatusWarning);
-            if (!node.content.empty()) {
-                paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
-                           node.content, noticeFg, noticeBg,
-                           SemanticRole::StatusWarning, style);
-            }
+        case ShellNodeKind::NoticeBar:
+        case ShellNodeKind::NoticeAction:
             break;
-        }
-        case ShellNodeKind::NoticeAction: {
-            paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
-                       node.content, noticeFg, noticeBg,
-                       SemanticRole::StatusWarning, style);
-            break;
-        }
         case ShellNodeKind::ExternalModificationBar:
         case ShellNodeKind::ExternalModificationRow: {
             // The header and each file row fill the bar. A normal row uses the
@@ -1328,6 +1327,21 @@ CellGrid Renderer::render(GridFrame const& snapshot,
 
     paintShellLeaves(grid, shell, theme, ui, background, panelBackground,
                      documentBackground, style);
+    if (snapshot.sections().noticeView) {
+        const auto* node =
+            snapshot.layout().find(UiNodeId{std::string{kNoticeNodeId}});
+        if (!node) {
+            throw std::logic_error(
+                "Renderer: notice has no solved UI node");
+        }
+        paintNotice(grid, *snapshot.sections().noticeView,
+                    solveNoticeSurface(*snapshot.sections().noticeView,
+                                       node->rect),
+                    theme, style,
+                    node->style.foreground.value_or(SemanticRole::Canvas),
+                    node->style.background.value_or(
+                        SemanticRole::StatusWarning));
+    }
 
     if (shell.panel) {
         // The tree window (grid projection) lives in presentation; it holds the

@@ -26,6 +26,10 @@ sidecars.
   Library profile validation rejects them before publication, and client
   `firstUnsupportedPrimitive`/`firstMalformedNodeStyle` checks provide a visible
   refusal if an incompatible frame still arrives. State at both boundaries.
+- UITREE-5: Until a surface atomically switches to solved-tree consumption, its
+  dormant solved rectangle equals the legacy shell rectangle still consumed for
+  that surface. State at each transitional parity oracle; delete this temporary
+  invariant with the last legacy placement reader.
 
 ## Considerations
 
@@ -34,6 +38,33 @@ well-known surface backing. Prompt, picker, notice, external modification, tab
 bar, tree providers/panel, document, search results, status, header, and footer
 must all travel through the same solver. Preserve platform-independent layout;
 terminal capability conversion stays at rendering edges.
+
+Notice and external-modification surfaces are editor-owned chrome: the
+authoritative tree places them after the tab bar and before the replaceable
+document-editor/picker branches, inside the content column. They therefore
+remain visible across a picker swap, reduce document or results rows without
+moving the panel, and never span it. This matches the established terminal
+placement and gives native clients the same responsive composition without a
+client-specific exception.
+
+The schema move does not reposition the established shell layout: in the same
+commit, a parity oracle compares both notice and external-modification solved
+rectangles with the legacy rectangles the shell already projects. Notice then
+switches atomically to its solved rectangle; external modification retains its
+equal legacy reader until its immediately following surface migration.
+
+The frozen legacy delta remains decodable until Plan 6 removes its compatibility
+wire path. Its preceding canonical arrangement is root `[header, notice,
+external modification, body, footer prompt, footer]`, body `[panel, content]`,
+content `[editor, find-results viewport]`, and editor `[tab bar, document
+viewport]`. The current arrangement is root `[header, body, footer prompt,
+footer]`, body `[panel, content]`, content `[tab bar, notice, external
+modification, editor, find-results viewport]`, and editor `[document viewport]`.
+UI-schema decode normalizes only a schema whose node-id order and container
+relationships exactly match that preceding arrangement, preserving node
+payloads while moving the named nodes, before current well-known-area
+validation. Every other structural mismatch remains rejected without
+normalization, and newly encoded schemas always use the current arrangement.
 
 ## Risks and Mitigations
 
@@ -45,6 +76,12 @@ terminal capability conversion stays at rendering edges.
   render and hit consumers to solved-tree placement and deletes their old
   placement reads in the same commit. No committed frame has two authoritative
   placement sources for one node.
+- Tightening the canonical topology can strand the frozen legacy delta: keep one
+  exact decode-only normalization with a checked-in legacy-fixture oracle, and
+  delete it with the compatibility wire path in Plan 6.
+- Widening that normalization could silently admit obsolete topology beyond its
+  compatibility window: require the complete preceding arrangement, not a
+  partial or approximate structural match.
 
 ## Acceptance (Definition of Done)
 
@@ -55,7 +92,9 @@ terminal capability conversion stays at rendering edges.
 - Gates: `scripts/check.sh` and `scripts/check.sh push`.
 - Oracles: generic constraint hand cases; current terminal cell/hit parity;
   generated-schema constraint properties; library and client unsupported-widget
-  refusal; each migrated feature deletes its shell branch.
+  refusal; each migrated feature deletes its shell branch; while any legacy
+  surface reader remains, its dormant solved rectangle equals that reader's
+  rectangle.
 
 ## Plan 3 bridge handoff
 
@@ -92,7 +131,7 @@ typed backing migrates with the status surface in Step 4.
 | 1 | Define solved grid-tree values and generic constraint cases | `include/ssg/UiTree.h`, layout headers/sources, focused layout tests | hand cases: axis/size/inset/gap/scroll | UITREE-1, UITREE-2 |
 | 2 | Solve validated UI frames into grid nodes | `src/WholeScreenAssembly.cpp`, layout/chrome lowering sources | property: every present renderable node has one solved result | UITREE-1, UITREE-4 |
 | 3 | Thread Step 2's existing solver output into one tree owned by each `GridFrame` and atomically move header/footer render-hit placement to it | `include/ssg/GridPresenter.h`, `src/GridPresenter.cpp`, `src/Renderer.cpp`, `src/HitTester.cpp`, related tests | parity: one solved node yields matching header/footer cells and hits; no header/footer consumer reads legacy placement | UITREE-2, UITREE-3 |
-| 4 | Migrate prompt, picker, notice, external modification, tab bar, tree providers/panel, document, search results, status, and remaining header/footer backing through generic placement, one atomic surface commit at a time | surface presentation sources plus focused render/hit tests | each named surface has cell/hit parity and its commit deletes that surface's feature geometry reads | UITREE-1, UITREE-3 |
+| 4 | Migrate prompt, picker, notice, external modification, tab bar, tree providers/panel, document, search results, status, and remaining header/footer backing through generic placement, one atomic surface commit at a time; normalize only a decoded UI schema whose complete node-id order and container structure equal the preceding canonical arrangement | surface presentation sources, `src/UiTreeProtocol.cpp`, protocol and focused render/hit tests | each named surface has cell/hit parity and its commit deletes that surface's feature geometry reads; the frozen legacy delta still decodes and replays to current canonical semantic state while every other malformed topology remains rejected; when Plan 6 deletes the shim, its compatibility-fixture inventory removes the frozen fixture or replaces it with a current semantic fixture | UITREE-1, UITREE-3 |
 | 5 | After every Step 4 inventory entry passes, construct frames directly from semantic state and the grid request; then delete `buildShellTree`, feature geometry sidecars, obsolete shell node kinds, and the presenter's bridge call while retaining the wrapper-only bridge for Plan 6 | `src/GridPresenter.cpp`, `src/ShellState.cpp`, `include/ssg/ShellState.h`, callers/tests | inventory is complete, no parallel whole-screen layout path remains, and `GridPresenter` no longer references `projectForBridgedPresenterDeprecated` | UITREE-1 |
 
 ## Rationale

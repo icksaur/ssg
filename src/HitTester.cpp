@@ -131,6 +131,27 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
+    if (snapshot.sections().noticeView) {
+        const auto* node =
+            snapshot.layout().find(UiNodeId{std::string{kNoticeNodeId}});
+        if (!node) {
+            throw std::logic_error(
+                "HitTester: notice has no solved UI node");
+        }
+        if (contains(node->rect, column, row)) {
+            const auto solved =
+                solveNoticeSurface(*snapshot.sections().noticeView, node->rect);
+            for (const auto& action : solved.actions) {
+                if (!contains(action.rect, column, row)) continue;
+                RegionHit hit;
+                hit.region = HitRegion::NoticeAction;
+                hit.fieldId = action.id;
+                return hit;
+            }
+            return {};
+        }
+    }
+
     for (auto const& node : shell.accessibilityNodes) {
         if (!contains(node.rect, column, row)) continue;
         if (node.kind == ShellNodeKind::HeaderField) {
@@ -145,12 +166,6 @@ RegionHit HitTester::at(int column, int row) const {
             hit.region = HitRegion::FooterField;
             hit.fieldId = node.id;
             hit.commandId = node.commandId;
-            return hit;
-        }
-        if (node.kind == ShellNodeKind::NoticeAction) {
-            RegionHit hit;
-            hit.region = HitRegion::NoticeAction;
-            hit.fieldId = node.id;
             return hit;
         }
         if (node.kind == ShellNodeKind::FooterAction) {

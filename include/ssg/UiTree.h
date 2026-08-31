@@ -160,21 +160,13 @@ inline constexpr std::string_view kFooterPromptOptionsNodeId =
     return UiNodeId{std::string{kFooterPromptNodeId} + ".control." +
                     std::string{controlId}};
 }
-// The draft-conflict notice's semantic surface: a View leaf naming
-// ViewSurface::Notice, placed between the header and the body (one reserved chrome
-// row above the document, M15), hidden by presence unless the active document has an
-// unresolved draft conflict. A native client renders the notice bar from the
-// semantic NoticeView section; the grid host ignores it and renders the parallel
-// ShellNotice with rects.
+// The draft-conflict notice's semantic surface: a content child after the tab bar
+// and before the replaceable document/picker branches, hidden unless the active document has an
+// unresolved draft conflict.
 inline constexpr std::string_view kNoticeNodeId = "notice";
 
-// The external-modification bar's presence-gated node, placed between the notice
-// and the body, adjacent to the notice. In 5b-1 it is a bare presence-gated
-// CONTAINER with no rendered View leaf: it exists so the transient external-focus
-// capture has a node to anchor on and reconcile against (KeyboardFocus pops the
-// capture when this node stops being present). Hidden by presence unless a file is
-// externally changed, so no client renders anything for it yet and grid goldens
-// stay byte-identical; its rendered View leaf is added in 5b-2.
+// The external-modification bar's presence-gated content child, immediately after
+// the notice and before the replaceable document/picker branches.
 inline constexpr std::string_view kExternalModNodeId = "externalmod";
 
 // The typed well-known areas: a closed set a native client may key off to hand a

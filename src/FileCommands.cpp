@@ -4,8 +4,9 @@
 
 namespace ssg {
 
-FileCommandsCommandSet fileCommandsCommandSet() {
-    return {};
+const FileCommandsCommandSet& fileCommandsCommandSet() {
+    static const FileCommandsCommandSet commands;
+    return commands;
 }
 
 PromptRequest FileCommandsCommandSet::pathPrompt(FileCommand command) const {
