@@ -273,7 +273,7 @@ TEST(viewportShellSettingsAndThemeAreLiveSections) {
     auto after = grid.present(runtime);
     ASSERT_TRUE(after.has_value());
     ASSERT_EQ(after->presentation().viewport.firstVisualRow, 5U);
-    ASSERT_TRUE(after->presentation().shell.panel.has_value());
+    ASSERT_TRUE(after->panel().has_value());
 }
 
 // Line numbers default OFF; view.toggle_line_numbers turns the gutter on and a
@@ -518,7 +518,10 @@ TEST(editorScrollUsesTheRealPaneHeightNotAHardcoded24) {
     auto snap0 = grid.present(runtime);  // populate the cache
     ASSERT_TRUE(snap0.has_value());
     if (!snap0) return;
-    auto const paneRows = static_cast<std::uint32_t>(snap0->presentation().shell.panes.front().content.height);
+    ASSERT_TRUE(snap0->document().has_value());
+    if (!snap0->document()) return;
+    auto const paneRows = static_cast<std::uint32_t>(
+        snap0->document()->content.height);
     ASSERT_TRUE(paneRows != 24);  // the whole point: not the hardcoded value
 
     // PageDown advances by the real pane height, not 24.
@@ -1061,18 +1064,19 @@ TEST(liveDiffTabGlyphColorTracksThemePalette) {
     ASSERT_TRUE(documentTabId.has_value());
     if (!documentTabId) return;
     auto darkGrid = ssg::Renderer{}.render(*darkFrame);
-    const auto* darkLiveTab = [&]() -> const ssg::AccessibilityNode* {
-        for (const auto& node :
-             darkFrame->presentation().shell.accessibilityNodes) {
-            if (node.kind == ssg::ShellNodeKind::Tab &&
-                node.content.starts_with("D ")) {
-                return &node;
-            }
-        }
-        return nullptr;
-    }();
-    ASSERT_TRUE(darkLiveTab != nullptr);
-    if (!darkLiveTab) return;
+    const auto* darkTabBar = darkFrame->layout().find(
+        ssg::UiNodeId{std::string{ssg::kTabBarNodeId}});
+    ASSERT_TRUE(darkTabBar != nullptr);
+    if (!darkTabBar) return;
+    const auto darkTabs = ssg::solveTabBar(
+        darkFrame->sections().tabs, darkFrame->presentation().style.tab,
+        darkTabBar->rect);
+    const auto darkLiveTab = std::ranges::find_if(
+        darkTabs.tabs, [](const ssg::SolvedTab& tab) {
+            return tab.text.starts_with("D ");
+        });
+    ASSERT_TRUE(darkLiveTab != darkTabs.tabs.end());
+    if (darkLiveTab == darkTabs.tabs.end()) return;
     const auto darkCell = darkGrid.at(darkLiveTab->rect.x, darkLiveTab->rect.y);
     const auto darkColor = darkGrid.colors[darkCell.foreground];
 
@@ -1090,18 +1094,19 @@ TEST(liveDiffTabGlyphColorTracksThemePalette) {
     ASSERT_TRUE(inactiveFrame.has_value());
     if (!inactiveFrame) return;
     auto inactiveGrid = ssg::Renderer{}.render(*inactiveFrame);
-    const auto* inactiveLiveTab = [&]() -> const ssg::AccessibilityNode* {
-        for (const auto& node :
-             inactiveFrame->presentation().shell.accessibilityNodes) {
-            if (node.kind == ssg::ShellNodeKind::Tab &&
-                node.content.starts_with("D ")) {
-                return &node;
-            }
-        }
-        return nullptr;
-    }();
-    ASSERT_TRUE(inactiveLiveTab != nullptr);
-    if (!inactiveLiveTab) return;
+    const auto* inactiveTabBar = inactiveFrame->layout().find(
+        ssg::UiNodeId{std::string{ssg::kTabBarNodeId}});
+    ASSERT_TRUE(inactiveTabBar != nullptr);
+    if (!inactiveTabBar) return;
+    const auto inactiveTabs = ssg::solveTabBar(
+        inactiveFrame->sections().tabs,
+        inactiveFrame->presentation().style.tab, inactiveTabBar->rect);
+    const auto inactiveLiveTab = std::ranges::find_if(
+        inactiveTabs.tabs, [](const ssg::SolvedTab& tab) {
+            return tab.text.starts_with("D ");
+        });
+    ASSERT_TRUE(inactiveLiveTab != inactiveTabs.tabs.end());
+    if (inactiveLiveTab == inactiveTabs.tabs.end()) return;
     const auto inactiveCell = inactiveGrid.at(inactiveLiveTab->rect.x,
                                               inactiveLiveTab->rect.y);
     const auto inactiveColor = inactiveGrid.colors[inactiveCell.foreground];
@@ -1476,9 +1481,11 @@ TEST(distinctViewsRetainIndependentPageScrollGeometry) {
     ASSERT_TRUE(first.has_value());
     ASSERT_TRUE(second.has_value());
     if (!first || !second) return;
-    auto const firstRows = first->presentation().shell.panes.front().content.height;
-    auto const secondRows =
-        second->presentation().shell.panes.front().content.height;
+    ASSERT_TRUE(first->document().has_value());
+    ASSERT_TRUE(second->document().has_value());
+    if (!first->document() || !second->document()) return;
+    auto const firstRows = first->document()->content.height;
+    auto const secondRows = second->document()->content.height;
     ASSERT_TRUE(firstRows != secondRows);
 
     ASSERT_TRUE(firstGrid

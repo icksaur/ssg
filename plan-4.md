@@ -222,6 +222,44 @@ nodes. After the atomic switch, corruption oracles alter every legacy
 accessibility rectangle and prove cells, hits, and the input caret still use
 solved coordinates.
 
+Step 6 replaces the presenter's deprecated projection call with a
+revision-checked two-phase internal capture inside one public
+`GridPresenter::project` call. Phase one acquires the runtime operation lock,
+validates client and view identity, captures one semantic snapshot plus the grid
+`Style`, and releases the lock. The presenter then solves the captured
+schema/state/presence against the request dimensions without the runtime lock.
+It subdivides the solved document viewport using pane frames from its own
+`ShellState` topology; pane topology is not a `solveUiFrame` input.
+
+Phase two reacquires the operation lock and validates the same client, view, and
+semantic revision before projecting wrapped or unwrapped viewport rows and
+applying any requested caret reveal. Its proposed navigation is the presenter's
+`firstVisualRow`, `firstVisualColumn`, and `desiredCell`; phase two may replace
+those values with the accepted reveal result. A revision mismatch discards the
+provisional frame and restarts phase one within a fixed implementation-owned
+retry budget. Budget exhaustion returns `nullopt`; it never loops indefinitely.
+Presenter navigation, dimensions, caches, and adopted revision mutate only
+after phase two succeeds. This is an internal optimistic-consistency retry, not
+a client round trip, and neither phase publishes grid geometry as semantic
+state.
+
+`GridFrame` is then constructed directly from the captured semantic snapshot,
+style, request dimensions, presenter-owned pane topology and scroll state, and
+the finalized viewport/navigation projection. It does not require a
+`ShellViewState`; the solved root rectangle is its grid size and no duplicate
+frame-size authority remains. `EditorSession::present` remains the only
+compatibility wrapper. It creates a fresh presenter for each call, preserving
+the wrapper's fixed-default navigation semantics, invokes the same direct
+projection path, and passes the result to a private one-way
+`LegacyPresentationSnapshot` adapter in `src/EditorSession.cpp`. The adapter is
+called only by `present` and is deleted with it in Plan 6. It contains no
+independent placement policy: a focused oracle compares every adapted legacy
+rectangle and projection value with its source solved surface or finalized
+viewport/navigation value. Delete
+`buildShellTree`, legacy feature geometry assembly, and the presenter's
+`projectForBridgedPresenterDeprecated` call in this step; Plan 6 deletes the
+wrapper, adapter, frozen types, and wire fields.
+
 The schema move does not reposition the established shell layout: in the same
 commit, a parity oracle compares both notice and external-modification solved
 rectangles with the legacy rectangles the shell already projects. Notice then

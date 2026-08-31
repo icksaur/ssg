@@ -32,8 +32,9 @@ CanonicalState canonical(Snapshot const& snapshot) {
     auto const* tab =
         sections.tabs.tabs.empty() ? nullptr : &sections.tabs.tabs.front();
     bool wordWrap = false;
-    for (auto const& node : snapshot.presentation().shell.accessibilityNodes) {
-        wordWrap = wordWrap || node.label == "Word wrap on";
+    for (auto const& node : sections.uiState.nodes) {
+        wordWrap = wordWrap ||
+                   (node.leaf && node.leaf->label == "Word wrap on");
     }
     return {snapshot.semantic().revision(),
             sections.document.text,

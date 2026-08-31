@@ -1113,10 +1113,9 @@ int main(int argc, char** argv) {
             // lags one frame before keep-visible re-settles — the same one-frame
             // clamp the editor's server-side scroll offset already has, and it
             // self-corrects on the next snapshot.
-            auto const& shell = snapshot->presentation().shell;
-            if (!shell.panes.empty()) {
+            if (snapshot->document()) {
                 picker.paneRows = static_cast<std::uint32_t>(
-                    std::max(shell.panes.front().content.height, 1));
+                    std::max(snapshot->document()->content.height, 1));
             }
             // A copy or cut offers its text for the SYSTEM clipboard.  Serve it
             // with OSC 52, which over SSH is the only way the remote editor can
@@ -1295,10 +1294,10 @@ int main(int argc, char** argv) {
             // scroll one line and re-extend the selection to the new edge cell, so a
             // drag held still at the edge keeps scrolling and selecting.
             std::optional<int> dragEdge;
-            if (dragging && snapshot && !snapshot->presentation().shell.panes.empty()) {
+            if (dragging && snapshot && snapshot->document()) {
                 dragEdge = ssg::app::edge_scroll(
                     dragging, lastPointerRow,
-                    snapshot->presentation().shell.panes.front().content);
+                    snapshot->document()->content);
             }
             if (dragEdge) {
                 auto const ready = waitReadiness(kEdgeScrollIntervalMs, signalPipe[0], -1);

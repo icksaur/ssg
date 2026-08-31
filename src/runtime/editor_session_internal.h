@@ -448,18 +448,11 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] SessionSnapshotSections sections(
         PaletteReport const& paletteReport = {}) const;
     [[nodiscard]] PromptStatusViewState promptStatusView() const;
-    [[nodiscard]] std::optional<PromptViewState> promptProjection(
-        ViewportDimensions dimensions,
-        std::optional<Rect> promptReservation = std::nullopt) const;
-    void projectFindReplacePrompt(PromptViewState& promptView) const;
     // The geometry-free semantic projection of the active footer-region prompt,
-    // or nullopt unless a footer-region prompt is open. Shares the one
-    // resolvePromptControls authority with the grid promptProjection.
+    // or nullopt unless a footer-region prompt is open.
     [[nodiscard]] std::optional<PromptView> promptView() const;
     // The one draft-conflict notice resolver: the geometry-free NoticeView for the
-    // active document, or nullopt unless its reopen outcome is Conflict. Both the
-    // grid ShellNotice (shellView) and the semantic section (noticeView) derive from
-    // this single literal.
+    // active document, or nullopt unless its reopen outcome is Conflict.
     [[nodiscard]] std::optional<NoticeView> draftNotice() const;
     // The geometry-free semantic draft-conflict notice for the snapshot section;
     // exactly draftNotice(), named to sit beside promptView() in sections().
@@ -479,25 +472,16 @@ struct EditorSession::Impl final : CommandServices,
     // document identity or revision no longer matches what it evaluated against,
     // so stale matches are never navigable or projected.
     void reconcileFindDocument();
-    [[nodiscard]] ShellViewState shellView(
-        ViewportDimensions dimensions,
-        detail::GridProjectionState& presentation,
-        PaletteReport const& paletteReport = {}) const;
     // The projected + command-bound header/footer status fields the composed chrome
-    // resolves its provider widgets against. Shared by shellView (built-in fields +
-    // the grid resolver) and sections (the semantic dynamic-state resolver), so the
-    // two resolve provider values identically.
+    // resolves its provider widgets against.
     // The status-field styling a chrome resolution wants: the grid path prefixes
     // the cwd with a terminal glyph; the semantic dynamic-state path takes none, so
     // a native client receives no presentation styling. A strong mode (not a raw
     // prefix) makes semantic purity a named choice at each call site.
     [[nodiscard]] StatusFieldProjection chromeStatusFields() const;
     [[nodiscard]] PaletteViewState paletteView() const;
-    // The tree view state with its scroll offset, scrollbar, and visible-window
-    // hit map resolved against the last panel height (keep-selection-visible).
+    // The geometry-free tree state; GridPresenter resolves its visible window.
     [[nodiscard]] TreeViewState treeView() const;
-    [[nodiscard]] std::vector<TreeWindow> treeWindows(
-        detail::GridProjectionState const& presentation) const;
     [[nodiscard]] TextEncodingViewState textEncodingView() const;
     [[nodiscard]] DocumentViewState documentView() const;
     [[nodiscard]] CommandHandlerResult updateTabsFor(FileDocumentId document);

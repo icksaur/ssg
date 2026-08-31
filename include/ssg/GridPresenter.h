@@ -33,6 +33,12 @@ struct GridPresentationRequest {
     PaletteReport palette;
 };
 
+struct GridProjection {
+    ViewportViewState viewport;
+    Style style;
+    SelectionNavigation selectionNav;
+};
+
 enum class GridActionStatus : std::uint8_t {
     Applied,
     TransitionRequired,
@@ -66,8 +72,8 @@ public:
     [[nodiscard]] SessionSnapshotSections const& sections() const noexcept {
         return semantic_.sections();
     }
-    [[nodiscard]] PresentationSnapshot const& presentation() const noexcept {
-        return presentation_;
+    [[nodiscard]] GridProjection const& presentation() const noexcept {
+        return projection_;
     }
     [[nodiscard]] SolvedGridTree const& layout() const noexcept {
         return layout_;
@@ -95,18 +101,28 @@ public:
 
 private:
     friend class GridPresenter;
+    friend class EditorSession;
     GridFrame(SessionSnapshot semantic, PresentationSnapshot presentation,
+              SolvedGridTree layout, GridBasis basis, PaletteReport palette);
+    GridFrame(SessionSnapshot semantic, GridProjection projection,
               SolvedGridTree layout, GridBasis basis, PaletteReport palette);
     [[nodiscard]] static std::optional<GridFrame> fromLegacy(
         LegacyPresentationSnapshot legacy, GridBasis basis,
         PaletteReport palette, std::uint32_t treeFirstVisible,
         bool revealTreeSelection, const ShellState& shell);
+    [[nodiscard]] static std::optional<GridFrame> fromSemantic(
+        SessionSnapshot semantic, Style style, ViewportDimensions dimensions,
+        GridBasis basis, PaletteReport palette,
+        std::uint32_t treeFirstVisible, bool revealTreeSelection,
+        const ShellState& shell, SelectionNavigation navigation);
+    void finalizeViewport(ViewportViewState viewport,
+                          SelectionNavigation navigation);
     void solvePanel(std::uint32_t treeFirstVisible, bool revealTreeSelection);
     void solveDocument(const ShellState* shell);
     [[nodiscard]] std::optional<std::string> solveChrome();
 
     SessionSnapshot semantic_;
-    PresentationSnapshot presentation_;
+    GridProjection projection_;
     SolvedGridTree layout_;
     PaletteReport palette_;
     std::optional<SolvedChromeSurface> header_;

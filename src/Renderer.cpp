@@ -1177,10 +1177,11 @@ std::string CellGrid::canonical() const {
 
 CellGrid Renderer::render(GridFrame const& snapshot,
                           LineLayoutCache* lineCache) const {
-    auto const& shell = snapshot.presentation().shell;
     auto const& theme = snapshot.sections().theme;
     auto const& style = snapshot.presentation().style;
-    if (shell.viewport.columns <= 0 || shell.viewport.rows <= 0) {
+    const auto* root =
+        snapshot.layout().find(UiNodeId{std::string{kRootNodeId}});
+    if (!root) {
         // The shell layout was declined (viewport below the 20x4 minimum): the
         // library renders the too-small placeholder, sized from the terminal
         // dimensions the client viewport carries (M11-L).
@@ -1202,11 +1203,11 @@ CellGrid Renderer::render(GridFrame const& snapshot,
     auto const background = semanticIndex(theme, rootBackground);
     auto const documentBackground =
         semanticIndex(theme, documentBackgroundRole);
+    const GridSize gridSize{root->rect.width, root->rect.height};
     CellGrid grid{
-        shell.viewport, themeColorTable(theme),
+        gridSize, themeColorTable(theme),
         std::vector<CellGridCell>(
-            static_cast<std::size_t>(shell.viewport.columns *
-                                     shell.viewport.rows),
+            static_cast<std::size_t>(gridSize.columns * gridSize.rows),
             CellGridCell{" ", foreground, background, SemanticRole::Canvas,
                          false})};
     grid.diffTints = themeDiffTints(theme);

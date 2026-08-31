@@ -168,40 +168,6 @@ PromptStatusViewState EditorSession::Impl::promptStatusView() const {
     return view;
 }
 
-std::optional<PromptViewState> EditorSession::Impl::promptProjection(
-    ViewportDimensions dimensions,
-    std::optional<Rect> promptReservation) const {
-    // Grid projection of the footer-anchored interaction.prompt(). Single-source prompt rect:
-    // when the shell laid out a footer-anchored prompt it passes that rect here,
-    // so the controls are laid out into the SAME reservation the shell reserved
-    // (identical a11y node, hit region, and render). The fallback -- a full-width
-    // bottom strip derived from the viewport -- covers the palette (zero prompt
-    // rows, its input lives in the header) and the no-active-prompt default.
-    auto rows = promptRowCount(interaction.prompt().request() ? interaction.prompt().request()->kind : PromptKind::CommandArgument);
-    Rect reservation =
-        promptReservation.value_or(
-            Rect{0, static_cast<int>(dimensions.rows > rows ? dimensions.rows - rows : 0),
-                 static_cast<int>(dimensions.columns), static_cast<int>(rows)});
-    const UiNode* promptTree = uiNodeById(
-        interaction.interaction().schema().schema().root,
-        kFooterPromptNodeId);
-    if (!promptTree) {
-        throw std::logic_error(
-            "active footer prompt has no authoritative UI subtree");
-    }
-    auto promptLayout =
-        computePromptLayout(interaction.prompt(), *promptTree, reservation);
-    if (!promptLayout.accepted()) return std::nullopt;
-    auto view = promptLayout.view;
-    projectFindReplacePrompt(*view);
-    return view;
-}
-
-void EditorSession::Impl::projectFindReplacePrompt(PromptViewState& promptView) const {
-    applyFindReplaceValues(promptView.controls, promptView.kind,
-                           findReplace.viewState());
-}
-
 std::optional<PromptView> EditorSession::Impl::promptView() const {
     auto const& request = interaction.prompt().request();
     if (!request) return std::nullopt;
@@ -259,134 +225,6 @@ StatusFieldProjection EditorSession::Impl::chromeStatusFields() const {
     bindStatusFieldCommands(fields.header, followProjection);
     bindStatusFieldCommands(fields.footer, followProjection);
     return fields;
-}
-
-ShellViewState EditorSession::Impl::shellView(
-    ViewportDimensions dimensions,
-    detail::GridProjectionState& presentation,
-    PaletteReport const& paletteReport) const {
-    std::vector<TabLabel> labels;
-    for (auto const& tab : tabs.viewState().tabs) {
-        labels.push_back({gridTabTitle(tab, style.tab), tab.label,
-                          tabs.viewState().active == tab.id, tab.dirty});
-    }
-    auto statusFields = chromeStatusFields();
-    ShellLayoutRequest request;    request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
-    request.reservedPromptRows = interaction.prompt().active() ? promptRowCount(interaction.prompt().request()->kind) : 0;
-    request.lineNumberGutterWidth =
-        lineNumberGutterWidth(presentation);
-    // Surface the draft-conflict notice for the active document (M15) from the one
-    // resolver; the grid ShellNotice is that geometry-free notice plus rects, added
-    // by the shell layout. Reserving a chrome row (rather than stealing document
-    // row 0) keeps the document's own coordinate space intact.
-    if (auto notice = draftNotice()) {
-        std::vector<ShellNoticeAction> actions;
-        actions.reserve(notice->actions.size());
-        for (auto const& action : notice->actions) {
-            actions.push_back({action.id, action.label, action.command});
-        }
-        request.notice = ShellNotice{std::move(notice->text), std::move(actions)};
-    }
-    // Surface the external-modification bar (7A-5b) from the library-owned view
-    // state: one row per externally-changed file (status glyph + path) carrying
-    // its offered actions, plus the ABSOLUTE selected index. computeShellLayout
-    // windows and bounds it; an empty section reserves zero rows.
-    if (auto externalView = external.viewState(); !externalView.files.empty()) {
-        ShellExternalBar bar;
-        for (auto const& file : externalView.files) {
-            ShellExternalRow row;
-            row.fileId = file.id.value();
-            row.text = file.statusLabel + " " + file.path.string();
-            for (auto const& action : file.actions) {
-                row.actions.push_back({action.label, action.command});
-            }
-            bar.rows.push_back(std::move(row));
-        }
-        bar.message = externalView.message;
-        if (externalView.selected) {
-            for (std::size_t i = 0; i < externalView.files.size(); ++i) {
-                if (externalView.files[i].id == *externalView.selected) {
-                    bar.selected = static_cast<std::uint32_t>(i);
-                    break;
-                }
-            }
-        }
-        request.externalBar = std::move(bar);
-    }
-    request.emptyState = activeDocument() == nullptr;
-    request.panelProviderLabel = std::string{panelProviderLabel(interaction.truth().selectedProvider)};
-    request.panelPresent = interaction.truth().panelPresent;
-    request.distractionFree = interaction.truth().distractionFree;
-    request.focus = interaction.effectiveFocus();
-    auto promptStatus = promptStatusView();
-    request.chromeProviderResolver = chromeResolverFor(
-        std::move(statusFields.header), std::move(statusFields.footer),
-        helpHintLabel(keymap));
-    request.tabs = std::move(labels);
-    request.style = style;
-    // Anchoring decision: a HEADER-anchored prompt hosts its query in the header
-    // input line. The query/ghost
-    // text come from the picker report, which today only the palette populates.
-    bool const headerPrompt = interaction.prompt().active() && interaction.prompt().request() &&
-                              promptFocusRegion(interaction.prompt().request()->kind) ==
-                                  PromptRegion::Header;
-    // Picker identity: the palette picker specifically (drives candidate ranking
-    // below). Distinct from the anchoring decision so a future non-palette header
-    // prompt does not inherit palette-picker plumbing.
-    bool const paletteOpen = interaction.prompt().active() && interaction.prompt().request() &&
-                              interaction.prompt().request()->kind == PromptKind::Palette;
-    // The prompt input's visibility is owned by presence (set when a header prompt
-    // is open); its query/ghost text is a grid-only sidecar, ignored when hidden.
-    PromptInputReport promptInput;
-    if (headerPrompt) {
-        promptInput.query = paletteReport.query;
-        promptInput.ghost = paletteReport.ghost;
-    }
-    auto result = computeShellLayout(request, presentation.shell,
-                                     interaction.interaction(),
-                                     promptStatus.status, promptInput);
-    if (!result.accepted()) return {};
-    auto view = *result.view;
-
-    if (paletteOpen && !view.panes.empty()) {
-        // The client owns palette ranking for latency and normally supplies the
-        // windowed report. On the frame the palette OPENS, though, the client has
-        // not yet adopted the just-published candidates, so its report is empty --
-        // and without this the list would paint blank and only fill in a frame
-        // later. Rank the published candidates here for that one frame (empty
-        // query, top of the list) so the palette is populated the instant it
-        // appears. Every later frame carries the client's own non-empty report,
-        // so this is skipped; a genuine no-match query keeps its non-empty query
-        // and is never overridden.
-        PaletteReport seeded;
-        PaletteReport const* source = &paletteReport;
-        if (paletteReport.rows.empty() && paletteReport.query.empty()) {
-            auto const palette = paletteView();
-            auto const open = interaction.openPicker();
-            auto const* descriptor =
-                open ? pickerCatalog().find(*open) : nullptr;
-            auto const* candidates =
-                descriptor ? palette.candidatesFor(descriptor->wireMode) : nullptr;
-            if (candidates != nullptr && !candidates->empty()) {
-                PaletteWindowState window;
-                window.paneRows = static_cast<std::uint32_t>(
-                    std::max(view.panes.front().content.height, 1));
-                seeded = PaletteSearcher{}.report(*candidates, window);
-                source = &seeded;
-            }
-        }
-        PaletteProjection projection;
-        projection.rect = view.panes.front().content;
-        projection.scrollbarRect = view.panes.front().scrollbar;
-        projection.selected = source->selected;
-        projection.firstVisible = source->firstVisible;
-        projection.scrollbar = source->scrollbar;
-        for (auto const& candidate : source->rows) {
-            projection.rows.push_back({candidate.label, candidate.detail});
-        }
-        view.palette = std::move(projection);
-    }
-    return view;
 }
 
 SessionSnapshotSections EditorSession::Impl::sections(
@@ -451,44 +289,8 @@ SessionSnapshotSections EditorSession::Impl::sections(
 }
 
 TreeViewState EditorSession::Impl::treeView() const {
-    // Semantic only: providers, nodes, selection, expansion. The grid scroll
-    // window is a presentation projection produced by treeWindows().
+    // Semantic only: providers, nodes, selection, and expansion.
     return tree.viewState();
-}
-
-std::vector<TreeWindow> EditorSession::Impl::treeWindows(
-    detail::GridProjectionState const& presentation) const {
-    auto view = tree.viewState();
-    if (view.providers.empty()) return {};
-    // Only the active (front) provider is rendered. Resolve a display window from
-    // the command-set offset and the current client's panel height WITHOUT
-    // persisting anything: keep-visible ran on the command path, so here we only
-    // clamp the offset to this height and window the nodes. This keeps snapshot
-    // generation a pure read (no cross-client scroll interference).
-    auto const& provider = view.providers.front();
-    std::optional<std::uint32_t> selectedIndex;
-    if (provider.selected) {
-        for (std::size_t i = 0; i < provider.nodes.size(); ++i) {
-            if (provider.nodes[i].node.id == *provider.selected) {
-                selectedIndex = static_cast<std::uint32_t>(i);
-                break;
-            }
-        }
-    }
-    auto scroll = Viewport{}.listScrollView(
-        static_cast<std::uint32_t>(provider.nodes.size()),
-        presentation.panelContentRows, presentation.treeFirstVisible,
-        selectedIndex,
-        /*keep_selection_visible=*/false);
-    TreeWindow window;
-    window.firstVisible = scroll.firstVisible;
-    window.scrollbar = scroll.scrollbar;
-    window.visibleNodeIds.reserve(scroll.visibleCount);
-    for (std::uint32_t row = 0; row < scroll.visibleCount; ++row) {
-        window.visibleNodeIds.push_back(
-            provider.nodes[scroll.firstVisible + row].node.id);
-    }
-    return {std::move(window)};
 }
 
 PaletteViewState EditorSession::Impl::paletteView() const {

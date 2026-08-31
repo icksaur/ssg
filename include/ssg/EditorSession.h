@@ -286,13 +286,26 @@ public:
 
 private:
     friend class GridPresenter;
-    [[nodiscard]] std::optional<LegacyPresentationSnapshot>
-    projectForBridgedPresenterDeprecated(
-        ClientId clientId, ViewportDimensions dimensions,
-        PaletteReport paletteReport,
-        std::optional<ViewId> expectedView,
-        detail::GridProjectionState& presentation,
-        bool revealPrimarySelection);
+    struct GridSemanticCapture {
+        SessionSnapshot semantic;
+        Style style;
+    };
+    struct GridViewportCapture {
+        ViewportViewState viewport;
+        SelectionNavigation navigation;
+    };
+    [[nodiscard]] std::optional<GridSemanticCapture>
+    captureForGridPresenter(
+        ClientId clientId, std::optional<ViewId> expectedView,
+        PaletteReport const& paletteReport);
+    [[nodiscard]] std::optional<GridViewportCapture>
+    finalizeGridViewport(
+        ClientId clientId, ViewId expectedView, Revision expectedRevision,
+        ViewportDimensions dimensions, std::uint32_t paneContentRows,
+        std::uint32_t paneContentColumns,
+        SelectionNavigation proposedNavigation,
+        bool revealPrimarySelection,
+        detail::GridProjectionState& presentation);
     explicit EditorSession(std::unique_ptr<Impl> implementation) noexcept;
 
     std::unique_ptr<Impl> impl_;

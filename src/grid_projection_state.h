@@ -14,8 +14,6 @@ struct GridProjectionState {
     ViewportDimensions dimensions{80, 24};
     std::uint32_t paneContentRows = 24;
     std::uint32_t paneContentColumns = 80;
-    std::uint32_t reservedPromptRows = 0;
-    std::uint32_t panelContentRows = 0;
     SelectionNavigation navigation;
     std::uint32_t treeFirstVisible = 0;
     LineLayoutCache viewportLineCache;

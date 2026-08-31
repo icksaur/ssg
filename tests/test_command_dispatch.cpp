@@ -374,6 +374,35 @@ TEST(aHandlerThatDispatchesIsToldToDeferInstead) {
     fs::remove_all(root);
 }
 
+TEST(aHandlerThatPresentsIsRefusedBeforeTakingTheOperationLock) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+
+    bool refused = false;
+    runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.presents"}
+            .owner("test-oracle")
+            .summary("attempts presentation from its handler")
+            .observes()
+            .handler([&](ssg::CommandContext&) {
+                try {
+                    (void)runtime->present(ssg::ClientId{1}, {80, 24});
+                } catch (const std::logic_error&) {
+                    refused = true;
+                }
+                return ssg::CommandHandlerResult::success();
+            }));
+
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"oracle.presents", runtime->revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(refused);
+
+    fs::remove_all(root);
+}
+
 TEST(aHandlerCannotMutateTheCommandCatalogReentrantly) {
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
@@ -523,6 +552,7 @@ int main() {
     RUN(anObservingCommandLeavesTheRevisionAlone);
     RUN(aFailedChainAdvancesTheRevisionOnlyForCommandsThatRan);
     RUN(aHandlerThatDispatchesIsToldToDeferInstead);
+    RUN(aHandlerThatPresentsIsRefusedBeforeTakingTheOperationLock);
     RUN(aHandlerCannotMutateTheCommandCatalogReentrantly);
     RUN(aggregateOperationHidesIntermediateDeferredRevisions);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

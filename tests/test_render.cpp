@@ -657,7 +657,10 @@ TEST(activePaletteWithoutSolvedFindResultsIsRejected) {
         ssg::LegacyPresentationSnapshot{
             baseline.semantic().revision(), baseline.semantic().topology(),
             baseline.semantic().client(), std::move(sections),
-            baseline.presentation()});
+            ssg::PresentationSnapshot{
+                baseline.presentation().viewport,
+                baseline.presentation().style, std::nullopt, {},
+                baseline.presentation().selectionNav}});
     ASSERT_FALSE(rejected.has_value());
 }
 
@@ -1149,16 +1152,20 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     auto snapshot = gridView.present(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& shell = snapshot->presentation().shell;
-    ASSERT_TRUE(shell.panelScrollbar.has_value());
-    if (!shell.panelScrollbar) return;
+    ASSERT_TRUE(snapshot->panel().has_value());
+    if (!snapshot->panel() || !snapshot->panel()->scrollbarGutter) return;
+    const auto& panel = *snapshot->panel();
     auto grid = ssg::Renderer{}.render(*snapshot);
 
     // A thumb (the default thumb glyph) is drawn in the reserved gutter column.
-    int const gx = shell.panelScrollbar->x;
+    int const gx = panel.scrollbarGutter->x;
+    const int thumbY =
+        panel.scrollbarGutter->y +
+        static_cast<int>(panel.scrollbar.thumbStart);
+    const int thumbBottom =
+        thumbY + static_cast<int>(panel.scrollbar.thumbSize);
     bool hasThumb = false;
-    for (int y = shell.panelScrollbar->y;
-         y < shell.panelScrollbar->y + shell.panelScrollbar->height; ++y) {
+    for (int y = thumbY; y < thumbBottom; ++y) {
         if (grid.at(gx, y).text == ssg::Style{}.scrollbar.body) hasThumb = true;
     }
     ASSERT_TRUE(hasThumb);
@@ -1336,7 +1343,8 @@ TEST(renderTooSmallViewportProducesLibraryPlaceholder) {
     // M11-L: below the 20x4 minimum the library (not the app) renders the
     // placeholder screen, sized to the terminal, so no app code authors cells.
     auto snapshot = ssg::test::SessionSnapshotBuilder{}.viewport(10, 5).build();
-    ASSERT_EQ(snapshot.presentation().shell.viewport.columns, 0);  // declined layout
+    ASSERT_TRUE(snapshot.layout().find(
+                    ssg::UiNodeId{std::string{ssg::kRootNodeId}}) == nullptr);
     ssg::CellGrid grid;
     ASSERT_NO_THROW(grid = ssg::Renderer{}.render(snapshot));
     ASSERT_EQ(grid.size.columns, 10);
@@ -1944,18 +1952,8 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
         auto builder = ssg::test::SessionSnapshotBuilder{}
                            .document("content\n")
                            .viewport(80, 16)
-                           .shellRequest([](ssg::ShellLayoutRequest& request) {
-                               request.notice = ssg::ShellNotice{
-                                   "Draft conflict",
-                                   {{"diff", "Diff", "draft.diff"}}};
-                               request.externalBar = ssg::ShellExternalBar{
-                                   "Files changed on disk",
-                                   {{"a", "M a.txt",
-                                     {{"Reload", "external.reload"}}},
-                                    {"b", "M b.txt",
-                                     {{"Reload", "external.reload"}}}},
-                                   1};
-                           })
+                           .noticePresent()
+                           .externalModificationPresent()
                            .sections(
                                [](ssg::SessionSnapshotSections& sections) {
                                    sections.noticeView = ssg::NoticeView{
@@ -2002,52 +2000,24 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
         return builder.build();
     };
     auto snapshot = buildSnapshot(false);
-    auto const& shell = snapshot.presentation().shell;
-    auto const find = [&](ssg::ShellNodeKind kind,
-                          std::string_view id)
-        -> const ssg::AccessibilityNode* {
-        auto found = std::find_if(
-            shell.accessibilityNodes.begin(), shell.accessibilityNodes.end(),
-            [&](ssg::AccessibilityNode const& node) {
-                return node.kind == kind && node.id == id;
-            });
-        return found == shell.accessibilityNodes.end() ? nullptr : &*found;
-    };
-    auto const* notice =
-        find(ssg::ShellNodeKind::NoticeBar, "draft.notice");
-    auto const* noticeAction =
-        find(ssg::ShellNodeKind::NoticeAction, "diff");
-    auto const* externalBar =
-        find(ssg::ShellNodeKind::ExternalModificationBar, "external.bar");
-    auto const* unselected =
-        find(ssg::ShellNodeKind::ExternalModificationRow, "a");
-    auto const* selected =
-        find(ssg::ShellNodeKind::ExternalModificationRow, "b");
     const auto* solvedNotice = snapshot.layout().find(
         ssg::UiNodeId{std::string{ssg::kNoticeNodeId}});
     const auto* solvedExternal = snapshot.layout().find(
         ssg::UiNodeId{std::string{ssg::kExternalModNodeId}});
-    ASSERT_TRUE(notice != nullptr);
-    ASSERT_TRUE(noticeAction != nullptr);
-    ASSERT_TRUE(externalBar != nullptr);
-    ASSERT_TRUE(unselected != nullptr);
-    ASSERT_TRUE(selected != nullptr);
     ASSERT_TRUE(solvedNotice != nullptr);
     ASSERT_TRUE(solvedExternal != nullptr);
-    if (!notice || !noticeAction || !externalBar || !unselected || !selected ||
-        !solvedNotice || !solvedExternal) {
+    if (!solvedNotice || !solvedExternal) {
         return;
     }
-    ASSERT_EQ(solvedNotice->rect, notice->rect);
-    const ssg::Rect legacyExternalRect{
-        externalBar->rect.x, externalBar->rect.y, externalBar->rect.width,
-        selected->rect.bottom() - externalBar->rect.y};
-    ASSERT_EQ(solvedExternal->rect, legacyExternalRect);
     const auto noticeSurface =
         ssg::solveNoticeSurface(*snapshot.sections().noticeView,
                                 solvedNotice->rect);
     ASSERT_TRUE(!noticeSurface.actions.empty());
     if (noticeSurface.actions.empty()) return;
+    const auto externalSurface = ssg::solveExternalModificationSurface(
+        snapshot.sections().externalModification, solvedExternal->rect);
+    ASSERT_EQ(externalSurface.rows.size(), std::size_t{2});
+    if (externalSurface.rows.size() < 2) return;
 
     auto renderFrame = buildSnapshot(true);
     const auto* renderNotice = renderFrame.layout().find(
@@ -2060,8 +2030,6 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
     ASSERT_EQ(renderNotice->rect, solvedNotice->rect);
     ASSERT_EQ(renderExternal->rect, solvedExternal->rect);
     auto const grid = ssg::Renderer{}.render(renderFrame);
-    ASSERT_EQ(notice->role, ssg::SemanticRole::StatusWarning);
-    ASSERT_EQ(noticeAction->role, ssg::SemanticRole::StatusWarning);
     ASSERT_EQ(grid.at(solvedNotice->rect.x, solvedNotice->rect.y).text,
               std::string{"D"});
     ASSERT_EQ(grid.at(solvedNotice->rect.x, solvedNotice->rect.y).role,
@@ -2072,9 +2040,11 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
     ASSERT_EQ(grid.at(noticeSurface.actions.front().rect.x,
                       noticeSurface.actions.front().rect.y).role,
               ssg::SemanticRole::StatusWarning);
-    ASSERT_EQ(grid.at(unselected->rect.x, unselected->rect.y).role,
+    ASSERT_EQ(grid.at(externalSurface.rows[0].rect.x,
+                      externalSurface.rows[0].rect.y).role,
               ssg::SemanticRole::StatusWarning);
-    ASSERT_EQ(grid.at(selected->rect.x, selected->rect.y).role,
+    ASSERT_EQ(grid.at(externalSurface.rows[1].rect.x,
+                      externalSurface.rows[1].rect.y).role,
               ssg::SemanticRole::Selection);
 }
 
@@ -2093,10 +2063,8 @@ TEST(tabRenderingUsesSemanticTabsAndSolvedGeometry) {
     auto frame =
         ssg::test::SessionSnapshotBuilder{}
             .viewport(50, 10)
-            .shellRequest([](ssg::ShellLayoutRequest& request) {
-                request.tabs = {{"alpha.txt", "Alpha", true, false},
-                                {"beta.txt", "Beta", false, false}};
-            })
+            .tabs({{"alpha.txt", "Alpha", true, false},
+                   {"beta.txt", "Beta", false, false}})
             .shellProjection([](ssg::ShellViewState& shell) {
                 shell.tabBar = ssg::Rect{0, 0, 1, 1};
                 for (auto& node : shell.accessibilityNodes) {
@@ -2136,18 +2104,7 @@ TEST(externalIntrinsicShrinksToPreserveAnEditorRow) {
         ssg::test::SessionSnapshotBuilder{}
             .document("content\n")
             .viewport(40, 6)
-            .shellRequest([](ssg::ShellLayoutRequest& request) {
-                ssg::ShellExternalBar bar;
-                bar.message = "Files changed on disk";
-                bar.selected = 4;
-                for (int index = 0; index < 6; ++index) {
-                    bar.rows.push_back(
-                        {"file-" + std::to_string(index),
-                         "M file-" + std::to_string(index) + ".txt",
-                         {{"Reload", "external.reload"}}});
-                }
-                request.externalBar = std::move(bar);
-            })
+            .externalModificationPresent()
             .sections([](ssg::SessionSnapshotSections& sections) {
                 sections.externalModification.revision = ssg::Revision{1};
                 sections.externalModification.message =
@@ -2237,32 +2194,25 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
                 ssg::StatusId{1}, ssg::StatusPriority::Information, 1,
                 "Status message",
                 {ssg::StatusAction{"footer.act", "Save", "footer.act"}}}}, 0})
-            .shellRequest([pickerOpen](ssg::ShellLayoutRequest& request) {
-                request.chromeProviderResolver =
-                    [](std::string_view id) -> std::optional<ssg::ResolvedProvider> {
-                    if (id == "cwd") {
-                        return ssg::ResolvedProvider{"~/project",
-                                                     "Working directory",
-                                                     std::nullopt};
-                    }
-                    if (id == "encoding") {
-                        return ssg::ResolvedProvider{"UTF-8", "Encoding",
-                                                     std::nullopt};
-                    }
-                    if (id == "footer.hint") {
-                        return ssg::ResolvedProvider{"help", "help",
-                                                     std::string{"help.open"}};
-                    }
-                    return std::nullopt;
-                };
-                request.tabs = {{"a.txt", "Tab a.txt", true, false},
-                                {"b.txt", "Tab b.txt", false, false}};
-                request.notice =
-                    ssg::ShellNotice{"Draft conflict",
-                                     {{"diff", "Diff", "draft.diff"}}};
-                // A line-number gutter so the LineNumber and current-line roles
-                // are exercised (the caret line uses the current-line roles).
-                request.lineNumberGutterWidth = 3;
+            .tabs({{"a.txt", "Tab a.txt", true, false},
+                   {"b.txt", "Tab b.txt", false, false}})
+            .noticePresent()
+            .chromeProviderResolver(
+                [](std::string_view id)
+                    -> std::optional<ssg::ResolvedProvider> {
+                if (id == "cwd") {
+                    return ssg::ResolvedProvider{
+                        "~/project", "Working directory", std::nullopt};
+                }
+                if (id == "encoding") {
+                    return ssg::ResolvedProvider{"UTF-8", "Encoding",
+                                                 std::nullopt};
+                }
+                if (id == "footer.hint") {
+                    return ssg::ResolvedProvider{
+                        "help", "help", std::string{"help.open"}};
+                }
+                return std::nullopt;
             })
             .promptInput(pickerOpen, "needle", "ghost")
             .paletteReport(ssg::PaletteReport{

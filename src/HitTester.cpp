@@ -118,9 +118,10 @@ RegionHit chromeHit(const SolvedChromeSurface& surface, HitRegion fieldRegion,
 
 RegionHit HitTester::at(int column, int row) const {
     auto const& snapshot = snapshot_;
-    auto const& shell = snapshot.presentation().shell;
-    if (column < 0 || row < 0 || column >= shell.viewport.columns ||
-        row >= shell.viewport.rows) {
+    const auto* root =
+        snapshot.layout().find(UiNodeId{std::string{kRootNodeId}});
+    if (!root || column < root->rect.x || row < root->rect.y ||
+        column >= root->rect.right() || row >= root->rect.bottom()) {
         return {};
     }
 

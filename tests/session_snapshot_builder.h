@@ -16,7 +16,7 @@
 //
 // This builder ASSEMBLES PRODUCTION COMPONENTS; it does not reimplement them.
 // The viewport projection comes from `Viewport::computeUnwrapped`, the shell
-// from `computeShellLayout`, syntax from `SyntaxViewState::plainText`, and colour
+// from the solved UI tree, syntax from `SyntaxViewState::plainText`, and colour
 // from `defaultTheme`.  A test using it therefore exercises the same projection
 // the runtime does.  Anything it cannot express is set through `sections()`.
 //
@@ -46,6 +46,13 @@ namespace ssg::test {
 
 class SessionSnapshotBuilder {
 public:
+    struct TabSpec {
+        std::string title;
+        std::string accessibleLabel;
+        bool active = false;
+        bool dirty = false;
+    };
+
     // The document text the viewport projects and the renderer paints.
     SessionSnapshotBuilder& document(std::string text) {
         text_ = std::move(text);
@@ -88,7 +95,7 @@ public:
         return *this;
     }
 
-    SessionSnapshotBuilder& tabs(std::vector<TabLabel> labels) {
+    SessionSnapshotBuilder& tabs(std::vector<TabSpec> labels) {
         tabs_ = std::move(labels);
         return *this;
     }
@@ -101,10 +108,19 @@ public:
         return *this;
     }
 
-    // Mutate the shell layout request before layout runs (input line, fields).
-    SessionSnapshotBuilder& shellRequest(
-        std::function<void(ShellLayoutRequest&)> mutate) {
-        shellMutators_.push_back(std::move(mutate));
+    SessionSnapshotBuilder& noticePresent(bool present = true) {
+        noticePresent_ = present;
+        return *this;
+    }
+
+    SessionSnapshotBuilder& externalModificationPresent(bool present = true) {
+        externalModificationPresent_ = present;
+        return *this;
+    }
+
+    SessionSnapshotBuilder& chromeProviderResolver(
+        ChromeProviderResolver resolver) {
+        chromeProviderResolver_ = std::move(resolver);
         return *this;
     }
 
@@ -134,7 +150,7 @@ public:
     SessionSnapshotBuilder& promptInput(bool visible, std::string query,
                                         std::string ghost = {}) {
         if (visible)
-            promptInput_ = PromptInputReport{std::move(query), std::move(ghost)};
+            promptInput_ = PromptInput{std::move(query), std::move(ghost)};
         return *this;
     }
 
@@ -158,14 +174,6 @@ public:
         const FocusTarget focus = (panel_ && panelFocused_) ? FocusTarget::Panel
                                                             : FocusTarget::Editor;
 
-        ShellLayoutRequest request;
-        request.viewport = {columns_, rows_};
-        request.emptyState = text_.empty();
-        request.tabs = tabs_;
-        request.panelPresent = panel_;
-        request.focus = focus;
-        // Caller mutators run LAST so a test can override any request field.
-        for (auto const& mutate : shellMutators_) mutate(request);
         std::optional<ValidatedSchema> defaultSchema;
         if (!schema_) {
             UiSchema schema;
@@ -179,17 +187,12 @@ public:
         truth.panelPresent = panel_;
         truth.baseFocus = focus == FocusTarget::Panel ? BaseFocus::Panel
                                                       : BaseFocus::Editor;
-        truth.noticePresent = request.notice.has_value();
-        truth.externalModificationPresent =
-            request.externalBar.has_value() &&
-            !request.externalBar->rows.empty();
+        truth.noticePresent = noticePresent_;
+        truth.externalModificationPresent = externalModificationPresent_;
         if (promptInput_) truth.openPicker = PickerKind::Command;
         UiInteractionState interaction = buildWholeScreenInteraction(
             schema, truth,
             promptInput_ ? std::optional{PromptRegion::Header} : std::nullopt);
-        auto layout = computeShellLayout(request, shell, interaction, status_,
-                                         promptInput_.value_or(PromptInputReport{}));
-
         ViewportDimensions const dimensions{
             static_cast<std::uint32_t>(columns_),
             static_cast<std::uint32_t>(rows_)};
@@ -225,8 +228,8 @@ public:
             PaletteViewState{}};
         sections.ui = schema.schema();
         const ChromeProviderResolver resolver =
-            request.chromeProviderResolver
-                ? request.chromeProviderResolver
+            chromeProviderResolver_
+                ? chromeProviderResolver_
                 : [](std::string_view)
                       -> std::optional<ResolvedProvider> {
                       return std::nullopt;
@@ -235,13 +238,13 @@ public:
         sections.uiState.focusPath = interaction.focusPath();
         sections.uiPresence =
             buildPresenceSection(schema, interaction.presence());
-        for (std::size_t index = 0; index < request.tabs.size(); ++index) {
+        for (std::size_t index = 0; index < tabs_.size(); ++index) {
             TabState tab;
             tab.id = TabId{index + 1};
-            tab.label = request.tabs[index].title;
-            tab.dirty = request.tabs[index].dirty;
+            tab.label = tabs_[index].title;
+            tab.dirty = tabs_[index].dirty;
             sections.tabs.tabs.push_back(std::move(tab));
-            if (request.tabs[index].active) {
+            if (tabs_[index].active) {
                 sections.tabs.active = TabId{index + 1};
             }
         }
@@ -256,7 +259,11 @@ public:
             framePalette.ghost = promptInput_->ghost;
         }
 
-        ShellViewState shellView = layout.view ? *layout.view : ShellViewState{};
+        ShellViewState shellView;
+        if (columns_ >= style_.dimensions.minimumColumns &&
+            rows_ >= style_.dimensions.minimumRows) {
+            shellView.viewport = {columns_, rows_};
+        }
         for (auto const& mutate : shellProjectionMutators_) mutate(shellView);
         ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
         auto frame = test::gridFrameFromLegacy(
@@ -273,6 +280,11 @@ public:
     }
 
 private:
+    struct PromptInput {
+        std::string query;
+        std::string ghost;
+    };
+
     // A caret at `offset`, with the line/cell coordinates derived from the text
     // so the position is internally consistent rather than merely non-empty.
     [[nodiscard]] DocumentPosition caretPosition(std::size_t offset) const {
@@ -299,15 +311,17 @@ private:
     Revision revision_{1};
     bool panel_ = false;
     bool panelFocused_ = true;
-    std::vector<TabLabel> tabs_;
+    std::vector<TabSpec> tabs_;
     std::vector<std::function<void(SessionSnapshotSections&)>> mutators_;
-    std::vector<std::function<void(ShellLayoutRequest&)>> shellMutators_;
     std::vector<std::function<void(ShellViewState&)>>
         shellProjectionMutators_;
     Style style_{};
     PaletteReport palette_;
     std::optional<ValidatedSchema> schema_;
-    std::optional<PromptInputReport> promptInput_;
+    std::optional<PromptInput> promptInput_;
+    bool noticePresent_ = false;
+    bool externalModificationPresent_ = false;
+    ChromeProviderResolver chromeProviderResolver_;
     StatusViewState status_;
 };
 

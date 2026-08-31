@@ -104,6 +104,11 @@ bool hasNoticeBar(const Snapshot& snapshot) {
     return findShellNode(snapshot, ssg::ShellNodeKind::NoticeBar) != nullptr;
 }
 
+bool hasNoticeBar(const ssg::GridFrame& snapshot) {
+    return snapshot.layout().find(
+               ssg::UiNodeId{std::string{ssg::kNoticeNodeId}}) != nullptr;
+}
+
 bool statusMentions(ssg::EditorSession& runtime, std::string_view needle) {
     auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
     if (!snapshot) return false;
@@ -550,9 +555,8 @@ TEST(noticeViewIsPresentOnlyOnADraftConflict) {
     }
 }
 
-// The grid ShellNotice and the semantic NoticeView are both projections of the ONE
-// draftNotice() resolver: whenever one raises the notice the other does too, with
-// the same action command ids, and neither raises it without the other.
+// The solved grid notice and semantic NoticeView come from the same resolver:
+// whenever one raises the notice the other does too, with the same action ids.
 TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     const ssg::ViewportDimensions dims{80, 24};
     auto root = uniqueRoot("one_resolver_conflict");
@@ -578,13 +582,18 @@ TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     // Both projections carry the same semantic action identities. Commands remain
     // library-owned and are resolved only after input returns to the session.
     std::vector<std::string> gridActions;
-    for (const auto& node : frame->presentation().shell.accessibilityNodes) {
-        if (node.kind == ssg::ShellNodeKind::NoticeAction) {
-            const auto hit = ssg::HitTester{*frame}.at(node.rect.x, node.rect.y);
-            ASSERT_TRUE(hit.fieldId.has_value());
-            ASSERT_FALSE(hit.commandId.has_value());
-            if (hit.fieldId) gridActions.push_back(*hit.fieldId);
-        }
+    const auto* noticeNode = frame->layout().find(
+        ssg::UiNodeId{std::string{ssg::kNoticeNodeId}});
+    ASSERT_TRUE(noticeNode != nullptr);
+    if (!noticeNode) return;
+    const auto solved =
+        ssg::solveNoticeSurface(*notice, noticeNode->rect);
+    for (const auto& action : solved.actions) {
+        const auto hit =
+            ssg::HitTester{*frame}.at(action.rect.x, action.rect.y);
+        ASSERT_TRUE(hit.fieldId.has_value());
+        ASSERT_FALSE(hit.commandId.has_value());
+        if (hit.fieldId) gridActions.push_back(*hit.fieldId);
     }
     std::vector<std::string> semanticActions;
     for (const auto& action : notice->actions)
@@ -644,10 +653,11 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     if (!restoredFrame) return;
 
     ASSERT_EQ(conflict.activeDocumentText(), restored.activeDocumentText());
-    const auto& withNotice =
-        conflictFrame->presentation().shell.panes.front().content;
-    const auto& without =
-        restoredFrame->presentation().shell.panes.front().content;
+    ASSERT_TRUE(conflictFrame->document().has_value());
+    ASSERT_TRUE(restoredFrame->document().has_value());
+    if (!conflictFrame->document() || !restoredFrame->document()) return;
+    const auto& withNotice = conflictFrame->document()->content;
+    const auto& without = restoredFrame->document()->content;
     // Reserved from the top: same left edge and width, top pushed down one, one
     // fewer content row -- the document is not shifted, it just shows one less
     // row (exactly like the prompt reservation costs a row from the bottom).

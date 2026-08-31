@@ -6,6 +6,7 @@
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GitMetadataWatcher.h>
 #include <ssg/GraphemeLayout.h>
+#include <ssg/GridPresenter.h>
 #include <ssg/Style.h>
 #include <ssg/WholeScreenAssembly.h>
 #include <ssg/platform_files.h>
@@ -3984,52 +3985,54 @@ GitDiffScanResult EditorSession::applyGitDiffScan(GitDiffScan scan) {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyGitDiffScan(std::move(scan));
 }
-std::optional<LegacyPresentationSnapshot>
-EditorSession::projectForBridgedPresenterDeprecated(
-    ClientId clientId, ViewportDimensions dimensions,
-    PaletteReport paletteReport, std::optional<ViewId> expectedView,
-    detail::GridProjectionState& presentation,
-    bool revealPrimarySelection) {
+std::optional<EditorSession::GridSemanticCapture>
+EditorSession::captureForGridPresenter(
+    ClientId clientId, std::optional<ViewId> expectedView,
+    PaletteReport const& paletteReport) {
     if (impl_->session->activeDispatchRevision()) {
         throw std::logic_error{"a view cannot be presented during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
     auto client = impl_->session->attachedClient(clientId);
-    if (!client || (expectedView && client->viewId != *expectedView))
+    if (!client || (expectedView && client->viewId != *expectedView)) {
         return std::nullopt;
-    presentation.dimensions = dimensions;
-    // Sections FIRST, then the viewport: computing the shell layout is what
-    // caches the pane content height the viewport scrolls against.  As
-    // arguments to one call their evaluation order would be unspecified, so the
-    // viewport could be built against the PREVIOUS frame's pane height -- which
-    // is wrong on the frame a resize or a prompt changes it.
-    // The shell layout is computed FIRST: it caches the panel content height that
-    // treeView() (inside sections) and viewport() resolve their scroll against.
-    // Its geometry is the presentation's shell projection; its focus is semantic.
-    auto shell =
-        impl_->shellView(dimensions, presentation, paletteReport);
-    if (!shell.panes.empty()) {
-        auto const& content = shell.panes.front().content;
-        presentation.paneContentRows =
-            static_cast<std::uint32_t>(std::max(content.height, 1));
-        presentation.paneContentColumns =
-            static_cast<std::uint32_t>(std::max(content.width, 1));
     }
-    presentation.reservedPromptRows =
-        impl_->interaction.prompt().active() &&
-                impl_->interaction.prompt().request()
-            ? promptRowCount(impl_->interaction.prompt().request()->kind)
-            : 0;
-    presentation.panelContentRows =
-        shell.panel ? static_cast<std::uint32_t>(
-                          std::max(shell.panel->height - 1, 0))
-                    : 0;
+    auto sections = impl_->sections(paletteReport);
+    return GridSemanticCapture{
+        SessionSnapshot{
+            impl_->session->revision(), impl_->session->topology(),
+            {client->principal.clientId(), client->viewId,
+             client->principal.capabilities()},
+            std::move(sections)},
+        impl_->style};
+}
+
+std::optional<EditorSession::GridViewportCapture>
+EditorSession::finalizeGridViewport(
+    ClientId clientId, ViewId expectedView, Revision expectedRevision,
+    ViewportDimensions dimensions, std::uint32_t paneContentRows,
+    std::uint32_t paneContentColumns,
+    SelectionNavigation proposedNavigation, bool revealPrimarySelection,
+    detail::GridProjectionState& presentation) {
+    if (impl_->session->activeDispatchRevision()) {
+        throw std::logic_error{"a view cannot be presented during dispatch"};
+    }
+    std::lock_guard operationLock{impl_->operationMutex};
+    auto client = impl_->session->attachedClient(clientId);
+    if (!client || client->viewId != expectedView ||
+        impl_->session->revision() != expectedRevision) {
+        return std::nullopt;
+    }
+
+    presentation.dimensions = dimensions;
+    presentation.paneContentRows = std::max(paneContentRows, std::uint32_t{1});
+    presentation.paneContentColumns =
+        std::max(paneContentColumns, std::uint32_t{1});
+    presentation.navigation = proposedNavigation;
     if (revealPrimarySelection) {
         const ViewportDimensions revealViewport{
-            std::max<std::uint32_t>(
-                presentation.paneContentColumns, 1),
-            std::max<std::uint32_t>(
-                presentation.paneContentRows, 1)};
+            presentation.paneContentColumns,
+            presentation.paneContentRows};
         auto navigation = SelectionViewState{
             impl_->selection.selections,
             presentation.navigation.firstVisualRow,
@@ -4047,26 +4050,310 @@ EditorSession::projectForBridgedPresenterDeprecated(
                 revealed.delta.replacement->desiredCell};
         }
     }
-    auto sections = impl_->sections(paletteReport);
     auto viewport = impl_->viewport(presentation);
-    auto promptView = impl_->promptProjection(dimensions, shell.prompt);
-    auto treeWindows = impl_->treeWindows(presentation);
-    return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
-                                     client->principal, client->viewId,
-                                     std::move(viewport), std::move(sections),
-                                     impl_->style, std::move(promptView),
-                                     std::move(shell),
-                                     presentation.navigation,
-                                     std::move(treeWindows));
+    return GridViewportCapture{std::move(viewport),
+                               presentation.navigation};
 }
+
+namespace {
+
+void addLegacyNode(ShellViewState& shell, ShellNodeKind kind, std::string id,
+                   std::string label, Rect rect, SemanticRole role,
+                   std::string content = {},
+                   std::optional<std::string> command = {},
+                   std::optional<StatusActionInvocation> invocation = {}) {
+    shell.accessibilityNodes.push_back(
+        {kind, std::move(id), std::move(label), rect, role,
+         std::move(content), std::move(command), std::move(invocation)});
+}
+
+PresentationSnapshot adaptLegacyPresentation(const GridFrame& frame) {
+    const auto& projection = frame.presentation();
+    const auto& sections = frame.sections();
+    ShellViewState shell;
+    if (!frame.layout().find(UiNodeId{std::string{kRootNodeId}})) {
+        return {projection.viewport, projection.style, std::nullopt,
+                std::move(shell), projection.selectionNav, {}};
+    }
+    shell.viewport = {
+        static_cast<int>(projection.viewport.dimensions.columns),
+        static_cast<int>(projection.viewport.dimensions.rows)};
+
+    const auto appendChrome =
+        [&](const SolvedChromeSurface& surface, ShellNodeKind regionKind,
+            std::string id, std::string label, SemanticRole role) {
+            if (regionKind == ShellNodeKind::HeaderField) {
+                shell.header = surface.rect;
+                addLegacyNode(shell, ShellNodeKind::Header, std::move(id),
+                              std::move(label), surface.rect, role);
+            } else {
+                shell.footer = surface.rect;
+                addLegacyNode(shell, ShellNodeKind::Footer, std::move(id),
+                              std::move(label), surface.rect, role);
+            }
+            for (const auto& item : surface.items) {
+                auto itemKind = regionKind;
+                if (item.statusInvocation) {
+                    itemKind = ShellNodeKind::FooterAction;
+                } else if (item.id == "footer.hint") {
+                    itemKind = ShellNodeKind::FooterHint;
+                }
+                addLegacyNode(shell, itemKind, item.id, item.label, item.rect,
+                              item.role, item.content, item.command,
+                              item.statusInvocation);
+            }
+            if (!surface.input) return;
+            addLegacyNode(shell, regionKind, "input_line.query", "Input line",
+                          surface.input->query, SemanticRole::Prompt,
+                          surface.input->queryText);
+            if (surface.input->ghost) {
+                addLegacyNode(shell, regionKind, "input_line.ghost",
+                              "Input line completion", *surface.input->ghost,
+                              SemanticRole::LineNumber,
+                              surface.input->ghostText);
+            }
+        };
+    if (frame.header()) {
+        appendChrome(*frame.header(), ShellNodeKind::HeaderField, "header",
+                     "Status header", SemanticRole::Header);
+    }
+    if (frame.footer()) {
+        appendChrome(*frame.footer(), ShellNodeKind::FooterField, "footer",
+                     "Status footer", SemanticRole::Footer);
+    }
+
+    if (const auto* tabNode = frame.layout().find(
+            UiNodeId{std::string{kTabBarNodeId}})) {
+        shell.tabBar = tabNode->rect;
+        addLegacyNode(shell, ShellNodeKind::TabBar, "tabs", "Open tabs",
+                      tabNode->rect, SemanticRole::TabInactive);
+        const auto tabs =
+            solveTabBar(sections.tabs, projection.style.tab, tabNode->rect);
+        for (std::size_t index = 0; index < tabs.tabs.size(); ++index) {
+            const auto& tab = tabs.tabs[index];
+            if (index > 0 && index - 1 < tabs.separators.size()) {
+                const auto& separator = tabs.separators[index - 1];
+                addLegacyNode(
+                    shell, ShellNodeKind::TabSeparator,
+                    "tabsep." + std::to_string(tab.index), "", separator.rect,
+                    SemanticRole::TabInactive, separator.text);
+            }
+            const auto& semanticTab = sections.tabs.tabs[tab.index];
+            addLegacyNode(
+                shell, ShellNodeKind::Tab,
+                "tab." + std::to_string(tab.index), semanticTab.label, tab.rect,
+                tab.active ? SemanticRole::TabActive
+                           : SemanticRole::TabInactive,
+                tab.text);
+            shell.tabHits.push_back(
+                {tab.rect, static_cast<std::uint32_t>(tab.index)});
+        }
+    }
+
+    if (frame.panel()) {
+        const auto& panel = *frame.panel();
+        shell.panel = panel.rect;
+        shell.panelScrollbar = panel.scrollbarGutter;
+        addLegacyNode(shell, ShellNodeKind::Panel, "panel", "Side panel",
+                      panel.rect, SemanticRole::PanelInactive);
+        const auto panelRole =
+            sections.focus == FocusTarget::Panel
+                ? SemanticRole::PanelActive
+                : SemanticRole::PanelInactive;
+        addLegacyNode(shell, ShellNodeKind::PanelProvider, "panel.provider",
+                      panel.providerText, panel.rect, panelRole,
+                      panel.providerText);
+        if (panel.scrollbarGutter) {
+            addLegacyNode(shell, ShellNodeKind::Scrollbar, "panel.scrollbar",
+                          "Panel scrollbar", *panel.scrollbarGutter,
+                          SemanticRole::ScrollbarTrack);
+        }
+    }
+
+    if (frame.document()) {
+        const bool emptyEditor =
+            sections.document.revision == Revision{0} &&
+            sections.tabs.tabs.empty();
+        for (const auto& pane : frame.document()->panes) {
+            shell.panes.push_back(
+                {pane.id, pane.frame, pane.content, pane.scrollbarGutter,
+                 pane.lineNumbers});
+            const auto suffix = std::to_string(pane.id.value());
+            addLegacyNode(shell, ShellNodeKind::Pane, "pane." + suffix,
+                          "Editor pane " + suffix, pane.frame,
+                          SemanticRole::Canvas);
+            addLegacyNode(shell, ShellNodeKind::Scrollbar,
+                          "pane." + suffix + ".scrollbar",
+                          "Scrollbar for editor pane " + suffix,
+                          pane.scrollbarGutter,
+                          SemanticRole::ScrollbarTrack);
+            if (emptyEditor) {
+                addLegacyNode(shell, ShellNodeKind::EmptyState,
+                              "pane." + suffix + ".empty", "empty editor",
+                              pane.content, SemanticRole::Canvas,
+                              "empty editor");
+            }
+        }
+    }
+
+    if (sections.noticeView) {
+        const auto* node = frame.layout().find(
+            UiNodeId{std::string{kNoticeNodeId}});
+        if (!node) {
+            throw std::logic_error{
+                "legacy adapter: notice has no solved UI node"};
+        }
+        const auto surface =
+            solveNoticeSurface(*sections.noticeView, node->rect);
+        addLegacyNode(shell, ShellNodeKind::NoticeBar, "draft.notice",
+                      "Draft conflict notice", surface.rect,
+                      SemanticRole::StatusWarning, sections.noticeView->text);
+        for (std::size_t index = 0; index < surface.actions.size(); ++index) {
+            const auto& action = surface.actions[index];
+            const auto semanticAction = std::ranges::find(
+                sections.noticeView->actions, action.id,
+                &NoticeAction::id);
+            if (semanticAction == sections.noticeView->actions.end()) {
+                throw std::logic_error{
+                    "legacy adapter: solved notice action has no semantic action"};
+            }
+            addLegacyNode(shell, ShellNodeKind::NoticeAction, action.id,
+                          semanticAction->label, action.rect,
+                          SemanticRole::StatusWarning, action.text,
+                          semanticAction->command);
+        }
+    }
+
+    if (!sections.externalModification.files.empty()) {
+        const auto* node = frame.layout().find(
+            UiNodeId{std::string{kExternalModNodeId}});
+        if (!node) {
+            throw std::logic_error{
+                "legacy adapter: external modification has no solved UI node"};
+        }
+        const auto surface = solveExternalModificationSurface(
+            sections.externalModification, node->rect);
+        addLegacyNode(shell, ShellNodeKind::ExternalModificationBar,
+                      "external.bar", "External modification bar",
+                      surface.header, SemanticRole::StatusWarning,
+                      sections.externalModification.message);
+        for (const auto& row : surface.rows) {
+            const auto role = row.selected ? SemanticRole::Selection
+                                           : SemanticRole::StatusWarning;
+            const std::string id =
+                row.fileId ? row.fileId->value() : "external.overflow";
+            addLegacyNode(shell, ShellNodeKind::ExternalModificationRow, id,
+                          row.fileId ? "External modification file"
+                                     : "More external modifications",
+                          row.rect, role, row.text);
+            for (const auto& action : row.actions) {
+                std::string actionLabel = action.text;
+                if (actionLabel.size() >= 2 && actionLabel.front() == '[' &&
+                    actionLabel.back() == ']') {
+                    actionLabel =
+                        actionLabel.substr(1, actionLabel.size() - 2);
+                }
+                addLegacyNode(
+                    shell, ShellNodeKind::ExternalModificationAction,
+                    id + "|" + action.command, actionLabel, action.rect, role,
+                    action.text);
+                shell.externalActions.push_back(
+                    {action.rect, id, action.command});
+            }
+        }
+    }
+
+    std::optional<PromptViewState> prompt;
+    if (sections.promptView) {
+        const auto* promptNode = frame.layout().find(
+            UiNodeId{std::string{kFooterPromptNodeId}});
+        if (!promptNode) {
+            throw std::logic_error{
+                "legacy adapter: prompt has no solved UI node"};
+        }
+        shell.prompt = promptNode->rect;
+        addLegacyNode(shell, ShellNodeKind::PromptReservation, "prompt",
+                      "Prompt surface", promptNode->rect,
+                      SemanticRole::Prompt);
+        PromptViewState projected{sections.promptView->kind,
+                                  sections.promptView->accessibleLabel,
+                                  promptNode->rect, {},
+                                  sections.promptView->activeInput};
+        projected.controls.reserve(sections.promptView->controls.size());
+        for (const auto& control : sections.promptView->controls) {
+            const auto* controlNode =
+                frame.layout().find(footerPromptControlNodeId(control.id));
+            if (!controlNode) {
+                throw std::logic_error{
+                    "legacy adapter: prompt control has no solved UI node"};
+            }
+            projected.controls.push_back(
+                {control.kind, control.id, control.accessibleLabel,
+                 control.value, control.checked, controlNode->rect});
+        }
+        prompt = std::move(projected);
+    }
+
+    if (sections.palette.activePicker) {
+        const auto* pickerNode = frame.layout().find(
+            UiNodeId{std::string{kFindResultsViewportNodeId}});
+        if (!pickerNode) {
+            throw std::logic_error{
+                "legacy adapter: palette has no solved UI node"};
+        }
+        const auto surface = solvePaletteSurface(
+            frame.palette(), pickerNode->rect,
+            projection.style.dimensions.scrollbarGutterWidth);
+        PaletteProjection palette;
+        palette.rect = surface.rows;
+        palette.scrollbarRect = surface.scrollbar;
+        palette.selected = frame.palette().selected;
+        palette.firstVisible = frame.palette().firstVisible;
+        palette.scrollbar = frame.palette().scrollbar;
+        for (const auto& candidate : frame.palette().rows) {
+            palette.rows.push_back({candidate.label, candidate.detail});
+        }
+        shell.palette = std::move(palette);
+    }
+
+    std::vector<TreeWindow> treeWindows;
+    if (frame.panel()) {
+        TreeWindow window;
+        window.firstVisible = frame.panel()->firstVisible;
+        window.scrollbar = frame.panel()->scrollbar;
+        for (const auto& row : frame.panel()->rows) {
+            window.visibleNodeIds.push_back(row.nodeId);
+        }
+        treeWindows.push_back(std::move(window));
+    }
+
+    return {projection.viewport, projection.style, std::move(prompt),
+            std::move(shell), projection.selectionNav,
+            std::move(treeWindows)};
+}
+
+}  // namespace
 
 std::optional<LegacyPresentationSnapshot> EditorSession::present(
     ClientId clientId, ViewportDimensions dimensions,
     PaletteReport paletteReport) {
-    detail::GridProjectionState presentation;
-    return projectForBridgedPresenterDeprecated(
-        clientId, dimensions, std::move(paletteReport), std::nullopt,
-        presentation, true);
+    if (impl_->session->activeDispatchRevision()) {
+        throw std::logic_error{"a view cannot be presented during dispatch"};
+    }
+    std::optional<ViewId> viewId;
+    {
+        std::lock_guard operationLock{impl_->operationMutex};
+        const auto client = impl_->session->attachedClient(clientId);
+        if (!client) return std::nullopt;
+        viewId = client->viewId;
+    }
+    GridPresenter presenter{*viewId};
+    auto frame = presenter.project(
+        *this, clientId, {dimensions, std::move(paletteReport)});
+    if (!frame) return std::nullopt;
+    auto presentation = adaptLegacyPresentation(*frame);
+    return LegacyPresentationSnapshot{std::move(frame->semantic_),
+                                      std::move(presentation)};
 }
 
 std::optional<SessionSnapshot> EditorSession::snapshot(ClientId clientId,

@@ -23,15 +23,6 @@ namespace ssg {
 struct StatusViewState;
 class UiInteractionState;
 
-// The header prompt input's grid-only text sidecar: the query and ghost that
-// `computeShellLayout` lowers into the input_line nodes when the header prompt is
-// present. Threaded alongside the interaction state rather than carried on the
-// schema, because the query is a client-local prediction, not semantic state.
-struct PromptInputReport {
-    std::string query;
-    std::string ghost;
-};
-
 class PaneId {
 public:
     constexpr explicit PaneId(std::uint32_t value = 0) noexcept : value_(value) {}
@@ -100,95 +91,6 @@ struct StatusField {
     std::optional<std::string> commandId;
 };
 
-
-// One clickable action in the draft-conflict notice (M15): a bracketed label
-// hit-tested to dispatch `commandId`.
-struct ShellNoticeAction {
-    std::string id;
-    std::string label;
-    std::string commandId;
-};
-
-// The draft-conflict notice reserved above the document (M15): a message plus
-// clickable actions. Absent (nullopt on the request) when there is no conflict.
-struct ShellNotice {
-    std::string text;
-    std::vector<ShellNoticeAction> actions;
-};
-
-// One offered action on an external-modification row (7A-5b): a bracketed label
-// and the payload-less action command it dispatches after the row is selected.
-struct ShellExternalActionEntry {
-    std::string label;
-    std::string commandId;
-
-    friend bool operator==(const ShellExternalActionEntry&,
-                           const ShellExternalActionEntry&) = default;
-};
-
-// One externally-changed file the bar can show (7A-5b): its runtime-minted id,
-// the display text (status glyph + path), and its offered actions.
-struct ShellExternalRow {
-    std::string fileId;
-    std::string text;
-    std::vector<ShellExternalActionEntry> actions;
-
-    friend bool operator==(const ShellExternalRow&,
-                           const ShellExternalRow&) = default;
-};
-
-// The external-modification bar to reserve above the document (7A-5b). The
-// request carries ALL rows plus the ABSOLUTE selected index; computeShellLayout
-// windows them to a bounded height that never consumes the document/footer, so
-// the tiny-viewport degrade is layout's decision, not the caller's. Absent
-// (nullopt) or with no rows reserves ZERO rows, keeping an empty-section golden
-// byte-identical.
-struct ShellExternalBar {
-    std::string message;
-    std::vector<ShellExternalRow> rows;
-    std::uint32_t selected = 0;
-
-    friend bool operator==(const ShellExternalBar&,
-                           const ShellExternalBar&) = default;
-};
-
-struct TabLabel {
-    std::string title;
-    std::string accessibleLabel;
-    bool active = false;
-    bool dirty = false;
-};
-
-
-struct ShellLayoutRequest {
-    GridSize viewport;
-    bool distractionFree = false;
-    std::uint8_t reservedPromptRows = 0;
-    // Width in columns of the editor's left line-number gutter, or 0 when line
-    // numbers are off. Carved from the LEFT of each
-    // editor pane's content; 0 reproduces today's layout exactly.
-    int lineNumberGutterWidth = 0;
-    // A draft-conflict notice to reserve one chrome row for, above the document
-    // (M15). Reserving a chrome row (rather than stealing document row 0) keeps
-    // the document's own coordinate space -- line numbers, caret, scroll -- intact.
-    std::optional<ShellNotice> notice;
-    // The external-modification bar to reserve above the document (7A-5b, below
-    // the notice in a fixed order). Absent or empty reserves ZERO rows.
-    std::optional<ShellExternalBar> externalBar;
-    bool emptyState = false;
-    std::string panelProviderLabel = "Panel";
-    // The panel presence and focus this layout is computed against. Stage-(i) of the
-    // interaction-authority cutover threads these through the request so stage (ii) can
-    // source them from the authority projection instead of ShellState without touching
-    // computeShellLayout. Sourced from ShellState today.
-    bool panelPresent = false;
-    FocusTarget focus = FocusTarget::Editor;
-    std::vector<TabLabel> tabs;
-    // Dimensions and chrome glyphs this layout is computed against.  Defaults
-    // reproduce the shipped appearance.
-    Style style;
-    ChromeProviderResolver chromeProviderResolver;
-};
 
 struct PaneGeometry {
     PaneId id;
@@ -284,25 +186,6 @@ struct ShellViewState {
     }
 };
 
-enum class ShellLayoutErrorCode : std::uint8_t {
-    ViewportTooSmall,
-    InvalidPromptRows,
-};
-
-struct ShellLayoutError {
-    ShellLayoutErrorCode code = ShellLayoutErrorCode::ViewportTooSmall;
-    std::string message;
-};
-
-struct ShellLayoutResult {
-    std::optional<ShellLayoutError> error;
-    std::optional<ShellViewState> view;
-
-    [[nodiscard]] bool accepted() const noexcept {
-        return view.has_value() && !error.has_value();
-    }
-};
-
 class ShellState {
 public:
     explicit ShellState();
@@ -320,22 +203,11 @@ public:
     void nextPane() noexcept;
     void previousPane() noexcept;
     [[nodiscard]] bool focusPane(PaneDirection direction,
-                                  const ShellViewState& view) noexcept;
+                                  const std::vector<PaneFrame>& panes) noexcept;
 
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-
-    friend ShellLayoutResult computeShellLayout(const ShellLayoutRequest&,
-                                                const ShellState&,
-                                                const UiInteractionState&,
-                                                const StatusViewState&,
-                                                const PromptInputReport&);
 };
-
-[[nodiscard]] ShellLayoutResult computeShellLayout(
-    const ShellLayoutRequest& request, const ShellState& state,
-    const UiInteractionState& interaction, const StatusViewState& statusView,
-    const PromptInputReport& promptInput);
 
 } // namespace ssg

@@ -9,6 +9,7 @@
 #include "legacy_grid_frame.h"
 #include "test_helpers.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -261,18 +262,6 @@ TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
     ASSERT_TRUE(toggleNode != nullptr);
     ASSERT_TRUE(countNode != nullptr);
     if (!inputNode || !toggleNode || !countNode) return;
-    bool overlapsLegacyFooter = false;
-    for (const auto& node : frame->presentation().shell.accessibilityNodes) {
-        if (node.kind != ssg::ShellNodeKind::FooterField) continue;
-        overlapsLegacyFooter =
-            toggleNode->rect.x >= node.rect.x &&
-            toggleNode->rect.x < node.rect.right() &&
-            toggleNode->rect.y >= node.rect.y &&
-            toggleNode->rect.y < node.rect.bottom();
-        if (overlapsLegacyFooter) break;
-    }
-    ASSERT_TRUE(overlapsLegacyFooter);
-
     auto input =
         ssg::HitTester{*frame}.at(inputNode->rect.x, inputNode->rect.y);
     ASSERT_EQ(input.region, ssg::HitRegion::PromptControl);
@@ -298,13 +287,7 @@ TEST(externalActionHitCarriesPublishedFileAndCommandIdentity) {
     auto snapshot =
         ssg::test::SessionSnapshotBuilder{}
             .viewport(80, 12)
-            .shellRequest([](ssg::ShellLayoutRequest& request) {
-                request.externalBar = ssg::ShellExternalBar{
-                    "Files changed on disk",
-                    {{"changed.txt", "M changed.txt",
-                      {{"Reload", "external.reload"}}}},
-                    0};
-            })
+            .externalModificationPresent()
             .sections([](ssg::SessionSnapshotSections& sections) {
                 sections.externalModification = {
                     ssg::Revision{1},
@@ -368,10 +351,9 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
         ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation().shell;
-    ASSERT_FALSE(shell.panes.empty());
-    if (shell.panes.empty()) return;
-    auto const content = shell.panes.front().content;
+    ASSERT_TRUE(frame->document().has_value());
+    if (!frame->document()) return;
+    auto const content = frame->document()->content;
 
     auto resolveLine = [&](std::uint32_t offset) -> std::uint64_t {
         auto p = ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{offset});
@@ -411,7 +393,8 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     ASSERT_EQ(below.byteOffset, lastRowEnd);
     ASSERT_EQ(below.byteLen, std::uint32_t{0});
     auto belowPos =
-        ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{below.byteOffset});
+        ssg::SelectionNavigator::resolvePosition(
+            text, ssg::ByteOffset{static_cast<std::uint64_t>(below.byteOffset)});
     ASSERT_TRUE(belowPos.has_value());
 }
 
@@ -434,7 +417,8 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
         auto frame =
             ssg::test::gridFrameFromLegacy(std::move(*snapshot));
         if (!frame) return 9999;
-        auto const content = frame->presentation().shell.panes.front().content;
+        if (!frame->document()) return 9999;
+        auto const content = frame->document()->content;
         auto hit = ssg::HitTester{*frame}.at(column, row);
         if (hit.region != ssg::HitRegion::Editor) return 9999;
         auto pos = ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{hit.byteOffset});
@@ -997,10 +981,8 @@ TEST(tabHitsUseSemanticTabsAndSolvedGeometry) {
     auto frame =
         ssg::test::SessionSnapshotBuilder{}
             .viewport(50, 10)
-            .shellRequest([](ssg::ShellLayoutRequest& request) {
-                request.tabs = {{"alpha.txt", "Alpha", true, false},
-                                {"beta.txt", "Beta", false, false}};
-            })
+            .tabs({{"alpha.txt", "Alpha", true, false},
+                   {"beta.txt", "Beta", false, false}})
             .shellProjection([](ssg::ShellViewState& shell) {
                 shell.tabBar = ssg::Rect{0, 0, 1, 1};
                 for (auto& hit : shell.tabHits) {
@@ -1118,9 +1100,12 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
               std::optional<std::string>{"follow_edits.toggle"});
 
     // A chrome coordinate outside any field remains a non-field hit.
+    const auto* rootNode = frame->layout().find(
+        ssg::UiNodeId{std::string{ssg::kRootNodeId}});
+    ASSERT_TRUE(rootNode != nullptr);
+    if (!rootNode) return;
     auto chrome =
-        ssg::HitTester{*frame}.at(
-            frame->presentation().shell.viewport.columns - 1, 0);
+        ssg::HitTester{*frame}.at(rootNode->rect.right() - 1, 0);
     ASSERT_TRUE(chrome.region != ssg::HitRegion::HeaderField);
     ASSERT_TRUE(chrome.region != ssg::HitRegion::FooterField);
 }
@@ -1153,10 +1138,18 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
             ssg::test::gridFrameFromLegacy(std::move(*before));
         ASSERT_TRUE(frame.has_value());
         if (!frame) return false;
-        auto const* node = findNode(frame->presentation().shell, kind, id);
-        ASSERT_TRUE(node != nullptr);
-        if (!node) return false;
-        auto hit = ssg::HitTester{*frame}.at(node->rect.x, node->rect.y);
+        const auto& surface = kind == ssg::ShellNodeKind::HeaderField
+                                  ? frame->header()
+                                  : frame->footer();
+        ASSERT_TRUE(surface.has_value());
+        if (!surface) return false;
+        const auto item = std::ranges::find_if(
+            surface->items, [&](const ssg::SolvedChromeItem& candidate) {
+                return candidate.id == id;
+            });
+        ASSERT_TRUE(item != surface->items.end());
+        if (item == surface->items.end()) return false;
+        auto hit = ssg::HitTester{*frame}.at(item->rect.x, item->rect.y);
         ASSERT_TRUE(hit.commandId.has_value());
         if (!hit.commandId) return false;
         return runtime
@@ -1228,13 +1221,14 @@ TEST(outOfBoundsAndChromeReturnNoTarget) {
               ssg::HitRegion::None);
     // A top-row coordinate outside visible header fields is chrome.
     int chromeX = -1;
-    for (int x = frame->presentation().shell.viewport.columns - 1; x >= 0;
-         --x) {
+    const auto* rootNode = frame->layout().find(
+        ssg::UiNodeId{std::string{ssg::kRootNodeId}});
+    ASSERT_TRUE(rootNode != nullptr);
+    if (!rootNode || !frame->header()) return;
+    for (int x = rootNode->rect.right() - 1; x >= 0; --x) {
         bool occupied = false;
-        for (const auto& node :
-             frame->presentation().shell.accessibilityNodes) {
-            if (node.kind != ssg::ShellNodeKind::HeaderField) continue;
-            if (x >= node.rect.x && x < node.rect.right()) {
+        for (const auto& item : frame->header()->items) {
+            if (x >= item.rect.x && x < item.rect.right()) {
                 occupied = true;
                 break;
             }

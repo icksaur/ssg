@@ -31,7 +31,7 @@ concept HasPresentation = requires(T const& value) {
 static_assert(!HasPresentation<ssg::SessionSnapshot>);
 static_assert(std::same_as<
               decltype(std::declval<ssg::GridFrame const&>().presentation()),
-              ssg::PresentationSnapshot const&>);
+              ssg::GridProjection const&>);
 
 std::filesystem::path uniqueRoot(std::string_view name) {
     auto root = std::filesystem::current_path() / ("runtime_snapshot_" + std::string{name});
@@ -74,6 +74,175 @@ TEST(runtimeConstructsAttachesAndProducesLiveSnapshot) {
     ASSERT_EQ(snapshot->semantic().revision(), runtime.revision());
     ASSERT_EQ(snapshot->semantic().client().clientId, ssg::ClientId{7});
     ASSERT_EQ(snapshot->semantic().client().viewId, ssg::ViewId{9});
+}
+
+TEST(legacyPresentationAdapterUsesTheDirectSolvedFrame) {
+    auto root = uniqueRoot("legacy_adapter");
+    std::ofstream{root / "workspace" / "doc.txt"} << "alpha\nbeta\n";
+    auto created = ssg::EditorSession::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    const ssg::ClientId client{7};
+    const ssg::ViewId view{9};
+    ASSERT_TRUE(
+        runtime
+            .attach({client, ssg::InvocationOrigin::InProcess}, view)
+            .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"file.open", runtime.revision(),
+                               std::string{"doc.txt"}})
+                    .accepted());
+    ssg::GridPresenter presenter{view};
+
+    const auto compare = [&] {
+        auto direct = presenter.project(runtime, client, {{80, 24}, {}});
+        auto legacy = runtime.present(client, {80, 24});
+        ASSERT_TRUE(direct.has_value());
+        ASSERT_TRUE(legacy.has_value());
+        if (!direct || !legacy) return;
+        const auto& projected = legacy->presentation();
+        ASSERT_EQ(projected.viewport, direct->presentation().viewport);
+        ASSERT_EQ(projected.style, direct->presentation().style);
+        ASSERT_EQ(projected.selectionNav,
+                  direct->presentation().selectionNav);
+        const auto* rootNode = direct->layout().find(
+            ssg::UiNodeId{std::string{ssg::kRootNodeId}});
+        ASSERT_TRUE(rootNode != nullptr);
+        if (rootNode) {
+            ASSERT_EQ(projected.shell.viewport.columns,
+                      rootNode->rect.width);
+            ASSERT_EQ(projected.shell.viewport.rows,
+                      rootNode->rect.height);
+        }
+
+        const auto compareChrome =
+            [&](const std::optional<ssg::SolvedChromeSurface>& surface,
+                const std::optional<ssg::Rect>& rect) {
+                ASSERT_EQ(rect.has_value(), surface.has_value());
+                if (!surface) return;
+                ASSERT_EQ(*rect, surface->rect);
+                for (const auto& item : surface->items) {
+                    const auto found = std::ranges::find(
+                        projected.shell.accessibilityNodes, item.id,
+                        &ssg::AccessibilityNode::id);
+                    ASSERT_TRUE(
+                        found != projected.shell.accessibilityNodes.end());
+                    if (found != projected.shell.accessibilityNodes.end()) {
+                        ASSERT_EQ(found->rect, item.rect);
+                    }
+                }
+            };
+        compareChrome(direct->header(), projected.shell.header);
+        compareChrome(direct->footer(), projected.shell.footer);
+
+        ASSERT_EQ(projected.shell.panes.size(),
+                  direct->document()
+                      ? direct->document()->panes.size()
+                      : std::size_t{0});
+        if (direct->document()) {
+            for (std::size_t index = 0;
+                 index < direct->document()->panes.size(); ++index) {
+                const auto& solved = direct->document()->panes[index];
+                const auto& adapted = projected.shell.panes[index];
+                ASSERT_EQ(adapted.frame, solved.frame);
+                ASSERT_EQ(adapted.content, solved.content);
+                ASSERT_EQ(adapted.scrollbar, solved.scrollbarGutter);
+                ASSERT_EQ(adapted.lineNumbers, solved.lineNumbers);
+            }
+        }
+
+        ASSERT_EQ(projected.shell.panel.has_value(),
+                  direct->panel().has_value());
+        if (direct->panel()) {
+            ASSERT_EQ(*projected.shell.panel, direct->panel()->rect);
+            ASSERT_EQ(projected.shell.panelScrollbar,
+                      direct->panel()->scrollbarGutter);
+            ASSERT_EQ(projected.treeWindows.size(), std::size_t{1});
+            if (!projected.treeWindows.empty()) {
+                ASSERT_EQ(projected.treeWindows.front().firstVisible,
+                          direct->panel()->firstVisible);
+                ASSERT_EQ(projected.treeWindows.front().scrollbar,
+                          direct->panel()->scrollbar);
+            }
+        }
+
+        const auto* tabNode = direct->layout().find(
+            ssg::UiNodeId{std::string{ssg::kTabBarNodeId}});
+        ASSERT_EQ(projected.shell.tabBar.has_value(), tabNode != nullptr);
+        if (tabNode) {
+            const auto tabs = ssg::solveTabBar(
+                direct->sections().tabs, direct->presentation().style.tab,
+                tabNode->rect);
+            ASSERT_EQ(projected.shell.tabHits.size(), tabs.tabs.size());
+            for (std::size_t index = 0; index < tabs.tabs.size(); ++index) {
+                ASSERT_EQ(projected.shell.tabHits[index].rect,
+                          tabs.tabs[index].rect);
+                ASSERT_EQ(projected.shell.tabHits[index].index,
+                          tabs.tabs[index].index);
+            }
+        }
+
+        ASSERT_EQ(projected.prompt.has_value(),
+                  direct->sections().promptView.has_value());
+        if (projected.prompt && direct->sections().promptView) {
+            ASSERT_EQ(projected.shell.prompt,
+                      std::optional<ssg::Rect>{projected.prompt->rect});
+            ASSERT_EQ(projected.prompt->controls.size(),
+                      direct->sections().promptView->controls.size());
+            for (std::size_t index = 0;
+                 index < projected.prompt->controls.size(); ++index) {
+                const auto* node = direct->layout().find(
+                    ssg::footerPromptControlNodeId(
+                        direct->sections().promptView->controls[index].id));
+                ASSERT_TRUE(node != nullptr);
+                if (node) {
+                    ASSERT_EQ(projected.prompt->controls[index].rect,
+                              node->rect);
+                }
+            }
+        }
+
+        ASSERT_EQ(projected.shell.palette.has_value(),
+                  direct->sections().palette.activePicker.has_value());
+        if (projected.shell.palette) {
+            const auto* node = direct->layout().find(
+                ssg::UiNodeId{
+                    std::string{ssg::kFindResultsViewportNodeId}});
+            ASSERT_TRUE(node != nullptr);
+            if (node) {
+                const auto solved = ssg::solvePaletteSurface(
+                    direct->palette(), node->rect,
+                    direct->presentation()
+                        .style.dimensions.scrollbarGutterWidth);
+                ASSERT_EQ(projected.shell.palette->rect, solved.rows);
+                ASSERT_EQ(projected.shell.palette->scrollbarRect,
+                          solved.scrollbar);
+            }
+        }
+    };
+
+    compare();
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"panel.show_files", runtime.revision(), {}})
+                    .accepted());
+    compare();
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"palette.open", runtime.revision(), {}})
+                    .accepted());
+    compare();
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"palette.close", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(client,
+                              {"find.open", runtime.revision(), {}})
+                    .accepted());
+    compare();
 }
 
 TEST(runtimeSourcesDoNotIncludeFixtureModel) {
@@ -858,8 +1027,11 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     ASSERT_TRUE(firstFrame.has_value());
     ASSERT_TRUE(secondFrame.has_value());
     if (!firstFrame || !secondFrame) return;
-    ASSERT_EQ(firstFrame->presentation().shell.panes.size(), std::size_t{1});
-    ASSERT_EQ(secondFrame->presentation().shell.panes.size(), std::size_t{1});
+    ASSERT_TRUE(firstFrame->document().has_value());
+    ASSERT_TRUE(secondFrame->document().has_value());
+    if (!firstFrame->document() || !secondFrame->document()) return;
+    ASSERT_EQ(firstFrame->document()->panes.size(), std::size_t{1});
+    ASSERT_EQ(secondFrame->document()->panes.size(), std::size_t{1});
 
     const auto revision = runtime.revision();
     auto split = runtime.dispatch(
@@ -880,8 +1052,11 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     ASSERT_TRUE(firstFrame.has_value());
     ASSERT_TRUE(secondFrame.has_value());
     if (!firstFrame || !secondFrame) return;
-    ASSERT_EQ(firstFrame->presentation().shell.panes.size(), std::size_t{2});
-    ASSERT_EQ(secondFrame->presentation().shell.panes.size(), std::size_t{1});
+    ASSERT_TRUE(firstFrame->document().has_value());
+    ASSERT_TRUE(secondFrame->document().has_value());
+    if (!firstFrame->document() || !secondFrame->document()) return;
+    ASSERT_EQ(firstFrame->document()->panes.size(), std::size_t{2});
+    ASSERT_EQ(secondFrame->document()->panes.size(), std::size_t{1});
 
     auto blockedFocus = runtime.dispatch(
         firstClient, {"pane.focus_down", runtime.revision(), {}});
@@ -1116,9 +1291,12 @@ TEST(visualMovementUsesActivePaneAndDiscardsMismatchedProposal) {
     ASSERT_TRUE(presenter.apply(*split.viewAction, *frame).accepted());
     frame = presenter.project(runtime, client, {{41, 15}, {}});
     ASSERT_TRUE(frame.has_value());
-    if (!frame || frame->presentation().shell.panes.size() != 2) return;
+    if (!frame || !frame->document() ||
+        frame->document()->panes.size() != 2) {
+        return;
+    }
     const auto activeRows = static_cast<std::uint32_t>(
-        frame->presentation().shell.panes.back().content.height);
+        frame->document()->panes.back().content.height);
 
     auto page = runtime.dispatch(
         client, {"cursor.page_down", runtime.revision(), {}});
