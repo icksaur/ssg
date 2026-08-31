@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 // Construction-time configuration types for SSG components.
 //
 // These are immutable value objects passed to constructors to separate
@@ -24,19 +26,21 @@
 namespace ssg {
 
 enum class IndentStyle : uint8_t {
-    Spaces,
-    Tabs,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_INDENT_STYLE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_INDENT_STYLE_ENUMERATORS
 
 // Line-ending convention stored in a document.
 // `mixed` preserves per-line terminators until an explicit normalization
 // command (spec §Design, file.set_line_ending).
 enum class LineEnding : uint8_t {
-    Lf,
-    Crlf,
-    Cr,
-    Mixed,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_LINE_ENDING_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_LINE_ENDING_ENUMERATORS
 
 class TabWidth {
 public:

@@ -52,8 +52,8 @@ const check = (name, fn) => { fn(); checks++; };
 
 check('browser surface vocabulary contains only current sparse surfaces', () => {
   assert.deepEqual(SURFACE, {
-    TABBAR: 0,
-    FINDRESULTS: 3,
+    TAB_BAR: 0,
+    FIND_RESULTS: 3,
     NOTICE: 6,
     EXTERNAL_MODIFICATION: 7,
     DOCUMENT: 8,
@@ -992,7 +992,7 @@ check('interpretChrome carries a node ScrollAxis so a client derives independent
   const document = leafNode(
     'document', WIDGET.VIEW, { surface: SURFACE.DOCUMENT });
   const editor = scrollContainer('editor', SCROLL.NONE, [
-    leafNode('tabbar', WIDGET.VIEW, { surface: SURFACE.TABBAR }),
+    leafNode('tabbar', WIDGET.VIEW, { surface: SURFACE.TAB_BAR }),
     scrollContainer('document.viewport', SCROLL.VERTICAL, [document]),
   ]);
   const root = { id: 'root', size: {}, container: { axis: 1, gap: 0, children: [
@@ -1122,11 +1122,11 @@ check('picker presence overlay preserves header siblings and panel while replaci
     leafNode('tree', WIDGET.VIEW, { surface: SURFACE.TREE }),
   ]);
   const editor = rowNode('editor', [
-    leafNode('tabbar', WIDGET.VIEW, { surface: SURFACE.TABBAR }),
+    leafNode('tabbar', WIDGET.VIEW, { surface: SURFACE.TAB_BAR }),
     leafNode('document', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
   ]);
   const results = rowNode('findresults.viewport', [
-    leafNode('findresults', WIDGET.VIEW, { surface: SURFACE.FINDRESULTS }),
+    leafNode('findresults', WIDGET.VIEW, { surface: SURFACE.FIND_RESULTS }),
   ]);
   const content = rowNode('content', [editor, results]);
   const root = rowNode('root', [header, rowNode('body', [panel, content])]);
@@ -1246,7 +1246,7 @@ check('interpretChrome applies the per-kind render gate', () => {
 
 check('interpretChrome produces View leaves for every supported surface', () => {
   const surfaces = [
-    SURFACE.TABBAR, SURFACE.TREE, SURFACE.FINDRESULTS, SURFACE.NOTICE,
+    SURFACE.TAB_BAR, SURFACE.TREE, SURFACE.FIND_RESULTS, SURFACE.NOTICE,
     SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
   ];
   const root = rowNode('root', surfaces.map((surface) => leafNode('surface-' + surface, WIDGET.VIEW, { surface })));
@@ -1330,12 +1330,12 @@ check('session deltas dirty only their dependent browser surfaces', () => {
   });
   assert.deepEqual(browserRenderPlan({ palette: {} }), {
     rebuild: false, reconcile: false, responsive: false, repaintTheme: false,
-    surfaces: [SURFACE.FINDRESULTS],
+    surfaces: [SURFACE.FIND_RESULTS],
   });
   assert.deepEqual(browserRenderPlan({ theme: { replacement: {} } }), {
     rebuild: false, reconcile: true, responsive: false, repaintTheme: true,
     surfaces: [
-      SURFACE.TABBAR, SURFACE.FINDRESULTS, SURFACE.NOTICE,
+      SURFACE.TAB_BAR, SURFACE.FIND_RESULTS, SURFACE.NOTICE,
       SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT, SURFACE.TREE,
     ],
   });
@@ -1366,10 +1366,10 @@ check('the locally owned finder becomes keyboard owner while it replaces the doc
   assert.equal(
     preferredKeyboardSurface([SURFACE.DOCUMENT]), SURFACE.DOCUMENT);
   assert.equal(
-    preferredKeyboardSurface([SURFACE.DOCUMENT, SURFACE.FINDRESULTS]),
-    SURFACE.FINDRESULTS);
+    preferredKeyboardSurface([SURFACE.DOCUMENT, SURFACE.FIND_RESULTS]),
+    SURFACE.FIND_RESULTS);
   assert.equal(
-    preferredKeyboardSurface([SURFACE.FINDRESULTS]), SURFACE.FINDRESULTS);
+    preferredKeyboardSurface([SURFACE.FIND_RESULTS]), SURFACE.FIND_RESULTS);
   assert.equal(preferredKeyboardSurface([SURFACE.TREE]), null);
 });
 

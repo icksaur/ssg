@@ -40,6 +40,13 @@ import {
   settlePromptPresentation, deferPromptDocumentSurface,
 } from '/reconcile.mjs';
 import { fuzzyRank } from '/fuzzy.mjs';
+import {
+  INPUT_POINTER_PHASE,
+  SEMANTIC_ROLE,
+  VIEW_ACTION_KIND as VIEW_ACTION,
+  VIEW_SCROLL_TARGET,
+  VISUAL_SELECTION_DIRECTION,
+} from '/generated/semantic_wire_manifest.mjs';
 
 const statusEl = document.getElementById('status');
 const chromeErrorEl = document.getElementById('chrome-error');
@@ -53,29 +60,8 @@ function activateUiNode(nodeId) {
     nodeId, state.sections.ui_frame.schema.generation, state.revision));
 }
 
-// Role ordinals the renderer maps to CSS custom properties; pinned by
-// test_theme's role-ordinal contract so a reorder cannot silently mis-color.
-const ROLE = { text: 0, canvas: 1, caret: 2, selection: 3, statusWarning: 13,
-               tabActive: 6, tabInactive: 7, statusInfo: 12,
-               scrollbarTrack: 17, scrollbarThumb: 18,
-               diffAdded: 19, diffRemoved: 20, diffModified: 21 };
-const FOCUS_EDITOR = 0;   // FocusTarget::Editor ordinal.
 const DOCUMENT_VIEWPORT_NODE_ID = 'document.viewport';
 const PANEL_NODE_ID = 'panel';
-const VIEW_ACTION = {
-  SCROLL_LINES: 0,
-  SCROLL_PAGES: 1,
-  SCROLL_FRACTION: 2,
-  MOVE_VISUAL_SELECTION: 3,
-  REVEAL_SELECTION: 4,
-  CENTER_SELECTION: 5,
-  SPLIT_PANE: 6,
-  CLOSE_PANE: 7,
-  CYCLE_PANE: 8,
-  FOCUS_PANE: 9,
-  CONTINUE_POINTER_EDGE: 10,
-};
-const VIEW_SCROLL_TARGET = { DOCUMENT: 0, TREE: 1 };
 
 // Persistent client model: the authoritative sections plus the still-unsettled
 // local predictions. Snapshots replace `sections`; deltas mutate it in place.
@@ -137,13 +123,13 @@ function applyTheme(theme) {
   // Re-derive every property each frame, clearing any set by an earlier theme,
   // so a short or absent role table never leaves a stale color on screen.
   const set = (name, i) => { const c = cssColor(rc[i]); if (c) root.setProperty(name, c); else root.removeProperty(name); };
-  set('--ssg-text', ROLE.text);
-  set('--ssg-canvas', ROLE.canvas);
-  set('--ssg-caret', ROLE.caret);
-  set('--ssg-selection', ROLE.selection);
-  set('--ssg-status-warning', ROLE.statusWarning);
-  set('--ssg-scrollbar-track', ROLE.scrollbarTrack);
-  set('--ssg-scrollbar-thumb', ROLE.scrollbarThumb);
+  set('--ssg-text', SEMANTIC_ROLE.TEXT);
+  set('--ssg-canvas', SEMANTIC_ROLE.CANVAS);
+  set('--ssg-caret', SEMANTIC_ROLE.CARET);
+  set('--ssg-selection', SEMANTIC_ROLE.SELECTION);
+  set('--ssg-status-warning', SEMANTIC_ROLE.STATUS_WARNING);
+  set('--ssg-scrollbar-track', SEMANTIC_ROLE.SCROLLBAR_TRACK);
+  set('--ssg-scrollbar-thumb', SEMANTIC_ROLE.SCROLLBAR_THUMB);
   return (theme && Array.isArray(theme.syntax_colors)) ? theme.syntax_colors : [];
 }
 
@@ -156,7 +142,8 @@ function renderTabsInto(host, tabs, theme) {
       el.type = 'button';
       el.className = 'tab' + (idKey(t.id) === activeId ? ' active' : '');
       el.style.color = roleColor(
-        idKey(t.id) === activeId ? ROLE.tabActive : ROLE.tabInactive, theme);
+        idKey(t.id) === activeId
+          ? SEMANTIC_ROLE.TAB_ACTIVE : SEMANTIC_ROLE.TAB_INACTIVE, theme);
       el.textContent = (t.dirty ? '\u25CF ' : '') + (t.label || '');
       el.setAttribute(
         'aria-label', (t.label || '') + (t.dirty ? ', modified' : ''));
@@ -575,7 +562,7 @@ function renderSurfaceNode(node, plan) {
     });
     if (created) {
       if (node.surface === SURFACE.DOCUMENT ||
-         node.surface === SURFACE.FINDRESULTS) {
+         node.surface === SURFACE.FIND_RESULTS) {
        el.tabIndex = 0;
       }
       el.dataset.surface = String(node.surface);
@@ -590,7 +577,7 @@ function renderSurfaceNode(node, plan) {
 
 function renderSurfaceContent(el, surface) {
   const s = state.sections || {};
-  if (surface === SURFACE.TABBAR) {
+  if (surface === SURFACE.TAB_BAR) {
     el.classList.add('tabs');
     renderTabsInto(el, s.tabs, s.theme);
   } else if (surface === SURFACE.DOCUMENT) {
@@ -599,7 +586,7 @@ function renderSurfaceContent(el, surface) {
   } else if (surface === SURFACE.TREE) {
     el.textContent = '';
     renderTreeSurface(el, s.tree);
-  } else if (surface === SURFACE.FINDRESULTS) {
+  } else if (surface === SURFACE.FIND_RESULTS) {
     el.textContent = '';
     el.classList.add('find-results-surface');
     renderFindResultsSurface(
@@ -956,7 +943,7 @@ function refreshFinder() {
     renderPickerInput(
       pickerInputElement, pickerInputElement._ssgPickerSigil);
   }
-  scheduleRender(surfaceRenderPlan(SURFACE.FINDRESULTS));
+  scheduleRender(surfaceRenderPlan(SURFACE.FIND_RESULTS));
 }
 
 function applyDelta(d) {
@@ -1185,7 +1172,9 @@ function dispatchPointerRange(range) {
 
 function dispatchPointerRelease(range) {
   const sent = sendInputFrame(
-    encodeDocumentPointerInput(null, state.revision, { phase: 2 }),
+    encodeDocumentPointerInput(null, state.revision, {
+      phase: INPUT_POINTER_PHASE.RELEASE,
+    }),
     { pointerRange: { ...range, stage: 'release' } });
   if (!sent) {
     cancelPointerSelection();
@@ -1197,7 +1186,9 @@ function dispatchPointerRelease(range) {
 
 function dispatchPointerMove(range) {
   const sent = sendInputFrame(
-    encodeDocumentPointerInput(range.active, state.revision, { phase: 1 }),
+    encodeDocumentPointerInput(range.active, state.revision, {
+      phase: INPUT_POINTER_PHASE.MOVE,
+    }),
     { pointerRange: { ...range, stage: 'move' } });
   if (!sent) {
     cancelPointerSelection();
@@ -1366,7 +1357,8 @@ function applyViewAction(request) {
       ? viewport.clientHeight
       : lineHeight;
     const sign = direction === 0 ||
-        (kind === VIEW_ACTION.MOVE_VISUAL_SELECTION && direction === 2)
+        (kind === VIEW_ACTION.MOVE_VISUAL_SELECTION &&
+         direction === VISUAL_SELECTION_DIRECTION.PAGE_UP)
       ? -1
       : 1;
     const viewportRect = viewport.getBoundingClientRect();
@@ -1424,7 +1416,9 @@ function applyViewAction(request) {
     }
     const frame = kind === VIEW_ACTION.CONTINUE_POINTER_EDGE
       ? encodeDocumentPointerInput(
-          resolved.at(-1).active, request.semantic_revision, { phase: 1 })
+          resolved.at(-1).active, request.semantic_revision, {
+            phase: INPUT_POINTER_PHASE.MOVE,
+          })
       : encodeResolvedSelectionInput(
           request.semantic_revision, activeTab, documentRevision, resolved);
     if (!sendInputFrame(
@@ -1867,7 +1861,7 @@ function handleKeydown(ev) {
       state.palette.pendingSubmit = null;
       state.palette.error = '';
       scheduleRender({
-        ...surfaceRenderPlan(SURFACE.FINDRESULTS),
+        ...surfaceRenderPlan(SURFACE.FIND_RESULTS),
         reconcile: true,
       });
       return;
@@ -1908,7 +1902,7 @@ function handleKeydown(ev) {
       Object.assign(p, before);
       return;
     }
-    scheduleRender({ ...surfaceRenderPlan(SURFACE.FINDRESULTS),
+    scheduleRender({ ...surfaceRenderPlan(SURFACE.FIND_RESULTS),
                      reconcile: true });
     return;
   }

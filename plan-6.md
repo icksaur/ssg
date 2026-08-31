@@ -259,3 +259,216 @@ Step 1 failure.
 - The removed JSON field manifest is the only protocol fixture changed by Step
   1; canonical hex fixtures are not regenerated.
 - `scripts/check.sh` and `scripts/check.sh push` pass.
+
+## Step 2 design: generated structural wire contract
+
+### Scope and boundary
+
+Step 2 moves the remaining cross-language structural contract into the
+manifest. It covers wire enum identities and reservations, nested object and
+tagged-union field shapes, primitive types, presence/nullability, bounded scalar
+forms, and unknown-value/unknown-field policy. Generated C++ and JavaScript
+bindings enforce those facts before typed conversion or retained-state
+mutation.
+
+The primitive schema vocabulary is exactly the existing `ProtocolValue` kinds:
+null, boolean, signed integer, unsigned integer, text, bytes, array, and object.
+Named constrained aliases may narrow an integer to an existing domain
+representation or require nonempty text/arrays; they do not add another scalar
+encoding.
+
+Step 2 does not generate state transitions. Revision comparison, stale-base
+rejection, splice/merge behavior, replacement/change decisions, candidate-state
+construction, and atomic commit remain in the existing replay code until Step
+3. Structural validation may establish that a revision is an unsigned wire
+integer; only replay decides whether that revision is applicable to retained
+state.
+
+The first migration targets are the contracts interpreted in both C++ and the
+browser:
+
+- UI vocabulary and layout values, including widget kinds, view surfaces,
+  focus targets, semantic roles, syntax scopes, axis/scroll/size kinds, and
+  widget overflow;
+- the recursive UI frame/schema/state/presence records and palette-presence
+  overlay;
+- browser-originated client input, client-owned input/result, published view
+  actions, and their nested pointer/target/direction vocabularies;
+- the nested snapshot and delta records consumed by browser presentation or
+  reconciliation.
+
+The generator inventory must also include a wire enum used only by C++ today.
+Being single-language at present is not permission to leave an independently
+numbered protocol vocabulary outside the manifest. Domain-only enums that never
+cross a codec boundary remain in their owning domain headers.
+
+### Manifest authority
+
+`semantic_wire.mjs` gains two closed declaration groups:
+
+- `wireEnums` declares each wire vocabulary, its symbolic identity, each value's
+  symbol, stable wire name where one exists, explicit ordinal, lifecycle, and
+  unknown-value policy. Retired values stay as permanent ordinal reservations.
+  A vocabulary may declare one explicit compatibility fallback; all other
+  unknown values reject.
+- `wireTypes` declares named records, arrays, and discriminated unions. A field
+  has one wire name, one referenced primitive/enum/type, and explicit
+  required/optional and nullable policy. A record explicitly allows or rejects
+  unknown fields. Declarative constraints cover independently structural facts
+  such as nonempty text/arrays, host-representable integer ranges, exact tagged
+  variants, and their discriminator-specific fields. An exclusive field
+  relationship must be modeled as a tagged union rather than as a second
+  general-purpose coordination constraint.
+
+Declaration references must resolve without cycles except through an explicitly
+recursive type. A `wireType` declares recursion on the field edge that may refer
+back to it; undeclared self-reference and every multi-type cycle reject.
+Duplicate symbols, wire names, enum ordinals, record fields, union discriminator
+values, or generated binding names reject before output is opened. A
+compatibility lifecycle value cannot be accepted by a current enum decoder
+unless a named compatibility adapter owns that acceptance.
+
+The manifest does not contain product defaults, presentation policy, client
+capabilities, authorization, retained-state behavior, or callbacks expressed as
+source strings. A constraint that cannot be represented by the closed schema
+vocabulary remains a named typed domain check. Examples include UI topology,
+generation correspondence, unique node identity, prompt predecessor
+normalization, and revision continuity. The generator must reject an untyped
+escape hatch rather than becoming a registry of arbitrary snippets.
+
+### Generated bindings
+
+The checked-in C++ output provides:
+
+- enumerator macros with explicit ordinals for public domain enums;
+- constexpr facts and enum traits for current values, compatibility values,
+  retired reservations, names, and unknown policy;
+- private structural validators and field identities consumed at the
+  `ProtocolValue` codec boundary.
+
+Public enum types, domain comments, constructors, and behavior stay in their
+existing public headers. Those headers consume generated enumerators as
+`ProtocolMessageKind` already does; generated code does not introduce parallel
+public wire-model structs. Handwritten typed conversion remains responsible for
+constructing domain values and running named semantic checks. Once a generated
+structural validator owns a migrated shape, the corresponding converter must
+not maintain a second allowed-field or allowed-enum inventory.
+
+The checked-in JavaScript output provides deeply frozen enum bindings, field
+identities, and direct synchronous structural validators/builders. Browser code
+imports symbolic bindings instead of numeric mirrors or naked tagged-union
+ordinals. Generated code is static and reflection-free on interaction paths:
+text prediction, selection, local picker filtering, scrolling, and view-action
+interpretation remain client-local and add no protocol round trip.
+
+Normal builds consume checked-in outputs without Node. Check and write modes
+continue to validate/render every output before touching any destination and
+retain the Step 1 restoration behavior across the enlarged output set.
+
+### Compatibility policy
+
+All current public enum ordinals are wire ABI even where the C++ declaration
+previously relied on declaration order. Generation makes them explicit without
+renumbering. Sparse and retired values remain declared and independently
+oracle-pinned; they are never compacted or reused.
+
+Unknown enum values reject unless the manifest names a compatibility fallback.
+The existing scroll-axis fallback remains exceptional and maps unknown numeric
+values to the non-scrolling form. A wrong primitive type still rejects.
+Step 2 grandfathers only a fallback already present in the current codec. Adding
+a fallback to another vocabulary requires an amendment to this design with a
+domain compatibility rationale; editing manifest data alone cannot broaden
+acceptance.
+Retired view-surface and focus representations remain accepted only by their
+exact predecessor adapters. Generated current validators neither broaden those
+adapters nor make retired values generally valid.
+
+Object unknown-field behavior also remains shape-specific. Existing
+forward-compatible records continue to ignore unknown fields. Exact tagged
+input variants continue to reject them. Step 2 records this policy but does not
+standardize it to one global rule.
+
+No canonical wire bytes, public decode error category, or externally visible
+diagnostic text changes in Step 2. Generated validation failures are translated
+through the existing owning codec's error surface.
+
+### Implementation increments
+
+Step 2 is implemented as separately gated, reviewed, and committed increments:
+
+- **Vocabulary foundation** — add every wire enum declaration and generate
+  explicit C++ enumerators/traits plus JavaScript bindings. Replace browser
+  constants and naked enum ordinals. Preserve all current and retired values,
+  names, public types, and compatibility behavior. Existing public enum
+  declarations consume generated enumerator macros in their owning headers, and
+  compile-time assertions bind each public value to the generated ordinal facts
+  before any structural schema consumes those traits.
+- **UI structure** — add and consume schemas for the recursive UI tree, frame,
+  state, presence, layout values, and palette-presence overlay. Preserve named
+  semantic topology/correspondence checks outside generated structural
+  validation.
+- **Interaction structure** — add and consume schemas/builders for client
+  inputs/results and view actions. Preserve exact-field rejection, typed command
+  dispatch, host-supplied identity/capabilities, and client-local interaction.
+- **Semantic section structure** — migrate the remaining nested snapshot/delta
+  shapes and browser-consumed field names. Preserve custom delta decoding and
+  all replay behavior for Step 3.
+- **Ownership cleanup** — remove superseded allowed-value arrays, field-name
+  lists, browser mirrors, and stale comments; add a source-inventory gate that
+  prevents their return.
+
+An increment must replace a live consumer; no generated schema or validator is
+landed as unused infrastructure. Each increment retains one authoritative typed
+conversion path per language.
+
+### Oracles and gates
+
+Independent tests pin all current enum identities and all sparse/retired
+reservations rather than accepting generated agreement as proof. Existing
+canonical protocol hex remains byte-identical throughout Step 2.
+
+A shared hand-authored corpus under
+`tests/fixtures/protocol/structural/` contains full wire-message hex cases that
+both language suites discover. Malformed cases exercise each migrated
+structural policy: missing required fields, wrong primitive kinds, nullability,
+unknown enum values, integer bounds, tagged-union discriminator and variant
+fields, and unknown-field handling. Existing accepted compatibility fixtures
+separately cover the exceptional fallback and predecessor adapters. C++ typed
+round trips and browser fixture interpretation continue to prove that accepted
+structures construct the same semantics.
+
+Focused UI tests retain recursive-tree, topology, unique-identity, generation,
+and predecessor-adapter rejection. Focused interaction tests retain exact input
+shapes and byte equality for browser-built requests. Browser tests run local
+interaction helpers with an unresolved fake transport and assert that predicted
+text/selection and scroll/view presentation update synchronously without
+waiting for a response; picker query/filter changes additionally assert that no
+outbound message is emitted. This distinguishes required authoritative sends
+from a forbidden interaction round trip.
+
+Source inventory rejects handwritten browser enum maps, numeric semantic-input
+tags, per-codec current-value arrays, and migrated current-shape field lists
+outside the manifest/generated outputs. Named compatibility adapters and
+independent hand-authored test oracles are allowlisted until their scheduled
+removal.
+
+Every increment requires deterministic regenerate-and-check, its narrow C++ and
+browser suites, `scripts/check.sh`, `scripts/check.sh push`, and standing review.
+Step 2 is complete only when all migrated declarations have one manifest owner
+and Step 3 can generate replay without rediscovering structural wire facts.
+
+### Invariants
+
+- **STRUCTURAL-WIRE-1** — every codec-reachable enum identity, ordinal,
+  reservation, and unknown-value policy has one manifest declaration consumed
+  by each language binding.
+- **STRUCTURAL-WIRE-2** — every migrated nested wire shape has one declarative
+  structural validator that runs before typed construction or retained-state
+  mutation.
+- **STRUCTURAL-WIRE-3** — generated bindings remain private implementation
+  facts; existing public domain types and typed transitions remain the product
+  contract.
+- **STRUCTURAL-WIRE-4** — compatibility acceptance is explicit and no broader
+  than the predecessor contract it replaces.
+- **STRUCTURAL-WIRE-5** — Step 2 changes ownership, not wire bytes, replay
+  behavior, client authority, or interaction latency.

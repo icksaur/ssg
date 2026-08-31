@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ssg/ShellState.h>
+#include <ssg/detail/generated/semantic_wire_manifest.h>
 #include <ssg/types.h>
 
 #include <cstdint>
@@ -9,23 +10,18 @@
 namespace ssg {
 
 enum class ViewActionKind : std::uint8_t {
-    ScrollLines,
-    ScrollPages,
-    ScrollFraction,
-    MoveVisualSelection,
-    RevealSelection,
-    CenterSelection,
-    SplitPane,
-    ClosePane,
-    CyclePane,
-    FocusPane,
-    ContinuePointerEdge,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_VIEW_ACTION_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_VIEW_ACTION_KIND_ENUMERATORS
 
 enum class ViewScrollTarget : std::uint8_t {
-    Document,
-    Tree,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_VIEW_SCROLL_TARGET_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_VIEW_SCROLL_TARGET_ENUMERATORS
 
 struct ViewScrollLines {
     ViewScrollTarget target = ViewScrollTarget::Document;
@@ -52,11 +48,11 @@ struct ViewScrollFraction {
 };
 
 enum class VisualSelectionDirection : std::uint8_t {
-    LineUp,
-    LineDown,
-    PageUp,
-    PageDown,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_VISUAL_SELECTION_DIRECTION_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_VISUAL_SELECTION_DIRECTION_ENUMERATORS
 
 struct MoveVisualSelection {
     VisualSelectionDirection direction = VisualSelectionDirection::LineDown;
@@ -87,9 +83,11 @@ struct ClosePane {
 };
 
 enum class PaneCycleDirection : std::uint8_t {
-    Next,
-    Previous,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_PANE_CYCLE_DIRECTION_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_PANE_CYCLE_DIRECTION_ENUMERATORS
 
 struct CyclePane {
     PaneCycleDirection direction = PaneCycleDirection::Next;
@@ -104,9 +102,11 @@ struct FocusPane {
 };
 
 enum class PointerEdgeDirection : std::uint8_t {
-    Before,
-    After,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_POINTER_EDGE_DIRECTION_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_POINTER_EDGE_DIRECTION_ENUMERATORS
 
 struct ContinuePointerEdge {
     PointerEdgeDirection direction = PointerEdgeDirection::After;

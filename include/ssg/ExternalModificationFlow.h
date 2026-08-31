@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include "ssg/DiffModel.h"
 #include "ssg/RecoveryManager.h"
 #include "ssg/FilesystemWatcher.h"
@@ -16,10 +18,11 @@
 namespace ssg {
 
 enum class ExternalAction : std::uint8_t {
-    Reload,
-    KeepBuffer,
-    OpenDiff,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_EXTERNAL_ACTION_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_EXTERNAL_ACTION_ENUMERATORS
 
 struct ExternalActionInvocation {
     DiffFileId fileId;
@@ -30,9 +33,11 @@ struct ExternalActionInvocation {
 };
 
 enum class ExternalDocumentStatus : std::uint8_t {
-    ExternallyModified,
-    ExternallyRemoved,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_EXTERNAL_DOCUMENT_STATUS_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_EXTERNAL_DOCUMENT_STATUS_ENUMERATORS
 
 struct ExternalModificationCommandDescriptor {
     std::string_view id;

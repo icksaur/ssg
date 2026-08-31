@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include <ssg/Theme.h>
 #include <ssg/types.h>
 
@@ -70,8 +72,18 @@ struct SyntaxSpan {
     friend bool operator==(const SyntaxSpan&, const SyntaxSpan&) = default;
 };
 
-enum class BracketKind : std::uint8_t { Round, Square, Curly };
-enum class BracketRole : std::uint8_t { Open, Close };
+enum class BracketKind : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_BRACKET_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_BRACKET_KIND_ENUMERATORS
+enum class BracketRole : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_BRACKET_ROLE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_BRACKET_ROLE_ENUMERATORS
 
 struct BracketToken {
     ByteOffset offset;
@@ -100,12 +112,18 @@ struct UnmatchedBracket {
                            const UnmatchedBracket&) = default;
 };
 
-enum class CommentKind : std::uint8_t { Line, Block };
-enum class CommentTokenRole : std::uint8_t {
-    Line,
-    BlockOpen,
-    BlockClose,
+enum class CommentKind : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_COMMENT_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_COMMENT_KIND_ENUMERATORS
+enum class CommentTokenRole : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_COMMENT_TOKEN_ROLE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_COMMENT_TOKEN_ROLE_ENUMERATORS
 
 struct CommentToken {
     SyntaxRange range;

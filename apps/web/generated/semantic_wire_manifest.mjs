@@ -63,6 +63,14 @@ export const MESSAGE_KINDS = deepFreeze([
     "lifecycle": "current"
   }
 ]);
+export const PROTOCOL_MESSAGE_KIND = deepFreeze({
+  COMMAND_REQUEST: 0,
+  SESSION_SNAPSHOT: 1,
+  SESSION_DELTA: 2,
+  COMMAND_RESULT: 6,
+  CLIENT_INPUT: 7,
+  CLIENT_INPUT_RESULT: 8,
+});
 export const SEMANTIC_SECTIONS = deepFreeze([
   {
     "symbol": "Document",
@@ -304,3 +312,392 @@ export const SEMANTIC_SNAPSHOT_FIELDS = Object.freeze(
   SEMANTIC_SECTIONS.map((section) => section.snapshot));
 export const SEMANTIC_DELTA_FIELDS = Object.freeze(
   SEMANTIC_SECTIONS.flatMap((section) => section.delta));
+export const COMMAND_ERROR = deepFreeze({
+  NONE: 0,
+  UNKNOWN_CLIENT: 1,
+  UNKNOWN_COMMAND: 2,
+  STALE_REVISION: 3,
+  CAPABILITY_DENIED: 4,
+  HANDLER_FAILED: 5,
+  REVISION_EXHAUSTED: 6,
+});
+export const DOCUMENT_MODE = deepFreeze({
+  EDIT: 0,
+  READ_ONLY: 1,
+  DIFF: 2,
+});
+export const STATUS_PRIORITY = deepFreeze({
+  ERROR: 0,
+  WARNING: 1,
+  INFORMATION: 2,
+  PROGRESS: 3,
+});
+export const PROMPT_KIND = deepFreeze({
+  PATH: 0,
+  FIND: 1,
+  REPLACE: 2,
+  SETTINGS: 3,
+  COMMAND_ARGUMENT: 4,
+  PALETTE: 5,
+});
+export const PROMPT_CONTROL_KIND = deepFreeze({
+  INPUT: 0,
+  TOGGLE: 1,
+  COUNT: 2,
+});
+export const SEARCH_MODE = deepFreeze({
+  FILE: 0,
+  LINE: 1,
+  SYMBOL: 2,
+  TEXT: 3,
+  COMMAND: 4,
+});
+export const FIND_REPLACE_ERROR = deepFreeze({
+  NONE: 0,
+  INVALID_PATTERN: 1,
+  INVALID_UTF8: 2,
+  INVALID_SELECTION: 3,
+  BUDGET_EXHAUSTED: 4,
+  CANCELLED: 5,
+  NO_MATCH: 6,
+  STALE_REVISION: 7,
+  DOCUMENT_REJECTED: 8,
+  WORKSPACE_REJECTED: 9,
+  RECOVERY_REJECTED: 10,
+});
+export const SETTING_SCOPE = deepFreeze({
+  DEFAULTS: 0,
+  USER: 1,
+  WORKSPACE: 2,
+  LANGUAGE: 3,
+  DOCUMENT: 4,
+});
+export const SETTING_KEY = deepFreeze({
+  INDENT_WIDTH: 0,
+  INDENT_STYLE: 1,
+  INDENT_DETECTION: 2,
+  AUTO_INDENT: 3,
+  LINE_ENDING: 4,
+  FINAL_NEWLINE: 5,
+  ENCODING: 6,
+  WORD_WRAP: 7,
+  THEME: 8,
+  KEYMAP: 9,
+  SEARCH_CASE_SENSITIVE: 10,
+  SEARCH_WHOLE_WORD: 11,
+  SEARCH_REGULAR_EXPRESSION: 12,
+  UNDO_BYTE_BUDGET: 13,
+  RECOVERY_BYTE_BUDGET: 14,
+  TYPING_COALESCING_MS: 15,
+  FILE_FINDER_RESPECT_GITIGNORE: 16,
+  AUTOSAVE_DEBOUNCE_MS: 17,
+  LINE_NUMBERS: 18,
+});
+export const TEXT_ENCODING = deepFreeze({
+  UTF8: 0,
+  UTF8_BOM: 1,
+  UTF16LE: 2,
+  UTF16BE: 3,
+  WINDOWS1252: 4,
+  ISO88591: 5,
+});
+export const INDENT_STYLE = deepFreeze({
+  SPACES: 0,
+  TABS: 1,
+});
+export const LINE_ENDING = deepFreeze({
+  LF: 0,
+  CRLF: 1,
+  CR: 2,
+  MIXED: 3,
+});
+export const TAB_KIND = deepFreeze({
+  DOCUMENT: 0,
+  LIVE_DIFF: 1,
+  READ_ONLY_OUTPUT: 2,
+  SEARCH_RESULTS: 3,
+  TREE_VIEW: 4,
+});
+export const TAB_RECOVERY_BADGE = deepFreeze({
+  NONE: 0,
+  PENDING: 1,
+  DURABLE: 2,
+  FAILED: 3,
+});
+export const JOURNAL_DOCUMENT_KEY_KIND = deepFreeze({
+  SAVED: 0,
+  UNTITLED: 1,
+});
+export const DIFF_LINE_KIND = deepFreeze({
+  ADDED: 0,
+  REMOVED: 1,
+  MODIFIED: 2,
+});
+export const DIFF_FILE_STATUS = deepFreeze({
+  ADDED: 0,
+  MODIFIED: 1,
+  DELETED: 2,
+  RENAMED: 3,
+});
+export const EXTERNAL_ACTION = deepFreeze({
+  RELOAD: 0,
+  KEEP_BUFFER: 1,
+  OPEN_DIFF: 2,
+});
+export const EXTERNAL_DOCUMENT_STATUS = deepFreeze({
+  EXTERNALLY_MODIFIED: 0,
+  EXTERNALLY_REMOVED: 1,
+});
+export const FOLLOW_MODE = deepFreeze({
+  FOLLOWING: 0,
+  PAUSED: 1,
+});
+export const TREE_PROVIDER_KIND = deepFreeze({
+  FILESYSTEM: 0,
+  GIT: 1,
+  SYMBOLS: 2,
+});
+export const TREE_NODE_KIND = deepFreeze({
+  ROOT: 0,
+  DIRECTORY: 1,
+  FILE: 2,
+  SYMLINK: 3,
+  GIT_ENTRY: 4,
+  SYMBOL: 5,
+});
+export const GIT_TREE_STATUS = deepFreeze({
+  ADDED: 0,
+  MODIFIED: 1,
+  DELETED: 2,
+  RENAMED: 3,
+  UNTRACKED: 4,
+});
+export const SYNTAX_SCOPE = deepFreeze({
+  PLAIN_TEXT: 0,
+  COMMENT: 1,
+  KEYWORD: 2,
+  STRING: 3,
+  NUMBER: 4,
+  TYPE: 5,
+  FUNCTION: 6,
+  VARIABLE: 7,
+  OPERATOR_TOKEN: 8,
+  PUNCTUATION: 9,
+  INVALID: 10,
+});
+export const BRACKET_KIND = deepFreeze({
+  ROUND: 0,
+  SQUARE: 1,
+  CURLY: 2,
+});
+export const BRACKET_ROLE = deepFreeze({
+  OPEN: 0,
+  CLOSE: 1,
+});
+export const COMMENT_KIND = deepFreeze({
+  LINE: 0,
+  BLOCK: 1,
+});
+export const COMMENT_TOKEN_ROLE = deepFreeze({
+  LINE: 0,
+  BLOCK_OPEN: 1,
+  BLOCK_CLOSE: 2,
+});
+export const LSP_DIAGNOSTIC_SEVERITY = deepFreeze({
+  ERROR: 1,
+  WARNING: 2,
+  INFORMATION: 3,
+  HINT: 4,
+});
+export const SHELL_NODE_KIND = deepFreeze({
+  HEADER: 0,
+  HEADER_FIELD: 1,
+  FOOTER: 2,
+  FOOTER_FIELD: 3,
+  FOOTER_ACTION: 4,
+  TAB_BAR: 5,
+  TAB: 6,
+  PANEL: 7,
+  PANEL_PROVIDER: 8,
+  PANE: 9,
+  SCROLLBAR: 10,
+  PROMPT_RESERVATION: 11,
+  EMPTY_STATE: 12,
+  NOTICE_BAR: 13,
+  NOTICE_ACTION: 14,
+  FOOTER_HINT: 15,
+  TAB_SEPARATOR: 16,
+  EXTERNAL_MODIFICATION_BAR: 17,
+  EXTERNAL_MODIFICATION_ROW: 18,
+  EXTERNAL_MODIFICATION_ACTION: 19,
+});
+export const FOCUS_TARGET = deepFreeze({
+  EDITOR: 0,
+  PANEL: 1,
+  PROMPT: 2,
+  EXTERNAL_MODIFICATION: 3,
+});
+export const SEMANTIC_ROLE = deepFreeze({
+  TEXT: 0,
+  CANVAS: 1,
+  CARET: 2,
+  SELECTION: 3,
+  TREE_BACKGROUND: 4,
+  TREE_FOCUS: 5,
+  TAB_ACTIVE: 6,
+  TAB_INACTIVE: 7,
+  PANEL_ACTIVE: 8,
+  PANEL_INACTIVE: 9,
+  HEADER: 10,
+  FOOTER: 11,
+  STATUS_INFO: 12,
+  STATUS_WARNING: 13,
+  LINE_NUMBER: 14,
+  SEARCH_MATCH: 15,
+  PROMPT: 16,
+  SCROLLBAR_TRACK: 17,
+  SCROLLBAR_THUMB: 18,
+  DIFF_ADDED: 19,
+  DIFF_REMOVED: 20,
+  DIFF_MODIFIED: 21,
+  TAB_INACTIVE_BACKGROUND: 22,
+  HEADER_BACKGROUND: 23,
+  FOOTER_BACKGROUND: 24,
+  CURRENT_LINE_NUMBER: 25,
+  CURRENT_LINE_NUMBER_BACKGROUND: 26,
+  LINE_NUMBER_BACKGROUND: 27,
+});
+export const CLIENT_INPUT_KIND = deepFreeze({
+  KEY: 0,
+  TAB: 1,
+  TREE: 2,
+  PICKER: 3,
+  PROMPT_CONTROL: 4,
+  EXTERNAL_ACTION: 5,
+  STATUS_ACTION: 6,
+  PUBLISHED_UI_ACTION: 7,
+  NOTICE_ACTION: 8,
+  DOCUMENT: 9,
+  SCROLL_LINES: 10,
+  SCROLL_FRACTION: 11,
+  VIEW_NAVIGATION: 12,
+  RESOLVED_PANE_FOCUS: 13,
+  RESOLVED_SELECTION: 14,
+});
+export const INPUT_POINTER_BUTTON = deepFreeze({
+  PRIMARY: 0,
+  AUXILIARY: 1,
+  SECONDARY: 2,
+});
+export const INPUT_POINTER_PHASE = deepFreeze({
+  PRESS: 0,
+  MOVE: 1,
+  RELEASE: 2,
+  CANCEL: 3,
+});
+export const DOCUMENT_POINTER_EDGE = deepFreeze({
+  NONE: 0,
+  BEFORE: 1,
+  AFTER: 2,
+});
+export const SEMANTIC_SCROLL_TARGET = deepFreeze({
+  DOCUMENT: 0,
+  TREE: 1,
+});
+export const CLIENT_OWNED_INPUT_KIND = deepFreeze({
+  APPEND_TEXT: 0,
+  DELETE_GRAPHEME_BACKWARD: 1,
+  DELETE_WORD_BACKWARD: 2,
+  SELECT_NEXT: 3,
+  SELECT_PREVIOUS: 4,
+  SUBMIT: 5,
+});
+export const CLIENT_INPUT_OUTCOME = deepFreeze({
+  UNHANDLED: 0,
+  CLIENT_OWNED: 1,
+  DISPATCHED: 2,
+  REJECTED: 3,
+  VIEW_OWNED: 4,
+});
+export const WIDGET_KIND = deepFreeze({
+  CONTAINER: 0,
+  LABEL: 1,
+  FIELD: 2,
+  CHECKBOX: 3,
+  TEXT_INPUT: 4,
+  SPACER: 5,
+  VIEW: 6,
+  STATUS_ACTIONS: 7,
+});
+export const VIEW_SURFACE = deepFreeze({
+  TAB_BAR: 0,
+  FIND_RESULTS: 3,
+  NOTICE: 6,
+  EXTERNAL_MODIFICATION: 7,
+  DOCUMENT: 8,
+  TREE: 9,
+});
+export const AXIS = deepFreeze({
+  ROW: 0,
+  COLUMN: 1,
+});
+export const SCROLL_AXIS = deepFreeze({
+  NONE: 0,
+  VERTICAL: 1,
+});
+export const SIZE_KIND = deepFreeze({
+  EXACT: 0,
+  FLEX: 1,
+  AUTO: 2,
+  RESPONSIVE: 3,
+});
+export const OVERFLOW = deepFreeze({
+  NONE: 0,
+  TRUNCATE: 1,
+  SCROLL_TAIL: 2,
+});
+export const VIEW_ACTION_KIND = deepFreeze({
+  SCROLL_LINES: 0,
+  SCROLL_PAGES: 1,
+  SCROLL_FRACTION: 2,
+  MOVE_VISUAL_SELECTION: 3,
+  REVEAL_SELECTION: 4,
+  CENTER_SELECTION: 5,
+  SPLIT_PANE: 6,
+  CLOSE_PANE: 7,
+  CYCLE_PANE: 8,
+  FOCUS_PANE: 9,
+  CONTINUE_POINTER_EDGE: 10,
+});
+export const VIEW_SCROLL_TARGET = deepFreeze({
+  DOCUMENT: 0,
+  TREE: 1,
+});
+export const VISUAL_SELECTION_DIRECTION = deepFreeze({
+  LINE_UP: 0,
+  LINE_DOWN: 1,
+  PAGE_UP: 2,
+  PAGE_DOWN: 3,
+});
+export const SPLIT_AXIS = deepFreeze({
+  HORIZONTAL: 0,
+  VERTICAL: 1,
+});
+export const PANE_CYCLE_DIRECTION = deepFreeze({
+  NEXT: 0,
+  PREVIOUS: 1,
+});
+export const PANE_DIRECTION = deepFreeze({
+  LEFT: 0,
+  RIGHT: 1,
+  UP: 2,
+  DOWN: 3,
+});
+export const POINTER_EDGE_DIRECTION = deepFreeze({
+  BEFORE: 0,
+  AFTER: 1,
+});
+export const PALETTE_PRESENCE_OP_KIND = deepFreeze({
+  SHOW: 0,
+  HIDE: 1,
+});

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ssg/ShellState.h"
+#include <ssg/detail/generated/semantic_wire_manifest.h>
 
 #include <array>
 #include <cstdint>
@@ -12,15 +13,18 @@
 namespace ssg {
 
 enum class PromptKind : std::uint8_t {
-    Path,
-    Find,
-    Replace,
-    Settings,
-    CommandArgument,
-    Palette,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_PROMPT_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_PROMPT_KIND_ENUMERATORS
 
-enum class PromptControlKind : std::uint8_t { Input, Toggle, Count };
+enum class PromptControlKind : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_PROMPT_CONTROL_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_PROMPT_CONTROL_KIND_ENUMERATORS
 
 // The layout region a prompt of a given kind is anchored to and draws its input
 // in. The palette's query lives in the HEADER input line (its results narrow to

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ssg/types.h>
+#include <ssg/detail/generated/semantic_wire_manifest.h>
 
 #include <array>
 #include <atomic>
@@ -14,14 +15,21 @@
 
 namespace ssg {
 
-enum class SearchMode : std::uint8_t { File, Line, Symbol, Text, Command };
+enum class SearchMode : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_SEARCH_MODE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
 
 // The closed set of SearchMode values, in wire order. The single domain every codec
 // validates against, so adding a mode cannot leave one decoder accepting it and
 // another rejecting it.
-inline constexpr std::array kAllSearchModes{SearchMode::File, SearchMode::Line,
-                                            SearchMode::Symbol, SearchMode::Text,
-                                            SearchMode::Command};
+inline constexpr std::array kAllSearchModes{
+#define SSG_ENUMERATOR(symbol, ordinal) SearchMode::symbol,
+    SSG_SEARCH_MODE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_SEARCH_MODE_ENUMERATORS
 
 enum class SearchQueryError : std::uint8_t { None, InvalidLine };
 

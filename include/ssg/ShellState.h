@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include "ssg/UiTree.h"
 #include "ssg/UiWidget.h"
 #include "ssg/focus.h"
@@ -33,42 +35,25 @@ private:
     std::uint32_t value_;
 };
 
-enum class SplitAxis : std::uint8_t { Horizontal, Vertical };
-enum class PaneDirection : std::uint8_t { Left, Right, Up, Down };
+enum class SplitAxis : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_SPLIT_AXIS_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_SPLIT_AXIS_ENUMERATORS
+enum class PaneDirection : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_PANE_DIRECTION_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_PANE_DIRECTION_ENUMERATORS
 
 enum class ShellNodeKind : std::uint8_t {
-    Header,
-    HeaderField,
-    Footer,
-    FooterField,
-    FooterAction,
-    TabBar,
-    Tab,
-    Panel,
-    PanelProvider,
-    Pane,
-    Scrollbar,
-    PromptReservation,
-    EmptyState,
-    // A one-row draft-conflict notice reserved above the document (M15). The bar
-    // spans the row (painted yellow); the actions are its clickable sub-regions.
-    NoticeBar,
-    NoticeAction,
-    // A persistent, right-aligned footer hint (e.g. "Alt+KeyH  Help"). Distinct
-    // from FooterAction so its click dispatches a plain command id directly,
-    // without touching the status-queue action invocation path.
-    FooterHint,
-    // A non-interactive glyph painted between adjacent tabs. Carries no hit and
-    // no command; it exists so a configured tab separator glyph is drawn.
-    TabSeparator,
-    // The external-modification bar reserved above the document (7A-5b): a
-    // multi-row, bounded, windowed surface. The header row spans the width
-    // (StatusWarning); each file row is a windowed entry with the selected one
-    // highlighted; an action is a clickable bracketed sub-region on its row.
-    ExternalModificationBar,
-    ExternalModificationRow,
-    ExternalModificationAction,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_SHELL_NODE_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_SHELL_NODE_KIND_ENUMERATORS
 
 struct AccessibilityNode {
     ShellNodeKind kind = ShellNodeKind::Pane;

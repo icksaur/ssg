@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 // Composable chrome widgets.
 //
 // A widget is a self-contained UI element positioned by RELATIVE layout inside
@@ -28,14 +30,9 @@ namespace ssg {
 // trees of these; it does not add kinds. Kept as a fixed enum for exactly that
 // reason (spec §Widget primitives).
 enum class WidgetKind : std::uint8_t {
-    Container,   // arranges children on an axis with a fit policy
-    Label,       // static text in a role
-    Field,       // an id'd, collapsible value with an optional command
-    Checkbox,    // a boolean with checked/unchecked glyphs + a caption
-    TextInput,   // a one-line editable region: sigil + scrolling tail + caret
-    Spacer,      // a flexible gap
-    View,        // an opaque client-rendered surface (its ViewSurface names which)
-    StatusActions,  // the selected status item's actions, rendered from promptStatus
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_WIDGET_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
 
 // The vocabulary made enumerable, mirroring SemanticRole's discipline: a count,
@@ -43,13 +40,13 @@ enum class WidgetKind : std::uint8_t {
 // (UiProfile.h) is a subset of this set, so both must enumerate the same kinds;
 // keeping the enum, the count, and the array bound at compile time is what makes
 // "the profile says X" and "the vocabulary has X" checkable against one source.
-inline constexpr std::size_t kWidgetKindCount = 8;
 inline constexpr std::array kAllWidgetKinds{
-    WidgetKind::Container, WidgetKind::Label,     WidgetKind::Field,
-    WidgetKind::Checkbox,  WidgetKind::TextInput, WidgetKind::Spacer,
-    WidgetKind::View,      WidgetKind::StatusActions,
+#define SSG_ENUMERATOR(symbol, ordinal) WidgetKind::symbol,
+    SSG_WIDGET_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
-static_assert(kAllWidgetKinds.size() == kWidgetKindCount);
+#undef SSG_WIDGET_KIND_ENUMERATORS
+inline constexpr std::size_t kWidgetKindCount = kAllWidgetKinds.size();
 
 // The closed set of opaque client-rendered surfaces a View leaf may name. The
 // library owns each surface's placement/size/presence in the tree and its
@@ -57,20 +54,18 @@ static_assert(kAllWidgetKinds.size() == kWidgetKindCount);
 // declares which surfaces it implements, so this enum, its count, and its name
 // array are bound like WidgetKind's.
 enum class ViewSurface : std::uint8_t {
-    TabBar = 0,       // the fixed tab strip
-    FindResults = 3,  // the finder candidate universe (client filters locally)
-    Notice = 6,       // the draft-conflict notice above the document (semantic NoticeView)
-    ExternalModification = 7,  // the external-modification bar above the document
-    Document = 8,     // the active document body, selection, caret, and syntax
-    Tree = 9,         // the active tree provider named by TreeViewState
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_VIEW_SURFACE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
 
-inline constexpr std::size_t kViewSurfaceCount = 6;
 inline constexpr std::array kAllViewSurfaces{
-    ViewSurface::TabBar, ViewSurface::FindResults, ViewSurface::Notice,
-    ViewSurface::ExternalModification, ViewSurface::Document, ViewSurface::Tree,
+#define SSG_ENUMERATOR(symbol, ordinal) ViewSurface::symbol,
+    SSG_VIEW_SURFACE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
-static_assert(kAllViewSurfaces.size() == kViewSurfaceCount);
+#undef SSG_VIEW_SURFACE_ENUMERATORS
+inline constexpr std::size_t kViewSurfaceCount = kAllViewSurfaces.size();
 
 // The stable wire/diagnostic name of a widget kind. Used to name the unsupported
 // kind when a composition exceeds a client's UI profile. Throws
@@ -251,7 +246,12 @@ struct InputLineLayout {
 // CENTER slot takes the gap between the left group's end and the right group's
 // start (`Fixed` clamped to that gap, `Flex` = the whole gap).
 
-enum class Overflow : std::uint8_t { None, Truncate, ScrollTail };
+enum class Overflow : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_OVERFLOW_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_OVERFLOW_ENUMERATORS
 
 // One stack item. `desired` is the cells it wants (its content's display width,
 // including any padding the caller already added). `rank` orders LEFT-group

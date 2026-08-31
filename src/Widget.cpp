@@ -14,19 +14,10 @@
 namespace ssg {
 
 namespace {
-constexpr std::array kWidgetKindNames{
-    std::string_view{"container"}, std::string_view{"label"},
-    std::string_view{"field"},     std::string_view{"checkbox"},
-    std::string_view{"text_input"}, std::string_view{"spacer"},
-    std::string_view{"view"},      std::string_view{"status_actions"},
-};
-static_assert(kWidgetKindNames.size() == kWidgetKindCount);
-
-constexpr std::array kViewSurfaceNames{
-    std::string_view{"tabbar"}, std::string_view{"findresults"},
-    std::string_view{"notice"}, std::string_view{"external_modification"},
-    std::string_view{"document"}, std::string_view{"tree"}};
-static_assert(kViewSurfaceNames.size() == kViewSurfaceCount);
+inline constexpr auto& kWidgetKindNames =
+    detail::generated::kWidgetKindCurrentWireNames;
+inline constexpr auto& kViewSurfaceNames =
+    detail::generated::kViewSurfaceCurrentWireNames;
 }  // namespace
 
 std::string_view widgetKindName(WidgetKind kind) {

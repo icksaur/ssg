@@ -4,6 +4,7 @@
 #include <ssg/Picker.h>
 #include <ssg/UiTree.h>
 #include <ssg/Viewport.h>
+#include <ssg/detail/generated/semantic_wire_manifest.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -23,7 +24,12 @@ struct PaletteCandidate {
     friend bool operator==(const PaletteCandidate&, const PaletteCandidate&) = default;
 };
 
-enum class PalettePresenceOpKind : std::uint8_t { Show, Hide };
+enum class PalettePresenceOpKind : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_PALETTE_PRESENCE_OP_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_PALETTE_PRESENCE_OP_KIND_ENUMERATORS
 
 struct PalettePresenceOp {
     PalettePresenceOpKind kind = PalettePresenceOpKind::Show;

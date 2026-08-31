@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include "ssg/RecoveryManager.h"
 #include "ssg/Workspace.h"
 
@@ -29,19 +31,18 @@ private:
 };
 
 enum class TabKind : std::uint8_t {
-    Document,
-    LiveDiff,
-    ReadOnlyOutput,
-    SearchResults,
-    TreeView,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_TAB_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
 
 enum class TabRecoveryBadge : std::uint8_t {
-    None,
-    Pending,
-    Durable,
-    Failed,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_TAB_RECOVERY_BADGE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_TAB_KIND_ENUMERATORS
+#undef SSG_TAB_RECOVERY_BADGE_ENUMERATORS
 
 struct TabState {
     TabId id;

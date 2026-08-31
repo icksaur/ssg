@@ -1218,189 +1218,144 @@ template <typename Enum, std::size_t N>
     return false;
 }
 
+template <typename Enum, std::size_t N>
+[[nodiscard]] bool decodeEnum(
+    ProtocolValue const& value, std::optional<Enum>& out,
+    std::array<detail::generated::WireEnumValueFact, N> const& validValues) {
+    auto raw = value.asUint();
+    if (!raw) return false;
+    for (auto const& candidate : validValues) {
+        if (candidate.ordinal == *raw) {
+            out.emplace(static_cast<Enum>(*raw));
+            return true;
+        }
+    }
+    return false;
+}
+
 
 // Enum decodePresent() definitions, each delegating to decode_enum() with
 // the closed set of valid values for that enum.
 
 bool decodePresent(ProtocolValue const& value, std::optional<DocumentMode>& out) {
-    static constexpr std::array values{DocumentMode::Edit, DocumentMode::ReadOnly,
-                                       DocumentMode::Diff};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kDocumentModeWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<StatusPriority>& out) {
-    static constexpr std::array values{StatusPriority::Error, StatusPriority::Warning,
-                                       StatusPriority::Information, StatusPriority::Progress};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kStatusPriorityWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<PromptKind>& out) {
-    static constexpr std::array values{PromptKind::Path, PromptKind::Find,
-                                       PromptKind::Replace, PromptKind::Settings,
-                                       PromptKind::CommandArgument,
-                                       PromptKind::Palette};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kPromptKindWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<PromptControlKind>& out) {
-    static constexpr std::array values{PromptControlKind::Input, PromptControlKind::Toggle,
-                                       PromptControlKind::Count};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kPromptControlKindWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<SearchMode>& out) {
-    return decodeEnum(value, out, kAllSearchModes);
+    return decodeEnum(value, out, detail::generated::kSearchModeWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<FindReplaceError>& out) {
-    static constexpr std::array values{
-        FindReplaceError::None, FindReplaceError::InvalidPattern,
-        FindReplaceError::InvalidUtf8, FindReplaceError::InvalidSelection,
-        FindReplaceError::BudgetExhausted, FindReplaceError::Cancelled,
-        FindReplaceError::NoMatch, FindReplaceError::StaleRevision,
-        FindReplaceError::DocumentRejected, FindReplaceError::WorkspaceRejected,
-        FindReplaceError::RecoveryRejected};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kFindReplaceErrorWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<SettingScope>& out) {
-    static constexpr std::array values{SettingScope::Defaults, SettingScope::User,
-                                       SettingScope::Workspace, SettingScope::Language,
-                                       SettingScope::Document};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kSettingScopeWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<SettingKey>& out) {
-    static constexpr std::array values{
-        SettingKey::IndentWidth, SettingKey::IndentStyle, SettingKey::IndentDetection,
-        SettingKey::AutoIndent, SettingKey::LineEnding, SettingKey::FinalNewline,
-        SettingKey::Encoding, SettingKey::WordWrap, SettingKey::Theme, SettingKey::Keymap,
-        SettingKey::SearchCaseSensitive, SettingKey::SearchWholeWord,
-        SettingKey::SearchRegularExpression, SettingKey::UndoByteBudget,
-        SettingKey::RecoveryByteBudget, SettingKey::TypingCoalescingMs,
-        SettingKey::FileFinderRespectGitignore, SettingKey::AutosaveDebounceMs,
-        SettingKey::LineNumbers};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kSettingKeyWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<TextEncoding>& out) {
-    static constexpr std::array values{TextEncoding::Utf8, TextEncoding::Utf8Bom,
-                                       TextEncoding::Utf16le, TextEncoding::Utf16be,
-                                       TextEncoding::Windows1252, TextEncoding::Iso88591};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kTextEncodingWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<IndentStyle>& out) {
-    static constexpr std::array values{IndentStyle::Spaces, IndentStyle::Tabs};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kIndentStyleWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<LineEnding>& out) {
-    static constexpr std::array values{LineEnding::Lf, LineEnding::Crlf, LineEnding::Cr,
-                                       LineEnding::Mixed};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kLineEndingWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<TabKind>& out) {
-    static constexpr std::array values{TabKind::Document, TabKind::LiveDiff,
-                                       TabKind::ReadOnlyOutput, TabKind::SearchResults,
-                                       TabKind::TreeView};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kTabKindWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<TabRecoveryBadge>& out) {
-    static constexpr std::array values{TabRecoveryBadge::None, TabRecoveryBadge::Pending,
-                                       TabRecoveryBadge::Durable, TabRecoveryBadge::Failed};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kTabRecoveryBadgeWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<JournalDocumentKeyKind>& out) {
-    static constexpr std::array values{JournalDocumentKeyKind::Saved,
-                                       JournalDocumentKeyKind::Untitled};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kJournalDocumentKeyKindWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<DiffLineKind>& out) {
-    static constexpr std::array values{DiffLineKind::Added, DiffLineKind::Removed,
-                                       DiffLineKind::Modified};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kDiffLineKindWireValues);
 }
 bool decodePresent(ProtocolValue const& value, std::optional<DiffFileStatus>& out) {
-    static constexpr std::array values{DiffFileStatus::Added,
-                                       DiffFileStatus::Modified,
-                                       DiffFileStatus::Deleted,
-                                       DiffFileStatus::Renamed};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kDiffFileStatusWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<ExternalAction>& out) {
-    static constexpr std::array values{ExternalAction::Reload, ExternalAction::KeepBuffer,
-                                       ExternalAction::OpenDiff};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kExternalActionWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<ExternalDocumentStatus>& out) {
-    static constexpr std::array values{ExternalDocumentStatus::ExternallyModified,
-                                       ExternalDocumentStatus::ExternallyRemoved};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kExternalDocumentStatusWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<FollowMode>& out) {
-    static constexpr std::array values{FollowMode::Following, FollowMode::Paused};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kFollowModeWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderKind>& out) {
-    static constexpr std::array values{TreeProviderKind::Filesystem, TreeProviderKind::Git,
-                                       TreeProviderKind::Symbols};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kTreeProviderKindWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeKind>& out) {
-    static constexpr std::array values{TreeNodeKind::Root, TreeNodeKind::Directory,
-                                       TreeNodeKind::File, TreeNodeKind::Symlink,
-                                       TreeNodeKind::GitEntry, TreeNodeKind::Symbol};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kTreeNodeKindWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<GitTreeStatus>& out) {
-    static constexpr std::array values{GitTreeStatus::Added, GitTreeStatus::Modified,
-                                       GitTreeStatus::Deleted, GitTreeStatus::Renamed,
-                                       GitTreeStatus::Untracked};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kGitTreeStatusWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<SyntaxScope>& out) {
-    return decodeEnum(value, out, kAllSyntaxScopes);
+    return decodeEnum(value, out, detail::generated::kSyntaxScopeWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<BracketKind>& out) {
-    static constexpr std::array values{BracketKind::Round, BracketKind::Square,
-                                       BracketKind::Curly};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kBracketKindWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<BracketRole>& out) {
-    static constexpr std::array values{BracketRole::Open, BracketRole::Close};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kBracketRoleWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<CommentKind>& out) {
-    static constexpr std::array values{CommentKind::Line, CommentKind::Block};
-    return decodeEnum(value, out, values);
+    return decodeEnum(value, out, detail::generated::kCommentKindWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<CommentTokenRole>& out) {
-    static constexpr std::array values{CommentTokenRole::Line, CommentTokenRole::BlockOpen,
-                                       CommentTokenRole::BlockClose};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kCommentTokenRoleWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<LspDiagnosticSeverity>& out) {
-    static constexpr std::array values{
-        LspDiagnosticSeverity::Error, LspDiagnosticSeverity::Warning,
-        LspDiagnosticSeverity::Information, LspDiagnosticSeverity::Hint};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kLspDiagnosticSeverityWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<ShellNodeKind>& out) {
@@ -1422,51 +1377,36 @@ bool decodePresent(ProtocolValue const& value, std::optional<FocusTarget>& out) 
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<SemanticRole>& out) {
-    return decodeEnum(value, out, kAllSemanticRoles);
+    return decodeEnum(value, out, detail::generated::kSemanticRoleWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value, std::optional<ClientInputKind>& out) {
-    static constexpr std::array values{
-        ClientInputKind::Key, ClientInputKind::Tab, ClientInputKind::Tree,
-        ClientInputKind::Picker, ClientInputKind::PromptControl,
-        ClientInputKind::ExternalAction, ClientInputKind::StatusAction,
-        ClientInputKind::PublishedUiAction, ClientInputKind::NoticeAction,
-        ClientInputKind::Document, ClientInputKind::ScrollLines,
-        ClientInputKind::ScrollFraction, ClientInputKind::ViewNavigation,
-        ClientInputKind::ResolvedPaneFocus,
-        ClientInputKind::ResolvedSelection};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kClientInputKindWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value,
                    std::optional<InputPointerButton>& out) {
-    static constexpr std::array values{
-        InputPointerButton::Primary, InputPointerButton::Auxiliary,
-        InputPointerButton::Secondary};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kInputPointerButtonWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value,
                    std::optional<InputPointerPhase>& out) {
-    static constexpr std::array values{
-        InputPointerPhase::Press, InputPointerPhase::Move,
-        InputPointerPhase::Release, InputPointerPhase::Cancel};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kInputPointerPhaseWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value,
                    std::optional<DocumentPointerEdge>& out) {
-    static constexpr std::array values{
-        DocumentPointerEdge::None, DocumentPointerEdge::Before,
-        DocumentPointerEdge::After};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kDocumentPointerEdgeWireValues);
 }
 
 bool decodePresent(ProtocolValue const& value,
                    std::optional<SemanticScrollTarget>& out) {
-    static constexpr std::array values{
-        SemanticScrollTarget::Document, SemanticScrollTarget::Tree};
-    return decodeEnum(value, out, values);
+    return decodeEnum(
+        value, out, detail::generated::kSemanticScrollTargetWireValues);
 }
 
 // Strong-id toValue()/decodePresent() definitions.

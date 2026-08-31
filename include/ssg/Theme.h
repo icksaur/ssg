@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -35,105 +37,32 @@ struct IndexedColor {
 };
 
 enum class SemanticRole : std::uint8_t {
-    Text,
-    Canvas,
-    Caret,
-    Selection,
-    TreeBackground,
-    TreeFocus,
-    TabActive,
-    TabInactive,
-    PanelActive,
-    PanelInactive,
-    Header,
-    Footer,
-    StatusInfo,
-    StatusWarning,
-    LineNumber,
-    SearchMatch,
-    Prompt,
-    ScrollbarTrack,
-    ScrollbarThumb,
-    DiffAdded,
-    DiffRemoved,
-    DiffModified,
-    // Chrome BACKGROUND roles (the roles above are foreground/text colors). The
-    // active tab deliberately has no background role: it reuses Canvas so it
-    // always matches the document by construction and cannot drift.
-    TabInactiveBackground,
-    HeaderBackground,
-    FooterBackground,
-    // The caret's line number in the gutter: a distinct foreground over a
-    // distinct background so the current line stands out.
-    CurrentLineNumber,
-    CurrentLineNumberBackground,
-    // The gutter background behind inactive (non-current) line numbers, so the
-    // gutter reads as distinct from the document content it sits beside.
-    LineNumberBackground,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_SEMANTIC_ROLE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
 
-inline constexpr std::size_t kSemanticRoleCount = 28;
 inline constexpr std::array kAllSemanticRoles{
-    SemanticRole::Text,
-    SemanticRole::Canvas,
-    SemanticRole::Caret,
-    SemanticRole::Selection,
-    SemanticRole::TreeBackground,
-    SemanticRole::TreeFocus,
-    SemanticRole::TabActive,
-    SemanticRole::TabInactive,
-    SemanticRole::PanelActive,
-    SemanticRole::PanelInactive,
-    SemanticRole::Header,
-    SemanticRole::Footer,
-    SemanticRole::StatusInfo,
-    SemanticRole::StatusWarning,
-    SemanticRole::LineNumber,
-    SemanticRole::SearchMatch,
-    SemanticRole::Prompt,
-    SemanticRole::ScrollbarTrack,
-    SemanticRole::ScrollbarThumb,
-    SemanticRole::DiffAdded,
-    SemanticRole::DiffRemoved,
-    SemanticRole::DiffModified,
-    SemanticRole::TabInactiveBackground,
-    SemanticRole::HeaderBackground,
-    SemanticRole::FooterBackground,
-    SemanticRole::CurrentLineNumber,
-    SemanticRole::CurrentLineNumberBackground,
-    SemanticRole::LineNumberBackground,
+#define SSG_ENUMERATOR(symbol, ordinal) SemanticRole::symbol,
+    SSG_SEMANTIC_ROLE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
-static_assert(kAllSemanticRoles.size() == kSemanticRoleCount);
+#undef SSG_SEMANTIC_ROLE_ENUMERATORS
+inline constexpr std::size_t kSemanticRoleCount = kAllSemanticRoles.size();
 
 enum class SyntaxScope : std::uint8_t {
-    PlainText,
-    Comment,
-    Keyword,
-    String,
-    Number,
-    Type,
-    Function,
-    Variable,
-    OperatorToken,
-    Punctuation,
-    Invalid,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_SYNTAX_SCOPE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
 
-inline constexpr std::size_t kSyntaxScopeCount = 11;
 inline constexpr std::array kAllSyntaxScopes{
-    SyntaxScope::PlainText,
-    SyntaxScope::Comment,
-    SyntaxScope::Keyword,
-    SyntaxScope::String,
-    SyntaxScope::Number,
-    SyntaxScope::Type,
-    SyntaxScope::Function,
-    SyntaxScope::Variable,
-    SyntaxScope::OperatorToken,
-    SyntaxScope::Punctuation,
-    SyntaxScope::Invalid,
+#define SSG_ENUMERATOR(symbol, ordinal) SyntaxScope::symbol,
+    SSG_SYNTAX_SCOPE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
-static_assert(kAllSyntaxScopes.size() == kSyntaxScopeCount);
+#undef SSG_SYNTAX_SCOPE_ENUMERATORS
+inline constexpr std::size_t kSyntaxScopeCount = kAllSyntaxScopes.size();
 
 // The flat render color table = every role color followed by every scope color.
 // A cell stores a uint8 index into this table; the theme gives each role and

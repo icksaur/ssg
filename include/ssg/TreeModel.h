@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include <ssg/Theme.h>
 #include <ssg/Viewport.h>
 
@@ -46,7 +48,12 @@ private:
     std::uint64_t value_;
 };
 
-enum class TreeProviderKind { Filesystem, Git, Symbols };
+enum class TreeProviderKind {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_TREE_PROVIDER_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_TREE_PROVIDER_KIND_ENUMERATORS
 
 [[nodiscard]] std::string_view treeProviderLabel(TreeProviderKind kind);
 [[nodiscard]] bool treeProviderCanBeCreatedEmpty(TreeProviderKind kind);
@@ -60,8 +67,18 @@ struct TreeProviderBinding {
     bool operator==(const TreeProviderBinding&) const = default;
 };
 
-enum class TreeNodeKind { Root, Directory, File, Symlink, GitEntry, Symbol };
-enum class GitTreeStatus { Added, Modified, Deleted, Renamed, Untracked };
+enum class TreeNodeKind {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_TREE_NODE_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_TREE_NODE_KIND_ENUMERATORS
+enum class GitTreeStatus {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_GIT_TREE_STATUS_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_GIT_TREE_STATUS_ENUMERATORS
 
 struct GitTreeAffordance {
     GitTreeStatus status = GitTreeStatus::Modified;

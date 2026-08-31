@@ -9,6 +9,7 @@
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
+#include <ssg/detail/generated/semantic_wire_manifest.h>
 
 #include <cstdint>
 #include <optional>
@@ -25,41 +26,32 @@ struct ClientKeyInput {
 };
 
 enum class ClientInputKind : std::uint8_t {
-    Key,
-    Tab,
-    Tree,
-    Picker,
-    PromptControl,
-    ExternalAction,
-    StatusAction,
-    PublishedUiAction,
-    NoticeAction,
-    Document,
-    ScrollLines,
-    ScrollFraction,
-    ViewNavigation,
-    ResolvedPaneFocus,
-    ResolvedSelection,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_CLIENT_INPUT_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_CLIENT_INPUT_KIND_ENUMERATORS
 
 enum class InputPointerButton : std::uint8_t {
-    Primary,
-    Auxiliary,
-    Secondary,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_INPUT_POINTER_BUTTON_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_INPUT_POINTER_BUTTON_ENUMERATORS
 
 enum class InputPointerPhase : std::uint8_t {
-    Press,
-    Move,
-    Release,
-    Cancel,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_INPUT_POINTER_PHASE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_INPUT_POINTER_PHASE_ENUMERATORS
 
 enum class DocumentPointerEdge : std::uint8_t {
-    None,
-    Before,
-    After,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_DOCUMENT_POINTER_EDGE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_DOCUMENT_POINTER_EDGE_ENUMERATORS
 
 struct SemanticInputBasis {
     Revision observedRevision;
@@ -163,9 +155,11 @@ struct DocumentPointerInput {
 };
 
 enum class SemanticScrollTarget : std::uint8_t {
-    Document,
-    Tree,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_SEMANTIC_SCROLL_TARGET_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_SEMANTIC_SCROLL_TARGET_ENUMERATORS
 
 struct ScrollLinesInput {
     SemanticInputBasis basis;
@@ -231,13 +225,11 @@ using ClientInput =
                  ResolvedPaneFocusInput, ResolvedSelectionInput>;
 
 enum class ClientOwnedInputKind : std::uint8_t {
-    AppendText,
-    DeleteGraphemeBackward,
-    DeleteWordBackward,
-    SelectNext,
-    SelectPrevious,
-    Submit,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_CLIENT_OWNED_INPUT_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_CLIENT_OWNED_INPUT_KIND_ENUMERATORS
 
 struct ClientOwnedInput {
     ClientOwnedInputKind kind;
@@ -248,12 +240,11 @@ struct ClientOwnedInput {
 };
 
 enum class ClientInputOutcome : std::uint8_t {
-    Unhandled,
-    ClientOwned,
-    Dispatched,
-    Rejected,
-    ViewOwned,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_CLIENT_INPUT_OUTCOME_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_CLIENT_INPUT_OUTCOME_ENUMERATORS
 
 struct ClientInputResult {
     ClientInputOutcome outcome;

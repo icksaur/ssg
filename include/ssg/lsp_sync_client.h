@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include <ssg/types.h>
 
 #include <chrono>
@@ -93,11 +95,11 @@ struct LspRange {
 };
 
 enum class LspDiagnosticSeverity : std::uint8_t {
-    Error = 1,
-    Warning = 2,
-    Information = 3,
-    Hint = 4,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_LSP_DIAGNOSTIC_SEVERITY_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_LSP_DIAGNOSTIC_SEVERITY_ENUMERATORS
 
 struct LspDiagnostic {
     LspRange range;

@@ -18,6 +18,15 @@ const lifecycles = new Set(['current', 'compatibility', 'retired']);
 const replayPolicies = new Set([
   'replacement', 'changed-replacement', 'specialized', 'compatibility',
 ]);
+const enumUnknownPolicies = new Set(['reject', 'map-to']);
+const fallbackWireEnums = new Set(['ScrollAxis']);
+const fixedJsExports = new Set([
+  'MESSAGE_KINDS',
+  'PROTOCOL_MESSAGE_KIND',
+  'SEMANTIC_SECTIONS',
+  'SEMANTIC_SNAPSHOT_FIELDS',
+  'SEMANTIC_DELTA_FIELDS',
+]);
 
 function requireUnique(items, key, label) {
   const seen = new Set();
@@ -31,8 +40,11 @@ function requireUnique(items, key, label) {
 export function validateManifest(manifest) {
   const messages = manifest?.messageKinds;
   const sections = manifest?.semanticSections;
-  if (!Array.isArray(messages) || !Array.isArray(sections)) {
-    throw new Error('manifest requires messageKinds and semanticSections arrays');
+  const wireEnums = manifest?.wireEnums;
+  if (!Array.isArray(messages) || !Array.isArray(sections) ||
+      !Array.isArray(wireEnums)) {
+    throw new Error(
+      'manifest requires messageKinds, semanticSections, and wireEnums arrays');
   }
   requireUnique(messages, 'symbol', 'message symbol');
   requireUnique(messages, 'wireName', 'message wire name');
@@ -64,6 +76,41 @@ export function validateManifest(manifest) {
     for (const field of section.delta) {
       if (deltaFields.has(field)) throw new Error(`duplicate delta field: ${field}`);
       deltaFields.add(field);
+    }
+  }
+
+  requireUnique(wireEnums, 'symbol', 'wire enum symbol');
+  requireUnique(wireEnums, 'jsName', 'wire enum JavaScript name');
+  for (const wireEnum of wireEnums) {
+    if (!cppIdentifier.test(wireEnum.symbol) ||
+        !/^[A-Z][A-Z0-9_]*$/.test(wireEnum.jsName) ||
+        !Array.isArray(wireEnum.values) || wireEnum.values.length === 0 ||
+        !wireEnum.unknown ||
+        !enumUnknownPolicies.has(wireEnum.unknown.policy)) {
+      throw new Error(`invalid wire enum declaration: ${wireEnum.symbol ?? '?'}`);
+    }
+    if (fixedJsExports.has(wireEnum.jsName)) {
+      throw new Error(`reserved wire enum JavaScript name: ${wireEnum.jsName}`);
+    }
+    requireUnique(wireEnum.values, 'symbol', 'wire enum value symbol');
+    requireUnique(wireEnum.values, 'wireName', 'wire enum value wire name');
+    requireUnique(wireEnum.values, 'ordinal', 'wire enum ordinal');
+    for (const value of wireEnum.values) {
+      if (!cppIdentifier.test(value.symbol) ||
+          !wireName.test(value.wireName) ||
+          !Number.isSafeInteger(value.ordinal) || value.ordinal < 0 ||
+          !lifecycles.has(value.lifecycle)) {
+        throw new Error(
+          `invalid wire enum value: ${wireEnum.symbol}.${value.symbol ?? '?'}`);
+      }
+    }
+    const fallback = wireEnum.unknown.fallback;
+    if ((wireEnum.unknown.policy === 'reject' && fallback != null) ||
+        (wireEnum.unknown.policy === 'map-to' &&
+         (!fallbackWireEnums.has(wireEnum.symbol) ||
+          !wireEnum.values.some((value) =>
+            value.symbol === fallback && value.lifecycle === 'current')))) {
+      throw new Error(`invalid wire enum fallback: ${wireEnum.symbol}`);
     }
   }
   return manifest;
@@ -103,6 +150,39 @@ function renderCpp(manifest) {
     `${replayCpp(section.replay)}},`);
   const strings = (values) => values.map(
     (value) => `    std::string_view{${quote(value)}},`);
+  const enumMacroName = (wireEnum) =>
+    `SSG_${wireEnum.jsName}_ENUMERATORS`;
+  const enumMacros = manifest.wireEnums.map((wireEnum) => {
+    const current = wireEnum.values.filter(
+      (value) => value.lifecycle === 'current');
+    const lines = current.map(
+      (value) => `    X(${value.symbol}, ${value.ordinal})`);
+    return `#define ${enumMacroName(wireEnum)}(X) \\\n${
+      lines.map((line, index) =>
+        `${line}${index + 1 === lines.length ? '' : ' \\'}`).join('\n')}`;
+  });
+  const enumFacts = manifest.wireEnums.map((wireEnum) => {
+    const facts = (values) => values.map((value) =>
+      `    WireEnumValueFact{${quote(value.symbol)}, ${quote(value.wireName)}, ` +
+      `${value.ordinal}, ManifestLifecycle::${lifecycleCpp(value.lifecycle)}},`);
+    const currentValues = wireEnum.values.filter(
+      (value) => value.lifecycle === 'current');
+    const fallback = wireEnum.unknown.policy === 'map-to'
+      ? wireEnum.values.find(
+        (value) => value.symbol === wireEnum.unknown.fallback).ordinal
+      : 0;
+    return `inline constexpr WireEnumFact k${wireEnum.symbol}WireEnum{\n` +
+      `    ${quote(wireEnum.symbol)}, UnknownEnumPolicy::${
+        wireEnum.unknown.policy === 'map-to' ? 'MapTo' : 'Reject'}, ` +
+      `${fallback},\n};\n` +
+      `inline constexpr std::array k${wireEnum.symbol}WireValues{\n` +
+      `${facts(currentValues).join('\n')}\n};\n` +
+      `inline constexpr std::array k${wireEnum.symbol}WireReservations{\n` +
+      `${facts(wireEnum.values).join('\n')}\n};\n` +
+      `inline constexpr std::array k${wireEnum.symbol}CurrentWireNames{\n` +
+      `${strings(currentValues
+        .map((value) => value.wireName)).join('\n')}\n};`;
+  });
   return `// Generated by protocol/schema/generate_semantic_wire.mjs.
 // Source: protocol/schema/semantic_wire.mjs. Do not edit.
 #pragma once
@@ -114,6 +194,8 @@ function renderCpp(manifest) {
 #define SSG_PROTOCOL_MESSAGE_KIND_ENUMERATORS(X) \\
 ${enumLines.map((line, index) =>
     `${line}${index + 1 === enumLines.length ? '' : ' \\'}`).join('\n')}
+
+${enumMacros.join('\n\n')}
 
 namespace ssg::detail::generated {
 
@@ -130,6 +212,11 @@ enum class ReplayPolicy : std::uint8_t {
     Compatibility,
 };
 
+enum class UnknownEnumPolicy : std::uint8_t {
+    Reject,
+    MapTo,
+};
+
 struct ProtocolMessageKindFact {
     std::string_view symbol;
     std::string_view wireName;
@@ -142,6 +229,19 @@ struct SemanticSectionFact {
     std::string_view snapshotField;
     ManifestLifecycle lifecycle;
     ReplayPolicy replay;
+};
+
+struct WireEnumFact {
+    std::string_view symbol;
+    UnknownEnumPolicy unknownPolicy;
+    std::uint64_t fallbackOrdinal;
+};
+
+struct WireEnumValueFact {
+    std::string_view symbol;
+    std::string_view wireName;
+    std::uint64_t ordinal;
+    ManifestLifecycle lifecycle;
 };
 
 inline constexpr std::array kProtocolMessageKinds{
@@ -160,6 +260,8 @@ inline constexpr std::array kSemanticDeltaFields{
 ${strings(deltas).join('\n')}
 };
 
+${enumFacts.join('\n\n')}
+
 }  // namespace ssg::detail::generated
 `;
 }
@@ -176,12 +278,29 @@ const deepFreeze = (value) => {
 
 export const MESSAGE_KINDS = deepFreeze(${
   JSON.stringify(manifest.messageKinds, null, 2)});
+export const PROTOCOL_MESSAGE_KIND = deepFreeze({
+${manifest.messageKinds
+    .filter((message) => message.lifecycle === 'current')
+    .map((message) =>
+      `  ${message.symbol.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()}: ` +
+      `${message.ordinal},`)
+    .join('\n')}
+});
 export const SEMANTIC_SECTIONS = deepFreeze(${
   JSON.stringify(manifest.semanticSections, null, 2)});
 export const SEMANTIC_SNAPSHOT_FIELDS = Object.freeze(
   SEMANTIC_SECTIONS.map((section) => section.snapshot));
 export const SEMANTIC_DELTA_FIELDS = Object.freeze(
   SEMANTIC_SECTIONS.flatMap((section) => section.delta));
+${manifest.wireEnums.map((wireEnum) => {
+    const values = wireEnum.values
+      .filter((value) => value.lifecycle === 'current')
+      .map((value) =>
+        `  ${value.symbol.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()}: ` +
+        `${value.ordinal},`);
+    return `export const ${wireEnum.jsName} = deepFreeze({\n${
+      values.join('\n')}\n});`;
+  }).join('\n')}
 `;
 }
 

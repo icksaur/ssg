@@ -94,16 +94,21 @@ std::optional<Enum> decodeEnumIn(std::optional<std::uint64_t> raw,
     return std::nullopt;
 }
 
-constexpr std::array kAllAxes{Axis::Row, Axis::Column};
-constexpr std::array kAllScrollAxes{ScrollAxis::None, ScrollAxis::Vertical};
-constexpr std::array kAllSizeKinds{SizeKind::Exact, SizeKind::Flex,
-                                   SizeKind::Auto, SizeKind::Responsive};
-constexpr std::array kAllOverflows{Overflow::None, Overflow::Truncate,
-                                   Overflow::ScrollTail};
+template <typename Enum, std::size_t N>
+std::optional<Enum> decodeEnumIn(
+    std::optional<std::uint64_t> raw,
+    const std::array<detail::generated::WireEnumValueFact, N>& allowed) {
+    if (!raw) return std::nullopt;
+    for (auto const& candidate : allowed) {
+        if (candidate.ordinal == *raw) return static_cast<Enum>(*raw);
+    }
+    return std::nullopt;
+}
 
 std::optional<Size> decodeSize(const ProtocolValue& value) {
     if (!value.asObject()) return std::nullopt;
-    const auto kind = decodeEnumIn(uintField(value, "kind"), kAllSizeKinds);
+    const auto kind = decodeEnumIn<SizeKind>(
+        uintField(value, "kind"), detail::generated::kSizeKindWireValues);
     const auto extent = boundedInt(uintField(value, "extent"));
     if (!kind || !extent) return std::nullopt;
     switch (*kind) {
@@ -216,13 +221,15 @@ struct DecodedWidget {
 
 std::optional<DecodedWidget> decodeWidget(const ProtocolValue& value) {
     if (!value.asObject()) return std::nullopt;
-    const auto kind = decodeEnumIn(uintField(value, "kind"), kAllWidgetKinds);
+    const auto kind = decodeEnumIn<WidgetKind>(
+        uintField(value, "kind"), detail::generated::kWidgetKindWireValues);
     const auto id = textField(value, "id");
     const auto rank = value.field("rank") ? value.field("rank")->asInt()
                                           : std::nullopt;
     const auto keep = boolField(value, "keep");
-    const auto overflow =
-        decodeEnumIn(uintField(value, "overflow"), kAllOverflows);
+    const auto overflow = decodeEnumIn<Overflow>(
+        uintField(value, "overflow"),
+        detail::generated::kOverflowWireValues);
     const auto sigil = textField(value, "sigil");
     if (!kind || !id || !rank || !keep || !overflow || !sigil) {
         return std::nullopt;
@@ -314,13 +321,15 @@ std::optional<UiNodeStyle> decodeStyle(const ProtocolValue& value) {
     if (!value.asObject()) return std::nullopt;
     UiNodeStyle style;
     if (value.field("foreground")) {
-        style.foreground = decodeEnumIn(uintField(value, "foreground"),
-                                        kAllSemanticRoles);
+        style.foreground = decodeEnumIn<SemanticRole>(
+            uintField(value, "foreground"),
+            detail::generated::kSemanticRoleWireValues);
         if (!style.foreground) return std::nullopt;
     }
     if (value.field("background")) {
-        style.background = decodeEnumIn(uintField(value, "background"),
-                                        kAllSemanticRoles);
+        style.background = decodeEnumIn<SemanticRole>(
+            uintField(value, "background"),
+            detail::generated::kSemanticRoleWireValues);
         if (!style.background) return std::nullopt;
     }
     return style;
@@ -397,11 +406,9 @@ std::optional<UiNode> decodeNode(
         node.style = std::move(*style);
     }
     if (value.field("focus_context")) {
-        static constexpr std::array focusTargets{
-            FocusTarget::Editor, FocusTarget::Panel, FocusTarget::Prompt,
-            FocusTarget::ExternalModification};
-        node.focusContext =
-            decodeEnumIn(uintField(value, "focus_context"), focusTargets);
+        node.focusContext = decodeEnumIn<FocusTarget>(
+            uintField(value, "focus_context"),
+            detail::generated::kFocusTargetWireValues);
         if (!node.focusContext) return std::nullopt;
     }
     if (const ProtocolValue* labelField = value.field("accessible_label")) {
@@ -416,8 +423,9 @@ std::optional<UiNode> decodeNode(
     if (hasContainer == hasLeaf) return std::nullopt;
     if (hasContainer) {
         if (!containerField->asObject()) return std::nullopt;
-        const auto axis = decodeEnumIn(uintField(*containerField, "axis"),
-                                       kAllAxes);
+        const auto axis = decodeEnumIn<Axis>(
+            uintField(*containerField, "axis"),
+            detail::generated::kAxisWireValues);
         const auto gap = boundedInt(uintField(*containerField, "gap"));
         const ProtocolValue* insetField = containerField->field("inset");
         const ProtocolValue* childrenField = containerField->field("children");
@@ -439,8 +447,9 @@ std::optional<UiNode> decodeNode(
         if (containerField->field("scroll")) {
             const auto raw = uintField(*containerField, "scroll");
             if (!raw) return std::nullopt;
-            container.scroll =
-                decodeEnumIn(raw, kAllScrollAxes).value_or(ScrollAxis::None);
+            container.scroll = decodeEnumIn<ScrollAxis>(
+                raw, detail::generated::kScrollAxisWireValues)
+                                   .value_or(ScrollAxis::None);
         }
         for (const auto& childValue : *childrenField->asArray()) {
             auto child = decodeNode(childValue, retiredTreeSurfaces,

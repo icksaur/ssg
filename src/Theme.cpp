@@ -10,52 +10,10 @@
 namespace ssg {
 namespace {
 
-constexpr std::array kSemanticNames{
-    std::string_view{"text"},
-    std::string_view{"canvas"},
-    std::string_view{"caret"},
-    std::string_view{"selection"},
-    std::string_view{"tree_background"},
-    std::string_view{"tree_focus"},
-    std::string_view{"tab_active"},
-    std::string_view{"tab_inactive"},
-    std::string_view{"panel_active"},
-    std::string_view{"panel_inactive"},
-    std::string_view{"header"},
-    std::string_view{"footer"},
-    std::string_view{"status_info"},
-    std::string_view{"status_warning"},
-    std::string_view{"line_number"},
-    std::string_view{"search_match"},
-    std::string_view{"prompt"},
-    std::string_view{"scrollbar_track"},
-    std::string_view{"scrollbar_thumb"},
-    std::string_view{"diff_added"},
-    std::string_view{"diff_removed"},
-    std::string_view{"diff_modified"},
-    std::string_view{"tab_inactive_background"},
-    std::string_view{"header_background"},
-    std::string_view{"footer_background"},
-    std::string_view{"current_line_number"},
-    std::string_view{"current_line_number_background"},
-    std::string_view{"line_number_background"},
-};
-static_assert(kSemanticNames.size() == kSemanticRoleCount);
-
-constexpr std::array kSyntaxNames{
-    std::string_view{"plain_text"},
-    std::string_view{"comment"},
-    std::string_view{"keyword"},
-    std::string_view{"string"},
-    std::string_view{"number"},
-    std::string_view{"type"},
-    std::string_view{"function"},
-    std::string_view{"variable"},
-    std::string_view{"operator"},
-    std::string_view{"punctuation"},
-    std::string_view{"invalid"},
-};
-static_assert(kSyntaxNames.size() == kSyntaxScopeCount);
+inline constexpr auto& kSemanticNames =
+    detail::generated::kSemanticRoleCurrentWireNames;
+inline constexpr auto& kSyntaxNames =
+    detail::generated::kSyntaxScopeCurrentWireNames;
 
 constexpr std::size_t position(SemanticRole role) noexcept {
     return static_cast<std::size_t>(role);

@@ -3,6 +3,28 @@
 // reconciliation exactly as the browser runs them. Nothing here touches
 // document/window; client.mjs owns all rendering and I/O.
 
+import {
+  AXIS,
+  CLIENT_INPUT_KIND,
+  CLIENT_OWNED_INPUT_KIND as CLIENT_OWNED_INPUT,
+  DOCUMENT_POINTER_EDGE,
+  INPUT_POINTER_BUTTON,
+  INPUT_POINTER_PHASE,
+  PALETTE_PRESENCE_OP_KIND as PALETTE_PRESENCE_OP,
+  PROTOCOL_MESSAGE_KIND,
+  SCROLL_AXIS as SCROLL,
+  SEARCH_MODE as PICKER_MODE,
+  SEMANTIC_ROLE,
+  SIZE_KIND as SIZE,
+  VIEW_SURFACE as SURFACE,
+  WIDGET_KIND as WIDGET,
+} from './generated/semantic_wire_manifest.mjs';
+
+export {
+  AXIS, CLIENT_OWNED_INPUT, PALETTE_PRESENCE_OP, PICKER_MODE, SCROLL, SIZE,
+  SURFACE, WIDGET,
+};
+
 const PROTOCOL_LIMITS = {
   messageBytes: 32 * 1024 * 1024,
   valueDepth: 32,
@@ -228,10 +250,10 @@ export function decodeMessage(buffer) {
 }
 
 export function browserInboundKind(kind) {
-  if (kind === 1) return 'snapshot';
-  if (kind === 2) return 'delta';
-  if (kind === 6) return 'command-result';
-  if (kind === 8) return 'input-result';
+  if (kind === PROTOCOL_MESSAGE_KIND.SESSION_SNAPSHOT) return 'snapshot';
+  if (kind === PROTOCOL_MESSAGE_KIND.SESSION_DELTA) return 'delta';
+  if (kind === PROTOCOL_MESSAGE_KIND.COMMAND_RESULT) return 'command-result';
+  if (kind === PROTOCOL_MESSAGE_KIND.CLIENT_INPUT_RESULT) return 'input-result';
   return 'ignore';
 }
 
@@ -241,7 +263,8 @@ export function settleCommandResult(queue) {
 }
 
 export function encodeCommandRequest(id, baseRevision, payload = null) {
-  return encodeMessage(0, { id, base_revision: BigInt(baseRevision), payload });
+  return encodeMessage(PROTOCOL_MESSAGE_KIND.COMMAND_REQUEST,
+    { id, base_revision: BigInt(baseRevision), payload });
 }
 
 export const encodeUiNodeActivationCommand = (
@@ -254,20 +277,22 @@ export const encodeUiNodeActivationCommand = (
 export function encodeClientInput({ code = '', control = false, alt = false,
                                     meta = false, shift = false, text = '' }) {
   const stroke = code ? { code, control, alt, meta, shift } : null;
-  return encodeMessage(7, { kind: 0n, stroke, committed_text: text });
+  return encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
+    kind: BigInt(CLIENT_INPUT_KIND.KEY), stroke, committed_text: text,
+  });
 }
 
 export function encodeViewNavigationInput(observedRevision) {
-  return encodeMessage(7, {
-    kind: 12n,
+  return encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
+    kind: BigInt(CLIENT_INPUT_KIND.VIEW_NAVIGATION),
     basis_revision: BigInt(observedRevision),
   });
 }
 
 export function encodeResolvedSelectionInput(
     observedRevision, activeTab, documentRevision, selections) {
-  return encodeMessage(7, {
-    kind: 14n,
+  return encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
+    kind: BigInt(CLIENT_INPUT_KIND.RESOLVED_SELECTION),
     basis_revision: BigInt(observedRevision),
     active_tab: BigInt(activeTab),
     document_revision: BigInt(documentRevision),
@@ -312,10 +337,10 @@ export class BrowserKeyDispatchTracker {
   }
 }
 
-export const PICKER_MODE = Object.freeze({ FILE: 0, COMMAND: 4 });
-
-const encodePointerInput = (kind, fields, button = 0, phase = 0) =>
-  encodeMessage(7, {
+const encodePointerInput = (
+    kind, fields, button = INPUT_POINTER_BUTTON.PRIMARY,
+    phase = INPUT_POINTER_PHASE.PRESS) =>
+  encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
     kind: BigInt(kind),
     button: BigInt(button),
     phase: BigInt(phase),
@@ -323,7 +348,7 @@ const encodePointerInput = (kind, fields, button = 0, phase = 0) =>
   });
 
 export const encodePickerPointerInput = (activation, candidateId) =>
-  encodePointerInput(3, {
+  encodePointerInput(CLIENT_INPUT_KIND.PICKER, {
     picker_mode: BigInt(activation.mode),
     activation_id: BigInt(activation.id),
     candidate_id: String(candidateId),
@@ -331,18 +356,20 @@ export const encodePickerPointerInput = (activation, candidateId) =>
 
 export const encodeDocumentPointerInput = (
     position, revision,
-    { additive = false, selectWord = false, phase = 0, edge = 0 } = {}) =>
-  encodePointerInput(9, {
+    { additive = false, selectWord = false,
+      phase = INPUT_POINTER_PHASE.PRESS,
+      edge = DOCUMENT_POINTER_EDGE.NONE } = {}) =>
+  encodePointerInput(CLIENT_INPUT_KIND.DOCUMENT, {
     basis_revision: BigInt(revision),
     position: position == null ? null : BigInt(position),
     additive,
     select_word: selectWord,
     edge: BigInt(edge),
-  }, 0, phase);
+  }, INPUT_POINTER_BUTTON.PRIMARY, phase);
 
 export const encodeScrollLinesInput = (target, rows, revision) =>
-  encodeMessage(7, {
-    kind: 10n,
+  encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
+    kind: BigInt(CLIENT_INPUT_KIND.SCROLL_LINES),
     basis_revision: BigInt(revision),
     target: BigInt(target),
     rows: BigInt(rows),
@@ -350,16 +377,17 @@ export const encodeScrollLinesInput = (target, rows, revision) =>
 
 export const encodeScrollFractionInput = (
     target, numerator, denominator, revision) =>
-  encodeMessage(7, {
-    kind: 11n,
+  encodeMessage(PROTOCOL_MESSAGE_KIND.CLIENT_INPUT, {
+    kind: BigInt(CLIENT_INPUT_KIND.SCROLL_FRACTION),
     basis_revision: BigInt(revision),
     target: BigInt(target),
     numerator: BigInt(numerator),
     denominator: BigInt(denominator),
   });
 
-export const encodeTabPointerInput = (tabId, revision, button = 0) =>
-  encodePointerInput(1, {
+export const encodeTabPointerInput = (
+    tabId, revision, button = INPUT_POINTER_BUTTON.PRIMARY) =>
+  encodePointerInput(CLIENT_INPUT_KIND.TAB, {
     basis_revision: BigInt(revision),
     tab_id: BigInt(tabId),
   }, button);
@@ -382,26 +410,26 @@ export function markedTextByteOffset(byteStart, text, utf16Offset) {
 }
 
 export const encodeTreePointerInput = (nodeId, revision) =>
-  encodePointerInput(2, {
+  encodePointerInput(CLIENT_INPUT_KIND.TREE, {
     basis_revision: BigInt(revision),
     node_id: String(nodeId),
   });
 
 export const encodePromptControlPointerInput = (controlId, revision) =>
-  encodePointerInput(4, {
+  encodePointerInput(CLIENT_INPUT_KIND.PROMPT_CONTROL, {
     basis_revision: BigInt(revision),
     control_id: String(controlId),
   });
 
 export const encodeExternalActionPointerInput = (action, fileId, revision) =>
-  encodePointerInput(5, {
+  encodePointerInput(CLIENT_INPUT_KIND.EXTERNAL_ACTION, {
     basis_revision: BigInt(revision),
     invocation: { file_id: String(fileId), action: BigInt(action) },
   });
 
 export const encodeStatusActionPointerInput = (
     { statusId, actionId, generation }, revision) =>
-  encodePointerInput(6, {
+  encodePointerInput(CLIENT_INPUT_KIND.STATUS_ACTION, {
     basis_revision: BigInt(revision),
     invocation: {
       status_id: BigInt(statusId),
@@ -412,14 +440,14 @@ export const encodeStatusActionPointerInput = (
 
 export const encodePublishedUiActionPointerInput = (
     nodeId, schemaGeneration, revision) =>
-  encodePointerInput(7, {
+  encodePointerInput(CLIENT_INPUT_KIND.PUBLISHED_UI_ACTION, {
     basis_revision: BigInt(revision),
     schema_generation: BigInt(schemaGeneration),
     node_id: String(nodeId),
   });
 
 export const encodeNoticeActionPointerInput = (actionId, revision) =>
-  encodePointerInput(8, {
+  encodePointerInput(CLIENT_INPUT_KIND.NOTICE_ACTION, {
     basis_revision: BigInt(revision),
     action_id: String(actionId),
   });
@@ -683,15 +711,6 @@ export function resolvePickerLifecycle(keymap, palette, inputStroke, context) {
   }
   return null;
 }
-
-export const CLIENT_OWNED_INPUT = Object.freeze({
-  APPEND_TEXT: 0,
-  DELETE_GRAPHEME_BACKWARD: 1,
-  DELETE_WORD_BACKWARD: 2,
-  SELECT_NEXT: 3,
-  SELECT_PREVIOUS: 4,
-  SUBMIT: 5,
-});
 
 export function predictPickerInput(keymap, inputStroke, text) {
   const command = resolveKeyCommand(keymap, inputStroke, 'prompt');
@@ -1743,25 +1762,12 @@ export function externalModificationFromSections(sections) {
 // Wire ordinals, pinned by the C++ enums (WidgetKind, RegionRole, Axis, SizeKind,
 // SemanticRole). The schema's leaves carry `kind`; regions carry `role`; nodes carry
 // `size`; containers carry `axis`.
-export const WIDGET = { CONTAINER: 0, LABEL: 1, FIELD: 2, CHECKBOX: 3, TEXT_INPUT: 4, SPACER: 5, VIEW: 6, STATUS_ACTIONS: 7 };
-export const AXIS = { ROW: 0, COLUMN: 1 };
-export const SIZE = { EXACT: 0, FLEX: 1, AUTO: 2, RESPONSIVE: 3 };
 // Whether a node is an independent scroll viewport, pinned to the C++ ScrollAxis
 // enum. An unrecognized value is treated as NONE (a future axis degrades to "not
 // a viewport"), matching the wire decoder's forward-compat rule.
-export const SCROLL = { NONE: 0, VERTICAL: 1 };
 // Opaque client-rendered surfaces a View leaf may name, pinned to the C++ ViewSurface enum.
-export const SURFACE = {
-  TABBAR: 0,
-  FINDRESULTS: 3,
-  NOTICE: 6,
-  EXTERNAL_MODIFICATION: 7,
-  DOCUMENT: 8,
-  TREE: 9,
-};
-export const PALETTE_PRESENCE_OP = { SHOW: 0, HIDE: 1 };
 const ALL_SURFACES = Object.freeze([
-  SURFACE.TABBAR, SURFACE.TREE, SURFACE.FINDRESULTS, SURFACE.NOTICE,
+  SURFACE.TAB_BAR, SURFACE.TREE, SURFACE.FIND_RESULTS, SURFACE.NOTICE,
   SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT,
 ]);
 const TREE_SURFACES = Object.freeze([
@@ -1781,9 +1787,9 @@ export function browserRenderPlan(delta) {
       (delta.syntax && delta.syntax.spans != null)) {
     add(SURFACE.DOCUMENT);
   }
-  if (delta.tabs && delta.tabs.state != null) add(SURFACE.TABBAR);
+  if (delta.tabs && delta.tabs.state != null) add(SURFACE.TAB_BAR);
   if (revisionChanged(delta.tree)) add(...TREE_SURFACES);
-  if (delta.palette) add(SURFACE.FINDRESULTS);
+  if (delta.palette) add(SURFACE.FIND_RESULTS);
   if (delta.notice_view && !!num(delta.notice_view.changed))
     add(SURFACE.NOTICE);
   if (revisionChanged(delta.external_modification))
@@ -1979,7 +1985,7 @@ export function gitAffordanceFromNode(node) {
 
 export function preferredKeyboardSurface(surfaces) {
   const present = new Set(surfaces || []);
-  if (present.has(SURFACE.FINDRESULTS)) return SURFACE.FINDRESULTS;
+  if (present.has(SURFACE.FIND_RESULTS)) return SURFACE.FIND_RESULTS;
   if (present.has(SURFACE.DOCUMENT)) return SURFACE.DOCUMENT;
   return null;
 }
@@ -2055,16 +2061,15 @@ export function focusUiNode(nodeId, findNode) {
   return true;
 }
 
-const STRUCTURAL_ROLE = { prompt: 16 };
-const structuralRole = (name) => Object.prototype.hasOwnProperty.call(STRUCTURAL_ROLE, name)
-  ? STRUCTURAL_ROLE[name] : null;
+const structuralRole = (name) =>
+  name === 'prompt' ? SEMANTIC_ROLE.PROMPT : null;
 
 // The primitives THIS web build's interpreter can draw. Header prompt TextInput
 // state is browser-local; footer prompt TextInputs resolve through UiState.
 // Placement is tree structure + well-known node ids, so there is no region-role set.
 export const WEB_UI_PROFILE = {
   widgets: new Set([WIDGET.CONTAINER, WIDGET.LABEL, WIDGET.FIELD, WIDGET.CHECKBOX, WIDGET.TEXT_INPUT, WIDGET.SPACER, WIDGET.VIEW, WIDGET.STATUS_ACTIONS]),
-  surfaces: new Set([SURFACE.TABBAR, SURFACE.TREE, SURFACE.FINDRESULTS, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT]),
+  surfaces: new Set([SURFACE.TAB_BAR, SURFACE.TREE, SURFACE.FIND_RESULTS, SURFACE.NOTICE, SURFACE.EXTERNAL_MODIFICATION, SURFACE.DOCUMENT]),
   sizes: new Set(Object.values(SIZE)),
 };
 

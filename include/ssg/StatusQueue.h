@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include "ssg/PromptSurface.h"
 #include "ssg/StatusActionInvocation.h"
 #include "ssg/UiTree.h"
@@ -14,11 +16,11 @@
 namespace ssg {
 
 enum class StatusPriority : std::uint8_t {
-    Error,
-    Warning,
-    Information,
-    Progress,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_STATUS_PRIORITY_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_STATUS_PRIORITY_ENUMERATORS
 
 struct StatusAction {
     std::string id;

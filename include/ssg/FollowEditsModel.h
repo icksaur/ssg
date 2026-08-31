@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include "ssg/CommandInvocation.h"
 #include "ssg/DiffModel.h"
 #include "ssg/Viewport.h"
@@ -15,7 +17,12 @@
 
 namespace ssg {
 
-enum class FollowMode : std::uint8_t { Following, Paused };
+enum class FollowMode : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_FOLLOW_MODE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_FOLLOW_MODE_ENUMERATORS
 
 enum class NavigationClass : std::uint8_t {
     User,

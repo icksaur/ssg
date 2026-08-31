@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include "ssg/config.h"
 
 #include <array>
@@ -14,45 +16,28 @@
 namespace ssg {
 
 enum class SettingScope : std::uint8_t {
-    Defaults,
-    User,
-    Workspace,
-    Language,
-    Document,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_SETTING_SCOPE_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_SETTING_SCOPE_ENUMERATORS
 
 enum class SettingKey : std::uint8_t {
-    IndentWidth,
-    IndentStyle,
-    IndentDetection,
-    AutoIndent,
-    LineEnding,
-    FinalNewline,
-    Encoding,
-    WordWrap,
-    Theme,
-    Keymap,
-    SearchCaseSensitive,
-    SearchWholeWord,
-    SearchRegularExpression,
-    UndoByteBudget,
-    RecoveryByteBudget,
-    TypingCoalescingMs,
-    FileFinderRespectGitignore,
-    AutosaveDebounceMs,
-    LineNumbers,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_SETTING_KEY_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_SETTING_KEY_ENUMERATORS
 
-inline constexpr std::size_t kSettingKeyCount = 19;
+inline constexpr std::size_t kSettingKeyCount =
+    detail::generated::kSettingKeyWireValues.size();
 
 enum class TextEncoding : std::uint8_t {
-    Utf8,
-    Utf8Bom,
-    Utf16le,
-    Utf16be,
-    Windows1252,
-    Iso88591,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_TEXT_ENCODING_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_TEXT_ENCODING_ENUMERATORS
 
 using SettingValue =
     std::variant<bool, std::uint32_t, std::uint64_t, IndentStyle, LineEnding,

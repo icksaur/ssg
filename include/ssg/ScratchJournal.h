@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/detail/generated/semantic_wire_manifest.h>
+
 #include "ssg/types.h"
 
 #include <array>
@@ -35,9 +37,11 @@ private:
 };
 
 enum class JournalDocumentKeyKind {
-    Saved,
-    Untitled,
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_JOURNAL_DOCUMENT_KEY_KIND_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
 };
+#undef SSG_JOURNAL_DOCUMENT_KEY_KIND_ENUMERATORS
 
 class JournalDocumentKey {
 public:
