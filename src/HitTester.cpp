@@ -56,19 +56,19 @@ RegionHit editorHit(GridFrame const& snapshot, Rect const& content,
     return hit;
 }
 
-RegionHit paletteHit(PaletteProjection const& palette, int column, int row) {
-    if (contains(palette.scrollbarRect, column, row)) {
-        return scrollbarHit(HitRegion::PaletteScrollbar, palette.scrollbarRect,
+RegionHit paletteHit(SolvedPaletteSurface const& palette, int column, int row) {
+    if (contains(palette.scrollbar, column, row)) {
+        return scrollbarHit(HitRegion::PaletteScrollbar, palette.scrollbar,
                              row);
     }
-    if (!contains(palette.rect, column, row)) return {};
-    auto const windowIndex = static_cast<std::size_t>(row - palette.rect.y);
-    if (windowIndex >= palette.rows.size()) return {};
-    RegionHit hit;
-    hit.region = HitRegion::Palette;
-    hit.itemIndex =
-        palette.firstVisible + static_cast<std::uint32_t>(windowIndex);
-    return hit;
+    for (const auto& paletteRow : palette.visibleRows) {
+        if (!contains(paletteRow.rect, column, row)) continue;
+        RegionHit hit;
+        hit.region = HitRegion::Palette;
+        hit.itemIndex = paletteRow.absoluteIndex;
+        return hit;
+    }
+    return {};
 }
 
 RegionHit panelHit(GridFrame const& snapshot, Rect const& panel,
@@ -192,6 +192,18 @@ RegionHit HitTester::at(int column, int row) const {
         return {};
     }
 
+    // The picker replaces the editor branch, so its solved viewport takes
+    // precedence over every legacy hit.
+    if (const auto* node = snapshot.layout().find(
+            UiNodeId{std::string{kFindResultsViewportNodeId}})) {
+        const auto solved = solvePaletteSurface(
+            snapshot.palette(), node->rect,
+            snapshot.presentation().style.dimensions.scrollbarGutterWidth);
+        auto hit = paletteHit(solved, column, row);
+        if (hit.hit()) return hit;
+        if (contains(solved.rect, column, row)) return {};
+    }
+
     for (auto const& node : shell.accessibilityNodes) {
         if (!contains(node.rect, column, row)) continue;
         if (node.kind == ShellNodeKind::HeaderField) {
@@ -240,19 +252,6 @@ RegionHit HitTester::at(int column, int row) const {
                          row);
     }
 
-    // The palette overlays the editor pane while it is open, so it takes
-    // precedence over the editor content in the same rectangle.
-    if (shell.palette) {
-        auto hit = paletteHit(*shell.palette, column, row);
-        if (hit.hit()) return hit;
-        // A pane cell not on a palette row or its gutter is inert while the
-        // palette is open (the document is not interactive underneath).
-        if (contains(shell.palette->rect, column, row) ||
-            contains(shell.palette->scrollbarRect, column, row)) {
-            return {};
-        }
-    }
-
     if (!shell.panes.empty()) {
         auto const& pane = shell.panes.front();
         if (contains(pane.scrollbar, column, row)) {
@@ -285,8 +284,14 @@ std::optional<HitTester::GutterThumb> HitTester::gutterThumb(
         return make(*shell.panelScrollbar, windows.front().scrollbar);
     }
     case HitRegion::PaletteScrollbar:
-        if (!shell.palette) return std::nullopt;
-        return make(shell.palette->scrollbarRect, shell.palette->scrollbar);
+        if (const auto* node = snapshot_.layout().find(
+                UiNodeId{std::string{kFindResultsViewportNodeId}})) {
+            const auto solved = solvePaletteSurface(
+                snapshot_.palette(), node->rect,
+                snapshot_.presentation().style.dimensions.scrollbarGutterWidth);
+            return make(solved.scrollbar, snapshot_.palette().scrollbar);
+        }
+        return std::nullopt;
     default:
         return std::nullopt;
     }

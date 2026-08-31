@@ -14,6 +14,7 @@
 
 #include <ssg/Geometry.h>
 #include <ssg/ExternalModificationFlow.h>
+#include <ssg/PaletteSearcher.h>
 #include <ssg/Style.h>
 #include <ssg/TabManager.h>
 #include <ssg/UiNodeState.h>
@@ -155,6 +156,31 @@ struct SolvedTabBar {
 // placement for grid rendering and hit testing.
 [[nodiscard]] SolvedTabBar solveTabBar(const TabViewState& tabs,
                                        const TabGlyphs& glyphs, Rect rect);
+
+struct SolvedPaletteRow {
+    std::size_t windowIndex = 0;
+    std::uint32_t absoluteIndex = 0;
+    Rect rect;
+    bool selected = false;
+
+    friend bool operator==(const SolvedPaletteRow&,
+                           const SolvedPaletteRow&) = default;
+};
+
+struct SolvedPaletteSurface {
+    Rect rect;
+    Rect rows;
+    Rect scrollbar;
+    std::vector<SolvedPaletteRow> visibleRows;
+
+    friend bool operator==(const SolvedPaletteSurface&,
+                           const SolvedPaletteSurface&) = default;
+};
+
+// CONTRACT: Picker rendering, row hits, inert padding, and scrollbar hits derive
+// from this one solved viewport projection.
+[[nodiscard]] SolvedPaletteSurface solvePaletteSurface(
+    const PaletteReport& palette, Rect rect, int scrollbarWidth);
 
 // Returns nullopt when nonnegative bounds cannot contain an inset, gaps, or
 // exact children. Invalid identities and unsupported Auto sizes are misuse and

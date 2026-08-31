@@ -71,22 +71,27 @@ public:
     [[nodiscard]] SolvedGridTree const& layout() const noexcept {
         return layout_;
     }
+    [[nodiscard]] PaletteReport const& palette() const noexcept {
+        return palette_;
+    }
     // CONTRACT: Direct value construction requires a corresponding, solvable
     // semantic UI frame and throws std::logic_error otherwise. GridPresenter
     // reports the same rejection through project()'s nullopt result.
     GridFrame(SessionSnapshot semantic, PresentationSnapshot presentation,
-              GridBasis basis);
+              GridBasis basis, PaletteReport palette = {});
 
 private:
     friend class GridPresenter;
     GridFrame(SessionSnapshot semantic, PresentationSnapshot presentation,
-              SolvedGridTree layout, GridBasis basis);
+              SolvedGridTree layout, GridBasis basis, PaletteReport palette);
     [[nodiscard]] static std::optional<GridFrame> fromLegacy(
-        LegacyPresentationSnapshot legacy, GridBasis basis);
+        LegacyPresentationSnapshot legacy, GridBasis basis,
+        PaletteReport palette = {});
 
     SessionSnapshot semantic_;
     PresentationSnapshot presentation_;
     SolvedGridTree layout_;
+    PaletteReport palette_;
     GridBasis basis_;
 };
 

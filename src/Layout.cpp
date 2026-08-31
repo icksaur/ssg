@@ -201,6 +201,31 @@ SolvedTabBar solveTabBar(const TabViewState& tabs,
     return solved;
 }
 
+SolvedPaletteSurface solvePaletteSurface(const PaletteReport& palette,
+                                         Rect rect,
+                                         int scrollbarWidth) {
+    const int gutter = std::clamp(scrollbarWidth, 0, rect.width);
+    SolvedPaletteSurface solved{
+        rect,
+        {rect.x, rect.y, rect.width - gutter, rect.height},
+        {rect.right() - gutter, rect.y, gutter, rect.height},
+        {}};
+    const auto visible = std::min(
+        palette.rows.size(),
+        static_cast<std::size_t>(std::max(rect.height, 0)));
+    solved.visibleRows.reserve(visible);
+    for (std::size_t index = 0; index < visible; ++index) {
+        const auto absolute = palette.firstVisible +
+                              static_cast<std::uint32_t>(index);
+        solved.visibleRows.push_back(
+            {index, absolute,
+             {solved.rows.x, solved.rows.y + static_cast<int>(index),
+              solved.rows.width, 1},
+             palette.selected && *palette.selected == absolute});
+    }
+    return solved;
+}
+
 namespace {
 
 void solveNode(const LayoutNode& node, Rect frame,

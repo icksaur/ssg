@@ -7,7 +7,7 @@
 namespace ssg::test {
 
 inline std::optional<GridFrame> gridFrameFromLegacy(
-    LegacyPresentationSnapshot const& legacy) {
+    LegacyPresentationSnapshot const& legacy, PaletteReport palette = {}) {
     auto const& semantic = legacy.semantic();
     auto sections = semantic.sections();
     if (sections.uiState.nodes.empty()) {
@@ -23,7 +23,8 @@ inline std::optional<GridFrame> gridFrameFromLegacy(
         SessionSnapshot{semantic.revision(), semantic.topology(),
                         semantic.client(), std::move(sections)},
         legacy.presentation(),
-        GridBasis{semantic.client().viewId, semantic.revision(), 0}};
+        GridBasis{semantic.client().viewId, semantic.revision(), 0},
+        std::move(palette)};
 }
 
 }  // namespace ssg::test

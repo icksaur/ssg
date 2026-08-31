@@ -77,6 +77,21 @@ ssg::SessionSnapshotSections minimalSections() {
     return sections;
 }
 
+void showPicker(ssg::SessionSnapshotSections& sections) {
+    sections.palette.activePicker = ssg::PickerActivation{
+        ssg::SearchMode::Command, ssg::PickerActivationId{1}};
+    for (auto& record : sections.uiPresence.nodes) {
+        if (record.id ==
+            ssg::UiNodeId{std::string{ssg::kEditorNodeId}}) {
+            record.present = false;
+        } else if (record.id ==
+                   ssg::UiNodeId{
+                       std::string{ssg::kFindResultsViewportNodeId}}) {
+            record.present = true;
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 
 TEST(editorCellMapsToItsDocumentByteOffset) {
@@ -567,21 +582,37 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     for (std::uint32_t i = 0; i < rows; ++i) {
         projection.rows.push_back({"cmd-" + std::to_string(20 + i), ""});
     }
+    projection.rect = {0, 0, 1, 1};
+    projection.scrollbarRect = {0, 0, 1, 1};
     presentation.shell.palette = projection;
+    auto sections = snapshot->semantic().sections();
+    showPicker(sections);
     ssg::LegacyPresentationSnapshot projected{snapshot->semantic().revision(), snapshot->semantic().topology(),
-                                   snapshot->semantic().client(), snapshot->semantic().sections(),
+                                   snapshot->semantic().client(), std::move(sections),
                                    std::move(presentation)};
     auto frame =
         ssg::test::gridFrameFromLegacy(std::move(projected));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
-    auto hit = ssg::HitTester{*frame}.at(pane.content.x, pane.content.y + 3);
+    const auto* viewport = frame->layout().find(
+        ssg::UiNodeId{
+            std::string{ssg::kFindResultsViewportNodeId}});
+    ASSERT_TRUE(viewport != nullptr);
+    if (!viewport) return;
+    const auto solved = ssg::solvePaletteSurface(
+        frame->palette(), viewport->rect,
+        frame->presentation().style.dimensions.scrollbarGutterWidth);
+    ASSERT_TRUE(solved.visibleRows.size() > 3);
+    if (solved.visibleRows.size() <= 3) return;
+    auto hit = ssg::HitTester{*frame}.at(
+        solved.visibleRows[3].rect.x, solved.visibleRows[3].rect.y);
     ASSERT_EQ(hit.region, ssg::HitRegion::Palette);
     ASSERT_EQ(hit.itemIndex, std::uint32_t{23});
 
     // The palette overlays the pane: a document cell is inert while it is open.
-    auto overDoc = ssg::HitTester{*frame}.at(pane.content.x, pane.content.y);
+    auto overDoc = ssg::HitTester{*frame}.at(
+        solved.visibleRows[0].rect.x, solved.visibleRows[0].rect.y);
     ASSERT_EQ(overDoc.region, ssg::HitRegion::Palette);
     ASSERT_EQ(overDoc.itemIndex, std::uint32_t{20});
 }
@@ -607,12 +638,16 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     projection.firstVisible = 0;
     projection.selected = std::uint32_t{0};
     projection.scrollbar = ssg::Viewport{}.scrollbarMetrics(100, rows, 0);
-    for (std::uint32_t i = 0; i < rows; ++i) {  // exactly fills the window
+    for (std::uint32_t i = 0; i < 2; ++i) {
         projection.rows.push_back({"cmd-" + std::to_string(i), ""});
     }
+    projection.rect = {0, 0, 1, 1};
+    projection.scrollbarRect = {0, 0, 1, 1};
     presentation.shell.palette = projection;
+    auto sections = snapshot->semantic().sections();
+    showPicker(sections);
     ssg::LegacyPresentationSnapshot projected{snapshot->semantic().revision(), snapshot->semantic().topology(),
-                                   snapshot->semantic().client(), snapshot->semantic().sections(),
+                                   snapshot->semantic().client(), std::move(sections),
                                    std::move(presentation)};
     auto frame =
         ssg::test::gridFrameFromLegacy(std::move(projected));
@@ -622,15 +657,31 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     // The gutter classifies as the palette scrollbar along its whole height; the
     // scroll position a press sends is computed by the app from the published
     // thumb geometry, not from this hit's row.
-    auto top = ssg::HitTester{*frame}.at(pane.scrollbar.x, pane.scrollbar.y);
+    const auto* viewport = frame->layout().find(
+        ssg::UiNodeId{
+            std::string{ssg::kFindResultsViewportNodeId}});
+    ASSERT_TRUE(viewport != nullptr);
+    if (!viewport) return;
+    const auto solved = ssg::solvePaletteSurface(
+        frame->palette(), viewport->rect,
+        frame->presentation().style.dimensions.scrollbarGutterWidth);
+    auto top = ssg::HitTester{*frame}.at(
+        solved.scrollbar.x, solved.scrollbar.y);
     ASSERT_EQ(top.region, ssg::HitRegion::PaletteScrollbar);
     auto bottom =
-        ssg::HitTester{*frame}.at(pane.scrollbar.x, pane.scrollbar.bottom() - 1);
+        ssg::HitTester{*frame}.at(
+            solved.scrollbar.x, solved.scrollbar.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::PaletteScrollbar);
+    ASSERT_EQ(solved.visibleRows.size(), std::size_t{2});
+    if (solved.visibleRows.size() == 2 && solved.rows.height > 2) {
+        auto padding = ssg::HitTester{*frame}.at(
+            solved.rows.x, solved.visibleRows.back().rect.bottom());
+        ASSERT_EQ(padding.region, ssg::HitRegion::None);
+    }
     auto const thumb = ssg::HitTester{*frame}.gutterThumb(
         ssg::HitRegion::PaletteScrollbar);
     ASSERT_TRUE(thumb.has_value());
-    if (thumb) ASSERT_EQ(thumb->gutterY, pane.scrollbar.y);
+    if (thumb) ASSERT_EQ(thumb->gutterY, solved.scrollbar.y);
 }
 
 // A scrollbar drag follows the pointer's ROW alone.  Once the button is down the

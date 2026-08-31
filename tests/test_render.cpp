@@ -154,6 +154,21 @@ ssg::GridFrame deprecatedGridFrame(
     return std::move(frame).value();
 }
 
+void showPicker(ssg::SessionSnapshotSections& sections) {
+    sections.palette.activePicker = ssg::PickerActivation{
+        ssg::SearchMode::Command, ssg::PickerActivationId{1}};
+    for (auto& record : sections.uiPresence.nodes) {
+        if (record.id ==
+            ssg::UiNodeId{std::string{ssg::kEditorNodeId}}) {
+            record.present = false;
+        } else if (record.id ==
+                   ssg::UiNodeId{
+                       std::string{ssg::kFindResultsViewportNodeId}}) {
+            record.present = true;
+        }
+    }
+}
+
 }  // namespace
 
 TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
@@ -569,13 +584,27 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
     projection.rect = presentation.shell.panes.front().content;
     projection.rows = {{"file.save", "ESC s"}, {"file.quit", "ESC q"}};
     projection.selected = std::uint32_t{1};
+    projection.rect = {0, 0, 1, 1};
     presentation.shell.palette = projection;
+    auto sections = snapshot->semantic().sections();
+    showPicker(sections);
 
     ssg::LegacyPresentationSnapshot projected{
         snapshot->semantic().revision(), snapshot->semantic().topology(),
-        snapshot->semantic().client(), snapshot->semantic().sections(),
+        snapshot->semantic().client(), std::move(sections),
         std::move(presentation)};
-    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(projected));
+    auto frame = deprecatedGridFrame(projected);
+    const auto* viewport = frame.layout().find(
+        ssg::UiNodeId{
+            std::string{ssg::kFindResultsViewportNodeId}});
+    ASSERT_TRUE(viewport != nullptr);
+    if (!viewport) return;
+    const auto solved = ssg::solvePaletteSurface(
+        frame.palette(), viewport->rect,
+        frame.presentation().style.dimensions.scrollbarGutterWidth);
+    ASSERT_EQ(solved.visibleRows.size(), std::size_t{2});
+    if (solved.visibleRows.size() < 2) return;
+    auto grid = ssg::Renderer{}.render(frame);
 
     // Results replace the document text in the pane.
     ASSERT_TRUE(gridContains(grid, "file.save"));
@@ -584,13 +613,27 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
 
     // The selected row is painted with the selection role, including on the
     // label's glyph cells (not only trailing filler).
-    int const selectedRow = projection.rect.y + 1;
-    ASSERT_EQ(grid.at(projection.rect.x, selectedRow).text, std::string{"f"});
-    ASSERT_EQ(grid.at(projection.rect.x, selectedRow).role,
+    const auto& selected = solved.visibleRows[1].rect;
+    ASSERT_EQ(grid.at(selected.x, selected.y).text, std::string{"f"});
+    ASSERT_EQ(grid.at(selected.x, selected.y).role,
               ssg::SemanticRole::Selection);
     // The unselected row must not carry the selection role.
-    ASSERT_FALSE(grid.at(projection.rect.x, projection.rect.y).role ==
+    const auto& unselected = solved.visibleRows[0].rect;
+    ASSERT_FALSE(grid.at(unselected.x, unselected.y).role ==
                  ssg::SemanticRole::Selection);
+}
+
+TEST(activePaletteWithoutSolvedFindResultsIsRejected) {
+    const auto baseline =
+        ssg::test::SessionSnapshotBuilder{}.viewport(80, 24).build();
+    auto sections = baseline.sections();
+    sections.palette.activePicker = ssg::PickerActivation{};
+    auto rejected = ssg::test::gridFrameFromLegacy(
+        ssg::LegacyPresentationSnapshot{
+            baseline.semantic().revision(), baseline.semantic().topology(),
+            baseline.semantic().client(), std::move(sections),
+            baseline.presentation()});
+    ASSERT_FALSE(rejected.has_value());
 }
 
 TEST(renderShowsPaletteQueryAndGhostInHeader) {
@@ -1160,9 +1203,11 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
             {"cmd-" + std::to_string(20 + i), ""});
     }
     presentation.shell.palette = projection;
+    auto sections = snapshot->semantic().sections();
+    showPicker(sections);
     ssg::LegacyPresentationSnapshot projected{
         snapshot->semantic().revision(), snapshot->semantic().topology(),
-        snapshot->semantic().client(), snapshot->semantic().sections(),
+        snapshot->semantic().client(), std::move(sections),
         std::move(presentation)};
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(projected));
 
@@ -1210,9 +1255,11 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
         ssg::Viewport{}.scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
     projection.rows = {{"a", ""}, {"b", ""}};
     presentation.shell.palette = projection;
+    auto sections = snapshot->semantic().sections();
+    showPicker(sections);
     ssg::LegacyPresentationSnapshot projected{
         snapshot->semantic().revision(), snapshot->semantic().topology(),
-        snapshot->semantic().client(), snapshot->semantic().sections(),
+        snapshot->semantic().client(), std::move(sections),
         std::move(presentation)};
     auto grid = ssg::Renderer{}.render(deprecatedGridFrame(projected));
     // The gutter is reserved (column exists) but blank: no thumb/track glyphs.
@@ -2050,6 +2097,9 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
                 request.lineNumberGutterWidth = 3;
             })
             .promptInput(pickerOpen, "needle", "ghost")
+            .paletteReport(ssg::PaletteReport{
+                "", "", {{"candidate", "Candidate", ""}},
+                std::uint32_t{0}, 0, {}})
             .sections([&](ssg::SessionSnapshotSections& sections) {
                 sections.theme = theme;
                 sections.noticeView = ssg::NoticeView{
@@ -2112,6 +2162,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     // Union both renders so every role has a frame that paints it.
     auto snapshot = makeSnapshot(true);
     auto grid = ssg::Renderer{}.render(snapshot);
+    auto documentGrid = ssg::Renderer{}.render(makeSnapshot(false));
 
     // Cell-level evidence that the selection and diff surfaces actually paint,
     // so treating Selection/Diff* colors (carried on grid.selectionFill/
@@ -2121,6 +2172,8 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     bool anyTintedCell = false;
     for (auto const& cell : grid.cells) {
         if (cell.role == SemanticRole::Selection) anySelectionCell = true;
+    }
+    for (auto const& cell : documentGrid.cells) {
         if (cell.tint != ssg::DiffTint::None) anyTintedCell = true;
     }
     ASSERT_TRUE(anySelectionCell);

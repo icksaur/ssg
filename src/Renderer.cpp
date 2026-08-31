@@ -621,23 +621,20 @@ void paintPanelTree(CellGrid& grid, Rect const& panel,
 // Projects the palette's ranked results into the active pane while the palette
 // prompt is open.  The query and caret live in the header;
 // this paints only the results window with the selected row highlighted.
-void paintPalette(CellGrid& grid, PaletteProjection const& palette,
-                   ThemeSnapshot const& theme, std::uint8_t background,
-                   Style const& style) {
-    auto const& rect = palette.rect;
-    if (rect.width <= 0 || rect.height <= 0) return;
+void paintPalette(CellGrid& grid, PaletteReport const& palette,
+                  SolvedPaletteSurface const& solved,
+                  ThemeSnapshot const& theme, std::uint8_t background,
+                  Style const& style) {
+    if (solved.rect.width <= 0 || solved.rect.height <= 0) return;
     auto const foreground = semanticIndex(theme, SemanticRole::Text);
     auto const detailColor = semanticIndex(theme, SemanticRole::LineNumber);
     auto const selectedBg = semanticIndex(theme, SemanticRole::Selection);
     // `rows` is already the client's windowed subset; `selected`/`first_visible`
     // are absolute, so the selected row's screen index is selected-first_visible.
-    for (std::size_t index = 0; index < palette.rows.size(); ++index) {
-        if (static_cast<int>(index) >= rect.height) break;
-        auto const& row = palette.rows[index];
-        int const y = rect.y + static_cast<int>(index);
-        bool const isSelected =
-            palette.selected &&
-            *palette.selected == palette.firstVisible + index;
+    for (const auto& solvedRow : solved.visibleRows) {
+        auto const& row = palette.rows[solvedRow.windowIndex];
+        const auto& rect = solvedRow.rect;
+        bool const isSelected = solvedRow.selected;
         auto const rowBackground = isSelected ? selectedBg : background;
         auto const rowRole =
             isSelected ? SemanticRole::Selection : SemanticRole::Canvas;
@@ -645,9 +642,9 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
             isSelected ? SemanticRole::Selection : SemanticRole::Text;
         auto const detailRole =
             isSelected ? SemanticRole::Selection : SemanticRole::LineNumber;
-        fillRect(grid, {rect.x, y, rect.width, 1}, foreground, rowBackground,
+        fillRect(grid, rect, foreground, rowBackground,
                   rowRole);
-        paintText(grid, rect.x, y, rect.right(), row.label, foreground,
+        paintText(grid, rect.x, rect.y, rect.right(), row.label, foreground,
                    rowBackground, labelRole, style);
         if (!row.detail.empty()) {
             auto const run = GraphemeLayout{}.computeRun(row.detail);
@@ -656,15 +653,15 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
                 width += static_cast<int>(std::max<std::uint32_t>(span.cellWidth, 1));
             }
             int const start = std::max(rect.x, rect.right() - width);
-            paintText(grid, start, y, rect.right(), row.detail, detailColor,
+            paintText(grid, start, rect.y, rect.right(), row.detail, detailColor,
                        rowBackground, detailRole, style);
         }
     }
     // Paint the reserved gutter (blank when the ranked list fits).
-    if (palette.scrollbarRect.width > 0 && palette.scrollbarRect.height > 0) {
-        paintScrollGutter(grid, palette.scrollbarRect.x,
-                            palette.scrollbarRect.y,
-                            palette.scrollbarRect.height, palette.scrollbar,
+    if (solved.scrollbar.width > 0 && solved.scrollbar.height > 0) {
+        paintScrollGutter(grid, solved.scrollbar.x,
+                            solved.scrollbar.y,
+                            solved.scrollbar.height, palette.scrollbar,
                             theme, background, style);
     }
 }
@@ -1379,11 +1376,18 @@ CellGrid Renderer::render(GridFrame const& snapshot,
     if (!shell.panes.empty()) {
         fillRect(grid, shell.panes.front().content, foreground,
                  documentBackground, documentBackgroundRole);
-        if (shell.palette) {
+        if (const auto* palette = snapshot.layout().find(
+                UiNodeId{std::string{kFindResultsViewportNodeId}})) {
             const auto paletteBackground = semanticIndex(
                 theme, nodeBackground(ui, kFindResultsNodeId,
                                       SemanticRole::Canvas));
-            paintPalette(grid, *shell.palette, theme, paletteBackground, style);
+            const auto solved = solvePaletteSurface(
+                snapshot.palette(), palette->rect,
+                style.dimensions.scrollbarGutterWidth);
+            fillRect(grid, solved.rect, foreground, paletteBackground,
+                     SemanticRole::Canvas);
+            paintPalette(grid, snapshot.palette(), solved, theme,
+                         paletteBackground, style);
         } else {
             paintDocument(grid, snapshot, shell.panes.front().content, theme,
                            documentBackground, style, lineCache);
@@ -1462,8 +1466,8 @@ CellGrid Renderer::render(GridFrame const& snapshot,
     }
 
     // The input line's caret, published outside the pane branches above.  A
-    // picker paints its RESULTS through paintPalette (the `shell.palette`
-    // branch), so a caret placed beside the prompt rows in the `else` branch
+    // picker paints its results through the retained find-results branch, so a
+    // caret placed beside the prompt rows in the `else` branch
     // would never be reached while a picker is open.  The cursor is the primary
     // way a user can tell a text input has focus, so it must
     // not depend on which pane branch ran.

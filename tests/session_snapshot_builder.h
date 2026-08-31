@@ -133,6 +133,11 @@ public:
         return *this;
     }
 
+    SessionSnapshotBuilder& paletteReport(PaletteReport palette) {
+        palette_ = std::move(palette);
+        return *this;
+    }
+
     // Drive the header prompt input (palette query line): when `visible`, make it
     // present and set the grid-only query/ghost sidecar, as the runtime does when a
     // picker is open. When not visible, the input stays hidden.
@@ -247,14 +252,16 @@ public:
         ShellViewState shellView = layout.view ? *layout.view : ShellViewState{};
         for (auto const& mutate : shellProjectionMutators_) mutate(shellView);
         ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
-        auto frame = test::gridFrameFromLegacy(LegacyPresentationSnapshot{
-            SessionSnapshot{
-                revision_, SessionTopology{}, std::move(client),
-                std::move(sections)},
-            PresentationSnapshot{std::move(viewportState), style_, std::nullopt,
-                                 std::move(shellView),
-                                 SelectionNavigation{firstRow_, 0,
-                                                     std::nullopt}}});
+        auto frame = test::gridFrameFromLegacy(
+            LegacyPresentationSnapshot{
+                SessionSnapshot{
+                    revision_, SessionTopology{}, std::move(client),
+                    std::move(sections)},
+                PresentationSnapshot{
+                    std::move(viewportState), style_, std::nullopt,
+                    std::move(shellView),
+                    SelectionNavigation{firstRow_, 0, std::nullopt}}},
+            palette_);
         return std::move(*frame);
     }
 
@@ -291,6 +298,7 @@ private:
     std::vector<std::function<void(ShellViewState&)>>
         shellProjectionMutators_;
     Style style_{};
+    PaletteReport palette_;
     std::optional<ValidatedSchema> schema_;
     std::optional<PromptInputReport> promptInput_;
     StatusViewState status_;

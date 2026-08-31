@@ -119,6 +119,7 @@ TEST(contentShowsEditorXorFindResultsByFinderState) {
     const auto a = buildWholeScreenInteraction(schemaOf({}), closed);
     ASSERT_TRUE(present(a, kEditorNodeId));
     ASSERT_FALSE(present(a, kFindResultsViewportNodeId));
+    ASSERT_TRUE(present(a, kTabBarNodeId));
 
     WholeScreenTruth open;
     open.openPicker = PickerKind::File;
@@ -126,10 +127,17 @@ TEST(contentShowsEditorXorFindResultsByFinderState) {
     const auto b = buildWholeScreenInteraction(schemaOf({}), open, PromptRegion::Header);
     ASSERT_FALSE(present(b, kEditorNodeId));
     ASSERT_TRUE(present(b, kFindResultsViewportNodeId));
+    ASSERT_FALSE(present(b, kTabBarNodeId));
     // The prompt capture (anchored on the header input line) routes effective focus to the
     // prompt context; findresults is displayed content, not the focus anchor.
     ASSERT_TRUE(b.effectiveFocus() == FocusTarget::Prompt);
     ASSERT_TRUE(present(b, kHeaderNodeId));
+
+    const auto closedAgain =
+        buildWholeScreenInteraction(schemaOf({}), closed);
+    ASSERT_TRUE(present(closedAgain, kEditorNodeId));
+    ASSERT_FALSE(present(closedAgain, kFindResultsViewportNodeId));
+    ASSERT_TRUE(present(closedAgain, kTabBarNodeId));
 }
 
 TEST(distractionFreePresenceLeavesOnlyTheDocumentBranchVisible) {

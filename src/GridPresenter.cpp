@@ -105,6 +105,7 @@ SolveUiFrameResult trySolveFrameLayout(
         UiNodeId{std::string{kNoticeNodeId}},
         UiNodeId{std::string{kExternalModNodeId}},
         UiNodeId{std::string{kTabBarNodeId}},
+        UiNodeId{std::string{kFindResultsViewportNodeId}},
     };
     if (semantic.sections().promptView) {
         retained.insert(UiNodeId{std::string{kFooterPromptNodeId}});
@@ -154,6 +155,12 @@ SolveUiFrameResult trySolveFrameLayout(
         return {std::nullopt,
                 "external-modification backing has no solved UI node"};
     }
+    if (semantic.sections().palette.activePicker &&
+        !result.tree->find(
+            UiNodeId{std::string{kFindResultsViewportNodeId}})) {
+        return {std::nullopt,
+                "palette backing has no solved UI node"};
+    }
     return result;
 }
 
@@ -168,32 +175,57 @@ SolvedGridTree requireFrameLayout(
     return std::move(*result.tree);
 }
 
+void adoptLegacyPalette(PaletteReport& palette,
+                        PresentationSnapshot const& presentation) {
+    // This bridge copies compatibility content but deliberately ignores legacy
+    // geometry. It leaves with the LegacyPresentationSnapshot path in Plan 6.
+    if (!palette.rows.empty() || !palette.query.empty() ||
+        !presentation.shell.palette) {
+        return;
+    }
+    const auto& legacy = *presentation.shell.palette;
+    palette.selected = legacy.selected;
+    palette.firstVisible = legacy.firstVisible;
+    palette.scrollbar = legacy.scrollbar;
+    for (const auto& row : legacy.rows) {
+        palette.rows.push_back({"", row.label, row.detail});
+    }
+}
+
 }  // namespace
 
 GridFrame::GridFrame(SessionSnapshot semantic,
-                     PresentationSnapshot presentation, GridBasis basis)
+                     PresentationSnapshot presentation, GridBasis basis,
+                     PaletteReport palette)
     : semantic_{std::move(semantic)},
       presentation_{std::move(presentation)},
       layout_{requireFrameLayout(semantic_, presentation_)},
-      basis_{basis} {}
+      palette_{std::move(palette)},
+      basis_{basis} {
+    adoptLegacyPalette(palette_, presentation_);
+}
 
 GridFrame::GridFrame(SessionSnapshot semantic,
                      PresentationSnapshot presentation,
-                     SolvedGridTree layout, GridBasis basis)
+                     SolvedGridTree layout, GridBasis basis,
+                     PaletteReport palette)
     : semantic_{std::move(semantic)},
       presentation_{std::move(presentation)},
       layout_{std::move(layout)},
+      palette_{std::move(palette)},
       basis_{basis} {}
 
 std::optional<GridFrame> GridFrame::fromLegacy(
-    LegacyPresentationSnapshot legacy, GridBasis basis) {
+    LegacyPresentationSnapshot legacy, GridBasis basis,
+    PaletteReport palette) {
     auto result =
         trySolveFrameLayout(legacy.semantic_, legacy.presentation_);
     if (!result.tree) return std::nullopt;
+    adoptLegacyPalette(palette, legacy.presentation_);
     return GridFrame{std::move(legacy.semantic_),
                      std::move(legacy.presentation_),
                      std::move(*result.tree),
-                     basis};
+                     basis, std::move(palette)};
 }
 
 GridPresenter::GridPresenter(ViewId viewId)
@@ -281,7 +313,8 @@ std::optional<GridFrame> GridPresenter::project(
     const auto nextGeneration = state.generation + 1;
     auto frame = GridFrame::fromLegacy(
         std::move(*snapshot),
-        GridBasis{viewId_, *state.adoptedRevision, nextGeneration});
+        GridBasis{viewId_, *state.adoptedRevision, nextGeneration},
+        std::move(request.palette));
     if (!frame) return std::nullopt;
     state.generation = nextGeneration;
     presentation = &frame->presentation();

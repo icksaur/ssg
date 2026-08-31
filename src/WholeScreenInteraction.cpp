@@ -58,6 +58,10 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     const bool pickerOpen = truth.openPicker.has_value();
     hidden.push_back(
         nodeId(pickerOpen ? kEditorNodeId : kFindResultsViewportNodeId));
+    // Established grid behavior treats the tab bar as part of the editor while
+    // a picker is open, even though the canonical tree keeps it as a content
+    // sibling so notice/external chrome can remain outside the branch swap.
+    if (pickerOpen) hidden.push_back(nodeId(kTabBarNodeId));
 
     // The header prompt input is present only while a header-region prompt is open,
     // so a client draws its query line exactly when the picker is up. The

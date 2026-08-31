@@ -127,6 +127,48 @@ TEST(tabBarWindowsAroundTheActiveTabAndClipsAtTheBandEdge) {
     ASSERT_TRUE(solveTabBar(tabs, glyphs, {2, 3, 18, 0}).tabs.empty());
 }
 
+TEST(paletteSurfaceCarvesOneGutterAndKeepsAbsoluteRows) {
+    PaletteReport palette;
+    palette.rows = {{"a", "Alpha", ""}, {"b", "Beta", ""},
+                    {"c", "Gamma", ""}};
+    palette.firstVisible = 20;
+    palette.selected = 21;
+    const auto solved = solvePaletteSurface(palette, {5, 2, 10, 2}, 1);
+    ASSERT_EQ(solved.rows, (Rect{5, 2, 9, 2}));
+    ASSERT_EQ(solved.scrollbar, (Rect{14, 2, 1, 2}));
+    ASSERT_EQ(solved.visibleRows.size(), std::size_t{2});
+    ASSERT_EQ(solved.visibleRows[0].absoluteIndex, std::uint32_t{20});
+    ASSERT_FALSE(solved.visibleRows[0].selected);
+    ASSERT_EQ(solved.visibleRows[1].absoluteIndex, std::uint32_t{21});
+    ASSERT_TRUE(solved.visibleRows[1].selected);
+}
+
+TEST(emptyPaletteSurfaceKeepsItsBandsAndHasNoRows) {
+    const auto solved =
+        solvePaletteSurface(PaletteReport{}, {5, 2, 10, 3}, 2);
+    ASSERT_EQ(solved.rows, (Rect{5, 2, 8, 3}));
+    ASSERT_EQ(solved.scrollbar, (Rect{13, 2, 2, 3}));
+    ASSERT_TRUE(solved.visibleRows.empty());
+}
+
+TEST(paletteSurfaceClipsRowsToItsHeight) {
+    PaletteReport palette;
+    palette.rows = {{"a", "Alpha", ""}, {"b", "Beta", ""},
+                    {"c", "Gamma", ""}};
+    const auto solved = solvePaletteSurface(palette, {5, 2, 10, 1}, 1);
+    ASSERT_EQ(solved.visibleRows.size(), std::size_t{1});
+    ASSERT_EQ(solved.visibleRows.front().rect, (Rect{5, 2, 9, 1}));
+}
+
+TEST(zeroSizePaletteSurfaceProducesNoPaintableGeometry) {
+    PaletteReport palette;
+    palette.rows = {{"a", "Alpha", ""}};
+    const auto solved = solvePaletteSurface(palette, {5, 2, 0, 0}, 1);
+    ASSERT_EQ(solved.rows, (Rect{5, 2, 0, 0}));
+    ASSERT_EQ(solved.scrollbar, (Rect{5, 2, 0, 0}));
+    ASSERT_TRUE(solved.visibleRows.empty());
+}
+
 // Two flex siblings split the width equally; the odd cell goes to the LAST child
 // (reproduces the old pane rule `rect.width - firstWidth`).
 TEST(rowFlexSplitsEquallyRemainderToLast) {
@@ -494,6 +536,7 @@ int main() {
     RUN(columnStackPlacesExactThenFillsFlex);
     RUN(externalModificationSurfaceIsBoundedAndKeepsSelectionVisible);
     RUN(tabBarWindowsAroundTheActiveTabAndClipsAtTheBandEdge);
+    RUN(paletteSurfaceCarvesOneGutterAndKeepsAbsoluteRows);
     RUN(rowFlexSplitsEquallyRemainderToLast);
     RUN(singleFlexTakesAllRemainder);
     RUN(insetReservesTheFrameOnEveryEdge);
