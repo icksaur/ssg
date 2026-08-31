@@ -1746,14 +1746,41 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
                                    sections.noticeView = ssg::NoticeView{
                                        "Draft conflict",
                                        {{"diff", "Diff", "draft.diff"}}};
+                                   sections.externalModification = {
+                                       ssg::Revision{1},
+                                       "Files changed on disk",
+                                       {{ssg::DiffFileId{"a"}, "a.txt",
+                                         ssg::ExternalDocumentStatus::
+                                             ExternallyModified,
+                                         "modified", "M",
+                                         {ssg::externalActionAffordance(
+                                             ssg::ExternalAction::Reload)}},
+                                        {ssg::DiffFileId{"b"}, "b.txt",
+                                         ssg::ExternalDocumentStatus::
+                                             ExternallyModified,
+                                         "modified", "M",
+                                         {ssg::externalActionAffordance(
+                                             ssg::ExternalAction::Reload)}}},
+                                       ssg::DiffFileId{"b"}};
                                });
         if (corruptLegacyNotice) {
             builder.shellProjection([](ssg::ShellViewState& shell) {
                 for (auto& node : shell.accessibilityNodes) {
                     if (node.kind == ssg::ShellNodeKind::NoticeBar ||
-                        node.kind == ssg::ShellNodeKind::NoticeAction) {
+                        node.kind == ssg::ShellNodeKind::NoticeAction ||
+                        node.kind ==
+                            ssg::ShellNodeKind::ExternalModificationBar ||
+                        node.kind ==
+                            ssg::ShellNodeKind::ExternalModificationRow ||
+                        node.kind ==
+                            ssg::ShellNodeKind::ExternalModificationAction) {
                         node.rect = {40, 0, 1, 1};
                     }
+                }
+                for (auto& action : shell.externalActions) {
+                    action.rect = {40, 0, 1, 1};
+                    action.fileId = "stale";
+                    action.commandId = "stale";
                 }
             });
         }
@@ -1810,9 +1837,13 @@ TEST(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects) {
     auto renderFrame = buildSnapshot(true);
     const auto* renderNotice = renderFrame.layout().find(
         ssg::UiNodeId{std::string{ssg::kNoticeNodeId}});
+    const auto* renderExternal = renderFrame.layout().find(
+        ssg::UiNodeId{std::string{ssg::kExternalModNodeId}});
     ASSERT_TRUE(renderNotice != nullptr);
-    if (!renderNotice) return;
+    ASSERT_TRUE(renderExternal != nullptr);
+    if (!renderNotice || !renderExternal) return;
     ASSERT_EQ(renderNotice->rect, solvedNotice->rect);
+    ASSERT_EQ(renderExternal->rect, solvedExternal->rect);
     auto const grid = ssg::Renderer{}.render(renderFrame);
     ASSERT_EQ(notice->role, ssg::SemanticRole::StatusWarning);
     ASSERT_EQ(noticeAction->role, ssg::SemanticRole::StatusWarning);
@@ -1841,6 +1872,60 @@ TEST(sessionSnapshotBuilderOrdersUiStateBySchemaPreorder) {
               ssg::UiNodeId{std::string{ssg::kRootNodeId}});
     ASSERT_EQ(nodes[1].id,
               ssg::UiNodeId{std::string{ssg::kHeaderNodeId}});
+}
+
+TEST(externalIntrinsicShrinksToPreserveAnEditorRow) {
+    auto snapshot =
+        ssg::test::SessionSnapshotBuilder{}
+            .document("content\n")
+            .viewport(40, 6)
+            .shellRequest([](ssg::ShellLayoutRequest& request) {
+                ssg::ShellExternalBar bar;
+                bar.message = "Files changed on disk";
+                bar.selected = 4;
+                for (int index = 0; index < 6; ++index) {
+                    bar.rows.push_back(
+                        {"file-" + std::to_string(index),
+                         "M file-" + std::to_string(index) + ".txt",
+                         {{"Reload", "external.reload"}}});
+                }
+                request.externalBar = std::move(bar);
+            })
+            .sections([](ssg::SessionSnapshotSections& sections) {
+                sections.externalModification.revision = ssg::Revision{1};
+                sections.externalModification.message =
+                    "Files changed on disk";
+                for (int index = 0; index < 6; ++index) {
+                    ssg::ExternalDocumentView file{
+                        ssg::DiffFileId{"file-" + std::to_string(index)}};
+                    file.path =
+                        "file-" + std::to_string(index) + ".txt";
+                    file.statusLabel = "M";
+                    file.actions.push_back(
+                        ssg::externalActionAffordance(
+                            ssg::ExternalAction::Reload));
+                    sections.externalModification.files.push_back(
+                        std::move(file));
+                }
+                sections.externalModification.selected =
+                    ssg::DiffFileId{"file-4"};
+            })
+            .build();
+    const auto* external = snapshot.layout().find(
+        ssg::UiNodeId{std::string{ssg::kExternalModNodeId}});
+    const auto* footer = snapshot.layout().find(
+        ssg::UiNodeId{std::string{ssg::kFooterNodeId}});
+    ASSERT_TRUE(external != nullptr);
+    ASSERT_TRUE(footer != nullptr);
+    if (!external || !footer) return;
+    ASSERT_TRUE(external->rect.height <
+                ssg::measureExternalModificationSurface(
+                    snapshot.sections().externalModification)
+                    .rows);
+    ASSERT_TRUE(external->rect.bottom() < footer->rect.y);
+    const auto grid = ssg::Renderer{}.render(snapshot);
+    ASSERT_EQ(grid.at(external->rect.x, external->rect.y).text,
+              std::string{"F"});
 }
 
 // The dead-color-role guard. Proves the
@@ -2122,6 +2207,7 @@ int main() {
     RUN(urlsInTheDocumentBecomeClickableRuns);
     RUN(urlDetectionStopsAtSentenceAndBracketBoundaries);
     RUN(sessionSnapshotBuilderOrdersUiStateBySchemaPreorder);
+    RUN(externalIntrinsicShrinksToPreserveAnEditorRow);
     RUN(noticeAndExternalRowsPaintTheirPublishedRolesAtTheirRects);
     RUN(lspDiagnosticsUnderlineExactlyTheirRange);
     RUN(staleDiagnosticsAreNotPainted);

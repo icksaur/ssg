@@ -13,8 +13,8 @@
 namespace ssg {
 namespace {
 
-std::vector<GridIntrinsicSize> transitionalIntrinsicSizes(
-    const UiNode& root, const PresentationSnapshot& presentation) {
+std::vector<GridIntrinsicSize> semanticIntrinsicSizes(
+    const UiNode& root, const SessionSnapshotSections& sections) {
     std::vector<GridIntrinsicSize> sizes;
     const auto collect = [&](const auto& self, const UiNode& node) -> void {
         if (node.size.kind() == SizeKind::Auto && node.isLeaf()) {
@@ -25,22 +25,12 @@ std::vector<GridIntrinsicSize> transitionalIntrinsicSizes(
         }
     };
     collect(collect, root);
-    int externalTop = std::numeric_limits<int>::max();
-    int externalBottom = 0;
-    for (const auto& node : presentation.shell.accessibilityNodes) {
-        if (node.kind != ShellNodeKind::ExternalModificationBar &&
-            node.kind != ShellNodeKind::ExternalModificationRow) {
-            continue;
-        }
-        externalTop = std::min(externalTop, node.rect.y);
-        externalBottom = std::max(externalBottom, node.rect.bottom());
-    }
-    if (externalTop != std::numeric_limits<int>::max()) {
-        for (auto& size : sizes) {
-            if (size.id == UiNodeId{std::string{kExternalModNodeId}}) {
-                size.size.rows = externalBottom - externalTop;
-                break;
-            }
+    for (auto& size : sizes) {
+        if (size.id == UiNodeId{std::string{kExternalModNodeId}}) {
+            size.size =
+                measureExternalModificationSurface(
+                    sections.externalModification);
+            break;
         }
     }
     return sizes;
@@ -72,11 +62,36 @@ SolveUiFrameResult trySolveFrameLayout(
     }
 
     const auto& root = validated.schema().schema().root;
-    auto result = solveUiFrame(
-        validated.schema(), semantic.sections().uiState, presence,
-        ClientUiProfile::full(),
-        transitionalIntrinsicSizes(root, presentation),
-        {0, 0, shell.viewport.columns, shell.viewport.rows});
+    auto intrinsicSizes =
+        semanticIntrinsicSizes(root, semantic.sections());
+    SolveUiFrameResult result;
+    for (;;) {
+        result = solveUiFrame(
+            validated.schema(), semantic.sections().uiState, presence,
+            ClientUiProfile::full(), intrinsicSizes,
+            {0, 0, shell.viewport.columns, shell.viewport.rows});
+        // WholeScreenAssembly's exhaustive replaceable content branches are
+        // editor and find-results. Extend this check with that topology.
+        const auto* content =
+            result.tree
+                ? (result.tree->find(UiNodeId{std::string{kEditorNodeId}})
+                       ? result.tree->find(
+                             UiNodeId{std::string{kEditorNodeId}})
+                       : result.tree->find(UiNodeId{
+                             std::string{kFindResultsViewportNodeId}}))
+                : nullptr;
+        if (result.tree && (!content || content->rect.height > 0)) break;
+        auto external = std::find_if(
+            intrinsicSizes.begin(), intrinsicSizes.end(),
+            [](const GridIntrinsicSize& size) {
+                return size.id ==
+                       UiNodeId{std::string{kExternalModNodeId}};
+            });
+        if (external == intrinsicSizes.end() || external->size.rows <= 1) {
+            break;
+        }
+        --external->size.rows;
+    }
     if (!result.tree) return result;
 
     // Only migrated placements are exposed. Unit intrinsic sizes let the outer
@@ -132,6 +147,11 @@ SolveUiFrameResult trySolveFrameLayout(
         !result.tree->find(UiNodeId{std::string{kNoticeNodeId}})) {
         return {std::nullopt,
                 "notice backing has no solved UI node"};
+    }
+    if (!semantic.sections().externalModification.files.empty() &&
+        !result.tree->find(UiNodeId{std::string{kExternalModNodeId}})) {
+        return {std::nullopt,
+                "external-modification backing has no solved UI node"};
     }
     return result;
 }

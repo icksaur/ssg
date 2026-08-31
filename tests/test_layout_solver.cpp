@@ -2,6 +2,7 @@
 #include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
+#include <algorithm>
 #include <optional>
 #include <limits>
 #include <stdexcept>
@@ -36,6 +37,49 @@ TEST(columnStackPlacesExactThenFillsFlex) {
     ASSERT_EQ(box(*solved, "header").rect, (Rect{0, 0, 10, 1}));
     ASSERT_EQ(box(*solved, "body").rect, (Rect{0, 1, 10, 3}));
     ASSERT_EQ(box(*solved, "footer").rect, (Rect{0, 4, 10, 1}));
+}
+
+TEST(externalModificationSurfaceIsBoundedAndKeepsSelectionVisible) {
+    ExternalModificationViewState external;
+    external.message = "Files changed on disk";
+    for (int index = 0; index < 6; ++index) {
+        ExternalDocumentView file{DiffFileId{"file-" +
+                                             std::to_string(index)}};
+        file.path = "file-" + std::to_string(index) + ".txt";
+        file.statusLabel = "M";
+        file.actions.push_back(
+            externalActionAffordance(ExternalAction::Reload));
+        external.files.push_back(std::move(file));
+    }
+    external.selected = DiffFileId{"file-4"};
+
+    ASSERT_EQ(measureExternalModificationSurface(external),
+              (GridSize{1, 5}));
+    const auto solved =
+        solveExternalModificationSurface(external, {3, 2, 30, 5});
+    ASSERT_EQ(solved.header, (Rect{3, 2, 30, 1}));
+    ASSERT_EQ(solved.rows.size(), std::size_t{4});
+    ASSERT_EQ(solved.rows.back().text, std::string{"+3 more"});
+    ASSERT_TRUE(solved.rows[1].selected);
+    ASSERT_EQ(solved.rows[1].fileId,
+              std::optional<DiffFileId>{DiffFileId{"file-4"}});
+    ASSERT_TRUE(!solved.rows[1].actions.empty());
+
+    const auto tiny =
+        solveExternalModificationSurface(external, {3, 2, 30, 2});
+    ASSERT_EQ(tiny.rows.size(), std::size_t{1});
+    ASSERT_TRUE(tiny.rows.front().selected);
+    ASSERT_EQ(tiny.rows.front().fileId,
+              std::optional<DiffFileId>{DiffFileId{"file-4"}});
+
+    external.selected.reset();
+    const auto unselected =
+        solveExternalModificationSurface(external, {3, 2, 30, 5});
+    ASSERT_TRUE(std::none_of(
+        unselected.rows.begin(), unselected.rows.end(),
+        [](const SolvedExternalModificationRow& row) {
+            return row.selected;
+        }));
 }
 
 // Two flex siblings split the width equally; the odd cell goes to the LAST child
@@ -403,6 +447,7 @@ TEST(solveGridTreeRejectsAutoSizeDistinctly) {
 
 int main() {
     RUN(columnStackPlacesExactThenFillsFlex);
+    RUN(externalModificationSurfaceIsBoundedAndKeepsSelectionVisible);
     RUN(rowFlexSplitsEquallyRemainderToLast);
     RUN(singleFlexTakesAllRemainder);
     RUN(insetReservesTheFrameOnEveryEdge);

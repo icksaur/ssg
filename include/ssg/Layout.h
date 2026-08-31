@@ -13,6 +13,7 @@
 // layout.
 
 #include <ssg/Geometry.h>
+#include <ssg/ExternalModificationFlow.h>
 #include <ssg/UiNodeState.h>
 #include <ssg/UiPresence.h>
 #include <ssg/UiProfile.h>
@@ -78,6 +79,45 @@ struct SolvedNoticeSurface {
 // notice band; rendering and hit testing consume the same result.
 [[nodiscard]] SolvedNoticeSurface solveNoticeSurface(
     const NoticeView& notice, Rect rect);
+
+struct SolvedExternalModificationAction {
+    DiffFileId fileId;
+    std::string command;
+    std::string text;
+    Rect rect;
+
+    friend bool operator==(const SolvedExternalModificationAction&,
+                           const SolvedExternalModificationAction&) = default;
+};
+
+struct SolvedExternalModificationRow {
+    std::optional<DiffFileId> fileId;
+    std::string text;
+    Rect rect;
+    bool selected = false;
+    std::vector<SolvedExternalModificationAction> actions;
+
+    friend bool operator==(const SolvedExternalModificationRow&,
+                           const SolvedExternalModificationRow&) = default;
+};
+
+struct SolvedExternalModificationSurface {
+    Rect rect;
+    Rect header;
+    std::vector<SolvedExternalModificationRow> rows;
+
+    friend bool operator==(const SolvedExternalModificationSurface&,
+                           const SolvedExternalModificationSurface&) = default;
+};
+
+[[nodiscard]] GridSize measureExternalModificationSurface(
+    const ExternalModificationViewState& external);
+// CONTRACT: Rendering and hit testing consume this single authoritative row and
+// action placement within the solved external-modification band. Actions are
+// stored right-to-left in visual packing order, not semantic declaration order.
+[[nodiscard]] SolvedExternalModificationSurface
+solveExternalModificationSurface(
+    const ExternalModificationViewState& external, Rect rect);
 
 // Returns nullopt when nonnegative bounds cannot contain an inset, gaps, or
 // exact children. Invalid identities and unsupported Auto sizes are misuse and

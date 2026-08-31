@@ -37,6 +37,84 @@ SolvedNoticeSurface solveNoticeSurface(const NoticeView& notice, Rect rect) {
     return solved;
 }
 
+GridSize measureExternalModificationSurface(
+    const ExternalModificationViewState& external) {
+    constexpr int kMaxListRows = 4;
+    if (external.files.empty()) return {};
+    return {1, 1 + static_cast<int>(std::min(
+                       external.files.size(),
+                       static_cast<std::size_t>(kMaxListRows)))};
+}
+
+SolvedExternalModificationSurface solveExternalModificationSurface(
+    const ExternalModificationViewState& external, Rect rect) {
+    SolvedExternalModificationSurface solved{
+        rect, {rect.x, rect.y, rect.width, rect.height > 0 ? 1 : 0}, {}};
+    if (rect.height <= 1 || external.files.empty()) return solved;
+
+    constexpr int kMaxListRows = 4;
+    const std::size_t total = external.files.size();
+    std::optional<std::size_t> selected;
+    if (external.selected) {
+        const auto found =
+            std::find_if(external.files.begin(), external.files.end(),
+                         [&](const ExternalDocumentView& file) {
+                             return file.id == *external.selected;
+                         });
+        if (found != external.files.end()) {
+            selected = static_cast<std::size_t>(
+                std::distance(external.files.begin(), found));
+        }
+    }
+    const int listRows = std::min(
+        static_cast<int>(std::min(
+            total, static_cast<std::size_t>(kMaxListRows))),
+        rect.height - 1);
+    const bool overflow =
+        total > static_cast<std::size_t>(listRows) && listRows > 1;
+    const int shown = overflow ? listRows - 1 : listRows;
+    const std::size_t half = static_cast<std::size_t>(shown / 2);
+    const std::size_t selectionIndex = selected.value_or(0);
+    const std::size_t firstVisible = std::min(
+        selectionIndex > half ? selectionIndex - half : 0,
+        total - static_cast<std::size_t>(shown));
+    int y = rect.y + 1;
+    for (int index = 0; index < shown; ++index) {
+        const auto& file =
+            external.files[firstVisible + static_cast<std::size_t>(index)];
+        SolvedExternalModificationRow row{
+            file.id, file.statusLabel + " " + file.path.string(),
+            {rect.x, y, rect.width, 1},
+            selected &&
+                firstVisible + static_cast<std::size_t>(index) == *selected,
+            {}};
+        int actionX = rect.right();
+        for (auto action = file.actions.rbegin();
+             action != file.actions.rend(); ++action) {
+            std::string text = "[" + action->label + "]";
+            const int width = static_cast<int>(
+                GraphemeLayout{}.computeRun(text).totalCells);
+            actionX -= width;
+            if (actionX < rect.x) break;
+            row.actions.push_back(
+                {file.id, action->command, std::move(text),
+                 {actionX, y, width, 1}});
+            --actionX;
+        }
+        solved.rows.push_back(std::move(row));
+        ++y;
+    }
+    if (overflow) {
+        solved.rows.push_back(
+            {std::nullopt,
+             "+" +
+                 std::to_string(total - static_cast<std::size_t>(shown)) +
+                 " more",
+             {rect.x, y, rect.width, 1}, false, {}});
+    }
+    return solved;
+}
+
 namespace {
 
 void solveNode(const LayoutNode& node, Rect frame,

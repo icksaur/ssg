@@ -607,7 +607,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             // The overflow indicator claims one of the list rows, but never the
             // last remaining row (tier-2 degrade shows just the selected file).
             shown = (total > listRows && listRows > 1) ? listRows - 1 : listRows;
-            overflow = total > shown;
+            overflow = total > shown && listRows > 1;
             // Window so the selected row is visible: clamp its top so
             // [firstVisible, firstVisible+shown) contains `selected`.
             firstVisible = std::clamp(selected - shown / 2, 0,

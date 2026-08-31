@@ -436,6 +436,31 @@ void paintNotice(CellGrid& grid, const NoticeView& notice,
     }
 }
 
+void paintExternalModification(
+    CellGrid& grid, const ExternalModificationViewState& external,
+    const SolvedExternalModificationSurface& solved,
+    ThemeSnapshot const& theme, Style const& style,
+    SemanticRole foregroundRole, SemanticRole backgroundRole) {
+    const auto foreground = semanticIndex(theme, foregroundRole);
+    const auto background = semanticIndex(theme, backgroundRole);
+    fillRect(grid, solved.rect, foreground, background, backgroundRole);
+    paintText(grid, solved.header.x, solved.header.y, solved.header.right(),
+              external.message, foreground, background, backgroundRole, style);
+    for (const auto& row : solved.rows) {
+        const auto role =
+            row.selected ? SemanticRole::Selection : backgroundRole;
+        const auto rowBackground = semanticIndex(theme, role);
+        fillRect(grid, row.rect, foreground, rowBackground, role);
+        paintText(grid, row.rect.x, row.rect.y, row.rect.right(), row.text,
+                  foreground, rowBackground, role, style);
+        for (const auto& action : row.actions) {
+            paintText(grid, action.rect.x, action.rect.y,
+                      action.rect.right(), action.text, foreground,
+                      rowBackground, role, style);
+        }
+    }
+}
+
 void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                         ThemeSnapshot const& theme, const UiSchema& ui,
                         std::uint8_t background, std::uint8_t panelBackground,
@@ -449,11 +474,6 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
     auto const tabInactiveBackground = semanticIndex(
         theme, nodeBackground(ui, kTabBarNodeId,
                               SemanticRole::TabInactiveBackground));
-    auto const externalFg = semanticIndex(
-        theme, nodeForeground(ui, kExternalModNodeId, SemanticRole::Canvas));
-    auto const externalBg = semanticIndex(
-        theme,
-        nodeBackground(ui, kExternalModNodeId, SemanticRole::StatusWarning));
     for (auto const& node : shell.accessibilityNodes) {
         std::uint8_t nodeBackground = background;
         switch (node.kind) {
@@ -502,30 +522,6 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
         case ShellNodeKind::NoticeBar:
         case ShellNodeKind::NoticeAction:
             break;
-        case ShellNodeKind::ExternalModificationBar:
-        case ShellNodeKind::ExternalModificationRow: {
-            // The header and each file row fill the bar. A normal row uses the
-            // StatusWarning band (like the notice); the SELECTED row is painted
-            // with the Selection role so it stands out. The action labels sit on
-            // top, painted after (their nodes follow this one).
-            auto const bg = node.role == SemanticRole::Selection
-                                ? semanticIndex(theme, SemanticRole::Selection)
-                                : externalBg;
-            fillRect(grid, node.rect, externalFg, bg, node.role);
-            if (!node.content.empty()) {
-                paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
-                           node.content, externalFg, bg, node.role, style);
-            }
-            break;
-        }
-        case ShellNodeKind::ExternalModificationAction: {
-            auto const bg = node.role == SemanticRole::Selection
-                                ? semanticIndex(theme, SemanticRole::Selection)
-                                : externalBg;
-            paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
-                       node.content, externalFg, bg, node.role, style);
-            break;
-        }
         default:
             break;  // Containers, panes, and scrollbars are painted elsewhere.
         }
@@ -1341,6 +1337,22 @@ CellGrid Renderer::render(GridFrame const& snapshot,
                     node->style.foreground.value_or(SemanticRole::Canvas),
                     node->style.background.value_or(
                         SemanticRole::StatusWarning));
+    }
+    if (!snapshot.sections().externalModification.files.empty()) {
+        const auto* node = snapshot.layout().find(
+            UiNodeId{std::string{kExternalModNodeId}});
+        if (!node) {
+            throw std::logic_error(
+                "Renderer: external modification has no solved UI node");
+        }
+        paintExternalModification(
+            grid, snapshot.sections().externalModification,
+            solveExternalModificationSurface(
+                snapshot.sections().externalModification, node->rect),
+            theme, style,
+            node->style.foreground.value_or(SemanticRole::Canvas),
+            node->style.background.value_or(
+                SemanticRole::StatusWarning));
     }
 
     if (shell.panel) {

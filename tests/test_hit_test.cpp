@@ -264,20 +264,46 @@ TEST(externalActionHitCarriesPublishedFileAndCommandIdentity) {
                       {{"Reload", "external.reload"}}}},
                     0};
             })
+            .sections([](ssg::SessionSnapshotSections& sections) {
+                sections.externalModification = {
+                    ssg::Revision{1},
+                    "Files changed on disk",
+                    {{ssg::DiffFileId{"changed.txt"}, "changed.txt",
+                      ssg::ExternalDocumentStatus::ExternallyModified,
+                      "modified", "M",
+                      {ssg::externalActionAffordance(
+                          ssg::ExternalAction::Reload)}}},
+                    ssg::DiffFileId{"changed.txt"}};
+            })
+            .shellProjection([](ssg::ShellViewState& shell) {
+                for (auto& action : shell.externalActions) {
+                    action.rect = {0, 0, 1, 1};
+                    action.fileId = "stale";
+                    action.commandId = "stale";
+                }
+            })
             .build();
-    ASSERT_EQ(snapshot.presentation().shell.externalActions.size(),
-              std::size_t{1});
-    if (snapshot.presentation().shell.externalActions.empty()) return;
-    auto const& published =
-        snapshot.presentation().shell.externalActions.front();
-    auto hit = ssg::HitTester{snapshot}.at(published.rect.x, published.rect.y);
+    const auto* node = snapshot.layout().find(
+        ssg::UiNodeId{std::string{ssg::kExternalModNodeId}});
+    ASSERT_TRUE(node != nullptr);
+    if (!node) return;
+    const auto solved = ssg::solveExternalModificationSurface(
+        snapshot.sections().externalModification, node->rect);
+    ASSERT_TRUE(!solved.rows.empty());
+    ASSERT_TRUE(!solved.rows.front().actions.empty());
+    if (solved.rows.empty() || solved.rows.front().actions.empty()) return;
+    const auto& action = solved.rows.front().actions.front();
+    auto hit = ssg::HitTester{snapshot}.at(action.rect.x, action.rect.y);
     ASSERT_EQ(hit.region, ssg::HitRegion::ExternalAction);
     ASSERT_EQ(hit.externalFileId,
               std::optional<std::string>{"changed.txt"});
     ASSERT_EQ(hit.commandId,
               std::optional<std::string>{"external.reload"});
-    ASSERT_EQ(ssg::HitTester{snapshot}.at(published.rect.x - 1,
-                                           published.rect.y).region,
+    ASSERT_EQ(ssg::HitTester{snapshot}.at(action.rect.x - 1,
+                                           action.rect.y).region,
+              ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{snapshot}.at(node->rect.x,
+                                           node->rect.y).region,
               ssg::HitRegion::None);
 }
 

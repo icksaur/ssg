@@ -152,6 +152,30 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
+    if (!snapshot.sections().externalModification.files.empty()) {
+        const auto* node = snapshot.layout().find(
+            UiNodeId{std::string{kExternalModNodeId}});
+        if (!node) {
+            throw std::logic_error(
+                "HitTester: external modification has no solved UI node");
+        }
+        if (contains(node->rect, column, row)) {
+            const auto solved = solveExternalModificationSurface(
+                snapshot.sections().externalModification, node->rect);
+            for (const auto& externalRow : solved.rows) {
+                for (const auto& action : externalRow.actions) {
+                    if (!contains(action.rect, column, row)) continue;
+                    RegionHit hit;
+                    hit.region = HitRegion::ExternalAction;
+                    hit.externalFileId = action.fileId.value();
+                    hit.commandId = action.command;
+                    return hit;
+                }
+            }
+            return {};
+        }
+    }
+
     for (auto const& node : shell.accessibilityNodes) {
         if (!contains(node.rect, column, row)) continue;
         if (node.kind == ShellNodeKind::HeaderField) {
@@ -191,20 +215,6 @@ RegionHit HitTester::at(int column, int row) const {
         const auto* node =
             snapshot.layout().find(UiNodeId{std::string{id}});
         if (node && contains(node->rect, column, row)) return {};
-    }
-
-    // The external-modification bar's action sub-regions map a cell to a
-    // (fileId, actionCommand) select-then-act target (7A-5b). Published as a
-    // dedicated list so the geometry travels with the hit, never re-parsed from a
-    // stringly-typed node id.
-    for (auto const& action : shell.externalActions) {
-        if (contains(action.rect, column, row)) {
-            RegionHit hit;
-            hit.region = HitRegion::ExternalAction;
-            hit.externalFileId = action.fileId;
-            hit.commandId = action.commandId;
-            return hit;
-        }
     }
 
     // The side panel and its gutter occupy the leftmost columns, disjoint from
