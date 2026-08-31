@@ -152,18 +152,6 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                     *targets.picker_activation, *targets.picker_candidate_id};
                 return dispatch;
             }
-            if (hit.region == ssg::HitRegion::StatusAction &&
-                targets.status_invocation) {
-                dispatch.semantic_input = ssg::StatusActionPointerInput{
-                    {targets.observed_revision}, *targets.status_invocation};
-                return dispatch;
-            }
-            if (hit.region == ssg::HitRegion::PromptControl &&
-                targets.prompt_control_id) {
-                dispatch.semantic_input = ssg::PromptControlPointerInput{
-                    {targets.observed_revision}, *targets.prompt_control_id};
-                return dispatch;
-            }
             // An external-modification action selects its file then runs the
             // action on the library-owned selection -- select-then-act, the same
             // one behavior path the keyboard drives (Decision 3/6). The file id is
@@ -179,9 +167,10 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             if ((hit.region == ssg::HitRegion::HeaderField ||
                  hit.region == ssg::HitRegion::FooterField) &&
                 targets.ui_generation && targets.ui_node_id) {
-                dispatch.semantic_input = ssg::PublishedUiActionPointerInput{
-                   {targets.observed_revision}, *targets.ui_generation,
-                   *targets.ui_node_id};
+                dispatch.command = ssg::ClientCommand{
+                   "ui.activate", targets.observed_revision,
+                   ssg::UiNodeActivationArguments{
+                       *targets.ui_generation, *targets.ui_node_id}};
                 return dispatch;
             }
             if (hit.region == ssg::HitRegion::NoticeAction &&

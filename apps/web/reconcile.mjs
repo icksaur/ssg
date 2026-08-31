@@ -244,6 +244,13 @@ export function encodeCommandRequest(id, baseRevision, payload = null) {
   return encodeMessage(0, { id, base_revision: BigInt(baseRevision), payload });
 }
 
+export const encodeUiNodeActivationCommand = (
+    nodeId, schemaGeneration, revision) =>
+  encodeCommandRequest('ui.activate', revision, {
+    generation: BigInt(schemaGeneration),
+    node_id: String(nodeId),
+  });
+
 export function encodeClientInput({ code = '', control = false, alt = false,
                                     meta = false, shift = false, text = '' }) {
   const stroke = code ? { code, control, alt, meta, shift } : null;
@@ -2022,7 +2029,8 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
       return { id: node.id, kind: 'leaf', widget: wk, size,
                role: node.leaf.role != null || style.foreground == null
                  ? num(st.leaf.role) : null,
-               text: st.leaf.value || '', checked: !!num(st.leaf.checked),
+               text: st.leaf.value || '', label: st.leaf.label || '',
+               checked: !!num(st.leaf.checked),
                command: st.leaf.command != null ? st.leaf.command : null,
                style };
     }
@@ -2031,7 +2039,7 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     return { id: node.id, kind: 'leaf', widget: wk, size,
              role: node.leaf.role != null || style.foreground == null
                ? num(st.leaf.role) : null,
-             text: st.leaf.value || '',
+             text: st.leaf.value || '', label: st.leaf.label || '',
              command: st.leaf.command != null ? st.leaf.command : null,
              style };
   };

@@ -1042,10 +1042,8 @@ void paintLineNumbers(CellGrid& grid, GridFrame const& snapshot,
     }
 }
 
-// Paint the semantic prompt controls in their solved UI-tree nodes. The palette
-// is excluded: it renders its query in the header and has no PromptView.
 std::optional<GridPosition> paintPrompt(CellGrid& grid,
-                                         PromptView const& prompt,
+                                         const UiFrame& frame,
                                          SolvedGridTree const& layout,
                                          ThemeSnapshot const& theme,
                                          SemanticRole foregroundRole,
@@ -1053,29 +1051,41 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                                          Style const& style) {
     auto const promptFg = semanticIndex(theme, foregroundRole);
     auto const promptBg = semanticIndex(theme, backgroundRole);
+    const UiNode* prompt = findUiNode(
+        frame.schema().root, kFooterPromptNodeId);
+    if (!prompt) return std::nullopt;
     std::optional<GridPosition> caret;
-    std::size_t inputIndex = 0;
-    for (auto const& control : prompt.controls) {
-        const auto* solved =
-            layout.find(footerPromptControlNodeId(control.id));
-        if (!solved) {
-            throw std::logic_error(
-                "Renderer: prompt control has no solved UI node");
+    const auto paint = [&](auto&& self, const UiNode& node) -> void {
+        if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+            for (const auto& child : container->children) self(self, child);
+            return;
         }
+        const auto* schemaLeaf = std::get_if<UiLeaf>(&node.content);
+        if (!schemaLeaf) return;
+        const auto state = std::find_if(
+            frame.state().nodes.begin(), frame.state().nodes.end(),
+            [&](const UiNodeState& item) { return item.id == node.id; });
+        if (state == frame.state().nodes.end() || !state->leaf) return;
+        const auto* solved = layout.find(node.id);
+        if (!solved) return;
         const Rect& rect = solved->rect;
         std::string text;
-        switch (control.kind) {
-            case PromptControlKind::Input:
-                text = textInputText(control.accessibleLabel,
-                                     style.promptLabelSeparator, control.value);
+        switch (schemaLeaf->widget.kind) {
+            case WidgetKind::TextInput:
+                text = textInputText(state->leaf->label,
+                                    style.promptLabelSeparator,
+                                    state->leaf->value);
                 break;
-            case PromptControlKind::Count:
-                text = control.value;
+            case WidgetKind::Label:
+                text = state->leaf->value;
                 break;
-            case PromptControlKind::Toggle:
-                text = checkboxText(control.checked, control.accessibleLabel,
+            case WidgetKind::Checkbox:
+                text = checkboxText(state->leaf->checked.value_or(false),
+                                    state->leaf->label,
                                     style.toggle);
                 break;
+            default:
+                return;
         }
         // Clear the row region first so a shrinking value does not leave stale
         // glyphs behind, then paint the control text.
@@ -1085,24 +1095,23 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
         }
         paintText(grid, rect.x, rect.y, rect.right(),
                    text, promptFg, promptBg, SemanticRole::Prompt, style);
-        const bool activeInput =
-            control.kind == PromptControlKind::Input &&
-            inputIndex == prompt.activeInput;
-        if (control.kind == PromptControlKind::Input && activeInput && !caret) {
+        if (schemaLeaf->widget.kind == WidgetKind::TextInput &&
+            state->leaf->active.value_or(false) && !caret) {
             auto const labelWidth =
                 static_cast<int>(GraphemeLayout{}
                                      .computeRun(textInputText(
-                                         control.accessibleLabel,
+                                         state->leaf->label,
                                          style.promptLabelSeparator, {}))
                                      .totalCells);
             auto const valueWidth =
-                static_cast<int>(GraphemeLayout{}.computeRun(control.value).totalCells);
+                static_cast<int>(
+                    GraphemeLayout{}.computeRun(state->leaf->value).totalCells);
             auto const cursorColumn =
                 std::min(rect.x + labelWidth + valueWidth, rect.right() - 1);
             caret = GridPosition{cursorColumn, rect.y};
         }
-        if (control.kind == PromptControlKind::Input) ++inputIndex;
-    }
+    };
+    paint(paint, *prompt);
     return caret;
 }
 
@@ -1341,8 +1350,9 @@ CellGrid Renderer::render(GridFrame const& snapshot,
 
             // Paint the reserved prompt rows (find/replace/settings) and place
             // the hardware cursor at the query when the prompt is focused.
-            auto const& prompt = snapshot.sections().promptView;
-            if (prompt) {
+            if (snapshot.sections().promptStatus.activeKind &&
+                promptFocusRegion(*snapshot.sections().promptStatus.activeKind) ==
+                    PromptRegion::Footer) {
                 const auto promptForegroundRole =
                     nodeForeground(ui, kFooterPromptNodeId,
                                    SemanticRole::Prompt);
@@ -1350,7 +1360,8 @@ CellGrid Renderer::render(GridFrame const& snapshot,
                     nodeBackground(ui, kFooterPromptNodeId,
                                    SemanticRole::Canvas);
                 auto promptCaret =
-                    paintPrompt(grid, *prompt, snapshot.layout(), theme,
+                    paintPrompt(grid, snapshot.sections().uiFrame,
+                                snapshot.layout(), theme,
                                 promptForegroundRole, promptBackgroundRole,
                                 style);
                 if (snapshot.sections().focus == FocusTarget::Prompt && promptCaret) {

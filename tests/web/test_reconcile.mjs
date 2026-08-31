@@ -12,6 +12,7 @@ import {
   applyDocumentDelta, project, byteToIndex, utf8Bytes, settleInput, cssColor,
   decodeMessage, browserInboundKind, encodeClientInput,
   encodeViewNavigationInput, encodeResolvedSelectionInput, encodeCommandRequest,
+  encodeUiNodeActivationCommand,
   BrowserKeyDispatchTracker,
   settleCommandResult,
   matcherParametersFromWire, matcherBoundsFromPalette,
@@ -406,6 +407,15 @@ check('typed raw input and command requests round-trip through ProtocolValue', (
     encodeCommandRequest('buffer.undo', 9n).buffer), {
     kind: 0,
     payload: { id: 'buffer.undo', base_revision: 9n, payload: null },
+  });
+  assert.deepEqual(decodeMessage(
+    encodeUiNodeActivationCommand('footer.action', 4n, 9n).buffer), {
+    kind: 0,
+    payload: {
+      id: 'ui.activate',
+      base_revision: 9n,
+      payload: { generation: 4n, node_id: 'footer.action' },
+    },
   });
 });
 
@@ -1472,6 +1482,27 @@ check('interpretChrome preserves footer prompt column and options row', () => {
                     'footer.prompt.control.matches']);
   assert.equal(out.root.children[0].controlId, 'find.query');
   assert.equal(out.root.children[0].active, true);
+});
+
+check('interpretChrome preserves ordinary status action node identity and command', () => {
+  const actionId = 'footer.status_action/77/9/7265747279';
+  const action = leafNode(actionId, WIDGET.FIELD, {
+    id: actionId, role: 'status_info',
+  });
+  const root = rowNode('footer.status_actions', [action]);
+  const state = { generation: 14, nodes: [
+    st('footer.status_actions'),
+    st(actionId, {
+      value: 'Retry', label: 'Retry', command: 'build.retry', role: 12,
+    }),
+  ] };
+  const out = interpretChrome(
+    schemaOf(14, root), state, presenceForSchema(14, root));
+  assert.ok(out);
+  assert.equal(out.root.children[0].id, actionId);
+  assert.equal(out.root.children[0].text, 'Retry');
+  assert.equal(out.root.children[0].label, 'Retry');
+  assert.equal(out.root.children[0].command, 'build.retry');
 });
 
 check('picker inventories are selected only by their published mode', () => {

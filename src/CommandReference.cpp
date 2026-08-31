@@ -13,6 +13,7 @@
 #include <ssg/Settings.h>
 #include <ssg/TabManager.h>
 #include <ssg/TextCodec.h>
+#include <ssg/UiNodeState.h>
 #include <ssg/TextInputCommands.h>
 #include <ssg/TreeModel.h>
 
@@ -54,6 +55,7 @@ std::unordered_map<std::type_index, std::string_view> const& argumentNames() {
         {typeid(FindQueryArguments), "query"},
         {typeid(PromptValueArguments), "prompt value"},
         {typeid(PromptFocusArguments), "prompt focus"},
+        {typeid(UiNodeActivationArguments), "UI node activation"},
         {typeid(TabId), "tab"},
     };
     return names;

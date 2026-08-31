@@ -1061,7 +1061,9 @@ std::any& EditorSession::Impl::featureStateValue(std::type_index) {
 
 void EditorSession::Impl::publishStatusValue(std::type_index, std::any statusValue) {
     if (auto const* item = std::any_cast<StatusItem>(&statusValue)) {
-        (void)status.enqueue(*item);
+        if (status.enqueue(*item).accepted) {
+            interaction.refreshStatusActions(status.actionNodes());
+        }
     }
 }
 
@@ -2604,7 +2606,11 @@ void EditorSession::Impl::primeDeferred() {
 
 void EditorSession::Impl::enqueueStatus(StatusPriority priority, std::string text) {
     auto value = nextStatusId++;
-    (void)status.enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}});
+    if (status
+            .enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}})
+            .accepted) {
+        interaction.refreshStatusActions(status.actionNodes());
+    }
 }
 
 namespace {
@@ -3208,9 +3214,12 @@ ClientInputResult inputKeyLocked(EditorSession::Impl* impl_, ClientId clientId,
         const auto activation = result.accepted()
                                     ? impl_->interaction.openPickerActivation()
                                     : std::nullopt;
-        const auto outcome = result.viewAction
-                                 ? ClientInputOutcome::ViewOwned
-                                 : ClientInputOutcome::Dispatched;
+        const auto outcome =
+            !result.accepted()
+                ? ClientInputOutcome::Rejected
+                : result.viewAction
+                      ? ClientInputOutcome::ViewOwned
+                      : ClientInputOutcome::Dispatched;
         return {outcome, std::nullopt, std::move(result), activation};
     };
     auto clientOwned = [](ClientOwnedInputKind kind,
@@ -3386,9 +3395,12 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                         result.accepted()
                             ? impl_->interaction.openPickerActivation()
                             : std::nullopt;
-                    const auto outcome = result.viewAction
-                                             ? ClientInputOutcome::ViewOwned
-                                             : ClientInputOutcome::Dispatched;
+                    const auto outcome =
+                        !result.accepted()
+                            ? ClientInputOutcome::Rejected
+                            : result.viewAction
+                                  ? ClientInputOutcome::ViewOwned
+                                  : ClientInputOutcome::Dispatched;
                     return {outcome, std::nullopt, std::move(result),
                             activation};
                 };
@@ -3718,30 +3730,10 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                     if (semantic.button != InputPointerButton::Primary) {
                         return unhandled();
                     }
-                    auto const sections = impl_->sections();
-                    const auto& frame = sections.uiFrame;
-                    if (frame.version().generation !=
-                        semantic.schemaGeneration) {
-                        return rejectTarget("UI action schema is stale");
-                    }
-                    bool present = false;
-                    for (auto const& node : frame.presence().nodes) {
-                        if (node.id == semantic.nodeId) {
-                            present = node.present;
-                            break;
-                        }
-                    }
-                    if (!present) {
-                        return rejectTarget("UI action target is not present");
-                    }
-                    for (auto const& node : frame.state().nodes) {
-                        if (node.id == semantic.nodeId && node.leaf &&
-                            node.leaf->command &&
-                            !node.leaf->command->empty()) {
-                            return dispatch(*node.leaf->command, std::any{});
-                        }
-                    }
-                    return rejectTarget("UI action target is not actionable");
+                    return dispatch(
+                        "ui.activate",
+                        UiNodeActivationArguments{
+                            semantic.schemaGeneration, semantic.nodeId});
                 } else if constexpr (std::same_as<
                                          Input, NoticeActionPointerInput>) {
                     if (semantic.button != InputPointerButton::Primary) {
@@ -3816,6 +3808,7 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
         impl_->interaction.refreshNoticePresence(impl_->noticePresent());
         impl_->interaction.refreshExternalModificationPresence(
             impl_->externalModificationPresent());
+        impl_->interaction.refreshStatusActions(impl_->status.actionNodes());
         if (result.accepted() && shouldPauseForLocalEdit &&
             existingDocumentMutated(revisionsBefore, impl_->workspace)) {
             (void)impl_->follow.notifyLocalEdit();
@@ -3832,6 +3825,13 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
     // each rebased on the revision the previous one left.
     const auto dispatchAndDrain = [&](ClientId as,
                                       const ClientCommand& dispatched) {
+        const auto* requested = dispatched.id.handle().valid()
+                                    ? impl_->catalog->find(
+                                          dispatched.id.handle())
+                                    : impl_->catalog->find(
+                                          dispatched.id.name());
+        const bool routing =
+            requested && requested->effect == CommandEffect::Routing;
         auto outcome = dispatchAs(as, dispatched);
         // A handler that FAILED does not get its requests performed: it may
         // have queued half a sequence before giving up, and running that half
@@ -3841,6 +3841,13 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
             impl_->deferredCommands.clear();
             return outcome;
         }
+        if (routing && impl_->deferredCommands.size() != 1) {
+            impl_->deferredCommands.clear();
+            return ExecutorResult{
+                CommandError::HandlerFailed, outcome.revision,
+                "a routing command must queue exactly one target",
+                std::nullopt};
+        }
         if (outcome.viewAction && !impl_->deferredCommands.empty()) {
             impl_->deferredCommands.clear();
             return ExecutorResult{
@@ -3848,8 +3855,25 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
                 "a view-action command cannot defer another command",
                 std::nullopt};
         }
+        bool directRoutingTarget = routing;
         while (!impl_->deferredCommands.empty()) {
             auto deferred = impl_->deferredCommands.takeFront();
+            if (directRoutingTarget) {
+                const auto* target = deferred.command.id.handle().valid()
+                                         ? impl_->catalog->find(
+                                               deferred.command.id.handle())
+                                         : impl_->catalog->find(
+                                               deferred.command.id.name());
+                if (target && target->effect == CommandEffect::Routing) {
+                    impl_->deferredCommands.clear();
+                    return ExecutorResult{
+                        CommandError::HandlerFailed, outcome.revision,
+                        "a routing command cannot target another routing "
+                        "command",
+                        std::nullopt};
+                }
+            }
+            directRoutingTarget = false;
             deferred.command.baseRevision = impl_->session->revision();
             auto const deferredResult = dispatchAs(
                 deferred.client.value_or(as), deferred.command);

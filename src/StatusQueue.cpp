@@ -1,6 +1,8 @@
 #include "ssg/StatusQueue.h"
 
 #include <algorithm>
+#include <array>
+#include <set>
 #include <utility>
 
 namespace ssg {
@@ -10,12 +12,30 @@ bool validItem(const StatusItem& item) {
     if (item.id.value() == 0 || item.text.empty()) {
         return false;
     }
-    return std::all_of(item.actions.begin(), item.actions.end(),
-                       [](const StatusAction& action) {
-                           return !action.id.empty() &&
-                                  !action.accessibleLabel.empty() &&
-                                  !action.commandId.empty();
-                       });
+    std::set<std::string_view> actionIds;
+    return std::all_of(
+        item.actions.begin(), item.actions.end(),
+        [&](const StatusAction& action) {
+            return !action.id.empty() && !action.accessibleLabel.empty() &&
+                   !action.commandId.empty() &&
+                   actionIds.insert(action.id).second;
+        });
+}
+
+std::string actionNodeId(StatusId statusId, std::uint64_t generation,
+                         std::string_view actionId) {
+    constexpr std::array<char, 16> digits{
+        '0', '1', '2', '3', '4', '5', '6', '7',
+        '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+    std::string id = "footer.status_action/" +
+                     std::to_string(statusId.value()) + "/" +
+                     std::to_string(generation) + "/";
+    id.reserve(id.size() + actionId.size() * 2);
+    for (const unsigned char byte : actionId) {
+        id.push_back(digits[byte >> 4]);
+        id.push_back(digits[byte & 0x0f]);
+    }
+    return id;
 }
 
 } // namespace
@@ -124,6 +144,7 @@ StatusFooterProjection StatusQueue::footerProjection() const {
     if (entries_.empty()) {
         return projection;
     }
+
     const auto& selected = entries_[selected_];
     projection.value =
         selected.item.text + " " + std::to_string(selected_ + 1) + "/" +
@@ -133,6 +154,27 @@ StatusFooterProjection StatusQueue::footerProjection() const {
         projection.actions.push_back({action.id, action.accessibleLabel});
     }
     return projection;
+}
+
+std::vector<StatusActionNode> StatusQueue::actionNodes() const {
+    return projectStatusActionNodes(viewState());
+}
+
+std::vector<StatusActionNode> projectStatusActionNodes(
+    const StatusViewState& status) {
+    std::vector<StatusActionNode> nodes;
+    if (status.items.empty() || status.selected >= status.items.size()) {
+        return nodes;
+    }
+    const auto& selected = status.items[status.selected];
+    nodes.reserve(selected.actions.size());
+    for (const auto& action : selected.actions) {
+        nodes.push_back(
+            {UiNodeId{actionNodeId(selected.id, selected.generation,
+                                   action.id)},
+             action.accessibleLabel, action.commandId});
+    }
+    return nodes;
 }
 
 PromptStatusDelta PromptStatusDeltaCodec::derive(

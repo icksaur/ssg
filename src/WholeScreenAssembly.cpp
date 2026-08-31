@@ -47,17 +47,6 @@ WidgetDescriptor hintField(std::string_view hintCommandId) {
     return widget;
 }
 
-// The stable status-actions widget: one node carrying only its id, whose data (the
-// selected status item's actions, its status id, and generation) rides the promptStatus
-// section. It is ALWAYS emitted in the built-in footer so the schema stays generation-
-// stable while the actions vary frame to frame on their own section cadence.
-WidgetDescriptor statusActionsWidget() {
-    WidgetDescriptor widget;
-    widget.kind = WidgetKind::StatusActions;
-    widget.id = "footer.status_actions";
-    return widget;
-}
-
 // A built-in header/footer region: catalog fields as the left group, `right` as the
 // right group, no center, in the shared canonical region shape.
 UiNode builtinRegion(std::string_view base,
@@ -134,7 +123,8 @@ UiNode footerPromptInput(const PromptControl& control) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::TextInput;
     widget.id = control.id;
-    widget.value = ValueSource{true, "", control.id};
+    widget.value =
+        ValueSource{true, "", footerPromptControlNodeId(control.id).value()};
     widget.command = control.command;
     widget.role = "prompt";
     return UiNode{footerPromptControlNodeId(control.id), Size::exact(1),
@@ -146,7 +136,8 @@ UiNode footerPromptToggle(const PromptControl& control, int width) {
     widget.kind = WidgetKind::Checkbox;
     widget.id = control.id;
     widget.value = ValueSource{false, control.accessibleLabel, ""};
-    widget.checked = ValueSource{true, "", control.id};
+    widget.checked =
+        ValueSource{true, "", footerPromptControlNodeId(control.id).value()};
     widget.command = control.command;
     widget.role = "prompt";
     return UiNode{footerPromptControlNodeId(control.id), Size::exact(width),
@@ -157,7 +148,8 @@ UiNode footerPromptCount(const PromptControl& control) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::Label;
     widget.id = control.id;
-    widget.value = ValueSource{true, "", control.id};
+    widget.value =
+        ValueSource{true, "", footerPromptControlNodeId(control.id).value()};
     widget.role = "prompt";
     return UiNode{footerPromptControlNodeId(control.id), Size::flex(),
                   UiLeaf{std::move(widget)}};
@@ -198,14 +190,10 @@ UiComposition assembleWholeScreen(
             .push_back(entry);
     }
 
-    // The built-in footer right group is STRUCTURALLY STABLE: the hint (provider-
-    // backed, label rides uiState) and the status-actions affordance (data rides
-    // promptStatus) are always present. A composed ssg.chrome footer replaces the
-    // whole built-in footer and so omits both -- matching the grid's whole-footer
-    // replacement.
+    // The built-in footer carries the provider-backed hint and an ordinary
+    // status-action container. A composed footer replaces both.
     std::vector<WidgetDescriptor> footerRight;
     footerRight.push_back(hintField(hintCommandId));
-    footerRight.push_back(statusActionsWidget());
 
     UiNode header = composedHeader
                         ? *composedHeader
@@ -214,6 +202,12 @@ UiComposition assembleWholeScreen(
                         ? *composedFooter
                         : builtinRegion(kFooterNodeId, footerEntries,
                                         std::move(footerRight));
+    if (!composedFooter) {
+        auto& region = std::get<UiContainer>(footer.content);
+        auto& right = std::get<UiContainer>(region.children[2].content);
+        right.children.push_back(
+            container("footer.status_actions", Axis::Row, Size::autoSize(), {}));
+    }
     header = withStyle(
         withSize(std::move(header), Size::exact(dimensions.headerHeight)),
         SemanticRole::Header, SemanticRole::HeaderBackground);
@@ -303,6 +297,53 @@ UiComposition withFooterPrompt(UiComposition base,
         throw std::logic_error("footer.prompt must be a container");
     }
     *promptNode = assembleFooterPrompt(prompt);
+    return base;
+}
+
+UiComposition withStatusActions(
+    UiComposition base, const std::vector<StatusActionNode>& actions) {
+    UiNode* actionContainer = nullptr;
+    // Only assembleWholeScreen's direct built-in footer anchor is eligible.
+    // Decoder-validated composed chrome cannot author this structural position,
+    // so a composed footer explicitly suppresses the retained projection.
+    if (auto* root = std::get_if<UiContainer>(&base.root.content)) {
+        for (auto& area : root->children) {
+            if (area.id.value() != kFooterNodeId) continue;
+            auto* region = std::get_if<UiContainer>(&area.content);
+            if (!region || region->children.size() != 3 ||
+                region->children[2].id.value() != "footer.right") {
+                break;
+            }
+            auto* right =
+                std::get_if<UiContainer>(&region->children[2].content);
+            if (!right) break;
+            for (auto& child : right->children) {
+                if (child.id.value() == "footer.status_actions") {
+                    actionContainer = &child;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    if (!actionContainer) return base;
+    auto* actionChildren =
+        std::get_if<UiContainer>(&actionContainer->content);
+    if (!actionChildren) {
+        throw std::logic_error(
+            "footer.status_actions must be a container");
+    }
+    actionChildren->children.clear();
+    actionChildren->children.reserve(actions.size());
+    for (const auto& action : actions) {
+        WidgetDescriptor widget;
+        widget.kind = WidgetKind::Field;
+        widget.id = action.id.value();
+        widget.value = ValueSource{true, "", action.id.value()};
+        widget.role = "status_info";
+        actionChildren->children.push_back(
+            UiNode{action.id, Size::autoSize(), UiLeaf{std::move(widget)}});
+    }
     return base;
 }
 

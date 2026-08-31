@@ -256,3 +256,160 @@ Focused tests must prove that:
   schema emits one node record and no schema in either case, with encoded delta
   size differing only by the encoded node identity rather than total
   schema-node count.
+
+## Step 3 design: node-native prompt and status actions
+
+All current client activation of published UI controls converges on one ordinary
+typed command, `ui.activate`. Its `UiNodeActivationArguments` carry only the
+observed schema generation and `UiNodeId`; the enclosing `CommandRequest`
+already carries the exact semantic base revision. The client never supplies the
+target command, prompt kind, control index, status identity, or action payload.
+
+Add `CommandEffect::Routing` and `CommandSpecBuilder::routes()` for commands
+whose only accepted effect is to enqueue authoritative follow-up commands.
+Routing commands require an exact base revision, may not require a view action,
+and do not advance the semantic revision themselves. The command executor drains
+their queued command before returning, rewriting the deferred command's base to
+the then-current revision exactly as for existing aggregate dispatch. This
+keeps one user activation from fabricating an intermediate revision while the
+target command still receives the original principal's capability checks,
+argument contract, and normal mutation semantics.
+
+A routing handler either rejects before queuing anything or succeeds after
+queuing exactly one target. The direct target may not itself be a routing
+command; ordinary target commands may use the existing deferred-command chain.
+The routing command publishes no independent success: the final target-chain
+result is the public `CommandResult`, and any target rejection is returned as
+the activation's rejection. A rejected routing handler clears its request
+without draining, while the existing error and view-action drain rules continue
+to clear any later queued work.
+
+The `ui.activate` handler resolves a fresh `UiFrame` from the runtime and rejects
+unless:
+
+- the argument generation equals the frame generation;
+- the node exists exactly once in the schema and state;
+- the node and every schema ancestor are present;
+- the node is a stateful `TextInput`, or is a `Checkbox` or `Field` whose leaf
+  state carries a bound command target; and
+- an ordinary command target takes no arguments.
+
+Resolution is server-side from the current schema and leaf state. Ordinary
+fields and checkboxes enqueue their current leaf command. A provider-backed,
+stateful `TextInput` instead enqueues `prompt.focus_control` with the schema
+widget's control id; its leaf command remains the typed value-update operation
+and is never dispatched with an invented empty payload. A state-free input such
+as the client-owned picker query, a count label, a container, and any leaf
+without a command are inert. Unknown, hidden, stale, malformed, argument-taking,
+or retired targets reject without queuing work.
+
+The preceding `PublishedUiActionPointerInput` decoder delegates to this same
+resolver during the compatibility window. `PromptControlPointerInput` and
+`StatusActionPointerInput` retain their exact decoders and frozen fixtures but
+are no longer constructed by current clients. Their compatibility handlers
+remain isolated until the corresponding Step 6 and Step 7 removals.
+
+### Prompt controls
+
+`PromptSurface` remains the authority for the active request, values, toggles,
+and active input. The existing prompt-control lowering remains the one internal
+semantic conversion used to build the request-derived footer subtree and
+resolve its `UiNodeState`; live find/replace state is overlaid at that resolver,
+not through `PromptView`.
+
+The current grid path traverses the `footer.prompt` subtree in `UiFrame`, joins
+it to the solved node tree by `UiNodeId`, and derives captions, checked state,
+active input, accessibility labels, and hit targets from those nodes. It does
+not enumerate `PromptView::controls`. Text inputs hit `ui.activate` for focus,
+checkboxes hit the node's command, and count labels are inert. Keyboard submit,
+cancel, navigation, focus cycling, and text updates continue through their
+existing authoritative keymap commands.
+
+`PromptView`, `PromptControl`, `PromptViewSectionDelta`, legacy
+`PromptViewState`, and their codecs remain compatibility projections in this
+step, but no current terminal or web render/input path consumes them. Step 6
+stops producing and then stages removal of that compatibility vocabulary. The
+unused terminal prompt mirror variables are deleted now.
+
+### Status actions
+
+The built-in footer's `footer.status_actions` node becomes an ordinary
+container whose children are actionable field nodes for the selected
+`StatusQueue` entry. A composed footer still replaces the complete built-in
+footer and therefore has no built-in status-action container or children.
+
+The library derives a typed `StatusActionNode` projection from the selected
+status entry. Each projection contains a collision-free opaque `UiNodeId` plus
+the accessible label and payloadless target command. Identity uses the canonical text
+`footer.status_action/<status-id>/<generation>/<action-id-hex>`, where the
+numeric strong ids use canonical unsigned decimal and `action-id-hex` is
+lowercase hexadecimal over the action id's UTF-8 bytes. The separators cannot
+occur in the encoded components, so changing any component cannot collide;
+clients never construct or parse the identity. The child order is authoritative
+queue order. Label and target resolution ride `UiStateSection`; an unchanged
+identity can therefore change state without changing schema. An identity-set or
+order change replaces the subtree and advances the whole-screen schema
+generation.
+
+`InteractionAuthority` owns the current status-action projection alongside its
+base composition. One rebuilding operation takes the base composition, retained
+status projection, and current `PromptSurface`, applies the status-action
+overlay when the built-in anchor exists, then applies the active footer-prompt
+overlay, and produces one candidate `WholeScreenSchema` plus matching
+`UiInteractionState` before swapping any owner.
+
+Installing a composed footer retains the status projection in the authority but
+publishes none of its nodes; restoring the built-in footer republishes those
+same identities if the selected status is unchanged. A status refresh while any
+prompt is open rebuilds through the complete pipeline, preserves the prompt and
+its capture, and overlays the prompt against the new candidate schema. It never
+closes a picker or footer prompt as a side effect.
+
+Runtime command draining reconciles the selected status projection under the
+operation lock after each command. The only other current writers,
+`publishStatusValue` and `enqueueStatus`, perform the same runtime-thread
+reconciliation immediately after `StatusQueue::enqueue`, before a snapshot can
+observe the queue. Worker threads may not write `StatusQueue` directly; they
+must post through the existing serialized runtime publication seam.
+
+The status target command is resolved from the current node state and must be a
+registered payloadless command. `StatusAction` has no payload field, so an
+argument-taking target is unsupported and activation rejects explicitly.
+Executing a status action queues that target command; it does not merely validate
+the old `StatusActionInvocation`.
+
+Current chrome lowering, rendering, accessibility, hit testing, and both clients
+consume these ordinary nodes. Synthetic `SolvedChromeItem::statusInvocation`,
+current `AccessibilityNode::statusInvocation`, dedicated prompt/status hit
+regions, and client-side status inventories leave the current path. Exact old
+schema and accessibility decoding remains in the legacy adapter until Step 7;
+the sidecar members may remain physically present but unused until that removal.
+
+Focused tests must prove that:
+
+- current revision, generation, effective presence, node identity, leaf
+  actionability, and payloadless target validation all gate `ui.activate`
+  without partial mutation;
+- a routing command advances no revision of its own, while its deferred target
+  executes once under the same principal and publishes the target's normal
+  result;
+- prompt open, default active input, pointer focus, focus cycling, value update,
+  toggle activation, inert count, close, shape-changing reopen, and stale
+  pre-close activation are observable through `UiFrame` nodes. A pre-close
+  request rejects first at the ordinary exact base-revision check; it introduces
+  no prompt-specific stale outcome. Every valid prompt request has at least one
+  input by `PromptSurface` construction, and a malformed control-free request
+  rejects before publication. Non-control prompt regions have no activation and
+  are inert to pointer hits;
+- selected status action nodes track enqueue, replacement, next, previous, and
+  dismissal, changing any status-identity component changes the collision-free
+  node id, and activation executes the current target once;
+- terminal and web presentation, accessibility, and hits use the same node ids,
+  labels, commands, active state, and checked state;
+- every published target command remains keyboard reachable through an
+  applicable keymap binding or the command palette;
+- current clients emit an ordinary `CommandRequest` for node activation and
+  contain no construction of the three preceding feature-specific input
+  variants; and
+- frozen preceding client-input, prompt-view, status-view, schema, and
+  accessibility fixtures continue to decode through compatibility paths.

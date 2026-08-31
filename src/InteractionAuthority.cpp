@@ -50,6 +50,13 @@ std::vector<TreeProviderPresence> InteractionAuthority::presentProviders() const
     return present;
 }
 
+UiComposition InteractionAuthority::assembled(
+    const UiComposition& base, const PromptSurface& prompt) const {
+    UiComposition projected = withStatusActions(base, statusActions_);
+    return prompt.active() ? withFooterPrompt(std::move(projected), prompt)
+                           : projected;
+}
+
 bool InteractionAuthority::apply(const CommandTransition& transition) {
     const auto* opening = std::get_if<OpenFinder>(&transition);
     const auto* openingDescriptor =
@@ -115,7 +122,7 @@ PromptCommandResult InteractionAuthority::openPrompt(PromptRequest request) {
     PromptCommandResult result = copy.open(std::move(request));
     if (result.accepted()) {
         WholeScreenSchema candidate = schema_;
-        candidate.update(withFooterPrompt(baseComposition_, copy));
+        candidate.update(assembled(baseComposition_, copy));
         WholeScreenTruth next = truth_;
         next.openPicker.reset();
         UiInteractionState projection = buildWholeScreenInteraction(
@@ -249,9 +256,7 @@ bool InteractionAuthority::updateComposition(UiComposition assembly) {    // Pre
     // the projection over it, then adopt both together, so a rebuild failure cannot leave a
     // new schema paired with the old interaction.
     WholeScreenSchema candidate = schema_;
-    UiComposition projected = prompt_.active()
-                                  ? withFooterPrompt(assembly, prompt_)
-                                  : assembly;
+    UiComposition projected = assembled(assembly, prompt_);
     if (!candidate.update(std::move(projected))) {
         baseComposition_ = std::move(assembly);
         return false;
@@ -261,6 +266,28 @@ bool InteractionAuthority::updateComposition(UiComposition assembly) {    // Pre
     schema_ = std::move(candidate);
     baseComposition_ = std::move(assembly);
     interaction_ = std::move(projection);
+    return true;
+}
+
+bool InteractionAuthority::refreshStatusActions(
+    std::vector<StatusActionNode> actions) {
+    if (actions == statusActions_) return false;
+    WholeScreenSchema candidate = schema_;
+    UiComposition projected = withStatusActions(baseComposition_, actions);
+    if (prompt_.active()) {
+        projected = withFooterPrompt(std::move(projected), prompt_);
+    }
+    const bool schemaChanged = candidate.update(std::move(projected));
+    std::optional<UiInteractionState> interaction;
+    if (schemaChanged) {
+        interaction = buildWholeScreenInteraction(
+            candidate.validated(), truth_, activePromptRegion(prompt_));
+    }
+    statusActions_ = std::move(actions);
+    if (schemaChanged) {
+        schema_ = std::move(candidate);
+        interaction_ = std::move(*interaction);
+    }
     return true;
 }
 

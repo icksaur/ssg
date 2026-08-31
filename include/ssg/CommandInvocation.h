@@ -176,6 +176,7 @@ enum class CommandEffect : std::uint8_t {
     Observation,
     Mutation,
     ViewAction,
+    Routing,
 };
 
 enum class CommandRevisionPolicy : std::uint8_t {

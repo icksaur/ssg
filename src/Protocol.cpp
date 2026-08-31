@@ -1035,6 +1035,9 @@ ProtocolValue toValue(PromptValueArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptValueArguments>& out);
 ProtocolValue toValue(PromptFocusArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptFocusArguments>& out);
+ProtocolValue toValue(UiNodeActivationArguments const& value);
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<UiNodeActivationArguments>& out);
 ProtocolValue toValue(SelectionCommandArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out);
 ProtocolValue toValue(ScrollLinesArguments const& value);
@@ -5406,6 +5409,26 @@ ProtocolValue toValue(PromptFocusArguments const& value) {
     fields.emplace_back("control_id", toValue(value.controlId));
     return ProtocolValue::makeObject(std::move(fields));
 }
+
+ProtocolValue toValue(UiNodeActivationArguments const& value) {
+    return ProtocolValue::makeObject(
+        {{"generation", ProtocolValue::makeUint(value.generation.value())},
+         {"node_id", ProtocolValue::makeText(value.nodeId.value())}});
+}
+
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<UiNodeActivationArguments>& out) {
+    if (!value.asObject()) return false;
+                   const auto* generation = value.field("generation");
+                   const auto* nodeId = value.field("node_id");
+                   if (!generation || !generation->asUint() || !nodeId ||
+                       !nodeId->asText()) {
+                       return false;
+                   }
+                   out.emplace(UiNodeActivationArguments{Generation{*generation->asUint()},
+                                                         UiNodeId{*nodeId->asText()}});
+    return true;
+}
 bool decodePresent(ProtocolValue const& value, std::optional<PromptFocusArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
@@ -5766,6 +5789,8 @@ argumentCodecsByType() {
         table.emplace(typeid(FindQueryArguments), makeTypedCodec<FindQueryArguments>());
         table.emplace(typeid(PromptValueArguments), makeTypedCodec<PromptValueArguments>());
         table.emplace(typeid(PromptFocusArguments), makeTypedCodec<PromptFocusArguments>());
+        table.emplace(typeid(UiNodeActivationArguments),
+                      makeTypedCodec<UiNodeActivationArguments>());
         table.emplace(typeid(TabId), makeOptionalTypedCodec<TabId>());
         return table;
     }();

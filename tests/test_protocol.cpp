@@ -445,6 +445,28 @@ TEST(commandRequestRoundTripsWithPromptFocusIdentity) {
                              std::string{"replace.replacement"});
 }
 
+TEST(commandRequestRoundTripsWithUiNodeActivationIdentity) {
+    const auto registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
+    const ssg::ClientCommand command{
+        "ui.activate", ssg::Revision{13},
+        ssg::UiNodeActivationArguments{
+            ssg::Generation{7}, ssg::UiNodeId{"footer.status_action/1/2/6f6b"}}};
+    const auto bytes =
+        ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    const auto decoded =
+        ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
+    ASSERT_TRUE(decoded.accepted());
+    const auto* arguments =
+        std::any_cast<ssg::UiNodeActivationArguments>(
+            &decoded.command->payload);
+    ASSERT_TRUE(arguments != nullptr);
+    if (arguments) {
+        ASSERT_EQ(arguments->generation, ssg::Generation{7});
+        ASSERT_EQ(arguments->nodeId,
+                  ssg::UiNodeId{"footer.status_action/1/2/6f6b"});
+    }
+}
+
 
 // A payload-bearing command reaching the WRONG codec entry (or none) is
 // invisible to the registry's exhaustiveness check, which only proves an entry
@@ -2523,8 +2545,22 @@ TEST(semanticReplayIgnoresFrozenLegacyPresentationDeltaFields) {
         ssg::SessionSnapshotCodec{}.replay(base.semantic(), *delta.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
-    if (replayed.snapshot)
-        ASSERT_EQ(*replayed.snapshot, expected.semantic());
+    if (replayed.snapshot) {
+        auto expectedSections = expected.semantic().sections();
+        auto legacyState = *legacy->state;
+        if (!legacyState.focusPath) {
+            legacyState.focusPath =
+                base.semantic().sections().uiFrame.focusPath();
+        }
+        expectedSections.uiFrame = ssg::UiFrame::require(
+            *legacy->schema, std::move(legacyState), *legacy->presence);
+        auto legacyExpected = ssg::SessionSnapshotCodec{}.assemble(
+            ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+            ssg::InvocationPrincipal{ssg::ClientId{7},
+                                     ssg::InvocationOrigin::InProcess},
+            ssg::ViewId{9}, clientView(5), std::move(expectedSections));
+        ASSERT_EQ(*replayed.snapshot, legacyExpected.semantic());
+    }
 }
 
 }  // namespace
@@ -2688,6 +2724,7 @@ int main() {
     RUN(commandRequestRoundTripsWithFindQueryArguments);
     RUN(commandRequestRoundTripsWithPromptValueArguments);
     RUN(commandRequestRoundTripsWithPromptFocusIdentity);
+    RUN(commandRequestRoundTripsWithUiNodeActivationIdentity);
     RUN(commandRequestRoundTripsWithTreeScrollToFraction);
     RUN(commandRequestRoundTripsWithTreeSelectArguments);
     RUN(viewportFirstVisualColumnSurvivesTheWire);

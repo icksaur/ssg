@@ -2,6 +2,7 @@
 
 #include "ssg/PromptSurface.h"
 #include "ssg/StatusActionInvocation.h"
+#include "ssg/UiTree.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -78,6 +79,17 @@ struct StatusFooterProjection {
                            const StatusFooterProjection&) = default;
 };
 
+struct StatusActionNode {
+    UiNodeId id;
+    std::string accessibleLabel;
+    std::string commandId;
+    friend bool operator==(const StatusActionNode&,
+                           const StatusActionNode&) = default;
+};
+
+[[nodiscard]] std::vector<StatusActionNode> projectStatusActionNodes(
+    const StatusViewState& status);
+
 class StatusQueue {
 public:
     static constexpr std::size_t kCapacity = 16;
@@ -90,6 +102,7 @@ public:
         const StatusActionInvocation& invocation) const;
     [[nodiscard]] StatusViewState viewState() const;
     [[nodiscard]] StatusFooterProjection footerProjection() const;
+    [[nodiscard]] std::vector<StatusActionNode> actionNodes() const;
 
 private:
     struct Entry {

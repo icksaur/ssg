@@ -324,8 +324,22 @@ std::optional<std::vector<const WidgetDescriptor*>> groupLeaves(
     std::vector<const WidgetDescriptor*> widgets;
     for (const auto& child : container->children) {
         const auto* leaf = std::get_if<UiLeaf>(&child.content);
-        if (!leaf) return std::nullopt;
-        widgets.push_back(&leaf->widget);
+        if (leaf) {
+            widgets.push_back(&leaf->widget);
+            continue;
+        }
+        if (child.id.value() != "footer.status_actions") {
+            return std::nullopt;
+        }
+        const auto* actions = std::get_if<UiContainer>(&child.content);
+        if (!actions || actions->axis != Axis::Row) return std::nullopt;
+        for (const auto& action : actions->children) {
+            const auto* actionLeaf = std::get_if<UiLeaf>(&action.content);
+            if (!actionLeaf || action.size.kind() != SizeKind::Auto) {
+                return std::nullopt;
+            }
+            widgets.push_back(&actionLeaf->widget);
+        }
     }
     return widgets;
 }

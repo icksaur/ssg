@@ -9,6 +9,82 @@
 namespace ssg {
 namespace {
 
+const UiNode* schemaNode(const UiNode& node, const UiNodeId& id) {
+    if (node.id == id) return &node;
+    const auto* container = std::get_if<UiContainer>(&node.content);
+    if (!container) return nullptr;
+    for (const auto& child : container->children) {
+        if (const auto* found = schemaNode(child, id)) return found;
+    }
+    return nullptr;
+}
+
+bool effectivelyPresent(const UiNode& node, const UiNodeId& id,
+                        const UiPresenceSection& presence,
+                        bool ancestorsPresent = true) {
+    const auto record = std::find_if(
+        presence.nodes.begin(), presence.nodes.end(),
+        [&](const UiPresenceRecord& item) { return item.id == node.id; });
+    if (record == presence.nodes.end()) return false;
+    const bool present = ancestorsPresent && record->present;
+    if (node.id == id) return present;
+    const auto* container = std::get_if<UiContainer>(&node.content);
+    if (!container) return false;
+    return std::any_of(
+        container->children.begin(), container->children.end(),
+        [&](const UiNode& child) {
+            return effectivelyPresent(child, id, presence, present);
+        });
+}
+
+CommandHandlerResult activateUiNode(
+    EditorSession::Impl& runtime, CommandContext& context,
+    const UiNodeActivationArguments& arguments) {
+    const UiFrame frame = runtime.sections().uiFrame;
+    if (frame.version().generation != arguments.generation) {
+        return failure("UI activation schema is stale");
+    }
+    const UiNode* node = schemaNode(frame.schema().root, arguments.nodeId);
+    if (!node ||
+        !effectivelyPresent(frame.schema().root, arguments.nodeId,
+                            frame.presence())) {
+        return failure("UI activation target is not present");
+    }
+    const auto state = std::find_if(
+        frame.state().nodes.begin(), frame.state().nodes.end(),
+        [&](const UiNodeState& item) { return item.id == arguments.nodeId; });
+    const auto* leaf = std::get_if<UiLeaf>(&node->content);
+    if (state == frame.state().nodes.end() || !state->leaf || !leaf) {
+        return failure("UI activation target is not actionable");
+    }
+
+    ClientCommand target;
+    target.baseRevision = context.revision();
+    if (leaf->widget.kind == WidgetKind::TextInput &&
+        state->leaf->active.has_value()) {
+        target.id = "prompt.focus_control";
+        target.payload = PromptFocusArguments{leaf->widget.id};
+    } else {
+        if ((leaf->widget.kind != WidgetKind::Field &&
+             leaf->widget.kind != WidgetKind::Checkbox) ||
+            !state->leaf->command || state->leaf->command->empty()) {
+            return failure("UI activation target is not actionable");
+        }
+        const CommandEntry* command =
+            runtime.catalog->find(*state->leaf->command);
+        if (!command || command->argument.type ||
+            command->effect == CommandEffect::Routing) {
+            return failure(
+                "UI activation target is not a payloadless command");
+        }
+        target.id = *state->leaf->command;
+    }
+    if (!runtime.defer(std::nullopt, std::move(target))) {
+        return failure("UI activation target could not be queued");
+    }
+    return success();
+}
+
 CommandHandlerResult setWordWrap(EditorSession::Impl& runtime) {
     bool next = !boolSetting(runtime.settings, SettingKey::WordWrap, runtime.wordWrap);
     auto mutation = runtime.settings.set(SettingScope::Workspace, SettingKey::WordWrap, next);
@@ -158,7 +234,12 @@ CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
         auto const* invocation = payloadAs<StatusActionInvocation>(payload);
         if (invocation == nullptr) return failure("status.invoke_action requires an action payload");
         auto result = runtime.status.invokeAction(*invocation);
-        return result.accepted() ? success() : failure("status action is unavailable");
+        if (!result.accepted()) return failure("status action is unavailable");
+        ClientCommand target{*result.commandId,
+                             runtime.session->revision(), {}};
+        return runtime.defer(std::nullopt, std::move(target))
+                   ? success()
+                   : failure("status action target could not be queued");
     }
     return success();
 }
@@ -476,6 +557,17 @@ void registerPromptStatusCommands(CommandCatalog& builder,
     bare("status.next", "Next", "");
     bare("status.previous", "Previous", "");
     bare("status.dismiss", "Dismiss", "");
+
+    builder.add(
+        CommandSpecBuilder{"ui.activate"}
+            .owner("ui-frame")
+            .summary("Activate Published UI Node")
+            .routes()
+            .handler<UiNodeActivationArguments>(
+                [&runtime](CommandContext& context,
+                           const UiNodeActivationArguments& arguments) {
+                    return activateUiNode(runtime, context, arguments);
+                }));
 
     builder.add(spec("status.invoke_action", "Invoke Action")
                     .optionalInProcessHandler<StatusActionInvocation>(

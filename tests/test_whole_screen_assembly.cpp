@@ -258,7 +258,9 @@ TEST(footerPromptAssemblyPublishesInputRowsAndAHorizontalOptionsRow) {
             ASSERT_EQ(leaf.widget.id, request.inputs[index].id);
             ASSERT_TRUE(leaf.widget.value.has_value());
             ASSERT_TRUE(leaf.widget.value->isProvider);
-            ASSERT_EQ(leaf.widget.value->provider, request.inputs[index].id);
+            ASSERT_EQ(
+                leaf.widget.value->provider,
+                column->children[index].id.value());
         }
         const auto& optionsNode = column->children.back();
         ASSERT_EQ(optionsNode.id.value(), std::string{kFooterPromptOptionsNodeId});
@@ -304,20 +306,27 @@ TEST(builtinHeaderFooterAreProviderBackedAndStable) {
     ASSERT_EQ(headerRow.left[0].rank, 3);
     ASSERT_TRUE(!headerRow.left[0].command.has_value());  // command rides uiState
 
-    // The footer right group carries the provider-backed hint (label rides uiState,
-    // command stable) and the stable status-actions widget.
-    const ssgtest::RowView footerRow =
-        ssgtest::rowOf(*childById(comp.root, kFooterNodeId));
-    ASSERT_EQ(footerRow.right.size(), std::size_t{2});
-    ASSERT_TRUE(footerRow.right[0].value.has_value());
-    if (footerRow.right[0].value) {
-        ASSERT_TRUE(footerRow.right[0].value->isProvider);
-        ASSERT_EQ(footerRow.right[0].value->provider, std::string{"footer.hint"});
+    const auto* footer = childById(comp.root, kFooterNodeId);
+    ASSERT_TRUE(footer != nullptr);
+    if (!footer) return;
+    const auto& footerRegion = std::get<ssg::UiContainer>(footer->content);
+    const auto& footerRight =
+        std::get<ssg::UiContainer>(footerRegion.children[2].content);
+    ASSERT_EQ(footerRight.children.size(), std::size_t{2});
+    const auto& hint =
+        std::get<ssg::UiLeaf>(footerRight.children[0].content).widget;
+    ASSERT_TRUE(hint.value.has_value());
+    if (hint.value) {
+        ASSERT_TRUE(hint.value->isProvider);
+        ASSERT_EQ(hint.value->provider, std::string{"footer.hint"});
     }
-    ASSERT_TRUE(footerRow.right[0].command.has_value());
-    if (footerRow.right[0].command)
-        ASSERT_EQ(*footerRow.right[0].command, std::string{kHintCommand});
-    ASSERT_TRUE(footerRow.right[1].kind == WidgetKind::StatusActions);
+    ASSERT_TRUE(hint.command.has_value());
+    if (hint.command)
+        ASSERT_EQ(*hint.command, std::string{kHintCommand});
+    ASSERT_EQ(footerRight.children[1].id,
+              ssg::UiNodeId{"footer.status_actions"});
+    ASSERT_TRUE(std::holds_alternative<ssg::UiContainer>(
+        footerRight.children[1].content));
 }
 
 TEST(theCatalogSplitsByRegionDeterministically) {

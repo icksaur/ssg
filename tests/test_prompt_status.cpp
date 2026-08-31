@@ -362,6 +362,46 @@ TEST(statusStaleActionsAreRejectedWithoutMutation) {
     ASSERT_EQ(invoked.commandId, std::optional<std::string>{"build.retry"});
 }
 
+TEST(statusActionsProjectCanonicalOpaqueNodeIdentities) {
+    StatusQueue queue;
+    const auto enqueued = queue.enqueue(status(
+        7, StatusPriority::Error, "Build failed",
+        {StatusAction{"retry", "Retry build", "build.retry"},
+         StatusAction{"r\xC3\xA9try", "Retry localized", "build.localized"}}));
+    ASSERT_TRUE(enqueued.accepted);
+    const auto nodes = queue.actionNodes();
+    ASSERT_EQ(nodes.size(), std::size_t{2});
+    ASSERT_EQ(nodes[0].id,
+              UiNodeId{"footer.status_action/7/" +
+                       std::to_string(enqueued.generation) +
+                       "/7265747279"});
+    ASSERT_EQ(nodes[0].accessibleLabel, std::string{"Retry build"});
+    ASSERT_EQ(nodes[0].commandId, std::string{"build.retry"});
+    ASSERT_EQ(nodes[1].id,
+              UiNodeId{"footer.status_action/7/" +
+                       std::to_string(enqueued.generation) +
+                       "/72c3a9747279"});
+
+    StatusViewState differentStatus = queue.viewState();
+    differentStatus.items[0].id = StatusId{8};
+    ASSERT_NE(projectStatusActionNodes(differentStatus)[0].id, nodes[0].id);
+    StatusViewState differentGeneration = queue.viewState();
+    ++differentGeneration.items[0].generation;
+    ASSERT_NE(projectStatusActionNodes(differentGeneration)[0].id,
+              nodes[0].id);
+}
+
+TEST(statusQueueRejectsDuplicateActionIdentityBeforeMutation) {
+    StatusQueue queue;
+    const auto rejected = queue.enqueue(status(
+        7, StatusPriority::Error, "Build failed",
+        {StatusAction{"retry", "Retry build", "build.retry"},
+         StatusAction{"retry", "Retry elsewhere", "build.other"}}));
+    ASSERT_FALSE(rejected.accepted);
+    ASSERT_TRUE(queue.viewState().items.empty());
+    ASSERT_TRUE(queue.actionNodes().empty());
+}
+
 TEST(footerProjectionAndAccessibilityMatchGolden) {
     PromptSurface prompt;
     ASSERT_TRUE(prompt.open(request(PromptKind::Find)).accepted());
@@ -405,6 +445,8 @@ int main() {
     RUN(statusPriorityAndNavigationTransitionTable);
     RUN(statusCapacityAdmissionAndEvictionTable);
     RUN(statusStaleActionsAreRejectedWithoutMutation);
+    RUN(statusActionsProjectCanonicalOpaqueNodeIdentities);
+    RUN(statusQueueRejectsDuplicateActionIdentityBeforeMutation);
     RUN(footerProjectionAndAccessibilityMatchGolden);
     return failed == 0 ? 0 : 1;
 }

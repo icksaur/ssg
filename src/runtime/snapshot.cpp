@@ -52,15 +52,37 @@ void applyFindReplaceValues(std::vector<Control>& controls, PromptKind kind,
     }
 }
 
+struct ResolvedPromptControls {
+    std::vector<PromptControl> controls;
+    std::size_t activeInput = 0;
+};
+
+std::optional<ResolvedPromptControls> resolvedPromptControls(
+    const PromptSurface& prompt, const FindReplaceViewState& findState) {
+    const auto& request = prompt.request();
+    if (!request ||
+        promptFocusRegion(request->kind) != PromptRegion::Footer) {
+        return std::nullopt;
+    }
+    ResolvedPromptControls resolved{
+        resolvePromptControls(*request), prompt.activeInput()};
+    applyFindReplaceValues(resolved.controls, request->kind, findState);
+    return resolved;
+}
+
 // A resolver from projected status fields: id -> (value, label, command). Shared by
 // the grid lowering and the semantic dynamic-state resolution so a composed
 // provider widget resolves to the same values on either path.
 ChromeProviderResolver chromeResolverFor(std::vector<StatusField> header,
                                          std::vector<StatusField> footer,
                                          std::string helpLabel,
-                                         std::optional<PromptView> prompt = std::nullopt) {
+                                         std::vector<StatusActionNode> statusActions,
+                                         std::optional<ResolvedPromptControls> prompt =
+                                             std::nullopt) {
     return [header = std::move(header), footer = std::move(footer),
-            helpLabel = std::move(helpLabel), prompt = std::move(prompt)](
+            helpLabel = std::move(helpLabel),
+            statusActions = std::move(statusActions),
+            prompt = std::move(prompt)](
                std::string_view id) -> std::optional<ResolvedProvider> {
         if (id == "footer.hint") {
             return ResolvedProvider{helpLabel, helpLabel, std::string{"help.open"}};
@@ -73,10 +95,17 @@ ChromeProviderResolver chromeResolverFor(std::vector<StatusField> header,
                 }
             }
         }
+        for (const auto& action : statusActions) {
+            if (action.id.value() == id) {
+                return ResolvedProvider{action.accessibleLabel,
+                                        action.accessibleLabel,
+                                        action.commandId};
+            }
+        }
         if (prompt) {
             std::size_t inputIndex = 0;
             for (const auto& control : prompt->controls) {
-                if (control.id == id) {
+                if (footerPromptControlNodeId(control.id).value() == id) {
                     const bool isInput =
                         control.kind == PromptControlKind::Input;
                     const std::string value =
@@ -253,7 +282,10 @@ SessionSnapshotSections EditorSession::Impl::sections(
             validatedSchema, chromeResolverFor(std::move(fields.header),
                                                std::move(fields.footer),
                                                helpHintLabel(keymap),
-                                               promptView()));
+                                               interaction.statusActions(),
+                                               resolvedPromptControls(
+                                                   interaction.prompt(),
+                                                   findReplace.viewState())));
     }();
     uiState.focusPath = interactionState.focusPath();
     UiPresenceSection uiPresence =

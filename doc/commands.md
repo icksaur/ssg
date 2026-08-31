@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 199 commands.
+There are 200 commands.
 
 ## clipboard-register
 
@@ -315,6 +315,12 @@ There are 199 commands.
 | `tree.select` | Select | tree node | lua |
 | `tree.scroll` | Scroll | scroll lines | lua |
 | `tree.scroll_to_fraction` | Scroll To Fraction | scroll fraction | lua |
+
+## ui-frame
+
+| Command | Summary | Arguments | Surfaces |
+|---|---|---|---|
+| `ui.activate` | Activate Published UI Node | UI node activation | — |
 
 ## undo-redo-history
 

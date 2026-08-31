@@ -78,6 +78,10 @@ public:
         setEffect(CommandEffect::ViewAction, CommandRevisionPolicy::Exact);
         return *this;
     }
+    CommandSpecBuilder& routes() {
+        setEffect(CommandEffect::Routing, CommandRevisionPolicy::Exact);
+        return *this;
+    }
     CommandSpecBuilder& stateValidatedMutation() {
         setEffect(CommandEffect::Mutation,
                   CommandRevisionPolicy::StateValidated);

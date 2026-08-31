@@ -26,12 +26,11 @@ import {
   predictedFocusCapture, resolveUiFocusPath, focusUiNode,
   applyPalettePresenceOverlay,
   BrowserKeyDispatchTracker,
-  encodeCommandRequest, encodeClientInput, encodeViewNavigationInput,
+  encodeCommandRequest, encodeUiNodeActivationCommand,
+  encodeClientInput, encodeViewNavigationInput,
   encodeResolvedSelectionInput,
   encodeTreePointerInput,
-  encodeStatusActionPointerInput,
-  encodePromptControlPointerInput,
-  encodePublishedUiActionPointerInput, encodeNoticeActionPointerInput,
+  encodeNoticeActionPointerInput,
   noticeViewFromSections,
   externalModificationFromSections, externalFocusHeld,
   encodeExternalActionPointerInput,
@@ -48,6 +47,11 @@ const uiRootEl = document.getElementById('ui-root');
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const idKey = (v) => JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString() : x);
+
+function activateUiNode(nodeId) {
+  sendCommandFrame(encodeUiNodeActivationCommand(
+    nodeId, state.sections.ui_frame.schema.generation, state.revision));
+}
 
 // Role ordinals the renderer maps to CSS custom properties; pinned by
 // test_theme's role-ordinal contract so a reorder cannot silently mis-color.
@@ -343,16 +347,6 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
     applySize(el, node.size, parentAxis);
     return el;
   }
-  if (node.widget === WIDGET.STATUS_ACTIONS) {
-    const el = retainedNodes.getOrCreate(
-      node.id, () => document.createElement('span'));
-    if (plan.rebuild || plan.reconcile || plan.repaintTheme) {
-      renderStatusActionsNode(el, theme);
-    }
-    applyNodeSemanticStyle(el.style, node, theme);
-    applySize(el, node.size, parentAxis);
-    return el;
-  }
   if (node.widget === WIDGET.TEXT_INPUT) {
     const el = retainedNodes.getOrCreate(
       node.id, () => document.createElement('span'));
@@ -375,8 +369,7 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
         if (renderedFooterPromptHost) {
           renderedFooterPromptHost.focus({ preventScroll: true });
         }
-        sendInputFrame(
-          encodePromptControlPointerInput(node.controlId, state.revision));
+        activateUiNode(node.id);
       };
     } else {
       pickerInputElement = el;
@@ -398,10 +391,7 @@ function renderChromeNode(node, theme, plan, parentAxis = AXIS.ROW,
   applyNodeSemanticStyle(el.style, node, theme);
   applySize(el, node.size, parentAxis);
   el.title = node.command || '';
-  el.onclick = node.command ? () => sendInputFrame(
-    encodePublishedUiActionPointerInput(
-      node.id, state.sections.ui_frame.schema.generation,
-      state.revision)) : null;
+  el.onclick = node.command ? () => activateUiNode(node.id) : null;
   if (inFooterPrompt && node.checked != null) {
     el.setAttribute('role', 'checkbox');
     el.setAttribute('aria-checked', node.checked ? 'true' : 'false');
@@ -718,24 +708,6 @@ function renderFindResultsSurface(parent, palette, mode = state.palette.mode) {
       button.addEventListener('click', () => submitPaletteCandidate(mode, rows[i]));
       parent.appendChild(button);
     }
-}
-
-function renderStatusActionsNode(el, theme) {
-    el.textContent = '';
-    el.className = 'status-actions';
-    const status = state.sections && state.sections.prompt_status && state.sections.prompt_status.status;
-    const items = status && Array.isArray(status.items) ? status.items : [];
-    const item = items[status ? (num(status.selected) || 0) : 0];
-    for (const action of (item && Array.isArray(item.actions) ? item.actions : [])) {
-      const button = document.createElement('button');
-      button.textContent = action.accessible_label || action.accessibleLabel || action.id || '';
-      button.style.color = roleColor(ROLE.statusInfo, theme);
-      button.addEventListener('click', () =>
-        sendInputFrame(encodeStatusActionPointerInput({
-          statusId: item.id, actionId: action.id, generation: item.generation,
-        }, state.revision)));
-      el.appendChild(button);
-  }
 }
 
 // Apply a published Size to a flex child ALONG the parent's main axis: Exact => a

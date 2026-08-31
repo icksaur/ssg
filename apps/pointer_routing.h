@@ -12,7 +12,6 @@
 
 #include <ssg/ClientInput.h>
 #include <ssg/HitTester.h>
-#include <ssg/StatusActionInvocation.h>
 #include <ssg/TabManager.h>
 #include <ssg/ShellState.h>
 #include <ssg/ExternalModificationFlow.h>
@@ -107,6 +106,7 @@ struct ClientScroll {
 // native drag bookkeeping and any client-owned picker scroll.
 struct PointerDispatch {
     std::optional<ssg::ClientInput> semantic_input;
+    std::optional<ssg::ClientCommand> command;
     bool begins_drag = false;  // a press that starts an editor selection drag
     bool ends_drag = false;    // a release that ends a drag
     // Set when the gesture targets a surface whose offset the client owns, so
@@ -129,8 +129,6 @@ struct PointerTargets {
     std::optional<ssg::Generation> ui_generation;
     std::optional<ssg::UiNodeId> ui_node_id;
     std::optional<std::string> notice_action_id;
-    std::optional<std::string> prompt_control_id;
-    std::optional<ssg::StatusActionInvocation> status_invocation;
     std::optional<ssg::ExternalActionInvocation> external_invocation;
 };
 

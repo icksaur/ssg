@@ -1,5 +1,6 @@
 #include <ssg/HitTester.h>
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace ssg {
@@ -114,6 +115,53 @@ RegionHit chromeHit(const SolvedChromeSurface& surface, HitRegion fieldRegion,
     return {};
 }
 
+const UiNode* nodeById(const UiNode& node, std::string_view id) {
+    if (node.id.value() == id) return &node;
+    const auto* container = std::get_if<UiContainer>(&node.content);
+    if (!container) return nullptr;
+    for (const auto& child : container->children) {
+        if (const auto* found = nodeById(child, id)) return found;
+    }
+    return nullptr;
+}
+
+RegionHit promptHit(const GridFrame& snapshot, const UiNode& node,
+                    int column, int row) {
+    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            RegionHit hit = promptHit(snapshot, child, column, row);
+            if (hit.region != HitRegion::None) return hit;
+        }
+        return {};
+    }
+    const auto* leaf = std::get_if<UiLeaf>(&node.content);
+    if (!leaf) return {};
+    const auto state = std::find_if(
+        snapshot.sections().uiFrame.state().nodes.begin(),
+        snapshot.sections().uiFrame.state().nodes.end(),
+        [&](const UiNodeState& item) { return item.id == node.id; });
+    if (state == snapshot.sections().uiFrame.state().nodes.end() ||
+        !state->leaf) {
+        return {};
+    }
+    const bool actionable =
+        (leaf->widget.kind == WidgetKind::TextInput &&
+         state->leaf->active.has_value()) ||
+        ((leaf->widget.kind == WidgetKind::Checkbox ||
+          leaf->widget.kind == WidgetKind::Field) &&
+         state->leaf->command && !state->leaf->command->empty());
+    const auto* solved = snapshot.layout().find(node.id);
+    if (!actionable || !solved ||
+        !contains(solved->rect, column, row)) {
+        return {};
+    }
+    RegionHit hit;
+    hit.region = HitRegion::FooterField;
+    hit.fieldId = node.id.value();
+    hit.commandId = "ui.activate";
+    return hit;
+}
+
 }  // namespace
 
 RegionHit HitTester::at(int column, int row) const {
@@ -125,7 +173,9 @@ RegionHit HitTester::at(int column, int row) const {
         return {};
     }
 
-    if (snapshot.sections().promptView) {
+    if (snapshot.sections().promptStatus.activeKind &&
+        promptFocusRegion(*snapshot.sections().promptStatus.activeKind) ==
+            PromptRegion::Footer) {
         const auto* prompt =
             snapshot.layout().find(UiNodeId{std::string{kFooterPromptNodeId}});
         if (!prompt) {
@@ -133,26 +183,12 @@ RegionHit HitTester::at(int column, int row) const {
                 "HitTester: prompt has no solved UI node");
         }
         if (contains(prompt->rect, column, row)) {
-            for (auto const& control :
-                 snapshot.sections().promptView->controls) {
-                const auto* solved = snapshot.layout().find(
-                    footerPromptControlNodeId(control.id));
-                if (!solved) {
-                    throw std::logic_error(
-                        "HitTester: prompt control has no solved UI node");
-                }
-                if (!contains(solved->rect, column, row)) continue;
-                if (control.kind == PromptControlKind::Count ||
-                    control.command.empty()) {
-                    return {};
-                }
-                RegionHit hit;
-                hit.region = HitRegion::PromptControl;
-                hit.fieldId = control.id;
-                hit.commandId = control.command;
-                return hit;
-            }
-            return {};
+            const auto* promptSchema = nodeById(
+                snapshot.sections().uiFrame.schema().root,
+                kFooterPromptNodeId);
+            return promptSchema
+                       ? promptHit(snapshot, *promptSchema, column, row)
+                       : RegionHit{};
         }
     }
 

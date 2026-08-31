@@ -228,8 +228,16 @@ inline RowView rowOf(const ssg::UiNode& regionRoot) {
         }
     }
     const auto& right = std::get<UiContainer>(groups[2]->content);
-    for (const auto& c : right.children)
-        v.right.push_back(std::get<UiLeaf>(c.content).widget);
+    for (const auto& c : right.children) {
+        if (const auto* leaf = std::get_if<UiLeaf>(&c.content)) {
+            v.right.push_back(leaf->widget);
+        } else if (const auto* nested =
+                       std::get_if<UiContainer>(&c.content)) {
+            for (const auto& item : nested->children) {
+                v.right.push_back(std::get<UiLeaf>(item.content).widget);
+            }
+        }
+    }
     return v;
 }
 

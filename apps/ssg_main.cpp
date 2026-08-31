@@ -947,24 +947,6 @@ int main(int argc, char** argv) {
     // (M8-S2).
     int lastPointerColumn = 0;
     int lastPointerRow = 0;
-    // Find prompt: the client holds no authoritative query.  It reads the
-    // published controller query (adopted in refresh), edits it, and reports the
-    // full next string via find.update_query.  find_open mirrors the controller.
-    bool findOpen = false;
-    std::string findQuery;
-    // Replace prompt: the query row is display-only; the client edits the
-    // replacement the same no-copy way as the find query (reads the published
-    // replacement, mutates it, dispatches replace.update_replacement).
-    bool replaceOpen = false;
-    std::string replaceReplacement;
-    // Path prompt: same no-copy discipline. The library owns the value and
-    // publishes it in the prompt view; the client reads it, edits it, and
-    // reports the full next string via prompt.update_value.
-    // A single-line text-entry prompt (Path or CommandArgument): both keep their
-    // authoritative value in the library, publish it in the prompt view, and
-    // collect edits through prompt.update_value on input index 0.
-    bool textPromptOpen = false;
-    std::string textPromptValue;
     // The last clipboard write served to the terminal, so one copy produces one
     // OSC 52 rather than one per frame for as long as it stays published.
     ssg::app::SystemClipboardWriter clipboardWriter;
@@ -1141,37 +1123,12 @@ int main(int argc, char** argv) {
             // nullopt for a header-hosted prompt -- is what lets typed text reach
             // the picker query.
             auto const activeKind = snapshot->sections().promptStatus.activeKind;
-            auto const& activePrompt = snapshot->sections().promptView;
             bool const wasPickerOpen = pickerOpen;
             pickerOpen = activeKind == ssg::PromptKind::Palette;
             if (pickerOpen && !wasPickerOpen) {
                 picker.query.clear();
                 picker.selected = 0;
                 picker.firstVisible = 0;
-            }
-            bool const findPromptActive = activeKind == ssg::PromptKind::Find;
-            findOpen = findView.open && findPromptActive;
-            findQuery = findView.query;
-            // The replace prompt edits the replacement, not the query.
-            bool const replacePromptActive =
-                activeKind == ssg::PromptKind::Replace;
-            replaceOpen = findView.open && replacePromptActive;
-            replaceReplacement = findView.replacement;
-            // A single-line text-entry prompt (save-as/open path, a
-            // CommandArgument prompt such as go-to-line, or the settings query)
-            // keeps its authoritative value in the library, which publishes it in
-            // the prompt view. These all collect edits through prompt.update_value
-            // on input index 0 rather than a dedicated controller (unlike
-            // find/replace/palette). Mirroring the value here (rather than a
-            // client-side copy) means the two cannot drift when the library
-            // rewrites it -- a rejected save-as, say.
-            textPromptOpen =
-                activeKind == ssg::PromptKind::Path ||
-                activeKind == ssg::PromptKind::CommandArgument ||
-                activeKind == ssg::PromptKind::Settings;
-            textPromptValue.clear();
-            if (textPromptOpen && activePrompt && !activePrompt->controls.empty()) {
-                textPromptValue = activePrompt->controls.front().value;
             }
         }
         return snapshot;
@@ -1515,16 +1472,12 @@ int main(int argc, char** argv) {
                             targets.picker_activation = pickerActivation;
                         }
                     } else if (hit.region == ssg::HitRegion::HeaderField ||
-                               hit.region == ssg::HitRegion::FooterField ||
-                               hit.region == ssg::HitRegion::PromptControl ||
-                               hit.region == ssg::HitRegion::StatusAction) {
+                               hit.region == ssg::HitRegion::FooterField) {
                         if (hit.fieldId) {
                             targets.ui_generation =
                                 snapshot->sections().uiFrame.version().generation;
                             targets.ui_node_id = ssg::UiNodeId{*hit.fieldId};
                         }
-                        targets.prompt_control_id = hit.fieldId;
-                        targets.status_invocation = hit.statusInvocation;
                     } else if (hit.region == ssg::HitRegion::NoticeAction) {
                         targets.notice_action_id = hit.fieldId;
                     } else if (hit.region == ssg::HitRegion::ExternalAction &&
@@ -1585,6 +1538,10 @@ int main(int argc, char** argv) {
                 if (plan.semantic_input) {
                     (void)handleInputResult(
                         runtime.input(client, *plan.semantic_input));
+                }
+                if (plan.command) {
+                    noteEffects(
+                        runtime.dispatch(client, *plan.command).effects);
                 }
                 // A gutter gesture on a client-owned surface has no command to
                 // dispatch (the picker's offset must not round-trip), so the

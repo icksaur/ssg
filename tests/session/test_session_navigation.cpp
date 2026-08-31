@@ -1894,13 +1894,13 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     ASSERT_EQ(invalidUiAction.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_EQ(runtime.revision(), revisionBeforeInvalid);
 
-    auto publishedAction = runtime.input(
-        client, ssg::PublishedUiActionPointerInput{
-                    {runtime.revision()},
-                    afterSubmit->semantic().sections().uiFrame.version().generation,
-                    actionNode->id});
-    ASSERT_TRUE(publishedAction.command.has_value() &&
-                publishedAction.command->accepted());
+    auto publishedAction = runtime.dispatch(
+        client,
+        {"ui.activate", runtime.revision(),
+         ssg::UiNodeActivationArguments{
+             afterSubmit->semantic().sections().uiFrame.version().generation,
+             actionNode->id}});
+    ASSERT_TRUE(publishedAction.accepted());
 
     for (auto target : {ssg::SemanticScrollTarget::Document,
                         ssg::SemanticScrollTarget::Tree}) {
@@ -1928,19 +1928,43 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
                               {"replace.open", runtime.revision(), {}})
                     .accepted());
     auto replace = runtime.present(client, viewport);
-    ASSERT_TRUE(replace.has_value() &&
-                replace->semantic().sections().promptView.has_value());
-    if (!replace || !replace->semantic().sections().promptView) return;
-    auto focusReplacement = runtime.input(
-        client, ssg::PromptControlPointerInput{
-                    {replace->semantic().revision()}, "replace.replacement"});
-    ASSERT_TRUE(focusReplacement.command.has_value() &&
-                focusReplacement.command->accepted());
+    ASSERT_TRUE(replace.has_value());
+    if (!replace) return;
+    const auto replacementNode =
+        ssg::footerPromptControlNodeId("replace.replacement");
+    auto focusReplacement = runtime.dispatch(
+        client,
+        {"ui.activate", replace->semantic().revision(),
+         ssg::UiNodeActivationArguments{
+             replace->semantic().sections().uiFrame.version().generation,
+             replacementNode}});
+    ASSERT_TRUE(focusReplacement.accepted());
     auto focused = runtime.present(client, viewport);
-    ASSERT_TRUE(focused.has_value() &&
-                focused->semantic().sections().promptView.has_value());
-    if (focused && focused->semantic().sections().promptView) {
-        ASSERT_EQ(focused->semantic().sections().promptView->activeInput, std::size_t{1});
+    ASSERT_TRUE(focused.has_value());
+    if (focused) {
+        const auto& nodes =
+            focused->semantic().sections().uiFrame.state().nodes;
+        const auto replacement = std::find_if(
+            nodes.begin(), nodes.end(), [&](const ssg::UiNodeState& node) {
+                return node.id == replacementNode;
+            });
+        ASSERT_TRUE(replacement != nodes.end());
+        if (replacement != nodes.end()) {
+            ASSERT_TRUE(replacement->leaf.has_value());
+            ASSERT_EQ(replacement->leaf->active, std::optional<bool>{true});
+        }
+        const auto generation =
+            focused->semantic().sections().uiFrame.version().generation;
+        ASSERT_TRUE(runtime
+                        .dispatch(client,
+                                  {"prompt.cancel", runtime.revision(), {}})
+                        .accepted());
+        const auto hidden = runtime.dispatch(
+            client,
+            {"ui.activate", runtime.revision(),
+             ssg::UiNodeActivationArguments{generation, replacementNode}});
+        ASSERT_FALSE(hidden.accepted());
+        ASSERT_EQ(hidden.error, ssg::CommandError::HandlerFailed);
     }
 }
 

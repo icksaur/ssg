@@ -1,7 +1,7 @@
 #pragma once
 
-// The whole-screen tree assembly: from the built-in status projection AND an optional
-// ssg.chrome composition, build the canonical whole-screen UiComposition
+// The whole-screen tree assembly: from the built-in status-field catalog and an
+// optional ssg.chrome composition, build the canonical whole-screen UiComposition.
 //
 //   root
 //   ├─ header            (composed override, else built-in from header)
@@ -39,6 +39,7 @@
 #include <ssg/StatusFields.h>   // StatusFieldCatalogEntry
 #include <ssg/Style.h>          // StyleDimensions
 #include <ssg/PromptSurface.h>  // PromptRequest
+#include <ssg/StatusQueue.h>
 #include <ssg/UiTree.h>         // UiComposition
 
 #include <optional>
@@ -48,14 +49,9 @@
 namespace ssg {
 
 // CONTRACT
-// assembleWholeScreen: the built-in footer's status-actions affordance is a stable
-//   StatusActions widget whose DATA rides the section statusActionsBackingSection()
-//   names (promptStatus: the selected status item's actions, status id, and
-//   generation), never the schema -- the schema is generation-stable while the actions
-//   vary on that section's cadence. A client renders the actions from that section and
-//   dispatches the existing StatusActionInvocation (by status/action id + generation);
-//   it never reinterprets an action as a commandId click. A composed ssg.chrome footer
-//   replaces the whole built-in footer and so omits the affordance, matching the grid.
+// assembleWholeScreen: a composed ssg.chrome footer replaces the whole built-in
+//   footer, including its status-action container. withStatusActions therefore
+//   leaves a composed footer unchanged rather than inventing another anchor.
 // assembleWholeScreen: the prompt query line is a built-in TextInput leaf the library
 //   always places right after the header's left (status-fields) group, so tree order
 //   matches the visual order (a tree-order client renders it after the fields, not
@@ -73,6 +69,8 @@ namespace ssg {
 
 [[nodiscard]] UiComposition withFooterPrompt(UiComposition base,
                                              const PromptSurface& prompt);
+[[nodiscard]] UiComposition withStatusActions(
+    UiComposition base, const std::vector<StatusActionNode>& actions);
 
 // Build the authoritative footer.prompt subtree for the active footer request.
 // This is the single source consumed by whole-screen schema overlay and grid

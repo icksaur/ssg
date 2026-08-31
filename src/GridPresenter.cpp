@@ -112,42 +112,51 @@ SolveUiFrameResult trySolveFrameLayout(
         UiNodeId{std::string{kFindResultsViewportNodeId}},
         UiNodeId{std::string{kHeaderPromptInputNodeId}},
     };
-    if (semantic.sections().promptView) {
-        retained.insert(UiNodeId{std::string{kFooterPromptNodeId}});
-        retained.insert(UiNodeId{std::string{kFooterPromptOptionsNodeId}});
-        for (const auto& control :
-             semantic.sections().promptView->controls) {
-            retained.insert(footerPromptControlNodeId(control.id));
-        }
+    const auto* promptSchema = findUiNode(
+        semantic.sections().uiFrame.schema().root, kFooterPromptNodeId);
+    if (semantic.sections().promptStatus.activeKind && promptSchema &&
+        promptFocusRegion(*semantic.sections().promptStatus.activeKind) ==
+            PromptRegion::Footer) {
+        const auto retainPrompt = [&](const auto& self,
+                                      const UiNode& node) -> void {
+            retained.insert(node.id);
+            if (const auto* container =
+                    std::get_if<UiContainer>(&node.content)) {
+                for (const auto& child : container->children) {
+                    self(self, child);
+                }
+            }
+        };
+        retainPrompt(retainPrompt, *promptSchema);
     }
     std::erase_if(result.tree->nodes, [&](const SolvedGridNode& node) {
         return !retained.contains(node.id);
     });
-    if (semantic.sections().promptView) {
-        for (const auto& control :
-             semantic.sections().promptView->controls) {
-            const auto* node =
-                result.tree->find(footerPromptControlNodeId(control.id));
-            const auto expectedKind = [&] {
-                switch (control.kind) {
-                case PromptControlKind::Input:
-                    return WidgetKind::TextInput;
-                case PromptControlKind::Toggle:
-                    return WidgetKind::Checkbox;
-                case PromptControlKind::Count:
-                    return WidgetKind::Label;
-                }
-                throw std::logic_error(
-                    "GridFrame: corrupt prompt control kind");
-            }();
-            if (!node || !node->widget ||
-                node->widget->id != control.id ||
-                node->widget->kind != expectedKind ||
-                (control.kind == PromptControlKind::Count &&
-                 node->rect.width <= 0)) {
-                return {std::nullopt,
-                        "prompt backing does not correspond to UI nodes"};
+    if (semantic.sections().promptStatus.activeKind && promptSchema &&
+        promptFocusRegion(*semantic.sections().promptStatus.activeKind) ==
+            PromptRegion::Footer) {
+        const auto validatePrompt = [&](const auto& self,
+                                        const UiNode& schemaNode) -> bool {
+            const auto* node = result.tree->find(schemaNode.id);
+            if (!node) return false;
+            if (const auto* leaf =
+                    std::get_if<UiLeaf>(&schemaNode.content)) {
+                return node->widget &&
+                       node->widget->id == leaf->widget.id &&
+                       node->widget->kind == leaf->widget.kind &&
+                       (leaf->widget.kind != WidgetKind::Label ||
+                        node->rect.width > 0);
             }
+            const auto* container =
+                std::get_if<UiContainer>(&schemaNode.content);
+            if (!container) return true;
+            return std::all_of(
+                container->children.begin(), container->children.end(),
+                [&](const UiNode& child) { return self(self, child); });
+        };
+        if (!validatePrompt(validatePrompt, *promptSchema)) {
+            return {std::nullopt,
+                    "prompt backing does not correspond to UI nodes"};
         }
     }
     if (semantic.sections().noticeView &&

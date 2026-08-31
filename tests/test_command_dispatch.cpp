@@ -1,15 +1,18 @@
 #include <ssg/EditorSession.h>
 
 #include <ssg/CommandCatalog.h>
+#include <ssg/StatusQueue.h>
 #include "../src/runtime/command_executor.h"
 
 #include "test_helpers.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <future>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -374,6 +377,212 @@ TEST(aHandlerThatDispatchesIsToldToDeferInstead) {
     fs::remove_all(root);
 }
 
+TEST(routingCommandsQueueExactlyOneDirectOrdinaryTarget) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+
+    int mutations = 0;
+    ASSERT_TRUE(runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.route_target"}
+            .owner("test-oracle")
+            .summary("target")
+            .mutates()
+            .handler([&](ssg::CommandContext&) {
+                ++mutations;
+                return ssg::CommandHandlerResult::success();
+            }))
+                    .valid());
+    ASSERT_TRUE(runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.route_once"}
+            .owner("test-oracle")
+            .summary("route once")
+            .routes()
+            .handler([&](ssg::CommandContext& context) {
+                return runtime->deferDispatch(
+                           ssg::ClientId{1},
+                           {"oracle.route_target", context.revision(), {}})
+                           ? ssg::CommandHandlerResult::success()
+                           : ssg::CommandHandlerResult::failure("queue failed");
+            }))
+                    .valid());
+    ASSERT_TRUE(runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.route_none"}
+            .owner("test-oracle")
+            .summary("route none")
+            .routes()
+            .handler([](ssg::CommandContext&) {
+                return ssg::CommandHandlerResult::success();
+            }))
+                    .valid());
+    ASSERT_TRUE(runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.route_twice"}
+            .owner("test-oracle")
+            .summary("route twice")
+            .routes()
+            .handler([&](ssg::CommandContext& context) {
+                const bool first = runtime->deferDispatch(
+                    ssg::ClientId{1},
+                    {"oracle.route_target", context.revision(), {}});
+                const bool second = runtime->deferDispatch(
+                    ssg::ClientId{1},
+                    {"oracle.route_target", context.revision(), {}});
+                return first && second
+                           ? ssg::CommandHandlerResult::success()
+                           : ssg::CommandHandlerResult::failure("queue failed");
+            }))
+                    .valid());
+    ASSERT_TRUE(runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.route_nested"}
+            .owner("test-oracle")
+            .summary("route nested")
+            .routes()
+            .handler([&](ssg::CommandContext& context) {
+                return runtime->deferDispatch(
+                           ssg::ClientId{1},
+                           {"oracle.route_once", context.revision(), {}})
+                           ? ssg::CommandHandlerResult::success()
+                           : ssg::CommandHandlerResult::failure("queue failed");
+            }))
+                    .valid());
+
+    const auto before = runtime->revision();
+    const auto accepted = runtime->dispatch(
+        ssg::ClientId{1}, {"oracle.route_once", before, {}});
+    ASSERT_TRUE(accepted.accepted());
+    ASSERT_EQ(mutations, 1);
+    ASSERT_EQ(runtime->revision().value(), before.value() + 1);
+
+    for (const std::string_view id :
+         {"oracle.route_none", "oracle.route_twice", "oracle.route_nested"}) {
+        const auto revision = runtime->revision();
+        const auto rejected = runtime->dispatch(
+            ssg::ClientId{1}, {std::string{id}, revision, {}});
+        ASSERT_FALSE(rejected.accepted());
+        ASSERT_EQ(rejected.error, ssg::CommandError::HandlerFailed);
+        ASSERT_EQ(runtime->revision(), revision);
+        ASSERT_EQ(mutations, 1);
+    }
+    fs::remove_all(root);
+}
+
+TEST(publishedStatusActionActivatesItsCurrentTargetCommand) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+
+    int targetRuns = 0;
+    ASSERT_TRUE(runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.status_target"}
+            .owner("test-oracle")
+            .summary("status target")
+            .mutates()
+            .handler([&](ssg::CommandContext&) {
+                ++targetRuns;
+                return ssg::CommandHandlerResult::success();
+            }))
+                    .valid());
+    ASSERT_TRUE(runtime
+                    ->registerCommand(
+                        ssg::CommandSpecBuilder{"oracle.status_payload"}
+                            .owner("test-oracle")
+                            .summary("payload status target")
+                            .mutates()
+                            .inProcessHandler<std::string>(
+                                [](ssg::CommandContext&,
+                                   const std::string&) {
+                                    return ssg::CommandHandlerResult::success();
+                                }))
+                    .valid());
+    ASSERT_TRUE(runtime->registerCommand(
+        ssg::CommandSpecBuilder{"oracle.publish_status"}
+            .owner("test-oracle")
+            .summary("publish status")
+            .mutates()
+            .handler([](ssg::CommandContext& context) {
+                context.services()->publishStatus(ssg::StatusItem{
+                    ssg::StatusId{41}, ssg::StatusPriority::Information,
+                    "Ready",
+                    {ssg::StatusAction{"run", "Run action",
+                                       "oracle.status_target"},
+                     ssg::StatusAction{"payload", "Payload action",
+                                       "oracle.status_payload"}}});
+                return ssg::CommandHandlerResult::success();
+            }))
+                    .valid());
+
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"oracle.publish_status",
+                                runtime->revision(), {}})
+                    .accepted());
+    const auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    const auto& frame = snapshot->semantic().sections().uiFrame;
+    const auto action = std::find_if(
+        frame.state().nodes.begin(), frame.state().nodes.end(),
+        [](const ssg::UiNodeState& node) {
+            return node.leaf &&
+                   node.leaf->command ==
+                       std::optional<std::string>{"oracle.status_target"};
+        });
+    ASSERT_TRUE(action != frame.state().nodes.end());
+    if (action == frame.state().nodes.end()) return;
+    const auto payloadAction = std::find_if(
+        frame.state().nodes.begin(), frame.state().nodes.end(),
+        [](const ssg::UiNodeState& node) {
+            return node.leaf &&
+                   node.leaf->command ==
+                       std::optional<std::string>{"oracle.status_payload"};
+        });
+    ASSERT_TRUE(payloadAction != frame.state().nodes.end());
+    if (payloadAction == frame.state().nodes.end()) return;
+
+    const auto before = runtime->revision();
+    for (const auto& arguments :
+         {ssg::UiNodeActivationArguments{
+              ssg::Generation{frame.version().generation.value() + 1},
+              action->id},
+          ssg::UiNodeActivationArguments{
+              frame.version().generation, ssg::UiNodeId{"missing.action"}}}) {
+        const auto rejected = runtime->dispatch(
+            ssg::ClientId{1}, {"ui.activate", before, arguments});
+        ASSERT_FALSE(rejected.accepted());
+        ASSERT_EQ(rejected.error, ssg::CommandError::HandlerFailed);
+        ASSERT_EQ(runtime->revision(), before);
+        ASSERT_EQ(targetRuns, 0);
+    }
+    const auto payloadRejected = runtime->dispatch(
+        ssg::ClientId{1},
+        {"ui.activate", before,
+         ssg::UiNodeActivationArguments{frame.version().generation,
+                                        payloadAction->id}});
+    ASSERT_FALSE(payloadRejected.accepted());
+    ASSERT_EQ(payloadRejected.error, ssg::CommandError::HandlerFailed);
+    ASSERT_EQ(runtime->revision(), before);
+    const auto activated = runtime->dispatch(
+        ssg::ClientId{1},
+        {"ui.activate", before,
+         ssg::UiNodeActivationArguments{frame.version().generation,
+                                        action->id}});
+    ASSERT_TRUE(activated.accepted());
+    ASSERT_EQ(targetRuns, 1);
+    ASSERT_EQ(runtime->revision().value(), before.value() + 1);
+    const auto stale = runtime->dispatch(
+        ssg::ClientId{1},
+        {"ui.activate", before,
+         ssg::UiNodeActivationArguments{frame.version().generation,
+                                        action->id}});
+    ASSERT_FALSE(stale.accepted());
+    ASSERT_EQ(stale.error, ssg::CommandError::StaleRevision);
+    ASSERT_EQ(targetRuns, 1);
+
+    fs::remove_all(root);
+}
+
 TEST(aHandlerThatPresentsIsRefusedBeforeTakingTheOperationLock) {
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
@@ -552,6 +761,8 @@ int main() {
     RUN(anObservingCommandLeavesTheRevisionAlone);
     RUN(aFailedChainAdvancesTheRevisionOnlyForCommandsThatRan);
     RUN(aHandlerThatDispatchesIsToldToDeferInstead);
+    RUN(routingCommandsQueueExactlyOneDirectOrdinaryTarget);
+    RUN(publishedStatusActionActivatesItsCurrentTargetCommand);
     RUN(aHandlerThatPresentsIsRefusedBeforeTakingTheOperationLock);
     RUN(aHandlerCannotMutateTheCommandCatalogReentrantly);
     RUN(aggregateOperationHidesIntermediateDeferredRevisions);

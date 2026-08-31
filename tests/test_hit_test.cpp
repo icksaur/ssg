@@ -180,8 +180,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     }
 }
 
-TEST(footerActionHitCarriesExactStatusActionInvocation) {
-    ssg::StatusActionInvocation invocation{ssg::StatusId{77}, "retry", 9};
+TEST(footerActionHitCarriesPublishedUiNodeIdentity) {
     auto frame =
         ssg::test::SessionSnapshotBuilder{}
             .viewport(40, 8)
@@ -193,14 +192,17 @@ TEST(footerActionHitCarriesExactStatusActionInvocation) {
             .build();
     ASSERT_TRUE(frame.footer().has_value());
     if (!frame.footer()) return;
+    const std::string nodeId =
+        "footer.status_action/77/9/7265747279";
     const auto found = std::ranges::find(
-        frame.footer()->items, std::string{"retry"},
+        frame.footer()->items, nodeId,
         &ssg::SolvedChromeItem::id);
     ASSERT_TRUE(found != frame.footer()->items.end());
     if (found == frame.footer()->items.end()) return;
     auto hit = ssg::HitTester{frame}.at(found->rect.x, found->rect.y);
-    ASSERT_EQ(hit.region, ssg::HitRegion::StatusAction);
-    ASSERT_EQ(hit.statusInvocation, invocation);
+    ASSERT_EQ(hit.region, ssg::HitRegion::FooterField);
+    ASSERT_EQ(hit.fieldId, std::optional<std::string>{nodeId});
+    ASSERT_EQ(hit.commandId, std::optional<std::string>{"ignored"});
 }
 
 TEST(headerInputAndGhostUseSolvedChromeHits) {
@@ -270,17 +272,18 @@ TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
     if (!inputNode || !toggleNode || !countNode) return;
     auto input =
         ssg::HitTester{*frame}.at(inputNode->rect.x, inputNode->rect.y);
-    ASSERT_EQ(input.region, ssg::HitRegion::PromptControl);
-    ASSERT_EQ(input.fieldId, std::optional<std::string>{"find.query"});
-    ASSERT_EQ(input.commandId,
-              std::optional<std::string>{"find.update_query"});
+    ASSERT_EQ(input.region, ssg::HitRegion::FooterField);
+    ASSERT_EQ(input.fieldId,
+              std::optional<std::string>{
+                  ssg::footerPromptControlNodeId("find.query").value()});
+    ASSERT_EQ(input.commandId, std::optional<std::string>{"ui.activate"});
     auto toggle =
         ssg::HitTester{*frame}.at(toggleNode->rect.x, toggleNode->rect.y);
-    ASSERT_EQ(toggle.region, ssg::HitRegion::PromptControl);
+    ASSERT_EQ(toggle.region, ssg::HitRegion::FooterField);
     ASSERT_EQ(toggle.fieldId,
-              std::optional<std::string>{"find.toggle_case"});
-    ASSERT_EQ(toggle.commandId,
-              std::optional<std::string>{"find.toggle_case"});
+              std::optional<std::string>{
+                  ssg::footerPromptControlNodeId("find.toggle_case").value()});
+    ASSERT_EQ(toggle.commandId, std::optional<std::string>{"ui.activate"});
     ASSERT_EQ(ssg::HitTester{*frame}.at(countNode->rect.x,
                                        countNode->rect.y).region,
               ssg::HitRegion::None);
@@ -1265,7 +1268,7 @@ int main() {
     RUN(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen);
     RUN(tabBarCellMapsToItsTabIndex);
     RUN(tabHitsUseSemanticTabsAndSolvedGeometry);
-    RUN(footerActionHitCarriesExactStatusActionInvocation);
+    RUN(footerActionHitCarriesPublishedUiNodeIdentity);
     RUN(headerInputAndGhostUseSolvedChromeHits);
     RUN(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert);
     RUN(externalActionHitCarriesPublishedFileAndCommandIdentity);

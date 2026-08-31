@@ -174,15 +174,20 @@ public:
         const FocusTarget focus = (panel_ && panelFocused_) ? FocusTarget::Panel
                                                             : FocusTarget::Editor;
 
-        std::optional<ValidatedSchema> defaultSchema;
-        if (!schema_) {
-            UiSchema schema;
-            schema.root = assembleWholeScreen({}, "help.open", style_.dimensions,
-                                              style_.inputLineSigil, std::nullopt)
-                              .root;
-            defaultSchema = ValidatedSchema::validate(std::move(schema)).takeSchema();
-        }
-        const ValidatedSchema& schema = schema_ ? *schema_ : *defaultSchema;
+        const auto statusActions = projectStatusActionNodes(status_);
+        UiComposition composition;
+        composition.root =
+            schema_
+                ? schema_->schema().root
+                : assembleWholeScreen({}, "help.open", style_.dimensions,
+                                      style_.inputLineSigil, std::nullopt)
+                      .root;
+        UiSchema effectiveUiSchema;
+        effectiveUiSchema.root =
+            withStatusActions(std::move(composition), statusActions).root;
+        auto effectiveSchema =
+            ValidatedSchema::validate(std::move(effectiveUiSchema)).takeSchema();
+        const ValidatedSchema& schema = effectiveSchema;
         WholeScreenTruth truth;
         truth.panelPresent = panel_;
         truth.baseFocus = focus == FocusTarget::Panel ? BaseFocus::Panel
@@ -227,12 +232,22 @@ public:
             focus,
             PaletteViewState{}};
         const ChromeProviderResolver resolver =
-            chromeProviderResolver_
-                ? chromeProviderResolver_
-                : [](std::string_view)
-                      -> std::optional<ResolvedProvider> {
-                      return std::nullopt;
-                  };
+            [configured = chromeProviderResolver_,
+             statusActions](std::string_view id)
+                -> std::optional<ResolvedProvider> {
+            if (configured) {
+                if (auto value = configured(id)) return value;
+            }
+            const auto action = std::find_if(
+                statusActions.begin(), statusActions.end(),
+                [&](const StatusActionNode& item) {
+                    return item.id.value() == id;
+                });
+            if (action == statusActions.end()) return std::nullopt;
+            return ResolvedProvider{action->accessibleLabel,
+                                    action->accessibleLabel,
+                                    action->commandId};
+        };
         auto uiState = resolveUiState(schema, resolver);
         uiState.focusPath = interaction.focusPath();
         sections.uiFrame = UiFrame::require(

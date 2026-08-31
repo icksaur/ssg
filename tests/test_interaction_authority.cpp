@@ -13,6 +13,7 @@
 #include "ssg/Style.h"
 #include "ssg/UiTree.h"
 #include "ssg/WholeScreenAssembly.h"
+#include "chrome_authoring.h"
 #include "test_helpers.h"
 
 #include <limits>
@@ -36,6 +37,19 @@ UiComposition assemble(const StyleDimensions& dims) {
                                 entry("mode", StatusFieldRegion::Footer)},
                                "help.open", dims, Style{}.inputLineSigil,
                                std::nullopt);
+}
+
+UiComposition assembleWithComposedFooter(const StyleDimensions& dims) {
+    WidgetDescriptor field;
+    field.kind = WidgetKind::Label;
+    field.id = "composed";
+    field.value = ValueSource{false, "composed", ""};
+    const auto composed =
+        ssgtest::composeHeaderAndFooterValidated({field}, {field});
+    return assembleWholeScreen(
+        {entry("path", StatusFieldRegion::Header),
+         entry("mode", StatusFieldRegion::Footer)},
+        "help.open", dims, Style{}.inputLineSigil, composed);
 }
 
 // A TreeModel seeded with the always-present filesystem provider (empty nodes suffice).
@@ -308,6 +322,39 @@ TEST(updateCompositionWithoutStructuralChangeDoesNotAdvance) {
     ASSERT_FALSE(authority.updateComposition(assemble(StyleDimensions{})));
 }
 
+TEST(statusOverlaySurvivesPromptAndComposedFooterRebuilds) {
+    TreeModel tree = seededTree();
+    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    const UiNodeId actionId{"footer.status_action/7/3/72756e"};
+    ASSERT_TRUE(authority.refreshStatusActions(
+        {{actionId, "Run", "build.run"}}));
+    ASSERT_TRUE(uiSchemaNodeIds(authority.interaction().schema().schema())
+                    .contains(actionId));
+
+    ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
+    ASSERT_TRUE(authority.refreshStatusActions(
+        {{actionId, "Run now", "build.run"}}));
+    ASSERT_TRUE(authority.prompt().active());
+    ASSERT_EQ(authority.effectiveFocus(), FocusTarget::Prompt);
+    ASSERT_EQ(authority.statusActions()[0].accessibleLabel,
+              std::string{"Run now"});
+
+    ASSERT_TRUE(
+        authority.updateComposition(assembleWithComposedFooter(
+            StyleDimensions{})));
+    ASSERT_FALSE(uiSchemaNodeIds(authority.interaction().schema().schema())
+                     .contains(actionId));
+    ASSERT_EQ(authority.statusActions()[0].id, actionId);
+    ASSERT_TRUE(authority.prompt().active());
+
+    ASSERT_TRUE(authority.updateComposition(assemble(StyleDimensions{})));
+    ASSERT_TRUE(uiSchemaNodeIds(authority.interaction().schema().schema())
+                    .contains(actionId));
+    ASSERT_EQ(authority.statusActions()[0].id, actionId);
+    ASSERT_TRUE(authority.prompt().active());
+    ASSERT_EQ(authority.effectiveFocus(), FocusTarget::Prompt);
+}
+
 // --- Editor/panel focus -------------------------------------------------------------
 
 TEST(promptOverPanelClosesBackToPanelFocus) {
@@ -477,6 +524,7 @@ int main() {
     RUN(constructionRejectsARevisionSourceBehindAProvider);
     RUN(updateCompositionMigratesPreservingPanelAndPromptTruth);
     RUN(updateCompositionWithoutStructuralChangeDoesNotAdvance);
+    RUN(statusOverlaySurvivesPromptAndComposedFooterRebuilds);
     RUN(focusPanelRequiresThePanelThenFocusEditorReturns);
     RUN(focusChangeUnderAnOpenPromptSurfacesWhenThePromptCloses);
     RUN(promptOverPanelClosesBackToPanelFocus);

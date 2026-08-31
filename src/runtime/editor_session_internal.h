@@ -291,6 +291,9 @@ struct EditorSession::Impl final : CommandServices,
         static constexpr std::size_t kMaximum = 64;
 
         [[nodiscard]] bool empty() const noexcept { return commands_.empty(); }
+        [[nodiscard]] std::size_t size() const noexcept {
+            return commands_.size();
+        }
         [[nodiscard]] bool contains(std::string_view commandId) const noexcept {
             for (const auto& deferred : commands_) {
                 if (deferred.command.id == commandId) return true;

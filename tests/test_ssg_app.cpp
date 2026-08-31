@@ -106,28 +106,6 @@ TEST(encodeAnsiFrameAdaptsToColorDepth) {
     ASSERT_TRUE(ansi.find(";2;") == std::string::npos);
 }
 
-TEST(statusActionPointerClickRoutesToInvokeActionWithGeneration) {
-    ssg::StatusActionInvocation invocation{ssg::StatusId{11}, "apply", 13};
-    ssg::RegionHit hit;
-    hit.region = ssg::HitRegion::StatusAction;
-    hit.statusInvocation = invocation;
-    ssg::app::PointerTargets targets;
-    targets.observed_revision = ssg::Revision{23};
-    targets.status_invocation = invocation;
-    auto plan = ssg::app::route_pointer(
-        hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
-        false, false, std::nullopt, targets);
-    ASSERT_TRUE(plan.semantic_input.has_value());
-    auto const* input = std::get_if<ssg::StatusActionPointerInput>(
-        &*plan.semantic_input);
-    ASSERT_TRUE(input != nullptr);
-    if (input) {
-        ASSERT_EQ(input->basis.observedRevision, ssg::Revision{23});
-        ASSERT_EQ(input->invocation, invocation);
-    }
-}
-
-
 TEST(aClickOnAnExternalActionRoutesThroughPointerTargetsToSelectThenAct) {
     // A click on an external-modification action first selects the runtime-minted
     // file (external.select), then runs the payload-less action on the library-
@@ -2172,7 +2150,7 @@ TEST(routePointerDragEmitsDocumentMove) {
     ASSERT_FALSE(plan.ends_drag);
 }
 
-TEST(routePointerFieldHitEmitsPublishedUiActionIdentity) {
+TEST(routePointerFieldHitEmitsUiActivationCommand) {
     ssg::app::PointerTargets targets;
     targets.observed_revision = ssg::Revision{8};
     targets.ui_generation = ssg::Generation{3};
@@ -2184,14 +2162,19 @@ TEST(routePointerFieldHitEmitsPublishedUiActionIdentity) {
         auto plan = ssg::app::route_pointer(
             hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
             false, std::nullopt, targets);
-        ASSERT_TRUE(plan.semantic_input.has_value());
-        auto const* input = std::get_if<ssg::PublishedUiActionPointerInput>(
-            &*plan.semantic_input);
-        ASSERT_TRUE(input != nullptr);
-        if (input) {
-            ASSERT_EQ(input->basis.observedRevision, ssg::Revision{8});
-            ASSERT_EQ(input->schemaGeneration, ssg::Generation{3});
-            ASSERT_EQ(input->nodeId, ssg::UiNodeId{"header.files"});
+        ASSERT_TRUE(plan.command.has_value());
+        if (plan.command) {
+            ASSERT_EQ(plan.command->id.name(), std::string_view{"ui.activate"});
+            ASSERT_EQ(plan.command->baseRevision, ssg::Revision{8});
+            const auto* arguments =
+                std::any_cast<ssg::UiNodeActivationArguments>(
+                    &plan.command->payload);
+            ASSERT_TRUE(arguments != nullptr);
+            if (arguments) {
+                ASSERT_EQ(arguments->generation, ssg::Generation{3});
+                ASSERT_EQ(arguments->nodeId,
+                          ssg::UiNodeId{"header.files"});
+            }
         }
         ASSERT_FALSE(plan.begins_drag);
         ASSERT_FALSE(plan.ends_drag);
@@ -3170,7 +3153,6 @@ int main() {
     RUN(unicodeEndToEndGridAndEncoding);
     RUN(classifySignalTagsMapsSignalNumbers);
     RUN(encodeAnsiFrameAdaptsToColorDepth);
-    RUN(statusActionPointerClickRoutesToInvokeActionWithGeneration);
     RUN(aClickOnAnExternalActionRoutesThroughPointerTargetsToSelectThenAct);
     RUN(encodeAnsiFrameEmitsOrthogonalTintBackgrounds);
     RUN(detectColorDepthReadsEnvironment);
@@ -3215,7 +3197,7 @@ int main() {
     RUN(routePointerLeftPressOnEditorEmitsDocumentInput);
     RUN(routePointerIgnoresNonEditorAndNonLeft);
     RUN(routePointerDragEmitsDocumentMove);
-    RUN(routePointerFieldHitEmitsPublishedUiActionIdentity);
+    RUN(routePointerFieldHitEmitsUiActivationCommand);
     RUN(routePointerDragWithoutAnchorOrTargetIsANoOp);
     RUN(routePointerReleaseEndsAuthoritativeDocumentGesture);
     RUN(routePointerAltPressMarksDocumentInputAdditive);

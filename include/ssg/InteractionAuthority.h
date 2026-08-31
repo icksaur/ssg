@@ -27,6 +27,7 @@
 #include <ssg/InteractionState.h>
 #include <ssg/Picker.h>
 #include <ssg/PromptSurface.h>
+#include <ssg/StatusQueue.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
 #include <ssg/Widget.h>  // UiComposition
@@ -95,6 +96,7 @@ public:
     // interaction projection from the SAME truth and prompt over the new schema (the
     // migration). Returns whether the generation advanced.
     bool updateComposition(UiComposition assembly);
+    bool refreshStatusActions(std::vector<StatusActionNode> actions);
 
     // The sole minter of tree revisions for non-transition tree updates (filesystem/git
     // refresh, panel-provider create), so all revisions come from one monotonic source.
@@ -105,6 +107,10 @@ public:
         return interaction_;
     }
     [[nodiscard]] const PromptSurface& prompt() const noexcept { return prompt_; }
+    [[nodiscard]] const std::vector<StatusActionNode>& statusActions() const
+        noexcept {
+        return statusActions_;
+    }
     [[nodiscard]] FocusTarget effectiveFocus() const noexcept {
         return interaction_.effectiveFocus();
     }
@@ -138,10 +144,13 @@ private:
     // schema, then assign truth, prompt, and projection -- all computed before any owned
     // state changes, so a rebuild failure cannot leave them divergent.
     void adopt(WholeScreenTruth next, PromptSurface prompt);
+    [[nodiscard]] UiComposition assembled(
+        const UiComposition& base, const PromptSurface& prompt) const;
 
     [[nodiscard]] std::vector<TreeProviderPresence> presentProviders() const;
 
     UiComposition baseComposition_;
+    std::vector<StatusActionNode> statusActions_;
     WholeScreenSchema schema_;
     TreeModel& tree_;
     std::uint64_t nextTreeRevision_;

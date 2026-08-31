@@ -71,4 +71,12 @@ struct UiStateSection {
     friend bool operator==(const UiStateSection&, const UiStateSection&) = default;
 };
 
+struct UiNodeActivationArguments {
+    Generation generation;
+    UiNodeId nodeId;
+
+    friend bool operator==(const UiNodeActivationArguments&,
+                           const UiNodeActivationArguments&) = default;
+};
+
 }  // namespace ssg
