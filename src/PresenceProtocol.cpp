@@ -1,4 +1,5 @@
 #include <ssg/PresenceProtocol.h>
+#include <ssg/detail/generated/ui_wire_schema.h>
 
 #include <set>
 #include <string>
@@ -35,7 +36,9 @@ ProtocolValue encodeUiPresence(const UiPresenceSection& section) {
 }
 
 std::optional<UiPresenceSection> decodeUiPresence(const ProtocolValue& value) {
-    if (!value.asObject()) return std::nullopt;
+    if (!detail::generated::validateUiPresenceSectionWire(value)) {
+        return std::nullopt;
+    }
     const ProtocolValue* generation = value.field("generation");
     const ProtocolValue* basis = value.field("basis");
     const ProtocolValue* nodesField = value.field("nodes");

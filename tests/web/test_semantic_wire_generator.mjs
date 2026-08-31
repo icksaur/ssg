@@ -29,6 +29,7 @@ try {
     assert.deepEqual(first, second);
     const destinations = {
       cpp: path.join(temporary, 'generated', 'manifest.h'),
+      uiCpp: path.join(temporary, 'generated', 'ui-schema.h'),
       js: path.join(temporary, 'generated', 'manifest.mjs'),
     };
     await writeOutputs(first, destinations);
@@ -38,6 +39,123 @@ try {
     assert.equal(Object.isFrozen(generated.SEMANTIC_SECTIONS[0]), true);
     assert.equal(Object.isFrozen(generated.SEMANTIC_SECTIONS[0].delta), true);
     assert.equal(Object.isFrozen(generated.WIDGET_KIND), true);
+    const leaf = {
+      id: 'leaf',
+      size: { kind: 0, extent: 0 },
+      leaf: {
+        kind: 1, id: 'leaf', rank: 0, keep: false, overflow: 0, sigil: '',
+      },
+    };
+    const root = {
+      id: 'root',
+      size: { kind: 1, extent: 0 },
+      container: {
+        axis: 1,
+        inset: { left: 0, right: 0, top: 0, bottom: 0 },
+        gap: 0,
+        children: [leaf],
+      },
+    };
+    const schema = { generation: 1, root };
+    const state = {
+      generation: 1,
+      nodes: [
+        { id: 'root', leaf: null },
+        {
+          id: 'leaf',
+          leaf: { value: 'value', label: 'label', role: 0 },
+        },
+      ],
+      focus_path: null,
+    };
+    const presence = {
+      generation: 1,
+      basis: 2,
+      nodes: [
+        { id: 'root', present: true },
+        { id: 'leaf', present: true },
+      ],
+    };
+    const frame = {
+      version: { generation: 1, presence_basis: 2 },
+      schema,
+      state,
+      presence,
+    };
+    assert.equal(generated.validateUiFrameWire(frame), true);
+    assert.equal(generated.validateUiFrameWire({
+      ...frame, version: { ...frame.version, generation: '1' },
+    }), false);
+    assert.equal(generated.validateUiFrameWire({
+      ...frame,
+      version: {
+        generation: 18446744073709551615n,
+        presence_basis: 9007199254740992n,
+      },
+    }), true);
+    assert.equal(generated.validateUiFrameWire({
+      ...frame,
+      version: {
+        generation: 18446744073709551616n,
+        presence_basis: 2,
+      },
+    }), false);
+    assert.equal(generated.validateUiFrameWire({
+      ...frame, state: { ...state, nodes: [{ id: 'root', leaf: 7 }] },
+    }), false);
+    assert.equal(generated.validateUiSchemaWire({
+      ...schema,
+      root: { ...root, leaf: leaf.leaf },
+    }), false);
+    assert.equal(generated.validateUiSchemaWire({
+      ...schema,
+      root: { ...root, size: { kind: '0', extent: 0 } },
+    }), false);
+    assert.equal(generated.validateUiSchemaWire({
+      ...schema,
+      root: { ...root, size: { kind: true, extent: 0 } },
+    }), false);
+    assert.equal(generated.validateUiSchemaWire({
+      ...schema,
+      root: {
+        ...root,
+        container: { ...root.container, scroll: 'vertical' },
+      },
+    }), false);
+    assert.equal(generated.validateUiSchemaWire({
+      ...schema,
+      root: {
+        ...root,
+        container: { ...root.container, scroll: 99 },
+      },
+    }), true);
+    assert.equal(generated.validateUiFrameDeltaWire({
+      base: frame.version,
+      target: frame.version,
+      kind: 'replacement',
+      frame,
+    }), true);
+    assert.equal(generated.validateUiFrameDeltaWire({
+      base: frame.version,
+      target: frame.version,
+      kind: 'changes',
+      state,
+    }), false);
+    assert.equal(generated.validateUiFrameDeltaWire({
+      base: frame.version,
+      target: frame.version,
+      kind: 'changes',
+      state,
+      presence,
+    }), true);
+    assert.equal(generated.validateUiStateSectionWire({
+      ...state,
+      nodes: [{ id: 'root', leaf: { value: 1, label: 'x', role: 0 } }],
+    }), false);
+    assert.equal(generated.validateUiPresenceSectionWire({
+      ...presence,
+      nodes: [{ id: 'root', present: 1 }],
+    }), false);
     await fsp.appendFile(destinations.js, '// stale\n');
     await assert.rejects(
       checkOutputs(second, destinations), /output is stale/);
@@ -69,15 +187,83 @@ export default {
   ],
   semanticSections: [],
   wireEnums: [],
+  wireTypes: [],
 };
 `);
     await assert.rejects(run([
       '--write',
       '--manifest', invalidManifest,
       '--cpp', path.join(invalidDestinations, 'manifest.h'),
+      '--ui-cpp', path.join(invalidDestinations, 'ui-schema.h'),
       '--js', path.join(invalidDestinations, 'manifest.mjs'),
     ]), /duplicate message symbol/);
     await assert.rejects(fsp.access(invalidDestinations), { code: 'ENOENT' });
+  });
+
+  await check('wire type declarations reject ambiguous recursion and drift', () => {
+    assert.ok(Array.isArray(manifest.wireTypes));
+    assert.ok(manifest.wireTypes.length > 0);
+
+    const duplicateType = structuredClone(manifest);
+    duplicateType.wireTypes.push(structuredClone(duplicateType.wireTypes[0]));
+    assert.throws(
+      () => validateManifest(duplicateType), /duplicate wire type symbol/);
+
+    const unknownReference = structuredClone(manifest);
+    unknownReference.wireTypes[0].schema = { kind: 'ref', type: 'Missing' };
+    assert.throws(
+      () => validateManifest(unknownReference), /invalid wire type reference/);
+
+    const undeclaredRecursion = structuredClone(manifest);
+    const recursive = undeclaredRecursion.wireTypes.find(
+      (wireType) => wireType.symbol === 'UiNode');
+    recursive.schema.variants[0].type.fields
+      .find((field) => field.wireName === 'children')
+      .type.items.recursive = false;
+    assert.throws(
+      () => validateManifest(undeclaredRecursion), /undeclared recursive wire type/);
+
+    const multiTypeCycle = structuredClone(manifest);
+    multiTypeCycle.wireTypes = [
+      { symbol: 'First', schema: { kind: 'ref', type: 'Second' } },
+      { symbol: 'Second', schema: { kind: 'ref', type: 'First' } },
+    ];
+    assert.throws(
+      () => validateManifest(multiTypeCycle), /multi-type wire cycle/);
+
+    const duplicateField = structuredClone(manifest);
+    duplicateField.wireTypes[1].schema.fields.push(
+      structuredClone(duplicateField.wireTypes[1].schema.fields[0]));
+    assert.throws(
+      () => validateManifest(duplicateField), /duplicate wire type field/);
+
+    const implicitPresence = structuredClone(manifest);
+    delete implicitPresence.wireTypes[1].schema.fields[0].required;
+    assert.throws(
+      () => validateManifest(implicitPresence), /invalid wire type field/);
+
+    const invalidUnknownPolicy = structuredClone(manifest);
+    invalidUnknownPolicy.wireTypes[1].schema.unknownFields = 'reject';
+    assert.throws(
+      () => validateManifest(invalidUnknownPolicy), /invalid unknown-field policy/);
+
+    const unknownPrimitiveProperty = structuredClone(manifest);
+    unknownPrimitiveProperty.wireTypes[1].schema.fields[1]
+      .type.fields[0].type.extra = true;
+    assert.throws(
+      () => validateManifest(unknownPrimitiveProperty),
+      /unknown wire primitive property/);
+
+    const broadenedEnumFallback = structuredClone(manifest);
+    broadenedEnumFallback.wireTypes[1].schema.fields[3].type.acceptUnknown = true;
+    assert.throws(
+      () => validateManifest(broadenedEnumFallback), /invalid wire type enum/);
+
+    const invalidUnion = structuredClone(manifest);
+    invalidUnion.wireTypes.find(
+      (wireType) => wireType.symbol === 'UiNode').schema.variants.length = 1;
+    assert.throws(
+      () => validateManifest(invalidUnion), /invalid wire field union/);
   });
 
   await check('wire enum declarations reject drift and invalid fallbacks', () => {

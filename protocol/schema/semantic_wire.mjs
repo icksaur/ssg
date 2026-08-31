@@ -702,10 +702,198 @@ export const wireEnums = Object.freeze([
   },
 ]);
 
+const optional = (wireName, type) =>
+  Object.freeze({ wireName, type, required: false });
+const required = (wireName, type) =>
+  Object.freeze({ wireName, type, required: true });
+const nullable = (value) => Object.freeze({ kind: 'nullable', value });
+const enumType = (name, options = {}) =>
+  Object.freeze({ kind: 'enum', enum: name, ...options });
+const record = (fields) =>
+  Object.freeze({ kind: 'record', fields, unknownFields: 'allow' });
+const arrayOf = (items, options = {}) =>
+  Object.freeze({ kind: 'array', items, ...options });
+const ref = (type, recursive = false) =>
+  Object.freeze({ kind: 'ref', type, ...(recursive ? { recursive: true } : {}) });
+const boundedUint = Object.freeze({ kind: 'uint', maxHostInt: true });
+const boundedInt = Object.freeze({ kind: 'int', hostInt: true });
+const nonEmptyText = Object.freeze({ kind: 'text', nonEmpty: true });
+
+const insetSchema = record([
+  required('left', boundedUint),
+  required('right', boundedUint),
+  required('top', boundedUint),
+  required('bottom', boundedUint),
+]);
+const valueSourceSchema = record([
+  required('is_provider', 'bool'),
+  required('literal', 'text'),
+  required('provider', 'text'),
+]);
+const nodeStyleSchema = record([
+  optional('foreground', enumType('SemanticRole')),
+  optional('background', enumType('SemanticRole')),
+]);
+const sizeSchema = Object.freeze({
+  kind: 'discriminated-record',
+  unknownFields: 'allow',
+  discriminator: { wireName: 'kind', enum: 'SizeKind' },
+  fields: [required('extent', boundedUint)],
+  variants: [
+    { value: 'Flex', fields: [] },
+    { value: 'Auto', fields: [] },
+    { value: 'Exact', fields: [] },
+    {
+      value: 'Responsive',
+      fields: [
+        required('minimum', boundedUint),
+        required('growth', boundedUint),
+        required('optional', 'bool'),
+      ],
+    },
+  ],
+});
+const widgetSchema = record([
+  required('kind', enumType('WidgetKind')),
+  required('id', 'text'),
+  optional('value', nullable(valueSourceSchema)),
+  optional('checked', nullable(valueSourceSchema)),
+  optional('width', nullable(boundedInt)),
+  optional('role', nullable('text')),
+  optional('command', nullable('text')),
+  optional('surface', nullable(enumType('ViewSurface', { values: 'reservations' }))),
+  required('rank', boundedInt),
+  required('keep', 'bool'),
+  required('overflow', enumType('Overflow')),
+  required('sigil', 'text'),
+]);
+const uiNodeSchema = Object.freeze({
+  kind: 'field-union',
+  unknownFields: 'allow',
+  fields: [
+    required('id', 'text'),
+    required('size', sizeSchema),
+    optional('style', nodeStyleSchema),
+    optional('focus_context', enumType('FocusTarget')),
+    optional('accessible_label', 'text'),
+  ],
+  variants: [
+    {
+      wireName: 'container',
+      type: record([
+        required('axis', enumType('Axis')),
+        required('inset', insetSchema),
+        required('gap', boundedUint),
+        required('children', arrayOf(ref('UiNode', true))),
+        optional('scroll', enumType('ScrollAxis', { acceptUnknown: true })),
+      ]),
+    },
+    { wireName: 'leaf', type: widgetSchema },
+  ],
+});
+const uiLeafStateSchema = record([
+  required('value', 'text'),
+  required('label', 'text'),
+  optional('command', nullable('text')),
+  optional('checked', nullable('bool')),
+  required('role', enumType('SemanticRole')),
+  optional('active', nullable('bool')),
+]);
+const uiNodeStateSchema = record([
+  required('id', nonEmptyText),
+  optional('leaf', nullable(uiLeafStateSchema)),
+]);
+const uiPresenceRecordSchema = record([
+  required('id', nonEmptyText),
+  required('present', 'bool'),
+]);
+
+export const wireTypes = Object.freeze([
+  { symbol: 'UiNodeStyle', schema: nodeStyleSchema },
+  { symbol: 'UiNode', schema: uiNodeSchema },
+  {
+    symbol: 'UiSchema',
+    schema: record([
+      required('generation', 'uint'),
+      required('root', ref('UiNode')),
+    ]),
+  },
+  {
+    symbol: 'UiStateSection',
+    schema: record([
+      required('generation', 'uint'),
+      required('nodes', arrayOf(uiNodeStateSchema)),
+      optional('focus_path',
+        nullable(arrayOf(nonEmptyText, { nonEmpty: true }))),
+    ]),
+  },
+  {
+    symbol: 'UiPresenceSection',
+    schema: record([
+      required('generation', 'uint'),
+      required('basis', 'uint'),
+      required('nodes', arrayOf(uiPresenceRecordSchema)),
+    ]),
+  },
+  {
+    symbol: 'PalettePresenceOverlay',
+    schema: record([
+      required('generation', 'uint'),
+      required('ops', arrayOf(record([
+        required('kind', enumType('PalettePresenceOpKind')),
+        required('target', nonEmptyText),
+      ]))),
+    ]),
+  },
+  {
+    symbol: 'UiFrameVersion',
+    schema: record([
+      required('generation', 'uint'),
+      required('presence_basis', 'uint'),
+    ]),
+  },
+  {
+    symbol: 'UiFrame',
+    schema: record([
+      required('version', ref('UiFrameVersion')),
+      required('schema', ref('UiSchema')),
+      required('state', ref('UiStateSection')),
+      required('presence', ref('UiPresenceSection')),
+    ]),
+  },
+  {
+    symbol: 'UiFrameDelta',
+    // Predecessor split UI fields normalize before this modern envelope exists.
+    schema: {
+      kind: 'text-discriminated-record',
+      unknownFields: 'allow',
+      discriminator: { wireName: 'kind' },
+      fields: [
+        required('base', ref('UiFrameVersion')),
+        required('target', ref('UiFrameVersion')),
+      ],
+      variants: [
+        {
+          value: 'replacement',
+          fields: [required('frame', ref('UiFrame'))],
+        },
+        {
+          value: 'changes',
+          fields: [
+            required('state', ref('UiStateSection')),
+            required('presence', ref('UiPresenceSection')),
+          ],
+        },
+      ],
+    },
+  },
+]);
+
 export default Object.freeze({
   lifecycle,
   replayPolicy,
   messageKinds,
   semanticSections,
   wireEnums,
+  wireTypes,
 });

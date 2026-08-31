@@ -1,4 +1,5 @@
 #include <ssg/PaletteProtocol.h>
+#include <ssg/detail/generated/ui_wire_schema.h>
 
 #include <array>
 #include <limits>
@@ -95,34 +96,22 @@ ProtocolValue encodePresenceOverlay(const PalettePresenceOverlay& overlay) {
 
 std::optional<PalettePresenceOverlay> decodePresenceOverlay(
     const ProtocolValue& value) {
-    const ProtocolValue* generation = value.field("generation");
-    const ProtocolValue* ops = value.field("ops");
-    if (!value.asObject() || !generation || !generation->asUint() || !ops ||
-        !ops->asArray()) {
+    if (!detail::generated::validatePalettePresenceOverlayWire(value)) {
         return std::nullopt;
     }
+    const ProtocolValue* generation = value.field("generation");
+    const ProtocolValue* ops = value.field("ops");
     PalettePresenceOverlay overlay;
     overlay.generation = Generation{*generation->asUint()};
     std::set<std::string> targets;
     for (const ProtocolValue& encoded : *ops->asArray()) {
         const ProtocolValue* kind = encoded.field("kind");
         const ProtocolValue* target = encoded.field("target");
-        if (!encoded.asObject() || !kind || !kind->asUint() || !target ||
-            !target->asText() || target->asText()->empty() ||
-            !targets.insert(*target->asText()).second) {
+        if (!targets.insert(*target->asText()).second) {
             return std::nullopt;
         }
-        PalettePresenceOpKind decodedKind;
-        switch (*kind->asUint()) {
-        case static_cast<std::uint8_t>(PalettePresenceOpKind::Show):
-            decodedKind = PalettePresenceOpKind::Show;
-            break;
-        case static_cast<std::uint8_t>(PalettePresenceOpKind::Hide):
-            decodedKind = PalettePresenceOpKind::Hide;
-            break;
-        default:
-            return std::nullopt;
-        }
+        const auto decodedKind =
+            static_cast<PalettePresenceOpKind>(*kind->asUint());
         overlay.ops.push_back(
             {decodedKind, UiNodeId{*target->asText()}});
     }

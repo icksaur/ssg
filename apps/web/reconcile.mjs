@@ -18,6 +18,13 @@ import {
   SIZE_KIND as SIZE,
   VIEW_SURFACE as SURFACE,
   WIDGET_KIND as WIDGET,
+  validatePalettePresenceOverlayWire,
+  validateUiFrameWire,
+  validateUiFrameDeltaWire,
+  validateUiNodeStyleWire,
+  validateUiPresenceSectionWire,
+  validateUiSchemaWire,
+  validateUiStateSectionWire,
 } from './generated/semantic_wire_manifest.mjs';
 
 export {
@@ -1199,6 +1206,7 @@ function normalizePromptViewCompatibility(sections) {
 }
 
 function validUiFrame(frame) {
+  if (!validateUiFrameWire(frame)) return false;
   const schema = frame?.schema;
   const state = frame?.state;
   const presence = frame?.presence;
@@ -1239,7 +1247,7 @@ function sameUiFrameVersion(left, right) {
 }
 
 export function applyUiFrameDelta(frame, delta) {
-  if (!validUiFrame(frame) || !delta ||
+  if (!validUiFrame(frame) || !validateUiFrameDeltaWire(delta) ||
       !sameUiFrameVersion(frame.version, delta.base)) return null;
   if (delta.kind === 'replacement') {
     return validUiFrame(delta.frame) &&
@@ -1819,8 +1827,13 @@ export function mergeBrowserRenderPlans(left, right) {
 }
 
 export function applyPalettePresenceOverlay(schema, presence, overlay) {
-  if (!schema || !schema.root || !presence || !overlay) {
+  if (!schema || !presence || !overlay) {
     return { presence, error: 'missing picker presence overlay', stale: false };
+  }
+  if (!validateUiSchemaWire(schema) ||
+      !validateUiPresenceSectionWire(presence) ||
+      !validatePalettePresenceOverlayWire(overlay)) {
+    return { presence, error: 'invalid picker presence overlay', stale: false };
   }
   if (num(schema.generation) !== num(overlay.generation)) {
     return { presence, error: null, stale: true };
@@ -1847,9 +1860,7 @@ export function applyPalettePresenceOverlay(schema, presence, overlay) {
   for (const op of (overlay.ops || [])) {
     const kind = num(op.kind);
     if (!schemaIds.has(op.target) || !records.has(op.target) ||
-        overrides.has(op.target) ||
-        (kind !== PALETTE_PRESENCE_OP.SHOW &&
-         kind !== PALETTE_PRESENCE_OP.HIDE)) {
+        overrides.has(op.target)) {
       return { presence, error: 'invalid picker presence overlay', stale: false };
     }
     overrides.set(op.target, kind === PALETTE_PRESENCE_OP.SHOW);
@@ -2104,24 +2115,13 @@ export function firstUnsupportedPrimitive(schema, profile = WEB_UI_PROFILE) {
   return walk(schema.root);
 }
 
-const semanticRoleCount = 28;
-const validSemanticRole = (value) =>
-  (typeof value === 'number' || typeof value === 'bigint') &&
-  Number.isInteger(num(value)) && num(value) >= 0 &&
-  num(value) < semanticRoleCount;
-
 export function firstMalformedNodeStyle(schema) {
   if (!schema || !schema.root) return null;
   const walk = (node) => {
     if (!node) return null;
     if (node.style !== undefined) {
-      if (!node.style || typeof node.style !== 'object' ||
-          Array.isArray(node.style)) return { kind: 'style', id: node.id };
-      for (const channel of ['foreground', 'background']) {
-        if (node.style[channel] !== undefined &&
-            !validSemanticRole(node.style[channel])) {
-          return { kind: 'style', id: node.id };
-        }
+      if (!validateUiNodeStyleWire(node.style)) {
+        return { kind: 'style', id: node.id };
       }
     }
     if (node.container && Array.isArray(node.container.children)) {
@@ -2158,7 +2158,9 @@ export function firstMalformedNodeStyle(schema) {
 // carries `checked`) -- a malformed frame is never partially drawn. `root` is the
 // interpreted render root; its children are the well-known areas (id "header"/"footer").
 export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFILE) {
-  if (!schema || !schema.root || !state || !presence) return null;
+  if (!validateUiSchemaWire(schema) ||
+      !validateUiStateSectionWire(state) ||
+      !validateUiPresenceSectionWire(presence)) return null;
   if (firstUnsupportedPrimitive(schema, profile)) return null;
   if (num(schema.generation) !== num(state.generation)) return null;
   // Presence is a separate basis-stamped section; it must name the same generation.
@@ -2238,7 +2240,7 @@ export function interpretChrome(schema, state, presence, profile = WEB_UI_PROFIL
     for (const channel of ['foreground', 'background']) {
       if (node.style[channel] === undefined) continue;
       const value = node.style[channel];
-      if (!validSemanticRole(value)) return null;
+      if (!Number.isInteger(num(value))) return null;
       resolved[channel] = num(value);
     }
     return resolved;

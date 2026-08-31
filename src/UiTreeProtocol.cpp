@@ -1,5 +1,6 @@
 #include <ssg/UiTreeProtocol.h>
 #include <ssg/Style.h>
+#include <ssg/detail/generated/ui_wire_schema.h>
 
 #include <array>
 #include <cstdint>
@@ -275,28 +276,26 @@ std::optional<DecodedWidget> decodeWidget(const ProtocolValue& value) {
         w.command = *value.field("command")->asText();
     }
     if (!isNull(value.field("surface"))) {
-        const auto raw = uintField(value, "surface");
-        if (const auto surface = decodeEnumIn(raw, kAllViewSurfaces)) {
-            w.surface = *surface;
-        } else if (raw && *raw == static_cast<std::uint64_t>(
-                                      RetiredTreeSurface::FileTree)) {
+        const auto raw = *value.field("surface")->asUint();
+        if (raw == static_cast<std::uint64_t>(
+                       RetiredTreeSurface::FileTree)) {
             w.surface = ViewSurface::Tree;
             decoded.retiredTreeSurface = RetiredTreeSurface::FileTree;
-        } else if (raw && *raw == static_cast<std::uint64_t>(
-                                      RetiredTreeSurface::GitStatus)) {
+        } else if (raw == static_cast<std::uint64_t>(
+                              RetiredTreeSurface::GitStatus)) {
             w.surface = ViewSurface::Tree;
             decoded.retiredTreeSurface = RetiredTreeSurface::GitStatus;
-        } else if (raw && *raw == static_cast<std::uint64_t>(
-                                      RetiredTreeSurface::Symbols)) {
+        } else if (raw == static_cast<std::uint64_t>(
+                              RetiredTreeSurface::Symbols)) {
             w.surface = ViewSurface::Tree;
             decoded.retiredTreeSurface = RetiredTreeSurface::Symbols;
-        } else if (raw && *raw == kRetiredFooterPromptSurface) {
+        } else if (raw == kRetiredFooterPromptSurface) {
             // A temporary current value is used only until the exact predecessor
             // shape can be checked after the complete tree has decoded.
             w.surface = ViewSurface::Notice;
             decoded.retiredFooterPromptSurface = true;
         } else {
-            return std::nullopt;
+            w.surface = static_cast<ViewSurface>(raw);
         }
     }
     return decoded;
@@ -635,7 +634,7 @@ ProtocolValue encodeUiSchema(const UiSchema& schema) {
 }
 
 std::optional<UiSchema> decodeUiSchema(const ProtocolValue& value) {
-    if (!value.asObject()) return std::nullopt;
+    if (!detail::generated::validateUiSchemaWire(value)) return std::nullopt;
     const auto generation = uintField(value, "generation");
     const ProtocolValue* rootField = value.field("root");
     if (!generation || !rootField) return std::nullopt;

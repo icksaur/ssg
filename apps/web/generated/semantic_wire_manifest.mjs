@@ -701,3 +701,620 @@ export const PALETTE_PRESENCE_OP_KIND = deepFreeze({
   SHOW: 0,
   HIDE: 1,
 });
+
+function validateWireNode0(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["foreground"] !== undefined && !validateWireNode1(value["foreground"])) return false;
+    if (value["background"] !== undefined && !validateWireNode2(value["background"])) return false;
+    return true;
+}
+
+function validateWireNode1(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
+}
+
+function validateWireNode2(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
+}
+
+function validateWireNode3(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode4(value["id"])) return false;
+    if (value["size"] === undefined || !validateWireNode5(value["size"])) return false;
+    if (value["style"] !== undefined && !validateWireNode10(value["style"])) return false;
+    if (value["focus_context"] !== undefined && !validateWireNode13(value["focus_context"])) return false;
+    if (value["accessible_label"] !== undefined && !validateWireNode14(value["accessible_label"])) return false;
+    let variantCount = 0;
+    if (value["container"] !== undefined && value["container"] !== null) {
+      ++variantCount;
+      if (!validateWireNode15(value["container"])) return false;
+    }
+    if (value["leaf"] !== undefined && value["leaf"] !== null) {
+      ++variantCount;
+      if (!validateWireNode26(value["leaf"])) return false;
+    }
+    return variantCount === 1;
+}
+
+function validateWireNode4(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode5(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["extent"] === undefined || !validateWireNode6(value["extent"])) return false;
+    const discriminatorValue = value["kind"];
+    if (typeof discriminatorValue !== 'number' &&
+        typeof discriminatorValue !== 'bigint') return false;
+    const discriminator = Number(discriminatorValue);
+    if (!Number.isSafeInteger(discriminator) || discriminator < 0) return false;
+    switch (discriminator) {
+    case 1:
+
+      return true;
+    case 2:
+
+      return true;
+    case 0:
+
+      return true;
+    case 3:
+    if (value["minimum"] === undefined || !validateWireNode7(value["minimum"])) return false;
+    if (value["growth"] === undefined || !validateWireNode8(value["growth"])) return false;
+    if (value["optional"] === undefined || !validateWireNode9(value["optional"])) return false;
+      return true;
+    default: return false;
+    }
+}
+
+function validateWireNode6(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && raw <= 2147483647;
+}
+
+function validateWireNode7(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && raw <= 2147483647;
+}
+
+function validateWireNode8(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && raw <= 2147483647;
+}
+
+function validateWireNode9(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode10(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["foreground"] !== undefined && !validateWireNode11(value["foreground"])) return false;
+    if (value["background"] !== undefined && !validateWireNode12(value["background"])) return false;
+    return true;
+}
+
+function validateWireNode11(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
+}
+
+function validateWireNode12(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
+}
+
+function validateWireNode13(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+}
+
+function validateWireNode14(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode15(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["axis"] === undefined || !validateWireNode16(value["axis"])) return false;
+    if (value["inset"] === undefined || !validateWireNode17(value["inset"])) return false;
+    if (value["gap"] === undefined || !validateWireNode22(value["gap"])) return false;
+    if (value["children"] === undefined || !validateWireNode23(value["children"])) return false;
+    if (value["scroll"] !== undefined && !validateWireNode25(value["scroll"])) return false;
+    return true;
+}
+
+function validateWireNode16(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
+function validateWireNode17(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["left"] === undefined || !validateWireNode18(value["left"])) return false;
+    if (value["right"] === undefined || !validateWireNode19(value["right"])) return false;
+    if (value["top"] === undefined || !validateWireNode20(value["top"])) return false;
+    if (value["bottom"] === undefined || !validateWireNode21(value["bottom"])) return false;
+    return true;
+}
+
+function validateWireNode18(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && raw <= 2147483647;
+}
+
+function validateWireNode19(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && raw <= 2147483647;
+}
+
+function validateWireNode20(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && raw <= 2147483647;
+}
+
+function validateWireNode21(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && raw <= 2147483647;
+}
+
+function validateWireNode22(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && raw <= 2147483647;
+}
+
+function validateWireNode23(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode24(item));
+}
+
+function validateWireNode24(value) {
+    return validateWireNode3(value);
+}
+
+function validateWireNode25(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (true);
+}
+
+function validateWireNode26(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["kind"] === undefined || !validateWireNode27(value["kind"])) return false;
+    if (value["id"] === undefined || !validateWireNode28(value["id"])) return false;
+    if (value["value"] !== undefined && !validateWireNode29(value["value"])) return false;
+    if (value["checked"] !== undefined && !validateWireNode34(value["checked"])) return false;
+    if (value["width"] !== undefined && !validateWireNode39(value["width"])) return false;
+    if (value["role"] !== undefined && !validateWireNode41(value["role"])) return false;
+    if (value["command"] !== undefined && !validateWireNode43(value["command"])) return false;
+    if (value["surface"] !== undefined && !validateWireNode45(value["surface"])) return false;
+    if (value["rank"] === undefined || !validateWireNode47(value["rank"])) return false;
+    if (value["keep"] === undefined || !validateWireNode48(value["keep"])) return false;
+    if (value["overflow"] === undefined || !validateWireNode49(value["overflow"])) return false;
+    if (value["sigil"] === undefined || !validateWireNode50(value["sigil"])) return false;
+    return true;
+}
+
+function validateWireNode27(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7);
+}
+
+function validateWireNode28(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode29(value) {
+    return value === null || validateWireNode30(value);
+}
+
+function validateWireNode30(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["is_provider"] === undefined || !validateWireNode31(value["is_provider"])) return false;
+    if (value["literal"] === undefined || !validateWireNode32(value["literal"])) return false;
+    if (value["provider"] === undefined || !validateWireNode33(value["provider"])) return false;
+    return true;
+}
+
+function validateWireNode31(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode32(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode33(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode34(value) {
+    return value === null || validateWireNode35(value);
+}
+
+function validateWireNode35(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["is_provider"] === undefined || !validateWireNode36(value["is_provider"])) return false;
+    if (value["literal"] === undefined || !validateWireNode37(value["literal"])) return false;
+    if (value["provider"] === undefined || !validateWireNode38(value["provider"])) return false;
+    return true;
+}
+
+function validateWireNode36(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode37(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode38(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode39(value) {
+    return value === null || validateWireNode40(value);
+}
+
+function validateWireNode40(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+}
+
+function validateWireNode41(value) {
+    return value === null || validateWireNode42(value);
+}
+
+function validateWireNode42(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode43(value) {
+    return value === null || validateWireNode44(value);
+}
+
+function validateWireNode44(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode45(value) {
+    return value === null || validateWireNode46(value);
+}
+
+function validateWireNode46(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9);
+}
+
+function validateWireNode47(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+}
+
+function validateWireNode48(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode49(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode50(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode51(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["generation"] === undefined || !validateWireNode52(value["generation"])) return false;
+    if (value["root"] === undefined || !validateWireNode53(value["root"])) return false;
+    return true;
+}
+
+function validateWireNode52(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value) &&
+      value >= 0;
+}
+
+function validateWireNode53(value) {
+    return validateWireNode3(value);
+}
+
+function validateWireNode54(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["generation"] === undefined || !validateWireNode55(value["generation"])) return false;
+    if (value["nodes"] === undefined || !validateWireNode56(value["nodes"])) return false;
+    if (value["focus_path"] !== undefined && !validateWireNode70(value["focus_path"])) return false;
+    return true;
+}
+
+function validateWireNode55(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value) &&
+      value >= 0;
+}
+
+function validateWireNode56(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode57(item));
+}
+
+function validateWireNode57(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode58(value["id"])) return false;
+    if (value["leaf"] !== undefined && !validateWireNode59(value["leaf"])) return false;
+    return true;
+}
+
+function validateWireNode58(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode59(value) {
+    return value === null || validateWireNode60(value);
+}
+
+function validateWireNode60(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["value"] === undefined || !validateWireNode61(value["value"])) return false;
+    if (value["label"] === undefined || !validateWireNode62(value["label"])) return false;
+    if (value["command"] !== undefined && !validateWireNode63(value["command"])) return false;
+    if (value["checked"] !== undefined && !validateWireNode65(value["checked"])) return false;
+    if (value["role"] === undefined || !validateWireNode67(value["role"])) return false;
+    if (value["active"] !== undefined && !validateWireNode68(value["active"])) return false;
+    return true;
+}
+
+function validateWireNode61(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode62(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode63(value) {
+    return value === null || validateWireNode64(value);
+}
+
+function validateWireNode64(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode65(value) {
+    return value === null || validateWireNode66(value);
+}
+
+function validateWireNode66(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode67(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
+}
+
+function validateWireNode68(value) {
+    return value === null || validateWireNode69(value);
+}
+
+function validateWireNode69(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode70(value) {
+    return value === null || validateWireNode71(value);
+}
+
+function validateWireNode71(value) {
+    return Array.isArray(value) && value.length > 0 &&
+      value.every((item) => validateWireNode72(item));
+}
+
+function validateWireNode72(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode73(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["generation"] === undefined || !validateWireNode74(value["generation"])) return false;
+    if (value["basis"] === undefined || !validateWireNode75(value["basis"])) return false;
+    if (value["nodes"] === undefined || !validateWireNode76(value["nodes"])) return false;
+    return true;
+}
+
+function validateWireNode74(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value) &&
+      value >= 0;
+}
+
+function validateWireNode75(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value) &&
+      value >= 0;
+}
+
+function validateWireNode76(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode77(item));
+}
+
+function validateWireNode77(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode78(value["id"])) return false;
+    if (value["present"] === undefined || !validateWireNode79(value["present"])) return false;
+    return true;
+}
+
+function validateWireNode78(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode79(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode80(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["generation"] === undefined || !validateWireNode81(value["generation"])) return false;
+    if (value["ops"] === undefined || !validateWireNode82(value["ops"])) return false;
+    return true;
+}
+
+function validateWireNode81(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value) &&
+      value >= 0;
+}
+
+function validateWireNode82(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode83(item));
+}
+
+function validateWireNode83(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["kind"] === undefined || !validateWireNode84(value["kind"])) return false;
+    if (value["target"] === undefined || !validateWireNode85(value["target"])) return false;
+    return true;
+}
+
+function validateWireNode84(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
+function validateWireNode85(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode86(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["generation"] === undefined || !validateWireNode87(value["generation"])) return false;
+    if (value["presence_basis"] === undefined || !validateWireNode88(value["presence_basis"])) return false;
+    return true;
+}
+
+function validateWireNode87(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value) &&
+      value >= 0;
+}
+
+function validateWireNode88(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value) &&
+      value >= 0;
+}
+
+function validateWireNode89(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["version"] === undefined || !validateWireNode90(value["version"])) return false;
+    if (value["schema"] === undefined || !validateWireNode91(value["schema"])) return false;
+    if (value["state"] === undefined || !validateWireNode92(value["state"])) return false;
+    if (value["presence"] === undefined || !validateWireNode93(value["presence"])) return false;
+    return true;
+}
+
+function validateWireNode90(value) {
+    return validateWireNode86(value);
+}
+
+function validateWireNode91(value) {
+    return validateWireNode51(value);
+}
+
+function validateWireNode92(value) {
+    return validateWireNode54(value);
+}
+
+function validateWireNode93(value) {
+    return validateWireNode73(value);
+}
+
+function validateWireNode94(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base"] === undefined || !validateWireNode95(value["base"])) return false;
+    if (value["target"] === undefined || !validateWireNode96(value["target"])) return false;
+    const discriminatorValue = value["kind"];
+    if (typeof discriminatorValue !== 'string') return false;
+    const discriminator = discriminatorValue;
+    switch (discriminator) {
+    case "replacement":
+    if (value["frame"] === undefined || !validateWireNode97(value["frame"])) return false;
+      return true;
+    case "changes":
+    if (value["state"] === undefined || !validateWireNode98(value["state"])) return false;
+    if (value["presence"] === undefined || !validateWireNode99(value["presence"])) return false;
+      return true;
+    default: return false;
+    }
+}
+
+function validateWireNode95(value) {
+    return validateWireNode86(value);
+}
+
+function validateWireNode96(value) {
+    return validateWireNode86(value);
+}
+
+function validateWireNode97(value) {
+    return validateWireNode89(value);
+}
+
+function validateWireNode98(value) {
+    return validateWireNode54(value);
+}
+
+function validateWireNode99(value) {
+    return validateWireNode73(value);
+}
+
+export const validateUiNodeStyleWire = (value) => validateWireNode0(value);
+export const validateUiNodeWire = (value) => validateWireNode3(value);
+export const validateUiSchemaWire = (value) => validateWireNode51(value);
+export const validateUiStateSectionWire = (value) => validateWireNode54(value);
+export const validateUiPresenceSectionWire = (value) => validateWireNode73(value);
+export const validatePalettePresenceOverlayWire = (value) => validateWireNode80(value);
+export const validateUiFrameVersionWire = (value) => validateWireNode86(value);
+export const validateUiFrameWire = (value) => validateWireNode89(value);
+export const validateUiFrameDeltaWire = (value) => validateWireNode94(value);
+

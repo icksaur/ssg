@@ -1,4 +1,5 @@
 #include <ssg/UiStateProtocol.h>
+#include <ssg/detail/generated/ui_wire_schema.h>
 
 #include <cassert>
 #include <set>
@@ -82,11 +83,7 @@ std::optional<UiLeafState> decodeLeaf(const ProtocolValue& value) {
         if (!asBool) return std::nullopt;
         leaf.active = *asBool;
     }
-    // The effective role is required and must name a real SemanticRole ordinal;
-    // a missing or out-of-range role is malformed.
     const ProtocolValue* role = value.field("role");
-    if (!role || !role->asUint()) return std::nullopt;
-    if (*role->asUint() >= kSemanticRoleCount) return std::nullopt;
     leaf.role = static_cast<SemanticRole>(*role->asUint());
     return leaf;
 }
@@ -119,7 +116,9 @@ ProtocolValue encodeUiState(const UiStateSection& section) {
 }
 
 std::optional<UiStateSection> decodeUiState(const ProtocolValue& value) {
-    if (!value.asObject()) return std::nullopt;
+    if (!detail::generated::validateUiStateSectionWire(value)) {
+        return std::nullopt;
+    }
     const ProtocolValue* generation = value.field("generation");
     if (!generation || !generation->asUint()) return std::nullopt;
     const ProtocolValue* nodesField = value.field("nodes");

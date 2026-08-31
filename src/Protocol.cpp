@@ -15,6 +15,7 @@
 #include <ssg/PresenceProtocol.h>
 #include <ssg/PaletteProtocol.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/detail/generated/ui_wire_schema.h>
 
 #include "legacy_focus_compat.h"
 #include "legacy_prompt_compat.h"
@@ -4803,6 +4804,9 @@ ProtocolValue encodeUiFrameVersion(UiFrameVersion version) {
 
 std::optional<UiFrameVersion> decodeUiFrameVersion(
     const ProtocolValue& value) {
+    if (!detail::generated::validateUiFrameVersionWire(value)) {
+        return std::nullopt;
+    }
     const auto* generation = value.field("generation");
     const auto* presenceBasis = value.field("presence_basis");
     if (!value.asObject() || !generation || !generation->asUint() ||
@@ -4822,7 +4826,7 @@ ProtocolValue encodeUiFrame(const UiFrame& frame) {
 }
 
 std::optional<UiFrame> decodeUiFrame(const ProtocolValue& value) {
-    if (!value.asObject()) return std::nullopt;
+    if (!detail::generated::validateUiFrameWire(value)) return std::nullopt;
     const auto version =
         value.field("version")
             ? decodeUiFrameVersion(*value.field("version"))
@@ -4871,7 +4875,9 @@ ProtocolValue encodeUiFrameDelta(const UiFrameDelta& delta) {
 }
 
 std::optional<UiFrameDelta> decodeUiFrameDelta(const ProtocolValue& value) {
-    if (!value.asObject()) return std::nullopt;
+    if (!detail::generated::validateUiFrameDeltaWire(value)) {
+        return std::nullopt;
+    }
     const auto base =
         value.field("base") ? decodeUiFrameVersion(*value.field("base"))
                             : std::nullopt;

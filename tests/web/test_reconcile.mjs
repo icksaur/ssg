@@ -756,18 +756,34 @@ import {
   responsiveSurvivors, responsiveFlexCss,
 } from '../../apps/web/reconcile.mjs';
 
+const exactSize = () => ({ kind: SIZE.EXACT, extent: 0 });
+const zeroInset = () => ({ left: 0, right: 0, top: 0, bottom: 0 });
 // A leaf node on the wire: { id, size, leaf: { kind, ..., role?, width? } }.
-const leafNode = (id, kind, extra) => ({ id, size: {}, leaf: { kind, ...(extra || {}) } });
+const leafNode = (id, kind, extra) => ({
+  id,
+  size: exactSize(),
+  leaf: {
+    kind, id, rank: 0, keep: false, overflow: 0, sigil: '',
+    ...(extra || {}),
+  },
+});
 const focusLeafNode = (id, kind, focusContext, extra) => ({
   ...leafNode(id, kind, extra),
   focus_context: focusContext,
 });
 // A Row container node over `children`.
-const rowNode = (id, children) => ({ id, size: {}, container: { axis: 0, gap: 0, children } });
+const rowNode = (id, children) => ({
+  id,
+  size: exactSize(),
+  container: { axis: 0, inset: zeroInset(), gap: 0, children },
+});
 // A schema is a single root node; placement is tree structure + well-known ids.
 const schemaOf = (generation, root) => ({ generation, root });
 // The dynamic-state record for a node (presence is a separate section now).
-const st = (id, leaf) => ({ id, leaf: leaf || null });
+const st = (id, leaf) => ({
+  id,
+  leaf: leaf ? { value: '', label: '', role: 0, ...leaf } : null,
+});
 // The presence section corresponding to a schema: one record per node in the tree,
 // all present except ids in `hidden`. Built from the schema so it always
 // corresponds; the tests that check state mismatch fail on state, not presence.
@@ -775,7 +791,7 @@ const presenceForSchema = (generation, root, hidden = []) => {
   const nodes = [];
   const walk = (node) => {
     if (!node) return;
-    nodes.push({ id: node.id, present: hidden.includes(node.id) ? 0 : 1 });
+    nodes.push({ id: node.id, present: !hidden.includes(node.id) });
     if (node.container && Array.isArray(node.container.children))
       for (const c of node.container.children) walk(c);
   };
@@ -947,7 +963,7 @@ function drawnLeaves(node, out = []) {
 }
 
 check('firstUnsupportedPrimitive accepts a supported header/footer schema', () => {
-  const root = { id: 'root', size: {}, container: { axis: 1, gap: 0, children: [
+  const root = { id: 'root', size: exactSize(), container: { axis: 1, inset: zeroInset(), gap: 0, children: [
     rowNode('header', [leafNode('a', WIDGET.FIELD), leafNode('b', WIDGET.SPACER)]),
     rowNode('footer', [leafNode('c', WIDGET.CHECKBOX)]),
   ] } };
@@ -988,14 +1004,14 @@ check('firstUnsupportedPrimitive accepts StatusActions by default and rejects it
 
 check('interpretChrome carries a node ScrollAxis so a client derives independent scroll, and degrades an unknown axis to none', () => {
   const scrollContainer = (id, scroll, children) =>
-    ({ id, size: {}, container: { axis: 1, gap: 0, scroll, children } });
+    ({ id, size: exactSize(), container: { axis: 1, inset: zeroInset(), gap: 0, scroll, children } });
   const document = leafNode(
     'document', WIDGET.VIEW, { surface: SURFACE.DOCUMENT });
   const editor = scrollContainer('editor', SCROLL.NONE, [
     leafNode('tabbar', WIDGET.VIEW, { surface: SURFACE.TAB_BAR }),
     scrollContainer('document.viewport', SCROLL.VERTICAL, [document]),
   ]);
-  const root = { id: 'root', size: {}, container: { axis: 1, gap: 0, children: [
+  const root = { id: 'root', size: exactSize(), container: { axis: 1, inset: zeroInset(), gap: 0, children: [
     rowNode('body', [
       scrollContainer('panel', SCROLL.VERTICAL, [leafNode('tree', WIDGET.VIEW, { surface: SURFACE.TREE })]),
       scrollContainer('content', SCROLL.NONE, [editor]),
@@ -1148,7 +1164,7 @@ check('picker presence overlay preserves header siblings and panel while replaci
   assert.notEqual(applied.presence, authoritative);
   assert.equal(
     authoritative.nodes.find((record) => record.id === 'input_line').present,
-    0);
+    false);
 
   const nodes = [];
   const collect = (node) => {
@@ -1208,7 +1224,7 @@ check('interpretChrome rejects a container whose scroll field is null or the wro
   // ordinal degrade to none, but a present null or non-numeric scroll is malformed
   // and rejects the frame.
   for (const bad of ['vertical', null]) {
-    const root = { id: 'root', size: {}, container: { axis: 1, gap: 0, scroll: bad, children: [
+    const root = { id: 'root', size: exactSize(), container: { axis: 1, inset: zeroInset(), gap: 0, scroll: bad, children: [
       leafNode('a', WIDGET.VIEW, { surface: SURFACE.DOCUMENT }),
     ] } };
     const nodes = [st('root'), st('a')];
@@ -1228,7 +1244,7 @@ check('interpretChrome applies the per-kind render gate', () => {
     st('lit', { value: 'hello', label: 'hello', command: 'open.thing' }),
     st('empty', null),
     st('sp', null),
-    st('box', { value: 'case', label: 'case', checked: 1 }),
+    st('box', { value: 'case', label: 'case', checked: true }),
   ] };
   const out = interpretChrome(schemaOf(4, root), state, presenceForSchema(4, root));
   assert.ok(out);
@@ -1411,10 +1427,16 @@ check('interpretChrome rejects View or StatusActions leaves with leaf state', ()
 
 check('interpretChrome preserves the left/middle/right grouping and its sizing', () => {
   // Row[ left(Auto container), middle(Flex container w/ center), right(Auto container) ].
-  const grp = (id, sizeKind, children) => ({ id, size: { kind: sizeKind }, container: { axis: 0, gap: 0, children } });
+  const grp = (id, sizeKind, children) => ({
+    id,
+    size: { kind: sizeKind, extent: 0 },
+    container: { axis: 0, inset: zeroInset(), gap: 0, children },
+  });
+  const centerNode = leafNode('c0', WIDGET.LABEL);
+  centerNode.size.extent = 12;
   const root = grp('root', SIZE.FLEX, [
     grp('left', SIZE.AUTO, [leafNode('l0', WIDGET.FIELD)]),
-    grp('mid', SIZE.FLEX, [{ id: 'c0', size: { kind: SIZE.EXACT, extent: 12 }, leaf: { kind: WIDGET.LABEL } }]),
+    grp('mid', SIZE.FLEX, [centerNode]),
     grp('right', SIZE.AUTO, [leafNode('r0', WIDGET.FIELD, { command: 'do.it' })]),
   ]);
   const state = { generation: 2, nodes: [
@@ -1534,11 +1556,11 @@ check('interpretChrome returns null on a state/schema SHAPE disagreement', () =>
   ] }, presenceForSchema(5, schema.root)), null);
   // Spacer carrying leaf state -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
-    st('root'), st('box', { value: '', label: '', checked: 0 }), st('sp', { value: 'x', label: 'x' }),
+    st('root'), st('box', { value: '', label: '', checked: false }), st('sp', { value: 'x', label: 'x' }),
   ] }, presenceForSchema(5, schema.root)), null);
   // Container carrying leaf state -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
-    st('root', { value: 'x', label: 'x' }), st('box', { value: '', label: '', checked: 0 }), st('sp', null),
+    st('root', { value: 'x', label: 'x' }), st('box', { value: '', label: '', checked: false }), st('sp', null),
   ] }, presenceForSchema(5, schema.root)), null);
   // Checkbox WITH leaf state but MISSING its `checked` -> wait.
   assert.equal(interpretChrome(schema, { generation: 5, nodes: [
@@ -1549,7 +1571,7 @@ check('interpretChrome returns null on a state/schema SHAPE disagreement', () =>
 check('interpretChrome returns null when a Label/Field leaf state carries checked', () => {
   const schema = schemaOf(6, rowNode('root', [leafNode('f', WIDGET.FIELD)]));
   assert.equal(interpretChrome(schema, { generation: 6, nodes: [
-    st('root'), st('f', { value: 'x', label: 'x', checked: 1 }),
+    st('root'), st('f', { value: 'x', label: 'x', checked: true }),
   ] }, presenceForSchema(6, schema.root)), null);
 });
 
@@ -1605,14 +1627,11 @@ check('interpretChrome preserves footer prompt column and options row', () => {
     { id: 'find.toggle_case', role: 'prompt' });
   const count = leafNode('footer.prompt.control.matches', WIDGET.LABEL,
     { id: 'find.matches', role: 'prompt' });
-  const options = {
-    id: 'footer.prompt.options', size: { kind: SIZE.EXACT, extent: 1 },
-    container: { axis: 0, gap: 0, children: [toggle, count] },
-  };
-  const root = {
-    id: 'footer.prompt', size: { kind: SIZE.AUTO },
-    container: { axis: 1, gap: 0, children: [input, options] },
-  };
+  const options = rowNode('footer.prompt.options', [toggle, count]);
+  options.size.extent = 1;
+  const root = rowNode('footer.prompt', [input, options]);
+  root.size = { kind: SIZE.AUTO, extent: 0 };
+  root.container.axis = 1;
   const state = { generation: 13, nodes: [
     st('footer.prompt'),
     st('footer.prompt.control.query',
@@ -1692,10 +1711,9 @@ check('picker lifecycle resolves published keymap commands with global precedenc
 });
 
 check('footer prompt compatibility is derived from the UI frame', () => {
-  const input = {
-    id: 'footer.prompt.control.find.query', size: {},
-    leaf: { kind: WIDGET.TEXT_INPUT, id: 'find.query' },
-  };
+  const input = leafNode(
+    'footer.prompt.control.find.query', WIDGET.TEXT_INPUT,
+    { id: 'find.query' });
   const root = rowNode('root', [
     focusLeafNode('editor', WIDGET.VIEW, 0, { surface: SURFACE.DOCUMENT }),
     {
