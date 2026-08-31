@@ -268,6 +268,45 @@ TEST(panelSurfaceWithoutAProviderIsEmptyAndBounded) {
     ASSERT_EQ(solved.firstVisible, std::uint32_t{0});
 }
 
+TEST(documentSurfaceCarvesGuttersAndProtectsMinimumContentWidth) {
+    SolvedGridNode viewport{
+        UiNodeId{"document.viewport"}, {3, 2, 30, 6}, {3, 2, 30, 6},
+        ScrollAxis::Vertical};
+    const auto wide = solveDocumentSurface(
+        viewport, {{PaneId{7}, viewport.rect}}, PaneId{7}, true, 100,
+        StyleDimensions{});
+    ASSERT_EQ(wide.rect, viewport.rect);
+    ASSERT_EQ(wide.lineNumbers, (Rect{3, 2, 4, 6}));
+    ASSERT_EQ(wide.content, (Rect{7, 2, 25, 6}));
+    ASSERT_EQ(wide.scrollbarGutter, (Rect{32, 2, 1, 6}));
+
+    viewport.rect.width = 21;
+    viewport.content.width = 21;
+    const auto narrow = solveDocumentSurface(
+        viewport, {{PaneId{7}, viewport.rect}}, PaneId{7}, true, 100,
+        StyleDimensions{});
+    ASSERT_EQ(narrow.lineNumbers, (Rect{}));
+    ASSERT_EQ(narrow.content, (Rect{3, 2, 20, 6}));
+    ASSERT_EQ(narrow.scrollbarGutter, (Rect{23, 2, 1, 6}));
+}
+
+TEST(documentSurfaceCarvesEachSplitPaneAndIdentifiesTheActiveOne) {
+    SolvedGridNode viewport{
+        UiNodeId{"document.viewport"}, {0, 0, 61, 8}, {0, 0, 61, 8},
+        ScrollAxis::Vertical};
+    const auto solved = solveDocumentSurface(
+        viewport,
+        {{PaneId{3}, {0, 0, 21, 8}}, {PaneId{4}, {21, 0, 40, 8}}},
+        PaneId{4}, true, 100, StyleDimensions{});
+    ASSERT_EQ(solved.panes.size(), std::size_t{2});
+    ASSERT_EQ(solved.activePaneIndex, std::size_t{1});
+    ASSERT_EQ(solved.panes[0].lineNumbers, (Rect{}));
+    ASSERT_EQ(solved.panes[0].content, (Rect{0, 0, 20, 8}));
+    ASSERT_EQ(solved.panes[1].lineNumbers, (Rect{21, 0, 4, 8}));
+    ASSERT_EQ(solved.panes[1].content, (Rect{25, 0, 35, 8}));
+    ASSERT_EQ(solved.content, solved.panes.front().content);
+}
+
 // Two flex siblings split the width equally; the odd cell goes to the LAST child
 // (reproduces the old pane rule `rect.width - firstWidth`).
 TEST(rowFlexSplitsEquallyRemainderToLast) {
@@ -645,6 +684,8 @@ int main() {
     RUN(paletteSurfaceClipsRowsToItsHeight);
     RUN(zeroSizePaletteSurfaceProducesNoPaintableGeometry);
     RUN(panelSurfaceWithoutAProviderIsEmptyAndBounded);
+    RUN(documentSurfaceCarvesGuttersAndProtectsMinimumContentWidth);
+    RUN(documentSurfaceCarvesEachSplitPaneAndIdentifiesTheActiveOne);
     RUN(rowFlexSplitsEquallyRemainderToLast);
     RUN(singleFlexTakesAllRemainder);
     RUN(insetReservesTheFrameOnEveryEdge);

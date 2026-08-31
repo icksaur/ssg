@@ -15,6 +15,7 @@
 #include <ssg/Geometry.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/ShellState.h>
 #include <ssg/Style.h>
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
@@ -213,6 +214,38 @@ struct SolvedPanelSurface {
 [[nodiscard]] SolvedPanelSurface solvePanelSurface(
     const TreeViewState& tree, const SolvedGridNode& panel,
     std::uint32_t firstVisible, bool revealSelection, const Style& style);
+
+struct SolvedDocumentPane {
+    PaneId id;
+    Rect frame;
+    Rect content;
+    Rect scrollbarGutter;
+    Rect lineNumbers;
+
+    friend bool operator==(const SolvedDocumentPane&,
+                           const SolvedDocumentPane&) = default;
+};
+
+struct SolvedDocumentSurface {
+    Rect rect;
+    // CONTRACT: These three fields mirror panes.front() for single-pane
+    // consumers. Split-aware code uses panes and activePaneIndex.
+    Rect content;
+    Rect scrollbarGutter;
+    Rect lineNumbers;
+    std::vector<SolvedDocumentPane> panes;
+    std::size_t activePaneIndex = 0;
+
+    friend bool operator==(const SolvedDocumentSurface&,
+                           const SolvedDocumentSurface&) = default;
+};
+
+// CONTRACT: Document rendering, hits, caret placement, scrollbar interaction,
+// and presenter navigation consume this single authoritative grid geometry.
+[[nodiscard]] SolvedDocumentSurface solveDocumentSurface(
+    const SolvedGridNode& viewport, const std::vector<PaneFrame>& paneFrames,
+    PaneId activePane, bool lineNumbers,
+    std::uint32_t logicalLineCount, const StyleDimensions& dimensions);
 
 // Returns nullopt when nonnegative bounds cannot contain an inset, gaps, or
 // exact children. Invalid identities and unsupported Auto sizes are misuse and

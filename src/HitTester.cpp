@@ -247,14 +247,14 @@ RegionHit HitTester::at(int column, int row) const {
         return panelHit(*snapshot.panel(), column, row);
     }
 
-    if (!shell.panes.empty()) {
-        auto const& pane = shell.panes.front();
-        if (contains(pane.scrollbar, column, row)) {
-            return scrollbarHit(HitRegion::EditorScrollbar, pane.scrollbar,
-                                 row);
+    if (snapshot.document()) {
+        const auto& document = *snapshot.document();
+        if (contains(document.scrollbarGutter, column, row)) {
+            return scrollbarHit(HitRegion::EditorScrollbar,
+                                document.scrollbarGutter, row);
         }
-        if (contains(pane.content, column, row)) {
-            return editorHit(snapshot, pane.content, column, row);
+        if (contains(document.content, column, row)) {
+            return editorHit(snapshot, document.content, column, row);
         }
     }
 
@@ -263,14 +263,13 @@ RegionHit HitTester::at(int column, int row) const {
 
 std::optional<HitTester::GutterThumb> HitTester::gutterThumb(
     HitRegion region) const {
-    auto const& shell = snapshot_.presentation().shell;
     auto const make = [](Rect const& gutter, ScrollbarMetrics const& m) {
         return GutterThumb{gutter.y, m.viewportRows, m.thumbStart, m.thumbSize};
     };
     switch (region) {
     case HitRegion::EditorScrollbar:
-        if (shell.panes.empty()) return std::nullopt;
-        return make(shell.panes.front().scrollbar,
+        if (!snapshot_.document()) return std::nullopt;
+        return make(snapshot_.document()->scrollbarGutter,
                     snapshot_.presentation().viewport.scrollbar);
     case HitRegion::PanelScrollbar: {
         if (!snapshot_.panel() || !snapshot_.panel()->scrollbarGutter) {

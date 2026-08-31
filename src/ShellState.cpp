@@ -109,48 +109,54 @@ bool canLayout(const PaneNode& node, Rect rect) {
                        rect.height - firstHeight});
 }
 
-void layoutPanes(const PaneNode& node, Rect rect,
-                  std::vector<PaneGeometry>& output, int gutterWidth,
-                  int lineNumberWidth, int editorMinimumWidth) {
+void layoutPaneFrames(const PaneNode& node, Rect rect,
+                     std::vector<PaneFrame>& output) {
     if (node.leaf()) {
-        // Reserve the left line-number gutter, but never at the cost of a usable
-        // editor: if the content left after both gutters would fall below the
-        // editor minimum, drop the number gutter for this pane (it reappears when
-        // the pane grows).  The renderer keys off the published rect, so the two
-        // cannot disagree.
-        int lineNumbers = lineNumberWidth;
-        if (lineNumbers > 0 &&
-            rect.width - gutterWidth - lineNumbers < editorMinimumWidth) {
-            lineNumbers = 0;
-        }
-        output.push_back({
-            node.id,
-            rect,
-            {rect.x + lineNumbers, rect.y,
-             rect.width - gutterWidth - lineNumbers, rect.height},
-            {rect.right() - gutterWidth, rect.y, gutterWidth, rect.height},
-            lineNumbers > 0 ? Rect{rect.x, rect.y, lineNumbers, rect.height}
-                            : Rect{0, 0, 0, 0},
-        });
+        output.push_back({node.id, rect});
         return;
     }
     if (node.axis == SplitAxis::Vertical) {
         const int firstWidth = rect.width / 2;
-        layoutPanes(*node.first, {rect.x, rect.y, firstWidth, rect.height},
-                     output, gutterWidth, lineNumberWidth, editorMinimumWidth);
-        layoutPanes(*node.second,
-                     {rect.x + firstWidth, rect.y,
-                      rect.width - firstWidth, rect.height},
-                     output, gutterWidth, lineNumberWidth, editorMinimumWidth);
+        layoutPaneFrames(*node.first,
+                        {rect.x, rect.y, firstWidth, rect.height}, output);
+        layoutPaneFrames(*node.second,
+                        {rect.x + firstWidth, rect.y,
+                         rect.width - firstWidth, rect.height},
+                        output);
         return;
     }
     const int firstHeight = rect.height / 2;
-    layoutPanes(*node.first, {rect.x, rect.y, rect.width, firstHeight},
-                 output, gutterWidth, lineNumberWidth, editorMinimumWidth);
-    layoutPanes(*node.second,
-                 {rect.x, rect.y + firstHeight, rect.width,
-                  rect.height - firstHeight},
-                 output, gutterWidth, lineNumberWidth, editorMinimumWidth);
+    layoutPaneFrames(*node.first,
+                    {rect.x, rect.y, rect.width, firstHeight}, output);
+    layoutPaneFrames(*node.second,
+                    {rect.x, rect.y + firstHeight, rect.width,
+                     rect.height - firstHeight},
+                    output);
+}
+
+void layoutPanes(const std::vector<PaneFrame>& frames,
+                std::vector<PaneGeometry>& output, int gutterWidth,
+                int lineNumberWidth, int editorMinimumWidth) {
+    for (const auto& frame : frames) {
+        int lineNumbers = lineNumberWidth;
+        if (lineNumbers > 0 &&
+            frame.rect.width - gutterWidth - lineNumbers <
+               editorMinimumWidth) {
+            lineNumbers = 0;
+        }
+        output.push_back({
+            frame.id,
+            frame.rect,
+            {frame.rect.x + lineNumbers, frame.rect.y,
+             frame.rect.width - gutterWidth - lineNumbers, frame.rect.height},
+            {frame.rect.right() - gutterWidth, frame.rect.y, gutterWidth,
+             frame.rect.height},
+            lineNumbers > 0
+               ? Rect{frame.rect.x, frame.rect.y, lineNumbers,
+                      frame.rect.height}
+                            : Rect{0, 0, 0, 0},
+        });
+    }
 }
 
 void addNode(ShellViewState& view, ShellNodeKind kind, std::string id,
@@ -232,6 +238,16 @@ std::size_t ShellState::paneCount() const noexcept {
     std::vector<PaneId> ids;
     collectIds(*impl_->root, ids);
     return ids.size();
+}
+
+std::vector<PaneFrame> ShellState::paneFrames(Rect rect) const {
+    std::vector<PaneFrame> frames;
+    if (canLayout(*impl_->root, rect)) {
+        layoutPaneFrames(*impl_->root, rect, frames);
+    } else {
+        frames.push_back({impl_->active, rect});
+    }
+    return frames;
 }
 
 PaneId ShellState::splitActive(SplitAxis axis) {
@@ -662,26 +678,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
 
     const int lineNumberWidth = std::max(0, request.lineNumberGutterWidth);
     const int editorMinimumWidth = request.style.dimensions.editorMinimumWidth;
-    if (canLayout(*state.impl_->root, editor)) {
-        layoutPanes(*state.impl_->root, editor, view.panes, contentGutter,
-                    lineNumberWidth, editorMinimumWidth);
-    } else {
-        int panelessNumbers = lineNumberWidth;
-        if (panelessNumbers > 0 &&
-            editor.width - contentGutter - panelessNumbers < editorMinimumWidth) {
-            panelessNumbers = 0;
-        }
-        view.panes.push_back({
-            state.impl_->active,
-            editor,
-            {editor.x + panelessNumbers, editor.y,
-             editor.width - contentGutter - panelessNumbers, editor.height},
-            {editor.right() - contentGutter, editor.y, contentGutter, editor.height},
-            panelessNumbers > 0
-                ? Rect{editor.x, editor.y, panelessNumbers, editor.height}
-                : Rect{0, 0, 0, 0},
-        });
-    }
+    layoutPanes(state.paneFrames(editor), view.panes, contentGutter,
+                lineNumberWidth, editorMinimumWidth);
 
     for (const auto& pane : view.panes) {
         const auto suffix = std::to_string(pane.id.value());

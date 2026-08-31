@@ -143,6 +143,24 @@ HitTester consume the same solved surface. The provider label is derived from
 the active semantic `TreeProviderKind` through the existing authoritative panel
 provider mapping, not copied from `ShellLayoutRequest`.
 
+Document grid geometry follows the same pattern. `SolvedDocumentSurface`
+derives the line-number band, document content, and scrollbar gutter from the
+solved `document.viewport` node, the effective line-number setting, the
+published logical-line inventory, and grid style dimensions. Its content
+excludes both gutters. Line numbers are omitted when reserving them would leave
+less than the editor minimum width, matching the legacy shell rule. Picker
+presence removes the editor branch, so absence of the solved document viewport
+is the only condition for absence of the document surface. Renderer, hit
+testing, scrollbar interaction, caret placement, and presenter navigation all
+consume this surface. While the deprecated bridge remains, a parity oracle
+compares its pane geometry with the solved surface; separate corruption oracles
+prove migrated consumers ignore every legacy pane rectangle.
+Presenter-owned split topology subdivides the solved document viewport through
+one shared pane-frame solver. `SolvedDocumentSurface` carries those pane
+interiors and the active pane identity; visual navigation uses the active
+interior while the existing single rendered pane uses the first. Split topology
+does not become UI-schema or wire geometry.
+
 The schema move does not reposition the established shell layout: in the same
 commit, a parity oracle compares both notice and external-modification solved
 rectangles with the legacy rectangles the shell already projects. Notice then

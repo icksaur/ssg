@@ -400,15 +400,38 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& pane = snapshot->presentation().shell.panes.front();
-    ASSERT_TRUE(pane.lineNumbers.width > 0);
-    auto grid = ssg::Renderer{}.render(deprecatedGridFrame(*snapshot));
-    int const gx = pane.lineNumbers.x;
-    int const gw = pane.lineNumbers.width;  // 4 lines -> 1 digit -> width 2
+    auto const legacyPane = snapshot->presentation().shell.panes.front();
+    auto presentation = snapshot->presentation();
+    presentation.shell.panes.front() = {
+        legacyPane.id, {50, 10, 5, 3}, {51, 11, 2, 1},
+        {54, 10, 1, 3}, {50, 10, 1, 3}};
+    auto frame = deprecatedGridFrame(ssg::LegacyPresentationSnapshot{
+        snapshot->semantic().revision(), snapshot->semantic().topology(),
+        snapshot->semantic().client(), snapshot->semantic().sections(),
+        std::move(presentation)});
+    ASSERT_TRUE(frame.document().has_value());
+    if (!frame.document()) return;
+    auto const& document = *frame.document();
+    ASSERT_EQ(document.rect, legacyPane.frame);
+    ASSERT_EQ(document.content, legacyPane.content);
+    ASSERT_EQ(document.scrollbarGutter, legacyPane.scrollbar);
+    ASSERT_EQ(document.lineNumbers, legacyPane.lineNumbers);
+    auto grid = ssg::Renderer{}.render(frame);
+    ASSERT_EQ(grid.at(document.content.x, document.content.y).text,
+              std::string{"a"});
+    ASSERT_TRUE(grid.caret.has_value());
+    if (grid.caret) {
+        ASSERT_EQ(grid.caret->column, document.content.x);
+        ASSERT_EQ(grid.caret->row, document.content.y + 1);
+    }
+    int const gx = document.lineNumbers.x;
+    int const gw = document.lineNumbers.width;
     ASSERT_EQ(gw, 2);
     auto gutterText = [&](int row) {
         std::string s;
-        for (int c = 0; c < gw; ++c) s += grid.at(gx + c, pane.lineNumbers.y + row).text;
+        for (int c = 0; c < gw; ++c) {
+            s += grid.at(gx + c, document.lineNumbers.y + row).text;
+        }
         return s;
     };
     // Right-aligned number + trailing space: "1 ", "2 ", "3 ".
@@ -416,17 +439,18 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
     ASSERT_EQ(gutterText(1), std::string{"2 "});
     ASSERT_EQ(gutterText(2), std::string{"3 "});
     // The caret's line (row 1) uses the current-line roles; others use LineNumber.
-    ASSERT_EQ(grid.at(gx, pane.lineNumbers.y + 1).role,
+    ASSERT_EQ(grid.at(gx, document.lineNumbers.y + 1).role,
               ssg::SemanticRole::CurrentLineNumber);
-    ASSERT_EQ(grid.at(gx, pane.lineNumbers.y + 0).role,
+    ASSERT_EQ(grid.at(gx, document.lineNumbers.y + 0).role,
               ssg::SemanticRole::LineNumber);
     // The inactive gutter has its own background band: distinct from the
     // document content background beside it AND from the current line's band.
     auto gutterBg = [&](int row) {
-        return grid.colors[grid.at(gx, pane.lineNumbers.y + row).background];
+        return grid.colors[
+            grid.at(gx, document.lineNumbers.y + row).background];
     };
     auto const contentBg =
-        grid.colors[grid.at(pane.content.x, pane.content.y).background];
+        grid.colors[grid.at(document.content.x, document.content.y).background];
     ASSERT_TRUE(gutterBg(0) != contentBg);
     ASSERT_TRUE(gutterBg(0) != gutterBg(1));
     std::filesystem::remove_all(root);
@@ -2139,6 +2163,9 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
                 std::uint32_t{0}, 0, {}})
             .sections([&](ssg::SessionSnapshotSections& sections) {
                 sections.theme = theme;
+                sections.settings.entries.back() = {
+                    ssg::SettingKey::LineNumbers,
+                    {true, ssg::SettingScope::Workspace}};
                 sections.noticeView = ssg::NoticeView{
                     "Draft conflict",
                     {{"diff", "Diff", "draft.diff"}}};

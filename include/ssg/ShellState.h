@@ -202,6 +202,12 @@ struct PaneGeometry {
     friend bool operator==(const PaneGeometry&, const PaneGeometry&) = default;
 };
 
+struct PaneFrame {
+    PaneId id;
+    Rect rect;
+    friend bool operator==(const PaneFrame&, const PaneFrame&) = default;
+};
+
 // A clickable tab's rectangle plus its index into `sections().tabs.tabs`. Layout
 // publishes one per visible tab so pointer hit-testing maps a cell to a tab
 // without parsing the stringly-typed `tab.{i}` accessibility-node id.
@@ -308,6 +314,7 @@ public:
 
     [[nodiscard]] PaneId activePane() const noexcept;
     [[nodiscard]] std::size_t paneCount() const noexcept;
+    [[nodiscard]] std::vector<PaneFrame> paneFrames(Rect rect) const;
     PaneId splitActive(SplitAxis axis);
     [[nodiscard]] bool closeActivePane();
     void nextPane() noexcept;

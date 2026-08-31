@@ -110,10 +110,9 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
         ssg::test::gridFrameFromLegacy(std::move(*snapshot));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation().shell;
-    ASSERT_FALSE(shell.panes.empty());
-    if (shell.panes.empty()) return;
-    auto const content = shell.panes.front().content;
+    ASSERT_TRUE(frame->document().has_value());
+    if (!frame->document()) return;
+    auto const content = frame->document()->content;
     auto const& targets = frame->presentation().viewport.hitTargets;
     ASSERT_FALSE(targets.empty());
     if (targets.empty()) return;
@@ -624,6 +623,7 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
         ssg::test::gridFrameFromLegacy(std::move(projected));
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
+    ASSERT_FALSE(frame->document().has_value());
 
     const auto* viewport = frame->layout().find(
         ssg::UiNodeId{
@@ -733,14 +733,25 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto const legacyPane = snapshot->presentation().shell.panes.front();
+    auto presentation = snapshot->presentation();
+    presentation.shell.panes.front() = {
+        legacyPane.id, {50, 10, 5, 3}, {51, 11, 2, 1},
+        {54, 10, 1, 3}, {50, 10, 1, 3}};
+    auto frame = ssg::test::gridFrameFromLegacy(
+        ssg::LegacyPresentationSnapshot{
+            snapshot->semantic().revision(), snapshot->semantic().topology(),
+            snapshot->semantic().client(), snapshot->semantic().sections(),
+            std::move(presentation)});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    auto const& shell = frame->presentation().shell;
-    ASSERT_FALSE(shell.panes.empty());
-    if (shell.panes.empty()) return;
-    auto const gutter = shell.panes.front().scrollbar;
+    ASSERT_TRUE(frame->document().has_value());
+    if (!frame->document()) return;
+    ASSERT_EQ(frame->document()->rect, legacyPane.frame);
+    ASSERT_EQ(frame->document()->content, legacyPane.content);
+    ASSERT_EQ(frame->document()->scrollbarGutter, legacyPane.scrollbar);
+    ASSERT_EQ(frame->document()->lineNumbers, legacyPane.lineNumbers);
+    auto const gutter = frame->document()->scrollbarGutter;
     ASSERT_TRUE(gutter.height > 1);
     ssg::HitTester const tester{*frame};
     auto const region = ssg::HitRegion::EditorScrollbar;

@@ -97,6 +97,8 @@ SolveUiFrameResult trySolveFrameLayout(
         UiNodeId{std::string{kExternalModNodeId}},
         UiNodeId{std::string{kTabBarNodeId}},
         UiNodeId{std::string{kPanelNodeId}},
+        UiNodeId{std::string{kDocumentViewportNodeId}},
+        UiNodeId{std::string{kDocumentNodeId}},
         UiNodeId{std::string{kFindResultsViewportNodeId}},
     };
     if (semantic.sections().promptView) {
@@ -196,6 +198,7 @@ GridFrame::GridFrame(SessionSnapshot semantic,
       basis_{basis} {
     adoptLegacyPalette(palette_, presentation_);
     solvePanel(0, false);
+    solveDocument(nullptr);
 }
 
 GridFrame::GridFrame(SessionSnapshot semantic,
@@ -221,10 +224,36 @@ void GridFrame::solvePanel(std::uint32_t treeFirstVisible,
                                presentation_.style);
 }
 
+void GridFrame::solveDocument(const ShellState* shell) {
+    const auto* node =
+        layout_.find(UiNodeId{std::string{kDocumentViewportNodeId}});
+    if (!node) {
+        document_.reset();
+        return;
+    }
+    bool lineNumbers = false;
+    if (const auto* setting =
+            semantic_.sections().settings.find(SettingKey::LineNumbers)) {
+        if (const auto* enabled =
+                std::get_if<bool>(&setting->effective.value)) {
+            lineNumbers = *enabled;
+        }
+    }
+    const auto lines = static_cast<std::uint32_t>(
+        semantic_.sections().syntax.indentation().size());
+    const auto paneFrames =
+        shell ? shell->paneFrames(node->rect)
+              : std::vector<PaneFrame>{{PaneId{0}, node->rect}};
+    const auto activePane = shell ? shell->activePane() : PaneId{0};
+    document_ = solveDocumentSurface(
+        *node, paneFrames, activePane, lineNumbers, lines,
+        presentation_.style.dimensions);
+}
+
 std::optional<GridFrame> GridFrame::fromLegacy(
     LegacyPresentationSnapshot legacy, GridBasis basis,
     PaletteReport palette, std::uint32_t treeFirstVisible,
-    bool revealTreeSelection) {
+    bool revealTreeSelection, const ShellState& shell) {
     auto result =
         trySolveFrameLayout(legacy.semantic_, legacy.presentation_);
     if (!result.tree) return std::nullopt;
@@ -234,6 +263,7 @@ std::optional<GridFrame> GridFrame::fromLegacy(
                     std::move(*result.tree),
                     basis, std::move(palette)};
     frame.solvePanel(treeFirstVisible, revealTreeSelection);
+    frame.solveDocument(&shell);
     return frame;
 }
 
@@ -302,7 +332,8 @@ std::optional<GridFrame> GridPresenter::project(
         std::move(*snapshot),
         GridBasis{viewId_, *state.adoptedRevision, nextGeneration},
         std::move(request.palette), state.treeFirstVisible,
-        selectedTree != state.treeSelection || !state.panelVisible);
+        selectedTree != state.treeSelection || !state.panelVisible,
+        state.shell);
     if (!frame) return std::nullopt;
     state.generation = nextGeneration;
     presentation = &frame->presentation();
@@ -311,6 +342,12 @@ std::optional<GridFrame> GridPresenter::project(
         presentation->viewport.firstVisualRow;
     state.navigation.firstVisualColumn =
         presentation->viewport.firstVisualColumn;
+    if (frame->document()) {
+        state.paneContentRows = static_cast<std::uint32_t>(
+            std::max(frame->document()->content.height, 1));
+        state.paneContentColumns = static_cast<std::uint32_t>(
+            std::max(frame->document()->content.width, 1));
+    }
     if (frame->panel()) {
         state.treeFirstVisible = frame->panel()->firstVisible;
         state.panelVisible = true;
@@ -365,21 +402,18 @@ GridActionResult GridPresenter::apply(ViewActionRequest const& request,
                 activeDiff = &*found;
             }
         }
-        const auto activePane = std::ranges::find(
-            presentation->shell.panes, state.shell.activePane(),
-            &PaneGeometry::id);
-        const auto paneColumns =
-            activePane == presentation->shell.panes.end()
-                ? presentation->viewport.dimensions.columns
-                : static_cast<std::uint32_t>(
-                      std::max(activePane->content.width, 1));
-        const auto paneRows =
-            activePane == presentation->shell.panes.end()
-                ? std::max(
-                      presentation->viewport.scrollbar.viewportRows,
-                      std::uint32_t{1})
-                : static_cast<std::uint32_t>(
-                      std::max(activePane->content.height, 1));
+        const auto* activeDocumentPane = frame.document()
+            ? &frame.document()->panes[frame.document()->activePaneIndex]
+            : nullptr;
+        const auto paneColumns = activeDocumentPane
+            ? static_cast<std::uint32_t>(
+                  std::max(activeDocumentPane->content.width, 1))
+            : presentation->viewport.dimensions.columns;
+        const auto paneRows = activeDocumentPane
+            ? static_cast<std::uint32_t>(
+                  std::max(activeDocumentPane->content.height, 1))
+            : std::max(presentation->viewport.scrollbar.viewportRows,
+                       std::uint32_t{1});
         const auto* wordWrapSetting =
             frame.sections().settings.find(SettingKey::WordWrap);
         const auto* wordWrap =

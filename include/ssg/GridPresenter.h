@@ -77,6 +77,9 @@ public:
     [[nodiscard]] std::optional<SolvedPanelSurface> const& panel() const noexcept {
         return panel_;
     }
+    [[nodiscard]] std::optional<SolvedDocumentSurface> const& document() const noexcept {
+        return document_;
+    }
     // CONTRACT: Direct value construction requires a corresponding, solvable
     // semantic UI frame and throws std::logic_error otherwise. GridPresenter
     // reports the same rejection through project()'s nullopt result.
@@ -90,14 +93,16 @@ private:
     [[nodiscard]] static std::optional<GridFrame> fromLegacy(
         LegacyPresentationSnapshot legacy, GridBasis basis,
         PaletteReport palette, std::uint32_t treeFirstVisible,
-        bool revealTreeSelection);
+        bool revealTreeSelection, const ShellState& shell);
     void solvePanel(std::uint32_t treeFirstVisible, bool revealTreeSelection);
+    void solveDocument(const ShellState* shell);
 
     SessionSnapshot semantic_;
     PresentationSnapshot presentation_;
     SolvedGridTree layout_;
     PaletteReport palette_;
     std::optional<SolvedPanelSurface> panel_;
+    std::optional<SolvedDocumentSurface> document_;
     GridBasis basis_;
 };
 

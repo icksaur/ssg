@@ -1019,13 +1019,14 @@ void paintDocument(CellGrid& grid, GridFrame const& snapshot,
     }
 }
 
-void paintScrollbar(CellGrid& grid, PaneGeometry const& pane,
+void paintScrollbar(CellGrid& grid, SolvedDocumentSurface const& document,
                      ViewportViewState const& viewport,
                      ThemeSnapshot const& theme, std::uint8_t background,
                      Style const& style) {
-    paintScrollGutter(grid, pane.scrollbar.x, pane.scrollbar.y,
-                        pane.scrollbar.height, viewport.scrollbar, theme,
-                        background, style);
+    paintScrollGutter(grid, document.scrollbarGutter.x,
+                     document.scrollbarGutter.y,
+                     document.scrollbarGutter.height, viewport.scrollbar,
+                     theme, background, style);
 }
 
 // The left line-number gutter. Each visible row shows
@@ -1033,8 +1034,9 @@ void paintScrollbar(CellGrid& grid, PaneGeometry const& pane,
 // wrapped continuation row (firstSpan != 0) shows a blank gutter; the caret's
 // logical line uses the current-line roles.
 void paintLineNumbers(CellGrid& grid, GridFrame const& snapshot,
-                       PaneGeometry const& pane, ThemeSnapshot const& theme) {
-    if (pane.lineNumbers.width <= 0) return;
+                      SolvedDocumentSurface const& document,
+                      ThemeSnapshot const& theme) {
+    if (document.lineNumbers.width <= 0) return;
     auto const& viewport = snapshot.presentation().viewport;
     auto const numberFg = semanticIndex(theme, SemanticRole::LineNumber);
     auto const numberBg = semanticIndex(theme, SemanticRole::LineNumberBackground);
@@ -1053,12 +1055,15 @@ void paintLineNumbers(CellGrid& grid, GridFrame const& snapshot,
         return std::find(caretLines.begin(), caretLines.end(), logicalLine) !=
                caretLines.end();
     };
-    int const width = pane.lineNumbers.width;
+    int const width = document.lineNumbers.width;
     for (std::size_t rowIndex = 0; rowIndex < viewport.visibleRows.size();
          ++rowIndex) {
-        if (rowIndex >= static_cast<std::size_t>(pane.lineNumbers.height)) break;
+        if (rowIndex >=
+            static_cast<std::size_t>(document.lineNumbers.height)) {
+            break;
+        }
         auto const& row = viewport.visibleRows[rowIndex];
-        int const y = pane.lineNumbers.y + static_cast<int>(rowIndex);
+        int const y = document.lineNumbers.y + static_cast<int>(rowIndex);
         bool const isCurrent = isCaretLine(row.logicalLine);
         auto const fg = isCurrent ? currentFg : numberFg;
         auto const bg = isCurrent ? currentBg : numberBg;
@@ -1079,18 +1084,18 @@ void paintLineNumbers(CellGrid& grid, GridFrame const& snapshot,
             }
         }
         for (int i = 0; i < width; ++i) {
-            put(grid, pane.lineNumbers.x + i, y, std::string{label[i]}, fg, bg,
-                role);
+            put(grid, document.lineNumbers.x + i, y,
+                std::string{label[i]}, fg, bg, role);
         }
     }
     // Rows below the document content (past the last visible row) get a blank
     // gutter in the inactive gutter background so the column reads as a solid
     // band distinct from the document content.
-    for (int y = pane.lineNumbers.y +
+    for (int y = document.lineNumbers.y +
                  static_cast<int>(viewport.visibleRows.size());
-         y < pane.lineNumbers.bottom(); ++y) {
+         y < document.lineNumbers.bottom(); ++y) {
         for (int i = 0; i < width; ++i) {
-            put(grid, pane.lineNumbers.x + i, y, " ", numberFg, numberBg,
+            put(grid, document.lineNumbers.x + i, y, " ", numberFg, numberBg,
                 SemanticRole::LineNumber);
         }
     }
@@ -1343,9 +1348,9 @@ CellGrid Renderer::render(GridFrame const& snapshot,
         paintPanelTree(grid, *snapshot.panel(), theme, panelBackground,
                        snapshot.sections().focus == FocusTarget::Panel, style);
     }
-    if (!shell.panes.empty()) {
-        fillRect(grid, shell.panes.front().content, foreground,
-                 documentBackground, documentBackgroundRole);
+    if (snapshot.document() ||
+        snapshot.layout().find(
+            UiNodeId{std::string{kFindResultsViewportNodeId}})) {
         if (const auto* palette = snapshot.layout().find(
                 UiNodeId{std::string{kFindResultsViewportNodeId}})) {
             const auto paletteBackground = semanticIndex(
@@ -1358,16 +1363,19 @@ CellGrid Renderer::render(GridFrame const& snapshot,
                      SemanticRole::Canvas);
             paintPalette(grid, snapshot.palette(), solved, theme,
                          paletteBackground, style);
-        } else {
-            paintDocument(grid, snapshot, shell.panes.front().content, theme,
+        } else if (snapshot.document()) {
+            const auto& document = *snapshot.document();
+            fillRect(grid, document.content, foreground, documentBackground,
+                     documentBackgroundRole);
+            paintDocument(grid, snapshot, document.content, theme,
                            documentBackground, style, lineCache);
             // After the document: a diagnostic underlines whatever the cell
             // already shows rather than replacing it.
-            paintDiagnostics(grid, snapshot, shell.panes.front().content);
-            paintHyperlinks(grid, snapshot, shell.panes.front().content);
-            paintLineNumbers(grid, snapshot, shell.panes.front(), theme);
-            paintScrollbar(grid, shell.panes.front(), snapshot.presentation().viewport,
-                            theme, documentBackground, style);
+            paintDiagnostics(grid, snapshot, document.content);
+            paintHyperlinks(grid, snapshot, document.content);
+            paintLineNumbers(grid, snapshot, document, theme);
+            paintScrollbar(grid, document, snapshot.presentation().viewport,
+                           theme, documentBackground, style);
 
             // Paint the reserved prompt rows (find/replace/settings) and place
             // the hardware cursor at the query when the prompt is focused.
@@ -1398,7 +1406,7 @@ CellGrid Renderer::render(GridFrame const& snapshot,
             // (a terminal has one hardware cursor), but only when the editor is
             // focused.
             if (snapshot.sections().focus == FocusTarget::Editor) {
-                auto const& content = shell.panes.front().content;
+                auto const& content = document.content;
                 auto const& viewport = snapshot.presentation().viewport;
                 auto const& selections =
                     snapshot.sections().selection;

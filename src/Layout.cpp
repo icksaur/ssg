@@ -300,6 +300,60 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
     return solved;
 }
 
+SolvedDocumentSurface solveDocumentSurface(
+    const SolvedGridNode& viewport, const std::vector<PaneFrame>& paneFrames,
+    PaneId activePane, bool lineNumbers,
+    std::uint32_t logicalLineCount, const StyleDimensions& dimensions) {
+    const int scrollbarWidth =
+        viewport.scroll == ScrollAxis::Vertical
+            ? std::clamp(dimensions.scrollbarGutterWidth, 0,
+                         viewport.rect.width)
+            : 0;
+    const int requestedLineNumberWidth =
+        lineNumbers
+            ? static_cast<int>(
+                  std::to_string(std::max(logicalLineCount, 1u)).size()) +
+                  1
+            : 0;
+    SolvedDocumentSurface solved;
+    solved.rect = viewport.rect;
+    auto frames = paneFrames;
+    if (frames.empty()) frames.push_back({PaneId{0}, viewport.rect});
+    solved.panes.reserve(frames.size());
+    for (const auto& pane : frames) {
+        int lineNumberWidth = requestedLineNumberWidth;
+        if (lineNumberWidth > 0 &&
+            pane.rect.width - scrollbarWidth - lineNumberWidth <
+                dimensions.editorMinimumWidth) {
+            lineNumberWidth = 0;
+        }
+        solved.panes.push_back({
+            pane.id,
+            pane.rect,
+            {pane.rect.x + lineNumberWidth, pane.rect.y,
+             pane.rect.width - scrollbarWidth - lineNumberWidth,
+             pane.rect.height},
+            {pane.rect.right() - scrollbarWidth, pane.rect.y,
+             scrollbarWidth, pane.rect.height},
+            lineNumberWidth > 0
+                ? Rect{pane.rect.x, pane.rect.y, lineNumberWidth,
+                       pane.rect.height}
+                : Rect{},
+        });
+    }
+    const auto active = std::ranges::find(
+        solved.panes, activePane, &SolvedDocumentPane::id);
+    solved.activePaneIndex =
+        active == solved.panes.end()
+            ? 0
+            : static_cast<std::size_t>(
+                  std::distance(solved.panes.begin(), active));
+    solved.content = solved.panes.front().content;
+    solved.scrollbarGutter = solved.panes.front().scrollbarGutter;
+    solved.lineNumbers = solved.panes.front().lineNumbers;
+    return solved;
+}
+
 namespace {
 
 void solveNode(const LayoutNode& node, Rect frame,
