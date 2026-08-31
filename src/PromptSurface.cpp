@@ -55,7 +55,7 @@ bool validRequest(const PromptRequest& request) {
         return false;
     }
 
-    // The layout looks controls up by id (solveLayout + SolvedLayout::find), so
+    // The layout looks controls up by id, so
     // ids must be distinct across every control; a collision would map a control
     // to the wrong rect.
     std::vector<std::string_view> ids;
@@ -74,10 +74,12 @@ bool validRequest(const PromptRequest& request) {
 }
 
 LayoutNode layoutNodeFor(const UiNode& node) {
-    LayoutNode layout{node.id.value(), std::nullopt, node.size};
+    LayoutNode layout{node.id, node.size};
     if (const auto* container = std::get_if<UiContainer>(&node.content)) {
         layout.axis = container->axis;
         layout.inset = container->inset;
+        layout.gap = container->gap;
+        layout.scroll = container->scroll;
         layout.children.reserve(container->children.size());
         for (const auto& child : container->children) {
             layout.children.push_back(layoutNodeFor(child));
@@ -258,7 +260,7 @@ PromptLayoutResult computePromptLayout(const PromptSurface& surface,
                          surface.activeInput()};
 
     const LayoutNode root = layoutNodeFor(promptTree);
-    const auto solved = solveLayout(root, reservation);
+    const auto solved = solveGridTree(root, reservation);
     if (!solved) {
         return {PromptError{PromptErrorCode::InvalidReservation,
                             "prompt controls exceed reservation width"},
@@ -269,7 +271,7 @@ PromptLayoutResult computePromptLayout(const PromptSurface& surface,
     // same order -- never a second content resolution.
     for (const auto& control : resolvePromptControls(request)) {
         const UiNode* node = controlNode(promptTree, control.id);
-        const SolvedBox* box = node ? solved->find(node->id.value()) : nullptr;
+        const SolvedGridNode* box = node ? solved->find(node->id) : nullptr;
         if (!box) {
             return {PromptError{PromptErrorCode::InvalidReservation,
                                 "prompt tree does not contain a control"},

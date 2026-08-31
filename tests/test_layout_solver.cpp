@@ -11,23 +11,23 @@ namespace {
 using namespace ssg;
 
 LayoutNode leaf(std::string id, Size size) {
-    return LayoutNode{std::move(id), ShellNodeKind::Pane, size, Axis::Column, {}, {}};
+    return LayoutNode{UiNodeId{std::move(id)}, size};
 }
 
-const SolvedBox& box(const SolvedLayout& layout, std::string_view id) {
-    const auto* found = layout.find(id);
+const SolvedGridNode& box(const SolvedGridTree& layout, std::string id) {
+    const auto* found = layout.find(UiNodeId{std::move(id)});
     ASSERT_TRUE(found != nullptr);
-    static SolvedBox empty{};
+    static SolvedGridNode empty{};
     return found ? *found : empty;
 }
 
 // A vertical stack: fixed header, flex body, fixed footer. Hand-computed.
 TEST(columnStackPlacesExactThenFillsFlex) {
     LayoutNode root{
-        "root", std::nullopt, Size::flex(), Axis::Column, {},
+        UiNodeId{"root"}, Size::flex(), Axis::Column, {},
         {leaf("header", Size::exact(1)), leaf("body", Size::flex()),
          leaf("footer", Size::exact(1))}};
-    auto solved = solveLayout(root, {0, 0, 10, 5});
+    auto solved = solveGridTree(root, {0, 0, 10, 5});
     ASSERT_TRUE(solved.has_value());
     if (!solved) return;
     ASSERT_EQ(box(*solved, "root").rect, (Rect{0, 0, 10, 5}));
@@ -39,9 +39,9 @@ TEST(columnStackPlacesExactThenFillsFlex) {
 // Two flex siblings split the width equally; the odd cell goes to the LAST child
 // (reproduces the old pane rule `rect.width - firstWidth`).
 TEST(rowFlexSplitsEquallyRemainderToLast) {
-    LayoutNode root{"root", std::nullopt, Size::flex(), Axis::Row, {},
+    LayoutNode root{UiNodeId{"root"}, Size::flex(), Axis::Row, {},
                     {leaf("left", Size::flex()), leaf("right", Size::flex())}};
-    auto solved = solveLayout(root, {0, 0, 11, 4});
+    auto solved = solveGridTree(root, {0, 0, 11, 4});
     ASSERT_TRUE(solved.has_value());
     if (!solved) return;
     ASSERT_EQ(box(*solved, "left").rect, (Rect{0, 0, 5, 4}));   // 11/2 == 5
@@ -50,9 +50,9 @@ TEST(rowFlexSplitsEquallyRemainderToLast) {
 
 // A single flex child takes the whole remainder after the exact sibling.
 TEST(singleFlexTakesAllRemainder) {
-    LayoutNode root{"root", std::nullopt, Size::flex(), Axis::Row, {},
+    LayoutNode root{UiNodeId{"root"}, Size::flex(), Axis::Row, {},
                     {leaf("bar", Size::exact(20)), leaf("content", Size::flex())}};
-    auto solved = solveLayout(root, {0, 0, 80, 24});
+    auto solved = solveGridTree(root, {0, 0, 80, 24});
     ASSERT_TRUE(solved.has_value());
     if (!solved) return;
     ASSERT_EQ(box(*solved, "bar").rect, (Rect{0, 0, 20, 24}));
@@ -63,9 +63,10 @@ TEST(singleFlexTakesAllRemainder) {
 // fills the content rect (frame minus inset).
 TEST(insetReservesTheFrameOnEveryEdge) {
     LayoutNode root{
-        "box", std::nullopt, Size::flex(), Axis::Column, Inset::of(2, 3, 1, 4),
+        UiNodeId{"box"}, Size::flex(), Axis::Column,
+        Inset::of(2, 3, 1, 4),
         {leaf("inner", Size::flex())}};
-    auto solved = solveLayout(root, {0, 0, 20, 20});
+    auto solved = solveGridTree(root, {0, 0, 20, 20});
     ASSERT_TRUE(solved.has_value());
     if (!solved) return;
     ASSERT_EQ(box(*solved, "box").rect, (Rect{0, 0, 20, 20}));  // full frame
@@ -77,9 +78,10 @@ TEST(insetReservesTheFrameOnEveryEdge) {
 // share the inset-reduced width and sit at the inset top.
 TEST(insetAppliesBeforeChildAxisDistribution) {
     LayoutNode root{
-        "outer", std::nullopt, Size::flex(), Axis::Row, Inset::of(1, 1, 1, 1),
+        UiNodeId{"outer"}, Size::flex(), Axis::Row,
+        Inset::of(1, 1, 1, 1),
         {leaf("a", Size::exact(4)), leaf("b", Size::flex())}};
-    auto solved = solveLayout(root, {0, 0, 10, 6});
+    auto solved = solveGridTree(root, {0, 0, 10, 6});
     ASSERT_TRUE(solved.has_value());
     if (!solved) return;
     // content = {1,1,8,4}; a exact 4 at x=1; b flex 4 at x=5
@@ -88,47 +90,97 @@ TEST(insetAppliesBeforeChildAxisDistribution) {
 }
 
 // When the Exact children exceed the available extent, the layout does not fit:
-// solveLayout returns nullopt rather than a clamped/overlapping layout.
+// solveGridTree returns nullopt rather than a clamped/overlapping layout.
 TEST(exactOverflowReturnsFailure) {
-    LayoutNode root{"root", std::nullopt, Size::flex(), Axis::Row, {},
+    LayoutNode root{UiNodeId{"root"}, Size::flex(), Axis::Row, {},
                     {leaf("a", Size::exact(6)), leaf("b", Size::exact(6))}};
-    ASSERT_FALSE(solveLayout(root, {0, 0, 10, 4}).has_value());  // 12 > 10
+    ASSERT_FALSE(solveGridTree(root, {0, 0, 10, 4}).has_value());  // 12 > 10
     // Exactly fitting is not a failure.
-    ASSERT_TRUE(solveLayout(root, {0, 0, 12, 4}).has_value());
+    ASSERT_TRUE(solveGridTree(root, {0, 0, 12, 4}).has_value());
 }
 
 // Failure propagates from any depth, not just the root.
 TEST(exactOverflowInAChildFails) {
     LayoutNode inner{
-        "inner", std::nullopt, Size::flex(), Axis::Column, {},
+        UiNodeId{"inner"}, Size::flex(), Axis::Column, {},
         {leaf("x", Size::exact(5)), leaf("y", Size::exact(5))}};
-    LayoutNode root{"root", std::nullopt, Size::flex(), Axis::Row, {},
+    LayoutNode root{UiNodeId{"root"}, Size::flex(), Axis::Row, {},
                     {leaf("side", Size::exact(2)), std::move(inner)}};
     // root fits (2 + flex), but inner needs height 10 in a height-6 bound.
-    ASSERT_FALSE(solveLayout(root, {0, 0, 20, 6}).has_value());
+    ASSERT_FALSE(solveGridTree(root, {0, 0, 20, 6}).has_value());
 }
 
 // A container of only Exact children with leftover space is NOT a failure; the
 // remainder is simply unused.
 TEST(zeroFlexWithLeftoverIsAllowed) {
-    LayoutNode root{"root", std::nullopt, Size::flex(), Axis::Row, {},
+    LayoutNode root{UiNodeId{"root"}, Size::flex(), Axis::Row, {},
                     {leaf("a", Size::exact(3)), leaf("b", Size::exact(3))}};
-    auto solved = solveLayout(root, {0, 0, 10, 4});
+    auto solved = solveGridTree(root, {0, 0, 10, 4});
     ASSERT_TRUE(solved.has_value());
     if (!solved) return;
     ASSERT_EQ(box(*solved, "a").rect, (Rect{0, 0, 3, 4}));
     ASSERT_EQ(box(*solved, "b").rect, (Rect{3, 0, 3, 4}));  // 4 cells left unused
 }
 
-// Structural nodes carry no kind; leaves carry theirs. `find` returns them all.
-TEST(structuralKindIsPreservedThroughSolving) {
-    LayoutNode root{"root", std::nullopt, Size::flex(), Axis::Column, {},
+TEST(nodeIdentityIsPreservedThroughSolving) {
+    LayoutNode root{UiNodeId{"root"}, Size::flex(), Axis::Column, {},
                     {leaf("header", Size::exact(1))}};
-    auto solved = solveLayout(root, {0, 0, 8, 3});
+    auto solved = solveGridTree(root, {0, 0, 8, 3});
     ASSERT_TRUE(solved.has_value());
     if (!solved) return;
-    ASSERT_FALSE(box(*solved, "root").kind.has_value());
-    ASSERT_TRUE(box(*solved, "header").kind.has_value());
+    ASSERT_EQ(box(*solved, "root").id, UiNodeId{"root"});
+    ASSERT_EQ(box(*solved, "header").id, UiNodeId{"header"});
+}
+
+TEST(gapSeparatesChildrenBeforeFlexDistribution) {
+    LayoutNode root{UiNodeId{"root"}, Size::flex(), Axis::Row, {},
+                    {leaf("fixed", Size::exact(3)),
+                     leaf("first", Size::flex()),
+                     leaf("second", Size::flex())},
+                    Gap::of(2)};
+    auto solved = solveGridTree(root, {0, 0, 15, 4});
+    ASSERT_TRUE(solved.has_value());
+    if (!solved) return;
+    ASSERT_EQ(box(*solved, "fixed").rect, (Rect{0, 0, 3, 4}));
+    ASSERT_EQ(box(*solved, "first").rect, (Rect{5, 0, 4, 4}));
+    ASSERT_EQ(box(*solved, "second").rect, (Rect{11, 0, 4, 4}));
+}
+
+TEST(scrollOwnershipSurvivesSolving) {
+    LayoutNode root{UiNodeId{"root"}, Size::flex(), Axis::Column, {},
+                    {leaf("content", Size::flex())}, {},
+                    ScrollAxis::Vertical};
+    auto solved = solveGridTree(root, {2, 3, 10, 6});
+    ASSERT_TRUE(solved.has_value());
+    if (!solved) return;
+    ASSERT_EQ(box(*solved, "root").scroll, ScrollAxis::Vertical);
+    ASSERT_EQ(box(*solved, "root").content, (Rect{2, 3, 10, 6}));
+    ASSERT_EQ(box(*solved, "content").scroll, ScrollAxis::None);
+}
+
+TEST(insetAndGapOverflowReturnFailure) {
+    LayoutNode inset{UiNodeId{"inset"}, Size::flex(), Axis::Row,
+                     Inset::of(4, 4, 0, 0),
+                     {leaf("content", Size::flex())}};
+    ASSERT_FALSE(solveGridTree(inset, {0, 0, 6, 2}).has_value());
+
+    LayoutNode gaps{UiNodeId{"gaps"}, Size::flex(), Axis::Row, {},
+                    {leaf("a", Size::exact(2)),
+                     leaf("b", Size::exact(2))},
+                    Gap::of(4)};
+    ASSERT_FALSE(solveGridTree(gaps, {0, 0, 7, 2}).has_value());
+}
+
+TEST(invalidNodeIdentityIsRejected) {
+    LayoutNode empty{UiNodeId{}, Size::flex()};
+    ASSERT_THROWS(solveGridTree(empty, {0, 0, 4, 2}),
+                  std::invalid_argument);
+
+    LayoutNode duplicate{
+        UiNodeId{"root"}, Size::flex(), Axis::Row, {},
+        {leaf("same", Size::flex()), leaf("same", Size::flex())}};
+    ASSERT_THROWS(solveGridTree(duplicate, {0, 0, 4, 2}),
+                  std::invalid_argument);
 }
 
 // The lifted constraint vocabulary excludes invalid geometry at construction: a
@@ -154,12 +206,12 @@ TEST(constraintsRejectNegativeGeometryAtConstruction) {
 
 // The grid box solver does not support Auto (content) sizing; handing it an Auto
 // child is a misuse that fails distinctly, not the nullopt that means "no fit".
-TEST(solveLayoutRejectsAutoSizeDistinctly) {
-    LayoutNode root{"root", std::nullopt, Size::flex(), Axis::Row, {},
+TEST(solveGridTreeRejectsAutoSizeDistinctly) {
+    LayoutNode root{UiNodeId{"root"}, Size::flex(), Axis::Row, {},
                     {leaf("a", Size::autoSize())}};
     bool threw = false;
     try {
-        (void)solveLayout(root, {0, 0, 10, 1});
+        (void)solveGridTree(root, {0, 0, 10, 1});
     } catch (const std::invalid_argument&) {
         threw = true;
     }
@@ -177,9 +229,13 @@ int main() {
     RUN(exactOverflowReturnsFailure);
     RUN(exactOverflowInAChildFails);
     RUN(zeroFlexWithLeftoverIsAllowed);
-    RUN(structuralKindIsPreservedThroughSolving);
+    RUN(nodeIdentityIsPreservedThroughSolving);
+    RUN(gapSeparatesChildrenBeforeFlexDistribution);
+    RUN(scrollOwnershipSurvivesSolving);
+    RUN(insetAndGapOverflowReturnFailure);
+    RUN(invalidNodeIdentityIsRejected);
     RUN(constraintsRejectNegativeGeometryAtConstruction);
-    RUN(solveLayoutRejectsAutoSizeDistinctly);
+    RUN(solveGridTreeRejectsAutoSizeDistinctly);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

@@ -2,13 +2,9 @@
 
 // The composable box-tree layout engine (the grid solver).
 //
-// A LayoutNode tree is solved against a bounding Rect into a flat list of
-// SolvedBoxes -- one rectangle per node, in tree (emission) order. The layout
-// CONSTRAINTS the tree is built from (Axis, Size, Inset) are the medium-agnostic
-// vocabulary in LayoutConstraints.h; this header is the GRID interpretation of
-// them: it binds a node to a grid projection role (ShellNodeKind) and solves to
-// cell rectangles (Rect). A native client consumes the same constraints without
-// this solver.
+// A LayoutNode tree is solved against a bounding Rect into one SolvedGridNode
+// per UiNodeId, in tree order. This is the grid interpretation of the
+// medium-agnostic UI constraint vocabulary.
 //
 // Everything richer -- conditional presence, min/max widths, borders -- is
 // expressed by HOW THE TREE IS BUILT and rendered, not by the solver. The solver
@@ -16,8 +12,8 @@
 // when a container's Exact children cannot fit, rather than clamping to a garbage
 // layout.
 
-#include <ssg/LayoutConstraints.h>  // Axis, Size, Inset (medium-agnostic)
-#include <ssg/ShellState.h>         // Rect, ShellNodeKind (grid)
+#include <ssg/Geometry.h>
+#include <ssg/UiTree.h>
 
 #include <optional>
 #include <string>
@@ -27,34 +23,36 @@
 namespace ssg {
 
 struct LayoutNode {
-    std::string id;
-    // The semantic role for the accessibility/field projection, or nullopt for a
-    // STRUCTURAL container (root/body/content) that only groups children and is
-    // never projected into the shell's manifest.
-    std::optional<ShellNodeKind> kind;
+    UiNodeId id;
     Size size;
-    Axis axis = Axis::Column;  // how THIS node arranges its own children
+    Axis axis = Axis::Column;
     Inset inset;
     std::vector<LayoutNode> children;
+    Gap gap;
+    ScrollAxis scroll = ScrollAxis::None;
 };
 
-struct SolvedBox {
-    std::string id;
-    std::optional<ShellNodeKind> kind;  // nullopt for a structural container
-    Rect rect;                          // the node's full solved rectangle
+struct SolvedGridNode {
+    UiNodeId id;
+    Rect rect;
+    Rect content;
+    ScrollAxis scroll = ScrollAxis::None;
 
-    friend bool operator==(const SolvedBox&, const SolvedBox&) = default;
+    friend bool operator==(const SolvedGridNode&,
+                           const SolvedGridNode&) = default;
 };
 
-struct SolvedLayout {
-    std::vector<SolvedBox> boxes;  // one per node, in tree (emission) order
+struct SolvedGridTree {
+    std::vector<SolvedGridNode> nodes;
 
-    [[nodiscard]] const SolvedBox* find(std::string_view id) const noexcept;
+    [[nodiscard]] const SolvedGridNode* find(
+        const UiNodeId& id) const noexcept;
 };
 
-// Solve `root` within `bounds`. Returns nullopt when any container's Exact
-// children exceed its available main-axis cells (the layout does not fit).
-[[nodiscard]] std::optional<SolvedLayout> solveLayout(const LayoutNode& root,
-                                                      Rect bounds);
+// Returns nullopt when nonnegative bounds cannot contain an inset, gaps, or
+// exact children. Invalid identities and unsupported Auto sizes are misuse and
+// throw std::invalid_argument.
+[[nodiscard]] std::optional<SolvedGridTree> solveGridTree(
+    const LayoutNode& root, Rect bounds);
 
 }  // namespace ssg

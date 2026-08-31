@@ -173,43 +173,41 @@ double centerY(const Rect& rect) { return rect.y + rect.height / 2.0; }
 // The shell's region geometry as a box tree. The
 // builder is where sizing POLICY lives: the caller passes the already-decided
 // panel width (0 when the panel is absent), and distraction-free collapses the
-// tree to just the document. The solver then computes every region rect. Chrome
-// leaves carry their kind; structural containers (root/body/content) carry none
-// and are not projected. The document node is never emitted as an a11y node --
-// panes are -- so it is structural here too.
+// tree to just the document. The solver then computes every region rect.
+// Accessibility projection remains separate during this compatibility step.
 LayoutNode buildShellTree(bool distractionFree, int headerHeight,
                           int footerHeight, int tabBarHeight, int panelWidth,
                           bool showTabBar) {
     const auto exact = [](int cells) { return Size::exact(cells); };
-    LayoutNode document{"document", std::nullopt, Size::flex(), Axis::Column,
+    LayoutNode document{UiNodeId{"document"}, Size::flex(), Axis::Column,
                         {}, {}};
     if (distractionFree) return document;
 
-    LayoutNode content{"content", std::nullopt, Size::flex(), Axis::Column,
+    LayoutNode content{UiNodeId{"content"}, Size::flex(), Axis::Column,
                        {}, {}};
     // A picker (palette / file find) covers the document, which is not a
     // document view -- so the tab bar is suppressed and the picker's content
     // fills its row.  This also removes the one-row gap the tab bar left between
     // the input line and the results.
     if (showTabBar) {
-        content.children.push_back({"tabbar", ShellNodeKind::TabBar,
-                                    exact(tabBarHeight), Axis::Row, {}, {}});
+        content.children.push_back(
+            {UiNodeId{"tabbar"}, exact(tabBarHeight), Axis::Row, {}, {}});
     }
     content.children.push_back(std::move(document));
 
-    LayoutNode body{"body", std::nullopt, Size::flex(), Axis::Row, {}, {}};
+    LayoutNode body{UiNodeId{"body"}, Size::flex(), Axis::Row, {}, {}};
     if (panelWidth > 0) {
-        body.children.push_back({"panel", ShellNodeKind::Panel,
-                                 exact(panelWidth), Axis::Column, {}, {}});
+        body.children.push_back(
+            {UiNodeId{"panel"}, exact(panelWidth), Axis::Column, {}, {}});
     }
     body.children.push_back(std::move(content));
 
-    LayoutNode root{"root", std::nullopt, Size::flex(), Axis::Column, {}, {}};
-    root.children.push_back({"header", ShellNodeKind::Header, exact(headerHeight),
-                             Axis::Row, {}, {}});
+    LayoutNode root{UiNodeId{"root"}, Size::flex(), Axis::Column, {}, {}};
+    root.children.push_back(
+        {UiNodeId{"header"}, exact(headerHeight), Axis::Row, {}, {}});
     root.children.push_back(std::move(body));
-    root.children.push_back({"footer", ShellNodeKind::Footer, exact(footerHeight),
-                             Axis::Row, {}, {}});
+    root.children.push_back(
+        {UiNodeId{"footer"}, exact(footerHeight), Axis::Row, {}, {}});
     return root;
 }
 
@@ -355,7 +353,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                               request.viewport.columns -
                                   request.style.dimensions.editorMinimumWidth);
     }
-    auto solved = solveLayout(
+    auto solved = solveGridTree(
         buildShellTree(distractionFree, headerHeight, footerHeight, tabBarHeight,
                        panelWidth, showTabBar),
         {0, 0, request.viewport.columns, request.viewport.rows});
@@ -364,11 +362,11 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                                  "viewport too small for the shell layout"},
                 std::nullopt};
     }
-    Rect editor = solved->find("document")->rect;
+    Rect editor = solved->find(UiNodeId{"document"})->rect;
 
     if (!distractionFree) {
-        view.header = solved->find("header")->rect;
-        view.footer = solved->find("footer")->rect;
+        view.header = solved->find(UiNodeId{"header"})->rect;
+        view.footer = solved->find(UiNodeId{"footer"})->rect;
         addNode(view, ShellNodeKind::Header, "header", "Status header",
                  *view.header, SemanticRole::Header);
         addNode(view, ShellNodeKind::Footer, "footer", "Status footer",
@@ -415,7 +413,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         }
 
         if (panelWidth > 0) {
-            view.panel = solved->find("panel")->rect;
+            view.panel = solved->find(UiNodeId{"panel"})->rect;
             addNode(view, ShellNodeKind::Panel, "panel", "Side panel",
                      *view.panel, SemanticRole::PanelInactive);
             addNode(view, ShellNodeKind::PanelProvider, "panel.provider",
@@ -436,9 +434,9 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             }
         }
 
-        editor = solved->find("document")->rect;
+        editor = solved->find(UiNodeId{"document"})->rect;
         if (showTabBar) {
-            view.tabBar = solved->find("tabbar")->rect;
+            view.tabBar = solved->find(UiNodeId{"tabbar"})->rect;
             addNode(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
                      *view.tabBar, SemanticRole::TabInactive);
             // A tab draws as leftEdge + title[+dirtySuffix] + rightEdge; its width
