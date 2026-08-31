@@ -12,7 +12,6 @@ std::span<const SnapshotSection> viewSurfaceBackingSections(ViewSurface surface)
         SnapshotSection::Syntax};
     static constexpr std::array kFindResults{SnapshotSection::Palette};
     static constexpr std::array kTree{SnapshotSection::Tree};
-    static constexpr std::array kFooterPrompt{SnapshotSection::PromptView};
     static constexpr std::array kNotice{SnapshotSection::NoticeView};
     static constexpr std::array kExternalModification{
         SnapshotSection::ExternalModification};
@@ -21,8 +20,6 @@ std::span<const SnapshotSection> viewSurfaceBackingSections(ViewSurface surface)
         return kTabBar;
     case ViewSurface::FindResults:
         return kFindResults;
-    case ViewSurface::FooterPrompt:
-        return kFooterPrompt;
     case ViewSurface::Notice:
         return kNotice;
     case ViewSurface::ExternalModification:

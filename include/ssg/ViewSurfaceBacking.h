@@ -26,7 +26,6 @@ enum class SnapshotSection : std::uint8_t {
     Tree,
     Palette,
     PromptStatus,
-    PromptView,
     NoticeView,
     ExternalModification,
 };

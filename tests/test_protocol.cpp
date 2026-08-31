@@ -17,6 +17,7 @@
 #include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
 #include "chrome_authoring.h"
+#include "../src/legacy_prompt_compat.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -106,7 +107,11 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
     result.uiFrame = ssg::UiFrame::require(
         std::move(ui), std::move(uiState),
         ssg::buildPresenceSection(
-            validated, ssg::PresenceConfig::allPresent(validated)));
+            validated,
+            ssg::PresenceConfig::initial(
+                validated,
+                {ssg::UiNodeId{
+                    std::string{ssg::kFooterPromptNodeId}}})));
     return result;
 }
 
@@ -140,6 +145,111 @@ ssg::SessionSnapshotSections sectionsFocusedOn(ssg::FocusTarget target) {
     auto result = sections(ssg::Revision{4}, "focus");
     result.uiFrame = frameFocusedOn(result.uiFrame, target);
     return result;
+}
+
+ssg::SessionSnapshotSections sectionsWithFindPrompt(
+    ssg::Revision revision, std::string value) {
+    auto result = sections(revision, value);
+    ssg::PromptSurface prompt;
+    const auto opened = prompt.open(ssg::PromptRequest{
+        ssg::PromptKind::Find, "Find",
+        {{"find.query", "Find text", value}},
+        {{"find.toggle_case", "Case sensitive", true, 4}},
+        ssg::PromptMatchCount{"find.matches", "Match count", "1/3"},
+        {}});
+    ASSERT_TRUE(opened.accepted());
+    ssg::UiSchema schema{
+        result.uiFrame.version().generation,
+        ssg::withFooterPrompt(
+            ssg::assembleWholeScreen(
+                {}, "help.open", ssg::StyleDimensions{},
+                ssg::Style{}.inputLineSigil, std::nullopt),
+            prompt)
+            .root};
+    const auto validated = ssg::ValidatedSchema::validate(schema).takeSchema();
+    auto state = ssg::resolveUiState(
+        validated,
+        [&](std::string_view id) -> std::optional<ssg::ResolvedProvider> {
+            if (id == ssg::footerPromptControlNodeId("find.query").value()) {
+                return ssg::ResolvedProvider{
+                    value, "Find text", std::nullopt, true};
+            }
+            if (id ==
+                ssg::footerPromptControlNodeId("find.toggle_case").value()) {
+                return ssg::ResolvedProvider{
+                    "true", "Case sensitive", std::nullopt,
+                    std::nullopt};
+            }
+            if (id ==
+                ssg::footerPromptControlNodeId("find.matches").value()) {
+                return ssg::ResolvedProvider{
+                    "1/3", "Match count", std::nullopt, std::nullopt};
+            }
+            return std::nullopt;
+        });
+    state.focusPath = std::vector{
+        ssg::UiNodeId{std::string{ssg::kEditorNodeId}},
+        ssg::UiNodeId{std::string{ssg::kFooterPromptNodeId}}};
+    result.uiFrame = ssg::UiFrame::require(
+        std::move(schema), std::move(state),
+        ssg::buildPresenceSection(
+            validated, ssg::PresenceConfig::allPresent(validated)));
+    result.promptStatus.activeKind = ssg::PromptKind::Find;
+    return result;
+}
+
+std::pair<ssg::PromptStatusViewState, ssg::UiFrame>
+promptCompatibilityFrame(ssg::PromptRequest request) {
+    ssg::PromptSurface prompt;
+    const auto opened = prompt.open(request);
+    ASSERT_TRUE(opened.accepted());
+    ssg::UiSchema schema{
+        ssg::Generation{77},
+        ssg::withFooterPrompt(
+            ssg::assembleWholeScreen(
+                {}, "help.open", ssg::StyleDimensions{},
+                ssg::Style{}.inputLineSigil, std::nullopt),
+            prompt)
+            .root};
+    const auto validated = ssg::ValidatedSchema::validate(schema).takeSchema();
+    const auto controls = ssg::resolvePromptControls(request);
+    auto state = ssg::resolveUiState(
+        validated,
+        [&](std::string_view id) -> std::optional<ssg::ResolvedProvider> {
+            std::size_t inputIndex = 0;
+            for (const auto& control : controls) {
+                if (ssg::footerPromptControlNodeId(control.id).value() == id) {
+                    const bool input =
+                        control.kind == ssg::PromptControlKind::Input;
+                    return ssg::ResolvedProvider{
+                        control.kind == ssg::PromptControlKind::Toggle
+                            ? (control.checked ? "true" : "false")
+                            : control.value,
+                        control.accessibleLabel,
+                        control.command.empty()
+                            ? std::nullopt
+                            : std::optional{control.command},
+                        input ? std::optional{inputIndex == 0}
+                              : std::nullopt};
+                }
+                if (control.kind == ssg::PromptControlKind::Input) {
+                    ++inputIndex;
+                }
+            }
+            return std::nullopt;
+        });
+    state.focusPath = std::vector{
+        ssg::UiNodeId{std::string{ssg::kEditorNodeId}},
+        ssg::UiNodeId{
+            request.kind == ssg::PromptKind::Palette
+                ? std::string{ssg::kHeaderPromptInputNodeId}
+                : std::string{ssg::kFooterPromptNodeId}}};
+    return {
+        ssg::PromptStatusViewState{{}, request.kind},
+        ssg::UiFrame::require(
+            std::move(schema), std::move(state),
+            ssg::buildPresenceSection(
+                validated, ssg::PresenceConfig::allPresent(validated)))};
 }
 
 // A sections fixture whose medium-agnostic ui section is non-empty, so the wire
@@ -185,7 +295,11 @@ ssg::SessionSnapshotSections sectionsWithUi(ssg::Revision revision,
     result.uiFrame = ssg::UiFrame::require(
         std::move(ui), std::move(uiState),
         ssg::buildPresenceSection(
-            validated, ssg::PresenceConfig::allPresent(validated)));
+            validated,
+            ssg::PresenceConfig::initial(
+                validated,
+                {ssg::UiNodeId{
+                    std::string{ssg::kFooterPromptNodeId}}})));
     return result;
 }
 
@@ -227,7 +341,11 @@ ssg::UiFrame uiFrameWithFillerNodes(std::size_t fillerCount,
     return ssg::UiFrame::require(
         std::move(schema), std::move(state),
         ssg::buildPresenceSection(
-            validated, ssg::PresenceConfig::allPresent(validated)));
+            validated,
+            ssg::PresenceConfig::initial(
+                validated,
+                {ssg::UiNodeId{
+                    std::string{ssg::kFooterPromptNodeId}}})));
 }
 
 std::pair<ssg::SessionSnapshotSections, ssg::SessionSnapshotSections>
@@ -236,18 +354,12 @@ semanticFixtureSections() {
     auto after = sections(ssg::Revision{5}, "changed");
     before.uiFrame = frameFocusedOn(
         before.uiFrame, ssg::FocusTarget::ExternalModification);
-    after.uiFrame =
-        frameFocusedOn(after.uiFrame, ssg::FocusTarget::Prompt);
+    after = sectionsWithFindPrompt(ssg::Revision{5}, "changed");
     after.palette.activePicker =
         ssg::PickerActivation{ssg::SearchMode::Command,
                               ssg::PickerActivationId{9}};
     after.palette.commandCandidates.push_back(
         {"command.id", "Command", "detail"});
-    after.promptView = ssg::PromptView{
-        ssg::PromptKind::Find, "Find",
-        {{ssg::PromptControlKind::Input, "find.query", "Find text",
-          "changed", false, "find.update_query"}},
-        0};
     after.noticeView =
         ssg::NoticeView{"changed", {{"notice", "dismiss", "draft.dismiss"}}};
     after.watcherAvailable = false;
@@ -1064,7 +1176,7 @@ ssg::SessionDelta withCompatibilityFocus(
         source.style(), source.shell(), source.viewport(),
         std::move(frameDelta), focus, source.selectionNav(),
         source.promptProjection(), source.treeWindows(), source.palette(),
-        source.promptView(), source.noticeView(), source.watcherAvailable(),
+        source.legacyPromptView(), source.noticeView(), source.watcherAvailable(),
         external);
 }
 
@@ -1320,27 +1432,13 @@ TEST(sessionDeltaCarriesThePaletteSection) {
                 after.semantic().sections().palette);
 }
 
-// The additive PromptView section: it survives a snapshot round-trip when present,
-// an absent section decodes to none (an older frame lacking it is a valid frame
-// with no footer prompt), and a changed-flagged delta both opens and CLOSES it on
-// replay -- so a native/web client can render and drive the footer prompt without
-// the grid PresentationSnapshot.
-TEST(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone) {
-    ssg::PromptView view{
-        ssg::PromptKind::Find, "Find",
-        {{ssg::PromptControlKind::Input, "find.query", "Find text", "ab", false,
-          "find.update_query"},
-         {ssg::PromptControlKind::Toggle, "case", "Case sensitive", "", true,
-          "find.toggle_case"},
-         {ssg::PromptControlKind::Count, "matches", "Match count", "1/3", false,
-          ""}},
-        0};
-
-    auto openSections = sections(ssg::Revision{5}, "alpha");
-    openSections.promptView = view;
-    auto closedLowSections = sections(ssg::Revision{4}, "alpha");
+TEST(promptViewCompatibilityIsDerivedFromTheFrameAndNotRetained) {
+    auto openSections = sectionsWithFindPrompt(ssg::Revision{5}, "ab");
+    auto closedLowSections = sections(ssg::Revision{4}, "a");
     auto closedHighSections = sections(ssg::Revision{6}, "alpha");
-    ASSERT_FALSE(closedLowSections.promptView.has_value());
+    const auto expected = ssg::detail::legacyPromptView(
+        openSections.promptStatus, openSections.uiFrame);
+    ASSERT_TRUE(expected.valid && expected.view.has_value());
 
     auto open = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
@@ -1358,21 +1456,26 @@ TEST(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone) {
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3), closedHighSections);
 
-    // Present round-trips whole; absent decodes to none.
     auto const decodedOpen = ssg::ProtocolCodec{}.decodeSessionSnapshot(
         ssg::ProtocolCodec{}.encodeSessionSnapshot(open.semantic()));
     ASSERT_TRUE(decodedOpen.snapshot.has_value());
-    ASSERT_TRUE(decodedOpen.snapshot->sections().promptView == view);
+    const auto decodedView = ssg::detail::legacyPromptView(
+        decodedOpen.snapshot->sections().promptStatus,
+        decodedOpen.snapshot->sections().uiFrame);
+    ASSERT_TRUE(decodedView.valid);
+    ASSERT_EQ(decodedView.view, expected.view);
     auto const decodedClosed = ssg::ProtocolCodec{}.decodeSessionSnapshot(
         ssg::ProtocolCodec{}.encodeSessionSnapshot(closedLow.semantic()));
     ASSERT_TRUE(decodedClosed.snapshot.has_value());
-    ASSERT_FALSE(decodedClosed.snapshot->sections().promptView.has_value());
+    ASSERT_FALSE(ssg::detail::legacyPromptView(
+                     decodedClosed.snapshot->sections().promptStatus,
+                     decodedClosed.snapshot->sections().uiFrame)
+                     .view.has_value());
 
-    // A delta opening the prompt carries it and replays to the open view.
     auto openDelta = ssg::SessionSnapshotCodec{}.deriveDelta(
         closedLow.semantic(), open.semantic());
-    ASSERT_TRUE(openDelta.promptView().changed);
-    ASSERT_TRUE(openDelta.promptView().replacement.has_value());
+    ASSERT_TRUE(openDelta.legacyPromptView().changed);
+    ASSERT_EQ(openDelta.legacyPromptView().replacement, expected.view);
     auto const decodedOpenDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(openDelta));
     ASSERT_TRUE(decodedOpenDelta.delta.has_value());
@@ -1380,14 +1483,16 @@ TEST(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone) {
         ssg::SessionSnapshotCodec{}.replay(closedLow.semantic(),
                                            *decodedOpenDelta.delta);
     ASSERT_TRUE(openReplay.accepted());
-    ASSERT_TRUE(openReplay.snapshot->sections().promptView == view);
+    ASSERT_EQ(ssg::detail::legacyPromptView(
+                  openReplay.snapshot->sections().promptStatus,
+                  openReplay.snapshot->sections().uiFrame)
+                  .view,
+              expected.view);
 
-    // A delta closing the prompt is changed with NO replacement and replays to
-    // none -- a null replacement means closed, never "unchanged".
     auto closeDelta = ssg::SessionSnapshotCodec{}.deriveDelta(
         open.semantic(), closedHigh.semantic());
-    ASSERT_TRUE(closeDelta.promptView().changed);
-    ASSERT_FALSE(closeDelta.promptView().replacement.has_value());
+    ASSERT_TRUE(closeDelta.legacyPromptView().changed);
+    ASSERT_FALSE(closeDelta.legacyPromptView().replacement.has_value());
     auto const decodedCloseDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
         ssg::ProtocolCodec{}.encodeSessionDelta(closeDelta));
     ASSERT_TRUE(decodedCloseDelta.delta.has_value());
@@ -1395,7 +1500,80 @@ TEST(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone) {
         ssg::SessionSnapshotCodec{}.replay(open.semantic(),
                                            *decodedCloseDelta.delta);
     ASSERT_TRUE(closeReplay.accepted());
-    ASSERT_FALSE(closeReplay.snapshot->sections().promptView.has_value());
+    ASSERT_FALSE(ssg::detail::legacyPromptView(
+                     closeReplay.snapshot->sections().promptStatus,
+                     closeReplay.snapshot->sections().uiFrame)
+                     .view.has_value());
+}
+
+TEST(everyPromptKindHasOneFrameDerivedCompatibilityShape) {
+    struct Case {
+        ssg::PromptRequest request;
+        std::vector<std::string> ids;
+        std::vector<ssg::PromptControlKind> kinds;
+        bool footer = true;
+    };
+    const auto input = [](std::string id) {
+        return ssg::PromptInput{std::move(id), "Input", "value"};
+    };
+    const std::vector cases{
+        Case{{ssg::PromptKind::Path, "Path", {input("path")}, {}, std::nullopt,
+              {}},
+             {"path"},
+             {ssg::PromptControlKind::Input}},
+        Case{{ssg::PromptKind::Find, "Find", {input("find.query")},
+              {{"find.toggle_case", "Case", true, 4}},
+              ssg::PromptMatchCount{"find.matches", "Matches", "1/2"}, {}},
+             {"find.query", "find.toggle_case", "find.matches"},
+             {ssg::PromptControlKind::Input, ssg::PromptControlKind::Toggle,
+              ssg::PromptControlKind::Count}},
+        Case{{ssg::PromptKind::Replace, "Replace",
+              {input("find.query"), input("replace.replacement")},
+              {{"find.toggle_regex", "Regex", false, 4}},
+              ssg::PromptMatchCount{"find.matches", "Matches", "0/0"}, {}},
+             {"find.query", "replace.replacement", "find.toggle_regex",
+              "find.matches"},
+             {ssg::PromptControlKind::Input, ssg::PromptControlKind::Input,
+              ssg::PromptControlKind::Toggle,
+              ssg::PromptControlKind::Count}},
+        Case{{ssg::PromptKind::Settings, "Settings", {input("setting")}, {},
+              std::nullopt, {}},
+             {"setting"},
+             {ssg::PromptControlKind::Input}},
+        Case{{ssg::PromptKind::CommandArgument, "Argument", {input("line")},
+              {}, std::nullopt, "goto.line"},
+             {"line"},
+             {ssg::PromptControlKind::Input}},
+        Case{{ssg::PromptKind::Palette, "Palette", {input("query")}, {},
+              std::nullopt, {}},
+             {},
+             {},
+             false},
+    };
+    for (const auto& test : cases) {
+        auto [status, frame] = promptCompatibilityFrame(test.request);
+        const auto compatibility =
+            ssg::detail::legacyPromptView(status, frame);
+        ASSERT_TRUE(compatibility.valid);
+        ASSERT_EQ(compatibility.view.has_value(), test.footer);
+        if (!compatibility.view) continue;
+        ASSERT_EQ(compatibility.view->controls.size(), test.ids.size());
+        for (std::size_t index = 0; index < test.ids.size(); ++index) {
+            ASSERT_EQ(compatibility.view->controls[index].id,
+                      test.ids[index]);
+            ASSERT_TRUE(compatibility.view->controls[index].kind ==
+                        test.kinds[index]);
+        }
+    }
+
+    auto [status, frame] = promptCompatibilityFrame(cases[2].request);
+    auto state = frame.state();
+    for (auto& node : state.nodes) {
+        if (node.leaf && node.leaf->active) node.leaf->active = true;
+    }
+    const auto malformed = ssg::UiFrame::require(
+        frame.schema(), std::move(state), frame.presence());
+    ASSERT_FALSE(ssg::detail::legacyPromptView(status, malformed).valid);
 }
 
 // The additive NoticeView section mirrors PromptView: it survives a snapshot
@@ -2938,7 +3116,8 @@ int main() {
     RUN(sessionSnapshotAndDeltaCarryTheUiSection);
     RUN(sparseUiFrameDeltaSizeIsIndependentOfSchemaInventory);
     RUN(sessionDeltaCarriesThePaletteSection);
-    RUN(promptViewSectionIsAdditiveAndCarriesTheFooterPromptOrNone);
+    RUN(promptViewCompatibilityIsDerivedFromTheFrameAndNotRetained);
+    RUN(everyPromptKindHasOneFrameDerivedCompatibilityShape);
     RUN(noticeViewSectionIsAdditiveAndDecodesAbsentAsNone);
     RUN(accessibilityNodeStatusInvocationRoundTripsWhenPresent);
     RUN(accessibilityNodeWithoutStatusInvocationRoundTripsAsAbsent);

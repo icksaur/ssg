@@ -453,7 +453,6 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] PromptStatusViewState promptStatusView() const;
     // The geometry-free semantic projection of the active footer-region prompt,
     // or nullopt unless a footer-region prompt is open.
-    [[nodiscard]] std::optional<PromptView> promptView() const;
     // The one draft-conflict notice resolver: the geometry-free NoticeView for the
     // active document, or nullopt unless its reopen outcome is Conflict.
     [[nodiscard]] std::optional<NoticeView> draftNotice() const;

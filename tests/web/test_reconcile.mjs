@@ -38,6 +38,7 @@ import {
   settlePromptPrediction,
   settlePromptPresentation, deferPromptDocumentSurface,
   mergeBrowserRenderPlans,
+  legacyPromptViewFromFrame,
 } from '../../apps/web/reconcile.mjs';
 
 let checks = 0;
@@ -47,7 +48,6 @@ check('browser surface vocabulary contains only current sparse surfaces', () => 
   assert.deepEqual(SURFACE, {
     TABBAR: 0,
     FINDRESULTS: 3,
-    FOOTER_PROMPT: 5,
     NOTICE: 6,
     EXTERNAL_MODIFICATION: 7,
     DOCUMENT: 8,
@@ -84,6 +84,21 @@ const fixtureBytes = (name) => {
     hex.match(/../g).map((pair) => Number.parseInt(pair, 16)));
 };
 const fixtureMessage = (name) => decodeMessage(fixtureBytes(name).buffer).payload;
+const rawSections = (node) => {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = rawSections(item);
+      if (found) return found;
+    }
+  } else if (node && typeof node === 'object') {
+    if (node.document && typeof node.document.text === 'string') return node;
+    for (const value of Object.values(node)) {
+      const found = rawSections(value);
+      if (found) return found;
+    }
+  }
+  return null;
+};
 
 // --- byte <-> UTF-16 mapping, including multi-byte and astral text and EOF ---
 check('byteToIndex maps ASCII, 2-byte, and astral boundaries and EOF', () => {
@@ -762,6 +777,41 @@ check('focus path resolves the present top while allowing a hidden base', () => 
       effective: 'input_line',
       context: 'prompt',
       captured: true,
+    });
+
+    check('retired footer surface normalizes only in its predecessor slot', () => {
+      const predecessor = fixtureMessage('session_focus_editor.hex');
+      const sections = rawSections(predecessor);
+      const findNode = (node, id) => {
+        if (node?.id === id) return node;
+        for (const child of (node?.container?.children || [])) {
+          const found = findNode(child, id);
+          if (found) return found;
+        }
+        return null;
+      };
+      const prompt = findNode(sections.ui_frame.schema.root, 'footer.prompt');
+      delete prompt.container;
+      delete prompt.focus_context;
+      prompt.leaf = {
+        kind: 6n, id: 'footer.prompt', value: null, checked: null, width: null,
+        role: null, command: null, surface: 5n, rank: 0n, keep: false,
+        overflow: 0n, sigil: '',
+      };
+      const normalized = findSections(predecessor);
+      assert.ok(normalized);
+      assert.ok(findNode(
+        normalized.ui_frame.schema.root, 'footer.prompt').container);
+      assert.equal(Object.hasOwn(normalized, 'prompt_view'), false);
+
+      const malformed = fixtureMessage('session_focus_editor.hex');
+      const malformedSections = rawSections(malformed);
+      const malformedPrompt =
+        findNode(malformedSections.ui_frame.schema.root, 'footer.prompt');
+      delete malformedPrompt.container;
+      delete malformedPrompt.focus_context;
+      malformedPrompt.leaf = { ...prompt.leaf, id: 'other' };
+      assert.equal(findSections(malformed), null);
     });
 });
 
@@ -1618,28 +1668,63 @@ check('picker lifecycle resolves published keymap commands with global precedenc
     null);
 });
 
-check('applySessionDeltaSections opens, changes, and CLOSES the footer prompt view', () => {
-  const sections = { document: { text: '' }, prompt_view: null };
-  const promptView = { kind: 1, active_input: 0, controls: [] };
-  // changed=true with a replacement opens/updates it.
-  applySessionDeltaSections(
-    sections, { prompt_view: { changed: 1, replacement: promptView } });
-  assert.ok(sections.prompt_view);
-  assert.equal(sections.prompt_view.active_input, 0);
-  // changed=false leaves the prior view intact (no spurious close).
-  applySessionDeltaSections(sections, { prompt_view: { changed: 0 } });
-  assert.ok(sections.prompt_view);
-  // changed=true with a null replacement CLOSES it (replaceWrapped's non-null
-  // guard would wrongly keep it -- this is why the delta is changed-flagged).
-  applySessionDeltaSections(sections, { prompt_view: { changed: 1, replacement: null } });
-  assert.equal(sections.prompt_view, null);
+check('footer prompt compatibility is derived from the UI frame', () => {
+  const input = {
+    id: 'footer.prompt.control.find.query', size: {},
+    leaf: { kind: WIDGET.TEXT_INPUT, id: 'find.query' },
+  };
+  const root = rowNode('root', [
+    focusLeafNode('editor', WIDGET.VIEW, 0, { surface: SURFACE.DOCUMENT }),
+    {
+      ...rowNode('footer.prompt', [input]),
+      accessible_label: 'Find',
+      focus_context: 2,
+    },
+  ]);
+  const schema = schemaOf(31, root);
+  const frame = {
+    version: { generation: 31n, presence_basis: 0n },
+    schema,
+    state: {
+      generation: 31n,
+      nodes: [
+        st('root'), st('editor'), st('footer.prompt'),
+        st('footer.prompt.control.find.query', {
+          value: 'ab', label: 'Find text', command: 'find.update_query',
+          checked: null, role: 0n, active: true,
+        }),
+      ],
+      focus_path: ['editor', 'footer.prompt'],
+    },
+    presence: presenceForSchema(31, root),
+  };
+  const derived = legacyPromptViewFromFrame(
+    { active_kind: 1n }, frame);
+  assert.equal(derived.valid, true);
+  assert.deepEqual(derived.view, {
+    kind: 1n,
+    accessible_label: 'Find',
+    controls: [{
+      kind: 0n, id: 'find.query', accessible_label: 'Find text',
+      value: 'ab', checked: false, command: 'find.update_query',
+    }],
+    active_input: 0n,
+  });
+  frame.state.nodes.at(-1).leaf.value = 'abc';
+  assert.equal(
+    legacyPromptViewFromFrame({ active_kind: 1n }, frame)
+      .view.controls[0].value,
+    'abc');
 });
 
 check('applySessionDeltaCopy retains unchanged large sections for a caret update', () => {
   const document = { text: 'large document', caret: 0 };
   const syntax = { spans: [{ begin: 0, end: 14, scope: 1 }] };
   const palette = { command_candidates: [{ id: 'command' }] };
-  const sections = { document, syntax, palette, selection: { selections: [] } };
+  const sections = {
+    ...findSections(fixtureMessage('session_semantic_base.hex')),
+    document, syntax, palette, selection: { selections: [] },
+  };
   const next = applySessionDeltaCopy(sections, { document_caret: 4 });
   assert.notEqual(next, sections);
   assert.notEqual(next.document, document);
@@ -1776,9 +1861,13 @@ check('semantic manifest and C++ fixture replay every browser section atomically
   const base = findSections(fixtureMessage('session_semantic_base.hex'));
   const target = findSections(fixtureMessage('session_semantic_target.hex'));
   const delta = fixtureMessage('session_semantic_delta.hex');
+  const retainedManifest = manifest.filter(
+    (entry) => entry.snapshot !== 'prompt_view');
   assert.deepEqual(
-    manifest.map((entry) => entry.snapshot), Object.keys(base));
-  for (const { snapshot } of manifest) {
+    retainedManifest.map((entry) => entry.snapshot), Object.keys(base));
+  assert.equal(Object.hasOwn(base, 'prompt_view'), false);
+  assert.equal(Object.hasOwn(target, 'prompt_view'), false);
+  for (const { snapshot } of retainedManifest) {
     assert.notDeepEqual(base[snapshot], target[snapshot],
       snapshot + ' fixture must independently change');
   }
@@ -1796,6 +1885,9 @@ check('semantic manifest and C++ fixture replay every browser section atomically
     assert.equal(applySessionDeltaCopy(retained, malformed), null);
     assert.deepEqual(retained, base);
   };
+  rejectsWithoutMutation((malformed) => {
+    malformed.prompt_view.replacement.controls[0].value = 'conflict';
+  });
   for (const name of [
     'document', 'search', 'diff', 'external_modification', 'tree',
     'lsp_sync', 'lsp_features',

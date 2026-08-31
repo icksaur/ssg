@@ -1937,13 +1937,12 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     if (!replace) return;
     const auto replacementNode =
         ssg::footerPromptControlNodeId("replace.replacement");
-    auto focusReplacement = runtime.dispatch(
+    auto focusReplacement = runtime.input(
         client,
-        {"ui.activate", replace->semantic().revision(),
-         ssg::UiNodeActivationArguments{
-             replace->semantic().sections().uiFrame.version().generation,
-             replacementNode}});
-    ASSERT_TRUE(focusReplacement.accepted());
+        ssg::PromptControlPointerInput{
+            {replace->semantic().revision()}, "replace.replacement"});
+    ASSERT_TRUE(focusReplacement.command.has_value());
+    ASSERT_TRUE(focusReplacement.command->accepted());
     auto focused = runtime.present(client, viewport);
     ASSERT_TRUE(focused.has_value());
     if (focused) {
@@ -1958,18 +1957,20 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
             ASSERT_TRUE(replacement->leaf.has_value());
             ASSERT_EQ(replacement->leaf->active, std::optional<bool>{true});
         }
-        const auto generation =
-            focused->semantic().sections().uiFrame.version().generation;
+        const auto missing = runtime.input(
+            client,
+            ssg::PromptControlPointerInput{
+                {runtime.revision()}, "missing.control"});
+        ASSERT_EQ(missing.outcome, ssg::ClientInputOutcome::Rejected);
         ASSERT_TRUE(runtime
                         .dispatch(client,
                                   {"prompt.cancel", runtime.revision(), {}})
                         .accepted());
-        const auto hidden = runtime.dispatch(
+        const auto hidden = runtime.input(
             client,
-            {"ui.activate", runtime.revision(),
-             ssg::UiNodeActivationArguments{generation, replacementNode}});
-        ASSERT_FALSE(hidden.accepted());
-        ASSERT_EQ(hidden.error, ssg::CommandError::HandlerFailed);
+            ssg::PromptControlPointerInput{
+                {runtime.revision()}, "replace.replacement"});
+        ASSERT_EQ(hidden.outcome, ssg::ClientInputOutcome::Rejected);
     }
 }
 

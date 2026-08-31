@@ -367,6 +367,7 @@ UiNode assembleFooterPrompt(const PromptSurface& prompt) {
         promptFocusRegion(prompt.request()->kind) != PromptRegion::Footer) {
         return promptNode;
     }
+    promptNode.accessibleLabel = prompt.request()->accessibleLabel;
 
     auto& column = std::get<UiContainer>(promptNode.content);
     const auto controls = resolvePromptControls(*prompt.request());

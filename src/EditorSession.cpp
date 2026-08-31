@@ -1,5 +1,7 @@
 #include "runtime/editor_session_internal.h"
+#include "runtime/prompt_resolution.h"
 #include "grid_projection_state.h"
+#include "legacy_prompt_compat.h"
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/DraftReopenClassifier.h>
@@ -3233,8 +3235,10 @@ ClientInputResult inputKeyLocked(EditorSession::Impl* impl_, ClientId clientId,
     auto const promptStatus = impl_->promptStatusView();
     if (promptStatus.activeKind == PromptKind::Palette) {
         routing.prompt = ActivePrompt::Palette;
-    } else if (auto const view = impl_->promptView()) {
-        switch (view->kind) {
+    } else if (auto const view = detail::resolveRuntimePromptControls(
+                   impl_->interaction.prompt(), impl_->findReplace.viewState())) {
+        const auto kind = impl_->interaction.prompt().request()->kind;
+        switch (kind) {
         case PromptKind::Find:
             routing.prompt = ActivePrompt::Find;
             break;
@@ -3707,9 +3711,39 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                     if (semantic.button != InputPointerButton::Primary) {
                         return unhandled();
                     }
+                    const UiFrame frame = impl_->sections().uiFrame;
+                    if (!impl_->interaction.prompt().request() ||
+                        promptFocusRegion(
+                            impl_->interaction.prompt().request()->kind) !=
+                            PromptRegion::Footer) {
+                        return rejectTarget(
+                            "prompt control target is not active");
+                    }
+                    const UiNodeId target =
+                        footerPromptControlNodeId(semantic.controlId);
+                    const UiNode* footer = findUiNode(
+                        frame.schema(),
+                        UiNodeId{std::string{kFooterPromptNodeId}});
+                    const auto containsTarget =
+                        [&](const auto& self, const UiNode& node) -> bool {
+                        if (node.id == target) return true;
+                        const auto* container =
+                            std::get_if<UiContainer>(&node.content);
+                        return container &&
+                               std::ranges::any_of(
+                                   container->children,
+                                   [&](const UiNode& child) {
+                                       return self(self, child);
+                                   });
+                    };
+                    if (!footer || !containsTarget(containsTarget, *footer)) {
+                        return rejectTarget(
+                            "prompt control target is not in the active prompt");
+                    }
                     return dispatch(
-                        "prompt.focus_control",
-                        PromptFocusArguments{semantic.controlId});
+                        "ui.activate",
+                        UiNodeActivationArguments{
+                            frame.version().generation, target});
                 } else if constexpr (std::same_as<
                                          Input, ExternalActionPointerInput>) {
                     if (semantic.button != InputPointerButton::Primary) {
@@ -4287,7 +4321,13 @@ PresentationSnapshot adaptLegacyPresentation(const GridFrame& frame) {
     }
 
     std::optional<PromptViewState> prompt;
-    if (sections.promptView) {
+    const auto legacyPrompt =
+        detail::legacyPromptView(sections.promptStatus, sections.uiFrame);
+    if (!legacyPrompt.valid) {
+        throw std::logic_error{
+            "legacy adapter: UI frame has malformed prompt state"};
+    }
+    if (legacyPrompt.view) {
         const auto* promptNode = frame.layout().find(
             UiNodeId{std::string{kFooterPromptNodeId}});
         if (!promptNode) {
@@ -4298,12 +4338,12 @@ PresentationSnapshot adaptLegacyPresentation(const GridFrame& frame) {
         addLegacyNode(shell, ShellNodeKind::PromptReservation, "prompt",
                       "Prompt surface", promptNode->rect,
                       SemanticRole::Prompt);
-        PromptViewState projected{sections.promptView->kind,
-                                  sections.promptView->accessibleLabel,
+        PromptViewState projected{legacyPrompt.view->kind,
+                                  legacyPrompt.view->accessibleLabel,
                                   promptNode->rect, {},
-                                  sections.promptView->activeInput};
-        projected.controls.reserve(sections.promptView->controls.size());
-        for (const auto& control : sections.promptView->controls) {
+                                  legacyPrompt.view->activeInput};
+        projected.controls.reserve(legacyPrompt.view->controls.size());
+        for (const auto& control : legacyPrompt.view->controls) {
             const auto* controlNode =
                 frame.layout().find(footerPromptControlNodeId(control.id));
             if (!controlNode) {

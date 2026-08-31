@@ -1,6 +1,7 @@
 #include "../test_helpers.h"
 #include "../grid_test_view.h"
 #include "../legacy_grid_frame.h"
+#include "../../src/legacy_prompt_compat.h"
 
 #include "../chrome_authoring.h"
 
@@ -191,16 +192,20 @@ TEST(clientInputUsesAuthoritativeRoutingAndKeepsPaletteLocal) {
     ASSERT_EQ(graphemeDelete.outcome,
               ssg::ClientInputOutcome::Dispatched);
     snapshot = runtime.snapshot(ssg::ClientId{1});
-    ASSERT_TRUE(snapshot->sections().promptView.has_value());
-    ASSERT_EQ(snapshot->sections().promptView->controls.front().value,
+    auto promptView = ssg::detail::legacyPromptView(
+        snapshot->sections().promptStatus, snapshot->sections().uiFrame);
+    ASSERT_TRUE(promptView.valid && promptView.view.has_value());
+    ASSERT_EQ(promptView.view->controls.front().value,
               std::string{"alpha bet"});
     backspace.alt = true;
     auto wordDelete =
         runtime.input(ssg::ClientId{1}, ssg::ClientKeyInput{backspace, {}});
     ASSERT_EQ(wordDelete.outcome, ssg::ClientInputOutcome::Dispatched);
     snapshot = runtime.snapshot(ssg::ClientId{1});
-    ASSERT_TRUE(snapshot->sections().promptView.has_value());
-    ASSERT_EQ(snapshot->sections().promptView->controls.front().value,
+    promptView = ssg::detail::legacyPromptView(
+        snapshot->sections().promptStatus, snapshot->sections().uiFrame);
+    ASSERT_TRUE(promptView.valid && promptView.view.has_value());
+    ASSERT_EQ(promptView.view->controls.front().value,
               std::string{"alpha "});
 
     auto const afterInput = runtime.revision();

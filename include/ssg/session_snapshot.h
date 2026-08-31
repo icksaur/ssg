@@ -79,12 +79,6 @@ struct SessionSnapshotSections {
     // One validated, atomically published UI-VM frame: schema, resolved values,
     // presence basis, and authoritative focus path cannot diverge.
     UiFrame uiFrame;
-    // The geometry-free semantic projection of the active footer-region prompt
-    // (find/replace/goto/save-path/settings): its controls, per-control commands,
-    // and active input. Absent unless a footer-region prompt is open. A native
-    // client renders and drives the prompt from this. The grid client combines
-    // the same semantic controls with solved footer-prompt nodes.
-    std::optional<PromptView> promptView;
     // The geometry-free semantic projection of the active document's draft-conflict
     // notice (M15). Absent unless the active document has an unresolved conflict. A
     // native and grid clients render the notice bar from this; grid placement
@@ -254,11 +248,9 @@ struct TreeWindowsDelta {
     std::optional<std::vector<TreeWindow>> replacement;
 };
 
-// Delta of the optional semantic PromptView section. `changed` is explicit
-// because the section is itself optional: {true, nullopt} means the footer prompt
-// closed, {true, value} a new/changed prompt, {false, _} unchanged. Read
-// `changed` first. Mirrors PromptProjectionDelta for the geometry-free channel.
-struct PromptViewSectionDelta {
+// Codec-only compatibility delta for the preceding prompt_view wire field.
+// Current replay validates it against the candidate UiFrame and never retains it.
+struct LegacyPromptViewDelta {
     bool changed = false;
     std::optional<PromptView> replacement;
 };
@@ -266,7 +258,7 @@ struct PromptViewSectionDelta {
 // Delta of the optional semantic NoticeView section. `changed` is explicit because
 // the section is itself optional: {true, nullopt} means the notice cleared, {true,
 // value} a new/changed notice, {false, _} unchanged. Read `changed` first. Mirrors
-// PromptViewSectionDelta for the geometry-free channel.
+// LegacyPromptViewDelta at the codec edge.
 struct NoticeViewSectionDelta {
     bool changed = false;
     std::optional<NoticeView> replacement;
@@ -359,8 +351,8 @@ public:
     [[nodiscard]] PaletteSectionDelta const& palette() const noexcept {
         return palette_;
     }
-    [[nodiscard]] PromptViewSectionDelta const& promptView() const noexcept {
-        return promptView_;
+    [[nodiscard]] LegacyPromptViewDelta const& legacyPromptView() const noexcept {
+        return legacyPromptView_;
     }
     [[nodiscard]] NoticeViewSectionDelta const& noticeView() const noexcept {
         return noticeView_;
@@ -413,7 +405,7 @@ private:
         PromptProjectionDelta promptProjection = {},
         TreeWindowsDelta treeWindows = {},
         PaletteSectionDelta palette = {},
-        PromptViewSectionDelta promptView = {},
+        LegacyPromptViewDelta legacyPromptView = {},
         NoticeViewSectionDelta noticeView = {},
         std::optional<bool> watcherAvailable = {},
         std::optional<bool> legacyExternalFocusHeld = {});
@@ -453,7 +445,7 @@ private:
     PromptProjectionDelta promptProjection_;
     TreeWindowsDelta treeWindows_;
     PaletteSectionDelta palette_;
-    PromptViewSectionDelta promptView_;
+    LegacyPromptViewDelta legacyPromptView_;
     NoticeViewSectionDelta noticeView_;
     std::optional<bool> watcherAvailable_;
     std::optional<bool> legacyExternalFocusHeld_;
@@ -508,7 +500,7 @@ public:
         PromptProjectionDelta promptProjection = {},
         TreeWindowsDelta treeWindows = {},
         PaletteSectionDelta palette = {},
-        PromptViewSectionDelta promptView = {},
+        LegacyPromptViewDelta legacyPromptView = {},
         NoticeViewSectionDelta noticeView = {},
         std::optional<bool> watcherAvailable = {},
         std::optional<bool> legacyExternalFocusHeld = {}) const;

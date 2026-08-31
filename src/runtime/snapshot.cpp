@@ -1,4 +1,5 @@
 #include "editor_session_internal.h"
+#include "prompt_resolution.h"
 #include "../grid_projection_state.h"
 
 #include <ssg/CommandCatalog.h>
@@ -18,58 +19,6 @@ namespace ssg {
 
 namespace {
 
-// Overlay the live find/replace state onto resolved prompt controls. Templated
-// over the control type so the grid PromptControlView and the geometry-free
-// PromptControl share ONE value/checked resolution -- the only difference between
-// the two renderings is geometry, never content.
-template <typename Control>
-void applyFindReplaceValues(std::vector<Control>& controls, PromptKind kind,
-                            FindReplaceViewState const& findState) {
-    if (kind != PromptKind::Find && kind != PromptKind::Replace) return;
-    for (auto& control : controls) {
-        switch (control.kind) {
-        case PromptControlKind::Input:
-            if (control.id == "find.query") control.value = findState.query;
-            else if (control.id == "replace.replacement")
-                control.value = findState.replacement;
-            break;
-        case PromptControlKind::Count: {
-            auto position =
-                findState.activeMatch ? *findState.activeMatch + 1 : 0;
-            control.value = std::to_string(position) + "/" +
-                            std::to_string(findState.matches.size());
-            break;
-        }
-        case PromptControlKind::Toggle:
-            if (control.id == "find.toggle_case")
-                control.checked = findState.options.caseSensitive;
-            else if (control.id == "find.toggle_whole_word")
-                control.checked = findState.options.wholeWord;
-            else if (control.id == "find.toggle_regex")
-                control.checked = findState.options.regex;
-            break;
-        }
-    }
-}
-
-struct ResolvedPromptControls {
-    std::vector<PromptControl> controls;
-    std::size_t activeInput = 0;
-};
-
-std::optional<ResolvedPromptControls> resolvedPromptControls(
-    const PromptSurface& prompt, const FindReplaceViewState& findState) {
-    const auto& request = prompt.request();
-    if (!request ||
-        promptFocusRegion(request->kind) != PromptRegion::Footer) {
-        return std::nullopt;
-    }
-    ResolvedPromptControls resolved{
-        resolvePromptControls(*request), prompt.activeInput()};
-    applyFindReplaceValues(resolved.controls, request->kind, findState);
-    return resolved;
-}
-
 // A resolver from projected status fields: id -> (value, label, command). Shared by
 // the grid lowering and the semantic dynamic-state resolution so a composed
 // provider widget resolves to the same values on either path.
@@ -77,7 +26,7 @@ ChromeProviderResolver chromeResolverFor(std::vector<StatusField> header,
                                          std::vector<StatusField> footer,
                                          std::string helpLabel,
                                          std::vector<StatusActionNode> statusActions,
-                                         std::optional<ResolvedPromptControls> prompt =
+                                         std::optional<detail::ResolvedPromptControls> prompt =
                                              std::nullopt) {
     return [header = std::move(header), footer = std::move(footer),
             helpLabel = std::move(helpLabel),
@@ -197,23 +146,6 @@ PromptStatusViewState EditorSession::Impl::promptStatusView() const {
     return view;
 }
 
-std::optional<PromptView> EditorSession::Impl::promptView() const {
-    auto const& request = interaction.prompt().request();
-    if (!request) return std::nullopt;
-    // Only a footer-region prompt is published here; the header-hosted palette
-    // finder lives on its own semantic channel (PaletteViewState).
-    if (promptFocusRegion(request->kind) != PromptRegion::Footer) {
-        return std::nullopt;
-    }
-    PromptView view;
-    view.kind = request->kind;
-    view.accessibleLabel = request->accessibleLabel;
-    view.controls = resolvePromptControls(*request);
-    applyFindReplaceValues(view.controls, request->kind, findReplace.viewState());
-    view.activeInput = interaction.prompt().activeInput();
-    return view;
-}
-
 std::optional<NoticeView> EditorSession::Impl::draftNotice() const {
     // Only the Conflict outcome raises the notice; a Restored draft is a quieter
     // state with no external change to resolve. The action command ids are already
@@ -283,7 +215,7 @@ SessionSnapshotSections EditorSession::Impl::sections(
                                                std::move(fields.footer),
                                                helpHintLabel(keymap),
                                                interaction.statusActions(),
-                                               resolvedPromptControls(
+                                               detail::resolveRuntimePromptControls(
                                                    interaction.prompt(),
                                                    findReplace.viewState())));
     }();
@@ -313,7 +245,6 @@ SessionSnapshotSections EditorSession::Impl::sections(
             paletteView(),
             UiFrame::require(std::move(uiSchema), std::move(uiState),
                              std::move(uiPresence)),
-            promptView(),
             noticeView(),
             watcherAvailable.load(std::memory_order_relaxed)};
 }

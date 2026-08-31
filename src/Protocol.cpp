@@ -17,6 +17,7 @@
 #include <ssg/PaletteSearcher.h>
 
 #include "legacy_focus_compat.h"
+#include "legacy_prompt_compat.h"
 
 #include <any>
 #include <array>
@@ -785,8 +786,8 @@ ProtocolValue toValue(SelectionSetDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionSetDelta>& out);
 ProtocolValue toValue(PromptProjectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptProjectionDelta>& out);
-ProtocolValue toValue(PromptViewSectionDelta const& value);
-bool decodePresent(ProtocolValue const& value, std::optional<PromptViewSectionDelta>& out);
+ProtocolValue toValue(LegacyPromptViewDelta const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<LegacyPromptViewDelta>& out);
 ProtocolValue toValue(NoticeViewSectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<NoticeViewSectionDelta>& out);
 ProtocolValue toValue(TreeWindowsDelta const& value);
@@ -1918,20 +1919,20 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptProjectionDel
     return true;
 }
 
-ProtocolValue toValue(PromptViewSectionDelta const& value) {
+ProtocolValue toValue(LegacyPromptViewDelta const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("changed", toValue(value.changed));
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decodePresent(ProtocolValue const& value, std::optional<PromptViewSectionDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LegacyPromptViewDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto changed = requireField<bool>(value.field("changed"));
     if (!changed) return false;
     std::optional<PromptView> replacement;
     if (!decodeOptionalField(value.field("replacement"), replacement)) return false;
-    out.emplace(PromptViewSectionDelta{*changed, std::move(replacement)});
+    out.emplace(LegacyPromptViewDelta{*changed, std::move(replacement)});
     return true;
 }
 
@@ -5113,11 +5114,14 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back(kSemanticSessionFields[20], encodePalette(value.palette));
     fields.emplace_back(kSemanticSessionFields[21],
                         encodeUiFrame(value.uiFrame));
-    // Additive: the semantic footer-prompt section. Null when no footer-region
-    // prompt is open; a decoder that predates this field simply ignores it, and a
-    // frame that omits it decodes to no footer prompt.
-    fields.emplace_back(kSemanticSessionFields[22], value.promptView
-                                           ? toValue(*value.promptView)
+    const auto promptView =
+        detail::legacyPromptView(value.promptStatus, value.uiFrame);
+    if (!promptView.valid) {
+        throw std::logic_error{
+            "cannot derive legacy prompt view from UI frame"};
+    }
+    fields.emplace_back(kSemanticSessionFields[22], promptView.view
+                                           ? toValue(*promptView.view)
                                            : ProtocolValue::makeNull());
     // Additive: the semantic draft-conflict notice section. Null when the active
     // document has no unresolved conflict; a decoder that predates this field simply
@@ -5262,6 +5266,10 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
                                   std::move(*uiPresence));
         if (!uiFrame) return false;
     }
+    if (uiFrame && value.field("prompt_view")) {
+        const auto derived = detail::legacyPromptView(*promptStatus, *uiFrame);
+        if (!derived.valid || derived.view != promptView) return false;
+    }
     out.emplace(SessionSnapshotSections{
         *document, *selection, *history, *clipboard, *promptStatus, *search,
         *findReplace, *settings, *keymap, *textEncoding, *tabs, *diff,
@@ -5269,7 +5277,6 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
         *lspFeatures, *theme});
     out->palette = std::move(*palette);
     if (uiFrame) out->uiFrame = std::move(*uiFrame);
-    out->promptView = std::move(promptView);
     out->noticeView = std::move(noticeView);
     out->watcherAvailable = watcherAvailable;
     return true;
@@ -6860,7 +6867,8 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
                         delta.palette().replacement
                             ? encodePalette(*delta.palette().replacement)
                             : ProtocolValue::makeNull());
-    fields.emplace_back(kSemanticSessionDeltaFields[23], toValue(delta.promptView()));
+    fields.emplace_back(kSemanticSessionDeltaFields[23],
+                        toValue(delta.legacyPromptView()));
     fields.emplace_back(kSemanticSessionDeltaFields[24], toValue(delta.noticeView()));
     // Additive: present only when watcher availability flipped (Decision 13). An
     // absent field means "unchanged" for a peer that predates it.
@@ -7021,9 +7029,9 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
     // Additive: an absent prompt_view field means "unchanged" (changed=false), so
     // a delta from a peer that predates the field never spuriously closes the
     // prompt; a present-but-malformed field fails loud.
-    PromptViewSectionDelta promptViewDelta;
+    LegacyPromptViewDelta promptViewDelta;
     if (const ProtocolValue* promptViewField = payload.field("prompt_view")) {
-        std::optional<PromptViewSectionDelta> decoded;
+        std::optional<LegacyPromptViewDelta> decoded;
         if (!decodePresent(*promptViewField, decoded)) {
             return {ProtocolError::MalformedMessage, std::nullopt,
                     "session delta payload is malformed"};

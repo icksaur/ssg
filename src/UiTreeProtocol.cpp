@@ -206,10 +206,12 @@ enum class RetiredTreeSurface : std::uint64_t {
     GitStatus = 2,
     Symbols = 4,
 };
+inline constexpr std::uint64_t kRetiredFooterPromptSurface = 5;
 
 struct DecodedWidget {
     WidgetDescriptor widget;
     std::optional<RetiredTreeSurface> retiredTreeSurface;
+    bool retiredFooterPromptSurface = false;
 };
 
 std::optional<DecodedWidget> decodeWidget(const ProtocolValue& value) {
@@ -281,6 +283,11 @@ std::optional<DecodedWidget> decodeWidget(const ProtocolValue& value) {
                                       RetiredTreeSurface::Symbols)) {
             w.surface = ViewSurface::Tree;
             decoded.retiredTreeSurface = RetiredTreeSurface::Symbols;
+        } else if (raw && *raw == kRetiredFooterPromptSurface) {
+            // A temporary current value is used only until the exact predecessor
+            // shape can be checked after the complete tree has decoded.
+            w.surface = ViewSurface::Notice;
+            decoded.retiredFooterPromptSurface = true;
         } else {
             return std::nullopt;
         }
@@ -349,6 +356,10 @@ ProtocolValue encodeNode(const UiNode& node) {
     if (node.focusContext) {
         fields.emplace_back("focus_context", enumValue(*node.focusContext));
     }
+    if (node.accessibleLabel) {
+        fields.emplace_back(
+            "accessible_label", ProtocolValue::makeText(*node.accessibleLabel));
+    }
     if (const auto* container = std::get_if<UiContainer>(&node.content)) {
         fields.emplace_back("container", encodeContainer(*container));
     } else {
@@ -368,7 +379,8 @@ struct RetiredTreeSurfaceUse {
 
 std::optional<UiNode> decodeNode(
     const ProtocolValue& value,
-    std::vector<RetiredTreeSurfaceUse>& retiredTreeSurfaces) {
+    std::vector<RetiredTreeSurfaceUse>& retiredTreeSurfaces,
+    std::vector<UiNodeId>& retiredFooterPromptSurfaces) {
     if (!value.asObject()) return std::nullopt;
     const auto id = textField(value, "id");
     const ProtocolValue* sizeField = value.field("size");
@@ -391,6 +403,10 @@ std::optional<UiNode> decodeNode(
         node.focusContext =
             decodeEnumIn(uintField(value, "focus_context"), focusTargets);
         if (!node.focusContext) return std::nullopt;
+    }
+    if (const ProtocolValue* labelField = value.field("accessible_label")) {
+        if (!labelField->asText()) return std::nullopt;
+        node.accessibleLabel = *labelField->asText();
     }
     const ProtocolValue* containerField = value.field("container");
     const ProtocolValue* leafField = value.field("leaf");
@@ -427,7 +443,8 @@ std::optional<UiNode> decodeNode(
                 decodeEnumIn(raw, kAllScrollAxes).value_or(ScrollAxis::None);
         }
         for (const auto& childValue : *childrenField->asArray()) {
-            auto child = decodeNode(childValue, retiredTreeSurfaces);
+            auto child = decodeNode(childValue, retiredTreeSurfaces,
+                                    retiredFooterPromptSurfaces);
             if (!child) return std::nullopt;
             container.children.push_back(std::move(*child));
         }
@@ -438,6 +455,9 @@ std::optional<UiNode> decodeNode(
         if (widget->retiredTreeSurface) {
             retiredTreeSurfaces.push_back(
                 {node.id, *widget->retiredTreeSurface});
+        }
+        if (widget->retiredFooterPromptSurface) {
+            retiredFooterPromptSurfaces.push_back(node.id);
         }
         node.content = UiLeaf{std::move(widget->widget)};
     }
@@ -571,6 +591,32 @@ bool normalizePrecedingTreeSurface(
     return true;
 }
 
+bool normalizePrecedingFooterPromptSurface(
+    UiSchema& schema, const std::vector<UiNodeId>& retiredSurfaces) {
+    if (retiredSurfaces !=
+        std::vector{UiNodeId{std::string{kFooterPromptNodeId}}}) {
+        return false;
+    }
+    if (!hasChildren(schema.root, {kHeaderNodeId, kBodyNodeId,
+                                   kFooterPromptNodeId, kFooterNodeId})) {
+        return false;
+    }
+    auto& root = std::get<UiContainer>(schema.root.content);
+    UiNode& prompt = root.children[2];
+    const auto* leaf = std::get_if<UiLeaf>(&prompt.content);
+    if (!leaf || prompt.size != Size::autoSize() ||
+        prompt.id.value() != kFooterPromptNodeId ||
+        leaf->widget.kind != WidgetKind::View ||
+        leaf->widget.id != kFooterPromptNodeId ||
+        leaf->widget.surface != ViewSurface::Notice ||
+        prompt.focusContext || prompt.accessibleLabel) {
+        return false;
+    }
+    prompt.content = UiContainer{Axis::Column, {}, {}, {}};
+    prompt.focusContext = FocusTarget::Prompt;
+    return true;
+}
+
 }  // namespace
 
 ProtocolValue encodeUiSchema(const UiSchema& schema) {
@@ -586,7 +632,9 @@ std::optional<UiSchema> decodeUiSchema(const ProtocolValue& value) {
     if (!generation || !rootField) return std::nullopt;
 
     std::vector<RetiredTreeSurfaceUse> retiredTreeSurfaces;
-    auto root = decodeNode(*rootField, retiredTreeSurfaces);
+    std::vector<UiNodeId> retiredFooterPromptSurfaces;
+    auto root = decodeNode(*rootField, retiredTreeSurfaces,
+                           retiredFooterPromptSurfaces);
     if (!root) return std::nullopt;
 
     UiSchema schema;
@@ -602,6 +650,11 @@ std::optional<UiSchema> decodeUiSchema(const ProtocolValue& value) {
     }
     if (!retiredTreeSurfaces.empty() &&
         !normalizePrecedingTreeSurface(schema, retiredTreeSurfaces)) {
+        return std::nullopt;
+    }
+    if (!retiredFooterPromptSurfaces.empty() &&
+        !normalizePrecedingFooterPromptSurface(
+            schema, retiredFooterPromptSurfaces)) {
         return std::nullopt;
     }
     if (!validateWellKnownAreas(schema).ok()) return std::nullopt;

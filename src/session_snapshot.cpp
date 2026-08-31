@@ -3,6 +3,7 @@
 #include <ssg/PresenceProtocol.h>
 
 #include "legacy_focus_compat.h"
+#include "legacy_prompt_compat.h"
 
 #include <algorithm>
 #include <map>
@@ -145,7 +146,6 @@ bool operator==(SessionSnapshotSections const& left,
            left.theme == right.theme &&
            left.palette == right.palette &&
            left.uiFrame == right.uiFrame &&
-           left.promptView == right.promptView &&
            left.noticeView == right.noticeView &&
            left.watcherAvailable == right.watcherAvailable;
 }
@@ -191,7 +191,7 @@ SessionDelta::SessionDelta(
     SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows,
     PaletteSectionDelta palette,
-    PromptViewSectionDelta promptView, NoticeViewSectionDelta noticeView,
+    LegacyPromptViewDelta legacyPromptView, NoticeViewSectionDelta noticeView,
     std::optional<bool> watcherAvailable,
     std::optional<bool> legacyExternalFocusHeld)
     : baseRevision_{baseRevision},
@@ -229,7 +229,7 @@ SessionDelta::SessionDelta(
       promptProjection_{std::move(promptProjection)},
       treeWindows_{std::move(treeWindows)},
       palette_{std::move(palette)},
-      promptView_{std::move(promptView)},
+      legacyPromptView_{std::move(legacyPromptView)},
       noticeView_{std::move(noticeView)},
       watcherAvailable_{watcherAvailable},
       legacyExternalFocusHeld_{legacyExternalFocusHeld} {}
@@ -323,8 +323,18 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         PaletteSectionDelta{old.palette == next.palette
                                 ? std::nullopt
                                 : std::optional{next.palette}},
-        PromptViewSectionDelta{old.promptView != next.promptView,
-                               next.promptView},
+        [&] {
+            const auto before = detail::legacyPromptView(
+                old.promptStatus, old.uiFrame);
+            const auto after = detail::legacyPromptView(
+                next.promptStatus, next.uiFrame);
+            if (!before.valid || !after.valid) {
+                throw std::logic_error{
+                    "cannot derive legacy prompt view from UI frame"};
+            }
+            return LegacyPromptViewDelta{
+                before.view != after.view, std::move(after.view)};
+        }(),
         NoticeViewSectionDelta{old.noticeView != next.noticeView,
                                next.noticeView},
         old.watcherAvailable == next.watcherAvailable
@@ -425,11 +435,6 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     auto palette = delta.palette_.replacement.value_or(base.sections().palette);
     auto uiFrame =
         UiFrameDeltaCodec{}.replay(base.sections().uiFrame, delta.uiFrameDelta_);
-    // The semantic footer-prompt section is optional; the delta's `changed`
-    // distinguishes "closed" (replacement nullopt) from "unchanged".
-    auto promptView = delta.promptView_.changed
-                          ? delta.promptView_.replacement
-                          : base.sections().promptView;
     // The semantic draft-conflict notice section is optional; the delta's `changed`
     // distinguishes "cleared" (replacement nullopt) from "unchanged".
     auto noticeView = delta.noticeView_.changed
@@ -448,6 +453,13 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         delta.legacyExternalFocusHeld_);
     if (!reconciledFrame) {
         return {std::nullopt, "legacy focus conflicts with UI frame"};
+    }
+    const auto derivedPrompt = detail::legacyPromptView(
+        *promptStatus, *reconciledFrame);
+    if (!derivedPrompt.valid ||
+        (delta.legacyPromptView_.changed &&
+         delta.legacyPromptView_.replacement != derivedPrompt.view)) {
+        return {std::nullopt, "legacy prompt view conflicts with UI frame"};
     }
 
     SessionSnapshotSections sections{
@@ -472,7 +484,6 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(theme),
         std::move(palette),
         std::move(*reconciledFrame),
-        std::move(promptView),
         std::move(noticeView),
         watcherAvailable,
     };
@@ -506,7 +517,7 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     SelectionNavigationDelta selectionNav,
     PromptProjectionDelta promptProjection,
     TreeWindowsDelta treeWindows, PaletteSectionDelta palette,
-    PromptViewSectionDelta promptView,
+    LegacyPromptViewDelta legacyPromptView,
     NoticeViewSectionDelta noticeView, std::optional<bool> watcherAvailable,
     std::optional<bool> externalFocusHeld)
     const {
@@ -545,7 +556,7 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(promptProjection),
                         std::move(treeWindows),
                         std::move(palette),
-                        std::move(promptView),
+                        std::move(legacyPromptView),
                         std::move(noticeView),
                         watcherAvailable,
                         externalFocusHeld};

@@ -88,12 +88,11 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
                 return;
             }
             if (node.size.kind() == SizeKind::Auto &&
-                *w.surface != ViewSurface::FooterPrompt &&
                 *w.surface != ViewSurface::Notice &&
                 *w.surface != ViewSurface::ExternalModification) {
                 // A View names its client-rendered surface and has no content to
-                // hug, so it is Exact- or Flex-sized -- EXCEPT the footer prompt,
-                // the draft-conflict notice, and the external-modification bar,
+                // hug, so it is Exact- or Flex-sized -- EXCEPT the
+                // draft-conflict notice and the external-modification bar,
                 // whose intrinsic (reservation-sized) footprints the runtime
                 // sizes, so they alone may be Auto.
                 // validateWellKnownAreas pins each allowance to its canonical node.
@@ -335,12 +334,6 @@ std::optional<std::string> checkWellKnownAreas(const UiSchema& schema) {
     if (auto err = requireViewLeaf(findResultsViewport->children[0],
                                    kFindResultsNodeId,
                                    ViewSurface::FindResults))
-        return err;
-    // The FooterPrompt and Notice surfaces are each bound to their canonical node; a
-    // View naming either anywhere else (the only other place an Auto-sized View can
-    // pass validateUiSchema) is a misplacement, so reject it.
-    if (auto err = rejectStraySurface(schema.root, ViewSurface::FooterPrompt,
-                                      kFooterPromptNodeId))
         return err;
     if (auto err = rejectStraySurface(schema.root, ViewSurface::Notice,
                                       kNoticeNodeId))

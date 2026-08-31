@@ -130,6 +130,26 @@ TEST(focusHostContextRoundTripsThroughTheWire) {
     ASSERT_EQ(declared, expected.size());
 }
 
+TEST(containerAccessibilityLabelRoundTripsThroughTheWire) {
+    for (const std::string label : {"Find and replace", ""}) {
+        auto schema = corpus().back();
+        auto* prompt = const_cast<UiNode*>(ssg::findUiNode(
+            schema, ssg::UiNodeId{std::string{ssg::kFooterPromptNodeId}}));
+        ASSERT_TRUE(prompt != nullptr);
+        prompt->accessibleLabel = label;
+        const auto decoded = decodeUiSchema(encodeUiSchema(schema));
+        ASSERT_TRUE(decoded.has_value());
+        const UiNode* roundTripped = decoded
+            ? ssg::findUiNode(
+                  *decoded,
+                  ssg::UiNodeId{std::string{ssg::kFooterPromptNodeId}})
+            : nullptr;
+        ASSERT_TRUE(roundTripped != nullptr);
+        ASSERT_EQ(roundTripped->accessibleLabel,
+                  std::optional<std::string>{label});
+    }
+}
+
 TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
     UiSchema current{
         Generation{1},
@@ -255,6 +275,54 @@ TEST(precedingCanonicalTopologyDecodesToTheCurrentArrangement) {
         std::get<ssg::UiContainer>(preceding.root.content);
     std::swap(precedingRoot.children[1], precedingRoot.children[2]);
     ASSERT_FALSE(decodeUiSchema(encodeUiSchema(preceding)).has_value());
+}
+
+TEST(precedingFooterPromptSurfaceDecodesOnlyInItsExactCanonicalShape) {
+    UiSchema current{
+        Generation{1},
+        ssg::assembleWholeScreen({}, "help.open", ssg::StyleDimensions{},
+                                 ssg::Style{}.inputLineSigil, std::nullopt)
+            .root};
+    auto preceding = current;
+    auto& root = std::get<ssg::UiContainer>(preceding.root.content);
+    WidgetDescriptor retired;
+    retired.kind = WidgetKind::View;
+    retired.id = std::string{ssg::kFooterPromptNodeId};
+    retired.surface = static_cast<ssg::ViewSurface>(5);
+    root.children[2] =
+        UiNode{ssg::UiNodeId{std::string{ssg::kFooterPromptNodeId}},
+               ssg::Size::autoSize(), ssg::UiLeaf{retired},
+               root.children[2].style};
+
+    ASSERT_EQ(decodeUiSchema(encodeUiSchema(preceding)),
+              std::optional<UiSchema>{current});
+
+    auto wrongId = preceding;
+    std::get<ssg::UiContainer>(wrongId.root.content).children[2].id =
+        ssg::UiNodeId{"other"};
+    ASSERT_FALSE(decodeUiSchema(encodeUiSchema(wrongId)).has_value());
+
+    auto wrongSize = preceding;
+    std::get<ssg::UiContainer>(wrongSize.root.content).children[2].size =
+        ssg::Size::exact(1);
+    ASSERT_FALSE(decodeUiSchema(encodeUiSchema(wrongSize)).has_value());
+
+    auto declaredFocus = preceding;
+    std::get<ssg::UiContainer>(declaredFocus.root.content)
+        .children[2]
+        .focusContext = ssg::FocusTarget::Prompt;
+    ASSERT_FALSE(decodeUiSchema(encodeUiSchema(declaredFocus)).has_value());
+
+    auto stray = current;
+    auto& strayRoot = std::get<ssg::UiContainer>(stray.root.content);
+    auto& tree = std::get<ssg::UiContainer>(
+        std::get<ssg::UiContainer>(strayRoot.children[1].content)
+            .children[0]
+            .content)
+                     .children[0];
+    std::get<ssg::UiLeaf>(tree.content).widget.surface =
+        static_cast<ssg::ViewSurface>(5);
+    ASSERT_FALSE(decodeUiSchema(encodeUiSchema(stray)).has_value());
 }
 
 ProtocolValue withRootField(const ProtocolValue& encoded, std::string key,
@@ -550,7 +618,9 @@ TEST(malformedSurfaceDecodesToNullopt) {
 int main() {
     RUN(uiSchemaRoundTripsThroughTheWire);
     RUN(focusHostContextRoundTripsThroughTheWire);
+    RUN(containerAccessibilityLabelRoundTripsThroughTheWire);
     RUN(precedingCanonicalTopologyDecodesToTheCurrentArrangement);
+    RUN(precedingFooterPromptSurfaceDecodesOnlyInItsExactCanonicalShape);
     RUN(nodeStyleRoundTripsAndFieldAdditionRemainsCompatible);
     RUN(responsiveSizeRoundTripsAndMalformedFormsAreRejected);
     RUN(malformedOrUnknownNodeStyleRejectsTheWholeSchema);

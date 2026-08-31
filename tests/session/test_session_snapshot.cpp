@@ -1,6 +1,7 @@
 #include "command_cases.h"
 #include "../grid_test_view.h"
 #include "../test_helpers.h"
+#include "../../src/legacy_prompt_compat.h"
 
 #include <ssg/EditorSession.h>
 #include <ssg/GridPresenter.h>
@@ -184,18 +185,20 @@ TEST(legacyPresentationAdapterUsesTheDirectSolvedFrame) {
             }
         }
 
-        ASSERT_EQ(projected.prompt.has_value(),
-                  direct->sections().promptView.has_value());
-        if (projected.prompt && direct->sections().promptView) {
+        const auto promptView = ssg::detail::legacyPromptView(
+            direct->sections().promptStatus, direct->sections().uiFrame);
+        ASSERT_TRUE(promptView.valid);
+        ASSERT_EQ(projected.prompt.has_value(), promptView.view.has_value());
+        if (projected.prompt && promptView.view) {
             ASSERT_EQ(projected.shell.prompt,
                       std::optional<ssg::Rect>{projected.prompt->rect});
             ASSERT_EQ(projected.prompt->controls.size(),
-                      direct->sections().promptView->controls.size());
+                      promptView.view->controls.size());
             for (std::size_t index = 0;
                  index < projected.prompt->controls.size(); ++index) {
                 const auto* node = direct->layout().find(
                     ssg::footerPromptControlNodeId(
-                        direct->sections().promptView->controls[index].id));
+                        promptView.view->controls[index].id));
                 ASSERT_TRUE(node != nullptr);
                 if (node) {
                     ASSERT_EQ(projected.prompt->controls[index].rect,
@@ -261,8 +264,43 @@ TEST(runtimeSourcesDoNotIncludeFixtureModel) {
             snapshotConstCast ||
             text.find("const_cast<EditorSession::Impl*>") != std::string::npos;
     }
+
     ASSERT_FALSE(found);
     ASSERT_FALSE(snapshotConstCast);
+}
+
+TEST(currentSourcesRetainNoSecondPromptPresentationPath) {
+    const auto root = std::filesystem::path{SSG_SOURCE_SCAN_ROOT};
+    const auto read = [](const std::filesystem::path& path) {
+        std::ifstream input{path};
+        return std::string{std::istreambuf_iterator<char>{input},
+                           std::istreambuf_iterator<char>{}};
+    };
+    const std::string snapshotHeader =
+        read(root / "include/ssg/session_snapshot.h");
+    const std::string editor = read(root / "src/EditorSession.cpp");
+    const std::string widget = read(root / "include/ssg/Widget.h");
+    const std::string browser = read(root / "apps/web/reconcile.mjs");
+
+    ASSERT_TRUE(snapshotHeader.find("PromptViewSectionDelta") ==
+                std::string::npos);
+    ASSERT_TRUE(snapshotHeader.find("promptView()") == std::string::npos);
+    ASSERT_TRUE(widget.find("ViewSurface::FooterPrompt") == std::string::npos);
+    ASSERT_TRUE(browser.find("SURFACE.FOOTER_PROMPT") == std::string::npos);
+
+    const auto pointerBegin = editor.find("Input, PromptControlPointerInput");
+    const auto pointerEnd =
+        editor.find("Input, ExternalActionPointerInput", pointerBegin);
+    ASSERT_TRUE(pointerBegin != std::string::npos);
+    ASSERT_TRUE(pointerEnd != std::string::npos);
+    if (pointerBegin != std::string::npos &&
+        pointerEnd != std::string::npos) {
+        const auto adapter =
+            editor.substr(pointerBegin, pointerEnd - pointerBegin);
+        ASSERT_TRUE(adapter.find("\"ui.activate\"") != std::string::npos);
+        ASSERT_TRUE(adapter.find("\"prompt.focus_control\"") ==
+                    std::string::npos);
+    }
 }
 
 TEST(runtimePublishesValidCuratedKeymap) {
@@ -1359,6 +1397,7 @@ int main() {
     RUN(constructionRejectsInvalidCwd);
     RUN(runtimeConstructsAttachesAndProducesLiveSnapshot);
     RUN(runtimeSourcesDoNotIncludeFixtureModel);
+    RUN(currentSourcesRetainNoSecondPromptPresentationPath);
     RUN(runtimePublishesValidCuratedKeymap);
     RUN(everyDocumentLineIsReachableAndTheCaretIsNeverLost);
     RUN(aDocumentClippedByTheChromeStillReportsAScrollbar);

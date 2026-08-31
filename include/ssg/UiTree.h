@@ -115,6 +115,9 @@ struct UiNode {
     // CONTRACT: A focus-stack entry names a node with this declaration. Clients
     // derive keymap context from the stack endpoint rather than a parallel value.
     std::optional<FocusTarget> focusContext;
+    // Optional accessible group label for a container whose children alone do
+    // not identify the control group to assistive technology.
+    std::optional<std::string> accessibleLabel;
 
     [[nodiscard]] bool isContainer() const noexcept {
         return std::holds_alternative<UiContainer>(content);

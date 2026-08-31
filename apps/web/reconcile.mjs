@@ -886,13 +886,6 @@ export function applySessionDeltaSections(sections, delta) {
   const replaceWrapped = (name) => { if (delta[name] && delta[name].replacement != null) sections[name] = delta[name].replacement; };
   replaceWrapped('prompt_status');
   replaceWrapped('find_replace');
-  // The footer prompt's semantic projection travels as a changed-flagged delta
-  // (like a snapshot section replacement, but a null replacement means the prompt
-  // CLOSED, which replaceWrapped's non-null guard would wrongly ignore). A frame
-  // with changed=false carries no replacement and leaves the prior view intact.
-  if (delta.prompt_view && num(delta.prompt_view.changed)) {
-    sections.prompt_view = delta.prompt_view.replacement != null ? delta.prompt_view.replacement : null;
-  }
   // The draft-conflict notice travels as a changed-flagged delta exactly like the
   // footer prompt: a null replacement means the notice CLEARED, so it must not go
   // through replaceWrapped's non-null guard. changed=false leaves the prior notice.
@@ -1048,6 +1041,144 @@ function effectiveUiPresence(schema, presence) {
   return visit(schema?.root, true) ? effective : null;
 }
 
+function normalizeRetiredFooterPromptFrame(frame) {
+  const prompt = uiNodeById(frame?.schema?.root, 'footer.prompt');
+  if (num(prompt?.leaf?.surface) !== 5) return frame;
+  const rootChildren = frame?.schema?.root?.container?.children;
+  const leaf = prompt.leaf;
+  const exactRoot = Array.isArray(rootChildren) &&
+    rootChildren.map((node) => node.id).join('\0') ===
+      ['header', 'body', 'footer.prompt', 'footer'].join('\0');
+  const exactLeaf = prompt === rootChildren?.[2] &&
+    num(prompt.size?.kind) === 2 && num(prompt.size?.extent) === 0 &&
+    Object.keys(prompt).every((key) =>
+      ['id', 'size', 'style', 'leaf'].includes(key)) &&
+    !Object.prototype.hasOwnProperty.call(prompt, 'focus_context') &&
+    !Object.prototype.hasOwnProperty.call(prompt, 'accessible_label') &&
+    num(leaf.kind) === 6 && leaf.id === 'footer.prompt' &&
+    leaf.value == null && leaf.checked == null && leaf.width == null &&
+    leaf.role == null && leaf.command == null && num(leaf.rank) === 0 &&
+    !leaf.keep && num(leaf.overflow) === 0 && leaf.sigil === '';
+  if (!exactRoot || !exactLeaf) return null;
+  const normalized = structuredClone(frame);
+  const normalizedPrompt =
+    uiNodeById(normalized.schema.root, 'footer.prompt');
+  delete normalizedPrompt.leaf;
+  normalizedPrompt.container = {
+    axis: 1n,
+    inset: { left: 0n, right: 0n, top: 0n, bottom: 0n },
+    gap: 0n,
+    children: [],
+  };
+  normalizedPrompt.focus_context = 2n;
+  const state = normalized.state?.nodes?.find(
+    (node) => node.id === 'footer.prompt');
+  if (!state) return null;
+  state.leaf = null;
+  return normalized;
+}
+
+export function legacyPromptViewFromFrame(status, frame) {
+  const root = uiNodeById(frame?.schema?.root, 'footer.prompt');
+  if (!root?.container) return { valid: false, view: null };
+  const effective = effectiveUiPresence(frame.schema, frame.presence);
+  if (!effective) return { valid: false, view: null };
+  const activeKind = status?.active_kind;
+  if (activeKind == null || num(activeKind) === 5) {
+    return {
+      valid: effective.get('footer.prompt') !== true ||
+        root.container.children.length === 0,
+      view: null,
+    };
+  }
+  if (num(activeKind) < 0 || num(activeKind) > 4 ||
+      effective.get('footer.prompt') !== true ||
+      typeof root.accessible_label !== 'string') {
+    return { valid: false, view: null };
+  }
+  const states = new Map(
+    (frame.state?.nodes || []).map((record) => [record.id, record.leaf]));
+  const controls = [];
+  let inputCount = 0;
+  let activeInput = null;
+  const add = (node, kind) => {
+    const widget = node?.leaf;
+    const state = states.get(node?.id);
+    if (!widget || !state) return false;
+    const control = {
+      kind: BigInt(kind),
+      id: widget.id,
+      accessible_label: state.label,
+      value: state.value,
+      checked: state.checked ?? false,
+      command: state.command ?? '',
+    };
+    if (kind === 0) {
+      if (num(widget.kind) !== 4 || typeof state.active !== 'boolean' ||
+          !control.command) return false;
+      if (state.active) {
+        if (activeInput != null) return false;
+        activeInput = inputCount;
+      }
+      inputCount++;
+    } else if (kind === 1) {
+      if (num(widget.kind) !== 3 || typeof state.checked !== 'boolean' ||
+          state.active != null || !control.command) return false;
+    } else if (num(widget.kind) !== 1 || state.checked != null ||
+               state.active != null || state.command != null) {
+      return false;
+    }
+    controls.push(control);
+    return true;
+  };
+  let sawOptions = false;
+  for (const child of root.container.children) {
+    if (child.id === 'footer.prompt.options') {
+      if (sawOptions || !child.container) return { valid: false, view: null };
+      sawOptions = true;
+      let sawCount = false;
+      for (const option of child.container.children || []) {
+        if (num(option?.leaf?.kind) === 3) {
+          if (sawCount || !add(option, 1))
+            return { valid: false, view: null };
+        } else if (num(option?.leaf?.kind) === 1) {
+          if (sawCount || !add(option, 2))
+            return { valid: false, view: null };
+          sawCount = true;
+        } else {
+          return { valid: false, view: null };
+        }
+      }
+    } else if (sawOptions || !add(child, 0)) {
+      return { valid: false, view: null };
+    }
+  }
+  if (activeInput == null || inputCount === 0) {
+    return { valid: false, view: null };
+  }
+  return {
+    valid: true,
+    view: {
+      kind: activeKind,
+      accessible_label: root.accessible_label,
+      controls,
+      active_input: BigInt(activeInput),
+    },
+  };
+}
+
+function normalizePromptViewCompatibility(sections) {
+  const derived = legacyPromptViewFromFrame(
+    sections?.prompt_status, sections?.ui_frame);
+  if (!derived.valid ||
+      (has(sections, 'prompt_view') &&
+       !sameValue(sections.prompt_view, derived.view))) {
+    return false;
+  }
+  delete sections.prompt_view;
+  return true;
+}
+
 function validUiFrame(frame) {
   const schema = frame?.schema;
   const state = frame?.state;
@@ -1144,15 +1275,17 @@ function normalizeUiFrameSections(sections) {
   const legacyPresent = legacyNames.filter((name) =>
     Object.prototype.hasOwnProperty.call(sections, name));
   if (sections.ui_frame != null) {
+    sections.ui_frame = normalizeRetiredFooterPromptFrame(sections.ui_frame);
     if (legacyPresent.length !== 0 || !validUiFrame(sections.ui_frame)) {
       return false;
     }
     const pair = uiFrameLegacyFocusPair(sections.ui_frame);
     const external = sections.external_focus_held == null
       ? false : strictBoolean(sections.external_focus_held);
-    return pair != null &&
+    if (!(pair != null &&
       sections.focus != null && num(sections.focus) === pair.focus &&
-      external != null && external === pair.external;
+      external != null && external === pair.external)) return false;
+    return normalizePromptViewCompatibility(sections);
   }
   if (legacyPresent.length === 0) return true;
   if (legacyPresent.length !== legacyNames.length ||
@@ -1195,10 +1328,11 @@ function normalizeUiFrameSections(sections) {
     state,
     presence: sections.ui_presence,
   };
-  if (!validUiFrame(frame)) return false;
-  sections.ui_frame = frame;
+  const normalizedFrame = normalizeRetiredFooterPromptFrame(frame);
+  if (!validUiFrame(normalizedFrame)) return false;
+  sections.ui_frame = normalizedFrame;
   for (const name of legacyNames) delete sections[name];
-  return true;
+  return normalizePromptViewCompatibility(sections);
 }
 
 function uiFrameLegacyFocusPair(frame) {
@@ -1396,7 +1530,7 @@ export function applySessionDeltaCopy(sections, delta) {
   const replacements = [
     ['selection', false], ['history', false], ['clipboard', false],
     ['prompt_status', false], ['keymap', false],
-    ['prompt_view', true], ['notice_view', true],
+    ['notice_view', true],
   ];
   for (const [name, nullable] of replacements) {
     const replayed = changedReplacement(sections[name], delta[name], nullable);
@@ -1506,6 +1640,17 @@ export function applySessionDeltaCopy(sections, delta) {
       sections.ui_frame, next.ui_frame, delta);
     if (!next.ui_frame) return null;
   }
+  if (next.ui_frame != null || delta.prompt_view != null) {
+    const derivedPrompt = legacyPromptViewFromFrame(
+      next.prompt_status, next.ui_frame);
+    if (!derivedPrompt.valid ||
+        (delta.prompt_view && !!num(delta.prompt_view.changed) &&
+         !sameValue(delta.prompt_view.replacement ?? null,
+                    derivedPrompt.view))) {
+      return null;
+    }
+  }
+  delete next.prompt_view;
   if (delta.watcher_available != null) {
     next.watcher_available = !!num(delta.watcher_available);
   }
@@ -1609,7 +1754,6 @@ export const SCROLL = { NONE: 0, VERTICAL: 1 };
 export const SURFACE = {
   TABBAR: 0,
   FINDRESULTS: 3,
-  FOOTER_PROMPT: 5,
   NOTICE: 6,
   EXTERNAL_MODIFICATION: 7,
   DOCUMENT: 8,

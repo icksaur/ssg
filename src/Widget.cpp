@@ -24,9 +24,8 @@ static_assert(kWidgetKindNames.size() == kWidgetKindCount);
 
 constexpr std::array kViewSurfaceNames{
     std::string_view{"tabbar"}, std::string_view{"findresults"},
-    std::string_view{"footer_prompt"}, std::string_view{"notice"},
-    std::string_view{"external_modification"}, std::string_view{"document"},
-    std::string_view{"tree"}};
+    std::string_view{"notice"}, std::string_view{"external_modification"},
+    std::string_view{"document"}, std::string_view{"tree"}};
 static_assert(kViewSurfaceNames.size() == kViewSurfaceCount);
 }  // namespace
 

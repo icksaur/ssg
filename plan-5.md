@@ -795,3 +795,181 @@ single compatibility obligation without allowing retired provider surfaces
 back into current product types or clients. Compacting retained surface values
 now is rejected for the same reason: Plan 6, not this cleanup, owns any wire
 break.
+
+## Step 6 design: one prompt presentation
+
+### Goals
+
+Footer prompts remain fully functional and accessible in terminal and web
+clients while `UiFrame` becomes their only current presentation state.
+`PromptView`, its independent delta, and the retired footer-prompt surface stop
+being current product vocabulary; preceding wire messages remain decodable
+until Plan 6 activates the replacement version.
+
+### Design
+
+`PromptSurface` remains authoritative for prompt request, values, toggles, and
+active input. Runtime frame assembly continues to lower that authority once
+into the footer prompt subtree and matching `UiNodeState` records. Current
+keyboard routing reads `PromptSurface` plus authoritative find/replace state
+directly; it no longer obtains prompt kind, active input, or current value by
+calling the compatibility `promptView()` projection.
+
+`UiNode` gains an optional accessibility label applicable to containers as well
+as leaves. The active footer-prompt root publishes the request's accessible
+label; clients use it to label the prompt group, and schema encoding preserves
+it. This is the only prompt datum needed for accessibility that was not already
+recoverable from `PromptStatusViewState`, prompt child descriptors, and child
+leaf state.
+
+`SessionSnapshotSections` drops `promptView`, and `SessionDelta` drops
+`PromptViewSectionDelta` as current state. Snapshot and delta compatibility
+encoding derives the preceding `prompt_view` value at the protocol edge from
+`PromptStatusViewState` and `UiFrame`: prompt kind comes from active status,
+overall label from the footer root, controls from its ordered descendants, and
+value, label, command, checked, and active-input identity from matching leaf
+state. Exactly one active footer text input is required. No active footer prompt
+derives null. The preceding `PromptView` contract contains exactly kind,
+accessible label, ordered controls, and active-input index; it has no request id
+or response-correlation identity, so these sources reconstruct every field.
+
+When a message carries both a frame and `prompt_view`, the codec compares the
+compatibility projection with the frame-derived value and rejects disagreement.
+Delta replay first constructs the candidate frame, then validates any present
+compatibility replacement against that candidate; compatibility data never
+mutates a current frame or escapes into retained sections. A preceding
+prompt-view-only change without matching frame/schema/state changes rejects
+rather than manufacturing current nodes from an incomplete projection. This
+comparison always uses the complete candidate frame: when an accompanying frame
+delta changes only document or other non-prompt state, an equal compatibility
+replacement accepts and a differing one rejects.
+
+The browser performs the same comparison while normalizing a snapshot or
+replaying a delta, then deletes `prompt_view` from retained state. Current
+rendering, focus, pointer activation, text prediction, and accessibility consume
+only the frame subtree. `PromptControlPointerInput` remains decodable during the
+compatibility window, but its runtime adapter resolves the addressed current
+footer child and invokes ordinary `ui.activate`; it does not dispatch
+`prompt.focus_control` as a second behavior path.
+The adapter uses `footerPromptControlNodeId`, the same mapping declared in
+`UiTree.h` and used by footer assembly, then requires that node to be a
+descendant of the effectively present active `kFooterPromptNodeId` subtree
+before invoking it. Reused control ids therefore resolve only against the
+current prompt shape; a stale id from a closed or replaced prompt rejects.
+
+`ViewSurface::FooterPrompt` leaves the current surface vocabulary. Its retained
+wire value remains reserved, and exact preceding schema decode may recognize it
+only as a decode-local retired meaning attached to
+`kFooterPromptNodeId`. The accepted predecessor is an Auto-sized `View` leaf at
+the root footer-prompt slot whose widget id is `kFooterPromptNodeId`, whose
+surface is the retired FooterPrompt value, and whose other widget fields are
+empty defaults. It has no focus-context or accessibility-label declaration.
+The adapter publishes the canonical focus-declared, accessibility-unlabelled
+empty footer container; any other node id, placement, size, widget shape, or use
+of the retired value rejects. Current schema encoding and browser profiles
+never emit or advertise that surface.
+
+`PromptView` and `PromptControl` remain private protocol-compatibility values
+until Plan 6 removes the old field. `PromptViewState`, `PromptControlView`, and
+the geometry-bearing prompt projection remain only in the frozen
+`LegacyPresentationSnapshot` adapter and are removed with that envelope in Plan
+6. Public current headers do not describe either form as a supported embedding
+contract.
+
+### Invariants
+
+- **PROMPT-PRESENTATION-1** — current prompt presentation, focus, activation,
+  and accessibility derive from one `UiFrame` subtree built from
+  `PromptSurface`. State at footer prompt assembly and `UiFrame`.
+- **PROMPT-PRESENTATION-2** — every active prompt container publishes its
+  accessible group label, and each child publishes its own accessible label.
+  State at `UiNode` and footer prompt assembly.
+- **PROMPT-COMPAT-1** — `prompt_view` is derived and validated only at protocol
+  compatibility edges; it is never retained beside a current frame. State at
+  snapshot/delta codecs until Plan 6.
+- **PROMPT-ACTION-1** — current and preceding pointer activation converge on
+  `ui.activate` and its generation, presence, actionability, and command
+  validation. State at the client-input compatibility adapter.
+- **PROMPT-SURFACE-1** — the current surface vocabulary contains no footer
+  prompt surface; the retired wire meaning is accepted only for the exact
+  preceding footer node. State at `ViewSurface` and `decodeUiSchema`.
+
+### Considerations
+
+- Palette prompts remain header-hosted and derive no footer compatibility view.
+- Find/replace live values come from `FindReplaceViewState`, not stale request
+  seeds; one runtime resolver supplies both frame leaf state and keyboard text
+  routing.
+- Prompt child order is semantic. Inputs precede the options row; toggles retain
+  request order and count remains last. Each input is a direct prompt child;
+  toggles and count are children of `kFooterPromptOptionsNodeId`, preserving row
+  grouping in the tree. Compatibility projection traverses that authored
+  structure rather than sorting ids.
+- The active input is identified by `UiLeafState::active`, then converted to the
+  preceding input-only index. Zero or multiple active inputs in an active footer
+  prompt make compatibility derivation fail at snapshot encode or mixed-message
+  decode. `PromptSurface` construction and frame assembly guarantee one active
+  input for current authored frames.
+- Closing a prompt changes schema, presence, focus, and compatibility projection
+  atomically. A stale pre-close activation still rejects at exact base revision.
+- Optional node accessibility labels are schema data. They do not create a
+  generic property bag or duplicate leaf-state labels.
+- Retired pointer inputs carry a control id rather than a node id. The adapter
+  constructs only `footerPromptControlNodeId(controlId)` and still routes through
+  current frame validation; unknown, hidden, non-input, or stale targets reject.
+
+### Risks and Mitigations
+
+- **Risk:** codec projection and frame assembly interpret prompt controls
+  differently. **Mitigation:** compare a table-driven independent reference
+  against every prompt kind and reject malformed child/state combinations.
+- **Risk:** routing reads seeded rather than live find/replace text.
+  **Mitigation:** share the runtime resolved-control result and pin edits after
+  query/replacement updates.
+- **Risk:** removing retained `promptView` breaks close-delta semantics.
+  **Mitigation:** test open, update, focus change, shape-changing reopen, and
+  close through frame-only snapshot/delta replay in C++ and JavaScript.
+- **Risk:** a retired footer surface leaks back into a client profile.
+  **Mitigation:** sparse surface inventory and source scans reject current
+  references outside the decode adapter.
+
+### Acceptance (Definition of Done)
+
+- **Observable:** every footer prompt kind renders, labels, focuses, edits,
+  toggles, submits, cancels, reopens, and closes identically in terminal and web
+  clients; palette behavior is unchanged.
+- **Budgets:** text input and focus changes remain sparse state/path deltas and
+  do not replace unchanged prompt schema.
+- **Gates:** `scripts/check.sh` and `scripts/check.sh push`.
+- **Oracles:** table-driven prompt-kind/control reference versus frame-derived
+  compatibility projection; schema round trip for container accessibility
+  labels; malformed/mixed prompt projection rejection; frame-only open/update/
+  focus/reopen/close replay in C++ and browser; current versus preceding pointer
+  activation parity through `ui.activate`; sparse current surface inventory and
+  exact retired-footer schema rejection; source inventory contains no current
+  `promptView` read, retained `PromptViewSectionDelta`, direct
+  `prompt.focus_control` pointer dispatch, or `ViewSurface::FooterPrompt`.
+
+### Plan
+
+| # | Step | Files | Oracle | Invariants |
+|---|------|-------|--------|------------|
+| 1 | Add frame-only prompt and compatibility reference oracles | prompt, snapshot, protocol, UI-schema, and browser tests | independent prompt table plus malformed/mixed replay cases | PROMPT-PRESENTATION-1, PROMPT-COMPAT-1, PROMPT-ACTION-1 |
+| 2 | Publish prompt group accessibility in the frame | `include/ssg/UiTree.h`, UI schema codec, whole-screen prompt assembly, terminal/web accessibility consumers | schema round trip and prompt group label cases | PROMPT-PRESENTATION-1, PROMPT-PRESENTATION-2 |
+| 3 | Migrate current routing and pointer compatibility to frame-native authority | runtime snapshot/routing sources, `src/EditorSession.cpp`, input tests | live-value routing and current/preceding activation parity | PROMPT-PRESENTATION-1, PROMPT-ACTION-1 |
+| 4 | Remove prompt projection from current snapshot and replay state | `include/ssg/session_snapshot.h`, `src/session_snapshot.cpp`, runtime snapshot assembly, snapshot tests | frame-only open/update/focus/reopen/close replay | PROMPT-PRESENTATION-1, PROMPT-COMPAT-1 |
+| 5 | Derive and validate preceding prompt projection at codec edges in the same increment as Step 4 | `src/Protocol.cpp`, `apps/web/reconcile.mjs`, protocol fixtures/tests, browser tests | independent compatibility reference and mixed disagreement rejection | PROMPT-COMPAT-1 |
+| 6 | Remove the current footer surface and dead consumers | `include/ssg/Widget.h`, profile/backing/schema codecs, prompt compatibility types, clients, source-inventory tests | sparse inventory and exact retired-footer decode cases | PROMPT-SURFACE-1 |
+
+### Rationale
+
+Keeping `PromptView` in semantic sections only because an older peer may need it
+would preserve the duplicate synchronization problem this plan is removing.
+The frame already carries each control's identity and state; publishing the
+group's accessibility label closes the one real data gap and makes the old view
+a stateless codec projection.
+
+Teaching clients to combine `PromptView` with frame geometry was rejected. It
+would retain two independently updated prompt trees and force every client to
+know which one wins. Exact compatibility derivation keeps that complexity at
+one temporary boundary with a named Plan 6 removal condition.
