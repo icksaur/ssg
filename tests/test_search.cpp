@@ -23,14 +23,14 @@ public:
             .revision = revision,
             .files = {
                 {.path = "README.md", .text = "project\n"},
-                {.path = "include/ssg/search.h",
+                {.path = "include/core/ssg/search.h",
                  .text = "struct SearchResult {};\n"},
                 {.path = "src/search.cpp",
                  .text = "search ranking\nworker\ncancel token\n"},
                 {.path = "src/session.cpp", .text = "session state\n"},
             },
             .symbols = {
-                {.path = "include/ssg/search.h",
+                {.path = "include/core/ssg/search.h",
                  .name = "SearchResult",
                  .line = 1,
                  .column = 8},
@@ -229,27 +229,7 @@ TEST(paletteUsesInjectedCatalogAndDispatch) {
     ASSERT_FALSE(controller.executePalette().accepted);
 }
 
-TEST(viewDeltaReplayAndCommandExportsAreExact) {
-    FixtureWorkspace workspace;
-    FixtureCommands commands;
-    SearchController controller{workspace, commands};
-    const auto base = controller.viewState();
-    controller.openPalette(Revision{20});
-    const auto target = controller.viewState();
-    const auto delta = SearchDeltaCodec{}.derive(base, target);
-    const auto replay = SearchDeltaCodec{}.replay(base, delta);
-    ASSERT_TRUE(replay.accepted());
-    ASSERT_EQ(*replay.state, target);
-    const auto noChange = SearchDeltaCodec{}.replay(
-        target, SearchDeltaCodec{}.derive(target, target));
-    ASSERT_TRUE(noChange.accepted());
-    ASSERT_EQ(*noChange.state, target);
-
-    auto stale = base;
-    stale.revision = Revision{99};
-    ASSERT_EQ(SearchDeltaCodec{}.replay(stale, delta).error,
-              SearchReplayError::StaleRevision);
-
+TEST(commandExportsAreExact) {
     const auto set = searchCommandSet();
     const std::vector<std::string_view> expected{
         "palette.open",          "palette.close",        "palette.next",
@@ -276,6 +256,6 @@ int main() {
     RUN(cancellationSupersessionAndStaleRevisionAreRejected);
     RUN(navigationHistoryMatchesTransitionTable);
     RUN(paletteUsesInjectedCatalogAndDispatch);
-    RUN(viewDeltaReplayAndCommandExportsAreExact);
+    RUN(commandExportsAreExact);
     return failed == 0 ? 0 : 1;
 }

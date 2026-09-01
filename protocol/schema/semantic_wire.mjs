@@ -35,7 +35,7 @@ export const messageKinds = Object.freeze([
 export const semanticSections = Object.freeze([
   { symbol: 'Document', snapshot: 'document',
     delta: ['document', 'document_caret'], lifecycle: lifecycle.CURRENT,
-    replay: replayPolicy.SPECIALIZED },
+    replay: replayPolicy.SPECIALIZED, retention: 'asymptotic' },
   { symbol: 'Selection', snapshot: 'selection', delta: ['selection'],
     lifecycle: lifecycle.CURRENT, replay: replayPolicy.CHANGED_REPLACEMENT },
   { symbol: 'History', snapshot: 'history', delta: ['history'],
@@ -46,52 +46,49 @@ export const semanticSections = Object.freeze([
     delta: ['prompt_status'], lifecycle: lifecycle.CURRENT,
     replay: replayPolicy.CHANGED_REPLACEMENT },
   { symbol: 'Search', snapshot: 'search', delta: ['search'],
-    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED },
+    lifecycle: lifecycle.CURRENT, replay: replayPolicy.REPLACEMENT },
   { symbol: 'FindReplace', snapshot: 'find_replace', delta: ['find_replace'],
-    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED },
+    lifecycle: lifecycle.CURRENT, replay: replayPolicy.REPLACEMENT },
   { symbol: 'Settings', snapshot: 'settings', delta: ['settings'],
-    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED },
+    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED,
+    retention: 'payload' },
   { symbol: 'Keymap', snapshot: 'keymap', delta: ['keymap'],
     lifecycle: lifecycle.CURRENT, replay: replayPolicy.CHANGED_REPLACEMENT },
   { symbol: 'TextEncoding', snapshot: 'text_encoding',
     delta: ['text_encoding'], lifecycle: lifecycle.CURRENT,
-    replay: replayPolicy.SPECIALIZED },
+    replay: replayPolicy.REPLACEMENT },
   { symbol: 'Tabs', snapshot: 'tabs', delta: ['tabs'],
-    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED },
+    lifecycle: lifecycle.CURRENT, replay: replayPolicy.REPLACEMENT },
   { symbol: 'Diff', snapshot: 'diff', delta: ['diff'],
-    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED },
+    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED,
+    retention: 'asymptotic' },
   { symbol: 'ExternalModification', snapshot: 'external_modification',
     delta: ['external_modification'], lifecycle: lifecycle.CURRENT,
-    replay: replayPolicy.SPECIALIZED },
+    replay: replayPolicy.SPECIALIZED, retention: 'asymptotic' },
   { symbol: 'FollowEdits', snapshot: 'follow_edits', delta: ['follow_edits'],
-    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED },
+    lifecycle: lifecycle.CURRENT, replay: replayPolicy.REPLACEMENT },
   { symbol: 'Tree', snapshot: 'tree', delta: ['tree'],
-    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED },
+    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED,
+    retention: 'asymptotic' },
   { symbol: 'Syntax', snapshot: 'syntax', delta: ['syntax'],
-    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED },
+    lifecycle: lifecycle.CURRENT, replay: replayPolicy.REPLACEMENT },
   { symbol: 'LspSync', snapshot: 'lsp_sync', delta: ['lsp_sync'],
-    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED },
+    lifecycle: lifecycle.CURRENT, replay: replayPolicy.REPLACEMENT },
   { symbol: 'LspFeatures', snapshot: 'lsp_features',
     delta: ['lsp_features'], lifecycle: lifecycle.CURRENT,
-    replay: replayPolicy.SPECIALIZED },
+    replay: replayPolicy.REPLACEMENT },
   { symbol: 'Theme', snapshot: 'theme', delta: ['theme'],
     lifecycle: lifecycle.CURRENT, replay: replayPolicy.REPLACEMENT },
-  { symbol: 'Focus', snapshot: 'focus', delta: ['focus'],
-    lifecycle: lifecycle.COMPATIBILITY, replay: replayPolicy.COMPATIBILITY },
   { symbol: 'Palette', snapshot: 'palette', delta: ['palette'],
     lifecycle: lifecycle.CURRENT, replay: replayPolicy.REPLACEMENT },
   { symbol: 'UiFrame', snapshot: 'ui_frame', delta: ['ui_frame_delta'],
-    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED },
-  { symbol: 'PromptView', snapshot: 'prompt_view', delta: ['prompt_view'],
-    lifecycle: lifecycle.COMPATIBILITY, replay: replayPolicy.COMPATIBILITY },
+    lifecycle: lifecycle.CURRENT, replay: replayPolicy.SPECIALIZED,
+    retention: 'asymptotic' },
   { symbol: 'NoticeView', snapshot: 'notice_view', delta: ['notice_view'],
     lifecycle: lifecycle.CURRENT, replay: replayPolicy.CHANGED_REPLACEMENT },
   { symbol: 'WatcherAvailable', snapshot: 'watcher_available',
     delta: ['watcher_available'], lifecycle: lifecycle.CURRENT,
     replay: replayPolicy.REPLACEMENT },
-  { symbol: 'ExternalFocusHeld', snapshot: 'external_focus_held',
-    delta: ['external_focus_held'], lifecycle: lifecycle.COMPATIBILITY,
-    replay: replayPolicy.COMPATIBILITY },
 ]);
 
 export const wireEnums = Object.freeze([
@@ -485,10 +482,10 @@ export const wireEnums = Object.freeze([
       { symbol: 'Tab', wireName: 'tab', ordinal: 1, lifecycle: lifecycle.CURRENT },
       { symbol: 'Tree', wireName: 'tree', ordinal: 2, lifecycle: lifecycle.CURRENT },
       { symbol: 'Picker', wireName: 'picker', ordinal: 3, lifecycle: lifecycle.CURRENT },
-      { symbol: 'PromptControl', wireName: 'prompt_control', ordinal: 4, lifecycle: lifecycle.CURRENT },
+      { symbol: 'PromptControl', wireName: 'prompt_control', ordinal: 4, lifecycle: lifecycle.RETIRED },
       { symbol: 'ExternalAction', wireName: 'external_action', ordinal: 5, lifecycle: lifecycle.CURRENT },
-      { symbol: 'StatusAction', wireName: 'status_action', ordinal: 6, lifecycle: lifecycle.CURRENT },
-      { symbol: 'PublishedUiAction', wireName: 'published_ui_action', ordinal: 7, lifecycle: lifecycle.CURRENT },
+      { symbol: 'StatusAction', wireName: 'status_action', ordinal: 6, lifecycle: lifecycle.RETIRED },
+      { symbol: 'PublishedUiAction', wireName: 'published_ui_action', ordinal: 7, lifecycle: lifecycle.RETIRED },
       { symbol: 'NoticeAction', wireName: 'notice_action', ordinal: 8, lifecycle: lifecycle.CURRENT },
       { symbol: 'Document', wireName: 'document', ordinal: 9, lifecycle: lifecycle.CURRENT },
       { symbol: 'ScrollLines', wireName: 'scroll_lines', ordinal: 10, lifecycle: lifecycle.CURRENT },
@@ -722,10 +719,14 @@ const required = (wireName, type) =>
 const nullable = (value) => Object.freeze({ kind: 'nullable', value });
 const enumType = (name, options = {}) =>
   Object.freeze({ kind: 'enum', enum: name, ...options });
-const record = (fields) =>
-  Object.freeze({ kind: 'record', fields, unknownFields: 'allow' });
+const record = (fields, forbiddenFields = []) =>
+  Object.freeze({
+    kind: 'record', fields, unknownFields: 'allow', forbiddenFields,
+  });
 const exactRecord = (fields) =>
-  Object.freeze({ kind: 'record', fields, unknownFields: 'reject' });
+  Object.freeze({
+    kind: 'record', fields, unknownFields: 'reject', forbiddenFields: [],
+  });
 const arrayOf = (items, options = {}) =>
   Object.freeze({ kind: 'array', items, ...options });
 const ref = (type, recursive = false) =>
@@ -840,11 +841,6 @@ const externalActionInvocationSchema = exactRecord([
   required('file_id', 'text'),
   required('action', enumType('ExternalAction')),
 ]);
-const statusActionInvocationSchema = exactRecord([
-  required('status_id', 'uint'),
-  required('action_id', 'text'),
-  required('generation', 'uint'),
-]);
 const resolvedSelectionRangeSchema = exactRecord([
   required('anchor', 'uint'),
   required('active', 'uint'),
@@ -951,29 +947,10 @@ const clientInputSchema = Object.freeze({
       ],
     },
     {
-      value: 'PromptControl',
-      fields: [...basedPointerFields(), required('control_id', 'text')],
-    },
-    {
       value: 'ExternalAction',
       fields: [
         ...basedPointerFields(),
         required('invocation', ref('ExternalActionInvocation')),
-      ],
-    },
-    {
-      value: 'StatusAction',
-      fields: [
-        ...basedPointerFields(),
-        required('invocation', ref('StatusActionInvocation')),
-      ],
-    },
-    {
-      value: 'PublishedUiAction',
-      fields: [
-        ...basedPointerFields(),
-        required('schema_generation', 'uint'),
-        required('node_id', 'text'),
       ],
     },
     {
@@ -1170,12 +1147,6 @@ const searchViewStateSchema = record([
   required('searching', 'bool'),
 ]);
 
-const searchDeltaSchema = record([
-  required('base_revision', 'uint'),
-  required('revision', 'uint'),
-  optional('state', nullable(ref('SearchViewState'))),
-]);
-
 const findOptionsSchema = record([
   required('case_sensitive', 'bool'),
   required('whole_word', 'bool'),
@@ -1200,12 +1171,6 @@ const findReplaceViewStateSchema = record([
   optional('active_match', nullable('uint')),
   required('error', enumType('FindReplaceError')),
   required('message', 'text'),
-]);
-
-const findReplaceDeltaSchema = record([
-  required('changed', 'bool'),
-  required('base_generation', 'uint'),
-  optional('replacement', nullable(ref('FindReplaceViewState'))),
 ]);
 
 const settingValueSchema = Object.freeze({
@@ -1284,11 +1249,6 @@ const textEncodingViewStateSchema = record([
   required('status', ref('TextEncodingStatus')),
 ]);
 
-const textEncodingDeltaSchema = record([
-  required('before', ref('TextEncodingViewState')),
-  required('after', ref('TextEncodingViewState')),
-]);
-
 const journalDocumentKeySchema = Object.freeze({
   kind: 'discriminated-record',
   unknownFields: 'allow',
@@ -1318,10 +1278,6 @@ const tabStateSchema = record([
 const tabViewStateSchema = record([
   required('tabs', arrayOf(ref('TabState'))),
   optional('active', nullable('uint')),
-]);
-
-const tabDeltaSchema = record([
-  optional('state', nullable(ref('TabViewState'))),
 ]);
 
 const diffWordRangeSchema = record([
@@ -1433,12 +1389,6 @@ const followEditsViewStateSchema = record([
   optional('active_target', nullable(ref('FollowTarget'))),
   required('queued_targets', arrayOf(ref('FollowTarget'))),
   required('clients', arrayOf(ref('FollowClientView'))),
-]);
-
-const followEditsDeltaSchema = record([
-  required('base_generation', 'uint'),
-  required('generation', 'uint'),
-  optional('replacement', nullable(ref('FollowEditsViewState'))),
 ]);
 
 const treeProviderBindingSchema = record([
@@ -1565,19 +1515,6 @@ const syntaxViewStateSchema = record([
   required('indentation', arrayOf(ref('LineIndentation'))),
 ]);
 
-const syntaxDeltaSchema = record([
-  required('base_revision', 'uint'),
-  required('revision', 'uint'),
-  optional('language', nullable('text')),
-  optional('text_bytes', nullable('uint')),
-  optional('spans', nullable(arrayOf(ref('SyntaxSpan')))),
-  optional('bracket_pairs', nullable(arrayOf(ref('SyntaxBracketPair')))),
-  optional('unmatched_brackets', nullable(arrayOf(ref('UnmatchedBracket')))),
-  optional('comment_tokens', nullable(arrayOf(ref('CommentToken')))),
-  optional('comment_ranges', nullable(arrayOf(ref('CommentRange')))),
-  optional('indentation', nullable(arrayOf(ref('LineIndentation')))),
-]);
-
 const lspPositionSchema = record([
   required('line', 'uint'),
   required('character', 'uint'),
@@ -1604,12 +1541,6 @@ const lspDocumentDiagnosticsSchema = record([
 const lspSyncViewStateSchema = record([
   required('revision', 'uint'),
   required('documents', arrayOf(ref('LspDocumentDiagnostics'))),
-]);
-
-const lspSyncDeltaSchema = record([
-  required('base_revision', 'uint'),
-  required('revision', 'uint'),
-  optional('state', nullable(ref('LspSyncViewState'))),
 ]);
 
 const lspCompletionItemSchema = record([
@@ -1650,12 +1581,6 @@ const lspFeatureViewStateSchema = record([
   optional('hover', nullable(ref('LspHover'))),
   required('navigation', ref('LspNavigationViewState')),
   required('status', 'text'),
-]);
-
-const lspFeatureDeltaSchema = record([
-  required('base_revision', 'uint'),
-  required('revision', 'uint'),
-  optional('state', nullable(ref('LspFeatureViewState'))),
 ]);
 
 const srgbColorSchema = record([
@@ -1747,8 +1672,9 @@ const sessionSnapshotSectionsSchema = record([
   // Additive predecessor-tolerant fields: absent has its documented default.
   optional('notice_view', nullable(ref('NoticeView'))),
   optional('watcher_available', 'bool'),
-  // Deliberately omitted and therefore permissive unknown fields:
-  // focus, prompt_view, external_focus_held, ui, ui_state, ui_presence.
+], [
+  'focus', 'prompt_view', 'external_focus_held',
+  'ui', 'ui_state', 'ui_presence',
 ]);
 
 const sessionSnapshotSchema = record([
@@ -1756,9 +1682,7 @@ const sessionSnapshotSchema = record([
   required('topology', ref('SessionTopology')),
   required('client', ref('ClientSnapshotState')),
   required('sections', ref('SessionSnapshotSections')),
-  // The frozen optional presentation field is deliberately omitted. record()
-  // preserves its permissive root treatment as an unknown field.
-]);
+], ['presentation']);
 
 const sessionDeltaSchema = record([
   required('base_revision', 'uint'),
@@ -1773,28 +1697,30 @@ const sessionDeltaSchema = record([
   required('history', ref('HistoryDelta')),
   required('clipboard', ref('ClipboardDelta')),
   required('prompt_status', ref('PromptStatusDelta')),
-  required('search', ref('SearchDelta')),
-  required('find_replace', ref('FindReplaceDelta')),
+  optional('search', nullable(ref('SearchViewState'))),
+  optional('find_replace', nullable(ref('FindReplaceViewState'))),
   required('settings', ref('SettingsSectionDelta')),
   required('keymap', ref('KeymapDelta')),
-  optional('text_encoding', nullable(ref('TextEncodingDelta'))),
-  required('tabs', ref('TabDelta')),
+  optional('text_encoding', nullable(ref('TextEncodingViewState'))),
+  optional('tabs', nullable(ref('TabViewState'))),
   required('diff', ref('DiffDelta')),
   required('external_modification', ref('ExternalModificationDelta')),
-  required('follow_edits', ref('FollowEditsDelta')),
+  optional('follow_edits', nullable(ref('FollowEditsViewState'))),
   required('tree', ref('TreeDelta')),
-  required('syntax', ref('SyntaxDelta')),
-  required('lsp_sync', ref('LspSyncDelta')),
-  required('lsp_features', ref('LspFeatureDelta')),
+  optional('syntax', nullable(ref('SyntaxViewState'))),
+  optional('lsp_sync', nullable(ref('LspSyncViewState'))),
+  optional('lsp_features', nullable(ref('LspFeatureViewState'))),
   required('theme', ref('ThemeSectionDelta')),
   // Both fields are absent on predecessors and absent means unchanged.
   optional('palette', nullable(ref('PaletteViewState'))),
   optional('ui_frame_delta', ref('UiFrameDelta')),
   optional('notice_view', ref('NoticeViewSectionDelta')),
   optional('watcher_available', nullable('bool')),
-  // Deliberately omitted and therefore permissive unknown fields:
-  // focus, prompt_view, external_focus_held, ui, ui_state, ui_presence,
-  // style, shell, viewport, selection_nav, prompt_projection, tree_windows.
+], [
+  'focus', 'prompt_view', 'external_focus_held',
+  'ui', 'ui_state', 'ui_presence',
+  'style', 'shell', 'viewport',
+  'selection_nav', 'prompt_projection', 'tree_windows',
 ]);
 
 const semanticSectionWireTypesToAppend = Object.freeze([
@@ -1818,11 +1744,9 @@ const semanticSectionWireTypesToAppend = Object.freeze([
   { symbol: 'PromptStatusDelta', schema: promptStatusDeltaSchema },
   { symbol: 'SearchResult', schema: searchResultSchema },
   { symbol: 'SearchViewState', schema: searchViewStateSchema },
-  { symbol: 'SearchDelta', schema: searchDeltaSchema },
   { symbol: 'FindOptions', schema: findOptionsSchema },
   { symbol: 'FindMatch', schema: findMatchSchema },
   { symbol: 'FindReplaceViewState', schema: findReplaceViewStateSchema },
-  { symbol: 'FindReplaceDelta', schema: findReplaceDeltaSchema },
   { symbol: 'SettingValue', schema: settingValueSchema },
   { symbol: 'EffectiveSetting', schema: effectiveSettingSchema },
   { symbol: 'SettingViewEntry', schema: settingViewEntrySchema },
@@ -1834,12 +1758,10 @@ const semanticSectionWireTypesToAppend = Object.freeze([
   { symbol: 'KeymapDelta', schema: keymapDeltaSchema },
   { symbol: 'TextEncodingStatus', schema: textEncodingStatusSchema },
   { symbol: 'TextEncodingViewState', schema: textEncodingViewStateSchema },
-  { symbol: 'TextEncodingDelta', schema: textEncodingDeltaSchema },
   { symbol: 'UntitledDocumentId', schema: fixedBytes(16) },
   { symbol: 'JournalDocumentKey', schema: journalDocumentKeySchema },
   { symbol: 'TabState', schema: tabStateSchema },
   { symbol: 'TabViewState', schema: tabViewStateSchema },
-  { symbol: 'TabDelta', schema: tabDeltaSchema },
   { symbol: 'DiffWordRange', schema: diffWordRangeSchema },
   { symbol: 'DiffLineChange', schema: diffLineChangeSchema },
   { symbol: 'DiffHunk', schema: diffHunkSchema },
@@ -1864,7 +1786,6 @@ const semanticSectionWireTypesToAppend = Object.freeze([
   { symbol: 'FollowTarget', schema: followTargetSchema },
   { symbol: 'FollowClientView', schema: followClientViewSchema },
   { symbol: 'FollowEditsViewState', schema: followEditsViewStateSchema },
-  { symbol: 'FollowEditsDelta', schema: followEditsDeltaSchema },
   { symbol: 'TreeProviderBinding', schema: treeProviderBindingSchema },
   { symbol: 'TreeNodeCommand', schema: treeNodeCommandSchema },
   { symbol: 'GitTreeAffordance', schema: gitTreeAffordanceSchema },
@@ -1882,13 +1803,11 @@ const semanticSectionWireTypesToAppend = Object.freeze([
   { symbol: 'CommentRange', schema: commentRangeSchema },
   { symbol: 'LineIndentation', schema: lineIndentationSchema },
   { symbol: 'SyntaxViewState', schema: syntaxViewStateSchema },
-  { symbol: 'SyntaxDelta', schema: syntaxDeltaSchema },
   { symbol: 'LspPosition', schema: lspPositionSchema },
   { symbol: 'LspRange', schema: lspRangeSchema },
   { symbol: 'LspDiagnostic', schema: lspDiagnosticSchema },
   { symbol: 'LspDocumentDiagnostics', schema: lspDocumentDiagnosticsSchema },
   { symbol: 'LspSyncViewState', schema: lspSyncViewStateSchema },
-  { symbol: 'LspSyncDelta', schema: lspSyncDeltaSchema },
   { symbol: 'LspCompletionItem', schema: lspCompletionItemSchema },
   { symbol: 'LspCompletionViewState', schema: lspCompletionViewStateSchema },
   { symbol: 'LspHover', schema: lspHoverSchema },
@@ -1898,7 +1817,6 @@ const semanticSectionWireTypesToAppend = Object.freeze([
     schema: lspNavigationViewStateSchema,
   },
   { symbol: 'LspFeatureViewState', schema: lspFeatureViewStateSchema },
-  { symbol: 'LspFeatureDelta', schema: lspFeatureDeltaSchema },
   { symbol: 'SrgbColor', schema: srgbColorSchema },
   { symbol: 'ThemeSnapshot', schema: themeSnapshotSchema },
   { symbol: 'ThemeSectionDelta', schema: themeSectionDeltaSchema },
@@ -1919,10 +1837,6 @@ export const wireTypes = Object.freeze([
   {
     symbol: 'ExternalActionInvocation',
     schema: externalActionInvocationSchema,
-  },
-  {
-    symbol: 'StatusActionInvocation',
-    schema: statusActionInvocationSchema,
   },
   {
     symbol: 'ResolvedSelectionRange',

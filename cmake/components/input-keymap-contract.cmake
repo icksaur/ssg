@@ -1,4 +1,4 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Keymap.cpp
     ${SSG_SOURCE_DIR}/src/CompiledKeymap.cpp
     ${SSG_SOURCE_DIR}/src/PromptRouting.cpp
@@ -8,7 +8,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_input
         ${SSG_SOURCE_DIR}/tests/test_input.cpp
     )
-    target_link_libraries(test_input PRIVATE ssg)
+    target_link_libraries(test_input PRIVATE ssg_core)
     target_include_directories(test_input PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
@@ -20,7 +20,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_prompt_routing
         ${SSG_SOURCE_DIR}/tests/test_prompt_routing.cpp
     )
-    target_link_libraries(test_prompt_routing PRIVATE ssg)
+    target_link_libraries(test_prompt_routing PRIVATE ssg_core)
     target_include_directories(test_prompt_routing PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
@@ -29,7 +29,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_keymap_single_stroke
         ${SSG_SOURCE_DIR}/tests/test_keymap_single_stroke.cpp
     )
-    target_link_libraries(test_keymap_single_stroke PRIVATE ssg)
+    target_link_libraries(test_keymap_single_stroke PRIVATE ssg_core)
     target_include_directories(test_keymap_single_stroke PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )

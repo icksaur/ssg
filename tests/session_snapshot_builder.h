@@ -1,20 +1,17 @@
 #pragma once
 
-#include "legacy_grid_frame.h"
-
 // Kind: seam.
 //
-// Builds a SessionSnapshot directly, so a test of presentation does not have to
+// Builds a GridFrame directly, so a test of presentation does not have to
 // stand up an EditorSession over a real directory first.
 //
-// The renderer is already a pure function of a snapshot
-// (`Renderer::render(SessionSnapshot const&)`), but a snapshot used to be
+// The renderer is a pure function of a frame, but a frame used to be
 // obtainable only from a runtime.  So every presentation test created temp
 // directories, wrote files to disk, constructed the whole editor, attached a
 // client, and dispatched commands -- eight steps of setup to exercise one pure
 // function.  test_render.cpp alone did that 31 times.
 //
-// This builder ASSEMBLES PRODUCTION COMPONENTS; it does not reimplement them.
+// This builder assembles production components; it does not reimplement them.
 // The viewport projection comes from `Viewport::computeUnwrapped`, the shell
 // from the solved UI tree, syntax from `SyntaxViewState::plainText`, and colour
 // from `defaultTheme`.  A test using it therefore exercises the same projection
@@ -26,6 +23,7 @@
 #include <ssg/GraphemeLayout.h>
 #include <ssg/GridPresenter.h>
 #include <ssg/InteractionState.h>
+#include <ssg/UiStateResolver.h>
 #include <ssg/Renderer.h>
 #include <ssg/ShellState.h>
 #include <ssg/StatusQueue.h>
@@ -121,14 +119,6 @@ public:
     SessionSnapshotBuilder& chromeProviderResolver(
         ChromeProviderResolver resolver) {
         chromeProviderResolver_ = std::move(resolver);
-        return *this;
-    }
-
-    // Mutate the projected legacy shell after layout, for migration tests that
-    // prove a solved-tree consumer no longer reads its former sidecar.
-    SessionSnapshotBuilder& shellProjection(
-        std::function<void(ShellViewState&)> mutate) {
-        shellProjectionMutators_.push_back(std::move(mutate));
         return *this;
     }
 
@@ -273,24 +263,15 @@ public:
             framePalette.ghost = promptInput_->ghost;
         }
 
-        ShellViewState shellView;
-        if (columns_ >= style_.dimensions.minimumColumns &&
-            rows_ >= style_.dimensions.minimumRows) {
-            shellView.viewport = {columns_, rows_};
-        }
-        for (auto const& mutate : shellProjectionMutators_) mutate(shellView);
         ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
-        auto frame = test::gridFrameFromLegacy(
-            LegacyPresentationSnapshot{
-                SessionSnapshot{
-                    revision_, SessionTopology{}, std::move(client),
-                    std::move(sections)},
-                PresentationSnapshot{
-                    std::move(viewportState), style_, std::nullopt,
-                    std::move(shellView),
-                    SelectionNavigation{firstRow_, 0, std::nullopt}}},
-            std::move(framePalette));
-        return std::move(*frame);
+        return GridFrame{
+            SessionSnapshot{
+                revision_, SessionTopology{}, std::move(client),
+                std::move(sections)},
+            GridProjection{
+                std::move(viewportState), style_,
+                SelectionNavigation{firstRow_, 0, std::nullopt}},
+            GridBasis{ViewId{1}, revision_, 0}, std::move(framePalette)};
     }
 
 private:
@@ -327,8 +308,6 @@ private:
     bool panelFocused_ = true;
     std::vector<TabSpec> tabs_;
     std::vector<std::function<void(SessionSnapshotSections&)>> mutators_;
-    std::vector<std::function<void(ShellViewState&)>>
-        shellProjectionMutators_;
     Style style_{};
     PaletteReport palette_;
     std::optional<ValidatedSchema> schema_;

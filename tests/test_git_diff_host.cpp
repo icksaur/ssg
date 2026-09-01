@@ -76,13 +76,13 @@ std::map<std::string, ssg::GitTreeStatus> porcelainStatuses(const fs::path& root
 std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
     ssg::EditorSession& runtime) {
     (void)runtime.pump();
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) {
         return {};
     }
     std::map<std::string, ssg::GitTreeStatus> statuses;
-    for (const auto& provider : snapshot->semantic().sections().tree.providers) {
+    for (const auto& provider : snapshot->sections().tree.providers) {
         if (provider.kind != ssg::TreeProviderKind::Git) {
             continue;
         }
@@ -132,8 +132,8 @@ bool waitForDiffCount(ssg::EditorSession& runtime, std::size_t expectedCount,
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
         (void)runtime.pump();
-        auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-        if (snapshot && snapshot->semantic().sections().diff.files.size() == expectedCount) {
+        auto snapshot = runtime.snapshot(ssg::ClientId{1});
+        if (snapshot && snapshot->sections().diff.files.size() == expectedCount) {
             return true;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds{20});
@@ -211,10 +211,10 @@ TEST(gitDiffHostWorkerPollingAndEventRefreshProduceExpectedDiffView) {
         ASSERT_TRUE(
             waitForDiffCount(runtime, 1, std::chrono::milliseconds{3000}));
         auto changed =
-            runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+            runtime.snapshot(ssg::ClientId{1});
         ASSERT_TRUE(changed.has_value());
         if (!changed) return;
-        ASSERT_EQ(changed->semantic().sections().diff.files.front().id,
+        ASSERT_EQ(changed->sections().diff.files.front().id,
                   ssg::DiffFileId{"tracked.txt"});
 
         ASSERT_EQ(runStatus(root, "commit -m update"), 0);
@@ -269,11 +269,11 @@ TEST(gitDiffHostWorkerStartsFromSubdirectoryWorkspace) {
     ASSERT_EQ(runStatus(root, "add src/tracked.txt"), 0);
     ASSERT_TRUE(waitForDiffCount(runtime, 1, std::chrono::milliseconds{3000}));
 
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->semantic().sections().diff.files.size(), std::size_t{1});
-    ASSERT_EQ(snapshot->semantic().sections().diff.files.front().id,
+    ASSERT_EQ(snapshot->sections().diff.files.size(), std::size_t{1});
+    ASSERT_EQ(snapshot->sections().diff.files.front().id,
               ssg::DiffFileId{"src/tracked.txt"});
 
     fs::remove_all(root);

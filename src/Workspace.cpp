@@ -674,7 +674,9 @@ bool Workspace::commitExternalDismissal(
         entry->baseline = Impl::ExternalBaseline::removed();
     } else {
         DraftBaseline advanced;
-        const std::string_view bytes = dismissedContent.value_or(std::string{});
+        const std::string_view bytes =
+            dismissedContent ? std::string_view{*dismissedContent}
+                             : std::string_view{};
         advanced.size = static_cast<std::uint64_t>(bytes.size());
         advanced.contentHash = fastContentHash(bytes);
         // mtimeNanos is left unset: the observed mtime that pairs with these

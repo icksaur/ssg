@@ -10,10 +10,12 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <future>
 #include <memory>
 #include <optional>
 #include <string>
+#include <typeindex>
 #include <vector>
 
 #include <unistd.h>
@@ -51,6 +53,45 @@ std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
 }
 
 // ---------------------------------------------------------------------------
+
+class TestServices final : public ssg::CommandServices {
+public:
+    ssg::CommandHandlerResult runTransaction(
+        std::function<ssg::CommandHandlerResult()> operation) override {
+        return operation();
+    }
+
+private:
+    std::any state_{std::uint32_t{0}};
+
+    std::any& featureStateValue(std::type_index) override { return state_; }
+    void publishStatusValue(std::type_index, std::any) override {}
+    void publishDeltaValue(std::type_index, std::any) override {}
+};
+
+TEST(executorThreadsServicesThroughTheCommonDispatchPath) {
+    TestServices services;
+    auto catalog = std::make_shared<ssg::CommandCatalog>();
+    catalog->add(ssg::CommandSpecBuilder{"probe.services"}
+                     .owner("test-owner")
+                     .summary("Observes dispatch services")
+                     .observes()
+                     .handler([&services](ssg::CommandContext& context) {
+                         ASSERT_TRUE(context.services() == &services);
+                         return ssg::CommandHandlerResult::success();
+                     }));
+    ssg::CommandExecutor executor{catalog, &services};
+    ASSERT_TRUE(executor
+                    .attach(ssg::InvocationPrincipal{
+                                ssg::ClientId{1},
+                                ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(executor
+                    .dispatch(ssg::ClientId{1},
+                              {"probe.services", ssg::Revision{1}, {}})
+                    .accepted());
+}
 
 TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
     auto root = uniqueRoot();
@@ -518,10 +559,10 @@ TEST(publishedStatusActionActivatesItsCurrentTargetCommand) {
                                {"oracle.publish_status",
                                 runtime->revision(), {}})
                     .accepted());
-    const auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
+    const auto snapshot = runtime->snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto& frame = snapshot->semantic().sections().uiFrame;
+    const auto& frame = snapshot->sections().uiFrame;
     const auto action = std::find_if(
         frame.state().nodes.begin(), frame.state().nodes.end(),
         [](const ssg::UiNodeState& node) {
@@ -583,7 +624,7 @@ TEST(publishedStatusActionActivatesItsCurrentTargetCommand) {
     fs::remove_all(root);
 }
 
-TEST(aHandlerThatPresentsIsRefusedBeforeTakingTheOperationLock) {
+TEST(aHandlerThatSnapshotsIsRefusedBeforeTakingTheOperationLock) {
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -592,11 +633,11 @@ TEST(aHandlerThatPresentsIsRefusedBeforeTakingTheOperationLock) {
     runtime->registerCommand(
         ssg::CommandSpecBuilder{"oracle.presents"}
             .owner("test-oracle")
-            .summary("attempts presentation from its handler")
+            .summary("attempts snapshot capture from its handler")
             .observes()
             .handler([&](ssg::CommandContext&) {
                 try {
-                    (void)runtime->present(ssg::ClientId{1}, {80, 24});
+                    (void)runtime->snapshot(ssg::ClientId{1});
                 } catch (const std::logic_error&) {
                     refused = true;
                 }
@@ -754,6 +795,7 @@ TEST(aggregateOperationHidesIntermediateDeferredRevisions) {
 }  // namespace
 
 int main() {
+    RUN(executorThreadsServicesThroughTheCommonDispatchPath);
     RUN(viewActionResultsRemainExplicitAcrossTheAggregateBoundary);
     RUN(revisionAdvancesExactlyOncePerAcceptedMutation);
     RUN(stateValidatedMutationUsesCurrentRevisionWhenClientBasisIsStale);
@@ -763,7 +805,7 @@ int main() {
     RUN(aHandlerThatDispatchesIsToldToDeferInstead);
     RUN(routingCommandsQueueExactlyOneDirectOrdinaryTarget);
     RUN(publishedStatusActionActivatesItsCurrentTargetCommand);
-    RUN(aHandlerThatPresentsIsRefusedBeforeTakingTheOperationLock);
+    RUN(aHandlerThatSnapshotsIsRefusedBeforeTakingTheOperationLock);
     RUN(aHandlerCannotMutateTheCommandCatalogReentrantly);
     RUN(aggregateOperationHidesIntermediateDeferredRevisions);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

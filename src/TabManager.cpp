@@ -63,20 +63,6 @@ std::optional<std::string> invalidState(const TabViewState& state) {
 
 }  // namespace
 
-TabDelta TabDeltaCodec::derive(const TabViewState& base,
-                          const TabViewState& target) {
-    return base == target ? TabDelta{} : TabDelta{target};
-}
-
-TabReplayResult TabDeltaCodec::replay(const TabViewState& base,
-                                 const TabDelta& delta) {
-    const auto& target = delta.state ? *delta.state : base;
-    if (const auto error = invalidState(target)) {
-        return {{}, *error};
-    }
-    return {target, {}};
-}
-
 TabManagementCommandSet tabManagementCommandSet() {
     return {};
 }

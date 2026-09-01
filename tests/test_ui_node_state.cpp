@@ -10,6 +10,7 @@
 #include "chrome_authoring.h"
 #include "ssg/Style.h"
 #include "ssg/UiNodeState.h"
+#include "ssg/UiStateResolver.h"
 #include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
@@ -32,7 +33,7 @@ UiChromeLowerResult lowerUiChromeRegion(
         ssg::lowerUiChromeRegion(region, rect, role, style, resolver, solved);
     for (const auto& item : solved.items) {
         out.push_back({kind, item.id, item.label, item.rect, item.role,
-                       item.content, item.command, item.statusInvocation});
+                       item.content, item.command});
     }
     return result;
 }

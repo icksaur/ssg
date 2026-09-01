@@ -22,7 +22,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     set_target_properties(ssg_app PROPERTIES OUTPUT_NAME ssg)
     target_include_directories(ssg_app PRIVATE ${SSG_SOURCE_DIR}/apps)
-    target_link_libraries(ssg_app PRIVATE ssg http ssg_http_server)
+    target_link_libraries(ssg_app PRIVATE ssg_grid ssg_protocol http ssg_http_server)
 
     add_executable(test_ssg_app
         ${SSG_SOURCE_DIR}/tests/test_ssg_app.cpp
@@ -37,7 +37,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_compile_definitions(test_ssg_app PRIVATE
         SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}"
     )
-    target_link_libraries(test_ssg_app PRIVATE ssg)
+    target_link_libraries(test_ssg_app PRIVATE ssg_grid)
     add_test(NAME test_ssg_app COMMAND test_ssg_app)
 
     # The web client's local-echo reconciliation is exercised by running the real

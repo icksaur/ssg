@@ -155,7 +155,7 @@ TEST(normalizesRequestedEndingsAndAppliesFinalNewlinePolicy) {
         0x6f, 0x6e, 0x65, 0x0d, 0x74, 0x77, 0x6f}));
 }
 
-TEST(exportsExactImmutableCommandSetAndTypedViewDelta) {
+TEST(exportsExactImmutableCommandSet) {
     constexpr std::array expected{
         std::string_view{"file.reopen_with_encoding"},
         std::string_view{"file.set_encoding"},
@@ -168,15 +168,6 @@ TEST(exportsExactImmutableCommandSetAndTypedViewDelta) {
                   expected[index]);
     }
 
-    const auto before = ssg::TextCodec{}.decode(fixture("utf8-lf"));
-    const auto after = ssg::TextCodec{}.decode(fixture("utf8-bom-crlf"));
-    const auto beforeView = ssg::TextCodec{}.viewState(*before.text);
-    const auto afterView = ssg::TextCodec{}.viewState(*after.text);
-    const auto delta = ssg::TextCodec{}.deriveDelta(beforeView, afterView);
-    ASSERT_TRUE(delta.has_value());
-    ASSERT_EQ(delta->before, beforeView);
-    ASSERT_EQ(delta->after, afterView);
-    ASSERT_FALSE(ssg::TextCodec{}.deriveDelta(afterView, afterView).has_value());
 }
 
 } // namespace
@@ -276,7 +267,7 @@ int main() {
     RUN(refusesInvalidInputWithoutReplacement);
     RUN(refusesLossySingleByteEncodingAtTheOffendingOffset);
     RUN(normalizesRequestedEndingsAndAppliesFinalNewlinePolicy);
-    RUN(exportsExactImmutableCommandSetAndTypedViewDelta);
+    RUN(exportsExactImmutableCommandSet);
     RUN(fusedDecodeRecordsEveryLineTerminator);
     RUN(fusedDecodePreservesMalformedOffsets);
     return failed == 0 ? 0 : 1;

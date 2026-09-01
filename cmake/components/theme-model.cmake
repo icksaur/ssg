@@ -1,4 +1,4 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Theme.cpp
     ${SSG_SOURCE_DIR}/src/DefaultTheme.cpp
 )
@@ -14,6 +14,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         SSG_SOURCE_ROOT="${SSG_SOURCE_DIR}"
         SSG_THEME_ROLES_PATH="${SSG_SOURCE_DIR}/tests/fixtures/theme_roles.json"
     )
-    target_link_libraries(test_theme PRIVATE ssg)
+    target_link_libraries(test_theme PRIVATE ssg_core)
     add_test(NAME test_theme COMMAND test_theme)
 endif()

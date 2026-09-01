@@ -18,20 +18,8 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <utility>
 #include <vector>
-
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#else
-#include <cerrno>
-#include <fcntl.h>
-#include <unistd.h>
-#endif
 
 namespace ssg {
 namespace {
@@ -186,54 +174,11 @@ void writeBytes(const std::filesystem::path& path,
     }
 }
 
-[[noreturn]] void throwSyncError(std::string_view operation,
-                                   const std::filesystem::path& path) {
-#ifdef _WIN32
-    throw std::system_error(
-        static_cast<int>(GetLastError()), std::system_category(),
-        std::string{operation} + ": " + path.string());
-#else
-    throw std::system_error(errno, std::generic_category(),
-                            std::string{operation} + ": " + path.string());
-#endif
-}
-
 void syncPath(const std::filesystem::path& path, bool directory) {
-#ifdef _WIN32
-    if (directory) return;
-    const HANDLE handle =
-        CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                    nullptr, OPEN_EXISTING, 0, nullptr);
-    if (handle == INVALID_HANDLE_VALUE) {
-        throw_sync_error("failed to open recovery path for flush", path);
+    const auto result = directory ? syncDirectory(path) : syncFile(path);
+    if (!result.ok()) {
+        throw std::runtime_error(result.message);
     }
-    if (!FlushFileBuffers(handle)) {
-        const auto failure = GetLastError();
-        CloseHandle(handle);
-        SetLastError(failure);
-        throw_sync_error("failed to flush recovery path", path);
-    }
-    if (!CloseHandle(handle)) {
-        throw_sync_error("failed to close flushed recovery path", path);
-    }
-#else
-    const int flags =
-        O_RDONLY | O_CLOEXEC | (directory ? O_DIRECTORY : 0);
-    const int descriptor = ::open(path.c_str(), flags);
-    if (descriptor < 0) {
-        throwSyncError("failed to open recovery path for sync", path);
-    }
-    if (::fsync(descriptor) != 0) {
-        const int failure = errno;
-        ::close(descriptor);
-        errno = failure;
-        throwSyncError("failed to sync recovery path", path);
-    }
-    if (::close(descriptor) != 0) {
-        throwSyncError("failed to close synced recovery path", path);
-    }
-#endif
 }
 
 void syncTree(const std::filesystem::path& root) {
@@ -257,37 +202,19 @@ void syncTree(const std::filesystem::path& root) {
 void installDirectoryDurably(const std::filesystem::path& staging,
                                const std::filesystem::path& installed,
                                const std::filesystem::path& parent) {
-#ifdef _WIN32
-    if (!MoveFileExW(staging.c_str(), installed.c_str(),
-                     MOVEFILE_WRITE_THROUGH)) {
-        throw_sync_error("failed to install recovery directory", installed);
+    (void)parent;
+    const auto result = renamePathDurably(staging, installed);
+    if (!result.ok()) {
+        throw std::runtime_error(result.message);
     }
-#else
-    // seam-exempt: installs a recovery staging dir; syncPath below provides durability
-    std::filesystem::rename(staging, installed);
-    syncPath(parent, true);
-#endif
 }
 
 void renameDurably(const std::filesystem::path& source,
                     const std::filesystem::path& destination) {
-#ifdef _WIN32
-    if (!MoveFileExW(source.c_str(), destination.c_str(),
-                     MOVEFILE_WRITE_THROUGH)) {
-        throw_sync_error("failed to durably rename path", source);
+    const auto result = renamePathDurably(source, destination);
+    if (!result.ok()) {
+        throw std::runtime_error(result.message);
     }
-#else
-    // seam-exempt: recovery-internal durable rename, paired with syncPath below
-    std::filesystem::rename(source, destination);
-    syncPath(std::filesystem::absolute(source).parent_path(), true);
-    const auto sourceParent =
-        std::filesystem::absolute(source).parent_path().lexically_normal();
-    const auto destinationParent =
-        std::filesystem::absolute(destination).parent_path().lexically_normal();
-    if (destinationParent != sourceParent) {
-        syncPath(destinationParent, true);
-    }
-#endif
 }
 
 std::vector<std::byte> readBytes(const std::filesystem::path& path) {

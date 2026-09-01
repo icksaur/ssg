@@ -1,4 +1,4 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/SyntaxModel.cpp
 )
 
@@ -83,13 +83,13 @@ set(_SSG_TREESITTER_VENDOR_SOURCES
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown-inline/src/scanner.c
 )
 
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/TreeSitterParser.cpp
     ${_SSG_EMBEDDED_QUERIES_TU}
     ${_SSG_TREESITTER_VENDOR_SOURCES}
 )
 
-target_include_directories(ssg PRIVATE
+target_include_directories(ssg_core PRIVATE
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter/lib/include
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/src
@@ -100,6 +100,16 @@ target_include_directories(ssg PRIVATE
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown-inline/src
 )
+ssg_allow_private_roots(ssg_core
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter/lib/include
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/typescript/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown-inline/src)
 
 set_source_files_properties(${_SSG_TREESITTER_VENDOR_SOURCES}
     PROPERTIES
@@ -113,7 +123,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_syntax PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_syntax PRIVATE ssg)
+    target_link_libraries(test_syntax PRIVATE ssg_core)
     add_test(NAME test_syntax COMMAND test_syntax)
 
     add_executable(test_syntax_language_detection
@@ -122,7 +132,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_syntax_language_detection PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_syntax_language_detection PRIVATE ssg)
+    target_link_libraries(test_syntax_language_detection PRIVATE ssg_core)
     add_test(NAME test_syntax_language_detection COMMAND test_syntax_language_detection)
 
     add_executable(test_treesitter_syntax
@@ -137,7 +147,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
         SSG_TREESITTER_SOURCE_DIR="${SSG_SOURCE_DIR}/src"
     )
-    target_link_libraries(test_treesitter_syntax PRIVATE ssg)
+    target_link_libraries(test_treesitter_syntax PRIVATE ssg_core)
     add_test(NAME test_treesitter_syntax COMMAND test_treesitter_syntax)
 
     # A separate executable so no earlier test has compiled a query first,
@@ -152,7 +162,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_compile_definitions(test_treesitter_embedded_queries PRIVATE
         SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
     )
-    target_link_libraries(test_treesitter_embedded_queries PRIVATE ssg)
+    target_link_libraries(test_treesitter_embedded_queries PRIVATE ssg_core)
     add_test(NAME test_treesitter_embedded_queries
              COMMAND test_treesitter_embedded_queries)
     set_tests_properties(test_treesitter_embedded_queries PROPERTIES
@@ -168,7 +178,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_treesitter_grammar_registration PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_treesitter_grammar_registration PRIVATE ssg)
+    target_link_libraries(test_treesitter_grammar_registration PRIVATE ssg_core)
     add_test(NAME test_treesitter_grammar_registration
              COMMAND test_treesitter_grammar_registration)
 endif()

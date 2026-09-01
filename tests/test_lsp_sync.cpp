@@ -161,15 +161,7 @@ TEST(diagnosticsAreVersionCheckedBoundedCoalescedAndReplayable) {
     ASSERT_EQ(errorOf(client.poll()), LspSyncError::None);
     ASSERT_EQ(client.viewState().documents[0].diagnostics.size(), 0U);
 
-    const auto base = accepted;
     const auto target = client.viewState();
-    const auto delta = LspSyncDeltaCodec{}.derive(base, target);
-    const auto replayed = LspSyncDeltaCodec{}.replay(base, delta);
-    ASSERT_TRUE(replayed.accepted());
-    ASSERT_EQ(replayed.state.value(), target);
-    ASSERT_EQ(errorOf(LspSyncDeltaCodec{}.replay(target, delta)),
-              LspSyncReplayError::StaleRevision);
-
     const auto three = "[" + one.substr(1, one.size() - 2) + "," +
                        one.substr(1, one.size() - 2) + "," +
                        one.substr(1, one.size() - 2) + "]";

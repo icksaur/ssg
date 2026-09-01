@@ -566,11 +566,4 @@ TextEncodingViewState TextCodec::viewState(
     return {text.status};
 }
 
-std::optional<TextEncodingDelta> TextCodec::deriveDelta(
-    const TextEncodingViewState& before,
-    const TextEncodingViewState& after) const {
-    if (before == after) return std::nullopt;
-    return TextEncodingDelta{before, after};
-}
-
 } // namespace ssg

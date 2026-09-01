@@ -7,6 +7,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/examples/tui
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_tui_fixture PRIVATE ssg)
+    target_link_libraries(test_tui_fixture PRIVATE ssg_grid)
     add_test(NAME test_tui_fixture COMMAND test_tui_fixture)
 endif()

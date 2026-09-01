@@ -396,28 +396,6 @@ std::optional<std::vector<LspNavigationTarget>> parseLocations(
 
 LspFeatureCommandSet lspFeatureCommandSet() { return {}; }
 
-LspFeatureDelta LspFeatureDeltaCodec::derive(const LspFeatureViewState& base,
-                                         const LspFeatureViewState& target) {
-    LspFeatureDelta delta{base.revision, target.revision, std::nullopt};
-    if (base != target) delta.state = target;
-    return delta;
-}
-
-LspFeatureReplayResult LspFeatureDeltaCodec::replay(
-    const LspFeatureViewState& base, const LspFeatureDelta& delta) {
-    if (delta.baseRevision != base.revision) {
-        return {std::nullopt, LspFeatureReplayError::StaleRevision};
-    }
-    if (delta.revision < delta.baseRevision ||
-        (delta.state && delta.state->revision != delta.revision) ||
-        (!delta.state && delta.revision != delta.baseRevision)) {
-        return {std::nullopt, LspFeatureReplayError::MalformedDelta};
-    }
-    return {delta.state ? delta.state
-                        : std::optional<LspFeatureViewState>{base},
-            LspFeatureReplayError::None};
-}
-
 LspFeatureController::LspFeatureController(LspSyncClient& client,
                                            LspFeatureConfig config)
     : client_(client), config_(config) {

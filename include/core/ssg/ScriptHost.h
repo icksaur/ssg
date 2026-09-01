@@ -1,0 +1,80 @@
+#pragma once
+#include <ssg/GridAction.h>
+#include <ssg/LuaCommandHost.h>
+
+#include <functional>
+
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace ssg {
+
+class EditorSession;
+
+// The client every script-originated command is dispatched as, reserved for the
+// process's one ScriptHost.  Named here rather than buried in the
+// implementation because it is a contract with every other attaching client:
+// constructing a second ScriptHost, or attaching this id elsewhere, is refused
+// by the runtime, and ScriptHost's constructor reports that rather than
+// starting in a half-connected state.
+inline constexpr ClientId kScriptClientId{2};
+
+// The editor's Lua state, and everything that connects it to the editor.
+//
+// One ScriptHost lives for the process, so the Lua state outlives any single
+// evaluation: a function a script defines is still callable long after the
+// script that defined it finished running.  This
+// is why it is a class rather than a function -- an `evaluateInitScript(script)`
+// free function can only ever build a state, use it and destroy it.
+//
+// Each evaluate() is a generation: whatever the script registers replaces what
+// the previous successful evaluation registered, atomically, so a reload never
+// leaves the editor with a half-applied script.  A failed evaluation changes no
+// registrations at all; it cannot undo effects the script already caused before
+// failing, such as a theme it had already applied (L5).
+//
+// The Lua state belongs to the thread that constructed the host, and only that
+// thread may evaluate or dispatch into it.
+class ScriptHost {
+public:
+    using ViewActionSink =
+        std::function<GridActionResult(ViewActionRequest const&)>;
+
+    // Attaches the script client to `runtime`, which must outlive this host.
+    // Throws std::runtime_error if the runtime refuses the attachment.
+    // Without a view-action sink, an immediate script request for a view-owned
+    // command fails with `view_action_unavailable`.
+    explicit ScriptHost(EditorSession& runtime);
+    // Attaches the script client to `viewId`. The host-owned sink applies a
+    // view action; ScriptHost submits its optional semantic transition once.
+    ScriptHost(EditorSession& runtime, ViewId viewId,
+               ViewActionSink viewActionSink);
+    ~ScriptHost();
+
+    ScriptHost(ScriptHost const&) = delete;
+    ScriptHost& operator=(ScriptHost const&) = delete;
+
+    // Runs `script` as the next generation.
+    //
+    // Must never be called with empty or whitespace-only content: an empty Lua
+    // chunk is trivially valid, so it would read as a successful reload that
+    // retires the previous generation and installs nothing.  Callers check for
+    // real content before reading a file's contents this far.
+    [[nodiscard]] LuaResult evaluate(std::string_view script);
+
+    // The header/footer chrome the last successful evaluation composed via
+    // `ssg.chrome`, or nullopt when the current script composes none (fall back
+    // to built-in chrome). Replaced wholesale by each successful evaluation.
+    [[nodiscard]] std::optional<ValidatedComposition> const& composedUi() const;
+
+private:
+    LuaResult offerGeneration(std::vector<std::string> const& commandIds);
+
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+}  // namespace ssg

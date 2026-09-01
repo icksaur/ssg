@@ -10,7 +10,7 @@
 #     measurement, kept off the default ctest run (name matches the
 #     `-E performance_measurement` filter).
 
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/open_metrics.cpp
 )
 
@@ -18,7 +18,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_open_equivalence
         ${SSG_SOURCE_DIR}/tests/test_open_equivalence.cpp
     )
-    target_link_libraries(test_open_equivalence PRIVATE ssg)
+    target_link_libraries(test_open_equivalence PRIVATE ssg_core)
     target_compile_definitions(test_open_equivalence PRIVATE
         SSG_OPEN_GOLDEN="${SSG_SOURCE_DIR}/tests/fixtures/open/golden.txt")
     add_test(NAME test_open_equivalence COMMAND test_open_equivalence)
@@ -26,13 +26,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_open_metrics
         ${SSG_SOURCE_DIR}/tests/test_open_metrics.cpp
     )
-    target_link_libraries(test_open_metrics PRIVATE ssg)
+    target_link_libraries(test_open_metrics PRIVATE ssg_core)
     add_test(NAME test_open_metrics COMMAND test_open_metrics)
 
     add_executable(open_path_benchmark
         ${SSG_SOURCE_DIR}/benchmarks/open_path_benchmark.cpp
     )
-    target_link_libraries(open_path_benchmark PRIVATE ssg)
+    target_link_libraries(open_path_benchmark PRIVATE ssg_core)
     add_test(NAME performance_measurement_open_path COMMAND open_path_benchmark)
     set_tests_properties(performance_measurement_open_path PROPERTIES
         LABELS "performance"

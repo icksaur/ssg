@@ -106,27 +106,6 @@ void StatusQueue::dismiss() noexcept {
     }
 }
 
-StatusActionResult StatusQueue::invokeAction(
-    const StatusActionInvocation& invocation) const {
-    if (entries_.empty()) {
-        return {StatusActionError::Stale, std::nullopt};
-    }
-    const auto& selected = entries_[selected_];
-    if (selected.item.id != invocation.statusId ||
-        selected.generation != invocation.generation) {
-        return {StatusActionError::Stale, std::nullopt};
-    }
-    const auto action = std::find_if(
-        selected.item.actions.begin(), selected.item.actions.end(),
-        [&](const StatusAction& candidate) {
-            return candidate.id == invocation.actionId;
-        });
-    if (action == selected.item.actions.end()) {
-        return {StatusActionError::UnknownAction, std::nullopt};
-    }
-    return {StatusActionError::None, action->commandId};
-}
-
 StatusViewState StatusQueue::viewState() const {
     StatusViewState view;
     view.selected = selected_;

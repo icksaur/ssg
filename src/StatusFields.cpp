@@ -138,15 +138,6 @@ std::vector<StatusFieldProviderBinding> defaultStatusFieldProviders() {
     };
 }
 
-std::string statusFieldGridDisplay(std::string_view providerId,
-                                   std::string_view semanticValue,
-                                   const Style& style) {
-    if (providerId == "path") {
-        return style.cwdPrefix + std::string{semanticValue};
-    }
-    return std::string{semanticValue};
-}
-
 StatusFieldProjection projectStatusFields(
     const std::vector<StatusFieldCatalogEntry>& catalog,
     const std::unordered_map<std::string, StatusFieldProvider>& providers,

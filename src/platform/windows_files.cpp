@@ -474,6 +474,91 @@ FileIoResult createFileExclusively(const std::filesystem::path& target,
     return {FileIoStatus::Ok, {}};
 }
 
+FileIoResult appendFileDurably(const std::filesystem::path& target,
+                               std::span<const std::byte> contents) {
+    if (const auto injected = injectedFailure("appendFileDurably", target)) {
+        return {*injected, "injected fault: appendFileDurably"};
+    }
+    const HANDLE handle =
+        CreateFileW(target.c_str(), FILE_APPEND_DATA,
+                    FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, OPEN_ALWAYS,
+                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        return last_error_failure(GetLastError(), "open file for append", target);
+    }
+    const bool created = GetLastError() != ERROR_ALREADY_EXISTS;
+    if (created) {
+        try {
+            setOwnerOnlyPermissions(target);
+        } catch (const std::system_error& error) {
+            CloseHandle(handle);
+            return {FileIoStatus::IoError, error.what()};
+        }
+    }
+    std::size_t written = 0;
+    while (written < contents.size()) {
+        const DWORD request = static_cast<DWORD>(
+            (std::min)(contents.size() - written,
+                       static_cast<std::size_t>(MAXDWORD)));
+        DWORD count = 0;
+        if (!WriteFile(handle, contents.data() + written, request, &count,
+                       nullptr)) {
+            const DWORD error = GetLastError();
+            CloseHandle(handle);
+            return last_error_failure(error, "append file", target);
+        }
+        if (count == 0) {
+            CloseHandle(handle);
+            return {FileIoStatus::IoError,
+                    "append made no progress: " + target.string()};
+        }
+        written += count;
+    }
+    if (!FlushFileBuffers(handle)) {
+        const DWORD error = GetLastError();
+        CloseHandle(handle);
+        return last_error_failure(error, "flush appended file", target);
+    }
+    if (!CloseHandle(handle)) {
+        return last_error_failure(GetLastError(), "close appended file", target);
+    }
+    return {FileIoStatus::Ok, {}};
+}
+
+FileIoResult syncFile(const std::filesystem::path& path) {
+    if (const auto injected = injectedFailure("syncFile", path)) {
+        return {*injected, "injected fault: syncFile"};
+    }
+    const HANDLE handle =
+        CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                    nullptr, OPEN_EXISTING, 0, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        return last_error_failure(GetLastError(), "open file for flush", path);
+    }
+    if (!FlushFileBuffers(handle)) {
+        const DWORD error = GetLastError();
+        CloseHandle(handle);
+        return last_error_failure(error, "flush file", path);
+    }
+    if (!CloseHandle(handle)) {
+        return last_error_failure(GetLastError(), "close flushed file", path);
+    }
+    return {FileIoStatus::Ok, {}};
+}
+
+FileIoResult renamePathDurably(const std::filesystem::path& source,
+                               const std::filesystem::path& destination) {
+    if (const auto injected = injectedFailure("renamePathDurably", source)) {
+        return {*injected, "injected fault: renamePathDurably"};
+    }
+    if (!MoveFileExW(source.c_str(), destination.c_str(),
+                     MOVEFILE_WRITE_THROUGH)) {
+        return last_error_failure(GetLastError(), "rename path", destination);
+    }
+    return {FileIoStatus::Ok, {}};
+}
+
 FileIoResult renameFileNoClobber(const std::filesystem::path& source,
                                  const std::filesystem::path& destination) {
     if (const auto injected = injectedFailure("renameFileNoClobber", source)) {

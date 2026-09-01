@@ -35,11 +35,11 @@ import {
   encodeScrollLinesInput, encodeScrollFractionInput,
   encodeTabPointerInput, markedTextByteOffset, encodeTreePointerInput,
   applyTreeDelta, normalizeTreeActiveBinding,
-  applySessionDeltaSections, applySessionDeltaCopy, applySessionDelta,
+  applySessionDeltaCopy, applySessionDelta,
   applyUiFrameDelta,
   findSections,
-  encodeStatusActionPointerInput, encodePromptControlPointerInput,
-  encodePublishedUiActionPointerInput, encodeNoticeActionPointerInput,
+  encodeNoticeActionPointerInput,
+  noticeViewFromSections,
   externalModificationFromSections,
   encodeExternalActionPointerInput,
   applyExternalModificationDelta, isCurrentGeneration, replayAttachFrame,
@@ -48,11 +48,18 @@ import {
   settlePromptPrediction,
   settlePromptPresentation, deferPromptDocumentSurface,
   mergeBrowserRenderPlans,
-  legacyPromptViewFromFrame,
 } from '../../apps/web/reconcile.mjs';
 
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; };
+const unchangedOrdinaryDelta = () => ({
+  selection: { changed: false, replacement: null },
+  history: { changed: false, replacement: null },
+  clipboard: { changed: false, replacement: null },
+  prompt_status: { changed: false, replacement: null },
+  keymap: { changed: false, replacement: null },
+  theme: { replacement: null },
+});
 
 check('browser surface vocabulary contains only current sparse surfaces', () => {
   assert.deepEqual(SURFACE, {
@@ -86,15 +93,15 @@ check('current sources contain no retired provider identity vocabulary', () => {
   const source = (relative) => fs.readFileSync(
     new URL(relative, import.meta.url), 'utf8');
   const commandSources = [
-    source('../../include/ssg/WholeScreenInteraction.h'),
-    source('../../include/ssg/CommandTransition.h'),
+    source('../../include/core/ssg/WholeScreenInteraction.h'),
+    source('../../include/core/ssg/CommandTransition.h'),
     source('../../src/CommandTransition.cpp'),
   ].join('\n');
   assert.doesNotMatch(commandSources, /\bPanelProvider\b/);
   assert.doesNotMatch(commandSources, /panelProvider(?:Label|TreeBinding)/);
 
   const surfaceSources = [
-    source('../../include/ssg/Widget.h'),
+    source('../../include/core/ssg/Widget.h'),
     source('../../src/ViewSurfaceBacking.cpp'),
     source('../../apps/web/reconcile.mjs'),
   ].join('\n');
@@ -149,6 +156,22 @@ check('generated semantic validators cover nested snapshot and delta structure',
   const delta = fixtureMessage('session_semantic_delta.hex');
   assert.equal(validateSessionSnapshotWire(snapshot), true);
   assert.equal(validateSessionDeltaWire(delta), true);
+  assert.equal(validateSessionSnapshotWire({
+    ...snapshot,
+    presentation: {},
+  }), false);
+  assert.equal(validateSessionSnapshotWire({
+    ...snapshot,
+    sections: { ...snapshot.sections, focus: 0n },
+  }), false);
+  assert.equal(validateSessionDeltaWire({
+    ...delta,
+    style: {},
+  }), false);
+  assert.equal(validateSessionDeltaWire({
+    ...delta,
+    ui_state: {},
+  }), false);
   assert.equal(validateSessionSnapshotWire({
     ...snapshot,
     sections: {
@@ -526,15 +549,15 @@ check('typed raw input and command requests round-trip through ProtocolValue', (
     assert.throws(() => decodeMessage(
       new Uint8Array([1, 9, 0]).buffer), /unsupported protocol frame/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([4, 1, 1, 2]).buffer), /malformed protocol bool/);
+      new Uint8Array([5, 1, 1, 2]).buffer), /malformed protocol bool/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([4, 1, 4, 4, 0, 0, 0, 65]).buffer), /truncated/);
+      new Uint8Array([5, 1, 4, 4, 0, 0, 0, 65]).buffer), /truncated/);
     assert.throws(() => decodeMessage(
-      new Uint8Array([4, 1, 6, 1, 0, 1, 0]).buffer), /collection length/);
+      new Uint8Array([5, 1, 6, 1, 0, 1, 0]).buffer), /collection length/);
   });
 
   check('browser ignores additive message kinds without weakening wire versions', () => {
-    const decoded = decodeMessage(new Uint8Array([4, 9, 0]).buffer);
+    const decoded = decodeMessage(new Uint8Array([5, 9, 0]).buffer);
     assert.equal(browserInboundKind(decoded.kind), 'ignore');
     assert.equal(browserInboundKind(1), 'snapshot');
     assert.equal(browserInboundKind(8), 'input-result');
@@ -617,16 +640,6 @@ check('picker key prediction follows the published keymap and Unicode edits', ()
       { query: 'a\u0301b', selected: 2, error: 'old' },
       { kind: CLIENT_OWNED_INPUT.DELETE_GRAPHEME_BACKWARD, text: '' }, 3),
     { query: 'a\u0301', selected: 0, error: '' });
-});
-
-check('status action uses the common semantic input envelope', () => {
-  const decoded = decodeMessage(encodeStatusActionPointerInput(
-    { statusId: 7, actionId: 'dismiss', generation: 3 }, 11n).buffer);
-  assert.equal(decoded.kind, 7);
-  assert.deepEqual(decoded.payload, {
-    kind: 6n, button: 0n, phase: 0n, basis_revision: 11n,
-    invocation: { status_id: 7n, action_id: 'dismiss', generation: 3n },
-  });
 });
 
 check('command results settle direct command owners in send order', () => {
@@ -719,15 +732,8 @@ check('browser semantic input bytes match the C++ canonical frames', () => {
     ['client_input_picker.hex',
       encodePickerPointerInput(
         { mode: PICKER_MODE.COMMAND, id: 13n }, 'command.open')],
-    ['client_input_prompt_control.hex',
-      encodePromptControlPointerInput('replace.replacement', 7n)],
     ['client_input_external_action.hex',
       encodeExternalActionPointerInput(0, 'external:src/a:b.cpp', 11n)],
-    ['client_input_status_action.hex',
-      encodeStatusActionPointerInput(
-        { statusId: 7, actionId: 'dismiss', generation: 3 }, 11n)],
-    ['client_input_ui_action.hex',
-      encodePublishedUiActionPointerInput('header.help', 4n, 12n)],
     ['client_input_notice_action.hex',
       encodeNoticeActionPointerInput('draft.notice.dismiss', 12n)],
     ['client_input_document.hex',
@@ -874,61 +880,6 @@ const presenceForSchema = (generation, root, hidden = []) => {
   walk(root);
   return { generation, basis: 0, nodes };
 };
-
-check('focus path resolves the present top while allowing a hidden base', () => {
-    const root = rowNode('root', [
-      focusLeafNode('editor', WIDGET.VIEW, 0, { surface: SURFACE.DOCUMENT }),
-      focusLeafNode('input_line', WIDGET.TEXT_INPUT, 2),
-    ]);
-    const schema = schemaOf(21, root);
-    const presence = presenceForSchema(21, root, ['editor']);
-    const state = {
-      generation: 21,
-      nodes: [st('root'), st('editor'), st('input_line')],
-      focus_path: ['editor', 'input_line'],
-    };
-    assert.deepEqual(resolveUiFocusPath(schema, state, presence), {
-      path: ['editor', 'input_line'],
-      effective: 'input_line',
-      context: 'prompt',
-      captured: true,
-    });
-
-    check('retired footer surface normalizes only in its predecessor slot', () => {
-      const predecessor = fixtureMessage('session_focus_editor.hex');
-      const sections = rawSections(predecessor);
-      const findNode = (node, id) => {
-        if (node?.id === id) return node;
-        for (const child of (node?.container?.children || [])) {
-          const found = findNode(child, id);
-          if (found) return found;
-        }
-        return null;
-      };
-      const prompt = findNode(sections.ui_frame.schema.root, 'footer.prompt');
-      delete prompt.container;
-      delete prompt.focus_context;
-      prompt.leaf = {
-        kind: 6n, id: 'footer.prompt', value: null, checked: null, width: null,
-        role: null, command: null, surface: 5n, rank: 0n, keep: false,
-        overflow: 0n, sigil: '',
-      };
-      const normalized = findSections(predecessor);
-      assert.ok(normalized);
-      assert.ok(findNode(
-        normalized.ui_frame.schema.root, 'footer.prompt').container);
-      assert.equal(Object.hasOwn(normalized, 'prompt_view'), false);
-
-      const malformed = fixtureMessage('session_focus_editor.hex');
-      const malformedSections = rawSections(malformed);
-      const malformedPrompt =
-        findNode(malformedSections.ui_frame.schema.root, 'footer.prompt');
-      delete malformedPrompt.container;
-      delete malformedPrompt.focus_context;
-      malformedPrompt.leaf = { ...prompt.leaf, id: 'other' };
-      assert.equal(findSections(malformed), null);
-    });
-});
 
 check('predicted picker focus is a disposable overlay on the authoritative path', () => {
     const root = rowNode('root', [
@@ -1388,10 +1339,9 @@ check('retained surfaces preserve identity within one generation only', () => {
 check('session deltas dirty only their dependent browser surfaces', () => {
   assert.deepEqual(browserRenderPlan({
     selection: { changed: false, replacement: null },
-    tabs: { state: null },
+    tabs: null,
     tree: { base_revision: 4n, revision: 4n },
     palette: null,
-    prompt_view: { changed: false, replacement: null },
     notice_view: { changed: false, replacement: null },
     external_modification: { base_revision: 5n, revision: 5n },
     theme: { replacement: null },
@@ -1405,6 +1355,10 @@ check('session deltas dirty only their dependent browser surfaces', () => {
   assert.deepEqual(browserRenderPlan({ selection: { replacement: {} } }), {
     rebuild: false, reconcile: false, responsive: false, repaintTheme: false,
     surfaces: [SURFACE.DOCUMENT],
+  });
+  assert.deepEqual(browserRenderPlan({ tabs: { active: 1n, tabs: [] } }), {
+    rebuild: false, reconcile: false, responsive: false, repaintTheme: false,
+    surfaces: [SURFACE.TAB_BAR],
   });
   assert.deepEqual(browserRenderPlan({
     tree: { base_revision: 1n, revision: 2n, providers: [] },
@@ -1786,54 +1740,6 @@ check('picker lifecycle resolves published keymap commands with global precedenc
     null);
 });
 
-check('footer prompt compatibility is derived from the UI frame', () => {
-  const input = leafNode(
-    'footer.prompt.control.find.query', WIDGET.TEXT_INPUT,
-    { id: 'find.query' });
-  const root = rowNode('root', [
-    focusLeafNode('editor', WIDGET.VIEW, 0, { surface: SURFACE.DOCUMENT }),
-    {
-      ...rowNode('footer.prompt', [input]),
-      accessible_label: 'Find',
-      focus_context: 2,
-    },
-  ]);
-  const schema = schemaOf(31, root);
-  const frame = {
-    version: { generation: 31n, presence_basis: 0n },
-    schema,
-    state: {
-      generation: 31n,
-      nodes: [
-        st('root'), st('editor'), st('footer.prompt'),
-        st('footer.prompt.control.find.query', {
-          value: 'ab', label: 'Find text', command: 'find.update_query',
-          checked: null, role: 0n, active: true,
-        }),
-      ],
-      focus_path: ['editor', 'footer.prompt'],
-    },
-    presence: presenceForSchema(31, root),
-  };
-  const derived = legacyPromptViewFromFrame(
-    { active_kind: 1n }, frame);
-  assert.equal(derived.valid, true);
-  assert.deepEqual(derived.view, {
-    kind: 1n,
-    accessible_label: 'Find',
-    controls: [{
-      kind: 0n, id: 'find.query', accessible_label: 'Find text',
-      value: 'ab', checked: false, command: 'find.update_query',
-    }],
-    active_input: 0n,
-  });
-  frame.state.nodes.at(-1).leaf.value = 'abc';
-  assert.equal(
-    legacyPromptViewFromFrame({ active_kind: 1n }, frame)
-      .view.controls[0].value,
-    'abc');
-});
-
 check('applySessionDeltaCopy retains unchanged large sections for a caret update', () => {
   const document = { text: 'large document', caret: 0 };
   const syntax = { spans: [{ begin: 0, end: 14, scope: 1 }] };
@@ -1842,12 +1748,176 @@ check('applySessionDeltaCopy retains unchanged large sections for a caret update
     ...findSections(fixtureMessage('session_semantic_base.hex')),
     document, syntax, palette, selection: { selections: [] },
   };
-  const next = applySessionDeltaCopy(sections, { document_caret: 4 });
+  const next = applySessionDeltaCopy(sections, {
+    ...unchangedOrdinaryDelta(),
+    document_caret: 4,
+  });
   assert.notEqual(next, sections);
   assert.notEqual(next.document, document);
   assert.equal(next.document.text, document.text);
   assert.equal(next.syntax, syntax);
   assert.equal(next.palette, palette);
+});
+
+check('ordinary replay has one absent/null/replacement matrix', () => {
+  const base = findSections(fixtureMessage('session_semantic_base.hex'));
+  const target = findSections(fixtureMessage('session_semantic_target.hex'));
+  const promptStatus = structuredClone(base.prompt_status);
+  promptStatus.status = {
+    items: [{
+      id: 2n,
+      priority: 2n,
+      generation: 1n,
+      accessible_label: 'ordinary replay',
+      actions: [],
+    }],
+    selected: 2n,
+  };
+  assert.notDeepEqual(promptStatus, base.prompt_status);
+  const expected = {
+    selection: target.selection,
+    history: target.history,
+    clipboard: target.clipboard,
+    prompt_status: promptStatus,
+    search: target.search,
+    find_replace: target.find_replace,
+    keymap: target.keymap,
+    text_encoding: target.text_encoding,
+    tabs: target.tabs,
+    follow_edits: target.follow_edits,
+    syntax: target.syntax,
+    lsp_sync: target.lsp_sync,
+    lsp_features: target.lsp_features,
+    notice_view: target.notice_view,
+    theme: target.theme,
+    palette: target.palette,
+    watcher_available: target.watcher_available,
+  };
+  const ordinary = {
+    selection: { changed: true, replacement: expected.selection },
+    history: { changed: true, replacement: expected.history },
+    clipboard: { changed: true, replacement: expected.clipboard },
+    prompt_status: { changed: true, replacement: expected.prompt_status },
+    search: expected.search,
+    find_replace: expected.find_replace,
+    keymap: { changed: true, replacement: expected.keymap },
+    text_encoding: expected.text_encoding,
+    tabs: expected.tabs,
+    follow_edits: expected.follow_edits,
+    syntax: expected.syntax,
+    lsp_sync: expected.lsp_sync,
+    lsp_features: expected.lsp_features,
+    notice_view: { changed: true, replacement: expected.notice_view },
+    theme: { replacement: expected.theme },
+    palette: expected.palette,
+    watcher_available: expected.watcher_available,
+  };
+  const replaced = applySessionDeltaCopy(base, ordinary);
+  for (const name of [
+    'selection', 'history', 'clipboard', 'prompt_status', 'search',
+    'find_replace', 'keymap', 'text_encoding', 'tabs', 'follow_edits',
+    'syntax', 'lsp_sync', 'lsp_features',
+    'notice_view', 'theme', 'palette', 'watcher_available',
+  ]) {
+    assert.deepEqual(replaced[name], expected[name], name);
+  }
+
+  const unchanged = applySessionDeltaCopy(base, {
+    selection: { changed: false, replacement: null },
+    history: { changed: false, replacement: null },
+    clipboard: { changed: false, replacement: null },
+    prompt_status: { changed: false, replacement: null },
+    search: null,
+    find_replace: null,
+    keymap: { changed: false, replacement: null },
+    text_encoding: null,
+    tabs: null,
+    follow_edits: null,
+    syntax: null,
+    lsp_sync: null,
+    lsp_features: null,
+    notice_view: { changed: false },
+    theme: { replacement: null },
+    palette: null,
+    watcher_available: null,
+  });
+  for (const name of [
+    'selection', 'history', 'clipboard', 'prompt_status', 'search',
+    'find_replace', 'keymap', 'text_encoding', 'tabs', 'follow_edits',
+    'syntax', 'lsp_sync', 'lsp_features',
+    'notice_view', 'theme', 'palette',
+  ]) {
+    assert.equal(unchanged[name], base[name], name);
+  }
+  assert.equal(unchanged.watcher_available, base.watcher_available);
+
+  const retained = structuredClone(base);
+  assert.equal(applySessionDeltaCopy(base, {
+    ...unchangedOrdinaryDelta(),
+    notice_view: { changed: false, replacement: target.notice_view },
+  }), null);
+  assert.deepEqual(base, retained);
+
+  const cleared = applySessionDeltaCopy(base, {
+    ...unchangedOrdinaryDelta(),
+    notice_view: { changed: true },
+  });
+  assert.ok(cleared);
+  assert.equal(cleared.notice_view, null);
+
+  assert.equal(applySessionDeltaCopy(base, {
+    ...unchangedOrdinaryDelta(),
+    palette: { replacement: target.palette },
+  }), null);
+  assert.equal(applySessionDeltaCopy(base, {
+    ...unchangedOrdinaryDelta(),
+    watcher_available: 'false',
+  }), null);
+  assert.deepEqual(base, retained);
+});
+
+check('session envelope replay matches C++ rejection and commit rules', () => {
+  const snapshot = fixtureMessage('session_semantic_base.hex');
+  const target = fixtureMessage('session_semantic_target.hex');
+  const delta = fixtureMessage('session_semantic_delta.hex');
+  const targetSections = findSections(target);
+  const retained = {
+    revision: snapshot.revision,
+    client: snapshot.client,
+    topology: snapshot.topology,
+    sections: findSections(snapshot),
+  };
+  const accepted = applySessionDelta(retained, delta);
+  assert.equal(accepted.kind, 'accepted');
+  assert.equal(accepted.session.revision, delta.revision);
+  assert.deepEqual(accepted.session.client, target.client);
+  assert.deepEqual(accepted.session.topology, target.topology);
+  assert.deepEqual(accepted.session.sections, targetSections);
+  assert.deepEqual(retained, {
+    revision: snapshot.revision,
+    client: snapshot.client,
+    topology: snapshot.topology,
+    sections: findSections(snapshot),
+  });
+  const nullTopology = applySessionDelta(retained, {
+    ...delta,
+    topology: null,
+  });
+  assert.equal(nullTopology.kind, 'accepted');
+  assert.equal(nullTopology.session.topology, retained.topology);
+
+  for (const malformed of [
+    { ...delta, base_revision: delta.base_revision - 1n },
+    { ...delta, revision: delta.base_revision },
+    { ...delta, revision: delta.base_revision - 1n },
+    { ...delta, client_id: delta.client_id + 1n },
+    { ...delta, view_id: delta.view_id + 1n },
+    { ...delta, capabilities: [...delta.capabilities, 'unexpected'] },
+  ]) {
+    const rejected = applySessionDelta(retained, malformed);
+    assert.equal(rejected.kind, 'semantic-rejection');
+    assert.equal(rejected.session, undefined);
+  }
 });
 
 check('UI frame replay restores hidden focus only in one atomic change', () => {
@@ -1898,43 +1968,6 @@ check('UI frame replay restores hidden focus only in one atomic change', () => {
   assert.equal(frame.presence.nodes[1].present, false);
 });
 
-check('preceding focus-only delta becomes the authoritative frame path', () => {
-  const base = findSections(fixtureMessage('session_focus_editor.hex'));
-  delete base.focus;
-  delete base.external_focus_held;
-  const replayed = applySessionDeltaCopy(base, { focus: 1n });
-  assert.ok(replayed);
-  assert.equal(replayed.focus, undefined);
-  assert.equal(replayed.external_focus_held, undefined);
-  assert.equal(resolveUiFocusPath(
-    replayed.ui_frame.schema, replayed.ui_frame.state,
-    replayed.ui_frame.presence).context, 'panel');
-});
-
-check('browser rejects focus compatibility forms rejected by C++', () => {
-  const fixture = () =>
-    structuredClone(findSections(fixtureMessage('session_focus_editor.hex')));
-
-  const promptBase = fixture();
-  promptBase.ui_frame.state.focus_path = ['input_line'];
-  promptBase.focus = 2n;
-  assert.equal(findSections(promptBase), null);
-
-  const missingFocus = fixture();
-  delete missingFocus.focus;
-  assert.equal(findSections(missingFocus), null);
-
-  const malformedSnapshotBool = fixture();
-  malformedSnapshotBool.external_focus_held = 2n;
-  assert.equal(findSections(malformedSnapshotBool), null);
-
-  const base = fixture();
-  delete base.focus;
-  delete base.external_focus_held;
-  assert.equal(
-    applySessionDeltaCopy(base, { external_focus_held: 2n }), null);
-});
-
 check('session delta replay permits switching to an older document revision', () => {
   const sections = {
     document: {
@@ -1945,6 +1978,15 @@ check('session delta replay permits switching to an older document revision', ()
   const delta = {
     base_revision: 10n,
     revision: 11n,
+    client_id: 7n,
+    view_id: 9n,
+    capabilities: [],
+    selection: { changed: false },
+    history: { changed: false },
+    clipboard: { changed: false },
+    prompt_status: { changed: false },
+    keymap: { changed: false },
+    theme: {},
     document: {
       base_revision: 2n,
       revision: 1n,
@@ -1955,19 +1997,26 @@ check('session delta replay permits switching to an older document revision', ()
     },
     document_caret: 0n,
   };
-  const replayed = applySessionDelta(sections, 10n, delta);
+  const session = {
+    revision: 10n,
+    client: { client_id: 7n, view_id: 9n, capabilities: [] },
+    topology: {},
+    sections,
+  };
+  const replayed = applySessionDelta(session, delta);
   assert.equal(replayed.kind, 'accepted');
-  assert.deepEqual(replayed.sections.document, {
+  assert.deepEqual(replayed.session.sections.document, {
     revision: 1n, text: 'older buffer', caret: 0n,
     diff_file_identity: null,
   });
 
   assert.equal(
-    applySessionDelta(sections, 9n, delta).kind, 'revision-gap');
+    applySessionDelta({ ...session, revision: 9n }, delta).kind,
+    'semantic-rejection');
   const malformed = structuredClone(delta);
   malformed.document.revision = 2n;
   assert.equal(
-    applySessionDelta(sections, 10n, malformed).kind,
+    applySessionDelta(session, malformed).kind,
     'semantic-rejection');
 });
 
@@ -1975,8 +2024,7 @@ check('semantic manifest and C++ fixture replay every browser section atomically
   const base = findSections(fixtureMessage('session_semantic_base.hex'));
   const target = findSections(fixtureMessage('session_semantic_target.hex'));
   const delta = fixtureMessage('session_semantic_delta.hex');
-  const retainedManifest = SEMANTIC_SECTIONS.filter(
-    (entry) => entry.snapshot !== 'prompt_view');
+  const retainedManifest = SEMANTIC_SECTIONS;
   assert.deepEqual(
     retainedManifest.map((entry) => entry.snapshot), Object.keys(base));
   assert.deepEqual(
@@ -1985,16 +2033,12 @@ check('semantic manifest and C++ fixture replay every browser section atomically
   assert.deepEqual(
     SEMANTIC_SECTIONS.map((entry) => entry.snapshot),
     SEMANTIC_SNAPSHOT_FIELDS);
-  assert.equal(Object.hasOwn(base, 'prompt_view'), false);
-  assert.equal(Object.hasOwn(target, 'prompt_view'), false);
   for (const { snapshot } of retainedManifest) {
     assert.notDeepEqual(base[snapshot], target[snapshot],
       snapshot + ' fixture must independently change');
   }
   const replayed = applySessionDeltaCopy(base, delta);
   assert.ok(replayed);
-  delete target.focus;
-  delete target.external_focus_held;
   assert.equal(normalizeTreeActiveBinding(target.tree), true);
   assert.deepEqual(replayed, target);
 
@@ -2005,12 +2049,8 @@ check('semantic manifest and C++ fixture replay every browser section atomically
     assert.equal(applySessionDeltaCopy(retained, malformed), null);
     assert.deepEqual(retained, base);
   };
-  rejectsWithoutMutation((malformed) => {
-    malformed.prompt_view.replacement.controls[0].value = 'conflict';
-  });
   for (const name of [
-    'document', 'search', 'diff', 'external_modification', 'tree',
-    'lsp_sync', 'lsp_features',
+    'document', 'diff', 'external_modification', 'tree',
   ]) {
     rejectsWithoutMutation((malformed) => {
       malformed[name].base_revision = 999n;
@@ -2020,22 +2060,31 @@ check('semantic manifest and C++ fixture replay every browser section atomically
     malformed.settings.changes[0].before.value.value = 999n;
   });
   rejectsWithoutMutation((malformed) => {
-    malformed.text_encoding.before.status.encoding = 999n;
+    malformed.text_encoding.status.encoding = 999n;
   });
   rejectsWithoutMutation((malformed) => {
     malformed.selection.changed = 0n;
   });
   rejectsWithoutMutation((malformed) => {
-    malformed.syntax.spans = [{ begin: 1n, end: 7n, scope: 0n }];
+    delete malformed.syntax.revision;
   });
+  for (const [name, field] of [
+    ['search', 'revision'],
+    ['find_replace', 'generation'],
+    ['tabs', 'tabs'],
+    ['follow_edits', 'generation'],
+    ['lsp_sync', 'revision'],
+    ['lsp_features', 'revision'],
+  ]) {
+    rejectsWithoutMutation((malformed) => {
+      delete malformed[name][field];
+    });
+  }
   rejectsWithoutMutation((malformed) => {
     malformed.ui_frame_delta.base.presence_basis = 999n;
   });
   rejectsWithoutMutation((malformed) => {
     delete malformed.ui_frame_delta.frame;
-  });
-  rejectsWithoutMutation((malformed) => {
-    malformed.focus = 1n;
   });
 });
 
@@ -2048,28 +2097,18 @@ check('mergeBrowserRenderPlans preserves every dirty surface and strongest work'
       repaintTheme: true, surfaces: [8, 3] });
 });
 
-check('prompt focus uses a typed revision-checked semantic input', () => {
-  assert.deepEqual(
-    decodeMessage(
-      encodePromptControlPointerInput('replace.replacement', 7n).buffer).payload,
-    { kind: 4n, button: 0n, phase: 0n, basis_revision: 7n,
-      control_id: 'replace.replacement' });
-});
-
-// --- Draft-conflict notice: semantic NoticeView projection, delta, action ingress ---
-import { noticeViewFromSections } from '../../apps/web/reconcile.mjs';
-
-// A decoded semantic NoticeView section, using the encoder's snake_case names.
-const noticeSection = () => ({
-  notice_view: {
-    text: 'Unsaved draft: file changed on disk externally.',
-    actions: [
-      { id: 'draft.notice.diff', label: 'diff', command: 'draft.diff' },
-      { id: 'draft.notice.use_disk', label: 'use disk', command: 'draft.discard' },
-      { id: 'draft.notice.dismiss', label: 'dismiss', command: 'draft.dismiss' },
-    ],
-  },
-});
+function noticeSection() {
+  return {
+    notice_view: {
+      text: 'Unsaved draft: file changed on disk externally.',
+      actions: [
+        { id: 'diff', label: 'diff', command: 'draft.diff' },
+        { id: 'discard', label: 'discard', command: 'draft.discard' },
+        { id: 'dismiss', label: 'dismiss', command: 'draft.dismiss' },
+      ],
+    },
+  };
+}
 
 check('noticeViewFromSections renders the notice from the section, null when absent', () => {
   assert.equal(noticeViewFromSections(null), null);
@@ -2079,22 +2118,6 @@ check('noticeViewFromSections renders the notice from the section, null when abs
   assert.equal(nv.text, 'Unsaved draft: file changed on disk externally.');
   assert.deepEqual(nv.actions.map((a) => a.command), ['draft.diff', 'draft.discard', 'draft.dismiss']);
   assert.equal(nv.actions[0].label, 'diff');
-});
-
-check('applySessionDeltaSections raises, holds, and CLEARS the notice view', () => {
-  const sections = { document: { text: '' }, notice_view: null };
-  // changed=true with a replacement raises it.
-  applySessionDeltaSections(sections, { notice_view: { changed: 1, replacement: noticeSection().notice_view } });
-  assert.ok(sections.notice_view);
-  assert.equal(noticeViewFromSections(sections).actions.length, 3);
-  // changed=false leaves the prior notice intact (no spurious clear).
-  applySessionDeltaSections(sections, { notice_view: { changed: 0 } });
-  assert.ok(sections.notice_view);
-  // changed=true with a null replacement CLEARS it (a null replacement means the
-  // notice cleared, never "unchanged").
-  applySessionDeltaSections(sections, { notice_view: { changed: 1, replacement: null } });
-  assert.equal(sections.notice_view, null);
-  assert.equal(noticeViewFromSections(sections), null);
 });
 
 check('a notice action carries the plain command id dispatched through the command ingress', () => {

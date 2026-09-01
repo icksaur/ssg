@@ -53,15 +53,6 @@ const DiffHunk* newestIntroducedHunk(
 
 }  // namespace
 
-FollowEditsDelta FollowEditsDeltaCodec::derive(const FollowEditsViewState& base,
-                                           const FollowEditsViewState& target) {
-    FollowEditsDelta delta{base.generation, target.generation, std::nullopt};
-    if (base != target) {
-        delta.replacement = target;
-    }
-    return delta;
-}
-
 FollowEditsCommandSet followEditsCommandSet() {
     return {};
 }

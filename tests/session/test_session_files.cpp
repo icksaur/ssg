@@ -1,6 +1,6 @@
 #include "../test_helpers.h"
 #include "../grid_test_view.h"
-#include "../legacy_grid_frame.h"
+#include "../grid_test_frame.h"
 
 #include <ssg/EditorSession.h>
 #include <ssg/FileCommands.h>
@@ -55,9 +55,9 @@ void writeBytes(const std::filesystem::path& path, std::initializer_list<std::ui
 }
 
 bool activeTabDirty(ssg::EditorSession& runtime) {
-    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     if (!snapshot) return false;
-    const auto& tabs = snapshot->semantic().sections().tabs;
+    const auto& tabs = snapshot->sections().tabs;
     if (!tabs.active) return false;
     for (const auto& tab : tabs.tabs) {
         if (tab.id == *tabs.active) return tab.dirty;
@@ -66,9 +66,9 @@ bool activeTabDirty(ssg::EditorSession& runtime) {
 }
 
 bool activeTabIsLiveDiff(ssg::EditorSession& runtime) {
-    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     if (!snapshot) return false;
-    const auto& tabs = snapshot->semantic().sections().tabs;
+    const auto& tabs = snapshot->sections().tabs;
     if (!tabs.active) return false;
     for (const auto& tab : tabs.tabs) {
         if (tab.id == *tabs.active) return tab.kind == ssg::TabKind::LiveDiff;
@@ -87,32 +87,15 @@ std::vector<std::filesystem::path> archivedDrafts(const std::filesystem::path& r
     return result;
 }
 
-// Find a shell accessibility node by kind (+ optional id) in the snapshot.
-template <class Snapshot>
-const ssg::AccessibilityNode* findShellNode(
-    const Snapshot& snapshot,
-                                            ssg::ShellNodeKind kind,
-                                            std::string_view id = {}) {
-    for (const auto& node : snapshot.presentation().shell.accessibilityNodes) {
-        if (node.kind == kind && (id.empty() || node.id == id)) return &node;
-    }
-    return nullptr;
-}
-
-template <class Snapshot>
-bool hasNoticeBar(const Snapshot& snapshot) {
-    return findShellNode(snapshot, ssg::ShellNodeKind::NoticeBar) != nullptr;
-}
-
 bool hasNoticeBar(const ssg::GridFrame& snapshot) {
     return snapshot.layout().find(
                ssg::UiNodeId{std::string{ssg::kNoticeNodeId}}) != nullptr;
 }
 
 bool statusMentions(ssg::EditorSession& runtime, std::string_view needle) {
-    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     if (!snapshot) return false;
-    for (const auto& item : snapshot->semantic().sections().promptStatus.status.items) {
+    for (const auto& item : snapshot->sections().promptStatus.status.items) {
         if (item.accessibleLabel.find(needle) != std::string::npos) return true;
     }
     return false;
@@ -506,7 +489,8 @@ TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
         ASSERT_TRUE(reopenNote(runtime).accepted());
         ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                     ssg::EditorSession::DraftReopenNotice::Conflict);
-        ASSERT_TRUE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, dims)));
+        ASSERT_TRUE(hasNoticeBar(*ssg::test::projectGridFrame(
+            runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims)));
     }
     {
         // Restored (disk unchanged): a quieter state, no yellow notice.
@@ -518,7 +502,8 @@ TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
         ASSERT_TRUE(reopenNote(runtime).accepted());
         ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                     ssg::EditorSession::DraftReopenNotice::Restored);
-        ASSERT_FALSE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, dims)));
+        ASSERT_FALSE(hasNoticeBar(*ssg::test::projectGridFrame(
+            runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims)));
     }
 }
 
@@ -535,9 +520,9 @@ TEST(noticeViewIsPresentOnlyOnADraftConflict) {
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
-        auto snapshot = runtime.present(ssg::ClientId{1}, dims);
+        auto snapshot = runtime.snapshot(ssg::ClientId{1});
         ASSERT_TRUE(snapshot.has_value());
-        const auto& notice = snapshot->semantic().sections().noticeView;
+        const auto& notice = snapshot->sections().noticeView;
         ASSERT_TRUE(notice.has_value());
         ASSERT_FALSE(notice->text.empty());
         ASSERT_EQ(notice->actions.size(), std::size_t{3});
@@ -549,9 +534,9 @@ TEST(noticeViewIsPresentOnlyOnADraftConflict) {
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
         ASSERT_TRUE(reopenNote(runtime).accepted());
-        auto snapshot = runtime.present(ssg::ClientId{1}, dims);
+        auto snapshot = runtime.snapshot(ssg::ClientId{1});
         ASSERT_TRUE(snapshot.has_value());
-        ASSERT_FALSE(snapshot->semantic().sections().noticeView.has_value());
+        ASSERT_FALSE(snapshot->sections().noticeView.has_value());
     }
 }
 
@@ -567,10 +552,8 @@ TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, dims);
-    ASSERT_TRUE(snapshot.has_value());
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
@@ -607,10 +590,11 @@ TEST(theGridNoticeAndSemanticNoticeComeFromTheOneResolver) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"draft.dismiss", runtime.revision(), {}})
                     .accepted());
-    auto cleared = runtime.present(ssg::ClientId{1}, dims);
+    auto cleared = ssg::test::projectGridFrame(
+        runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
     ASSERT_TRUE(cleared.has_value());
     ASSERT_FALSE(hasNoticeBar(*cleared));
-    ASSERT_FALSE(cleared->semantic().sections().noticeView.has_value());
+    ASSERT_FALSE(cleared->sections().noticeView.has_value());
 }
 
 TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
@@ -630,13 +614,11 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     ASSERT_TRUE(conflictCreated.accepted());
     auto& conflict = *conflictCreated.session;
     ASSERT_TRUE(reopenNote(conflict).accepted());
-    auto conflictSnap = conflict.present(ssg::ClientId{1}, dims);
-    ASSERT_TRUE(conflictSnap.has_value());
-    ASSERT_TRUE(hasNoticeBar(*conflictSnap));
-    auto conflictFrame =
-        ssg::test::gridFrameFromLegacy(std::move(*conflictSnap));
+    auto conflictFrame = ssg::test::projectGridFrame(
+        conflict, ssg::ClientId{1}, ssg::ViewId{1}, dims);
     ASSERT_TRUE(conflictFrame.has_value());
     if (!conflictFrame) return;
+    ASSERT_TRUE(hasNoticeBar(*conflictFrame));
 
     auto restoredRoot = uniqueRoot("notice_perturb_restored");
     leaveDirtyDraft(restoredRoot);  // disk unchanged -> Restored, no notice
@@ -644,13 +626,11 @@ TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
     ASSERT_TRUE(restoredCreated.accepted());
     auto& restored = *restoredCreated.session;
     ASSERT_TRUE(reopenNote(restored).accepted());
-    auto restoredSnap = restored.present(ssg::ClientId{1}, dims);
-    ASSERT_TRUE(restoredSnap.has_value());
-    ASSERT_FALSE(hasNoticeBar(*restoredSnap));
-    auto restoredFrame =
-        ssg::test::gridFrameFromLegacy(std::move(*restoredSnap));
+    auto restoredFrame = ssg::test::projectGridFrame(
+        restored, ssg::ClientId{1}, ssg::ViewId{1}, dims);
     ASSERT_TRUE(restoredFrame.has_value());
     if (!restoredFrame) return;
+    ASSERT_FALSE(hasNoticeBar(*restoredFrame));
 
     ASSERT_EQ(conflict.activeDocumentText(), restored.activeDocumentText());
     ASSERT_TRUE(conflictFrame->document().has_value());
@@ -684,21 +664,8 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(reopenNote(runtime).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, dims);
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto presentation = snapshot->presentation();
-    for (auto& node : presentation.shell.accessibilityNodes) {
-        if (node.kind == ssg::ShellNodeKind::NoticeBar ||
-           node.kind == ssg::ShellNodeKind::NoticeAction) {
-           node.rect = {0, 0, 1, 1};
-        }
-    }
-    auto frame = ssg::test::gridFrameFromLegacy(
-        ssg::LegacyPresentationSnapshot{
-           snapshot->semantic().revision(), snapshot->semantic().topology(),
-           snapshot->semantic().client(), snapshot->semantic().sections(),
-           std::move(presentation)});
+    auto frame = ssg::test::projectGridFrame(
+        runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto* noticeNode = frame->layout().find(
@@ -741,7 +708,8 @@ TEST(clickingNoticeActionsDispatchesTheirCommands) {
     ASSERT_TRUE(dismiss.command.has_value() && dismiss.command->accepted());
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                 ssg::EditorSession::DraftReopenNotice::None);
-    ASSERT_FALSE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, dims)));
+    ASSERT_FALSE(hasNoticeBar(*ssg::test::projectGridFrame(
+        runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims)));
 }
 
 TEST(dismissRefusesWhenThereIsNoConflictNotice) {
@@ -834,7 +802,8 @@ TEST(binaryDiskReplacementRaisesConflictNotSilentDraftLoss) {
     // Not silently None: the conflict is surfaced (old behaviour left it None).
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                 ssg::EditorSession::DraftReopenNotice::Conflict);
-    ASSERT_TRUE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, {80, 24})));
+    ASSERT_TRUE(hasNoticeBar(*ssg::test::projectGridFrame(
+        runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24})));
 }
 
 TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
@@ -930,7 +899,8 @@ TEST(touchingTheFileWithIdenticalBytesIsNotAFalseConflict) {
     ASSERT_TRUE(activeTabDirty(runtime));
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
                 ssg::EditorSession::DraftReopenNotice::Restored);
-    ASSERT_FALSE(hasNoticeBar(*runtime.present(ssg::ClientId{1}, {80, 24})));
+    ASSERT_FALSE(hasNoticeBar(*ssg::test::projectGridFrame(
+        runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24})));
 }
 
 TEST(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile) {
@@ -1051,9 +1021,9 @@ TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_encoding", runtime.revision(), ssg::SetEncodingArguments{ssg::TextEncoding::Utf8Bom}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_line_ending", runtime.revision(), ssg::SetLineEndingArguments{ssg::LineEnding::Crlf}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_final_newline", runtime.revision(), ssg::SetFinalNewlineArguments{true}}).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_EQ(snapshot->semantic().sections().textEncoding.status, decoded.text->status);
+    ASSERT_EQ(snapshot->sections().textEncoding.status, decoded.text->status);
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.save", runtime.revision(), {}}).accepted());
     ASSERT_EQ(readBytes(root / "workspace" / "note.txt"), expected.bytes);
@@ -1073,10 +1043,10 @@ TEST(reopenWithEncodingDispatchRedecodesRealFileBytes) {
     auto reopened = runtime.dispatch(ssg::ClientId{1}, {"file.reopen_with_encoding", runtime.revision(), ssg::ReopenWithEncodingArguments{ssg::TextEncoding::Iso88591}});
     ASSERT_TRUE(reopened.accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"\xC3\xA9\n"});
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_EQ(snapshot->semantic().sections().textEncoding.status.encoding, ssg::TextEncoding::Iso88591);
-    ASSERT_EQ(snapshot->semantic().sections().textEncoding.status.lineEnding, ssg::LineEnding::Cr);
+    ASSERT_EQ(snapshot->sections().textEncoding.status.encoding, ssg::TextEncoding::Iso88591);
+    ASSERT_EQ(snapshot->sections().textEncoding.status.lineEnding, ssg::LineEnding::Cr);
 }
 
 TEST(closingTheLastTabClearsTheEditorDocument) {
@@ -1091,7 +1061,7 @@ TEST(closingTheLastTabClearsTheEditorDocument) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto tabCount = [&] {
-        return runtime.present(ssg::ClientId{1}, {80, 24})->semantic().sections().tabs.tabs.size();
+        return runtime.snapshot(ssg::ClientId{1})->sections().tabs.tabs.size();
     };
 
     // Open two files: two tabs, the active document shows content.
@@ -1110,9 +1080,9 @@ TEST(closingTheLastTabClearsTheEditorDocument) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.close", runtime.revision(), {}}).accepted());
     ASSERT_EQ(tabCount(), std::size_t{0});
     ASSERT_TRUE(runtime.activeDocumentText().empty());
-    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
-    if (snapshot) ASSERT_TRUE(snapshot->semantic().sections().document.text.empty());
+    if (snapshot) ASSERT_TRUE(snapshot->sections().document.text.empty());
 }
 
 TEST(tabActivateFocusesTheEditor) {
@@ -1129,8 +1099,8 @@ TEST(tabActivateFocusesTheEditor) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
-        return snap ? snap->semantic().sections().uiFrame.effectiveFocus()
+        auto snap = runtime.snapshot(ssg::ClientId{1});
+        return snap ? snap->sections().uiFrame.effectiveFocus()
                     : ssg::FocusTarget::Editor;
     };
 
@@ -1140,7 +1110,7 @@ TEST(tabActivateFocusesTheEditor) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.focus", runtime.revision(), {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
-    auto first = runtime.present(ssg::ClientId{1}, dims)->semantic().sections().tabs.tabs.front().id;
+    auto first = runtime.snapshot(ssg::ClientId{1})->sections().tabs.tabs.front().id;
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.activate", runtime.revision(), first}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 }
@@ -1214,12 +1184,12 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
                     .accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"beta"});
 
-    auto beforeClose = runtime.present(ssg::ClientId{1}, {80, 24});
+    auto beforeClose = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(beforeClose.has_value());
     if (!beforeClose.has_value()) return;
     std::optional<ssg::TabId> tabA;
     std::optional<ssg::FileDocumentId> documentA;
-    for (auto const& tab : beforeClose->semantic().sections().tabs.tabs) {
+    for (auto const& tab : beforeClose->sections().tabs.tabs) {
         if (tab.label == "a.txt") {
             tabA = tab.id;
             documentA = tab.document;
@@ -1241,11 +1211,11 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
                     .accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"!alpha"});
 
-    auto afterReopen = runtime.present(ssg::ClientId{1}, {80, 24});
+    auto afterReopen = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(afterReopen.has_value());
     if (!afterReopen.has_value()) return;
     std::optional<ssg::FileDocumentId> reopenedDocumentA;
-    for (auto const& tab : afterReopen->semantic().sections().tabs.tabs) {
+    for (auto const& tab : afterReopen->sections().tabs.tabs) {
         if (tab.label == "a.txt") {
             reopenedDocumentA = tab.document;
             break;

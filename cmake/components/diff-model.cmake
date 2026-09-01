@@ -1,4 +1,4 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/DiffModel.cpp
 )
 
@@ -12,6 +12,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_compile_definitions(test_diff PRIVATE
         SSG_DIFF_FIXTURE_DIR="${SSG_SOURCE_DIR}/tests/fixtures/diff"
     )
-    target_link_libraries(test_diff PRIVATE ssg)
+    target_link_libraries(test_diff PRIVATE ssg_core)
     add_test(NAME test_diff COMMAND test_diff)
 endif()

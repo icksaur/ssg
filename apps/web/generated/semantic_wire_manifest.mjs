@@ -80,7 +80,8 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "document_caret"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "specialized",
+    "retention": "asymptotic"
   },
   {
     "symbol": "Selection",
@@ -125,7 +126,7 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "search"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "replacement"
   },
   {
     "symbol": "FindReplace",
@@ -134,7 +135,7 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "find_replace"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "replacement"
   },
   {
     "symbol": "Settings",
@@ -143,7 +144,8 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "settings"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "specialized",
+    "retention": "payload"
   },
   {
     "symbol": "Keymap",
@@ -161,7 +163,7 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "text_encoding"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "replacement"
   },
   {
     "symbol": "Tabs",
@@ -170,7 +172,7 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "tabs"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "replacement"
   },
   {
     "symbol": "Diff",
@@ -179,7 +181,8 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "diff"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "specialized",
+    "retention": "asymptotic"
   },
   {
     "symbol": "ExternalModification",
@@ -188,7 +191,8 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "external_modification"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "specialized",
+    "retention": "asymptotic"
   },
   {
     "symbol": "FollowEdits",
@@ -197,7 +201,7 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "follow_edits"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "replacement"
   },
   {
     "symbol": "Tree",
@@ -206,7 +210,8 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "tree"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "specialized",
+    "retention": "asymptotic"
   },
   {
     "symbol": "Syntax",
@@ -215,7 +220,7 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "syntax"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "replacement"
   },
   {
     "symbol": "LspSync",
@@ -224,7 +229,7 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "lsp_sync"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "replacement"
   },
   {
     "symbol": "LspFeatures",
@@ -233,7 +238,7 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "lsp_features"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
+    "replay": "replacement"
   },
   {
     "symbol": "Theme",
@@ -243,15 +248,6 @@ export const SEMANTIC_SECTIONS = deepFreeze([
     ],
     "lifecycle": "current",
     "replay": "replacement"
-  },
-  {
-    "symbol": "Focus",
-    "snapshot": "focus",
-    "delta": [
-      "focus"
-    ],
-    "lifecycle": "compatibility",
-    "replay": "compatibility"
   },
   {
     "symbol": "Palette",
@@ -269,16 +265,8 @@ export const SEMANTIC_SECTIONS = deepFreeze([
       "ui_frame_delta"
     ],
     "lifecycle": "current",
-    "replay": "specialized"
-  },
-  {
-    "symbol": "PromptView",
-    "snapshot": "prompt_view",
-    "delta": [
-      "prompt_view"
-    ],
-    "lifecycle": "compatibility",
-    "replay": "compatibility"
+    "replay": "specialized",
+    "retention": "asymptotic"
   },
   {
     "symbol": "NoticeView",
@@ -297,15 +285,6 @@ export const SEMANTIC_SECTIONS = deepFreeze([
     ],
     "lifecycle": "current",
     "replay": "replacement"
-  },
-  {
-    "symbol": "ExternalFocusHeld",
-    "snapshot": "external_focus_held",
-    "delta": [
-      "external_focus_held"
-    ],
-    "lifecycle": "compatibility",
-    "replay": "compatibility"
   }
 ]);
 export const SEMANTIC_SNAPSHOT_FIELDS = Object.freeze(
@@ -572,10 +551,7 @@ export const CLIENT_INPUT_KIND = deepFreeze({
   TAB: 1,
   TREE: 2,
   PICKER: 3,
-  PROMPT_CONTROL: 4,
   EXTERNAL_ACTION: 5,
-  STATUS_ACTION: 6,
-  PUBLISHED_UI_ACTION: 7,
   NOTICE_ACTION: 8,
   DOCUMENT: 9,
   SCROLL_LINES: 10,
@@ -759,10 +735,9 @@ function validateWireNode8(value) {
 }
 
 function validateWireNode9(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== 3) return false;
-    if (value["status_id"] === undefined || !validateWireNode10(value["status_id"])) return false;
-    if (value["action_id"] === undefined || !validateWireNode11(value["action_id"])) return false;
-    if (value["generation"] === undefined || !validateWireNode12(value["generation"])) return false;
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== 2) return false;
+    if (value["anchor"] === undefined || !validateWireNode10(value["anchor"])) return false;
+    if (value["active"] === undefined || !validateWireNode11(value["active"])) return false;
     return true;
 }
 
@@ -775,41 +750,14 @@ function validateWireNode10(value) {
 }
 
 function validateWireNode11(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode12(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode13(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== 2) return false;
-    if (value["anchor"] === undefined || !validateWireNode14(value["anchor"])) return false;
-    if (value["active"] === undefined || !validateWireNode15(value["active"])) return false;
-    return true;
-}
-
-function validateWireNode14(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode15(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode16(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
 
     const discriminatorValue = value["kind"];
@@ -819,20 +767,20 @@ function validateWireNode16(value) {
     if (!Number.isSafeInteger(discriminator) || discriminator < 0) return false;
     switch (discriminator) {
     case 0:
-    if (value["target"] === undefined || !validateWireNode17(value["target"])) return false;
-    if (value["rows"] === undefined || !validateWireNode18(value["rows"])) return false;
+    if (value["target"] === undefined || !validateWireNode13(value["target"])) return false;
+    if (value["rows"] === undefined || !validateWireNode14(value["rows"])) return false;
       return true;
     case 1:
-    if (value["pages"] === undefined || !validateWireNode19(value["pages"])) return false;
+    if (value["pages"] === undefined || !validateWireNode15(value["pages"])) return false;
       return true;
     case 2:
-    if (value["target"] === undefined || !validateWireNode20(value["target"])) return false;
-    if (value["numerator"] === undefined || !validateWireNode21(value["numerator"])) return false;
-    if (value["denominator"] === undefined || !validateWireNode22(value["denominator"])) return false;
+    if (value["target"] === undefined || !validateWireNode16(value["target"])) return false;
+    if (value["numerator"] === undefined || !validateWireNode17(value["numerator"])) return false;
+    if (value["denominator"] === undefined || !validateWireNode18(value["denominator"])) return false;
       return true;
     case 3:
-    if (value["direction"] === undefined || !validateWireNode23(value["direction"])) return false;
-    if (value["extend"] === undefined || !validateWireNode24(value["extend"])) return false;
+    if (value["direction"] === undefined || !validateWireNode19(value["direction"])) return false;
+    if (value["extend"] === undefined || !validateWireNode20(value["extend"])) return false;
       return true;
     case 4:
 
@@ -841,66 +789,88 @@ function validateWireNode16(value) {
 
       return true;
     case 6:
-    if (value["axis"] === undefined || !validateWireNode25(value["axis"])) return false;
+    if (value["axis"] === undefined || !validateWireNode21(value["axis"])) return false;
       return true;
     case 7:
 
       return true;
     case 8:
-    if (value["direction"] === undefined || !validateWireNode26(value["direction"])) return false;
+    if (value["direction"] === undefined || !validateWireNode22(value["direction"])) return false;
       return true;
     case 9:
-    if (value["direction"] === undefined || !validateWireNode27(value["direction"])) return false;
+    if (value["direction"] === undefined || !validateWireNode23(value["direction"])) return false;
       return true;
     case 10:
-    if (value["direction"] === undefined || !validateWireNode28(value["direction"])) return false;
+    if (value["direction"] === undefined || !validateWireNode24(value["direction"])) return false;
       return true;
     default: return false;
     }
 }
 
-function validateWireNode17(value) {
+function validateWireNode13(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
+function validateWireNode14(value) {
+    if (typeof value === 'bigint') {
+      return value >= -9223372036854775808n &&
+        value <= 9223372036854775807n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value);
+}
+
+function validateWireNode15(value) {
+    if (typeof value === 'bigint') {
+      return value >= -9223372036854775808n &&
+        value <= 9223372036854775807n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value);
+}
+
+function validateWireNode16(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
+function validateWireNode17(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
 function validateWireNode18(value) {
     if (typeof value === 'bigint') {
-      return value >= -9223372036854775808n &&
-        value <= 9223372036854775807n;
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
     }
-    return typeof value === 'number' && Number.isSafeInteger(value);
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
 function validateWireNode19(value) {
-    if (typeof value === 'bigint') {
-      return value >= -9223372036854775808n &&
-        value <= 9223372036854775807n;
-    }
-    return typeof value === 'number' && Number.isSafeInteger(value);
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
 }
 
 function validateWireNode20(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode21(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
 }
 
-function validateWireNode21(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
-}
-
 function validateWireNode22(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
 }
 
 function validateWireNode23(value) {
@@ -910,47 +880,54 @@ function validateWireNode23(value) {
 }
 
 function validateWireNode24(value) {
-    return typeof value === 'boolean';
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
 }
 
 function validateWireNode25(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
-}
-
-function validateWireNode26(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
-}
-
-function validateWireNode27(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
-}
-
-function validateWireNode28(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
-}
-
-function validateWireNode29(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["view_id"] === undefined || !validateWireNode30(value["view_id"])) return false;
-    if (value["semantic_revision"] === undefined || !validateWireNode31(value["semantic_revision"])) return false;
-    if (value["action"] === undefined || !validateWireNode32(value["action"])) return false;
+    if (value["view_id"] === undefined || !validateWireNode26(value["view_id"])) return false;
+    if (value["semantic_revision"] === undefined || !validateWireNode27(value["semantic_revision"])) return false;
+    if (value["action"] === undefined || !validateWireNode28(value["action"])) return false;
     return true;
 }
 
-function validateWireNode30(value) {
+function validateWireNode26(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
     return typeof value === 'number' &&
       Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode27(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode28(value) {
+    return validateWireNode12(value);
+}
+
+function validateWireNode29(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["error"] === undefined || !validateWireNode30(value["error"])) return false;
+    if (value["revision"] === undefined || !validateWireNode31(value["revision"])) return false;
+    if (value["message"] === undefined || !validateWireNode32(value["message"])) return false;
+    if (value["routingChanged"] !== undefined && !validateWireNode33(value["routingChanged"])) return false;
+    if (value["geometryChanged"] !== undefined && !validateWireNode34(value["geometryChanged"])) return false;
+    if (value["view_action"] !== undefined && !validateWireNode35(value["view_action"])) return false;
+    return true;
+}
+
+function validateWireNode30(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6);
 }
 
 function validateWireNode31(value) {
@@ -962,39 +939,10 @@ function validateWireNode31(value) {
 }
 
 function validateWireNode32(value) {
-    return validateWireNode16(value);
-}
-
-function validateWireNode33(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["error"] === undefined || !validateWireNode34(value["error"])) return false;
-    if (value["revision"] === undefined || !validateWireNode35(value["revision"])) return false;
-    if (value["message"] === undefined || !validateWireNode36(value["message"])) return false;
-    if (value["routingChanged"] !== undefined && !validateWireNode37(value["routingChanged"])) return false;
-    if (value["geometryChanged"] !== undefined && !validateWireNode38(value["geometryChanged"])) return false;
-    if (value["view_action"] !== undefined && !validateWireNode39(value["view_action"])) return false;
-    return true;
-}
-
-function validateWireNode34(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6);
-}
-
-function validateWireNode35(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode36(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode37(value) {
+function validateWireNode33(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 2147483647n && value <= 4294967295n && (value === 0n || value === 1n);
     }
@@ -1002,7 +950,7 @@ function validateWireNode37(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 2147483647 && value <= 4294967295 && (value === 0 || value === 1);
 }
 
-function validateWireNode38(value) {
+function validateWireNode34(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 2147483647n && value <= 4294967295n && (value === 0n || value === 1n);
     }
@@ -1010,11 +958,11 @@ function validateWireNode38(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 2147483647 && value <= 4294967295 && (value === 0 || value === 1);
 }
 
-function validateWireNode39(value) {
-    return validateWireNode29(value);
+function validateWireNode35(value) {
+    return validateWireNode25(value);
 }
 
-function validateWireNode40(value) {
+function validateWireNode36(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
 
     const discriminatorValue = value["kind"];
@@ -1025,119 +973,125 @@ function validateWireNode40(value) {
     switch (discriminator) {
     case 0:
       if (Object.keys(value).length !== 3) return false;
-    if (value["stroke"] === undefined || !validateWireNode41(value["stroke"])) return false;
-    if (value["committed_text"] === undefined || !validateWireNode43(value["committed_text"])) return false;
+    if (value["stroke"] === undefined || !validateWireNode37(value["stroke"])) return false;
+    if (value["committed_text"] === undefined || !validateWireNode39(value["committed_text"])) return false;
       return true;
     case 1:
+      if (Object.keys(value).length !== 5) return false;
+    if (value["button"] === undefined || !validateWireNode40(value["button"])) return false;
+    if (value["phase"] === undefined || !validateWireNode41(value["phase"])) return false;
+    if (value["basis_revision"] === undefined || !validateWireNode42(value["basis_revision"])) return false;
+    if (value["tab_id"] === undefined || !validateWireNode43(value["tab_id"])) return false;
+      return true;
+    case 2:
       if (Object.keys(value).length !== 5) return false;
     if (value["button"] === undefined || !validateWireNode44(value["button"])) return false;
     if (value["phase"] === undefined || !validateWireNode45(value["phase"])) return false;
     if (value["basis_revision"] === undefined || !validateWireNode46(value["basis_revision"])) return false;
-    if (value["tab_id"] === undefined || !validateWireNode47(value["tab_id"])) return false;
-      return true;
-    case 2:
-      if (Object.keys(value).length !== 5) return false;
-    if (value["button"] === undefined || !validateWireNode48(value["button"])) return false;
-    if (value["phase"] === undefined || !validateWireNode49(value["phase"])) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode50(value["basis_revision"])) return false;
-    if (value["node_id"] === undefined || !validateWireNode51(value["node_id"])) return false;
+    if (value["node_id"] === undefined || !validateWireNode47(value["node_id"])) return false;
       return true;
     case 3:
       if (Object.keys(value).length !== 6) return false;
-    if (value["button"] === undefined || !validateWireNode52(value["button"])) return false;
-    if (value["phase"] === undefined || !validateWireNode53(value["phase"])) return false;
-    if (value["picker_mode"] === undefined || !validateWireNode54(value["picker_mode"])) return false;
-    if (value["activation_id"] === undefined || !validateWireNode55(value["activation_id"])) return false;
-    if (value["candidate_id"] === undefined || !validateWireNode56(value["candidate_id"])) return false;
+    if (value["button"] === undefined || !validateWireNode48(value["button"])) return false;
+    if (value["phase"] === undefined || !validateWireNode49(value["phase"])) return false;
+    if (value["picker_mode"] === undefined || !validateWireNode50(value["picker_mode"])) return false;
+    if (value["activation_id"] === undefined || !validateWireNode51(value["activation_id"])) return false;
+    if (value["candidate_id"] === undefined || !validateWireNode52(value["candidate_id"])) return false;
       return true;
-    case 4:
+    case 5:
+      if (Object.keys(value).length !== 5) return false;
+    if (value["button"] === undefined || !validateWireNode53(value["button"])) return false;
+    if (value["phase"] === undefined || !validateWireNode54(value["phase"])) return false;
+    if (value["basis_revision"] === undefined || !validateWireNode55(value["basis_revision"])) return false;
+    if (value["invocation"] === undefined || !validateWireNode56(value["invocation"])) return false;
+      return true;
+    case 8:
       if (Object.keys(value).length !== 5) return false;
     if (value["button"] === undefined || !validateWireNode57(value["button"])) return false;
     if (value["phase"] === undefined || !validateWireNode58(value["phase"])) return false;
     if (value["basis_revision"] === undefined || !validateWireNode59(value["basis_revision"])) return false;
-    if (value["control_id"] === undefined || !validateWireNode60(value["control_id"])) return false;
-      return true;
-    case 5:
-      if (Object.keys(value).length !== 5) return false;
-    if (value["button"] === undefined || !validateWireNode61(value["button"])) return false;
-    if (value["phase"] === undefined || !validateWireNode62(value["phase"])) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode63(value["basis_revision"])) return false;
-    if (value["invocation"] === undefined || !validateWireNode64(value["invocation"])) return false;
-      return true;
-    case 6:
-      if (Object.keys(value).length !== 5) return false;
-    if (value["button"] === undefined || !validateWireNode65(value["button"])) return false;
-    if (value["phase"] === undefined || !validateWireNode66(value["phase"])) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode67(value["basis_revision"])) return false;
-    if (value["invocation"] === undefined || !validateWireNode68(value["invocation"])) return false;
-      return true;
-    case 7:
-      if (Object.keys(value).length !== 6) return false;
-    if (value["button"] === undefined || !validateWireNode69(value["button"])) return false;
-    if (value["phase"] === undefined || !validateWireNode70(value["phase"])) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode71(value["basis_revision"])) return false;
-    if (value["schema_generation"] === undefined || !validateWireNode72(value["schema_generation"])) return false;
-    if (value["node_id"] === undefined || !validateWireNode73(value["node_id"])) return false;
-      return true;
-    case 8:
-      if (Object.keys(value).length !== 5) return false;
-    if (value["button"] === undefined || !validateWireNode74(value["button"])) return false;
-    if (value["phase"] === undefined || !validateWireNode75(value["phase"])) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode76(value["basis_revision"])) return false;
-    if (value["action_id"] === undefined || !validateWireNode77(value["action_id"])) return false;
+    if (value["action_id"] === undefined || !validateWireNode60(value["action_id"])) return false;
       return true;
     case 9:
       if (Object.keys(value).length !== 8) return false;
-    if (value["button"] === undefined || !validateWireNode78(value["button"])) return false;
-    if (value["phase"] === undefined || !validateWireNode79(value["phase"])) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode80(value["basis_revision"])) return false;
-    if (value["position"] === undefined || !validateWireNode81(value["position"])) return false;
-    if (value["additive"] === undefined || !validateWireNode83(value["additive"])) return false;
-    if (value["select_word"] === undefined || !validateWireNode84(value["select_word"])) return false;
-    if (value["edge"] === undefined || !validateWireNode85(value["edge"])) return false;
+    if (value["button"] === undefined || !validateWireNode61(value["button"])) return false;
+    if (value["phase"] === undefined || !validateWireNode62(value["phase"])) return false;
+    if (value["basis_revision"] === undefined || !validateWireNode63(value["basis_revision"])) return false;
+    if (value["position"] === undefined || !validateWireNode64(value["position"])) return false;
+    if (value["additive"] === undefined || !validateWireNode66(value["additive"])) return false;
+    if (value["select_word"] === undefined || !validateWireNode67(value["select_word"])) return false;
+    if (value["edge"] === undefined || !validateWireNode68(value["edge"])) return false;
       return true;
     case 10:
       if (Object.keys(value).length !== 4) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode86(value["basis_revision"])) return false;
-    if (value["target"] === undefined || !validateWireNode87(value["target"])) return false;
-    if (value["rows"] === undefined || !validateWireNode88(value["rows"])) return false;
+    if (value["basis_revision"] === undefined || !validateWireNode69(value["basis_revision"])) return false;
+    if (value["target"] === undefined || !validateWireNode70(value["target"])) return false;
+    if (value["rows"] === undefined || !validateWireNode71(value["rows"])) return false;
       return true;
     case 11:
       if (Object.keys(value).length !== 5) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode89(value["basis_revision"])) return false;
-    if (value["target"] === undefined || !validateWireNode90(value["target"])) return false;
-    if (value["numerator"] === undefined || !validateWireNode91(value["numerator"])) return false;
-    if (value["denominator"] === undefined || !validateWireNode92(value["denominator"])) return false;
+    if (value["basis_revision"] === undefined || !validateWireNode72(value["basis_revision"])) return false;
+    if (value["target"] === undefined || !validateWireNode73(value["target"])) return false;
+    if (value["numerator"] === undefined || !validateWireNode74(value["numerator"])) return false;
+    if (value["denominator"] === undefined || !validateWireNode75(value["denominator"])) return false;
       return true;
     case 12:
       if (Object.keys(value).length !== 2) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode93(value["basis_revision"])) return false;
+    if (value["basis_revision"] === undefined || !validateWireNode76(value["basis_revision"])) return false;
       return true;
     case 13:
       if (Object.keys(value).length !== 2) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode94(value["basis_revision"])) return false;
+    if (value["basis_revision"] === undefined || !validateWireNode77(value["basis_revision"])) return false;
       return true;
     case 14:
       if (Object.keys(value).length !== 5) return false;
-    if (value["basis_revision"] === undefined || !validateWireNode95(value["basis_revision"])) return false;
-    if (value["active_tab"] === undefined || !validateWireNode96(value["active_tab"])) return false;
-    if (value["document_revision"] === undefined || !validateWireNode97(value["document_revision"])) return false;
-    if (value["selections"] === undefined || !validateWireNode98(value["selections"])) return false;
+    if (value["basis_revision"] === undefined || !validateWireNode78(value["basis_revision"])) return false;
+    if (value["active_tab"] === undefined || !validateWireNode79(value["active_tab"])) return false;
+    if (value["document_revision"] === undefined || !validateWireNode80(value["document_revision"])) return false;
+    if (value["selections"] === undefined || !validateWireNode81(value["selections"])) return false;
       return true;
     default: return false;
     }
 }
 
-function validateWireNode41(value) {
-    return value === null || validateWireNode42(value);
+function validateWireNode37(value) {
+    return value === null || validateWireNode38(value);
 }
 
-function validateWireNode42(value) {
+function validateWireNode38(value) {
     return validateWireNode0(value);
 }
 
-function validateWireNode43(value) {
+function validateWireNode39(value) {
     return typeof value === 'string';
+}
+
+function validateWireNode40(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode41(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+}
+
+function validateWireNode42(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode43(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode44(value) {
@@ -1161,11 +1115,7 @@ function validateWireNode46(value) {
 }
 
 function validateWireNode47(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'string';
 }
 
 function validateWireNode48(value) {
@@ -1181,6 +1131,12 @@ function validateWireNode49(value) {
 }
 
 function validateWireNode50(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+}
+
+function validateWireNode51(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -1188,26 +1144,20 @@ function validateWireNode50(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode51(value) {
-    return typeof value === 'string';
-}
-
 function validateWireNode52(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+    return typeof value === 'string';
 }
 
 function validateWireNode53(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
 }
 
 function validateWireNode54(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
 }
 
 function validateWireNode55(value) {
@@ -1219,7 +1169,7 @@ function validateWireNode55(value) {
 }
 
 function validateWireNode56(value) {
-    return typeof value === 'string';
+    return validateWireNode6(value);
 }
 
 function validateWireNode57(value) {
@@ -1267,22 +1217,10 @@ function validateWireNode63(value) {
 }
 
 function validateWireNode64(value) {
-    return validateWireNode6(value);
+    return value === null || validateWireNode65(value);
 }
 
 function validateWireNode65(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
-}
-
-function validateWireNode66(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
-}
-
-function validateWireNode67(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -1290,28 +1228,40 @@ function validateWireNode67(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode68(value) {
-    return validateWireNode9(value);
+function validateWireNode66(value) {
+    return typeof value === 'boolean';
 }
 
-function validateWireNode69(value) {
+function validateWireNode67(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode68(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode69(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode70(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
 }
 
 function validateWireNode71(value) {
     if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
+      return value >= -9223372036854775808n &&
+        value <= 9223372036854775807n;
     }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'number' && Number.isSafeInteger(value);
 }
 
 function validateWireNode72(value) {
@@ -1323,19 +1273,25 @@ function validateWireNode72(value) {
 }
 
 function validateWireNode73(value) {
-    return typeof value === 'string';
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
 }
 
 function validateWireNode74(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
 function validateWireNode75(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
 function validateWireNode76(value) {
@@ -1347,19 +1303,27 @@ function validateWireNode76(value) {
 }
 
 function validateWireNode77(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode78(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode79(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode80(value) {
@@ -1371,163 +1335,45 @@ function validateWireNode80(value) {
 }
 
 function validateWireNode81(value) {
-    return value === null || validateWireNode82(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode82(item));
 }
 
 function validateWireNode82(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode9(value);
 }
 
 function validateWireNode83(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode84(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode85(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
-}
-
-function validateWireNode86(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode87(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
-}
-
-function validateWireNode88(value) {
-    if (typeof value === 'bigint') {
-      return value >= -9223372036854775808n &&
-        value <= 9223372036854775807n;
-    }
-    return typeof value === 'number' && Number.isSafeInteger(value);
-}
-
-function validateWireNode89(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode90(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
-}
-
-function validateWireNode91(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
-}
-
-function validateWireNode92(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
-}
-
-function validateWireNode93(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode94(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode95(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode96(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode97(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode98(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode99(item));
-}
-
-function validateWireNode99(value) {
-    return validateWireNode13(value);
-}
-
-function validateWireNode100(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["kind"] === undefined || !validateWireNode101(value["kind"])) return false;
-    if (value["text"] === undefined || !validateWireNode102(value["text"])) return false;
+    if (value["kind"] === undefined || !validateWireNode84(value["kind"])) return false;
+    if (value["text"] === undefined || !validateWireNode85(value["text"])) return false;
     return true;
 }
 
-function validateWireNode101(value) {
+function validateWireNode84(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
 }
 
-function validateWireNode102(value) {
+function validateWireNode85(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode103(value) {
+function validateWireNode86(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["mode"] === undefined || !validateWireNode104(value["mode"])) return false;
-    if (value["activation_id"] === undefined || !validateWireNode105(value["activation_id"])) return false;
+    if (value["mode"] === undefined || !validateWireNode87(value["mode"])) return false;
+    if (value["activation_id"] === undefined || !validateWireNode88(value["activation_id"])) return false;
     return true;
 }
 
-function validateWireNode104(value) {
+function validateWireNode87(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
 }
 
-function validateWireNode105(value) {
+function validateWireNode88(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -1535,90 +1381,90 @@ function validateWireNode105(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode106(value) {
+function validateWireNode89(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["outcome"] === undefined || !validateWireNode107(value["outcome"])) return false;
-    if (value["client_owned"] === undefined || !validateWireNode108(value["client_owned"])) return false;
-    if (value["command"] === undefined || !validateWireNode110(value["command"])) return false;
-    if (value["picker_activation"] === undefined || !validateWireNode112(value["picker_activation"])) return false;
+    if (value["outcome"] === undefined || !validateWireNode90(value["outcome"])) return false;
+    if (value["client_owned"] === undefined || !validateWireNode91(value["client_owned"])) return false;
+    if (value["command"] === undefined || !validateWireNode93(value["command"])) return false;
+    if (value["picker_activation"] === undefined || !validateWireNode95(value["picker_activation"])) return false;
     return true;
 }
 
-function validateWireNode107(value) {
+function validateWireNode90(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
 }
 
-function validateWireNode108(value) {
-    return value === null || validateWireNode109(value);
+function validateWireNode91(value) {
+    return value === null || validateWireNode92(value);
 }
 
-function validateWireNode109(value) {
-    return validateWireNode100(value);
+function validateWireNode92(value) {
+    return validateWireNode83(value);
 }
 
-function validateWireNode110(value) {
-    return value === null || validateWireNode111(value);
+function validateWireNode93(value) {
+    return value === null || validateWireNode94(value);
 }
 
-function validateWireNode111(value) {
-    return validateWireNode33(value);
+function validateWireNode94(value) {
+    return validateWireNode29(value);
 }
 
-function validateWireNode112(value) {
-    return value === null || validateWireNode113(value);
+function validateWireNode95(value) {
+    return value === null || validateWireNode96(value);
 }
 
-function validateWireNode113(value) {
-    return validateWireNode103(value);
+function validateWireNode96(value) {
+    return validateWireNode86(value);
 }
 
-function validateWireNode114(value) {
+function validateWireNode97(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["foreground"] !== undefined && !validateWireNode115(value["foreground"])) return false;
-    if (value["background"] !== undefined && !validateWireNode116(value["background"])) return false;
+    if (value["foreground"] !== undefined && !validateWireNode98(value["foreground"])) return false;
+    if (value["background"] !== undefined && !validateWireNode99(value["background"])) return false;
     return true;
 }
 
-function validateWireNode115(value) {
+function validateWireNode98(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
 }
 
-function validateWireNode116(value) {
+function validateWireNode99(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
 }
 
-function validateWireNode117(value) {
+function validateWireNode100(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode118(value["id"])) return false;
-    if (value["size"] === undefined || !validateWireNode119(value["size"])) return false;
-    if (value["style"] !== undefined && !validateWireNode124(value["style"])) return false;
-    if (value["focus_context"] !== undefined && !validateWireNode127(value["focus_context"])) return false;
-    if (value["accessible_label"] !== undefined && !validateWireNode128(value["accessible_label"])) return false;
+    if (value["id"] === undefined || !validateWireNode101(value["id"])) return false;
+    if (value["size"] === undefined || !validateWireNode102(value["size"])) return false;
+    if (value["style"] !== undefined && !validateWireNode107(value["style"])) return false;
+    if (value["focus_context"] !== undefined && !validateWireNode110(value["focus_context"])) return false;
+    if (value["accessible_label"] !== undefined && !validateWireNode111(value["accessible_label"])) return false;
     let variantCount = 0;
     if (value["container"] !== undefined && value["container"] !== null) {
       ++variantCount;
-      if (!validateWireNode129(value["container"])) return false;
+      if (!validateWireNode112(value["container"])) return false;
     }
     if (value["leaf"] !== undefined && value["leaf"] !== null) {
       ++variantCount;
-      if (!validateWireNode140(value["leaf"])) return false;
+      if (!validateWireNode123(value["leaf"])) return false;
     }
     return variantCount === 1;
 }
 
-function validateWireNode118(value) {
+function validateWireNode101(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode119(value) {
+function validateWireNode102(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["extent"] === undefined || !validateWireNode120(value["extent"])) return false;
+    if (value["extent"] === undefined || !validateWireNode103(value["extent"])) return false;
     const discriminatorValue = value["kind"];
     if (typeof discriminatorValue !== 'number' &&
         typeof discriminatorValue !== 'bigint') return false;
@@ -1635,15 +1481,15 @@ function validateWireNode119(value) {
 
       return true;
     case 3:
-    if (value["minimum"] === undefined || !validateWireNode121(value["minimum"])) return false;
-    if (value["growth"] === undefined || !validateWireNode122(value["growth"])) return false;
-    if (value["optional"] === undefined || !validateWireNode123(value["optional"])) return false;
+    if (value["minimum"] === undefined || !validateWireNode104(value["minimum"])) return false;
+    if (value["growth"] === undefined || !validateWireNode105(value["growth"])) return false;
+    if (value["optional"] === undefined || !validateWireNode106(value["optional"])) return false;
       return true;
     default: return false;
     }
 }
 
-function validateWireNode120(value) {
+function validateWireNode103(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 2147483647n;
     }
@@ -1651,7 +1497,7 @@ function validateWireNode120(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 2147483647;
 }
 
-function validateWireNode121(value) {
+function validateWireNode104(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 2147483647n;
     }
@@ -1659,7 +1505,7 @@ function validateWireNode121(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 2147483647;
 }
 
-function validateWireNode122(value) {
+function validateWireNode105(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 2147483647n;
     }
@@ -1667,65 +1513,65 @@ function validateWireNode122(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 2147483647;
 }
 
-function validateWireNode123(value) {
+function validateWireNode106(value) {
     return typeof value === 'boolean';
 }
 
-function validateWireNode124(value) {
+function validateWireNode107(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["foreground"] !== undefined && !validateWireNode125(value["foreground"])) return false;
-    if (value["background"] !== undefined && !validateWireNode126(value["background"])) return false;
+    if (value["foreground"] !== undefined && !validateWireNode108(value["foreground"])) return false;
+    if (value["background"] !== undefined && !validateWireNode109(value["background"])) return false;
     return true;
 }
 
-function validateWireNode125(value) {
+function validateWireNode108(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
 }
 
-function validateWireNode126(value) {
+function validateWireNode109(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
 }
 
-function validateWireNode127(value) {
+function validateWireNode110(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
 }
 
-function validateWireNode128(value) {
+function validateWireNode111(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode129(value) {
+function validateWireNode112(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["axis"] === undefined || !validateWireNode130(value["axis"])) return false;
-    if (value["inset"] === undefined || !validateWireNode131(value["inset"])) return false;
-    if (value["gap"] === undefined || !validateWireNode136(value["gap"])) return false;
-    if (value["children"] === undefined || !validateWireNode137(value["children"])) return false;
-    if (value["scroll"] !== undefined && !validateWireNode139(value["scroll"])) return false;
+    if (value["axis"] === undefined || !validateWireNode113(value["axis"])) return false;
+    if (value["inset"] === undefined || !validateWireNode114(value["inset"])) return false;
+    if (value["gap"] === undefined || !validateWireNode119(value["gap"])) return false;
+    if (value["children"] === undefined || !validateWireNode120(value["children"])) return false;
+    if (value["scroll"] !== undefined && !validateWireNode122(value["scroll"])) return false;
     return true;
 }
 
-function validateWireNode130(value) {
+function validateWireNode113(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
 }
 
-function validateWireNode131(value) {
+function validateWireNode114(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["left"] === undefined || !validateWireNode132(value["left"])) return false;
-    if (value["right"] === undefined || !validateWireNode133(value["right"])) return false;
-    if (value["top"] === undefined || !validateWireNode134(value["top"])) return false;
-    if (value["bottom"] === undefined || !validateWireNode135(value["bottom"])) return false;
+    if (value["left"] === undefined || !validateWireNode115(value["left"])) return false;
+    if (value["right"] === undefined || !validateWireNode116(value["right"])) return false;
+    if (value["top"] === undefined || !validateWireNode117(value["top"])) return false;
+    if (value["bottom"] === undefined || !validateWireNode118(value["bottom"])) return false;
     return true;
 }
 
-function validateWireNode132(value) {
+function validateWireNode115(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 2147483647n;
     }
@@ -1733,7 +1579,7 @@ function validateWireNode132(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 2147483647;
 }
 
-function validateWireNode133(value) {
+function validateWireNode116(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 2147483647n;
     }
@@ -1741,7 +1587,7 @@ function validateWireNode133(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 2147483647;
 }
 
-function validateWireNode134(value) {
+function validateWireNode117(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 2147483647n;
     }
@@ -1749,7 +1595,7 @@ function validateWireNode134(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 2147483647;
 }
 
-function validateWireNode135(value) {
+function validateWireNode118(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 2147483647n;
     }
@@ -1757,7 +1603,7 @@ function validateWireNode135(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 2147483647;
 }
 
-function validateWireNode136(value) {
+function validateWireNode119(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 2147483647n;
     }
@@ -1765,58 +1611,136 @@ function validateWireNode136(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 2147483647;
 }
 
-function validateWireNode137(value) {
+function validateWireNode120(value) {
     return Array.isArray(value) &&
-      value.every((item) => validateWireNode138(item));
+      value.every((item) => validateWireNode121(item));
 }
 
-function validateWireNode138(value) {
-    return validateWireNode117(value);
+function validateWireNode121(value) {
+    return validateWireNode100(value);
 }
 
-function validateWireNode139(value) {
+function validateWireNode122(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (true);
 }
 
-function validateWireNode140(value) {
+function validateWireNode123(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["kind"] === undefined || !validateWireNode141(value["kind"])) return false;
-    if (value["id"] === undefined || !validateWireNode142(value["id"])) return false;
-    if (value["value"] !== undefined && !validateWireNode143(value["value"])) return false;
-    if (value["checked"] !== undefined && !validateWireNode148(value["checked"])) return false;
-    if (value["width"] !== undefined && !validateWireNode153(value["width"])) return false;
-    if (value["role"] !== undefined && !validateWireNode155(value["role"])) return false;
-    if (value["command"] !== undefined && !validateWireNode157(value["command"])) return false;
-    if (value["surface"] !== undefined && !validateWireNode159(value["surface"])) return false;
-    if (value["rank"] === undefined || !validateWireNode161(value["rank"])) return false;
-    if (value["keep"] === undefined || !validateWireNode162(value["keep"])) return false;
-    if (value["overflow"] === undefined || !validateWireNode163(value["overflow"])) return false;
-    if (value["sigil"] === undefined || !validateWireNode164(value["sigil"])) return false;
+    if (value["kind"] === undefined || !validateWireNode124(value["kind"])) return false;
+    if (value["id"] === undefined || !validateWireNode125(value["id"])) return false;
+    if (value["value"] !== undefined && !validateWireNode126(value["value"])) return false;
+    if (value["checked"] !== undefined && !validateWireNode131(value["checked"])) return false;
+    if (value["width"] !== undefined && !validateWireNode136(value["width"])) return false;
+    if (value["role"] !== undefined && !validateWireNode138(value["role"])) return false;
+    if (value["command"] !== undefined && !validateWireNode140(value["command"])) return false;
+    if (value["surface"] !== undefined && !validateWireNode142(value["surface"])) return false;
+    if (value["rank"] === undefined || !validateWireNode144(value["rank"])) return false;
+    if (value["keep"] === undefined || !validateWireNode145(value["keep"])) return false;
+    if (value["overflow"] === undefined || !validateWireNode146(value["overflow"])) return false;
+    if (value["sigil"] === undefined || !validateWireNode147(value["sigil"])) return false;
     return true;
 }
 
-function validateWireNode141(value) {
+function validateWireNode124(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7);
 }
 
-function validateWireNode142(value) {
+function validateWireNode125(value) {
     return typeof value === 'string';
 }
 
+function validateWireNode126(value) {
+    return value === null || validateWireNode127(value);
+}
+
+function validateWireNode127(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["is_provider"] === undefined || !validateWireNode128(value["is_provider"])) return false;
+    if (value["literal"] === undefined || !validateWireNode129(value["literal"])) return false;
+    if (value["provider"] === undefined || !validateWireNode130(value["provider"])) return false;
+    return true;
+}
+
+function validateWireNode128(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode129(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode130(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode131(value) {
+    return value === null || validateWireNode132(value);
+}
+
+function validateWireNode132(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["is_provider"] === undefined || !validateWireNode133(value["is_provider"])) return false;
+    if (value["literal"] === undefined || !validateWireNode134(value["literal"])) return false;
+    if (value["provider"] === undefined || !validateWireNode135(value["provider"])) return false;
+    return true;
+}
+
+function validateWireNode133(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode134(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode135(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode136(value) {
+    return value === null || validateWireNode137(value);
+}
+
+function validateWireNode137(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+}
+
+function validateWireNode138(value) {
+    return value === null || validateWireNode139(value);
+}
+
+function validateWireNode139(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode140(value) {
+    return value === null || validateWireNode141(value);
+}
+
+function validateWireNode141(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode142(value) {
+    return value === null || validateWireNode143(value);
+}
+
 function validateWireNode143(value) {
-    return value === null || validateWireNode144(value);
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9);
 }
 
 function validateWireNode144(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["is_provider"] === undefined || !validateWireNode145(value["is_provider"])) return false;
-    if (value["literal"] === undefined || !validateWireNode146(value["literal"])) return false;
-    if (value["provider"] === undefined || !validateWireNode147(value["provider"])) return false;
-    return true;
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
 }
 
 function validateWireNode145(value) {
@@ -1824,7 +1748,9 @@ function validateWireNode145(value) {
 }
 
 function validateWireNode146(value) {
-    return typeof value === 'string';
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
 }
 
 function validateWireNode147(value) {
@@ -1832,49 +1758,69 @@ function validateWireNode147(value) {
 }
 
 function validateWireNode148(value) {
-    return value === null || validateWireNode149(value);
-}
-
-function validateWireNode149(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["is_provider"] === undefined || !validateWireNode150(value["is_provider"])) return false;
-    if (value["literal"] === undefined || !validateWireNode151(value["literal"])) return false;
-    if (value["provider"] === undefined || !validateWireNode152(value["provider"])) return false;
+    if (value["generation"] === undefined || !validateWireNode149(value["generation"])) return false;
+    if (value["root"] === undefined || !validateWireNode150(value["root"])) return false;
     return true;
 }
 
+function validateWireNode149(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
 function validateWireNode150(value) {
-    return typeof value === 'boolean';
+    return validateWireNode100(value);
 }
 
 function validateWireNode151(value) {
-    return typeof value === 'string';
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["generation"] === undefined || !validateWireNode152(value["generation"])) return false;
+    if (value["nodes"] === undefined || !validateWireNode153(value["nodes"])) return false;
+    if (value["focus_path"] !== undefined && !validateWireNode167(value["focus_path"])) return false;
+    return true;
 }
 
 function validateWireNode152(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode153(value) {
-    return value === null || validateWireNode154(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode154(item));
 }
 
 function validateWireNode154(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode155(value["id"])) return false;
+    if (value["leaf"] !== undefined && !validateWireNode156(value["leaf"])) return false;
+    return true;
 }
 
 function validateWireNode155(value) {
-    return value === null || validateWireNode156(value);
+    return typeof value === 'string' && value.length > 0;
 }
 
 function validateWireNode156(value) {
-    return typeof value === 'string';
+    return value === null || validateWireNode157(value);
 }
 
 function validateWireNode157(value) {
-    return value === null || validateWireNode158(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["value"] === undefined || !validateWireNode158(value["value"])) return false;
+    if (value["label"] === undefined || !validateWireNode159(value["label"])) return false;
+    if (value["command"] !== undefined && !validateWireNode160(value["command"])) return false;
+    if (value["checked"] !== undefined && !validateWireNode162(value["checked"])) return false;
+    if (value["role"] === undefined || !validateWireNode164(value["role"])) return false;
+    if (value["active"] !== undefined && !validateWireNode165(value["active"])) return false;
+    return true;
 }
 
 function validateWireNode158(value) {
@@ -1882,161 +1828,61 @@ function validateWireNode158(value) {
 }
 
 function validateWireNode159(value) {
-    return value === null || validateWireNode160(value);
+    return typeof value === 'string';
 }
 
 function validateWireNode160(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9);
+    return value === null || validateWireNode161(value);
 }
 
 function validateWireNode161(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+    return typeof value === 'string';
 }
 
 function validateWireNode162(value) {
-    return typeof value === 'boolean';
+    return value === null || validateWireNode163(value);
 }
 
 function validateWireNode163(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
-}
-
-function validateWireNode164(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode165(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["generation"] === undefined || !validateWireNode166(value["generation"])) return false;
-    if (value["root"] === undefined || !validateWireNode167(value["root"])) return false;
-    return true;
-}
-
-function validateWireNode166(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode167(value) {
-    return validateWireNode117(value);
-}
-
-function validateWireNode168(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["generation"] === undefined || !validateWireNode169(value["generation"])) return false;
-    if (value["nodes"] === undefined || !validateWireNode170(value["nodes"])) return false;
-    if (value["focus_path"] !== undefined && !validateWireNode184(value["focus_path"])) return false;
-    return true;
-}
-
-function validateWireNode169(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode170(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode171(item));
-}
-
-function validateWireNode171(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode172(value["id"])) return false;
-    if (value["leaf"] !== undefined && !validateWireNode173(value["leaf"])) return false;
-    return true;
-}
-
-function validateWireNode172(value) {
-    return typeof value === 'string' && value.length > 0;
-}
-
-function validateWireNode173(value) {
-    return value === null || validateWireNode174(value);
-}
-
-function validateWireNode174(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["value"] === undefined || !validateWireNode175(value["value"])) return false;
-    if (value["label"] === undefined || !validateWireNode176(value["label"])) return false;
-    if (value["command"] !== undefined && !validateWireNode177(value["command"])) return false;
-    if (value["checked"] !== undefined && !validateWireNode179(value["checked"])) return false;
-    if (value["role"] === undefined || !validateWireNode181(value["role"])) return false;
-    if (value["active"] !== undefined && !validateWireNode182(value["active"])) return false;
-    return true;
-}
-
-function validateWireNode175(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode176(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode177(value) {
-    return value === null || validateWireNode178(value);
-}
-
-function validateWireNode178(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode179(value) {
-    return value === null || validateWireNode180(value);
-}
-
-function validateWireNode180(value) {
     return typeof value === 'boolean';
 }
 
-function validateWireNode181(value) {
+function validateWireNode164(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
 }
 
-function validateWireNode182(value) {
-    return value === null || validateWireNode183(value);
+function validateWireNode165(value) {
+    return value === null || validateWireNode166(value);
 }
 
-function validateWireNode183(value) {
+function validateWireNode166(value) {
     return typeof value === 'boolean';
 }
 
-function validateWireNode184(value) {
-    return value === null || validateWireNode185(value);
+function validateWireNode167(value) {
+    return value === null || validateWireNode168(value);
 }
 
-function validateWireNode185(value) {
+function validateWireNode168(value) {
     return Array.isArray(value) && value.length > 0 &&
-      value.every((item) => validateWireNode186(item));
+      value.every((item) => validateWireNode169(item));
 }
 
-function validateWireNode186(value) {
+function validateWireNode169(value) {
     return typeof value === 'string' && value.length > 0;
 }
 
-function validateWireNode187(value) {
+function validateWireNode170(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["generation"] === undefined || !validateWireNode188(value["generation"])) return false;
-    if (value["basis"] === undefined || !validateWireNode189(value["basis"])) return false;
-    if (value["nodes"] === undefined || !validateWireNode190(value["nodes"])) return false;
+    if (value["generation"] === undefined || !validateWireNode171(value["generation"])) return false;
+    if (value["basis"] === undefined || !validateWireNode172(value["basis"])) return false;
+    if (value["nodes"] === undefined || !validateWireNode173(value["nodes"])) return false;
     return true;
 }
 
-function validateWireNode188(value) {
+function validateWireNode171(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -2044,7 +1890,7 @@ function validateWireNode188(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode189(value) {
+function validateWireNode172(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -2052,34 +1898,34 @@ function validateWireNode189(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode190(value) {
+function validateWireNode173(value) {
     return Array.isArray(value) &&
-      value.every((item) => validateWireNode191(item));
+      value.every((item) => validateWireNode174(item));
 }
 
-function validateWireNode191(value) {
+function validateWireNode174(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode192(value["id"])) return false;
-    if (value["present"] === undefined || !validateWireNode193(value["present"])) return false;
+    if (value["id"] === undefined || !validateWireNode175(value["id"])) return false;
+    if (value["present"] === undefined || !validateWireNode176(value["present"])) return false;
     return true;
 }
 
-function validateWireNode192(value) {
+function validateWireNode175(value) {
     return typeof value === 'string' && value.length > 0;
 }
 
-function validateWireNode193(value) {
+function validateWireNode176(value) {
     return typeof value === 'boolean';
 }
 
-function validateWireNode194(value) {
+function validateWireNode177(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["generation"] === undefined || !validateWireNode195(value["generation"])) return false;
-    if (value["ops"] === undefined || !validateWireNode196(value["ops"])) return false;
+    if (value["generation"] === undefined || !validateWireNode178(value["generation"])) return false;
+    if (value["ops"] === undefined || !validateWireNode179(value["ops"])) return false;
     return true;
 }
 
-function validateWireNode195(value) {
+function validateWireNode178(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -2087,33 +1933,136 @@ function validateWireNode195(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode196(value) {
+function validateWireNode179(value) {
     return Array.isArray(value) &&
-      value.every((item) => validateWireNode197(item));
+      value.every((item) => validateWireNode180(item));
 }
 
-function validateWireNode197(value) {
+function validateWireNode180(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["kind"] === undefined || !validateWireNode198(value["kind"])) return false;
-    if (value["target"] === undefined || !validateWireNode199(value["target"])) return false;
+    if (value["kind"] === undefined || !validateWireNode181(value["kind"])) return false;
+    if (value["target"] === undefined || !validateWireNode182(value["target"])) return false;
     return true;
 }
 
-function validateWireNode198(value) {
+function validateWireNode181(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
 }
 
-function validateWireNode199(value) {
+function validateWireNode182(value) {
     return typeof value === 'string' && value.length > 0;
 }
 
-function validateWireNode200(value) {
+function validateWireNode183(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["generation"] === undefined || !validateWireNode201(value["generation"])) return false;
-    if (value["presence_basis"] === undefined || !validateWireNode202(value["presence_basis"])) return false;
+    if (value["generation"] === undefined || !validateWireNode184(value["generation"])) return false;
+    if (value["presence_basis"] === undefined || !validateWireNode185(value["presence_basis"])) return false;
     return true;
+}
+
+function validateWireNode184(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode185(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode186(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["version"] === undefined || !validateWireNode187(value["version"])) return false;
+    if (value["schema"] === undefined || !validateWireNode188(value["schema"])) return false;
+    if (value["state"] === undefined || !validateWireNode189(value["state"])) return false;
+    if (value["presence"] === undefined || !validateWireNode190(value["presence"])) return false;
+    return true;
+}
+
+function validateWireNode187(value) {
+    return validateWireNode183(value);
+}
+
+function validateWireNode188(value) {
+    return validateWireNode148(value);
+}
+
+function validateWireNode189(value) {
+    return validateWireNode151(value);
+}
+
+function validateWireNode190(value) {
+    return validateWireNode170(value);
+}
+
+function validateWireNode191(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base"] === undefined || !validateWireNode192(value["base"])) return false;
+    if (value["target"] === undefined || !validateWireNode193(value["target"])) return false;
+    const discriminatorValue = value["kind"];
+    if (typeof discriminatorValue !== 'string') return false;
+    const discriminator = discriminatorValue;
+    switch (discriminator) {
+    case "replacement":
+    if (value["frame"] === undefined || !validateWireNode194(value["frame"])) return false;
+      return true;
+    case "changes":
+    if (value["state"] === undefined || !validateWireNode195(value["state"])) return false;
+    if (value["presence"] === undefined || !validateWireNode196(value["presence"])) return false;
+      return true;
+    default: return false;
+    }
+}
+
+function validateWireNode192(value) {
+    return validateWireNode183(value);
+}
+
+function validateWireNode193(value) {
+    return validateWireNode183(value);
+}
+
+function validateWireNode194(value) {
+    return validateWireNode186(value);
+}
+
+function validateWireNode195(value) {
+    return validateWireNode151(value);
+}
+
+function validateWireNode196(value) {
+    return validateWireNode170(value);
+}
+
+function validateWireNode197(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["active_workspace"] !== undefined && !validateWireNode198(value["active_workspace"])) return false;
+    if (value["active_view"] !== undefined && !validateWireNode200(value["active_view"])) return false;
+    return true;
+}
+
+function validateWireNode198(value) {
+    return value === null || validateWireNode199(value);
+}
+
+function validateWireNode199(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode200(value) {
+    return value === null || validateWireNode201(value);
 }
 
 function validateWireNode201(value) {
@@ -2125,6 +2074,14 @@ function validateWireNode201(value) {
 }
 
 function validateWireNode202(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["client_id"] === undefined || !validateWireNode203(value["client_id"])) return false;
+    if (value["view_id"] === undefined || !validateWireNode204(value["view_id"])) return false;
+    if (value["capabilities"] === undefined || !validateWireNode205(value["capabilities"])) return false;
+    return true;
+}
+
+function validateWireNode203(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -2132,75 +2089,82 @@ function validateWireNode202(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode203(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["version"] === undefined || !validateWireNode204(value["version"])) return false;
-    if (value["schema"] === undefined || !validateWireNode205(value["schema"])) return false;
-    if (value["state"] === undefined || !validateWireNode206(value["state"])) return false;
-    if (value["presence"] === undefined || !validateWireNode207(value["presence"])) return false;
-    return true;
-}
-
 function validateWireNode204(value) {
-    return validateWireNode200(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode205(value) {
-    return validateWireNode165(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode206(item));
 }
 
 function validateWireNode206(value) {
-    return validateWireNode168(value);
+    return typeof value === 'string';
 }
 
 function validateWireNode207(value) {
-    return validateWireNode187(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["byte_offset"] === undefined || !validateWireNode208(value["byte_offset"])) return false;
+    if (value["line"] === undefined || !validateWireNode209(value["line"])) return false;
+    if (value["cell"] === undefined || !validateWireNode210(value["cell"])) return false;
+    return true;
 }
 
 function validateWireNode208(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base"] === undefined || !validateWireNode209(value["base"])) return false;
-    if (value["target"] === undefined || !validateWireNode210(value["target"])) return false;
-    const discriminatorValue = value["kind"];
-    if (typeof discriminatorValue !== 'string') return false;
-    const discriminator = discriminatorValue;
-    switch (discriminator) {
-    case "replacement":
-    if (value["frame"] === undefined || !validateWireNode211(value["frame"])) return false;
-      return true;
-    case "changes":
-    if (value["state"] === undefined || !validateWireNode212(value["state"])) return false;
-    if (value["presence"] === undefined || !validateWireNode213(value["presence"])) return false;
-      return true;
-    default: return false;
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
     }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode209(value) {
-    return validateWireNode200(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode210(value) {
-    return validateWireNode200(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode211(value) {
-    return validateWireNode203(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode212(value["revision"])) return false;
+    if (value["text"] === undefined || !validateWireNode213(value["text"])) return false;
+    if (value["caret"] === undefined || !validateWireNode214(value["caret"])) return false;
+    if (value["diff_file_identity"] !== undefined && !validateWireNode215(value["diff_file_identity"])) return false;
+    return true;
 }
 
 function validateWireNode212(value) {
-    return validateWireNode168(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode213(value) {
-    return validateWireNode187(value);
+    return typeof value === 'string';
 }
 
 function validateWireNode214(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["active_workspace"] !== undefined && !validateWireNode215(value["active_workspace"])) return false;
-    if (value["active_view"] !== undefined && !validateWireNode217(value["active_view"])) return false;
-    return true;
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode215(value) {
@@ -2208,15 +2172,18 @@ function validateWireNode215(value) {
 }
 
 function validateWireNode216(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'string';
 }
 
 function validateWireNode217(value) {
-    return value === null || validateWireNode218(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode218(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode219(value["revision"])) return false;
+    if (value["start"] === undefined || !validateWireNode220(value["start"])) return false;
+    if (value["erased_bytes"] === undefined || !validateWireNode221(value["erased_bytes"])) return false;
+    if (value["inserted_text"] === undefined || !validateWireNode222(value["inserted_text"])) return false;
+    if (value["diff_file_identity"] !== undefined && !validateWireNode223(value["diff_file_identity"])) return false;
+    return true;
 }
 
 function validateWireNode218(value) {
@@ -2228,11 +2195,11 @@ function validateWireNode218(value) {
 }
 
 function validateWireNode219(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["client_id"] === undefined || !validateWireNode220(value["client_id"])) return false;
-    if (value["view_id"] === undefined || !validateWireNode221(value["view_id"])) return false;
-    if (value["capabilities"] === undefined || !validateWireNode222(value["capabilities"])) return false;
-    return true;
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode220(value) {
@@ -2252,116 +2219,80 @@ function validateWireNode221(value) {
 }
 
 function validateWireNode222(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode223(item));
-}
-
-function validateWireNode223(value) {
     return typeof value === 'string';
 }
 
+function validateWireNode223(value) {
+    return value === null || validateWireNode224(value);
+}
+
 function validateWireNode224(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["byte_offset"] === undefined || !validateWireNode225(value["byte_offset"])) return false;
-    if (value["line"] === undefined || !validateWireNode226(value["line"])) return false;
-    if (value["cell"] === undefined || !validateWireNode227(value["cell"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode225(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["anchor"] === undefined || !validateWireNode226(value["anchor"])) return false;
+    if (value["active"] === undefined || !validateWireNode227(value["active"])) return false;
+    return true;
 }
 
 function validateWireNode226(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode207(value);
 }
 
 function validateWireNode227(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode207(value);
 }
 
 function validateWireNode228(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["revision"] === undefined || !validateWireNode229(value["revision"])) return false;
-    if (value["text"] === undefined || !validateWireNode230(value["text"])) return false;
-    if (value["caret"] === undefined || !validateWireNode231(value["caret"])) return false;
-    if (value["diff_file_identity"] !== undefined && !validateWireNode232(value["diff_file_identity"])) return false;
+    if (value["selections"] === undefined || !validateWireNode229(value["selections"])) return false;
     return true;
 }
 
 function validateWireNode229(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return Array.isArray(value) && value.length > 0 &&
+      value.every((item) => validateWireNode230(item));
 }
 
 function validateWireNode230(value) {
-    return typeof value === 'string';
+    return validateWireNode225(value);
 }
 
 function validateWireNode231(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode232(value) {
-    return value === null || validateWireNode233(value);
-}
-
-function validateWireNode233(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode234(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_revision"] === undefined || !validateWireNode235(value["base_revision"])) return false;
-    if (value["revision"] === undefined || !validateWireNode236(value["revision"])) return false;
-    if (value["start"] === undefined || !validateWireNode237(value["start"])) return false;
-    if (value["erased_bytes"] === undefined || !validateWireNode238(value["erased_bytes"])) return false;
-    if (value["inserted_text"] === undefined || !validateWireNode239(value["inserted_text"])) return false;
-    if (value["diff_file_identity"] !== undefined && !validateWireNode240(value["diff_file_identity"])) return false;
+    if (value["changed"] === undefined || !validateWireNode232(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode233(value["replacement"])) return false;
     return true;
 }
 
+function validateWireNode232(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode233(value) {
+    return value === null || validateWireNode234(value);
+}
+
+function validateWireNode234(value) {
+    return validateWireNode228(value);
+}
+
 function validateWireNode235(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["can_undo"] === undefined || !validateWireNode236(value["can_undo"])) return false;
+    if (value["can_redo"] === undefined || !validateWireNode237(value["can_redo"])) return false;
+    if (value["retained_bytes"] === undefined || !validateWireNode238(value["retained_bytes"])) return false;
+    return true;
 }
 
 function validateWireNode236(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'boolean';
 }
 
 function validateWireNode237(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'boolean';
 }
 
 function validateWireNode238(value) {
@@ -2373,76 +2304,86 @@ function validateWireNode238(value) {
 }
 
 function validateWireNode239(value) {
-    return typeof value === 'string';
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode240(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode241(value["replacement"])) return false;
+    return true;
 }
 
 function validateWireNode240(value) {
-    return value === null || validateWireNode241(value);
+    return typeof value === 'boolean';
 }
 
 function validateWireNode241(value) {
-    return typeof value === 'string';
+    return value === null || validateWireNode242(value);
 }
 
 function validateWireNode242(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["anchor"] === undefined || !validateWireNode243(value["anchor"])) return false;
-    if (value["active"] === undefined || !validateWireNode244(value["active"])) return false;
-    return true;
+    return validateWireNode235(value);
 }
 
 function validateWireNode243(value) {
-    return validateWireNode224(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode244(value["id"])) return false;
+    if (value["request_revision"] === undefined || !validateWireNode245(value["request_revision"])) return false;
+    if (value["text"] === undefined || !validateWireNode246(value["text"])) return false;
+    return true;
 }
 
 function validateWireNode244(value) {
-    return validateWireNode224(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode245(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["selections"] === undefined || !validateWireNode246(value["selections"])) return false;
-    return true;
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode246(value) {
-    return Array.isArray(value) && value.length > 0 &&
-      value.every((item) => validateWireNode247(item));
+    return typeof value === 'string';
 }
 
 function validateWireNode247(value) {
-    return validateWireNode242(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["fragments"] === undefined || !validateWireNode248(value["fragments"])) return false;
+    if (value["plain_text"] === undefined || !validateWireNode250(value["plain_text"])) return false;
+    if (value["system_write"] !== undefined && !validateWireNode251(value["system_write"])) return false;
+    return true;
 }
 
 function validateWireNode248(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["changed"] === undefined || !validateWireNode249(value["changed"])) return false;
-    if (value["replacement"] !== undefined && !validateWireNode250(value["replacement"])) return false;
-    return true;
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode249(item));
 }
 
 function validateWireNode249(value) {
-    return typeof value === 'boolean';
+    return typeof value === 'string';
 }
 
 function validateWireNode250(value) {
-    return value === null || validateWireNode251(value);
+    return typeof value === 'string';
 }
 
 function validateWireNode251(value) {
-    return validateWireNode245(value);
+    return value === null || validateWireNode252(value);
 }
 
 function validateWireNode252(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["can_undo"] === undefined || !validateWireNode253(value["can_undo"])) return false;
-    if (value["can_redo"] === undefined || !validateWireNode254(value["can_redo"])) return false;
-    if (value["retained_bytes"] === undefined || !validateWireNode255(value["retained_bytes"])) return false;
-    return true;
+    return validateWireNode243(value);
 }
 
 function validateWireNode253(value) {
-    return typeof value === 'boolean';
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode254(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode255(value["replacement"])) return false;
+    return true;
 }
 
 function validateWireNode254(value) {
@@ -2450,46 +2391,41 @@ function validateWireNode254(value) {
 }
 
 function validateWireNode255(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return value === null || validateWireNode256(value);
 }
 
 function validateWireNode256(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["changed"] === undefined || !validateWireNode257(value["changed"])) return false;
-    if (value["replacement"] !== undefined && !validateWireNode258(value["replacement"])) return false;
-    return true;
+    return validateWireNode247(value);
 }
 
 function validateWireNode257(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode258(value) {
-    return value === null || validateWireNode259(value);
-}
-
-function validateWireNode259(value) {
-    return validateWireNode252(value);
-}
-
-function validateWireNode260(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode261(value["id"])) return false;
-    if (value["request_revision"] === undefined || !validateWireNode262(value["request_revision"])) return false;
-    if (value["text"] === undefined || !validateWireNode263(value["text"])) return false;
+    if (value["id"] === undefined || !validateWireNode258(value["id"])) return false;
+    if (value["accessible_label"] === undefined || !validateWireNode259(value["accessible_label"])) return false;
+    if (value["command_id"] === undefined || !validateWireNode260(value["command_id"])) return false;
     return true;
 }
 
+function validateWireNode258(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode259(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode260(value) {
+    return typeof value === 'string';
+}
+
 function validateWireNode261(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode262(value["id"])) return false;
+    if (value["priority"] === undefined || !validateWireNode263(value["priority"])) return false;
+    if (value["generation"] === undefined || !validateWireNode264(value["generation"])) return false;
+    if (value["accessible_label"] === undefined || !validateWireNode265(value["accessible_label"])) return false;
+    if (value["actions"] === undefined || !validateWireNode266(value["actions"])) return false;
+    return true;
 }
 
 function validateWireNode262(value) {
@@ -2501,107 +2437,111 @@ function validateWireNode262(value) {
 }
 
 function validateWireNode263(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode264(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["fragments"] === undefined || !validateWireNode265(value["fragments"])) return false;
-    if (value["plain_text"] === undefined || !validateWireNode267(value["plain_text"])) return false;
-    if (value["system_write"] !== undefined && !validateWireNode268(value["system_write"])) return false;
-    return true;
-}
-
-function validateWireNode265(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode266(item));
-}
-
-function validateWireNode266(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode267(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode268(value) {
-    return value === null || validateWireNode269(value);
-}
-
-function validateWireNode269(value) {
-    return validateWireNode260(value);
-}
-
-function validateWireNode270(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["changed"] === undefined || !validateWireNode271(value["changed"])) return false;
-    if (value["replacement"] !== undefined && !validateWireNode272(value["replacement"])) return false;
-    return true;
-}
-
-function validateWireNode271(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode272(value) {
-    return value === null || validateWireNode273(value);
-}
-
-function validateWireNode273(value) {
-    return validateWireNode264(value);
-}
-
-function validateWireNode274(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode275(value["id"])) return false;
-    if (value["accessible_label"] === undefined || !validateWireNode276(value["accessible_label"])) return false;
-    if (value["command_id"] === undefined || !validateWireNode277(value["command_id"])) return false;
-    return true;
-}
-
-function validateWireNode275(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode276(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode277(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode278(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode279(value["id"])) return false;
-    if (value["priority"] === undefined || !validateWireNode280(value["priority"])) return false;
-    if (value["generation"] === undefined || !validateWireNode281(value["generation"])) return false;
-    if (value["accessible_label"] === undefined || !validateWireNode282(value["accessible_label"])) return false;
-    if (value["actions"] === undefined || !validateWireNode283(value["actions"])) return false;
-    return true;
-}
-
-function validateWireNode279(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode280(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
 }
 
-function validateWireNode281(value) {
+function validateWireNode264(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
     return typeof value === 'number' &&
       Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode265(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode266(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode267(item));
+}
+
+function validateWireNode267(value) {
+    return validateWireNode257(value);
+}
+
+function validateWireNode268(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["items"] === undefined || !validateWireNode269(value["items"])) return false;
+    if (value["selected"] === undefined || !validateWireNode271(value["selected"])) return false;
+    return true;
+}
+
+function validateWireNode269(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode270(item));
+}
+
+function validateWireNode270(value) {
+    return validateWireNode261(value);
+}
+
+function validateWireNode271(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode272(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["active_kind"] !== undefined && !validateWireNode273(value["active_kind"])) return false;
+    if (value["status"] === undefined || !validateWireNode275(value["status"])) return false;
+    return true;
+}
+
+function validateWireNode273(value) {
+    return value === null || validateWireNode274(value);
+}
+
+function validateWireNode274(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
+}
+
+function validateWireNode275(value) {
+    return validateWireNode268(value);
+}
+
+function validateWireNode276(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode277(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode278(value["replacement"])) return false;
+    return true;
+}
+
+function validateWireNode277(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode278(value) {
+    return value === null || validateWireNode279(value);
+}
+
+function validateWireNode279(value) {
+    return validateWireNode272(value);
+}
+
+function validateWireNode280(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["mode"] === undefined || !validateWireNode281(value["mode"])) return false;
+    if (value["path"] === undefined || !validateWireNode282(value["path"])) return false;
+    if (value["label"] === undefined || !validateWireNode283(value["label"])) return false;
+    if (value["line"] !== undefined && !validateWireNode284(value["line"])) return false;
+    if (value["column"] === undefined || !validateWireNode286(value["column"])) return false;
+    if (value["score"] === undefined || !validateWireNode287(value["score"])) return false;
+    return true;
+}
+
+function validateWireNode281(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
 }
 
 function validateWireNode282(value) {
@@ -2609,31 +2549,14 @@ function validateWireNode282(value) {
 }
 
 function validateWireNode283(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode284(item));
+    return typeof value === 'string';
 }
 
 function validateWireNode284(value) {
-    return validateWireNode274(value);
+    return value === null || validateWireNode285(value);
 }
 
 function validateWireNode285(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["items"] === undefined || !validateWireNode286(value["items"])) return false;
-    if (value["selected"] === undefined || !validateWireNode288(value["selected"])) return false;
-    return true;
-}
-
-function validateWireNode286(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode287(item));
-}
-
-function validateWireNode287(value) {
-    return validateWireNode278(value);
-}
-
-function validateWireNode288(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -2641,36 +2564,62 @@ function validateWireNode288(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode289(value) {
+function validateWireNode286(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode287(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+}
+
+function validateWireNode288(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["active_kind"] !== undefined && !validateWireNode290(value["active_kind"])) return false;
-    if (value["status"] === undefined || !validateWireNode292(value["status"])) return false;
+    if (value["revision"] === undefined || !validateWireNode289(value["revision"])) return false;
+    if (value["palette_open"] === undefined || !validateWireNode290(value["palette_open"])) return false;
+    if (value["query"] === undefined || !validateWireNode291(value["query"])) return false;
+    if (value["mode"] === undefined || !validateWireNode292(value["mode"])) return false;
+    if (value["results"] === undefined || !validateWireNode293(value["results"])) return false;
+    if (value["selected_index"] !== undefined && !validateWireNode295(value["selected_index"])) return false;
+    if (value["search_generation"] === undefined || !validateWireNode297(value["search_generation"])) return false;
+    if (value["searching"] === undefined || !validateWireNode298(value["searching"])) return false;
     return true;
+}
+
+function validateWireNode289(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode290(value) {
-    return value === null || validateWireNode291(value);
+    return typeof value === 'boolean';
 }
 
 function validateWireNode291(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
+    return typeof value === 'string';
 }
 
 function validateWireNode292(value) {
-    return validateWireNode285(value);
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
 }
 
 function validateWireNode293(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["changed"] === undefined || !validateWireNode294(value["changed"])) return false;
-    if (value["replacement"] !== undefined && !validateWireNode295(value["replacement"])) return false;
-    return true;
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode294(item));
 }
 
 function validateWireNode294(value) {
-    return typeof value === 'boolean';
+    return validateWireNode280(value);
 }
 
 function validateWireNode295(value) {
@@ -2678,71 +2627,63 @@ function validateWireNode295(value) {
 }
 
 function validateWireNode296(value) {
-    return validateWireNode289(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode297(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["mode"] === undefined || !validateWireNode298(value["mode"])) return false;
-    if (value["path"] === undefined || !validateWireNode299(value["path"])) return false;
-    if (value["label"] === undefined || !validateWireNode300(value["label"])) return false;
-    if (value["line"] !== undefined && !validateWireNode301(value["line"])) return false;
-    if (value["column"] === undefined || !validateWireNode303(value["column"])) return false;
-    if (value["score"] === undefined || !validateWireNode304(value["score"])) return false;
-    return true;
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode298(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+    return typeof value === 'boolean';
 }
 
 function validateWireNode299(value) {
-    return typeof value === 'string';
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["case_sensitive"] === undefined || !validateWireNode300(value["case_sensitive"])) return false;
+    if (value["whole_word"] === undefined || !validateWireNode301(value["whole_word"])) return false;
+    if (value["regex"] === undefined || !validateWireNode302(value["regex"])) return false;
+    if (value["selection_only"] === undefined || !validateWireNode303(value["selection_only"])) return false;
+    return true;
 }
 
 function validateWireNode300(value) {
-    return typeof value === 'string';
+    return typeof value === 'boolean';
 }
 
 function validateWireNode301(value) {
-    return value === null || validateWireNode302(value);
+    return typeof value === 'boolean';
 }
 
 function validateWireNode302(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'boolean';
 }
 
 function validateWireNode303(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode304(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["begin"] === undefined || !validateWireNode305(value["begin"])) return false;
+    if (value["end"] === undefined || !validateWireNode306(value["end"])) return false;
+    return true;
+}
+
+function validateWireNode305(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
     return typeof value === 'number' &&
       Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode304(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
-}
-
-function validateWireNode305(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["revision"] === undefined || !validateWireNode306(value["revision"])) return false;
-    if (value["palette_open"] === undefined || !validateWireNode307(value["palette_open"])) return false;
-    if (value["query"] === undefined || !validateWireNode308(value["query"])) return false;
-    if (value["mode"] === undefined || !validateWireNode309(value["mode"])) return false;
-    if (value["results"] === undefined || !validateWireNode310(value["results"])) return false;
-    if (value["selected_index"] !== undefined && !validateWireNode312(value["selected_index"])) return false;
-    if (value["search_generation"] === undefined || !validateWireNode314(value["search_generation"])) return false;
-    if (value["searching"] === undefined || !validateWireNode315(value["searching"])) return false;
-    return true;
 }
 
 function validateWireNode306(value) {
@@ -2754,66 +2695,68 @@ function validateWireNode306(value) {
 }
 
 function validateWireNode307(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode308(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode309(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
-}
-
-function validateWireNode310(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode311(item));
-}
-
-function validateWireNode311(value) {
-    return validateWireNode297(value);
-}
-
-function validateWireNode312(value) {
-    return value === null || validateWireNode313(value);
-}
-
-function validateWireNode313(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode314(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode315(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode316(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_revision"] === undefined || !validateWireNode317(value["base_revision"])) return false;
-    if (value["revision"] === undefined || !validateWireNode318(value["revision"])) return false;
-    if (value["state"] !== undefined && !validateWireNode319(value["state"])) return false;
+    if (value["generation"] === undefined || !validateWireNode308(value["generation"])) return false;
+    if (value["open"] === undefined || !validateWireNode309(value["open"])) return false;
+    if (value["replace_mode"] === undefined || !validateWireNode310(value["replace_mode"])) return false;
+    if (value["source_revision"] === undefined || !validateWireNode311(value["source_revision"])) return false;
+    if (value["query"] === undefined || !validateWireNode312(value["query"])) return false;
+    if (value["replacement"] === undefined || !validateWireNode313(value["replacement"])) return false;
+    if (value["options"] === undefined || !validateWireNode314(value["options"])) return false;
+    if (value["matches"] === undefined || !validateWireNode315(value["matches"])) return false;
+    if (value["active_match"] !== undefined && !validateWireNode317(value["active_match"])) return false;
+    if (value["error"] === undefined || !validateWireNode319(value["error"])) return false;
+    if (value["message"] === undefined || !validateWireNode320(value["message"])) return false;
     return true;
 }
 
-function validateWireNode317(value) {
+function validateWireNode308(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
     return typeof value === 'number' &&
       Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode309(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode310(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode311(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode312(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode313(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode314(value) {
+    return validateWireNode299(value);
+}
+
+function validateWireNode315(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode316(item));
+}
+
+function validateWireNode316(value) {
+    return validateWireNode304(value);
+}
+
+function validateWireNode317(value) {
+    return value === null || validateWireNode318(value);
 }
 
 function validateWireNode318(value) {
@@ -2825,173 +2768,16 @@ function validateWireNode318(value) {
 }
 
 function validateWireNode319(value) {
-    return value === null || validateWireNode320(value);
-}
-
-function validateWireNode320(value) {
-    return validateWireNode305(value);
-}
-
-function validateWireNode321(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["case_sensitive"] === undefined || !validateWireNode322(value["case_sensitive"])) return false;
-    if (value["whole_word"] === undefined || !validateWireNode323(value["whole_word"])) return false;
-    if (value["regex"] === undefined || !validateWireNode324(value["regex"])) return false;
-    if (value["selection_only"] === undefined || !validateWireNode325(value["selection_only"])) return false;
-    return true;
-}
-
-function validateWireNode322(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode323(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode324(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode325(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode326(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["begin"] === undefined || !validateWireNode327(value["begin"])) return false;
-    if (value["end"] === undefined || !validateWireNode328(value["end"])) return false;
-    return true;
-}
-
-function validateWireNode327(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode328(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode329(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["generation"] === undefined || !validateWireNode330(value["generation"])) return false;
-    if (value["open"] === undefined || !validateWireNode331(value["open"])) return false;
-    if (value["replace_mode"] === undefined || !validateWireNode332(value["replace_mode"])) return false;
-    if (value["source_revision"] === undefined || !validateWireNode333(value["source_revision"])) return false;
-    if (value["query"] === undefined || !validateWireNode334(value["query"])) return false;
-    if (value["replacement"] === undefined || !validateWireNode335(value["replacement"])) return false;
-    if (value["options"] === undefined || !validateWireNode336(value["options"])) return false;
-    if (value["matches"] === undefined || !validateWireNode337(value["matches"])) return false;
-    if (value["active_match"] !== undefined && !validateWireNode339(value["active_match"])) return false;
-    if (value["error"] === undefined || !validateWireNode341(value["error"])) return false;
-    if (value["message"] === undefined || !validateWireNode342(value["message"])) return false;
-    return true;
-}
-
-function validateWireNode330(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode331(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode332(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode333(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode334(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode335(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode336(value) {
-    return validateWireNode321(value);
-}
-
-function validateWireNode337(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode338(item));
-}
-
-function validateWireNode338(value) {
-    return validateWireNode326(value);
-}
-
-function validateWireNode339(value) {
-    return value === null || validateWireNode340(value);
-}
-
-function validateWireNode340(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode341(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10);
 }
 
-function validateWireNode342(value) {
+function validateWireNode320(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode343(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["changed"] === undefined || !validateWireNode344(value["changed"])) return false;
-    if (value["base_generation"] === undefined || !validateWireNode345(value["base_generation"])) return false;
-    if (value["replacement"] !== undefined && !validateWireNode346(value["replacement"])) return false;
-    return true;
-}
-
-function validateWireNode344(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode345(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode346(value) {
-    return value === null || validateWireNode347(value);
-}
-
-function validateWireNode347(value) {
-    return validateWireNode329(value);
-}
-
-function validateWireNode348(value) {
+function validateWireNode321(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
 
     const discriminatorValue = value["index"];
@@ -3001,35 +2787,35 @@ function validateWireNode348(value) {
     if (!Number.isSafeInteger(discriminator) || discriminator < 0) return false;
     switch (discriminator) {
     case 0:
-    if (value["value"] === undefined || !validateWireNode349(value["value"])) return false;
+    if (value["value"] === undefined || !validateWireNode322(value["value"])) return false;
       return true;
     case 1:
-    if (value["value"] === undefined || !validateWireNode350(value["value"])) return false;
+    if (value["value"] === undefined || !validateWireNode323(value["value"])) return false;
       return true;
     case 2:
-    if (value["value"] === undefined || !validateWireNode351(value["value"])) return false;
+    if (value["value"] === undefined || !validateWireNode324(value["value"])) return false;
       return true;
     case 3:
-    if (value["value"] === undefined || !validateWireNode352(value["value"])) return false;
+    if (value["value"] === undefined || !validateWireNode325(value["value"])) return false;
       return true;
     case 4:
-    if (value["value"] === undefined || !validateWireNode353(value["value"])) return false;
+    if (value["value"] === undefined || !validateWireNode326(value["value"])) return false;
       return true;
     case 5:
-    if (value["value"] === undefined || !validateWireNode354(value["value"])) return false;
+    if (value["value"] === undefined || !validateWireNode327(value["value"])) return false;
       return true;
     case 6:
-    if (value["value"] === undefined || !validateWireNode355(value["value"])) return false;
+    if (value["value"] === undefined || !validateWireNode328(value["value"])) return false;
       return true;
     default: return false;
     }
 }
 
-function validateWireNode349(value) {
+function validateWireNode322(value) {
     return typeof value === 'boolean';
 }
 
-function validateWireNode350(value) {
+function validateWireNode323(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
     }
@@ -3037,7 +2823,7 @@ function validateWireNode350(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
-function validateWireNode351(value) {
+function validateWireNode324(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -3045,238 +2831,223 @@ function validateWireNode351(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode352(value) {
+function validateWireNode325(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
 }
 
-function validateWireNode353(value) {
+function validateWireNode326(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
 }
 
-function validateWireNode354(value) {
+function validateWireNode327(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
 }
 
-function validateWireNode355(value) {
+function validateWireNode328(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode356(value) {
+function validateWireNode329(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["value"] === undefined || !validateWireNode357(value["value"])) return false;
-    if (value["source"] === undefined || !validateWireNode358(value["source"])) return false;
+    if (value["value"] === undefined || !validateWireNode330(value["value"])) return false;
+    if (value["source"] === undefined || !validateWireNode331(value["source"])) return false;
     return true;
 }
 
-function validateWireNode357(value) {
-    return validateWireNode348(value);
+function validateWireNode330(value) {
+    return validateWireNode321(value);
 }
 
-function validateWireNode358(value) {
+function validateWireNode331(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
 }
 
-function validateWireNode359(value) {
+function validateWireNode332(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["key"] === undefined || !validateWireNode360(value["key"])) return false;
-    if (value["effective"] === undefined || !validateWireNode361(value["effective"])) return false;
+    if (value["key"] === undefined || !validateWireNode333(value["key"])) return false;
+    if (value["effective"] === undefined || !validateWireNode334(value["effective"])) return false;
     return true;
 }
 
-function validateWireNode360(value) {
+function validateWireNode333(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18);
 }
 
-function validateWireNode361(value) {
-    return validateWireNode356(value);
+function validateWireNode334(value) {
+    return validateWireNode329(value);
 }
 
-function validateWireNode362(value) {
+function validateWireNode335(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["entries"] === undefined || !validateWireNode363(value["entries"])) return false;
+    if (value["entries"] === undefined || !validateWireNode336(value["entries"])) return false;
     return true;
 }
 
-function validateWireNode363(value) {
+function validateWireNode336(value) {
     return Array.isArray(value) &&
       value.length === 19 &&
-      value.every((item) => validateWireNode364(item));
+      value.every((item) => validateWireNode337(item));
 }
 
-function validateWireNode364(value) {
-    return validateWireNode359(value);
+function validateWireNode337(value) {
+    return validateWireNode332(value);
 }
 
-function validateWireNode365(value) {
+function validateWireNode338(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["key"] === undefined || !validateWireNode366(value["key"])) return false;
-    if (value["before"] === undefined || !validateWireNode367(value["before"])) return false;
-    if (value["after"] === undefined || !validateWireNode368(value["after"])) return false;
+    if (value["key"] === undefined || !validateWireNode339(value["key"])) return false;
+    if (value["before"] === undefined || !validateWireNode340(value["before"])) return false;
+    if (value["after"] === undefined || !validateWireNode341(value["after"])) return false;
     return true;
 }
 
-function validateWireNode366(value) {
+function validateWireNode339(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18);
 }
 
-function validateWireNode367(value) {
-    return validateWireNode356(value);
+function validateWireNode340(value) {
+    return validateWireNode329(value);
 }
 
-function validateWireNode368(value) {
-    return validateWireNode356(value);
+function validateWireNode341(value) {
+    return validateWireNode329(value);
 }
 
-function validateWireNode369(value) {
+function validateWireNode342(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["changes"] === undefined || !validateWireNode370(value["changes"])) return false;
+    if (value["changes"] === undefined || !validateWireNode343(value["changes"])) return false;
     return true;
 }
 
-function validateWireNode370(value) {
+function validateWireNode343(value) {
     return Array.isArray(value) &&
-      value.every((item) => validateWireNode371(item));
+      value.every((item) => validateWireNode344(item));
 }
 
-function validateWireNode371(value) {
-    return validateWireNode365(value);
+function validateWireNode344(value) {
+    return validateWireNode338(value);
 }
 
-function validateWireNode372(value) {
+function validateWireNode345(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["sequence"] === undefined || !validateWireNode373(value["sequence"])) return false;
-    if (value["command_id"] === undefined || !validateWireNode375(value["command_id"])) return false;
-    if (value["context"] === undefined || !validateWireNode376(value["context"])) return false;
+    if (value["sequence"] === undefined || !validateWireNode346(value["sequence"])) return false;
+    if (value["command_id"] === undefined || !validateWireNode348(value["command_id"])) return false;
+    if (value["context"] === undefined || !validateWireNode349(value["context"])) return false;
     return true;
 }
 
-function validateWireNode373(value) {
+function validateWireNode346(value) {
     return Array.isArray(value) &&
-      value.every((item) => validateWireNode374(item));
+      value.every((item) => validateWireNode347(item));
 }
 
-function validateWireNode374(value) {
+function validateWireNode347(value) {
     return validateWireNode0(value);
 }
 
-function validateWireNode375(value) {
+function validateWireNode348(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode376(value) {
+function validateWireNode349(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode377(value) {
+function validateWireNode350(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["name"] === undefined || !validateWireNode378(value["name"])) return false;
-    if (value["bindings"] === undefined || !validateWireNode379(value["bindings"])) return false;
+    if (value["name"] === undefined || !validateWireNode351(value["name"])) return false;
+    if (value["bindings"] === undefined || !validateWireNode352(value["bindings"])) return false;
     return true;
 }
 
-function validateWireNode378(value) {
+function validateWireNode351(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode379(value) {
+function validateWireNode352(value) {
     return Array.isArray(value) &&
-      value.every((item) => validateWireNode380(item));
+      value.every((item) => validateWireNode353(item));
 }
 
-function validateWireNode380(value) {
-    return validateWireNode372(value);
+function validateWireNode353(value) {
+    return validateWireNode345(value);
 }
 
-function validateWireNode381(value) {
+function validateWireNode354(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["changed"] === undefined || !validateWireNode382(value["changed"])) return false;
-    if (value["replacement"] !== undefined && !validateWireNode383(value["replacement"])) return false;
+    if (value["changed"] === undefined || !validateWireNode355(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode356(value["replacement"])) return false;
     return true;
 }
 
-function validateWireNode382(value) {
+function validateWireNode355(value) {
     return typeof value === 'boolean';
 }
 
-function validateWireNode383(value) {
-    return value === null || validateWireNode384(value);
+function validateWireNode356(value) {
+    return value === null || validateWireNode357(value);
 }
 
-function validateWireNode384(value) {
-    return validateWireNode377(value);
+function validateWireNode357(value) {
+    return validateWireNode350(value);
 }
 
-function validateWireNode385(value) {
+function validateWireNode358(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["encoding"] === undefined || !validateWireNode386(value["encoding"])) return false;
-    if (value["line_ending"] === undefined || !validateWireNode387(value["line_ending"])) return false;
-    if (value["had_bom"] === undefined || !validateWireNode388(value["had_bom"])) return false;
-    if (value["final_newline"] === undefined || !validateWireNode389(value["final_newline"])) return false;
+    if (value["encoding"] === undefined || !validateWireNode359(value["encoding"])) return false;
+    if (value["line_ending"] === undefined || !validateWireNode360(value["line_ending"])) return false;
+    if (value["had_bom"] === undefined || !validateWireNode361(value["had_bom"])) return false;
+    if (value["final_newline"] === undefined || !validateWireNode362(value["final_newline"])) return false;
     return true;
 }
 
-function validateWireNode386(value) {
+function validateWireNode359(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
 }
 
-function validateWireNode387(value) {
+function validateWireNode360(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
 }
 
-function validateWireNode388(value) {
+function validateWireNode361(value) {
     return typeof value === 'boolean';
 }
 
-function validateWireNode389(value) {
+function validateWireNode362(value) {
     return typeof value === 'boolean';
 }
 
-function validateWireNode390(value) {
+function validateWireNode363(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["status"] === undefined || !validateWireNode391(value["status"])) return false;
+    if (value["status"] === undefined || !validateWireNode364(value["status"])) return false;
     return true;
 }
 
-function validateWireNode391(value) {
-    return validateWireNode385(value);
+function validateWireNode364(value) {
+    return validateWireNode358(value);
 }
 
-function validateWireNode392(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["before"] === undefined || !validateWireNode393(value["before"])) return false;
-    if (value["after"] === undefined || !validateWireNode394(value["after"])) return false;
-    return true;
-}
-
-function validateWireNode393(value) {
-    return validateWireNode390(value);
-}
-
-function validateWireNode394(value) {
-    return validateWireNode390(value);
-}
-
-function validateWireNode395(value) {
+function validateWireNode365(value) {
     return value instanceof Uint8Array && value.length === 16;
 }
 
-function validateWireNode396(value) {
+function validateWireNode366(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
 
     const discriminatorValue = value["kind"];
@@ -3286,38 +3057,38 @@ function validateWireNode396(value) {
     if (!Number.isSafeInteger(discriminator) || discriminator < 0) return false;
     switch (discriminator) {
     case 0:
-    if (value["path"] === undefined || !validateWireNode397(value["path"])) return false;
+    if (value["path"] === undefined || !validateWireNode367(value["path"])) return false;
       return true;
     case 1:
-    if (value["untitled_id"] === undefined || !validateWireNode398(value["untitled_id"])) return false;
+    if (value["untitled_id"] === undefined || !validateWireNode368(value["untitled_id"])) return false;
       return true;
     default: return false;
     }
 }
 
-function validateWireNode397(value) {
+function validateWireNode367(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode398(value) {
-    return validateWireNode395(value);
+function validateWireNode368(value) {
+    return validateWireNode365(value);
 }
 
-function validateWireNode399(value) {
+function validateWireNode369(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode400(value["id"])) return false;
-    if (value["kind"] === undefined || !validateWireNode401(value["kind"])) return false;
-    if (value["document"] !== undefined && !validateWireNode402(value["document"])) return false;
-    if (value["document_key"] !== undefined && !validateWireNode404(value["document_key"])) return false;
-    if (value["content_identity"] === undefined || !validateWireNode406(value["content_identity"])) return false;
-    if (value["label"] === undefined || !validateWireNode407(value["label"])) return false;
-    if (value["mode"] === undefined || !validateWireNode408(value["mode"])) return false;
-    if (value["dirty"] === undefined || !validateWireNode409(value["dirty"])) return false;
-    if (value["recovery"] === undefined || !validateWireNode410(value["recovery"])) return false;
+    if (value["id"] === undefined || !validateWireNode370(value["id"])) return false;
+    if (value["kind"] === undefined || !validateWireNode371(value["kind"])) return false;
+    if (value["document"] !== undefined && !validateWireNode372(value["document"])) return false;
+    if (value["document_key"] !== undefined && !validateWireNode374(value["document_key"])) return false;
+    if (value["content_identity"] === undefined || !validateWireNode376(value["content_identity"])) return false;
+    if (value["label"] === undefined || !validateWireNode377(value["label"])) return false;
+    if (value["mode"] === undefined || !validateWireNode378(value["mode"])) return false;
+    if (value["dirty"] === undefined || !validateWireNode379(value["dirty"])) return false;
+    if (value["recovery"] === undefined || !validateWireNode380(value["recovery"])) return false;
     return true;
 }
 
-function validateWireNode400(value) {
+function validateWireNode370(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -3325,14 +3096,190 @@ function validateWireNode400(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode401(value) {
+function validateWireNode371(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
 }
 
+function validateWireNode372(value) {
+    return value === null || validateWireNode373(value);
+}
+
+function validateWireNode373(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode374(value) {
+    return value === null || validateWireNode375(value);
+}
+
+function validateWireNode375(value) {
+    return validateWireNode366(value);
+}
+
+function validateWireNode376(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode377(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode378(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode379(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode380(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+}
+
+function validateWireNode381(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["tabs"] === undefined || !validateWireNode382(value["tabs"])) return false;
+    if (value["active"] !== undefined && !validateWireNode384(value["active"])) return false;
+    return true;
+}
+
+function validateWireNode382(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode383(item));
+}
+
+function validateWireNode383(value) {
+    return validateWireNode369(value);
+}
+
+function validateWireNode384(value) {
+    return value === null || validateWireNode385(value);
+}
+
+function validateWireNode385(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode386(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["byte_start"] === undefined || !validateWireNode387(value["byte_start"])) return false;
+    if (value["byte_length"] === undefined || !validateWireNode388(value["byte_length"])) return false;
+    return true;
+}
+
+function validateWireNode387(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode388(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode389(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["kind"] === undefined || !validateWireNode390(value["kind"])) return false;
+    if (value["baseline_line"] !== undefined && !validateWireNode391(value["baseline_line"])) return false;
+    if (value["target_line"] !== undefined && !validateWireNode393(value["target_line"])) return false;
+    if (value["target_added_word_ranges"] !== undefined && !validateWireNode395(value["target_added_word_ranges"])) return false;
+    if (value["baseline_removed_word_ranges"] !== undefined && !validateWireNode397(value["baseline_removed_word_ranges"])) return false;
+    if (value["target_modified_word_ranges"] !== undefined && !validateWireNode399(value["target_modified_word_ranges"])) return false;
+    return true;
+}
+
+function validateWireNode390(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode391(value) {
+    return value === null || validateWireNode392(value);
+}
+
+function validateWireNode392(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode393(value) {
+    return value === null || validateWireNode394(value);
+}
+
+function validateWireNode394(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode395(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode396(item));
+}
+
+function validateWireNode396(value) {
+    return validateWireNode386(value);
+}
+
+function validateWireNode397(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode398(item));
+}
+
+function validateWireNode398(value) {
+    return validateWireNode386(value);
+}
+
+function validateWireNode399(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode400(item));
+}
+
+function validateWireNode400(value) {
+    return validateWireNode386(value);
+}
+
+function validateWireNode401(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["baseline_start"] === undefined || !validateWireNode402(value["baseline_start"])) return false;
+    if (value["target_start"] === undefined || !validateWireNode403(value["target_start"])) return false;
+    if (value["baseline_lines"] === undefined || !validateWireNode404(value["baseline_lines"])) return false;
+    if (value["target_lines"] === undefined || !validateWireNode406(value["target_lines"])) return false;
+    return true;
+}
+
 function validateWireNode402(value) {
-    return value === null || validateWireNode403(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode403(value) {
@@ -3344,15 +3291,17 @@ function validateWireNode403(value) {
 }
 
 function validateWireNode404(value) {
-    return value === null || validateWireNode405(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode405(item));
 }
 
 function validateWireNode405(value) {
-    return validateWireNode396(value);
+    return typeof value === 'string';
 }
 
 function validateWireNode406(value) {
-    return typeof value === 'string';
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode407(item));
 }
 
 function validateWireNode407(value) {
@@ -3360,35 +3309,37 @@ function validateWireNode407(value) {
 }
 
 function validateWireNode408(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
-}
-
-function validateWireNode409(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode410(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
-}
-
-function validateWireNode411(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["tabs"] === undefined || !validateWireNode412(value["tabs"])) return false;
-    if (value["active"] !== undefined && !validateWireNode414(value["active"])) return false;
+    if (value["id"] === undefined || !validateWireNode409(value["id"])) return false;
+    if (value["path"] === undefined || !validateWireNode410(value["path"])) return false;
+    if (value["previous_path"] !== undefined && !validateWireNode411(value["previous_path"])) return false;
+    if (value["deleted"] === undefined || !validateWireNode413(value["deleted"])) return false;
+    if (value["status"] !== undefined && !validateWireNode414(value["status"])) return false;
+    if (value["baseline_identity"] === undefined || !validateWireNode416(value["baseline_identity"])) return false;
+    if (value["current_content"] === undefined || !validateWireNode417(value["current_content"])) return false;
+    if (value["hunks"] === undefined || !validateWireNode418(value["hunks"])) return false;
+    if (value["changed_lines"] === undefined || !validateWireNode420(value["changed_lines"])) return false;
     return true;
 }
 
+function validateWireNode409(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode410(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode411(value) {
+    return value === null || validateWireNode412(value);
+}
+
 function validateWireNode412(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode413(item));
+    return typeof value === 'string';
 }
 
 function validateWireNode413(value) {
-    return validateWireNode399(value);
+    return typeof value === 'boolean';
 }
 
 function validateWireNode414(value) {
@@ -3396,72 +3347,45 @@ function validateWireNode414(value) {
 }
 
 function validateWireNode415(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
 }
 
 function validateWireNode416(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["state"] !== undefined && !validateWireNode417(value["state"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode417(value) {
-    return value === null || validateWireNode418(value);
+    return typeof value === 'string';
 }
 
 function validateWireNode418(value) {
-    return validateWireNode411(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode419(item));
 }
 
 function validateWireNode419(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["byte_start"] === undefined || !validateWireNode420(value["byte_start"])) return false;
-    if (value["byte_length"] === undefined || !validateWireNode421(value["byte_length"])) return false;
-    return true;
+    return validateWireNode401(value);
 }
 
 function validateWireNode420(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode421(item));
 }
 
 function validateWireNode421(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode389(value);
 }
 
 function validateWireNode422(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["kind"] === undefined || !validateWireNode423(value["kind"])) return false;
-    if (value["baseline_line"] !== undefined && !validateWireNode424(value["baseline_line"])) return false;
-    if (value["target_line"] !== undefined && !validateWireNode426(value["target_line"])) return false;
-    if (value["target_added_word_ranges"] !== undefined && !validateWireNode428(value["target_added_word_ranges"])) return false;
-    if (value["baseline_removed_word_ranges"] !== undefined && !validateWireNode430(value["baseline_removed_word_ranges"])) return false;
-    if (value["target_modified_word_ranges"] !== undefined && !validateWireNode432(value["target_modified_word_ranges"])) return false;
+    if (value["revision"] === undefined || !validateWireNode423(value["revision"])) return false;
+    if (value["files"] === undefined || !validateWireNode424(value["files"])) return false;
     return true;
 }
 
 function validateWireNode423(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
-}
-
-function validateWireNode424(value) {
-    return value === null || validateWireNode425(value);
-}
-
-function validateWireNode425(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -3469,8 +3393,22 @@ function validateWireNode425(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
+function validateWireNode424(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode425(item));
+}
+
+function validateWireNode425(value) {
+    return validateWireNode408(value);
+}
+
 function validateWireNode426(value) {
-    return value === null || validateWireNode427(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode427(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode428(value["revision"])) return false;
+    if (value["upserted"] === undefined || !validateWireNode429(value["upserted"])) return false;
+    if (value["removed"] === undefined || !validateWireNode431(value["removed"])) return false;
+    return true;
 }
 
 function validateWireNode427(value) {
@@ -3482,60 +3420,62 @@ function validateWireNode427(value) {
 }
 
 function validateWireNode428(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode429(item));
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode429(value) {
-    return validateWireNode419(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode430(item));
 }
 
 function validateWireNode430(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode431(item));
+    return validateWireNode408(value);
 }
 
 function validateWireNode431(value) {
-    return validateWireNode419(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode432(item));
 }
 
 function validateWireNode432(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode433(item));
+    return typeof value === 'string';
 }
 
 function validateWireNode433(value) {
-    return validateWireNode419(value);
-}
-
-function validateWireNode434(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["baseline_start"] === undefined || !validateWireNode435(value["baseline_start"])) return false;
-    if (value["target_start"] === undefined || !validateWireNode436(value["target_start"])) return false;
-    if (value["baseline_lines"] === undefined || !validateWireNode437(value["baseline_lines"])) return false;
-    if (value["target_lines"] === undefined || !validateWireNode439(value["target_lines"])) return false;
+    if (value["action"] === undefined || !validateWireNode434(value["action"])) return false;
+    if (value["label"] === undefined || !validateWireNode435(value["label"])) return false;
+    if (value["command"] === undefined || !validateWireNode436(value["command"])) return false;
     return true;
 }
 
+function validateWireNode434(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
 function validateWireNode435(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'string';
 }
 
 function validateWireNode436(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'string';
 }
 
 function validateWireNode437(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode438(item));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode438(value["id"])) return false;
+    if (value["path"] === undefined || !validateWireNode439(value["path"])) return false;
+    if (value["status"] === undefined || !validateWireNode440(value["status"])) return false;
+    if (value["accessible_status"] === undefined || !validateWireNode441(value["accessible_status"])) return false;
+    if (value["status_label"] === undefined || !validateWireNode442(value["status_label"])) return false;
+    if (value["actions"] === undefined || !validateWireNode443(value["actions"])) return false;
+    return true;
 }
 
 function validateWireNode438(value) {
@@ -3543,26 +3483,17 @@ function validateWireNode438(value) {
 }
 
 function validateWireNode439(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode440(item));
-}
-
-function validateWireNode440(value) {
     return typeof value === 'string';
 }
 
+function validateWireNode440(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
 function validateWireNode441(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode442(value["id"])) return false;
-    if (value["path"] === undefined || !validateWireNode443(value["path"])) return false;
-    if (value["previous_path"] !== undefined && !validateWireNode444(value["previous_path"])) return false;
-    if (value["deleted"] === undefined || !validateWireNode446(value["deleted"])) return false;
-    if (value["status"] !== undefined && !validateWireNode447(value["status"])) return false;
-    if (value["baseline_identity"] === undefined || !validateWireNode449(value["baseline_identity"])) return false;
-    if (value["current_content"] === undefined || !validateWireNode450(value["current_content"])) return false;
-    if (value["hunks"] === undefined || !validateWireNode451(value["hunks"])) return false;
-    if (value["changed_lines"] === undefined || !validateWireNode453(value["changed_lines"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode442(value) {
@@ -3570,99 +3501,140 @@ function validateWireNode442(value) {
 }
 
 function validateWireNode443(value) {
-    return typeof value === 'string';
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode444(item));
 }
 
 function validateWireNode444(value) {
-    return value === null || validateWireNode445(value);
+    return validateWireNode433(value);
 }
 
 function validateWireNode445(value) {
-    return typeof value === 'string';
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode446(value["revision"])) return false;
+    if (value["message"] === undefined || !validateWireNode447(value["message"])) return false;
+    if (value["files"] === undefined || !validateWireNode448(value["files"])) return false;
+    if (value["selected"] !== undefined && !validateWireNode450(value["selected"])) return false;
+    return true;
 }
 
 function validateWireNode446(value) {
-    return typeof value === 'boolean';
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode447(value) {
-    return value === null || validateWireNode448(value);
+    return typeof value === 'string';
 }
 
 function validateWireNode448(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode449(item));
 }
 
 function validateWireNode449(value) {
-    return typeof value === 'string';
+    return validateWireNode437(value);
 }
 
 function validateWireNode450(value) {
-    return typeof value === 'string';
+    return value === null || validateWireNode451(value);
 }
 
 function validateWireNode451(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode452(item));
+    return typeof value === 'string';
 }
 
 function validateWireNode452(value) {
-    return validateWireNode434(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode453(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode454(value["revision"])) return false;
+    if (value["message"] === undefined || !validateWireNode455(value["message"])) return false;
+    if (value["upserted"] === undefined || !validateWireNode456(value["upserted"])) return false;
+    if (value["removed"] === undefined || !validateWireNode458(value["removed"])) return false;
+    if (value["selected"] !== undefined && !validateWireNode460(value["selected"])) return false;
+    return true;
 }
 
 function validateWireNode453(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode454(item));
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode454(value) {
-    return validateWireNode422(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode455(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["revision"] === undefined || !validateWireNode456(value["revision"])) return false;
-    if (value["files"] === undefined || !validateWireNode457(value["files"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode456(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode457(item));
 }
 
 function validateWireNode457(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode458(item));
+    return validateWireNode437(value);
 }
 
 function validateWireNode458(value) {
-    return validateWireNode441(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode459(item));
 }
 
 function validateWireNode459(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_revision"] === undefined || !validateWireNode460(value["base_revision"])) return false;
-    if (value["revision"] === undefined || !validateWireNode461(value["revision"])) return false;
-    if (value["upserted"] === undefined || !validateWireNode462(value["upserted"])) return false;
-    if (value["removed"] === undefined || !validateWireNode464(value["removed"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode460(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return value === null || validateWireNode461(value);
 }
 
 function validateWireNode461(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode462(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["columns"] === undefined || !validateWireNode463(value["columns"])) return false;
+    if (value["rows"] === undefined || !validateWireNode464(value["rows"])) return false;
+    return true;
+}
+
+function validateWireNode463(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode464(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+}
+
+function validateWireNode465(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["first_row"] === undefined || !validateWireNode466(value["first_row"])) return false;
+    if (value["first_column"] === undefined || !validateWireNode467(value["first_column"])) return false;
+    return true;
+}
+
+function validateWireNode466(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -3670,40 +3642,22 @@ function validateWireNode461(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode462(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode463(item));
-}
-
-function validateWireNode463(value) {
-    return validateWireNode441(value);
-}
-
-function validateWireNode464(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode465(item));
-}
-
-function validateWireNode465(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode466(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["action"] === undefined || !validateWireNode467(value["action"])) return false;
-    if (value["label"] === undefined || !validateWireNode468(value["label"])) return false;
-    if (value["command"] === undefined || !validateWireNode469(value["command"])) return false;
-    return true;
-}
-
 function validateWireNode467(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode468(value) {
-    return typeof value === 'string';
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode469(value["id"])) return false;
+    if (value["path"] === undefined || !validateWireNode470(value["path"])) return false;
+    if (value["deleted"] === undefined || !validateWireNode471(value["deleted"])) return false;
+    if (value["newest_hunk_line"] === undefined || !validateWireNode472(value["newest_hunk_line"])) return false;
+    if (value["source_revision"] === undefined || !validateWireNode473(value["source_revision"])) return false;
+    return true;
 }
 
 function validateWireNode469(value) {
@@ -3711,53 +3665,61 @@ function validateWireNode469(value) {
 }
 
 function validateWireNode470(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode471(value["id"])) return false;
-    if (value["path"] === undefined || !validateWireNode472(value["path"])) return false;
-    if (value["status"] === undefined || !validateWireNode473(value["status"])) return false;
-    if (value["accessible_status"] === undefined || !validateWireNode474(value["accessible_status"])) return false;
-    if (value["status_label"] === undefined || !validateWireNode475(value["status_label"])) return false;
-    if (value["actions"] === undefined || !validateWireNode476(value["actions"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode471(value) {
-    return typeof value === 'string';
+    return typeof value === 'boolean';
 }
 
 function validateWireNode472(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode473(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode474(value) {
-    return typeof value === 'string';
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["client"] === undefined || !validateWireNode475(value["client"])) return false;
+    if (value["dimensions"] === undefined || !validateWireNode476(value["dimensions"])) return false;
+    if (value["offset"] === undefined || !validateWireNode477(value["offset"])) return false;
+    return true;
 }
 
 function validateWireNode475(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode476(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode477(item));
+    return validateWireNode462(value);
 }
 
 function validateWireNode477(value) {
-    return validateWireNode466(value);
+    return validateWireNode465(value);
 }
 
 function validateWireNode478(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["revision"] === undefined || !validateWireNode479(value["revision"])) return false;
-    if (value["message"] === undefined || !validateWireNode480(value["message"])) return false;
-    if (value["files"] === undefined || !validateWireNode481(value["files"])) return false;
-    if (value["selected"] !== undefined && !validateWireNode483(value["selected"])) return false;
+    if (value["generation"] === undefined || !validateWireNode479(value["generation"])) return false;
+    if (value["mode"] === undefined || !validateWireNode480(value["mode"])) return false;
+    if (value["active_pane"] === undefined || !validateWireNode481(value["active_pane"])) return false;
+    if (value["active_target"] !== undefined && !validateWireNode482(value["active_target"])) return false;
+    if (value["queued_targets"] === undefined || !validateWireNode484(value["queued_targets"])) return false;
+    if (value["clients"] === undefined || !validateWireNode486(value["clients"])) return false;
     return true;
 }
 
@@ -3770,69 +3732,67 @@ function validateWireNode479(value) {
 }
 
 function validateWireNode480(value) {
-    return typeof value === 'string';
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
 }
 
 function validateWireNode481(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode482(item));
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
 function validateWireNode482(value) {
-    return validateWireNode470(value);
+    return value === null || validateWireNode483(value);
 }
 
 function validateWireNode483(value) {
-    return value === null || validateWireNode484(value);
+    return validateWireNode468(value);
 }
 
 function validateWireNode484(value) {
-    return typeof value === 'string';
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode485(item));
 }
 
 function validateWireNode485(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_revision"] === undefined || !validateWireNode486(value["base_revision"])) return false;
-    if (value["revision"] === undefined || !validateWireNode487(value["revision"])) return false;
-    if (value["message"] === undefined || !validateWireNode488(value["message"])) return false;
-    if (value["upserted"] === undefined || !validateWireNode489(value["upserted"])) return false;
-    if (value["removed"] === undefined || !validateWireNode491(value["removed"])) return false;
-    if (value["selected"] !== undefined && !validateWireNode493(value["selected"])) return false;
-    return true;
+    return validateWireNode468(value);
 }
 
 function validateWireNode486(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode487(item));
 }
 
 function validateWireNode487(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode474(value);
 }
 
 function validateWireNode488(value) {
-    return typeof value === 'string';
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["provider_id"] === undefined || !validateWireNode489(value["provider_id"])) return false;
+    if (value["kind"] === undefined || !validateWireNode490(value["kind"])) return false;
+    return true;
 }
 
 function validateWireNode489(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode490(item));
+    return typeof value === 'string';
 }
 
 function validateWireNode490(value) {
-    return validateWireNode470(value);
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
 }
 
 function validateWireNode491(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode492(item));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode492(value["id"])) return false;
+    if (value["label"] === undefined || !validateWireNode493(value["label"])) return false;
+    return true;
 }
 
 function validateWireNode492(value) {
@@ -3840,67 +3800,58 @@ function validateWireNode492(value) {
 }
 
 function validateWireNode493(value) {
-    return value === null || validateWireNode494(value);
-}
-
-function validateWireNode494(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode495(value) {
+function validateWireNode494(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["columns"] === undefined || !validateWireNode496(value["columns"])) return false;
-    if (value["rows"] === undefined || !validateWireNode497(value["rows"])) return false;
+    if (value["status"] === undefined || !validateWireNode495(value["status"])) return false;
+    if (value["short_label"] === undefined || !validateWireNode496(value["short_label"])) return false;
+    if (value["role"] === undefined || !validateWireNode497(value["role"])) return false;
     return true;
 }
 
+function validateWireNode495(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+}
+
 function validateWireNode496(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+    return typeof value === 'string';
 }
 
 function validateWireNode497(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
 }
 
 function validateWireNode498(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["first_row"] === undefined || !validateWireNode499(value["first_row"])) return false;
-    if (value["first_column"] === undefined || !validateWireNode500(value["first_column"])) return false;
+    if (value["id"] === undefined || !validateWireNode499(value["id"])) return false;
+    if (value["parent_id"] !== undefined && !validateWireNode500(value["parent_id"])) return false;
+    if (value["label"] === undefined || !validateWireNode502(value["label"])) return false;
+    if (value["kind"] === undefined || !validateWireNode503(value["kind"])) return false;
+    if (value["icon"] !== undefined && !validateWireNode504(value["icon"])) return false;
+    if (value["commands"] === undefined || !validateWireNode506(value["commands"])) return false;
+    if (value["git_status"] !== undefined && !validateWireNode508(value["git_status"])) return false;
+    if (value["workspace_path"] !== undefined && !validateWireNode510(value["workspace_path"])) return false;
+    if (value["source_line"] !== undefined && !validateWireNode512(value["source_line"])) return false;
+    if (value["expandable"] === undefined || !validateWireNode514(value["expandable"])) return false;
     return true;
 }
 
 function validateWireNode499(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'string';
 }
 
 function validateWireNode500(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return value === null || validateWireNode501(value);
 }
 
 function validateWireNode501(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode502(value["id"])) return false;
-    if (value["path"] === undefined || !validateWireNode503(value["path"])) return false;
-    if (value["deleted"] === undefined || !validateWireNode504(value["deleted"])) return false;
-    if (value["newest_hunk_line"] === undefined || !validateWireNode505(value["newest_hunk_line"])) return false;
-    if (value["source_revision"] === undefined || !validateWireNode506(value["source_revision"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode502(value) {
@@ -3908,79 +3859,49 @@ function validateWireNode502(value) {
 }
 
 function validateWireNode503(value) {
-    return typeof value === 'string';
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
 }
 
 function validateWireNode504(value) {
-    return typeof value === 'boolean';
+    return value === null || validateWireNode505(value);
 }
 
 function validateWireNode505(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'string';
 }
 
 function validateWireNode506(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode507(item));
 }
 
 function validateWireNode507(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["client"] === undefined || !validateWireNode508(value["client"])) return false;
-    if (value["dimensions"] === undefined || !validateWireNode509(value["dimensions"])) return false;
-    if (value["offset"] === undefined || !validateWireNode510(value["offset"])) return false;
-    return true;
+    return validateWireNode491(value);
 }
 
 function validateWireNode508(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return value === null || validateWireNode509(value);
 }
 
 function validateWireNode509(value) {
-    return validateWireNode495(value);
+    return validateWireNode494(value);
 }
 
 function validateWireNode510(value) {
-    return validateWireNode498(value);
+    return value === null || validateWireNode511(value);
 }
 
 function validateWireNode511(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["generation"] === undefined || !validateWireNode512(value["generation"])) return false;
-    if (value["mode"] === undefined || !validateWireNode513(value["mode"])) return false;
-    if (value["active_pane"] === undefined || !validateWireNode514(value["active_pane"])) return false;
-    if (value["active_target"] !== undefined && !validateWireNode515(value["active_target"])) return false;
-    if (value["queued_targets"] === undefined || !validateWireNode517(value["queued_targets"])) return false;
-    if (value["clients"] === undefined || !validateWireNode519(value["clients"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode512(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return value === null || validateWireNode513(value);
 }
 
 function validateWireNode513(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
-}
-
-function validateWireNode514(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
     }
@@ -3988,41 +3909,23 @@ function validateWireNode514(value) {
       Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
+function validateWireNode514(value) {
+    return typeof value === 'boolean';
+}
+
 function validateWireNode515(value) {
-    return value === null || validateWireNode516(value);
-}
-
-function validateWireNode516(value) {
-    return validateWireNode501(value);
-}
-
-function validateWireNode517(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode518(item));
-}
-
-function validateWireNode518(value) {
-    return validateWireNode501(value);
-}
-
-function validateWireNode519(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode520(item));
-}
-
-function validateWireNode520(value) {
-    return validateWireNode507(value);
-}
-
-function validateWireNode521(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_generation"] === undefined || !validateWireNode522(value["base_generation"])) return false;
-    if (value["generation"] === undefined || !validateWireNode523(value["generation"])) return false;
-    if (value["replacement"] !== undefined && !validateWireNode524(value["replacement"])) return false;
+    if (value["node"] === undefined || !validateWireNode516(value["node"])) return false;
+    if (value["depth"] === undefined || !validateWireNode517(value["depth"])) return false;
+    if (value["expanded"] === undefined || !validateWireNode518(value["expanded"])) return false;
     return true;
 }
 
-function validateWireNode522(value) {
+function validateWireNode516(value) {
+    return validateWireNode498(value);
+}
+
+function validateWireNode517(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -4030,12 +3933,36 @@ function validateWireNode522(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
+function validateWireNode518(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode519(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["provider_id"] === undefined || !validateWireNode520(value["provider_id"])) return false;
+    if (value["kind"] === undefined || !validateWireNode521(value["kind"])) return false;
+    if (value["nodes"] === undefined || !validateWireNode522(value["nodes"])) return false;
+    if (value["selected"] !== undefined && !validateWireNode524(value["selected"])) return false;
+    return true;
+}
+
+function validateWireNode520(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode521(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode522(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode523(item));
+}
+
 function validateWireNode523(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode515(value);
 }
 
 function validateWireNode524(value) {
@@ -4043,121 +3970,135 @@ function validateWireNode524(value) {
 }
 
 function validateWireNode525(value) {
-    return validateWireNode511(value);
+    return typeof value === 'string';
 }
 
 function validateWireNode526(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["provider_id"] === undefined || !validateWireNode527(value["provider_id"])) return false;
-    if (value["kind"] === undefined || !validateWireNode528(value["kind"])) return false;
+    if (value["revision"] === undefined || !validateWireNode527(value["revision"])) return false;
+    if (value["providers"] === undefined || !validateWireNode528(value["providers"])) return false;
+    if (value["active_binding"] !== undefined && !validateWireNode530(value["active_binding"])) return false;
     return true;
 }
 
 function validateWireNode527(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode528(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode529(item));
+}
+
+function validateWireNode529(value) {
+    return validateWireNode519(value);
+}
+
+function validateWireNode530(value) {
+    return value === null || validateWireNode531(value);
+}
+
+function validateWireNode531(value) {
+    return validateWireNode488(value);
+}
+
+function validateWireNode532(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["provider_id"] === undefined || !validateWireNode533(value["provider_id"])) return false;
+    if (value["kind"] === undefined || !validateWireNode534(value["kind"])) return false;
+    if (value["remove_provider"] === undefined || !validateWireNode535(value["remove_provider"])) return false;
+    if (value["start"] === undefined || !validateWireNode536(value["start"])) return false;
+    if (value["erase_count"] === undefined || !validateWireNode537(value["erase_count"])) return false;
+    if (value["insert"] === undefined || !validateWireNode538(value["insert"])) return false;
+    if (value["selected"] !== undefined && !validateWireNode540(value["selected"])) return false;
+    return true;
+}
+
+function validateWireNode533(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode534(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
 }
 
-function validateWireNode529(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode530(value["id"])) return false;
-    if (value["label"] === undefined || !validateWireNode531(value["label"])) return false;
-    return true;
-}
-
-function validateWireNode530(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode531(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode532(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["status"] === undefined || !validateWireNode533(value["status"])) return false;
-    if (value["short_label"] === undefined || !validateWireNode534(value["short_label"])) return false;
-    if (value["role"] === undefined || !validateWireNode535(value["role"])) return false;
-    return true;
-}
-
-function validateWireNode533(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
-}
-
-function validateWireNode534(value) {
-    return typeof value === 'string';
-}
-
 function validateWireNode535(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10 || raw === 11 || raw === 12 || raw === 13 || raw === 14 || raw === 15 || raw === 16 || raw === 17 || raw === 18 || raw === 19 || raw === 20 || raw === 21 || raw === 22 || raw === 23 || raw === 24 || raw === 25 || raw === 26 || raw === 27);
+    return typeof value === 'boolean';
 }
 
 function validateWireNode536(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode537(value["id"])) return false;
-    if (value["parent_id"] !== undefined && !validateWireNode538(value["parent_id"])) return false;
-    if (value["label"] === undefined || !validateWireNode540(value["label"])) return false;
-    if (value["kind"] === undefined || !validateWireNode541(value["kind"])) return false;
-    if (value["icon"] !== undefined && !validateWireNode542(value["icon"])) return false;
-    if (value["commands"] === undefined || !validateWireNode544(value["commands"])) return false;
-    if (value["git_status"] !== undefined && !validateWireNode546(value["git_status"])) return false;
-    if (value["workspace_path"] !== undefined && !validateWireNode548(value["workspace_path"])) return false;
-    if (value["source_line"] !== undefined && !validateWireNode550(value["source_line"])) return false;
-    if (value["expandable"] === undefined || !validateWireNode552(value["expandable"])) return false;
-    return true;
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode537(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode538(value) {
-    return value === null || validateWireNode539(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode539(item));
 }
 
 function validateWireNode539(value) {
-    return typeof value === 'string';
+    return validateWireNode515(value);
 }
 
 function validateWireNode540(value) {
-    return typeof value === 'string';
+    return value === null || validateWireNode541(value);
 }
 
 function validateWireNode541(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5);
-}
-
-function validateWireNode542(value) {
-    return value === null || validateWireNode543(value);
-}
-
-function validateWireNode543(value) {
     return typeof value === 'string';
 }
 
+function validateWireNode542(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_revision"] === undefined || !validateWireNode543(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode544(value["revision"])) return false;
+    if (value["snapshot_required"] === undefined || !validateWireNode545(value["snapshot_required"])) return false;
+    if (value["providers"] === undefined || !validateWireNode546(value["providers"])) return false;
+    if (value["provider_order"] === undefined || !validateWireNode548(value["provider_order"])) return false;
+    if (value["active_binding"] !== undefined && !validateWireNode550(value["active_binding"])) return false;
+    return true;
+}
+
+function validateWireNode543(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
 function validateWireNode544(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode545(item));
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode545(value) {
-    return validateWireNode529(value);
+    return typeof value === 'boolean';
 }
 
 function validateWireNode546(value) {
-    return value === null || validateWireNode547(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode547(item));
 }
 
 function validateWireNode547(value) {
@@ -4165,7 +4106,8 @@ function validateWireNode547(value) {
 }
 
 function validateWireNode548(value) {
-    return value === null || validateWireNode549(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode549(item));
 }
 
 function validateWireNode549(value) {
@@ -4177,30 +4119,17 @@ function validateWireNode550(value) {
 }
 
 function validateWireNode551(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+    return validateWireNode488(value);
 }
 
 function validateWireNode552(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode553(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["node"] === undefined || !validateWireNode554(value["node"])) return false;
-    if (value["depth"] === undefined || !validateWireNode555(value["depth"])) return false;
-    if (value["expanded"] === undefined || !validateWireNode556(value["expanded"])) return false;
+    if (value["begin"] === undefined || !validateWireNode553(value["begin"])) return false;
+    if (value["end"] === undefined || !validateWireNode554(value["end"])) return false;
     return true;
 }
 
-function validateWireNode554(value) {
-    return validateWireNode536(value);
-}
-
-function validateWireNode555(value) {
+function validateWireNode553(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
@@ -4208,51 +4137,88 @@ function validateWireNode555(value) {
       Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode556(value) {
-    return typeof value === 'boolean';
+function validateWireNode554(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
-function validateWireNode557(value) {
+function validateWireNode555(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["provider_id"] === undefined || !validateWireNode558(value["provider_id"])) return false;
-    if (value["kind"] === undefined || !validateWireNode559(value["kind"])) return false;
-    if (value["nodes"] === undefined || !validateWireNode560(value["nodes"])) return false;
-    if (value["selected"] !== undefined && !validateWireNode562(value["selected"])) return false;
+    if (value["begin"] === undefined || !validateWireNode556(value["begin"])) return false;
+    if (value["end"] === undefined || !validateWireNode557(value["end"])) return false;
+    if (value["scope"] === undefined || !validateWireNode558(value["scope"])) return false;
     return true;
 }
 
+function validateWireNode556(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode557(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
 function validateWireNode558(value) {
-    return typeof value === 'string';
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10);
 }
 
 function validateWireNode559(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["open"] === undefined || !validateWireNode560(value["open"])) return false;
+    if (value["close"] === undefined || !validateWireNode561(value["close"])) return false;
+    if (value["kind"] === undefined || !validateWireNode562(value["kind"])) return false;
+    if (value["depth"] === undefined || !validateWireNode563(value["depth"])) return false;
+    return true;
+}
+
+function validateWireNode560(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode561(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode562(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
 }
 
-function validateWireNode560(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode561(item));
-}
-
-function validateWireNode561(value) {
-    return validateWireNode553(value);
-}
-
-function validateWireNode562(value) {
-    return value === null || validateWireNode563(value);
-}
-
 function validateWireNode563(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
 function validateWireNode564(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["revision"] === undefined || !validateWireNode565(value["revision"])) return false;
-    if (value["providers"] === undefined || !validateWireNode566(value["providers"])) return false;
-    if (value["active_binding"] !== undefined && !validateWireNode568(value["active_binding"])) return false;
+    if (value["offset"] === undefined || !validateWireNode565(value["offset"])) return false;
+    if (value["kind"] === undefined || !validateWireNode566(value["kind"])) return false;
+    if (value["role"] === undefined || !validateWireNode567(value["role"])) return false;
     return true;
 }
 
@@ -4265,54 +4231,61 @@ function validateWireNode565(value) {
 }
 
 function validateWireNode566(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode567(item));
-}
-
-function validateWireNode567(value) {
-    return validateWireNode557(value);
-}
-
-function validateWireNode568(value) {
-    return value === null || validateWireNode569(value);
-}
-
-function validateWireNode569(value) {
-    return validateWireNode526(value);
-}
-
-function validateWireNode570(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["provider_id"] === undefined || !validateWireNode571(value["provider_id"])) return false;
-    if (value["kind"] === undefined || !validateWireNode572(value["kind"])) return false;
-    if (value["remove_provider"] === undefined || !validateWireNode573(value["remove_provider"])) return false;
-    if (value["start"] === undefined || !validateWireNode574(value["start"])) return false;
-    if (value["erase_count"] === undefined || !validateWireNode575(value["erase_count"])) return false;
-    if (value["insert"] === undefined || !validateWireNode576(value["insert"])) return false;
-    if (value["selected"] !== undefined && !validateWireNode578(value["selected"])) return false;
-    return true;
-}
-
-function validateWireNode571(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode572(value) {
     if (typeof value !== 'number' && typeof value !== 'bigint') return false;
     const raw = Number(value);
     return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
 }
 
+function validateWireNode567(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+}
+
+function validateWireNode568(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["range"] === undefined || !validateWireNode569(value["range"])) return false;
+    if (value["role"] === undefined || !validateWireNode570(value["role"])) return false;
+    return true;
+}
+
+function validateWireNode569(value) {
+    return validateWireNode552(value);
+}
+
+function validateWireNode570(value) {
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+}
+
+function validateWireNode571(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["range"] === undefined || !validateWireNode572(value["range"])) return false;
+    if (value["kind"] === undefined || !validateWireNode573(value["kind"])) return false;
+    return true;
+}
+
+function validateWireNode572(value) {
+    return validateWireNode552(value);
+}
+
 function validateWireNode573(value) {
-    return typeof value === 'boolean';
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
 }
 
 function validateWireNode574(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["line"] === undefined || !validateWireNode575(value["line"])) return false;
+    if (value["line_start"] === undefined || !validateWireNode576(value["line_start"])) return false;
+    if (value["content_start"] === undefined || !validateWireNode577(value["content_start"])) return false;
+    if (value["spaces"] === undefined || !validateWireNode578(value["spaces"])) return false;
+    if (value["tabs"] === undefined || !validateWireNode579(value["tabs"])) return false;
+    if (value["columns"] === undefined || !validateWireNode580(value["columns"])) return false;
+    if (value["blank"] === undefined || !validateWireNode581(value["blank"])) return false;
+    return true;
 }
 
 function validateWireNode575(value) {
@@ -4324,60 +4297,81 @@ function validateWireNode575(value) {
 }
 
 function validateWireNode576(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode577(item));
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode577(value) {
-    return validateWireNode553(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode578(value) {
-    return value === null || validateWireNode579(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
 function validateWireNode579(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
 function validateWireNode580(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_revision"] === undefined || !validateWireNode581(value["base_revision"])) return false;
-    if (value["revision"] === undefined || !validateWireNode582(value["revision"])) return false;
-    if (value["snapshot_required"] === undefined || !validateWireNode583(value["snapshot_required"])) return false;
-    if (value["providers"] === undefined || !validateWireNode584(value["providers"])) return false;
-    if (value["provider_order"] === undefined || !validateWireNode586(value["provider_order"])) return false;
-    if (value["active_binding"] !== undefined && !validateWireNode588(value["active_binding"])) return false;
-    return true;
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
 }
 
 function validateWireNode581(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode582(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode583(value) {
     return typeof value === 'boolean';
 }
 
+function validateWireNode582(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode583(value["revision"])) return false;
+    if (value["language"] === undefined || !validateWireNode584(value["language"])) return false;
+    if (value["text_bytes"] === undefined || !validateWireNode585(value["text_bytes"])) return false;
+    if (value["spans"] === undefined || !validateWireNode586(value["spans"])) return false;
+    if (value["bracket_pairs"] === undefined || !validateWireNode588(value["bracket_pairs"])) return false;
+    if (value["unmatched_brackets"] === undefined || !validateWireNode590(value["unmatched_brackets"])) return false;
+    if (value["comment_tokens"] === undefined || !validateWireNode592(value["comment_tokens"])) return false;
+    if (value["comment_ranges"] === undefined || !validateWireNode594(value["comment_ranges"])) return false;
+    if (value["indentation"] === undefined || !validateWireNode596(value["indentation"])) return false;
+    return true;
+}
+
+function validateWireNode583(value) {
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
+}
+
 function validateWireNode584(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode585(item));
+    return typeof value === 'string';
 }
 
 function validateWireNode585(value) {
-    return validateWireNode570(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode586(value) {
@@ -4386,85 +4380,59 @@ function validateWireNode586(value) {
 }
 
 function validateWireNode587(value) {
-    return typeof value === 'string';
+    return validateWireNode555(value);
 }
 
 function validateWireNode588(value) {
-    return value === null || validateWireNode589(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode589(item));
 }
 
 function validateWireNode589(value) {
-    return validateWireNode526(value);
+    return validateWireNode559(value);
 }
 
 function validateWireNode590(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["begin"] === undefined || !validateWireNode591(value["begin"])) return false;
-    if (value["end"] === undefined || !validateWireNode592(value["end"])) return false;
-    return true;
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode591(item));
 }
 
 function validateWireNode591(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode564(value);
 }
 
 function validateWireNode592(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode593(item));
 }
 
 function validateWireNode593(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["begin"] === undefined || !validateWireNode594(value["begin"])) return false;
-    if (value["end"] === undefined || !validateWireNode595(value["end"])) return false;
-    if (value["scope"] === undefined || !validateWireNode596(value["scope"])) return false;
-    return true;
+    return validateWireNode568(value);
 }
 
 function validateWireNode594(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode595(item));
 }
 
 function validateWireNode595(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode571(value);
 }
 
 function validateWireNode596(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4 || raw === 5 || raw === 6 || raw === 7 || raw === 8 || raw === 9 || raw === 10);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode597(item));
 }
 
 function validateWireNode597(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["open"] === undefined || !validateWireNode598(value["open"])) return false;
-    if (value["close"] === undefined || !validateWireNode599(value["close"])) return false;
-    if (value["kind"] === undefined || !validateWireNode600(value["kind"])) return false;
-    if (value["depth"] === undefined || !validateWireNode601(value["depth"])) return false;
-    return true;
+    return validateWireNode574(value);
 }
 
 function validateWireNode598(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["line"] === undefined || !validateWireNode599(value["line"])) return false;
+    if (value["character"] === undefined || !validateWireNode600(value["character"])) return false;
+    return true;
 }
 
 function validateWireNode599(value) {
@@ -4476,165 +4444,128 @@ function validateWireNode599(value) {
 }
 
 function validateWireNode600(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode601(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["start"] === undefined || !validateWireNode602(value["start"])) return false;
+    if (value["end"] === undefined || !validateWireNode603(value["end"])) return false;
+    return true;
 }
 
 function validateWireNode602(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["offset"] === undefined || !validateWireNode603(value["offset"])) return false;
-    if (value["kind"] === undefined || !validateWireNode604(value["kind"])) return false;
-    if (value["role"] === undefined || !validateWireNode605(value["role"])) return false;
-    return true;
+    return validateWireNode598(value);
 }
 
 function validateWireNode603(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode598(value);
 }
 
 function validateWireNode604(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["range"] === undefined || !validateWireNode605(value["range"])) return false;
+    if (value["severity"] !== undefined && !validateWireNode606(value["severity"])) return false;
+    if (value["code"] === undefined || !validateWireNode608(value["code"])) return false;
+    if (value["message"] === undefined || !validateWireNode609(value["message"])) return false;
+    return true;
 }
 
 function validateWireNode605(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
+    return validateWireNode601(value);
 }
 
 function validateWireNode606(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["range"] === undefined || !validateWireNode607(value["range"])) return false;
-    if (value["role"] === undefined || !validateWireNode608(value["role"])) return false;
-    return true;
+    return value === null || validateWireNode607(value);
 }
 
 function validateWireNode607(value) {
-    return validateWireNode590(value);
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 1 || raw === 2 || raw === 3 || raw === 4);
 }
 
 function validateWireNode608(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2);
+    return typeof value === 'string';
 }
 
 function validateWireNode609(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["range"] === undefined || !validateWireNode610(value["range"])) return false;
-    if (value["kind"] === undefined || !validateWireNode611(value["kind"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode610(value) {
-    return validateWireNode590(value);
-}
-
-function validateWireNode611(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1);
-}
-
-function validateWireNode612(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["line"] === undefined || !validateWireNode613(value["line"])) return false;
-    if (value["line_start"] === undefined || !validateWireNode614(value["line_start"])) return false;
-    if (value["content_start"] === undefined || !validateWireNode615(value["content_start"])) return false;
-    if (value["spaces"] === undefined || !validateWireNode616(value["spaces"])) return false;
-    if (value["tabs"] === undefined || !validateWireNode617(value["tabs"])) return false;
-    if (value["columns"] === undefined || !validateWireNode618(value["columns"])) return false;
-    if (value["blank"] === undefined || !validateWireNode619(value["blank"])) return false;
+    if (value["uri"] === undefined || !validateWireNode611(value["uri"])) return false;
+    if (value["revision"] === undefined || !validateWireNode612(value["revision"])) return false;
+    if (value["diagnostics"] === undefined || !validateWireNode613(value["diagnostics"])) return false;
     return true;
 }
 
-function validateWireNode613(value) {
+function validateWireNode611(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode612(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
     return typeof value === 'number' &&
       Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode613(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode614(item));
 }
 
 function validateWireNode614(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode604(value);
 }
 
 function validateWireNode615(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode616(value["revision"])) return false;
+    if (value["documents"] === undefined || !validateWireNode617(value["documents"])) return false;
+    return true;
 }
 
 function validateWireNode616(value) {
     if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
-}
-
-function validateWireNode617(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
-}
-
-function validateWireNode618(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 4294967295n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 4294967295;
-}
-
-function validateWireNode619(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode620(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["revision"] === undefined || !validateWireNode621(value["revision"])) return false;
-    if (value["language"] === undefined || !validateWireNode622(value["language"])) return false;
-    if (value["text_bytes"] === undefined || !validateWireNode623(value["text_bytes"])) return false;
-    if (value["spans"] === undefined || !validateWireNode624(value["spans"])) return false;
-    if (value["bracket_pairs"] === undefined || !validateWireNode626(value["bracket_pairs"])) return false;
-    if (value["unmatched_brackets"] === undefined || !validateWireNode628(value["unmatched_brackets"])) return false;
-    if (value["comment_tokens"] === undefined || !validateWireNode630(value["comment_tokens"])) return false;
-    if (value["comment_ranges"] === undefined || !validateWireNode632(value["comment_ranges"])) return false;
-    if (value["indentation"] === undefined || !validateWireNode634(value["indentation"])) return false;
-    return true;
-}
-
-function validateWireNode621(value) {
-    if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
     return typeof value === 'number' &&
       Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode617(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode618(item));
+}
+
+function validateWireNode618(value) {
+    return validateWireNode610(value);
+}
+
+function validateWireNode619(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["label"] === undefined || !validateWireNode620(value["label"])) return false;
+    if (value["detail"] === undefined || !validateWireNode621(value["detail"])) return false;
+    if (value["sort_text"] === undefined || !validateWireNode622(value["sort_text"])) return false;
+    if (value["insert_text"] === undefined || !validateWireNode623(value["insert_text"])) return false;
+    if (value["replacement_range"] !== undefined && !validateWireNode624(value["replacement_range"])) return false;
+    return true;
+}
+
+function validateWireNode620(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode621(value) {
+    return typeof value === 'string';
 }
 
 function validateWireNode622(value) {
@@ -4642,116 +4573,105 @@ function validateWireNode622(value) {
 }
 
 function validateWireNode623(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode624(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode625(item));
-}
-
-function validateWireNode625(value) {
-    return validateWireNode593(value);
-}
-
-function validateWireNode626(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode627(item));
-}
-
-function validateWireNode627(value) {
-    return validateWireNode597(value);
-}
-
-function validateWireNode628(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode629(item));
-}
-
-function validateWireNode629(value) {
-    return validateWireNode602(value);
-}
-
-function validateWireNode630(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode631(item));
-}
-
-function validateWireNode631(value) {
-    return validateWireNode606(value);
-}
-
-function validateWireNode632(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode633(item));
-}
-
-function validateWireNode633(value) {
-    return validateWireNode609(value);
-}
-
-function validateWireNode634(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode635(item));
-}
-
-function validateWireNode635(value) {
-    return validateWireNode612(value);
-}
-
-function validateWireNode636(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_revision"] === undefined || !validateWireNode637(value["base_revision"])) return false;
-    if (value["revision"] === undefined || !validateWireNode638(value["revision"])) return false;
-    if (value["language"] !== undefined && !validateWireNode639(value["language"])) return false;
-    if (value["text_bytes"] !== undefined && !validateWireNode641(value["text_bytes"])) return false;
-    if (value["spans"] !== undefined && !validateWireNode643(value["spans"])) return false;
-    if (value["bracket_pairs"] !== undefined && !validateWireNode646(value["bracket_pairs"])) return false;
-    if (value["unmatched_brackets"] !== undefined && !validateWireNode649(value["unmatched_brackets"])) return false;
-    if (value["comment_tokens"] !== undefined && !validateWireNode652(value["comment_tokens"])) return false;
-    if (value["comment_ranges"] !== undefined && !validateWireNode655(value["comment_ranges"])) return false;
-    if (value["indentation"] !== undefined && !validateWireNode658(value["indentation"])) return false;
-    return true;
-}
-
-function validateWireNode637(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode638(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode639(value) {
-    return value === null || validateWireNode640(value);
-}
-
-function validateWireNode640(value) {
     return typeof value === 'string';
 }
 
-function validateWireNode641(value) {
-    return value === null || validateWireNode642(value);
+function validateWireNode624(value) {
+    return value === null || validateWireNode625(value);
 }
 
-function validateWireNode642(value) {
+function validateWireNode625(value) {
+    return validateWireNode601(value);
+}
+
+function validateWireNode626(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["visible"] === undefined || !validateWireNode627(value["visible"])) return false;
+    if (value["loading"] === undefined || !validateWireNode628(value["loading"])) return false;
+    if (value["items"] === undefined || !validateWireNode629(value["items"])) return false;
+    if (value["selected_index"] !== undefined && !validateWireNode631(value["selected_index"])) return false;
+    return true;
+}
+
+function validateWireNode627(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode628(value) {
+    return typeof value === 'boolean';
+}
+
+function validateWireNode629(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode630(item));
+}
+
+function validateWireNode630(value) {
+    return validateWireNode619(value);
+}
+
+function validateWireNode631(value) {
+    return value === null || validateWireNode632(value);
+}
+
+function validateWireNode632(value) {
     if (typeof value === 'bigint') {
       return value >= 0n && value <= 18446744073709551615n;
     }
     return typeof value === 'number' &&
       Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateWireNode633(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["contents"] === undefined || !validateWireNode634(value["contents"])) return false;
+    if (value["range"] !== undefined && !validateWireNode635(value["range"])) return false;
+    return true;
+}
+
+function validateWireNode634(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode635(value) {
+    return value === null || validateWireNode636(value);
+}
+
+function validateWireNode636(value) {
+    return validateWireNode601(value);
+}
+
+function validateWireNode637(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["uri"] === undefined || !validateWireNode638(value["uri"])) return false;
+    if (value["range"] === undefined || !validateWireNode639(value["range"])) return false;
+    return true;
+}
+
+function validateWireNode638(value) {
+    return typeof value === 'string';
+}
+
+function validateWireNode639(value) {
+    return validateWireNode601(value);
+}
+
+function validateWireNode640(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["targets"] === undefined || !validateWireNode641(value["targets"])) return false;
+    if (value["selected_index"] !== undefined && !validateWireNode643(value["selected_index"])) return false;
+    if (value["user_navigation"] === undefined || !validateWireNode645(value["user_navigation"])) return false;
+    if (value["reveal_primary_caret"] === undefined || !validateWireNode646(value["reveal_primary_caret"])) return false;
+    return true;
+}
+
+function validateWireNode641(value) {
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode642(item));
+}
+
+function validateWireNode642(value) {
+    return validateWireNode637(value);
 }
 
 function validateWireNode643(value) {
@@ -4759,437 +4679,448 @@ function validateWireNode643(value) {
 }
 
 function validateWireNode644(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode645(item));
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode645(value) {
-    return validateWireNode593(value);
+    return typeof value === 'boolean';
 }
 
 function validateWireNode646(value) {
-    return value === null || validateWireNode647(value);
+    return typeof value === 'boolean';
 }
 
 function validateWireNode647(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode648(item));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["revision"] === undefined || !validateWireNode648(value["revision"])) return false;
+    if (value["completion"] === undefined || !validateWireNode649(value["completion"])) return false;
+    if (value["hover"] !== undefined && !validateWireNode650(value["hover"])) return false;
+    if (value["navigation"] === undefined || !validateWireNode652(value["navigation"])) return false;
+    if (value["status"] === undefined || !validateWireNode653(value["status"])) return false;
+    return true;
 }
 
 function validateWireNode648(value) {
-    return validateWireNode597(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode649(value) {
-    return value === null || validateWireNode650(value);
+    return validateWireNode626(value);
 }
 
 function validateWireNode650(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode651(item));
+    return value === null || validateWireNode651(value);
 }
 
 function validateWireNode651(value) {
-    return validateWireNode602(value);
+    return validateWireNode633(value);
 }
 
 function validateWireNode652(value) {
-    return value === null || validateWireNode653(value);
+    return validateWireNode640(value);
 }
 
 function validateWireNode653(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode654(item));
+    return typeof value === 'string';
 }
 
 function validateWireNode654(value) {
-    return validateWireNode606(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["red"] === undefined || !validateWireNode655(value["red"])) return false;
+    if (value["green"] === undefined || !validateWireNode656(value["green"])) return false;
+    if (value["blue"] === undefined || !validateWireNode657(value["blue"])) return false;
+    return true;
 }
 
 function validateWireNode655(value) {
-    return value === null || validateWireNode656(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 255n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 255;
 }
 
 function validateWireNode656(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode657(item));
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 255n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 255;
 }
 
 function validateWireNode657(value) {
-    return validateWireNode609(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n && value <= 255n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0 && value <= 255;
 }
 
 function validateWireNode658(value) {
-    return value === null || validateWireNode659(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["role_colors"] === undefined || !validateWireNode659(value["role_colors"])) return false;
+    if (value["syntax_colors"] === undefined || !validateWireNode661(value["syntax_colors"])) return false;
+    return true;
 }
 
 function validateWireNode659(value) {
     return Array.isArray(value) &&
+      value.length === 28 &&
       value.every((item) => validateWireNode660(item));
 }
 
 function validateWireNode660(value) {
-    return validateWireNode612(value);
+    return validateWireNode654(value);
 }
 
 function validateWireNode661(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["line"] === undefined || !validateWireNode662(value["line"])) return false;
-    if (value["character"] === undefined || !validateWireNode663(value["character"])) return false;
-    return true;
+    return Array.isArray(value) &&
+      value.length === 11 &&
+      value.every((item) => validateWireNode662(item));
 }
 
 function validateWireNode662(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode654(value);
 }
 
 function validateWireNode663(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["replacement"] !== undefined && !validateWireNode664(value["replacement"])) return false;
+    return true;
 }
 
 function validateWireNode664(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["start"] === undefined || !validateWireNode665(value["start"])) return false;
-    if (value["end"] === undefined || !validateWireNode666(value["end"])) return false;
-    return true;
+    return value === null || validateWireNode665(value);
 }
 
 function validateWireNode665(value) {
-    return validateWireNode661(value);
+    return validateWireNode658(value);
 }
 
 function validateWireNode666(value) {
-    return validateWireNode661(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["id"] === undefined || !validateWireNode667(value["id"])) return false;
+    if (value["label"] === undefined || !validateWireNode668(value["label"])) return false;
+    if (value["detail"] === undefined || !validateWireNode669(value["detail"])) return false;
+    return true;
 }
 
 function validateWireNode667(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["range"] === undefined || !validateWireNode668(value["range"])) return false;
-    if (value["severity"] !== undefined && !validateWireNode669(value["severity"])) return false;
-    if (value["code"] === undefined || !validateWireNode671(value["code"])) return false;
-    if (value["message"] === undefined || !validateWireNode672(value["message"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode668(value) {
-    return validateWireNode664(value);
+    return typeof value === 'string';
 }
 
 function validateWireNode669(value) {
-    return value === null || validateWireNode670(value);
+    return typeof value === 'string';
 }
 
 function validateWireNode670(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 1 || raw === 2 || raw === 3 || raw === 4);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["base_score"] === undefined || !validateWireNode671(value["base_score"])) return false;
+    if (value["word_boundary_bonus"] === undefined || !validateWireNode672(value["word_boundary_bonus"])) return false;
+    if (value["contiguity_bonus"] === undefined || !validateWireNode673(value["contiguity_bonus"])) return false;
+    if (value["exact_case_bonus"] === undefined || !validateWireNode674(value["exact_case_bonus"])) return false;
+    if (value["length_cap"] === undefined || !validateWireNode675(value["length_cap"])) return false;
+    return true;
 }
 
 function validateWireNode671(value) {
-    return typeof value === 'string';
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
 }
 
 function validateWireNode672(value) {
-    return typeof value === 'string';
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
 }
 
 function validateWireNode673(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["uri"] === undefined || !validateWireNode674(value["uri"])) return false;
-    if (value["revision"] === undefined || !validateWireNode675(value["revision"])) return false;
-    if (value["diagnostics"] === undefined || !validateWireNode676(value["diagnostics"])) return false;
-    return true;
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
 }
 
 function validateWireNode674(value) {
-    return typeof value === 'string';
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
 }
 
 function validateWireNode675(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
 }
 
 function validateWireNode676(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode677(item));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["active_mode"] === undefined || !validateWireNode677(value["active_mode"])) return false;
+    if (value["activation_id"] === undefined || !validateWireNode679(value["activation_id"])) return false;
+    if (value["command_candidates"] === undefined || !validateWireNode681(value["command_candidates"])) return false;
+    if (value["command_open_command_id"] === undefined || !validateWireNode683(value["command_open_command_id"])) return false;
+    if (value["file_candidates"] === undefined || !validateWireNode684(value["file_candidates"])) return false;
+    if (value["file_open_command_id"] === undefined || !validateWireNode686(value["file_open_command_id"])) return false;
+    if (value["presence_overlay"] === undefined || !validateWireNode687(value["presence_overlay"])) return false;
+    if (value["parameters"] === undefined || !validateWireNode688(value["parameters"])) return false;
+    if (value["max_parameter_magnitude"] === undefined || !validateWireNode689(value["max_parameter_magnitude"])) return false;
+    if (value["max_candidate_bytes"] === undefined || !validateWireNode690(value["max_candidate_bytes"])) return false;
+    return true;
 }
 
 function validateWireNode677(value) {
-    return validateWireNode667(value);
+    return value === null || validateWireNode678(value);
 }
 
 function validateWireNode678(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["revision"] === undefined || !validateWireNode679(value["revision"])) return false;
-    if (value["documents"] === undefined || !validateWireNode680(value["documents"])) return false;
-    return true;
+    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
+    const raw = Number(value);
+    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
 }
 
 function validateWireNode679(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return value === null || validateWireNode680(value);
 }
 
 function validateWireNode680(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode681(item));
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode681(value) {
-    return validateWireNode673(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode682(item));
 }
 
 function validateWireNode682(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_revision"] === undefined || !validateWireNode683(value["base_revision"])) return false;
-    if (value["revision"] === undefined || !validateWireNode684(value["revision"])) return false;
-    if (value["state"] !== undefined && !validateWireNode685(value["state"])) return false;
-    return true;
+    return validateWireNode666(value);
 }
 
 function validateWireNode683(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'string' && value.length > 0;
 }
 
 function validateWireNode684(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode685(item));
 }
 
 function validateWireNode685(value) {
-    return value === null || validateWireNode686(value);
+    return validateWireNode666(value);
 }
 
 function validateWireNode686(value) {
-    return validateWireNode678(value);
+    return typeof value === 'string' && value.length > 0;
 }
 
 function validateWireNode687(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["label"] === undefined || !validateWireNode688(value["label"])) return false;
-    if (value["detail"] === undefined || !validateWireNode689(value["detail"])) return false;
-    if (value["sort_text"] === undefined || !validateWireNode690(value["sort_text"])) return false;
-    if (value["insert_text"] === undefined || !validateWireNode691(value["insert_text"])) return false;
-    if (value["replacement_range"] !== undefined && !validateWireNode692(value["replacement_range"])) return false;
-    return true;
+    return validateWireNode177(value);
 }
 
 function validateWireNode688(value) {
-    return typeof value === 'string';
+    return validateWireNode670(value);
 }
 
 function validateWireNode689(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= -9223372036854775808n &&
+        value <= 9223372036854775807n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value);
 }
 
 function validateWireNode690(value) {
-    return typeof value === 'string';
+    if (typeof value === 'bigint') {
+      return value >= -9223372036854775808n &&
+        value <= 9223372036854775807n;
+    }
+    return typeof value === 'number' && Number.isSafeInteger(value);
 }
 
 function validateWireNode691(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode692(value) {
-    return value === null || validateWireNode693(value);
-}
-
-function validateWireNode693(value) {
-    return validateWireNode664(value);
-}
-
-function validateWireNode694(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["visible"] === undefined || !validateWireNode695(value["visible"])) return false;
-    if (value["loading"] === undefined || !validateWireNode696(value["loading"])) return false;
-    if (value["items"] === undefined || !validateWireNode697(value["items"])) return false;
-    if (value["selected_index"] !== undefined && !validateWireNode699(value["selected_index"])) return false;
+    if (value["id"] === undefined || !validateWireNode692(value["id"])) return false;
+    if (value["label"] === undefined || !validateWireNode693(value["label"])) return false;
+    if (value["command"] === undefined || !validateWireNode694(value["command"])) return false;
     return true;
 }
 
+function validateWireNode692(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode693(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function validateWireNode694(value) {
+    return typeof value === 'string' && value.length > 0;
+}
+
 function validateWireNode695(value) {
-    return typeof value === 'boolean';
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["text"] === undefined || !validateWireNode696(value["text"])) return false;
+    if (value["actions"] === undefined || !validateWireNode697(value["actions"])) return false;
+    return true;
 }
 
 function validateWireNode696(value) {
-    return typeof value === 'boolean';
+    return typeof value === 'string' && value.length > 0;
 }
 
 function validateWireNode697(value) {
-    return Array.isArray(value) &&
+    return Array.isArray(value) && value.length > 0 &&
       value.every((item) => validateWireNode698(item));
 }
 
 function validateWireNode698(value) {
-    return validateWireNode687(value);
+    return validateWireNode691(value);
 }
 
 function validateWireNode699(value) {
-    return value === null || validateWireNode700(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value["changed"] === undefined || !validateWireNode700(value["changed"])) return false;
+    if (value["replacement"] !== undefined && !validateWireNode701(value["replacement"])) return false;
+    return true;
 }
 
 function validateWireNode700(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return typeof value === 'boolean';
 }
 
 function validateWireNode701(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["contents"] === undefined || !validateWireNode702(value["contents"])) return false;
-    if (value["range"] !== undefined && !validateWireNode703(value["range"])) return false;
-    return true;
+    return value === null || validateWireNode702(value);
 }
 
 function validateWireNode702(value) {
-    return typeof value === 'string';
+    return validateWireNode695(value);
 }
 
 function validateWireNode703(value) {
-    return value === null || validateWireNode704(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.hasOwn(value, "focus") || Object.hasOwn(value, "prompt_view") || Object.hasOwn(value, "external_focus_held") || Object.hasOwn(value, "ui") || Object.hasOwn(value, "ui_state") || Object.hasOwn(value, "ui_presence")) return false;
+    if (value["document"] === undefined || !validateWireNode704(value["document"])) return false;
+    if (value["selection"] === undefined || !validateWireNode705(value["selection"])) return false;
+    if (value["history"] === undefined || !validateWireNode706(value["history"])) return false;
+    if (value["clipboard"] === undefined || !validateWireNode707(value["clipboard"])) return false;
+    if (value["prompt_status"] === undefined || !validateWireNode708(value["prompt_status"])) return false;
+    if (value["search"] === undefined || !validateWireNode709(value["search"])) return false;
+    if (value["find_replace"] === undefined || !validateWireNode710(value["find_replace"])) return false;
+    if (value["settings"] === undefined || !validateWireNode711(value["settings"])) return false;
+    if (value["keymap"] === undefined || !validateWireNode712(value["keymap"])) return false;
+    if (value["text_encoding"] === undefined || !validateWireNode713(value["text_encoding"])) return false;
+    if (value["tabs"] === undefined || !validateWireNode714(value["tabs"])) return false;
+    if (value["diff"] === undefined || !validateWireNode715(value["diff"])) return false;
+    if (value["external_modification"] === undefined || !validateWireNode716(value["external_modification"])) return false;
+    if (value["follow_edits"] === undefined || !validateWireNode717(value["follow_edits"])) return false;
+    if (value["tree"] === undefined || !validateWireNode718(value["tree"])) return false;
+    if (value["syntax"] === undefined || !validateWireNode719(value["syntax"])) return false;
+    if (value["lsp_sync"] === undefined || !validateWireNode720(value["lsp_sync"])) return false;
+    if (value["lsp_features"] === undefined || !validateWireNode721(value["lsp_features"])) return false;
+    if (value["theme"] === undefined || !validateWireNode722(value["theme"])) return false;
+    if (value["palette"] === undefined || !validateWireNode723(value["palette"])) return false;
+    if (value["ui_frame"] !== undefined && !validateWireNode724(value["ui_frame"])) return false;
+    if (value["notice_view"] !== undefined && !validateWireNode725(value["notice_view"])) return false;
+    if (value["watcher_available"] !== undefined && !validateWireNode727(value["watcher_available"])) return false;
+    return true;
 }
 
 function validateWireNode704(value) {
-    return validateWireNode664(value);
+    return validateWireNode211(value);
 }
 
 function validateWireNode705(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["uri"] === undefined || !validateWireNode706(value["uri"])) return false;
-    if (value["range"] === undefined || !validateWireNode707(value["range"])) return false;
-    return true;
+    return validateWireNode228(value);
 }
 
 function validateWireNode706(value) {
-    return typeof value === 'string';
+    return validateWireNode235(value);
 }
 
 function validateWireNode707(value) {
-    return validateWireNode664(value);
+    return validateWireNode247(value);
 }
 
 function validateWireNode708(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["targets"] === undefined || !validateWireNode709(value["targets"])) return false;
-    if (value["selected_index"] !== undefined && !validateWireNode711(value["selected_index"])) return false;
-    if (value["user_navigation"] === undefined || !validateWireNode713(value["user_navigation"])) return false;
-    if (value["reveal_primary_caret"] === undefined || !validateWireNode714(value["reveal_primary_caret"])) return false;
-    return true;
+    return validateWireNode272(value);
 }
 
 function validateWireNode709(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode710(item));
+    return validateWireNode288(value);
 }
 
 function validateWireNode710(value) {
-    return validateWireNode705(value);
+    return validateWireNode307(value);
 }
 
 function validateWireNode711(value) {
-    return value === null || validateWireNode712(value);
+    return validateWireNode335(value);
 }
 
 function validateWireNode712(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode350(value);
 }
 
 function validateWireNode713(value) {
-    return typeof value === 'boolean';
+    return validateWireNode363(value);
 }
 
 function validateWireNode714(value) {
-    return typeof value === 'boolean';
+    return validateWireNode381(value);
 }
 
 function validateWireNode715(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["revision"] === undefined || !validateWireNode716(value["revision"])) return false;
-    if (value["completion"] === undefined || !validateWireNode717(value["completion"])) return false;
-    if (value["hover"] !== undefined && !validateWireNode718(value["hover"])) return false;
-    if (value["navigation"] === undefined || !validateWireNode720(value["navigation"])) return false;
-    if (value["status"] === undefined || !validateWireNode721(value["status"])) return false;
-    return true;
+    return validateWireNode422(value);
 }
 
 function validateWireNode716(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode445(value);
 }
 
 function validateWireNode717(value) {
-    return validateWireNode694(value);
+    return validateWireNode478(value);
 }
 
 function validateWireNode718(value) {
-    return value === null || validateWireNode719(value);
+    return validateWireNode526(value);
 }
 
 function validateWireNode719(value) {
-    return validateWireNode701(value);
+    return validateWireNode582(value);
 }
 
 function validateWireNode720(value) {
-    return validateWireNode708(value);
+    return validateWireNode615(value);
 }
 
 function validateWireNode721(value) {
-    return typeof value === 'string';
+    return validateWireNode647(value);
 }
 
 function validateWireNode722(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_revision"] === undefined || !validateWireNode723(value["base_revision"])) return false;
-    if (value["revision"] === undefined || !validateWireNode724(value["revision"])) return false;
-    if (value["state"] !== undefined && !validateWireNode725(value["state"])) return false;
-    return true;
+    return validateWireNode658(value);
 }
 
 function validateWireNode723(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode676(value);
 }
 
 function validateWireNode724(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode186(value);
 }
 
 function validateWireNode725(value) {
@@ -5197,155 +5128,160 @@ function validateWireNode725(value) {
 }
 
 function validateWireNode726(value) {
-    return validateWireNode715(value);
+    return validateWireNode695(value);
 }
 
 function validateWireNode727(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["red"] === undefined || !validateWireNode728(value["red"])) return false;
-    if (value["green"] === undefined || !validateWireNode729(value["green"])) return false;
-    if (value["blue"] === undefined || !validateWireNode730(value["blue"])) return false;
-    return true;
+    return typeof value === 'boolean';
 }
 
 function validateWireNode728(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 255n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 255;
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.hasOwn(value, "presentation")) return false;
+    if (value["revision"] === undefined || !validateWireNode729(value["revision"])) return false;
+    if (value["topology"] === undefined || !validateWireNode730(value["topology"])) return false;
+    if (value["client"] === undefined || !validateWireNode731(value["client"])) return false;
+    if (value["sections"] === undefined || !validateWireNode732(value["sections"])) return false;
+    return true;
 }
 
 function validateWireNode729(value) {
     if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 255n;
+      return value >= 0n && value <= 18446744073709551615n;
     }
     return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 255;
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode730(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n && value <= 255n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0 && value <= 255;
+    return validateWireNode197(value);
 }
 
 function validateWireNode731(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["role_colors"] === undefined || !validateWireNode732(value["role_colors"])) return false;
-    if (value["syntax_colors"] === undefined || !validateWireNode734(value["syntax_colors"])) return false;
-    return true;
+    return validateWireNode202(value);
 }
 
 function validateWireNode732(value) {
-    return Array.isArray(value) &&
-      value.length === 28 &&
-      value.every((item) => validateWireNode733(item));
+    return validateWireNode703(value);
 }
 
 function validateWireNode733(value) {
-    return validateWireNode727(value);
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.hasOwn(value, "focus") || Object.hasOwn(value, "prompt_view") || Object.hasOwn(value, "external_focus_held") || Object.hasOwn(value, "ui") || Object.hasOwn(value, "ui_state") || Object.hasOwn(value, "ui_presence") || Object.hasOwn(value, "style") || Object.hasOwn(value, "shell") || Object.hasOwn(value, "viewport") || Object.hasOwn(value, "selection_nav") || Object.hasOwn(value, "prompt_projection") || Object.hasOwn(value, "tree_windows")) return false;
+    if (value["base_revision"] === undefined || !validateWireNode734(value["base_revision"])) return false;
+    if (value["revision"] === undefined || !validateWireNode735(value["revision"])) return false;
+    if (value["client_id"] === undefined || !validateWireNode736(value["client_id"])) return false;
+    if (value["view_id"] === undefined || !validateWireNode737(value["view_id"])) return false;
+    if (value["capabilities"] === undefined || !validateWireNode738(value["capabilities"])) return false;
+    if (value["topology"] !== undefined && !validateWireNode740(value["topology"])) return false;
+    if (value["document"] !== undefined && !validateWireNode742(value["document"])) return false;
+    if (value["document_caret"] !== undefined && !validateWireNode744(value["document_caret"])) return false;
+    if (value["selection"] === undefined || !validateWireNode746(value["selection"])) return false;
+    if (value["history"] === undefined || !validateWireNode747(value["history"])) return false;
+    if (value["clipboard"] === undefined || !validateWireNode748(value["clipboard"])) return false;
+    if (value["prompt_status"] === undefined || !validateWireNode749(value["prompt_status"])) return false;
+    if (value["search"] !== undefined && !validateWireNode750(value["search"])) return false;
+    if (value["find_replace"] !== undefined && !validateWireNode752(value["find_replace"])) return false;
+    if (value["settings"] === undefined || !validateWireNode754(value["settings"])) return false;
+    if (value["keymap"] === undefined || !validateWireNode755(value["keymap"])) return false;
+    if (value["text_encoding"] !== undefined && !validateWireNode756(value["text_encoding"])) return false;
+    if (value["tabs"] !== undefined && !validateWireNode758(value["tabs"])) return false;
+    if (value["diff"] === undefined || !validateWireNode760(value["diff"])) return false;
+    if (value["external_modification"] === undefined || !validateWireNode761(value["external_modification"])) return false;
+    if (value["follow_edits"] !== undefined && !validateWireNode762(value["follow_edits"])) return false;
+    if (value["tree"] === undefined || !validateWireNode764(value["tree"])) return false;
+    if (value["syntax"] !== undefined && !validateWireNode765(value["syntax"])) return false;
+    if (value["lsp_sync"] !== undefined && !validateWireNode767(value["lsp_sync"])) return false;
+    if (value["lsp_features"] !== undefined && !validateWireNode769(value["lsp_features"])) return false;
+    if (value["theme"] === undefined || !validateWireNode771(value["theme"])) return false;
+    if (value["palette"] !== undefined && !validateWireNode772(value["palette"])) return false;
+    if (value["ui_frame_delta"] !== undefined && !validateWireNode774(value["ui_frame_delta"])) return false;
+    if (value["notice_view"] !== undefined && !validateWireNode775(value["notice_view"])) return false;
+    if (value["watcher_available"] !== undefined && !validateWireNode776(value["watcher_available"])) return false;
+    return true;
 }
 
 function validateWireNode734(value) {
-    return Array.isArray(value) &&
-      value.length === 11 &&
-      value.every((item) => validateWireNode735(item));
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode735(value) {
-    return validateWireNode727(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode736(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["replacement"] !== undefined && !validateWireNode737(value["replacement"])) return false;
-    return true;
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode737(value) {
-    return value === null || validateWireNode738(value);
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode738(value) {
-    return validateWireNode731(value);
+    return Array.isArray(value) &&
+      value.every((item) => validateWireNode739(item));
 }
 
 function validateWireNode739(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode740(value["id"])) return false;
-    if (value["label"] === undefined || !validateWireNode741(value["label"])) return false;
-    if (value["detail"] === undefined || !validateWireNode742(value["detail"])) return false;
-    return true;
+    return typeof value === 'string';
 }
 
 function validateWireNode740(value) {
-    return typeof value === 'string';
+    return value === null || validateWireNode741(value);
 }
 
 function validateWireNode741(value) {
-    return typeof value === 'string';
+    return validateWireNode197(value);
 }
 
 function validateWireNode742(value) {
-    return typeof value === 'string';
+    return value === null || validateWireNode743(value);
 }
 
 function validateWireNode743(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_score"] === undefined || !validateWireNode744(value["base_score"])) return false;
-    if (value["word_boundary_bonus"] === undefined || !validateWireNode745(value["word_boundary_bonus"])) return false;
-    if (value["contiguity_bonus"] === undefined || !validateWireNode746(value["contiguity_bonus"])) return false;
-    if (value["exact_case_bonus"] === undefined || !validateWireNode747(value["exact_case_bonus"])) return false;
-    if (value["length_cap"] === undefined || !validateWireNode748(value["length_cap"])) return false;
-    return true;
+    return validateWireNode217(value);
 }
 
 function validateWireNode744(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+    return value === null || validateWireNode745(value);
 }
 
 function validateWireNode745(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+    if (typeof value === 'bigint') {
+      return value >= 0n && value <= 18446744073709551615n;
+    }
+    return typeof value === 'number' &&
+      Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateWireNode746(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+    return validateWireNode231(value);
 }
 
 function validateWireNode747(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+    return validateWireNode239(value);
 }
 
 function validateWireNode748(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= -2147483648 && raw <= 2147483647;
+    return validateWireNode253(value);
 }
 
 function validateWireNode749(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["active_mode"] === undefined || !validateWireNode750(value["active_mode"])) return false;
-    if (value["activation_id"] === undefined || !validateWireNode752(value["activation_id"])) return false;
-    if (value["command_candidates"] === undefined || !validateWireNode754(value["command_candidates"])) return false;
-    if (value["command_open_command_id"] === undefined || !validateWireNode756(value["command_open_command_id"])) return false;
-    if (value["file_candidates"] === undefined || !validateWireNode757(value["file_candidates"])) return false;
-    if (value["file_open_command_id"] === undefined || !validateWireNode759(value["file_open_command_id"])) return false;
-    if (value["presence_overlay"] === undefined || !validateWireNode760(value["presence_overlay"])) return false;
-    if (value["parameters"] === undefined || !validateWireNode761(value["parameters"])) return false;
-    if (value["max_parameter_magnitude"] === undefined || !validateWireNode762(value["max_parameter_magnitude"])) return false;
-    if (value["max_candidate_bytes"] === undefined || !validateWireNode763(value["max_candidate_bytes"])) return false;
-    return true;
+    return validateWireNode276(value);
 }
 
 function validateWireNode750(value) {
@@ -5353,9 +5289,7 @@ function validateWireNode750(value) {
 }
 
 function validateWireNode751(value) {
-    if (typeof value !== 'number' && typeof value !== 'bigint') return false;
-    const raw = Number(value);
-    return Number.isSafeInteger(raw) && raw >= 0 && (raw === 0 || raw === 1 || raw === 2 || raw === 3 || raw === 4);
+    return validateWireNode288(value);
 }
 
 function validateWireNode752(value) {
@@ -5363,600 +5297,217 @@ function validateWireNode752(value) {
 }
 
 function validateWireNode753(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
+    return validateWireNode307(value);
 }
 
 function validateWireNode754(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode755(item));
+    return validateWireNode342(value);
 }
 
 function validateWireNode755(value) {
-    return validateWireNode739(value);
+    return validateWireNode354(value);
 }
 
 function validateWireNode756(value) {
-    return typeof value === 'string' && value.length > 0;
+    return value === null || validateWireNode757(value);
 }
 
 function validateWireNode757(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode758(item));
+    return validateWireNode363(value);
 }
 
 function validateWireNode758(value) {
-    return validateWireNode739(value);
+    return value === null || validateWireNode759(value);
 }
 
 function validateWireNode759(value) {
-    return typeof value === 'string' && value.length > 0;
-}
-
-function validateWireNode760(value) {
-    return validateWireNode194(value);
-}
-
-function validateWireNode761(value) {
-    return validateWireNode743(value);
-}
-
-function validateWireNode762(value) {
-    if (typeof value === 'bigint') {
-      return value >= -9223372036854775808n &&
-        value <= 9223372036854775807n;
-    }
-    return typeof value === 'number' && Number.isSafeInteger(value);
-}
-
-function validateWireNode763(value) {
-    if (typeof value === 'bigint') {
-      return value >= -9223372036854775808n &&
-        value <= 9223372036854775807n;
-    }
-    return typeof value === 'number' && Number.isSafeInteger(value);
-}
-
-function validateWireNode764(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["id"] === undefined || !validateWireNode765(value["id"])) return false;
-    if (value["label"] === undefined || !validateWireNode766(value["label"])) return false;
-    if (value["command"] === undefined || !validateWireNode767(value["command"])) return false;
-    return true;
-}
-
-function validateWireNode765(value) {
-    return typeof value === 'string' && value.length > 0;
-}
-
-function validateWireNode766(value) {
-    return typeof value === 'string' && value.length > 0;
-}
-
-function validateWireNode767(value) {
-    return typeof value === 'string' && value.length > 0;
-}
-
-function validateWireNode768(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["text"] === undefined || !validateWireNode769(value["text"])) return false;
-    if (value["actions"] === undefined || !validateWireNode770(value["actions"])) return false;
-    return true;
-}
-
-function validateWireNode769(value) {
-    return typeof value === 'string' && value.length > 0;
-}
-
-function validateWireNode770(value) {
-    return Array.isArray(value) && value.length > 0 &&
-      value.every((item) => validateWireNode771(item));
-}
-
-function validateWireNode771(value) {
-    return validateWireNode764(value);
-}
-
-function validateWireNode772(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["changed"] === undefined || !validateWireNode773(value["changed"])) return false;
-    if (value["replacement"] !== undefined && !validateWireNode774(value["replacement"])) return false;
-    return true;
-}
-
-function validateWireNode773(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode774(value) {
-    return value === null || validateWireNode775(value);
-}
-
-function validateWireNode775(value) {
-    return validateWireNode768(value);
-}
-
-function validateWireNode776(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["document"] === undefined || !validateWireNode777(value["document"])) return false;
-    if (value["selection"] === undefined || !validateWireNode778(value["selection"])) return false;
-    if (value["history"] === undefined || !validateWireNode779(value["history"])) return false;
-    if (value["clipboard"] === undefined || !validateWireNode780(value["clipboard"])) return false;
-    if (value["prompt_status"] === undefined || !validateWireNode781(value["prompt_status"])) return false;
-    if (value["search"] === undefined || !validateWireNode782(value["search"])) return false;
-    if (value["find_replace"] === undefined || !validateWireNode783(value["find_replace"])) return false;
-    if (value["settings"] === undefined || !validateWireNode784(value["settings"])) return false;
-    if (value["keymap"] === undefined || !validateWireNode785(value["keymap"])) return false;
-    if (value["text_encoding"] === undefined || !validateWireNode786(value["text_encoding"])) return false;
-    if (value["tabs"] === undefined || !validateWireNode787(value["tabs"])) return false;
-    if (value["diff"] === undefined || !validateWireNode788(value["diff"])) return false;
-    if (value["external_modification"] === undefined || !validateWireNode789(value["external_modification"])) return false;
-    if (value["follow_edits"] === undefined || !validateWireNode790(value["follow_edits"])) return false;
-    if (value["tree"] === undefined || !validateWireNode791(value["tree"])) return false;
-    if (value["syntax"] === undefined || !validateWireNode792(value["syntax"])) return false;
-    if (value["lsp_sync"] === undefined || !validateWireNode793(value["lsp_sync"])) return false;
-    if (value["lsp_features"] === undefined || !validateWireNode794(value["lsp_features"])) return false;
-    if (value["theme"] === undefined || !validateWireNode795(value["theme"])) return false;
-    if (value["palette"] === undefined || !validateWireNode796(value["palette"])) return false;
-    if (value["ui_frame"] !== undefined && !validateWireNode797(value["ui_frame"])) return false;
-    if (value["notice_view"] !== undefined && !validateWireNode798(value["notice_view"])) return false;
-    if (value["watcher_available"] !== undefined && !validateWireNode800(value["watcher_available"])) return false;
-    return true;
-}
-
-function validateWireNode777(value) {
-    return validateWireNode228(value);
-}
-
-function validateWireNode778(value) {
-    return validateWireNode245(value);
-}
-
-function validateWireNode779(value) {
-    return validateWireNode252(value);
-}
-
-function validateWireNode780(value) {
-    return validateWireNode264(value);
-}
-
-function validateWireNode781(value) {
-    return validateWireNode289(value);
-}
-
-function validateWireNode782(value) {
-    return validateWireNode305(value);
-}
-
-function validateWireNode783(value) {
-    return validateWireNode329(value);
-}
-
-function validateWireNode784(value) {
-    return validateWireNode362(value);
-}
-
-function validateWireNode785(value) {
-    return validateWireNode377(value);
-}
-
-function validateWireNode786(value) {
-    return validateWireNode390(value);
-}
-
-function validateWireNode787(value) {
-    return validateWireNode411(value);
-}
-
-function validateWireNode788(value) {
-    return validateWireNode455(value);
-}
-
-function validateWireNode789(value) {
-    return validateWireNode478(value);
-}
-
-function validateWireNode790(value) {
-    return validateWireNode511(value);
-}
-
-function validateWireNode791(value) {
-    return validateWireNode564(value);
-}
-
-function validateWireNode792(value) {
-    return validateWireNode620(value);
-}
-
-function validateWireNode793(value) {
-    return validateWireNode678(value);
-}
-
-function validateWireNode794(value) {
-    return validateWireNode715(value);
-}
-
-function validateWireNode795(value) {
-    return validateWireNode731(value);
-}
-
-function validateWireNode796(value) {
-    return validateWireNode749(value);
-}
-
-function validateWireNode797(value) {
-    return validateWireNode203(value);
-}
-
-function validateWireNode798(value) {
-    return value === null || validateWireNode799(value);
-}
-
-function validateWireNode799(value) {
-    return validateWireNode768(value);
-}
-
-function validateWireNode800(value) {
-    return typeof value === 'boolean';
-}
-
-function validateWireNode801(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["revision"] === undefined || !validateWireNode802(value["revision"])) return false;
-    if (value["topology"] === undefined || !validateWireNode803(value["topology"])) return false;
-    if (value["client"] === undefined || !validateWireNode804(value["client"])) return false;
-    if (value["sections"] === undefined || !validateWireNode805(value["sections"])) return false;
-    return true;
-}
-
-function validateWireNode802(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode803(value) {
-    return validateWireNode214(value);
-}
-
-function validateWireNode804(value) {
-    return validateWireNode219(value);
-}
-
-function validateWireNode805(value) {
-    return validateWireNode776(value);
-}
-
-function validateWireNode806(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    if (value["base_revision"] === undefined || !validateWireNode807(value["base_revision"])) return false;
-    if (value["revision"] === undefined || !validateWireNode808(value["revision"])) return false;
-    if (value["client_id"] === undefined || !validateWireNode809(value["client_id"])) return false;
-    if (value["view_id"] === undefined || !validateWireNode810(value["view_id"])) return false;
-    if (value["capabilities"] === undefined || !validateWireNode811(value["capabilities"])) return false;
-    if (value["topology"] !== undefined && !validateWireNode813(value["topology"])) return false;
-    if (value["document"] !== undefined && !validateWireNode815(value["document"])) return false;
-    if (value["document_caret"] !== undefined && !validateWireNode817(value["document_caret"])) return false;
-    if (value["selection"] === undefined || !validateWireNode819(value["selection"])) return false;
-    if (value["history"] === undefined || !validateWireNode820(value["history"])) return false;
-    if (value["clipboard"] === undefined || !validateWireNode821(value["clipboard"])) return false;
-    if (value["prompt_status"] === undefined || !validateWireNode822(value["prompt_status"])) return false;
-    if (value["search"] === undefined || !validateWireNode823(value["search"])) return false;
-    if (value["find_replace"] === undefined || !validateWireNode824(value["find_replace"])) return false;
-    if (value["settings"] === undefined || !validateWireNode825(value["settings"])) return false;
-    if (value["keymap"] === undefined || !validateWireNode826(value["keymap"])) return false;
-    if (value["text_encoding"] !== undefined && !validateWireNode827(value["text_encoding"])) return false;
-    if (value["tabs"] === undefined || !validateWireNode829(value["tabs"])) return false;
-    if (value["diff"] === undefined || !validateWireNode830(value["diff"])) return false;
-    if (value["external_modification"] === undefined || !validateWireNode831(value["external_modification"])) return false;
-    if (value["follow_edits"] === undefined || !validateWireNode832(value["follow_edits"])) return false;
-    if (value["tree"] === undefined || !validateWireNode833(value["tree"])) return false;
-    if (value["syntax"] === undefined || !validateWireNode834(value["syntax"])) return false;
-    if (value["lsp_sync"] === undefined || !validateWireNode835(value["lsp_sync"])) return false;
-    if (value["lsp_features"] === undefined || !validateWireNode836(value["lsp_features"])) return false;
-    if (value["theme"] === undefined || !validateWireNode837(value["theme"])) return false;
-    if (value["palette"] !== undefined && !validateWireNode838(value["palette"])) return false;
-    if (value["ui_frame_delta"] !== undefined && !validateWireNode840(value["ui_frame_delta"])) return false;
-    if (value["notice_view"] !== undefined && !validateWireNode841(value["notice_view"])) return false;
-    if (value["watcher_available"] !== undefined && !validateWireNode842(value["watcher_available"])) return false;
-    return true;
-}
-
-function validateWireNode807(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode808(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode809(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode810(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode811(value) {
-    return Array.isArray(value) &&
-      value.every((item) => validateWireNode812(item));
-}
-
-function validateWireNode812(value) {
-    return typeof value === 'string';
-}
-
-function validateWireNode813(value) {
-    return value === null || validateWireNode814(value);
-}
-
-function validateWireNode814(value) {
-    return validateWireNode214(value);
-}
-
-function validateWireNode815(value) {
-    return value === null || validateWireNode816(value);
-}
-
-function validateWireNode816(value) {
-    return validateWireNode234(value);
-}
-
-function validateWireNode817(value) {
-    return value === null || validateWireNode818(value);
-}
-
-function validateWireNode818(value) {
-    if (typeof value === 'bigint') {
-      return value >= 0n && value <= 18446744073709551615n;
-    }
-    return typeof value === 'number' &&
-      Number.isSafeInteger(value) && value >= 0;
-}
-
-function validateWireNode819(value) {
-    return validateWireNode248(value);
-}
-
-function validateWireNode820(value) {
-    return validateWireNode256(value);
-}
-
-function validateWireNode821(value) {
-    return validateWireNode270(value);
-}
-
-function validateWireNode822(value) {
-    return validateWireNode293(value);
-}
-
-function validateWireNode823(value) {
-    return validateWireNode316(value);
-}
-
-function validateWireNode824(value) {
-    return validateWireNode343(value);
-}
-
-function validateWireNode825(value) {
-    return validateWireNode369(value);
-}
-
-function validateWireNode826(value) {
     return validateWireNode381(value);
 }
 
-function validateWireNode827(value) {
-    return value === null || validateWireNode828(value);
+function validateWireNode760(value) {
+    return validateWireNode426(value);
 }
 
-function validateWireNode828(value) {
-    return validateWireNode392(value);
+function validateWireNode761(value) {
+    return validateWireNode452(value);
 }
 
-function validateWireNode829(value) {
-    return validateWireNode416(value);
+function validateWireNode762(value) {
+    return value === null || validateWireNode763(value);
 }
 
-function validateWireNode830(value) {
-    return validateWireNode459(value);
+function validateWireNode763(value) {
+    return validateWireNode478(value);
 }
 
-function validateWireNode831(value) {
-    return validateWireNode485(value);
+function validateWireNode764(value) {
+    return validateWireNode542(value);
 }
 
-function validateWireNode832(value) {
-    return validateWireNode521(value);
+function validateWireNode765(value) {
+    return value === null || validateWireNode766(value);
 }
 
-function validateWireNode833(value) {
-    return validateWireNode580(value);
+function validateWireNode766(value) {
+    return validateWireNode582(value);
 }
 
-function validateWireNode834(value) {
-    return validateWireNode636(value);
+function validateWireNode767(value) {
+    return value === null || validateWireNode768(value);
 }
 
-function validateWireNode835(value) {
-    return validateWireNode682(value);
+function validateWireNode768(value) {
+    return validateWireNode615(value);
 }
 
-function validateWireNode836(value) {
-    return validateWireNode722(value);
+function validateWireNode769(value) {
+    return value === null || validateWireNode770(value);
 }
 
-function validateWireNode837(value) {
-    return validateWireNode736(value);
+function validateWireNode770(value) {
+    return validateWireNode647(value);
 }
 
-function validateWireNode838(value) {
-    return value === null || validateWireNode839(value);
+function validateWireNode771(value) {
+    return validateWireNode663(value);
 }
 
-function validateWireNode839(value) {
-    return validateWireNode749(value);
+function validateWireNode772(value) {
+    return value === null || validateWireNode773(value);
 }
 
-function validateWireNode840(value) {
-    return validateWireNode208(value);
+function validateWireNode773(value) {
+    return validateWireNode676(value);
 }
 
-function validateWireNode841(value) {
-    return validateWireNode772(value);
+function validateWireNode774(value) {
+    return validateWireNode191(value);
 }
 
-function validateWireNode842(value) {
-    return value === null || validateWireNode843(value);
+function validateWireNode775(value) {
+    return validateWireNode699(value);
 }
 
-function validateWireNode843(value) {
+function validateWireNode776(value) {
+    return value === null || validateWireNode777(value);
+}
+
+function validateWireNode777(value) {
     return typeof value === 'boolean';
 }
 
 export const validateKeyStrokeWire = (value) => validateWireNode0(value);
 export const validateExternalActionInvocationWire = (value) => validateWireNode6(value);
-export const validateStatusActionInvocationWire = (value) => validateWireNode9(value);
-export const validateResolvedSelectionRangeWire = (value) => validateWireNode13(value);
-export const validateViewActionWire = (value) => validateWireNode16(value);
-export const validateViewActionRequestWire = (value) => validateWireNode29(value);
-export const validateCommandResultWire = (value) => validateWireNode33(value);
-export const validateClientInputWire = (value) => validateWireNode40(value);
-export const validateClientOwnedInputWire = (value) => validateWireNode100(value);
-export const validatePickerActivationWire = (value) => validateWireNode103(value);
-export const validateClientInputResultWire = (value) => validateWireNode106(value);
-export const validateUiNodeStyleWire = (value) => validateWireNode114(value);
-export const validateUiNodeWire = (value) => validateWireNode117(value);
-export const validateUiSchemaWire = (value) => validateWireNode165(value);
-export const validateUiStateSectionWire = (value) => validateWireNode168(value);
-export const validateUiPresenceSectionWire = (value) => validateWireNode187(value);
-export const validatePalettePresenceOverlayWire = (value) => validateWireNode194(value);
-export const validateUiFrameVersionWire = (value) => validateWireNode200(value);
-export const validateUiFrameWire = (value) => validateWireNode203(value);
-export const validateUiFrameDeltaWire = (value) => validateWireNode208(value);
-export const validateSessionTopologyWire = (value) => validateWireNode214(value);
-export const validateClientSnapshotStateWire = (value) => validateWireNode219(value);
-export const validateDocumentPositionWire = (value) => validateWireNode224(value);
-export const validateDocumentViewStateWire = (value) => validateWireNode228(value);
-export const validateDocumentDeltaWire = (value) => validateWireNode234(value);
-export const validateSelectionWire = (value) => validateWireNode242(value);
-export const validateSelectionSetWire = (value) => validateWireNode245(value);
-export const validateSelectionSetDeltaWire = (value) => validateWireNode248(value);
-export const validateHistoryViewStateWire = (value) => validateWireNode252(value);
-export const validateHistoryDeltaWire = (value) => validateWireNode256(value);
-export const validateClipboardWriteWire = (value) => validateWireNode260(value);
-export const validateClipboardViewStateWire = (value) => validateWireNode264(value);
-export const validateClipboardDeltaWire = (value) => validateWireNode270(value);
-export const validateStatusActionWire = (value) => validateWireNode274(value);
-export const validateStatusItemViewWire = (value) => validateWireNode278(value);
-export const validateStatusViewStateWire = (value) => validateWireNode285(value);
-export const validatePromptStatusViewStateWire = (value) => validateWireNode289(value);
-export const validatePromptStatusDeltaWire = (value) => validateWireNode293(value);
-export const validateSearchResultWire = (value) => validateWireNode297(value);
-export const validateSearchViewStateWire = (value) => validateWireNode305(value);
-export const validateSearchDeltaWire = (value) => validateWireNode316(value);
-export const validateFindOptionsWire = (value) => validateWireNode321(value);
-export const validateFindMatchWire = (value) => validateWireNode326(value);
-export const validateFindReplaceViewStateWire = (value) => validateWireNode329(value);
-export const validateFindReplaceDeltaWire = (value) => validateWireNode343(value);
-export const validateSettingValueWire = (value) => validateWireNode348(value);
-export const validateEffectiveSettingWire = (value) => validateWireNode356(value);
-export const validateSettingViewEntryWire = (value) => validateWireNode359(value);
-export const validateSettingsViewStateWire = (value) => validateWireNode362(value);
-export const validateSettingsDeltaWire = (value) => validateWireNode365(value);
-export const validateSettingsSectionDeltaWire = (value) => validateWireNode369(value);
-export const validateKeyBindingWire = (value) => validateWireNode372(value);
-export const validateKeymapViewStateWire = (value) => validateWireNode377(value);
-export const validateKeymapDeltaWire = (value) => validateWireNode381(value);
-export const validateTextEncodingStatusWire = (value) => validateWireNode385(value);
-export const validateTextEncodingViewStateWire = (value) => validateWireNode390(value);
-export const validateTextEncodingDeltaWire = (value) => validateWireNode392(value);
-export const validateUntitledDocumentIdWire = (value) => validateWireNode395(value);
-export const validateJournalDocumentKeyWire = (value) => validateWireNode396(value);
-export const validateTabStateWire = (value) => validateWireNode399(value);
-export const validateTabViewStateWire = (value) => validateWireNode411(value);
-export const validateTabDeltaWire = (value) => validateWireNode416(value);
-export const validateDiffWordRangeWire = (value) => validateWireNode419(value);
-export const validateDiffLineChangeWire = (value) => validateWireNode422(value);
-export const validateDiffHunkWire = (value) => validateWireNode434(value);
-export const validateDiffFileViewWire = (value) => validateWireNode441(value);
-export const validateDiffViewStateWire = (value) => validateWireNode455(value);
-export const validateDiffDeltaWire = (value) => validateWireNode459(value);
-export const validateExternalActionAffordanceWire = (value) => validateWireNode466(value);
-export const validateExternalDocumentViewWire = (value) => validateWireNode470(value);
-export const validateExternalModificationViewStateWire = (value) => validateWireNode478(value);
-export const validateExternalModificationDeltaWire = (value) => validateWireNode485(value);
-export const validateViewportDimensionsWire = (value) => validateWireNode495(value);
-export const validateFollowScrollOffsetWire = (value) => validateWireNode498(value);
-export const validateFollowTargetWire = (value) => validateWireNode501(value);
-export const validateFollowClientViewWire = (value) => validateWireNode507(value);
-export const validateFollowEditsViewStateWire = (value) => validateWireNode511(value);
-export const validateFollowEditsDeltaWire = (value) => validateWireNode521(value);
-export const validateTreeProviderBindingWire = (value) => validateWireNode526(value);
-export const validateTreeNodeCommandWire = (value) => validateWireNode529(value);
-export const validateGitTreeAffordanceWire = (value) => validateWireNode532(value);
-export const validateTreeNodeWire = (value) => validateWireNode536(value);
-export const validateTreeNodeViewWire = (value) => validateWireNode553(value);
-export const validateTreeProviderViewWire = (value) => validateWireNode557(value);
-export const validateTreeViewStateWire = (value) => validateWireNode564(value);
-export const validateTreeProviderDeltaWire = (value) => validateWireNode570(value);
-export const validateTreeDeltaWire = (value) => validateWireNode580(value);
-export const validateSyntaxRangeWire = (value) => validateWireNode590(value);
-export const validateSyntaxSpanWire = (value) => validateWireNode593(value);
-export const validateSyntaxBracketPairWire = (value) => validateWireNode597(value);
-export const validateUnmatchedBracketWire = (value) => validateWireNode602(value);
-export const validateCommentTokenWire = (value) => validateWireNode606(value);
-export const validateCommentRangeWire = (value) => validateWireNode609(value);
-export const validateLineIndentationWire = (value) => validateWireNode612(value);
-export const validateSyntaxViewStateWire = (value) => validateWireNode620(value);
-export const validateSyntaxDeltaWire = (value) => validateWireNode636(value);
-export const validateLspPositionWire = (value) => validateWireNode661(value);
-export const validateLspRangeWire = (value) => validateWireNode664(value);
-export const validateLspDiagnosticWire = (value) => validateWireNode667(value);
-export const validateLspDocumentDiagnosticsWire = (value) => validateWireNode673(value);
-export const validateLspSyncViewStateWire = (value) => validateWireNode678(value);
-export const validateLspSyncDeltaWire = (value) => validateWireNode682(value);
-export const validateLspCompletionItemWire = (value) => validateWireNode687(value);
-export const validateLspCompletionViewStateWire = (value) => validateWireNode694(value);
-export const validateLspHoverWire = (value) => validateWireNode701(value);
-export const validateLspNavigationTargetWire = (value) => validateWireNode705(value);
-export const validateLspNavigationViewStateWire = (value) => validateWireNode708(value);
-export const validateLspFeatureViewStateWire = (value) => validateWireNode715(value);
-export const validateLspFeatureDeltaWire = (value) => validateWireNode722(value);
-export const validateSrgbColorWire = (value) => validateWireNode727(value);
-export const validateThemeSnapshotWire = (value) => validateWireNode731(value);
-export const validateThemeSectionDeltaWire = (value) => validateWireNode736(value);
-export const validatePaletteCandidateWire = (value) => validateWireNode739(value);
-export const validateMatcherParametersWire = (value) => validateWireNode743(value);
-export const validatePaletteViewStateWire = (value) => validateWireNode749(value);
-export const validateNoticeActionWire = (value) => validateWireNode764(value);
-export const validateNoticeViewWire = (value) => validateWireNode768(value);
-export const validateNoticeViewSectionDeltaWire = (value) => validateWireNode772(value);
-export const validateSessionSnapshotSectionsWire = (value) => validateWireNode776(value);
-export const validateSessionSnapshotWire = (value) => validateWireNode801(value);
-export const validateSessionDeltaWire = (value) => validateWireNode806(value);
+export const validateResolvedSelectionRangeWire = (value) => validateWireNode9(value);
+export const validateViewActionWire = (value) => validateWireNode12(value);
+export const validateViewActionRequestWire = (value) => validateWireNode25(value);
+export const validateCommandResultWire = (value) => validateWireNode29(value);
+export const validateClientInputWire = (value) => validateWireNode36(value);
+export const validateClientOwnedInputWire = (value) => validateWireNode83(value);
+export const validatePickerActivationWire = (value) => validateWireNode86(value);
+export const validateClientInputResultWire = (value) => validateWireNode89(value);
+export const validateUiNodeStyleWire = (value) => validateWireNode97(value);
+export const validateUiNodeWire = (value) => validateWireNode100(value);
+export const validateUiSchemaWire = (value) => validateWireNode148(value);
+export const validateUiStateSectionWire = (value) => validateWireNode151(value);
+export const validateUiPresenceSectionWire = (value) => validateWireNode170(value);
+export const validatePalettePresenceOverlayWire = (value) => validateWireNode177(value);
+export const validateUiFrameVersionWire = (value) => validateWireNode183(value);
+export const validateUiFrameWire = (value) => validateWireNode186(value);
+export const validateUiFrameDeltaWire = (value) => validateWireNode191(value);
+export const validateSessionTopologyWire = (value) => validateWireNode197(value);
+export const validateClientSnapshotStateWire = (value) => validateWireNode202(value);
+export const validateDocumentPositionWire = (value) => validateWireNode207(value);
+export const validateDocumentViewStateWire = (value) => validateWireNode211(value);
+export const validateDocumentDeltaWire = (value) => validateWireNode217(value);
+export const validateSelectionWire = (value) => validateWireNode225(value);
+export const validateSelectionSetWire = (value) => validateWireNode228(value);
+export const validateSelectionSetDeltaWire = (value) => validateWireNode231(value);
+export const validateHistoryViewStateWire = (value) => validateWireNode235(value);
+export const validateHistoryDeltaWire = (value) => validateWireNode239(value);
+export const validateClipboardWriteWire = (value) => validateWireNode243(value);
+export const validateClipboardViewStateWire = (value) => validateWireNode247(value);
+export const validateClipboardDeltaWire = (value) => validateWireNode253(value);
+export const validateStatusActionWire = (value) => validateWireNode257(value);
+export const validateStatusItemViewWire = (value) => validateWireNode261(value);
+export const validateStatusViewStateWire = (value) => validateWireNode268(value);
+export const validatePromptStatusViewStateWire = (value) => validateWireNode272(value);
+export const validatePromptStatusDeltaWire = (value) => validateWireNode276(value);
+export const validateSearchResultWire = (value) => validateWireNode280(value);
+export const validateSearchViewStateWire = (value) => validateWireNode288(value);
+export const validateFindOptionsWire = (value) => validateWireNode299(value);
+export const validateFindMatchWire = (value) => validateWireNode304(value);
+export const validateFindReplaceViewStateWire = (value) => validateWireNode307(value);
+export const validateSettingValueWire = (value) => validateWireNode321(value);
+export const validateEffectiveSettingWire = (value) => validateWireNode329(value);
+export const validateSettingViewEntryWire = (value) => validateWireNode332(value);
+export const validateSettingsViewStateWire = (value) => validateWireNode335(value);
+export const validateSettingsDeltaWire = (value) => validateWireNode338(value);
+export const validateSettingsSectionDeltaWire = (value) => validateWireNode342(value);
+export const validateKeyBindingWire = (value) => validateWireNode345(value);
+export const validateKeymapViewStateWire = (value) => validateWireNode350(value);
+export const validateKeymapDeltaWire = (value) => validateWireNode354(value);
+export const validateTextEncodingStatusWire = (value) => validateWireNode358(value);
+export const validateTextEncodingViewStateWire = (value) => validateWireNode363(value);
+export const validateUntitledDocumentIdWire = (value) => validateWireNode365(value);
+export const validateJournalDocumentKeyWire = (value) => validateWireNode366(value);
+export const validateTabStateWire = (value) => validateWireNode369(value);
+export const validateTabViewStateWire = (value) => validateWireNode381(value);
+export const validateDiffWordRangeWire = (value) => validateWireNode386(value);
+export const validateDiffLineChangeWire = (value) => validateWireNode389(value);
+export const validateDiffHunkWire = (value) => validateWireNode401(value);
+export const validateDiffFileViewWire = (value) => validateWireNode408(value);
+export const validateDiffViewStateWire = (value) => validateWireNode422(value);
+export const validateDiffDeltaWire = (value) => validateWireNode426(value);
+export const validateExternalActionAffordanceWire = (value) => validateWireNode433(value);
+export const validateExternalDocumentViewWire = (value) => validateWireNode437(value);
+export const validateExternalModificationViewStateWire = (value) => validateWireNode445(value);
+export const validateExternalModificationDeltaWire = (value) => validateWireNode452(value);
+export const validateViewportDimensionsWire = (value) => validateWireNode462(value);
+export const validateFollowScrollOffsetWire = (value) => validateWireNode465(value);
+export const validateFollowTargetWire = (value) => validateWireNode468(value);
+export const validateFollowClientViewWire = (value) => validateWireNode474(value);
+export const validateFollowEditsViewStateWire = (value) => validateWireNode478(value);
+export const validateTreeProviderBindingWire = (value) => validateWireNode488(value);
+export const validateTreeNodeCommandWire = (value) => validateWireNode491(value);
+export const validateGitTreeAffordanceWire = (value) => validateWireNode494(value);
+export const validateTreeNodeWire = (value) => validateWireNode498(value);
+export const validateTreeNodeViewWire = (value) => validateWireNode515(value);
+export const validateTreeProviderViewWire = (value) => validateWireNode519(value);
+export const validateTreeViewStateWire = (value) => validateWireNode526(value);
+export const validateTreeProviderDeltaWire = (value) => validateWireNode532(value);
+export const validateTreeDeltaWire = (value) => validateWireNode542(value);
+export const validateSyntaxRangeWire = (value) => validateWireNode552(value);
+export const validateSyntaxSpanWire = (value) => validateWireNode555(value);
+export const validateSyntaxBracketPairWire = (value) => validateWireNode559(value);
+export const validateUnmatchedBracketWire = (value) => validateWireNode564(value);
+export const validateCommentTokenWire = (value) => validateWireNode568(value);
+export const validateCommentRangeWire = (value) => validateWireNode571(value);
+export const validateLineIndentationWire = (value) => validateWireNode574(value);
+export const validateSyntaxViewStateWire = (value) => validateWireNode582(value);
+export const validateLspPositionWire = (value) => validateWireNode598(value);
+export const validateLspRangeWire = (value) => validateWireNode601(value);
+export const validateLspDiagnosticWire = (value) => validateWireNode604(value);
+export const validateLspDocumentDiagnosticsWire = (value) => validateWireNode610(value);
+export const validateLspSyncViewStateWire = (value) => validateWireNode615(value);
+export const validateLspCompletionItemWire = (value) => validateWireNode619(value);
+export const validateLspCompletionViewStateWire = (value) => validateWireNode626(value);
+export const validateLspHoverWire = (value) => validateWireNode633(value);
+export const validateLspNavigationTargetWire = (value) => validateWireNode637(value);
+export const validateLspNavigationViewStateWire = (value) => validateWireNode640(value);
+export const validateLspFeatureViewStateWire = (value) => validateWireNode647(value);
+export const validateSrgbColorWire = (value) => validateWireNode654(value);
+export const validateThemeSnapshotWire = (value) => validateWireNode658(value);
+export const validateThemeSectionDeltaWire = (value) => validateWireNode663(value);
+export const validatePaletteCandidateWire = (value) => validateWireNode666(value);
+export const validateMatcherParametersWire = (value) => validateWireNode670(value);
+export const validatePaletteViewStateWire = (value) => validateWireNode676(value);
+export const validateNoticeActionWire = (value) => validateWireNode691(value);
+export const validateNoticeViewWire = (value) => validateWireNode695(value);
+export const validateNoticeViewSectionDeltaWire = (value) => validateWireNode699(value);
+export const validateSessionSnapshotSectionsWire = (value) => validateWireNode703(value);
+export const validateSessionSnapshotWire = (value) => validateWireNode728(value);
+export const validateSessionDeltaWire = (value) => validateWireNode733(value);
 
 export const buildKeyStrokeWire = (code, control, alt, meta, shift) => ({
   code: String(code),
@@ -5997,37 +5548,12 @@ export const buildClientInputPickerWire = (button, phase, pickerMode, activation
   candidate_id: String(candidateId),
 });
 
-export const buildClientInputPromptControlWire = (button, phase, basisRevision, controlId) => ({
-  kind: 4n,
-  button: BigInt(button),
-  phase: BigInt(phase),
-  basis_revision: BigInt(basisRevision),
-  control_id: String(controlId),
-});
-
 export const buildClientInputExternalActionWire = (button, phase, basisRevision, invocation) => ({
   kind: 5n,
   button: BigInt(button),
   phase: BigInt(phase),
   basis_revision: BigInt(basisRevision),
   invocation: ({ file_id: String(invocation.fileId), action: BigInt(invocation.action) }),
-});
-
-export const buildClientInputStatusActionWire = (button, phase, basisRevision, invocation) => ({
-  kind: 6n,
-  button: BigInt(button),
-  phase: BigInt(phase),
-  basis_revision: BigInt(basisRevision),
-  invocation: ({ status_id: BigInt(invocation.statusId), action_id: String(invocation.actionId), generation: BigInt(invocation.generation) }),
-});
-
-export const buildClientInputPublishedUiActionWire = (button, phase, basisRevision, schemaGeneration, nodeId) => ({
-  kind: 7n,
-  button: BigInt(button),
-  phase: BigInt(phase),
-  basis_revision: BigInt(basisRevision),
-  schema_generation: BigInt(schemaGeneration),
-  node_id: String(nodeId),
 });
 
 export const buildClientInputNoticeActionWire = (button, phase, basisRevision, actionId) => ({
@@ -6081,4 +5607,207 @@ export const buildClientInputResolvedSelectionWire = (basisRevision, activeTab, 
   document_revision: BigInt(documentRevision),
   selections: selections.map((item) => ({ anchor: BigInt(item.anchor), active: BigInt(item.active) })),
 });
+
+
+// CONTRACT: This is the sole ordinary-section replay inventory. It returns a
+// candidate and never mutates the retained base.
+export function replayOrdinarySessionSections(baseSections, delta) {
+  if (!baseSections || typeof baseSections !== 'object' ||
+      !delta || typeof delta !== 'object') return null;
+  const next = { ...baseSections };
+  {
+    const present = Object.prototype.hasOwnProperty.call(delta, "selection");
+    if (!present) return null;
+    const change = delta["selection"];
+    if (!change || typeof change !== 'object' || Array.isArray(change) ||
+        typeof change.changed !== 'boolean') return null;
+    const replacement = change.replacement;
+    if (!change.changed) {
+      if (replacement != null) return null;
+    } else {
+      if (replacement == null || !(validateSelectionSetWire(replacement))) return null;
+      next.selection = replacement;
+    }
+
+  }
+  {
+    const present = Object.prototype.hasOwnProperty.call(delta, "history");
+    if (!present) return null;
+    const change = delta["history"];
+    if (!change || typeof change !== 'object' || Array.isArray(change) ||
+        typeof change.changed !== 'boolean') return null;
+    const replacement = change.replacement;
+    if (!change.changed) {
+      if (replacement != null) return null;
+    } else {
+      if (replacement == null || !(validateHistoryViewStateWire(replacement))) return null;
+      next.history = replacement;
+    }
+
+  }
+  {
+    const present = Object.prototype.hasOwnProperty.call(delta, "clipboard");
+    if (!present) return null;
+    const change = delta["clipboard"];
+    if (!change || typeof change !== 'object' || Array.isArray(change) ||
+        typeof change.changed !== 'boolean') return null;
+    const replacement = change.replacement;
+    if (!change.changed) {
+      if (replacement != null) return null;
+    } else {
+      if (replacement == null || !(validateClipboardViewStateWire(replacement))) return null;
+      next.clipboard = replacement;
+    }
+
+  }
+  {
+    const present = Object.prototype.hasOwnProperty.call(delta, "prompt_status");
+    if (!present) return null;
+    const change = delta["prompt_status"];
+    if (!change || typeof change !== 'object' || Array.isArray(change) ||
+        typeof change.changed !== 'boolean') return null;
+    const replacement = change.replacement;
+    if (!change.changed) {
+      if (replacement != null) return null;
+    } else {
+      if (replacement == null || !(validatePromptStatusViewStateWire(replacement))) return null;
+      next.prompt_status = replacement;
+    }
+
+  }
+  {
+    if (Object.prototype.hasOwnProperty.call(delta, "search")) {
+      const replacement = delta["search"];
+      if (replacement != null) {
+        if (!(validateSearchViewStateWire(replacement))) return null;
+        next.search = replacement;
+      }
+    }
+  }
+  {
+    if (Object.prototype.hasOwnProperty.call(delta, "find_replace")) {
+      const replacement = delta["find_replace"];
+      if (replacement != null) {
+        if (!(validateFindReplaceViewStateWire(replacement))) return null;
+        next.find_replace = replacement;
+      }
+    }
+  }
+  {
+    const present = Object.prototype.hasOwnProperty.call(delta, "keymap");
+    if (!present) return null;
+    const change = delta["keymap"];
+    if (!change || typeof change !== 'object' || Array.isArray(change) ||
+        typeof change.changed !== 'boolean') return null;
+    const replacement = change.replacement;
+    if (!change.changed) {
+      if (replacement != null) return null;
+    } else {
+      if (replacement == null || !(validateKeymapViewStateWire(replacement))) return null;
+      next.keymap = replacement;
+    }
+
+  }
+  {
+    if (Object.prototype.hasOwnProperty.call(delta, "text_encoding")) {
+      const replacement = delta["text_encoding"];
+      if (replacement != null) {
+        if (!(validateTextEncodingViewStateWire(replacement))) return null;
+        next.text_encoding = replacement;
+      }
+    }
+  }
+  {
+    if (Object.prototype.hasOwnProperty.call(delta, "tabs")) {
+      const replacement = delta["tabs"];
+      if (replacement != null) {
+        if (!(validateTabViewStateWire(replacement))) return null;
+        next.tabs = replacement;
+      }
+    }
+  }
+  {
+    if (Object.prototype.hasOwnProperty.call(delta, "follow_edits")) {
+      const replacement = delta["follow_edits"];
+      if (replacement != null) {
+        if (!(validateFollowEditsViewStateWire(replacement))) return null;
+        next.follow_edits = replacement;
+      }
+    }
+  }
+  {
+    if (Object.prototype.hasOwnProperty.call(delta, "syntax")) {
+      const replacement = delta["syntax"];
+      if (replacement != null) {
+        if (!(validateSyntaxViewStateWire(replacement))) return null;
+        next.syntax = replacement;
+      }
+    }
+  }
+  {
+    if (Object.prototype.hasOwnProperty.call(delta, "lsp_sync")) {
+      const replacement = delta["lsp_sync"];
+      if (replacement != null) {
+        if (!(validateLspSyncViewStateWire(replacement))) return null;
+        next.lsp_sync = replacement;
+      }
+    }
+  }
+  {
+    if (Object.prototype.hasOwnProperty.call(delta, "lsp_features")) {
+      const replacement = delta["lsp_features"];
+      if (replacement != null) {
+        if (!(validateLspFeatureViewStateWire(replacement))) return null;
+        next.lsp_features = replacement;
+      }
+    }
+  }
+  {
+    if (!Object.prototype.hasOwnProperty.call(delta, "theme")) return null;
+    const envelope = delta["theme"];
+    if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
+      return null;
+    }
+    const replacement = envelope.replacement;
+    if (replacement != null) {
+      if (!(validateThemeSnapshotWire(replacement))) return null;
+      next.theme = replacement;
+    }
+  }
+  {
+    if (Object.prototype.hasOwnProperty.call(delta, "palette")) {
+      const replacement = delta["palette"];
+      if (replacement != null) {
+        if (!(validatePaletteViewStateWire(replacement))) return null;
+        next.palette = replacement;
+      }
+    }
+  }
+  {
+    const present = Object.prototype.hasOwnProperty.call(delta, "notice_view");
+    if (present) {
+    const change = delta["notice_view"];
+    if (!change || typeof change !== 'object' || Array.isArray(change) ||
+        typeof change.changed !== 'boolean') return null;
+    const replacement = change.replacement;
+    if (!change.changed) {
+      if (replacement != null) return null;
+    } else {
+      if (replacement != null && !(validateNoticeViewWire(replacement))) return null;
+      next.notice_view = replacement ?? null;
+    }
+
+    }
+  }
+  {
+    if (Object.prototype.hasOwnProperty.call(delta, "watcher_available")) {
+      const replacement = delta["watcher_available"];
+      if (replacement != null) {
+        if (!(typeof replacement === 'boolean')) return null;
+        next.watcher_available = replacement;
+      }
+    }
+  }
+  return next;
+}
 

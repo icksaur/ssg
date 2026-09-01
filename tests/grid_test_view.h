@@ -1,7 +1,6 @@
 #pragma once
 
-#include <ssg/EditorSession.h>
-#include <ssg/GridPresenter.h>
+#include "grid_test_frame.h"
 
 #include <stdexcept>
 #include <utility>

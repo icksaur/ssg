@@ -1,9 +1,10 @@
 #include <ssg/ChromeLowering.h>
 
 #include <ssg/GraphemeLayout.h>
-#include <ssg/StatusFields.h>
+#include <ssg/StatusFieldGrid.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/Theme.h>  // semanticRoleFromName
+#include <ssg/UiStateResolver.h>
 #include <ssg/Widget.h>
 
 #include <optional>
@@ -27,7 +28,6 @@ struct Packed {
     std::string label;
     std::optional<std::string> command;
     SemanticRole role;
-    std::optional<StatusActionInvocation> statusInvocation;
 };
 
 struct Resolved {
@@ -41,45 +41,6 @@ bool truthy(std::string_view value) { return value == "true"; }
 
 // The resolved sources shared by the TUI's glyph lowering and the semantic
 // dynamic-state resolution, so the two cannot diverge on how a source resolves.
-struct Sources {
-    std::string value;
-    std::string providerLabel;
-    std::string providerId;
-    std::optional<std::string> inheritedCommand;
-    std::optional<bool> active;
-    bool fromProvider = false;
-};
-
-Sources resolveSources(const WidgetDescriptor& w,
-                       const ChromeProviderResolver& resolveProvider) {
-    Sources s;
-    if (w.value) {
-        if (w.value->isProvider) {
-            s.fromProvider = true;
-            s.providerId = w.value->provider;
-            if (const auto resolved = resolveProvider(w.value->provider)) {
-                s.value = resolved->value;
-                s.providerLabel = resolved->accessibleLabel;
-                s.inheritedCommand = resolved->commandId;
-                s.active = resolved->active;
-            }
-        } else {
-            s.value = w.value->literal;
-        }
-    }
-    return s;
-}
-
-bool resolveChecked(const WidgetDescriptor& w,
-                    const ChromeProviderResolver& resolveProvider) {
-    if (!w.checked) return false;
-    if (w.checked->isProvider) {
-        const auto resolved = resolveProvider(w.checked->provider);
-        return resolved && truthy(resolved->value);
-    }
-    return truthy(w.checked->literal);
-}
-
 // Resolve a widget's displayed content + accessible label + inherited command for
 // the GRID lowering: content is the glyph a terminal draws (a checkbox composes its
 // box), and a literal checkbox labels itself with that glyph. Byte-identical to the
@@ -87,7 +48,8 @@ bool resolveChecked(const WidgetDescriptor& w,
 Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
                        const ChromeProviderResolver& resolveProvider) {
     Resolved r;
-    const Sources s = resolveSources(w, resolveProvider);
+    const auto semantic =
+        resolveUiLeafState(w, resolveProvider, SemanticRole::Text);
 
     switch (w.kind) {
     case WidgetKind::Label:
@@ -95,20 +57,27 @@ Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
         // A provider widget's label is the provider's; a literal widget labels
         // itself with its own text. Match the built-in status-field skip: drop
         // when EITHER the value or the accessible label is empty.
-        const std::string label = s.fromProvider ? s.providerLabel : s.value;
-        if (s.value.empty() || label.empty()) {
+        if (!semantic) {
             r.drop = true;
             return r;
         }
+        const std::string_view providerId =
+            w.value && w.value->isProvider ? w.value->provider : std::string_view{};
         r.content =
-            statusFieldGridDisplay(s.providerId, s.value, style);
-        r.label = label;
+            statusFieldGridDisplay(providerId, semantic->value, style);
+        r.label = semantic->label;
         break;
     }
     case WidgetKind::Checkbox: {
-        const bool checked = resolveChecked(w, resolveProvider);
-        r.content = checkboxText(checked, s.value, style.toggle);
-        r.label = s.providerLabel.empty() ? r.content : s.providerLabel;
+        if (!semantic) {
+            r.drop = true;
+            return r;
+        }
+        r.content = checkboxText(semantic->checked.value_or(false),
+                                 semantic->value, style.toggle);
+        r.label = semantic->label.empty()
+                      ? r.content
+                      : semantic->label;
         break;
     }
     case WidgetKind::Spacer:
@@ -121,46 +90,9 @@ Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
 
     // The descriptor's own command overrides an inherited one.
     if (w.kind != WidgetKind::Label) {
-        r.command = w.command ? w.command : s.inheritedCommand;
+        r.command = semantic ? semantic->command : std::nullopt;
     }
     return r;
-}
-
-// The SEMANTIC leaf state a non-grid client renders, glyph-free and
-// geometry-independent. A Label/Field with an empty value or label resolves to no
-// leaf state (the semantic drop); a checkbox always resolves (its caption is the
-// bare value, its label the semantic caption/provider label, plus the checked
-// bool); a spacer/container resolve to none. The command precedence matches the
-// grid path (descriptor overrides inherited).
-std::optional<UiLeafState> semanticLeafState(
-    const WidgetDescriptor& w, const ChromeProviderResolver& resolveProvider,
-    SemanticRole defaultRole) {
-    const Sources s = resolveSources(w, resolveProvider);
-    const std::string label = s.fromProvider ? s.providerLabel : s.value;
-    const std::optional<std::string> command =
-        w.command ? w.command : s.inheritedCommand;
-    // The effective role the library owns: the widget's own valid role name, else
-    // the region default. Resolved here so a client colors by ordinal, never by
-    // re-deriving role names.
-    SemanticRole role = defaultRole;
-    if (w.role) {
-        if (const auto parsed = semanticRoleFromName(*w.role)) role = *parsed;
-    }
-    switch (w.kind) {
-    case WidgetKind::Label:
-    case WidgetKind::Field:
-        if (s.value.empty() || label.empty()) return std::nullopt;
-        return UiLeafState{s.value, label, command, std::nullopt, role};
-    case WidgetKind::Checkbox:
-        return UiLeafState{s.value, label, command,
-                           resolveChecked(w, resolveProvider), role};
-    case WidgetKind::TextInput:
-        if (!s.fromProvider || label.empty()) return std::nullopt;
-        return UiLeafState{s.value, label, command, std::nullopt, role,
-                           s.active};
-    default:
-        return std::nullopt;  // Spacer/Container carry no leaf state
-    }
 }
 
 int displayCells(std::string_view text) {
@@ -217,12 +149,17 @@ static int lowerChromeGroups(
     const auto pack = [&](const WidgetDescriptor& w, const std::string& stackId,
                           bool isLeft, bool isCenter) {
         if (w.kind == WidgetKind::StatusActions) {
-            if (!statusView || statusView->items.empty()) return;
-            const std::size_t selected = std::min(statusView->selected, statusView->items.size() - 1);
-            const auto& itemView = statusView->items[selected];
+            if (!statusView || statusView->items.empty() ||
+                statusView->selected >= statusView->items.size()) {
+                return;
+            }
+            const auto& itemView =
+                statusView->items[statusView->selected];
+            const auto actionNodes = projectStatusActionNodes(*statusView);
             for (std::size_t actionIndex = 0; actionIndex < itemView.actions.size(); ++actionIndex) {
                 const auto& action = itemView.actions[actionIndex];
                 if (action.accessibleLabel.empty()) continue;
+                const auto& actionNode = actionNodes[actionIndex];
                 Resolved resolved;
                 resolved.content = action.accessibleLabel;
                 resolved.label = action.accessibleLabel;
@@ -238,10 +175,9 @@ static int lowerChromeGroups(
                     stack.packRight(std::move(stackItem));
                 }
                 packed.push_back(
-                    {actionStackId, &w, action.id, resolved.content,
-                     resolved.label, std::nullopt, SemanticRole::StatusInfo,
-                     StatusActionInvocation{itemView.id, action.id,
-                                            itemView.generation}});
+                    {actionStackId, &w, actionNode.id.value(), resolved.content,
+                     resolved.label, actionNode.commandId,
+                     SemanticRole::StatusInfo});
             }
             return;
         }
@@ -260,7 +196,7 @@ static int lowerChromeGroups(
                 ? SemanticRole::Footer
                 : widgetRole(w, defaultRole);
         packed.push_back({stackId, &w, w.id, resolved.content, resolved.label,
-                          resolved.command, role, std::nullopt});
+                          resolved.command, role});
     };
 
     for (std::size_t i = 0; i < left.size(); ++i)
@@ -292,8 +228,7 @@ static int lowerChromeGroups(
         if (item->descriptor->kind == WidgetKind::Spacer) return;
         out.push_back({item->nodeId, item->label,
                        {rect.x + placement->offset, rect.y, placement->size, 1},
-                       item->role, item->content, item->command,
-                       item->statusInvocation});
+                       item->role, item->content, item->command});
     };
 
     const auto emit = [&](std::string_view stackId) {
@@ -604,57 +539,6 @@ UiChromeLowerResult solveUiChromeRegion(
     };
     return lowerUiChromeRegion(regionRoot, rect, defaultRole, style, resolver,
                                out, statusView, input);
-}
-
-namespace {
-
-// The default SemanticRole a well-known area's widgets take when a widget declares
-// none: Header for the header subtree, Footer for the footer subtree, else Text.
-// Keyed on the well-known node id, since placement is id-based, not a region enum.
-SemanticRole defaultRoleForArea(const UiNodeId& id) {
-    if (id.value() == kHeaderNodeId) return SemanticRole::Header;
-    if (id.value() == kFooterNodeId) return SemanticRole::Footer;
-    return SemanticRole::Text;
-}
-
-// Pre-order walk: record each node's presence (always present in phase 6) and, for
-// a leaf, its semantic state (including its effective role, resolved against the
-// region default).
-void collectNodeStates(const UiNode& node,
-                       const ChromeProviderResolver& resolveProvider,
-                       SemanticRole defaultRole,
-                       std::vector<UiNodeState>& out) {
-    UiNodeState state;
-    state.id = node.id;
-    if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
-        state.leaf =
-            semanticLeafState(leaf->widget, resolveProvider, defaultRole);
-    }
-    out.push_back(std::move(state));
-    if (const auto* container = std::get_if<UiContainer>(&node.content)) {
-        for (const auto& child : container->children) {
-            collectNodeStates(child, resolveProvider, defaultRole, out);
-        }
-    }
-}
-
-}  // namespace
-
-UiStateSection resolveUiState(const ValidatedSchema& schema,
-                              const ChromeProviderResolver& resolveProvider) {
-    UiStateSection section;
-    section.generation = schema.generation();
-    const UiNode& root = schema.schema().root;
-    // The root carries the well-known areas as children; each area's widgets take
-    // that area's default role. The root node itself has no leaf.
-    section.nodes.push_back(UiNodeState{root.id, std::nullopt});
-    if (const auto* container = std::get_if<UiContainer>(&root.content)) {
-        for (const auto& area : container->children) {
-            collectNodeStates(area, resolveProvider,
-                              defaultRoleForArea(area.id), section.nodes);
-        }
-    }
-    return section;
 }
 
 }  // namespace ssg

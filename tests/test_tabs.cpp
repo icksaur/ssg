@@ -225,8 +225,6 @@ TEST(reopenActivatesAnIdentityAlreadyOpenedByAnotherPath) {
     ASSERT_EQ(tabs.viewState().active, std::optional{replacement});
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
     ASSERT_EQ(lifecycle.reopenCalls, 0);
-    const auto delta = ssg::TabDeltaCodec{}.derive({}, tabs.viewState());
-    ASSERT_TRUE(ssg::TabDeltaCodec{}.replay({}, delta).accepted());
 }
 
 TEST(untitledLabelsAreSmallestAvailableAndReopenIsStable) {
@@ -292,10 +290,9 @@ TEST(reopenUntitledRebindsDocumentKeyForDedup) {
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
 }
 
-TEST(badgesUpdateAndDeltaReplayIsExact) {
+TEST(badgesUpdateExactly) {
     FakeLifecycle lifecycle;
     ssg::TabManager tabs{lifecycle};
-    const auto base = tabs.viewState();
     (void)openSaved(tabs, 7, "a");
     ASSERT_TRUE(tabs.updateDocument(
                         ssg::FileDocumentId{7}, saved("a"), "a",
@@ -303,14 +300,9 @@ TEST(badgesUpdateAndDeltaReplayIsExact) {
                         ssg::TabRecoveryBadge::Pending)
                     .accepted());
     const auto target = tabs.viewState();
-    const auto delta = ssg::TabDeltaCodec{}.derive(base, target);
-    const auto replay = ssg::TabDeltaCodec{}.replay(base, delta);
-    ASSERT_TRUE(replay.accepted());
-    ASSERT_EQ(replay.state, std::optional{target});
     ASSERT_EQ(target.tabs[0].mode, ssg::DocumentMode::ReadOnly);
     ASSERT_TRUE(target.tabs[0].dirty);
     ASSERT_EQ(target.tabs[0].recovery, ssg::TabRecoveryBadge::Pending);
-    ASSERT_FALSE(ssg::TabDeltaCodec{}.derive(target, target).state.has_value());
 }
 
 TEST(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab) {
@@ -351,7 +343,7 @@ int main() {
     RUN(reopenActivatesAnIdentityAlreadyOpenedByAnotherPath);
     RUN(untitledLabelsAreSmallestAvailableAndReopenIsStable);
     RUN(reopenUntitledRebindsDocumentKeyForDedup);
-    RUN(badgesUpdateAndDeltaReplayIsExact);
+    RUN(badgesUpdateExactly);
     RUN(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

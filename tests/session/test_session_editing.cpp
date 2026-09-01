@@ -1,4 +1,5 @@
 #include "../test_helpers.h"
+#include "../grid_test_frame.h"
 #include "../grid_test_view.h"
 
 #include <ssg/EditorSession.h>
@@ -17,6 +18,12 @@
 #include <vector>
 
 namespace {
+
+std::optional<ssg::GridFrame> projectFrame(
+    ssg::EditorSession& runtime, ssg::ViewportDimensions dimensions) {
+    return ssg::test::projectGridFrame(
+        runtime, ssg::ClientId{1}, ssg::ViewId{1}, dimensions);
+}
 
 std::filesystem::path uniqueRoot() {
     auto root = std::filesystem::temp_directory_path() /
@@ -208,7 +215,7 @@ TEST(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.workspace_apply", runtime.revision(), {}}).accepted());
     ASSERT_EQ(readText(root / "workspace" / "edit.txt"), std::string{"dog dog"});
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"dog dog"});
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->semantic().sections().document.text, std::string{"dog dog"});
 }
@@ -231,7 +238,7 @@ TEST(workspaceSearchAndReplaceExcludeRuntimeStateRoots) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"search.workspace", runtime.revision(), std::string{"#secret"}}).accepted());
-    auto searchSnapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto searchSnapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(searchSnapshot.has_value());
     ASSERT_EQ(searchSnapshot->semantic().sections().search.results.size(), std::size_t{1});
     if (!searchSnapshot->semantic().sections().search.results.empty()) {
@@ -263,7 +270,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
 
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& find = snapshot->semantic().sections().findReplace;
@@ -277,25 +284,14 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     ASSERT_EQ(find.matches[2].begin.value(), std::uint64_t{8});
     ASSERT_EQ(find.matches[2].end.value(), std::uint64_t{11});
 
-    // The find prompt projects the controller query and the 1-based match count.
-    auto const& prompt = snapshot->presentation().prompt;
-    ASSERT_TRUE(prompt.has_value());
-    if (prompt) {
-        std::string queryValue;
-        std::string countValue;
-        for (auto const& control : prompt->controls) {
-            if (control.kind == ssg::PromptControlKind::Input) queryValue = control.value;
-            if (control.kind == ssg::PromptControlKind::Count) countValue = control.value;
-        }
-        ASSERT_EQ(queryValue, std::string{"cat"});
-        ASSERT_EQ(countValue, std::string{"1/3"});
-    }
+    ASSERT_EQ(snapshot->sections().promptStatus.activeKind,
+              std::optional{ssg::PromptKind::Find});
 
     const auto activeAfter = [&](int advances) -> std::size_t {
         for (int i = 0; i < advances; ++i) {
             (void)runtime.dispatch(ssg::ClientId{1}, {"find.next", runtime.revision(), {}});
         }
-        auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+        auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
         return snap->semantic().sections().findReplace.activeMatch.value_or(999);
     };
     ASSERT_EQ(activeAfter(1), std::size_t{1});
@@ -336,25 +332,23 @@ TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"doc.txt"}}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
-    auto before = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto before = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(before.has_value());
     if (before) {
-        ASSERT_TRUE(before->presentation().prompt.has_value());
-        if (before->presentation().prompt) {
-            ASSERT_EQ(before->presentation().prompt->kind, ssg::PromptKind::Palette);
-        }
+        ASSERT_TRUE(before->sections().promptStatus.activeKind.has_value());
+        ASSERT_EQ(*before->sections().promptStatus.activeKind,
+                  ssg::PromptKind::Palette);
     }
 
     // A find.close while the palette prompt is active must leave the palette
     // prompt intact (it only owns the find prompt).
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.close", runtime.revision(), {}}).accepted());
-    auto after = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
-        ASSERT_TRUE(after->presentation().prompt.has_value());
-        if (after->presentation().prompt) {
-            ASSERT_EQ(after->presentation().prompt->kind, ssg::PromptKind::Palette);
-        }
+        ASSERT_TRUE(after->sections().promptStatus.activeKind.has_value());
+        ASSERT_EQ(*after->sections().promptStatus.activeKind,
+                  ssg::PromptKind::Palette);
     }
 }
 
@@ -374,7 +368,7 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
     {
-        auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
         if (snap) ASSERT_EQ(snap->semantic().sections().findReplace.matches.size(), std::size_t{3});
     }
@@ -382,11 +376,11 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     // Switching to another freshly opened document (which shares revision 1 with
     // a.txt) must dismiss find: identity, not revision equality, binds the state.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
-    auto after = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
         ASSERT_FALSE(after->semantic().sections().findReplace.open);
-        ASSERT_FALSE(after->presentation().prompt.has_value());
+        ASSERT_FALSE(after->sections().promptStatus.activeKind.has_value());
     }
 }
 
@@ -410,7 +404,7 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
 
     // Baseline: the viewport starts at the top.
     {
-        auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
         if (snap) ASSERT_EQ(snap->presentation().viewport.firstVisualRow, std::uint32_t{0});
     }
@@ -420,7 +414,7 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
 
     // The match on line 40 lies below the initial 24-row viewport, so revealing
     // it must scroll down and the match's logical line must be visible.
-    auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (!snap) return;
     auto const& viewport = snap->presentation().viewport;
@@ -449,30 +443,19 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.update_replacement", runtime.revision(), ssg::FindQueryArguments{"dog"}}).accepted());
 
     {
-        auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
         if (snap) {
             ASSERT_EQ(snap->semantic().sections().findReplace.replacement, std::string{"dog"});
             ASSERT_EQ(snap->semantic().sections().findReplace.matches.size(), std::size_t{3});
-            // The replace prompt row 1 projects the replacement.
-            auto const& prompt = snap->presentation().prompt;
-            ASSERT_TRUE(prompt.has_value());
-            if (prompt) {
-                std::string replacementValue;
-                for (auto const& control : prompt->controls) {
-                    if (control.kind == ssg::PromptControlKind::Input &&
-                        control.id == "replace.replacement") {
-                        replacementValue = control.value;
-                    }
-                }
-                ASSERT_EQ(replacementValue, std::string{"dog"});
-            }
+            ASSERT_EQ(snap->sections().promptStatus.activeKind,
+                      std::optional{ssg::PromptKind::Replace});
         }
     }
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.current", runtime.revision(), {}}).accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"dog cat cat"});
-    auto after = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
         auto const& fr = after->semantic().sections().findReplace;
@@ -504,7 +487,7 @@ TEST(replaceAllReplacesEveryMatch) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.update_replacement", runtime.revision(), ssg::FindQueryArguments{"dog"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.all", runtime.revision(), {}}).accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"dog dog dog"});
-    auto after = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto after = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
         ASSERT_TRUE(after->semantic().sections().findReplace.matches.empty());
@@ -533,7 +516,7 @@ TEST(replaceCommandsAreBenignNoOpsWithoutAReplacePrompt) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.current", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.all", runtime.revision(), {}}).accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"cat cat cat"});
-    auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) ASSERT_TRUE(snap->semantic().sections().findReplace.replacement.empty());
 }
@@ -555,7 +538,7 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
     // leaves the (default) options untouched.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.toggle_case", runtime.revision(), {}}).accepted());
     {
-        auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
         if (snap) ASSERT_FALSE(snap->semantic().sections().findReplace.options.caseSensitive);
     }
@@ -564,14 +547,14 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
     {
         // Case-insensitive (default): all three "cat"s match.
-        auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
         if (snap) ASSERT_EQ(snap->semantic().sections().findReplace.matches.size(), std::size_t{3});
     }
 
     // Toggle case sensitivity: now only the lowercase "cat" matches.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.toggle_case", runtime.revision(), {}}).accepted());
-    auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) {
         ASSERT_TRUE(snap->semantic().sections().findReplace.options.caseSensitive);
@@ -596,14 +579,14 @@ TEST(replaceOpenPreservesFindOptions) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.toggle_case", runtime.revision(), {}}).accepted());
     // Case-sensitive find matched only the lowercase "cat".
     {
-        auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
         if (snap) ASSERT_EQ(snap->semantic().sections().findReplace.matches.size(), std::size_t{1});
     }
     // Opening replace must NOT widen the match population: options carry over so
     // replace.all acts on exactly what the user reviewed.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
-    auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) {
         ASSERT_TRUE(snap->semantic().sections().findReplace.options.caseSensitive);
@@ -625,21 +608,21 @@ TEST(findCloseDismissesTheReplacePrompt) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
     {
-        auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
         if (snap) {
             ASSERT_TRUE(snap->semantic().sections().findReplace.open);
-            ASSERT_TRUE(snap->presentation().prompt.has_value());
+            ASSERT_TRUE(snap->sections().promptStatus.activeKind.has_value());
         }
     }
     // A single find.close must close the controller AND dismiss the replace
     // prompt (no stale prompt requiring a second cancel).
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.close", runtime.revision(), {}}).accepted());
-    auto snap = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snap = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) {
         ASSERT_FALSE(snap->semantic().sections().findReplace.open);
-        ASSERT_FALSE(snap->presentation().prompt.has_value());
+        ASSERT_FALSE(snap->sections().promptStatus.activeKind.has_value());
     }
 }
 
@@ -653,13 +636,13 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = projectFrame(runtime, dims);
         return snap ? snap->semantic().sections().uiFrame.effectiveFocus()
                     : ssg::FocusTarget::Editor;
     };
     auto focusPanel = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
-        bool const shown = snap && snap->presentation().shell.panel.has_value();
+        auto snap = projectFrame(runtime, dims);
+        bool const shown = snap && snap->panel().has_value();
         if (!shown) {
             ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
         }
@@ -853,7 +836,7 @@ TEST(multiCursorPastePreservesAllCursors) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto selectionCount = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = projectFrame(runtime, dims);
         return snap ? snap->semantic().sections().selection.items().size() : std::size_t{0};
     };
 
@@ -893,7 +876,7 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
                                   std::string{"m.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto selectionCount = [&] {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = projectFrame(runtime, dims);
         return snap ? snap->semantic().sections().selection.items().size()
                     : std::size_t{0};
     };
@@ -1013,24 +996,22 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
                                  {"prompt.submit", runtime.revision(), {}})
                     .accepted());
     auto findAfterSubmit =
-        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(findAfterSubmit.has_value());
     if (findAfterSubmit) {
         ASSERT_TRUE(findAfterSubmit->semantic().sections().findReplace.open);
         ASSERT_EQ(findAfterSubmit->semantic().sections().findReplace.activeMatch,
                   std::optional<std::size_t>{1});
-        ASSERT_TRUE(findAfterSubmit->presentation().prompt.has_value());
-        if (findAfterSubmit->presentation().prompt) {
-            ASSERT_EQ(findAfterSubmit->presentation().prompt->kind,
-                      ssg::PromptKind::Find);
-        }
+        ASSERT_TRUE(findAfterSubmit->sections().promptStatus.activeKind.has_value());
+        ASSERT_EQ(*findAfterSubmit->sections().promptStatus.activeKind,
+                  ssg::PromptKind::Find);
     }
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"prompt.previous", runtime.revision(), {}})
                     .accepted());
     auto findAfterPrevious =
-        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(findAfterPrevious.has_value());
     if (findAfterPrevious) {
         ASSERT_EQ(findAfterPrevious->semantic().sections().findReplace.activeMatch,
@@ -1050,23 +1031,21 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
                     .accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"dog cat cat"});
     auto replaceAfterSubmit =
-        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(replaceAfterSubmit.has_value());
     std::uint64_t generationBeforeCancel = 0;
     if (replaceAfterSubmit) {
         generationBeforeCancel = replaceAfterSubmit->semantic().sections().findReplace.generation;
-        ASSERT_TRUE(replaceAfterSubmit->presentation().prompt.has_value());
-        if (replaceAfterSubmit->presentation().prompt) {
-            ASSERT_EQ(replaceAfterSubmit->presentation().prompt->kind,
-                      ssg::PromptKind::Replace);
-        }
+        ASSERT_TRUE(replaceAfterSubmit->sections().promptStatus.activeKind.has_value());
+        ASSERT_EQ(*replaceAfterSubmit->sections().promptStatus.activeKind,
+                  ssg::PromptKind::Replace);
     }
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"prompt.cancel", runtime.revision(), {}})
                     .accepted());
     auto afterCancel =
-        runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterCancel.has_value());
     if (afterCancel) {
         auto const& find = afterCancel->semantic().sections().findReplace;
@@ -1075,7 +1054,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
         ASSERT_TRUE(find.matches.empty());
         ASSERT_FALSE(find.activeMatch.has_value());
         ASSERT_TRUE(find.generation > generationBeforeCancel);
-        ASSERT_FALSE(afterCancel->presentation().prompt.has_value());
+        ASSERT_FALSE(afterCancel->sections().promptStatus.activeKind.has_value());
     }
     std::filesystem::remove_all(root);
 }
@@ -1104,7 +1083,7 @@ TEST(findWordUnderCursorSeedsTheCaretWordAndFindsEveryOccurrence) {
 
     // The caret starts at offset 0, inside "alpha".
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.word_under_cursor", runtime.revision(), {}}).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& find = snapshot->semantic().sections().findReplace;
@@ -1112,12 +1091,11 @@ TEST(findWordUnderCursorSeedsTheCaretWordAndFindsEveryOccurrence) {
     ASSERT_EQ(find.query, std::string{"alpha"});
     ASSERT_EQ(find.matches.size(), std::size_t{2});
     ASSERT_FALSE(find.options.regex);
-    // The find prompt is open with the query pre-filled.
-    auto const& prompt = snapshot->presentation().prompt;
-    ASSERT_TRUE(prompt.has_value());
+    ASSERT_EQ(snapshot->sections().promptStatus.activeKind,
+              std::optional{ssg::PromptKind::Find});
     // The query is live, not just prompt text: next moves to the second "alpha".
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.next", runtime.revision(), {}}).accepted());
-    auto advanced = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto advanced = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(advanced.has_value());
     if (advanced) ASSERT_EQ(advanced->semantic().sections().findReplace.activeMatch.value_or(999), std::size_t{1});
     std::filesystem::remove_all(root);
@@ -1135,7 +1113,7 @@ TEST(findWordUnderCursorTakesTheWordWhenTheCaretSitsJustPastIt) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.word_right", runtime.revision(), {}}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.word_under_cursor", runtime.revision(), {}}).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) ASSERT_EQ(snapshot->semantic().sections().findReplace.query, std::string{"alpha"});
     std::filesystem::remove_all(root);
@@ -1165,7 +1143,7 @@ TEST(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.toggle_selection", runtime.revision(), {}}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.word_under_cursor", runtime.revision(), {}}).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& find = snapshot->semantic().sections().findReplace;
@@ -1190,78 +1168,14 @@ TEST(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret) {
 
     // Reported success, but no find controller and no prompt were opened.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.word_under_cursor", runtime.revision(), {}}).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_FALSE(snapshot->semantic().sections().findReplace.open);
-    ASSERT_FALSE(snapshot->presentation().prompt.has_value());
+    ASSERT_FALSE(snapshot->sections().promptStatus.activeKind.has_value());
     std::filesystem::remove_all(root);
 }
 
-// Single-source prompt rect: the shell reservation (shell.prompt) and the
-// prompt-status reservation
-// (promptStatus.prompt->rect) MUST be the SAME rect, and it MUST be the
-// full-width bottom strip -- so the a11y node, the hit region, and the rendered
-// controls cannot diverge. The panel is the combination that used to break this:
-// the shell reserved an editor-width rect while the controls rendered full
-// width. Assert equality (and full width) for BOTH prompt heights -- find (2
-// rows) and replace (3 rows) -- across panel-off and panel-on, so a
-// height-specific regression cannot satisfy the test.
-TEST(promptReservationIsSingleSourcedAndFullWidthAcrossPanel) {
-    auto root = uniqueRoot();
-    auto workspace = root / "workspace";
-    std::filesystem::create_directories(workspace);
-    std::ofstream{workspace / "hits.txt"} << "cat cat cat";
-    auto created = ssg::EditorSession::create({
-        workspace, root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"hits.txt"}}).accepted());
-
-    const ssg::ViewportDimensions dims{80, 12};
-    const auto assertSingleSourced = [&](int expectedHeight) {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
-        ASSERT_TRUE(snap.has_value());
-        if (!snap) return;
-        const auto& shellPrompt = snap->presentation().shell.prompt;
-        const auto& statusPrompt = snap->presentation().prompt;
-        ASSERT_TRUE(shellPrompt.has_value());
-        ASSERT_TRUE(statusPrompt.has_value());
-        if (!shellPrompt || !statusPrompt) return;
-        // The two derivations are the one rect.
-        ASSERT_EQ(*shellPrompt, statusPrompt->rect);
-        // ...and it spans the full viewport width (the footer-region width),
-        // independent of the panel, at the reserved height for its kind.
-        ASSERT_EQ(shellPrompt->x, 0);
-        ASSERT_EQ(shellPrompt->width, 80);
-        ASSERT_EQ(shellPrompt->height, expectedHeight);
-        // The prompt sits flush at the bottom of the viewport.
-        ASSERT_EQ(shellPrompt->y, static_cast<int>(dims.rows) - expectedHeight);
-    };
-
-    const auto both = [&](int expectedHeight) {
-        assertSingleSourced(expectedHeight);  // panel off
-        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
-        assertSingleSourced(expectedHeight);  // panel on -- used to diverge
-        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
-    };
-
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
-    both(2);  // Find = 2 rows
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.close", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
-    both(3);  // Replace = 3 rows
-}
-
-// Prompt focus is unambiguous by construction: there is one PromptSurface, so
-// at most one prompt
-// is active; focus is Prompt iff a prompt is active; and promptFocusRegion(kind)
-// names where that one prompt lives -- Header for the palette (its query IS the
-// header input line, no footer reservation), Footer for find/replace (a footer
-// reservation, no header input line). Assert the region mapping AND that the
-// named region is the one actually populated in the shell.
 TEST(promptFocusIsSingleAndResolvesToItsRegion) {
     // The mapping itself (pure): palette -> header, every other kind -> footer.
     static_assert(ssg::promptFocusRegion(ssg::PromptKind::Palette) ==
@@ -1292,7 +1206,7 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
 
     // No prompt: focus is not Prompt.
     {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = projectFrame(runtime, dims);
         ASSERT_TRUE(snap.has_value());
         if (snap) {
             ASSERT_TRUE(snap->semantic().sections().uiFrame.effectiveFocus() !=
@@ -1304,17 +1218,19 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
     // line is populated, and NO footer prompt reservation exists.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
     {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = projectFrame(runtime, dims);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         const auto& s = snap->semantic().sections();
         ASSERT_EQ(s.uiFrame.effectiveFocus(), ssg::FocusTarget::Prompt);
-        ASSERT_TRUE(hasInputLine(snap->presentation().shell));       // header hosts the query
-        ASSERT_FALSE(snap->presentation().shell.prompt.has_value()); // no footer reservation
+        ASSERT_TRUE(snap->layout().find(ssg::UiNodeId{
+            std::string{ssg::kHeaderPromptInputNodeId}}) != nullptr);
+        ASSERT_TRUE(snap->layout().find(ssg::UiNodeId{
+            std::string{ssg::kFooterPromptNodeId}}) == nullptr);
     }
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.close", runtime.revision(), {}}).accepted());
     {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = projectFrame(runtime, dims);
         ASSERT_TRUE(snap.has_value());
         if (snap) {
             ASSERT_TRUE(snap->semantic().sections().uiFrame.effectiveFocus() !=
@@ -1326,13 +1242,15 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
     // NO header input line.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
     {
-        auto snap = runtime.present(ssg::ClientId{1}, dims);
+        auto snap = projectFrame(runtime, dims);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
         const auto& s = snap->semantic().sections();
         ASSERT_EQ(s.uiFrame.effectiveFocus(), ssg::FocusTarget::Prompt);
-        ASSERT_TRUE(snap->presentation().shell.prompt.has_value());  // footer reservation hosts it
-        ASSERT_FALSE(hasInputLine(snap->presentation().shell));      // not the header input line
+        ASSERT_TRUE(snap->layout().find(ssg::UiNodeId{
+            std::string{ssg::kFooterPromptNodeId}}) != nullptr);
+        ASSERT_TRUE(snap->layout().find(ssg::UiNodeId{
+            std::string{ssg::kHeaderPromptInputNodeId}}) == nullptr);
     }
 }
 
@@ -1356,7 +1274,6 @@ int main() {
     RUN(findWordUnderCursorTakesTheWordWhenTheCaretSitsJustPastIt);
     RUN(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally);
     RUN(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret);
-    RUN(promptReservationIsSingleSourcedAndFullWidthAcrossPanel);
     RUN(promptFocusIsSingleAndResolvesToItsRegion);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

@@ -381,7 +381,7 @@ TEST(staleChangesAndInvalidClientsAreFailureAtomic) {
     ASSERT_EQ(model.viewState(), paused);
 }
 
-TEST(commandViewDeltaAndFooterAreComplete) {
+TEST(commandViewAndFooterAreComplete) {
     const auto commands = followEditsCommandSet().descriptors();
     ASSERT_EQ(commands.size(), std::size_t{3});
     ASSERT_EQ(commands[0].id, "follow_edits.resume");
@@ -395,13 +395,7 @@ TEST(commandViewDeltaAndFooterAreComplete) {
     ASSERT_EQ(followingFooter.resumeCommand,
               std::optional<std::string>{"follow_edits.toggle"});
 
-    const auto before = model.viewState();
     ASSERT_TRUE(model.pause().accepted());
-    const auto after = model.viewState();
-    const auto delta = FollowEditsDeltaCodec{}.derive(before, after);
-    ASSERT_EQ(delta.baseGeneration, before.generation);
-    ASSERT_EQ(delta.generation, after.generation);
-    ASSERT_EQ(delta.replacement, after);
 
     const auto footer = model.footerProjection();
     ASSERT_EQ(footer.mode, "paused");
@@ -432,7 +426,7 @@ int main() {
     RUN(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets);
     RUN(resumePreservesNewestIntroducedHunkInsteadOfChoosingBottomHunk);
     RUN(staleChangesAndInvalidClientsAreFailureAtomic);
-    RUN(commandViewDeltaAndFooterAreComplete);
+    RUN(commandViewAndFooterAreComplete);
     RUN(configurationRejectsInvalidQueueCapacity);
     return failed == 0 ? 0 : 1;
 }

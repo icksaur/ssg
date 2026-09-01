@@ -23,11 +23,12 @@ if(NOT SSG_LUA_HEADERS_ARE_54)
     message(FATAL_ERROR "SSG Lua command host requires Lua 5.4 headers")
 endif()
 
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/LuaCommandHost.cpp
 )
-target_include_directories(ssg PRIVATE ${SSG_LUA_INCLUDE_DIR})
-target_link_libraries(ssg PRIVATE ${SSG_LUA_LIBRARY})
+target_include_directories(ssg_core PRIVATE ${SSG_LUA_INCLUDE_DIR})
+ssg_allow_private_roots(ssg_core "${SSG_LUA_INCLUDE_DIR}")
+target_link_libraries(ssg_core PRIVATE ${SSG_LUA_LIBRARY})
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_lua
@@ -39,6 +40,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_compile_definitions(test_lua PRIVATE
         SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}"
     )
-    target_link_libraries(test_lua PRIVATE ssg)
+    target_link_libraries(test_lua PRIVATE ssg_core)
     add_test(NAME test_lua COMMAND test_lua)
 endif()

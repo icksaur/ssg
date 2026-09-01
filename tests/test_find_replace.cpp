@@ -303,7 +303,7 @@ TEST(workspacePreviewApplyRecoverAndFailuresRoundTrip) {
     ASSERT_EQ(workspace.files(), original);
 }
 
-TEST(viewDeltaReplayAndCommandExportsAreExact) {
+TEST(viewStateAndCommandExportsAreExact) {
     const auto commands = FindReplaceCommandSet{};
     ASSERT_EQ(commands.descriptors().size(), std::size_t{16});
     ASSERT_EQ(commands.descriptors().front().id, std::string_view{"find.open"});
@@ -327,11 +327,6 @@ TEST(viewDeltaReplayAndCommandExportsAreExact) {
         document.snapshot(),
         FindRequest{"alpha", {}, std::nullopt, 100000, nullptr});
     ASSERT_TRUE(controller.viewState().replaceMode);
-    const auto delta = FindReplaceDeltaCodec{}.derive(closed, open);
-    ASSERT_TRUE(delta.changed);
-    ASSERT_EQ(FindReplaceDeltaCodec{}.replay(closed, delta).state, open);
-    ASSERT_EQ(FindReplaceDeltaCodec{}.replay(open, delta).error,
-              FindReplaceReplayError::BaseMismatch);
 }
 
 }  // namespace
@@ -343,7 +338,7 @@ int main() {
     RUN(ssg::zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels);
     RUN(ssg::currentReplaceIsAtomicOneUndoUnitAndStaleSafe);
     RUN(ssg::workspacePreviewApplyRecoverAndFailuresRoundTrip);
-    RUN(ssg::viewDeltaReplayAndCommandExportsAreExact);
+    RUN(ssg::viewStateAndCommandExportsAreExact);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

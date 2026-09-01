@@ -6,7 +6,7 @@
 #include <ssg/session_snapshot.h>
 
 #include "session_snapshot_builder.h"
-#include "legacy_grid_frame.h"
+#include "grid_test_frame.h"
 #include "test_helpers.h"
 
 #include <algorithm>
@@ -115,11 +115,8 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     ASSERT_TRUE(frame->document().has_value());
@@ -214,11 +211,6 @@ TEST(headerInputAndGhostUseSolvedChromeHits) {
         ssg::test::SessionSnapshotBuilder{}
             .viewport(40, 8)
             .promptInput(true, "sa", "ve")
-            .shellProjection([](ssg::ShellViewState& shell) {
-                for (auto& node : shell.accessibilityNodes) {
-                    node.rect = {0, 1, 1, 1};
-                }
-            })
             .build();
     ASSERT_TRUE(frame.header().has_value());
     const auto* input = frame.header() && frame.header()->input
@@ -247,20 +239,8 @@ TEST(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert) {
         {"file.open", runtime->revision(), std::string{"doc.txt"}});
     (void)runtime->dispatch(
         ssg::ClientId{1}, {"find.open", runtime->revision(), {}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto presentation = snapshot->presentation();
-    if (presentation.prompt) {
-        for (auto& control : presentation.prompt->controls) {
-            control.rect = {0, 2, 1, 1};
-        }
-    }
-    auto frame = ssg::test::gridFrameFromLegacy(
-        ssg::LegacyPresentationSnapshot{
-            snapshot->semantic().revision(), snapshot->semantic().topology(),
-            snapshot->semantic().client(), snapshot->semantic().sections(),
-            std::move(presentation)});
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
@@ -312,13 +292,6 @@ TEST(externalActionHitCarriesPublishedFileAndCommandIdentity) {
                           ssg::ExternalAction::Reload)}}},
                     ssg::DiffFileId{"changed.txt"}};
             })
-            .shellProjection([](ssg::ShellViewState& shell) {
-                for (auto& action : shell.externalActions) {
-                    action.rect = {0, 0, 1, 1};
-                    action.fileId = "stale";
-                    action.commandId = "stale";
-                }
-            })
             .build();
     const auto* node = snapshot.layout().find(
         ssg::UiNodeId{std::string{ssg::kExternalModNodeId}});
@@ -357,11 +330,8 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     ASSERT_TRUE(frame->document().has_value());
@@ -425,10 +395,8 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
 
     auto caretOffsetAfterClick = [&](int column, int row) -> std::uint64_t {
-        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-        if (!snapshot) return 9999;
-        auto frame =
-            ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+        auto frame = ssg::test::projectGridFrame(
+            *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
         if (!frame) return 9999;
         if (!frame->document()) return 9999;
         auto const content = frame->document()->content;
@@ -440,17 +408,18 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
             ssg::ClientId{1},
             {"cursor.set_position", runtime->revision(),
              ssg::SelectionCommandArguments{pos, std::nullopt}});
-        auto after = runtime->present(ssg::ClientId{1}, {80, 24});
+        auto after = runtime->snapshot(ssg::ClientId{1});
         if (!after) return 9999;
-        return after->semantic().sections()
+        return after->sections()
             .selection.primary()
             .active.byteOffset.value();
     };
 
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto const content = snapshot->presentation().shell.panes.front().content;
+    auto initial = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
+    ASSERT_TRUE(initial.has_value());
+    if (!initial || !initial->document()) return;
+    auto const content = initial->document()->content;
 
     // Click far right of line 0 ("ab") -> caret at its end (offset 2).
     ASSERT_EQ(caretOffsetAfterClick(content.x + 40, content.y), std::uint64_t{2});
@@ -471,9 +440,10 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
+    auto base = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
+    ASSERT_TRUE(base.has_value());
+    if (!base || !base->document()) return;
 
     ssg::DiffFileView diff{ssg::DiffFileId{"doc.txt"}};
     diff.currentContent = text;
@@ -481,25 +451,20 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
                           .targetStart = 1,
                           .baselineLines = {"removed\n"},
                           .targetLines = {}});
-    const auto content = snapshot->presentation().shell.panes.front().content;
-    auto presentation = snapshot->presentation();
-    presentation.viewport = ssg::Viewport{}.computeUnwrapped(
+    const auto content = base->document()->content;
+    auto projection = base->presentation();
+    projection.viewport = ssg::Viewport{}.computeUnwrapped(
         text,
         ssg::ViewportDimensions{
             static_cast<std::uint32_t>(content.width),
             static_cast<std::uint32_t>(content.height)},
         0, 0, 4, &diff);
-    auto sections = snapshot->semantic().sections();
-    ssg::LegacyPresentationSnapshot projected{
-        snapshot->semantic().revision(), snapshot->semantic().topology(), snapshot->semantic().client(),
-        std::move(sections), std::move(presentation)};
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(projected));
-    ASSERT_TRUE(frame.has_value());
-    if (!frame) return;
+    auto sections = base->sections();
+    auto frame = ssg::test::copyGridFrame(
+        *base, std::move(sections), std::move(projection));
 
     const auto phantom =
-        ssg::HitTester{*frame}.at(content.x + 5, content.y + 1);
+        ssg::HitTester{frame}.at(content.x + 5, content.y + 1);
     ASSERT_EQ(phantom.region, ssg::HitRegion::Editor);
     ASSERT_EQ(phantom.byteOffset, std::uint32_t{4});
     ASSERT_EQ(phantom.byteLen, std::uint32_t{0});
@@ -547,25 +512,13 @@ TEST(panelRowMapsToItsTreeNodeId) {
     (void)runtime->dispatch(ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto presentation = snapshot->presentation();
-    presentation.shell.panel = ssg::Rect{60, 2, 8, 3};
-    presentation.shell.panelScrollbar = ssg::Rect{67, 3, 1, 2};
-    presentation.treeWindows = {
-        ssg::TreeWindow{5, {}, {ssg::TreeNodeId{"bogus"}}}};
-    auto frame = ssg::test::gridFrameFromLegacy(
-        ssg::LegacyPresentationSnapshot{
-            snapshot->semantic().revision(), snapshot->semantic().topology(),
-            snapshot->semantic().client(), snapshot->semantic().sections(),
-            std::move(presentation)});
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     ASSERT_TRUE(frame->panel().has_value());
     if (!frame->panel()) return;
     auto const& panel = *frame->panel();
-    ASSERT_NE(panel.rect, (ssg::Rect{60, 2, 8, 3}));
     ASSERT_EQ(panel.providerText,
               ssg::treeProviderLabel(
                   frame->sections().tree.providers.front().kind));
@@ -615,20 +568,18 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto presentation = snapshot->presentation();
-    ASSERT_FALSE(presentation.shell.panes.empty());
-    if (presentation.shell.panes.empty()) return;
-    auto const& pane = presentation.shell.panes.front();
+    auto base = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
+    ASSERT_TRUE(base.has_value());
+    if (!base || !base->document()) return;
+    auto const& pane = *base->document();
 
     // A 40-item ranked list windowed to [20, 20+h): the on-screen row 3 is the
     // absolute candidate 23.
     std::uint32_t const rows = static_cast<std::uint32_t>(pane.content.height);
     ssg::PaletteProjection projection;
     projection.rect = pane.content;
-    projection.scrollbarRect = pane.scrollbar;
+    projection.scrollbarRect = pane.scrollbarGutter;
     projection.firstVisible = 20;
     projection.selected = std::uint32_t{25};
     projection.scrollbar = ssg::Viewport{}.scrollbarMetrics(40, rows, 20);
@@ -637,35 +588,36 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     }
     projection.rect = {0, 0, 1, 1};
     projection.scrollbarRect = {0, 0, 1, 1};
-    presentation.shell.palette = projection;
-    auto sections = snapshot->semantic().sections();
+    auto sections = base->sections();
     showPicker(sections);
-    ssg::LegacyPresentationSnapshot projected{snapshot->semantic().revision(), snapshot->semantic().topology(),
-                                   snapshot->semantic().client(), std::move(sections),
-                                   std::move(presentation)};
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(projected));
-    ASSERT_TRUE(frame.has_value());
-    if (!frame) return;
-    ASSERT_FALSE(frame->document().has_value());
+    ssg::PaletteReport report;
+    report.firstVisible = projection.firstVisible;
+    report.selected = projection.selected;
+    report.scrollbar = projection.scrollbar;
+    for (auto const& row : projection.rows) {
+        report.rows.push_back({"", row.label, row.detail});
+    }
+    auto frame = ssg::test::copyGridFrame(
+        *base, std::move(sections), base->presentation(), std::move(report));
+    ASSERT_FALSE(frame.document().has_value());
 
-    const auto* viewport = frame->layout().find(
+    const auto* viewport = frame.layout().find(
         ssg::UiNodeId{
             std::string{ssg::kFindResultsViewportNodeId}});
     ASSERT_TRUE(viewport != nullptr);
     if (!viewport) return;
     const auto solved = ssg::solvePaletteSurface(
-        frame->palette(), viewport->rect,
-        frame->presentation().style.dimensions.scrollbarGutterWidth);
+        frame.palette(), viewport->rect,
+        frame.presentation().style.dimensions.scrollbarGutterWidth);
     ASSERT_TRUE(solved.visibleRows.size() > 3);
     if (solved.visibleRows.size() <= 3) return;
-    auto hit = ssg::HitTester{*frame}.at(
+    auto hit = ssg::HitTester{frame}.at(
         solved.visibleRows[3].rect.x, solved.visibleRows[3].rect.y);
     ASSERT_EQ(hit.region, ssg::HitRegion::Palette);
     ASSERT_EQ(hit.itemIndex, std::uint32_t{23});
 
     // The palette overlays the pane: a document cell is inert while it is open.
-    auto overDoc = ssg::HitTester{*frame}.at(
+    auto overDoc = ssg::HitTester{frame}.at(
         solved.visibleRows[0].rect.x, solved.visibleRows[0].rect.y);
     ASSERT_EQ(overDoc.region, ssg::HitRegion::Palette);
     ASSERT_EQ(overDoc.itemIndex, std::uint32_t{20});
@@ -679,16 +631,16 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto presentation = snapshot->presentation();
-    auto const& pane = presentation.shell.panes.front();
+    auto base = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
+    ASSERT_TRUE(base.has_value());
+    if (!base || !base->document()) return;
+    auto const& pane = *base->document();
     std::uint32_t const rows = static_cast<std::uint32_t>(pane.content.height);
 
     ssg::PaletteProjection projection;
     projection.rect = pane.content;
-    projection.scrollbarRect = pane.scrollbar;
+    projection.scrollbarRect = pane.scrollbarGutter;
     projection.firstVisible = 0;
     projection.selected = std::uint32_t{0};
     projection.scrollbar = ssg::Viewport{}.scrollbarMetrics(100, rows, 0);
@@ -697,42 +649,43 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     }
     projection.rect = {0, 0, 1, 1};
     projection.scrollbarRect = {0, 0, 1, 1};
-    presentation.shell.palette = projection;
-    auto sections = snapshot->semantic().sections();
+    auto sections = base->sections();
     showPicker(sections);
-    ssg::LegacyPresentationSnapshot projected{snapshot->semantic().revision(), snapshot->semantic().topology(),
-                                   snapshot->semantic().client(), std::move(sections),
-                                   std::move(presentation)};
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(projected));
-    ASSERT_TRUE(frame.has_value());
-    if (!frame) return;
+    ssg::PaletteReport report;
+    report.firstVisible = projection.firstVisible;
+    report.selected = projection.selected;
+    report.scrollbar = projection.scrollbar;
+    for (auto const& row : projection.rows) {
+        report.rows.push_back({"", row.label, row.detail});
+    }
+    auto frame = ssg::test::copyGridFrame(
+        *base, std::move(sections), base->presentation(), std::move(report));
 
     // The gutter classifies as the palette scrollbar along its whole height; the
     // scroll position a press sends is computed by the app from the published
     // thumb geometry, not from this hit's row.
-    const auto* viewport = frame->layout().find(
+    const auto* viewport = frame.layout().find(
         ssg::UiNodeId{
             std::string{ssg::kFindResultsViewportNodeId}});
     ASSERT_TRUE(viewport != nullptr);
     if (!viewport) return;
     const auto solved = ssg::solvePaletteSurface(
-        frame->palette(), viewport->rect,
-        frame->presentation().style.dimensions.scrollbarGutterWidth);
-    auto top = ssg::HitTester{*frame}.at(
+        frame.palette(), viewport->rect,
+        frame.presentation().style.dimensions.scrollbarGutterWidth);
+    auto top = ssg::HitTester{frame}.at(
         solved.scrollbar.x, solved.scrollbar.y);
     ASSERT_EQ(top.region, ssg::HitRegion::PaletteScrollbar);
     auto bottom =
-        ssg::HitTester{*frame}.at(
+        ssg::HitTester{frame}.at(
             solved.scrollbar.x, solved.scrollbar.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::PaletteScrollbar);
     ASSERT_EQ(solved.visibleRows.size(), std::size_t{2});
     if (solved.visibleRows.size() == 2 && solved.rows.height > 2) {
-        auto padding = ssg::HitTester{*frame}.at(
+        auto padding = ssg::HitTester{frame}.at(
             solved.rows.x, solved.visibleRows.back().rect.bottom());
         ASSERT_EQ(padding.region, ssg::HitRegion::None);
     }
-    auto const thumb = ssg::HitTester{*frame}.gutterThumb(
+    auto const thumb = ssg::HitTester{frame}.gutterThumb(
         ssg::HitRegion::PaletteScrollbar);
     ASSERT_TRUE(thumb.has_value());
     if (thumb) ASSERT_EQ(thumb->gutterY, solved.scrollbar.y);
@@ -754,27 +707,12 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"tall.txt"}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto const legacyPane = snapshot->presentation().shell.panes.front();
-    auto presentation = snapshot->presentation();
-    presentation.shell.panes.front() = {
-        legacyPane.id, {50, 10, 5, 3}, {51, 11, 2, 1},
-        {54, 10, 1, 3}, {50, 10, 1, 3}};
-    auto frame = ssg::test::gridFrameFromLegacy(
-        ssg::LegacyPresentationSnapshot{
-            snapshot->semantic().revision(), snapshot->semantic().topology(),
-            snapshot->semantic().client(), snapshot->semantic().sections(),
-            std::move(presentation)});
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     ASSERT_TRUE(frame->document().has_value());
     if (!frame->document()) return;
-    ASSERT_EQ(frame->document()->rect, legacyPane.frame);
-    ASSERT_EQ(frame->document()->content, legacyPane.content);
-    ASSERT_EQ(frame->document()->scrollbarGutter, legacyPane.scrollbar);
-    ASSERT_EQ(frame->document()->lineNumbers, legacyPane.lineNumbers);
     auto const gutter = frame->document()->scrollbarGutter;
     ASSERT_TRUE(gutter.height > 1);
     ssg::HitTester const tester{*frame};
@@ -828,11 +766,8 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
                                 {"file.open", runtime->revision(), name});
     }
 
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto const& tabs = frame->sections().tabs.tabs;
@@ -888,11 +823,8 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     // active tab in both directions, so tab.previous cannot strand it either.
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"tab.activate", runtime->revision(), tabs.front().id});
-    auto scrolledBack = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(scrolledBack.has_value());
-    if (!scrolledBack) return;
-    auto scrolledBackFrame =
-        ssg::test::gridFrameFromLegacy(std::move(*scrolledBack));
+    auto scrolledBackFrame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(scrolledBackFrame.has_value());
     if (!scrolledBackFrame) return;
     const auto* scrolledBackBar = scrolledBackFrame->layout().find(
@@ -913,11 +845,8 @@ TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
     // window scrolling past it into an empty bar.  This is the case the "stop at
     // the active tab" bound exists for; without it a very long filename in a
     // narrow terminal would leave nothing to click.
-    auto narrow = runtime->present(ssg::ClientId{1}, {20, 24});
-    ASSERT_TRUE(narrow.has_value());
-    if (!narrow) return;
-    auto narrowFrame =
-        ssg::test::gridFrameFromLegacy(std::move(*narrow));
+    auto narrowFrame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {20, 24});
     ASSERT_TRUE(narrowFrame.has_value());
     if (!narrowFrame) return;
     const auto* narrowBar = narrowFrame->layout().find(
@@ -959,11 +888,8 @@ TEST(tabBarCellMapsToItsTabIndex) {
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"file.open", runtime->revision(), std::string{"beta.txt"}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto* tabBar = frame->layout().find(
@@ -996,18 +922,6 @@ TEST(tabHitsUseSemanticTabsAndSolvedGeometry) {
             .viewport(50, 10)
             .tabs({{"alpha.txt", "Alpha", true, false},
                    {"beta.txt", "Beta", false, false}})
-            .shellProjection([](ssg::ShellViewState& shell) {
-                shell.tabBar = ssg::Rect{0, 0, 1, 1};
-                for (auto& hit : shell.tabHits) {
-                    hit.index = 99;
-                }
-                for (auto& node : shell.accessibilityNodes) {
-                    if (node.kind == ssg::ShellNodeKind::Tab ||
-                        node.kind == ssg::ShellNodeKind::TabSeparator) {
-                        node.rect = {0, 0, 1, 1};
-                    }
-                }
-            })
             .build();
     ASSERT_EQ(frame.sections().tabs.tabs.size(), std::size_t{2});
     ASSERT_EQ(frame.sections().tabs.tabs[0].label,
@@ -1048,19 +962,8 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
     scan.currentBranch = std::string{"main"};
     ASSERT_TRUE(runtime->applyGitDiffScan(std::move(scan)).accepted());
 
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    const auto originalShell = snapshot->presentation().shell;
-    auto presentation = snapshot->presentation();
-    for (auto& node : presentation.shell.accessibilityNodes) {
-        node.rect = {0, 1, 1, 1};
-    }
-    auto frame = ssg::test::gridFrameFromLegacy(
-        ssg::LegacyPresentationSnapshot{
-            snapshot->semantic().revision(), snapshot->semantic().topology(),
-            snapshot->semantic().client(), snapshot->semantic().sections(),
-            std::move(presentation)});
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
@@ -1075,22 +978,8 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
     const auto* path = item(frame->header(), "path");
     const auto* branch = item(frame->header(), "branch");
     const auto* follow = item(frame->footer(), "follow");
-    const auto* legacyPath =
-        findNode(originalShell, ssg::ShellNodeKind::HeaderField, "path");
-    const auto* legacyBranch =
-        findNode(originalShell, ssg::ShellNodeKind::HeaderField, "branch");
-    const auto* legacyFollow =
-        findNode(originalShell, ssg::ShellNodeKind::FooterField, "follow");
     ASSERT_TRUE(path != nullptr && branch != nullptr && follow != nullptr);
-    ASSERT_TRUE(legacyPath != nullptr && legacyBranch != nullptr &&
-                legacyFollow != nullptr);
-    if (!path || !branch || !follow || !legacyPath || !legacyBranch ||
-        !legacyFollow) {
-        return;
-    }
-    ASSERT_EQ(path->rect, legacyPath->rect);
-    ASSERT_EQ(branch->rect, legacyBranch->rect);
-    ASSERT_EQ(follow->rect, legacyFollow->rect);
+    if (!path || !branch || !follow) return;
 
     auto pathHit = ssg::HitTester{*frame}.at(path->rect.x, path->rect.y);
     ASSERT_EQ(pathHit.region, ssg::HitRegion::HeaderField);
@@ -1144,11 +1033,8 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
     ASSERT_TRUE(runtime->applyGitDiffScan(std::move(scan)).accepted());
 
     const auto clickField = [&](ssg::ShellNodeKind kind, std::string_view id) {
-        auto before = runtime->present(ssg::ClientId{1}, {80, 24});
-        ASSERT_TRUE(before.has_value());
-        if (!before) return false;
-        auto frame =
-            ssg::test::gridFrameFromLegacy(std::move(*before));
+        auto frame = ssg::test::projectGridFrame(
+            *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
         ASSERT_TRUE(frame.has_value());
         if (!frame) return false;
         const auto& surface = kind == ssg::ShellNodeKind::HeaderField
@@ -1171,26 +1057,25 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
             .accepted();
     };
     const auto providerLabel = [&]() -> std::optional<std::string> {
-        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime->snapshot(ssg::ClientId{1});
         ASSERT_TRUE(snapshot.has_value());
-        if (!snapshot) return std::nullopt;
-        const auto* provider = findNode(snapshot->presentation().shell,
-                                        ssg::ShellNodeKind::PanelProvider,
-                                        "panel.provider");
-        if (!provider) return std::nullopt;
-        return provider->content;
+        if (!snapshot || !snapshot->sections().tree.activeBinding) {
+            return std::nullopt;
+        }
+        return std::string{ssg::treeProviderLabel(
+            snapshot->sections().tree.activeBinding->kind)};
     };
     const auto panelVisible = [&]() -> bool {
-        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-        ASSERT_TRUE(snapshot.has_value());
-        if (!snapshot) return false;
-        return snapshot->presentation().shell.panel.has_value();
+        auto frame = ssg::test::projectGridFrame(
+            *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
+        ASSERT_TRUE(frame.has_value());
+        return frame && frame->panel().has_value();
     };
     const auto followMode = [&]() {
-        auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime->snapshot(ssg::ClientId{1});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return ssg::FollowMode::Paused;
-        return snapshot->semantic().sections().followEdits.mode;
+        return snapshot->sections().followEdits.mode;
     };
 
     ASSERT_TRUE(clickField(ssg::ShellNodeKind::HeaderField, "path"));
@@ -1218,11 +1103,8 @@ TEST(outOfBoundsAndChromeReturnNoTarget) {
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 

@@ -1,9 +1,6 @@
 #include <ssg/session_snapshot.h>
 
-#include <ssg/PresenceProtocol.h>
-
-#include "legacy_focus_compat.h"
-#include "legacy_prompt_compat.h"
+#include <ssg/detail/generated/ordinary_replay.h>
 
 #include <algorithm>
 #include <map>
@@ -14,21 +11,8 @@
 namespace ssg {
 namespace {
 
-bool shellEqual(ShellViewState const& left, ShellViewState const& right) {
-    return left.viewport == right.viewport && left.header == right.header &&
-           left.footer == right.footer && left.tabBar == right.tabBar &&
-           left.panel == right.panel &&
-           left.panelScrollbar == right.panelScrollbar &&
-           left.prompt == right.prompt &&
-           left.panes == right.panes &&
-           left.tabHits == right.tabHits &&
-           left.accessibilityNodes == right.accessibilityNodes &&
-           left.palette == right.palette &&
-           left.externalActions == right.externalActions;
-}
-
-SelectionSetDelta selectionDelta(SelectionSet const& before,
-                                 SelectionSet const& after) {
+SelectionSetDelta deriveSelectionSetDelta(SelectionSet const& before,
+                                         SelectionSet const& after) {
     bool const changed = before != after;
     return {changed, changed ? std::optional{after} : std::nullopt};
 }
@@ -67,64 +51,6 @@ std::optional<SettingsViewState> replaySettings(
     return state;
 }
 
-template <typename State, typename Delta>
-std::optional<State> replayReplacement(State const& state,
-                                        Delta const& delta) {
-    if (delta.changed != delta.replacement.has_value()) {
-        return std::nullopt;
-    }
-    return delta.replacement ? delta.replacement : std::optional<State>{state};
-}
-
-struct LegacyFocusPair {
-    FocusTarget focus = FocusTarget::Editor;
-    bool external = false;
-
-    friend bool operator==(const LegacyFocusPair&,
-                           const LegacyFocusPair&) = default;
-};
-
-LegacyFocusPair legacyFocusPair(const UiFrame& frame) {
-    return {frame.legacyFocus(),
-            frame.effectiveFocus() == FocusTarget::ExternalModification};
-}
-
-bool explicitlyChangesFocus(const UiFrameDelta& delta) {
-    if (std::holds_alternative<UiFrameReplacement>(delta.body())) return true;
-    if (const auto* changes = std::get_if<UiFrameChanges>(&delta.body())) {
-        return changes->focusPathChanged;
-    }
-    const auto& legacy = std::get<LegacyUiFrameChanges>(delta.body());
-    return legacy.state && legacy.state->focusPath;
-}
-
-std::optional<UiFrame> reconcileLegacyFocus(
-    const UiFrame& base, UiFrame candidate, const UiFrameDelta& frameDelta,
-    const std::optional<FocusTarget>& focus,
-    const std::optional<bool>& external) {
-    if (!focus && !external) return candidate;
-    const LegacyFocusPair actual = legacyFocusPair(candidate);
-    if (explicitlyChangesFocus(frameDelta)) {
-        if ((focus && actual.focus != *focus) ||
-            (external && actual.external != *external)) {
-            return std::nullopt;
-        }
-        return candidate;
-    }
-
-    LegacyFocusPair requested = legacyFocusPair(base);
-    if (focus) requested.focus = *focus;
-    if (external) requested.external = *external;
-    auto path = detail::legacyFocusPath(
-        candidate.schema(), candidate.presence(), requested.focus,
-        requested.external);
-    if (!path) return std::nullopt;
-    UiStateSection state = candidate.state();
-    state.focusPath = std::move(*path);
-    return UiFrame::create(candidate.schema(), std::move(state),
-                           candidate.presence());
-}
-
 }  // namespace
 
 bool operator==(SessionSnapshotSections const& left,
@@ -150,13 +76,6 @@ bool operator==(SessionSnapshotSections const& left,
            left.watcherAvailable == right.watcherAvailable;
 }
 
-bool PresentationSnapshot::operator==(PresentationSnapshot const& other) const {
-    return viewport == other.viewport && style == other.style &&
-           prompt == other.prompt && shellEqual(shell, other.shell) &&
-           selectionNav == other.selectionNav &&
-           treeWindows == other.treeWindows;
-}
-
 SessionSnapshot::SessionSnapshot(Revision revision, SessionTopology topology,
                                  ClientSnapshotState client,
                                  SessionSnapshotSections sections)
@@ -177,23 +96,19 @@ SessionDelta::SessionDelta(
     std::optional<DocumentDelta> document,
     std::optional<ByteOffset> documentCaret, SelectionSetDelta selection,
     HistoryDelta history, ClipboardDelta clipboard,
-    PromptStatusDelta promptStatus, SearchDelta search,
-    FindReplaceDelta findReplace, SettingsSectionDelta settings,
-    KeymapDelta keymap, std::optional<TextEncodingDelta> textEncoding,
-    TabDelta tabs, DiffDelta diff,
+    PromptStatusDelta promptStatus, std::optional<SearchViewState> search,
+    std::optional<FindReplaceViewState> findReplace,
+    SettingsSectionDelta settings, KeymapDelta keymap,
+    std::optional<TextEncodingViewState> textEncoding,
+    std::optional<TabViewState> tabs, DiffDelta diff,
     ExternalModificationDelta externalModification,
-    FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
-    LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
-    ThemeSectionDelta theme, StyleSectionDelta style,
-    ShellSectionDelta shell, ViewportDelta viewport,
-    UiFrameDelta uiFrameDelta,
-    std::optional<FocusTarget> legacyFocus,
-    SelectionNavigationDelta selectionNav,
-    PromptProjectionDelta promptProjection, TreeWindowsDelta treeWindows,
-    PaletteSectionDelta palette,
-    LegacyPromptViewDelta legacyPromptView, NoticeViewSectionDelta noticeView,
-    std::optional<bool> watcherAvailable,
-    std::optional<bool> legacyExternalFocusHeld)
+    std::optional<FollowEditsViewState> followEdits, TreeDelta tree,
+    std::optional<SyntaxViewState> syntax,
+    std::optional<LspSyncViewState> lspSync,
+    std::optional<LspFeatureViewState> lspFeatures,
+    ThemeSectionDelta theme, UiFrameDelta uiFrameDelta,
+    PaletteSectionDelta palette, NoticeViewSectionDelta noticeView,
+    std::optional<bool> watcherAvailable)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -220,37 +135,10 @@ SessionDelta::SessionDelta(
       lspSync_{std::move(lspSync)},
       lspFeatures_{std::move(lspFeatures)},
       theme_{std::move(theme)},
-      style_{std::move(style)},
-      shell_{std::move(shell)},
-      viewport_{std::move(viewport)},
       uiFrameDelta_{std::move(uiFrameDelta)},
-      legacyFocus_{legacyFocus},
-      selectionNav_{std::move(selectionNav)},
-      promptProjection_{std::move(promptProjection)},
-      treeWindows_{std::move(treeWindows)},
       palette_{std::move(palette)},
-      legacyPromptView_{std::move(legacyPromptView)},
       noticeView_{std::move(noticeView)},
-      watcherAvailable_{watcherAvailable},
-      legacyExternalFocusHeld_{legacyExternalFocusHeld} {}
-
-LegacyPresentationSnapshot SessionSnapshotCodec::assemble(
-    Revision revision, SessionTopology topology,
-    InvocationPrincipal const& principal, ViewId viewId,
-    ViewportViewState viewport, SessionSnapshotSections sections,
-    Style style, std::optional<PromptViewState> prompt,
-    ShellViewState shell, SelectionNavigation selectionNav,
-    std::vector<TreeWindow> treeWindows) const {
-    return {
-        SessionSnapshot{
-            revision, std::move(topology),
-            {principal.clientId(), viewId, principal.capabilities()},
-            std::move(sections)},
-        PresentationSnapshot{std::move(viewport), std::move(style),
-                             std::move(prompt), std::move(shell),
-                             std::move(selectionNav),
-                             std::move(treeWindows)}};
-}
+      watcherAvailable_{watcherAvailable} {}
 
 SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
                                                SessionSnapshot const& after)
@@ -290,62 +178,45 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         old.document.caret == next.document.caret
             ? std::nullopt
             : std::optional{next.document.caret},
-        selectionDelta(old.selection, next.selection),
+        deriveSelectionSetDelta(old.selection, next.selection),
         HistoryDeltaCodec{}.derive(old.history, next.history),
         ClipboardDeltaCodec{}.derive(old.clipboard, next.clipboard),
         PromptStatusDeltaCodec{}.derive(old.promptStatus, next.promptStatus),
-        SearchDeltaCodec{}.derive(old.search, next.search),
-        FindReplaceDeltaCodec{}.derive(old.findReplace, next.findReplace),
+        old.search == next.search ? std::nullopt : std::optional{next.search},
+        old.findReplace == next.findReplace
+            ? std::nullopt
+            : std::optional{next.findReplace},
         settingsDelta(old.settings, next.settings),
         KeymapMatcher::deriveDelta(old.keymap, next.keymap),
-        TextCodec{}.deriveDelta(old.textEncoding, next.textEncoding),
-        TabDeltaCodec{}.derive(old.tabs, next.tabs),
+        old.textEncoding == next.textEncoding
+            ? std::nullopt
+            : std::optional{next.textEncoding},
+        old.tabs == next.tabs ? std::nullopt : std::optional{next.tabs},
         DiffDeltaCodec{}.derive(old.diff, next.diff),
         ExternalModificationDeltaCodec{}.derive(old.externalModification,
                                                     next.externalModification),
-        FollowEditsDeltaCodec{}.derive(old.followEdits, next.followEdits),
+        old.followEdits == next.followEdits
+            ? std::nullopt
+            : std::optional{next.followEdits},
         TreeDeltaCodec{}.derive(old.tree, next.tree, 4096),
-        SyntaxDeltaCodec{}.derive(old.syntax, next.syntax),
-        LspSyncDeltaCodec{}.derive(old.lspSync, next.lspSync),
-        LspFeatureDeltaCodec{}.derive(old.lspFeatures, next.lspFeatures),
+        old.syntax == next.syntax ? std::nullopt : std::optional{next.syntax},
+        old.lspSync == next.lspSync
+            ? std::nullopt
+            : std::optional{next.lspSync},
+        old.lspFeatures == next.lspFeatures
+            ? std::nullopt
+            : std::optional{next.lspFeatures},
         {old.theme == next.theme ? std::nullopt
                                  : std::optional{next.theme}},
-        {},
-        {},
-        {},
         UiFrameDeltaCodec{}.derive(old.uiFrame, next.uiFrame),
-        old.uiFrame.legacyFocus() == next.uiFrame.legacyFocus()
-            ? std::nullopt
-            : std::optional{next.uiFrame.legacyFocus()},
-        {},
-        {},
-        {},
         PaletteSectionDelta{old.palette == next.palette
                                 ? std::nullopt
                                 : std::optional{next.palette}},
-        [&] {
-            const auto before = detail::legacyPromptView(
-                old.promptStatus, old.uiFrame);
-            const auto after = detail::legacyPromptView(
-                next.promptStatus, next.uiFrame);
-            if (!before.valid || !after.valid) {
-                throw std::logic_error{
-                    "cannot derive legacy prompt view from UI frame"};
-            }
-            return LegacyPromptViewDelta{
-                before.view != after.view, std::move(after.view)};
-        }(),
         NoticeViewSectionDelta{old.noticeView != next.noticeView,
                                next.noticeView},
         old.watcherAvailable == next.watcherAvailable
             ? std::nullopt
             : std::optional{next.watcherAvailable},
-        (old.uiFrame.effectiveFocus() == FocusTarget::ExternalModification) ==
-                (next.uiFrame.effectiveFocus() ==
-                 FocusTarget::ExternalModification)
-            ? std::nullopt
-            : std::optional{next.uiFrame.effectiveFocus() ==
-                            FocusTarget::ExternalModification},
     };
 }
 
@@ -359,6 +230,11 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         base.client().capabilities != delta.capabilities_) {
         return {std::nullopt, "session delta base revision mismatch"};
     }
+    auto ordinary = detail::generated::replayOrdinarySessionSections(
+        base.sections(), delta);
+    if (!ordinary) {
+        return {std::nullopt, "malformed ordinary section delta"};
+    }
 
     auto document = std::optional<DocumentViewState>{base.sections().document};
     if (delta.document_) {
@@ -371,121 +247,47 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         }
         document->caret = *delta.documentCaret_;
     }
-    auto selection = replayReplacement(base.sections().selection,
-                                        delta.selection_);
-    auto history = replayReplacement(base.sections().history, delta.history_);
-    auto clipboard =
-        replayReplacement(base.sections().clipboard, delta.clipboard_);
-    auto promptStatus = replayReplacement(base.sections().promptStatus,
-                                            delta.promptStatus_);
-    auto search = SearchDeltaCodec{}.replay(base.sections().search, delta.search_);
-    auto findReplace = FindReplaceDeltaCodec{}.replay(base.sections().findReplace,
-                                                  delta.findReplace_);
     auto settings = replaySettings(base.sections().settings, delta.settings_);
-    auto keymap = replayReplacement(base.sections().keymap, delta.keymap_);
-    auto tabs = TabDeltaCodec{}.replay(base.sections().tabs, delta.tabs_);
     auto diff = DiffDeltaCodec{}.replay(base.sections().diff, delta.diff_);
     auto external = ExternalModificationDeltaCodec{}.replay(
         base.sections().externalModification,
         delta.externalModification_);
     auto tree = TreeDeltaCodec{}.replay(base.sections().tree, delta.tree_);
-    auto syntax = SyntaxDeltaCodec{}.replay(base.sections().syntax, delta.syntax_);
-    auto lspSync =
-        LspSyncDeltaCodec{}.replay(base.sections().lspSync, delta.lspSync_);
-    auto lspFeatures = LspFeatureDeltaCodec{}.replay(
-        base.sections().lspFeatures, delta.lspFeatures_);
 
-    if (!document || !selection || !history || !clipboard || !promptStatus ||
-        !search.accepted() ||
-        findReplace.error != FindReplaceReplayError::None || !settings ||
-        !keymap || !tabs.accepted() || !diff.accepted() ||
-        !external.accepted() || !tree.accepted() || !syntax.accepted() ||
-        !lspSync.accepted() || !lspFeatures.accepted()) {
+    if (!document || !settings || !diff.accepted() ||
+        !external.accepted() || !tree.accepted()) {
         return {std::nullopt, "malformed feature delta"};
     }
 
-    auto textEncoding = base.sections().textEncoding;
-    if (delta.textEncoding_) {
-        if (delta.textEncoding_->before != textEncoding) {
-            return {std::nullopt, "text encoding delta base mismatch"};
-        }
-        textEncoding = delta.textEncoding_->after;
-    }
-
-    auto followEdits = base.sections().followEdits;
-    if (delta.followEdits_.baseGeneration != followEdits.generation ||
-        (delta.followEdits_.replacement &&
-         (delta.followEdits_.replacement->generation !=
-              delta.followEdits_.generation ||
-          delta.followEdits_.generation <
-              delta.followEdits_.baseGeneration)) ||
-        (!delta.followEdits_.replacement &&
-         delta.followEdits_.generation !=
-             delta.followEdits_.baseGeneration)) {
-        return {std::nullopt, "follow-edits delta base mismatch"};
-    }
-    if (delta.followEdits_.replacement) {
-        followEdits = *delta.followEdits_.replacement;
-    }
-
-    auto theme = delta.theme_.replacement.value_or(base.sections().theme);
-    // The palette section (candidate universe + matcher parameters) changes as
-    // pickers open/close and the command catalog changes; the delta carries a whole-
-    // value replacement when it does, else the base value is preserved.
-    auto palette = delta.palette_.replacement.value_or(base.sections().palette);
     auto uiFrame =
         UiFrameDeltaCodec{}.replay(base.sections().uiFrame, delta.uiFrameDelta_);
-    // The semantic draft-conflict notice section is optional; the delta's `changed`
-    // distinguishes "cleared" (replacement nullopt) from "unchanged".
-    auto noticeView = delta.noticeView_.changed
-                          ? delta.noticeView_.replacement
-                          : base.sections().noticeView;
-    // Decision-13 durable capability fact: the delta carries it only when it flips
-    // (nullopt otherwise), so an unchanged availability preserves the base value.
-    auto watcherAvailable =
-        delta.watcherAvailable_.value_or(base.sections().watcherAvailable);
     if (!uiFrame.accepted()) {
         return {std::nullopt, "UI frame delta is inconsistent"};
     }
-    auto reconciledFrame = reconcileLegacyFocus(
-        base.sections().uiFrame, std::move(*uiFrame.frame),
-        delta.uiFrameDelta_, delta.legacyFocus_,
-        delta.legacyExternalFocusHeld_);
-    if (!reconciledFrame) {
-        return {std::nullopt, "legacy focus conflicts with UI frame"};
-    }
-    const auto derivedPrompt = detail::legacyPromptView(
-        *promptStatus, *reconciledFrame);
-    if (!derivedPrompt.valid ||
-        (delta.legacyPromptView_.changed &&
-         delta.legacyPromptView_.replacement != derivedPrompt.view)) {
-        return {std::nullopt, "legacy prompt view conflicts with UI frame"};
-    }
-
     SessionSnapshotSections sections{
         std::move(*document),
-        std::move(*selection),
-        std::move(*history),
-        std::move(*clipboard),
-        std::move(*promptStatus),
-        std::move(*search.state),
-        std::move(findReplace.state),
+        std::move(ordinary->selection),
+        std::move(ordinary->history),
+        std::move(ordinary->clipboard),
+        std::move(ordinary->promptStatus),
+        std::move(ordinary->search),
+        std::move(ordinary->findReplace),
         std::move(*settings),
-        std::move(*keymap),
-        std::move(textEncoding),
-        std::move(*tabs.state),
+        std::move(ordinary->keymap),
+        std::move(ordinary->textEncoding),
+        std::move(ordinary->tabs),
         std::move(*diff.state),
         std::move(*external.state),
-        std::move(followEdits),
+        std::move(ordinary->followEdits),
         std::move(*tree.state),
-        std::move(*syntax.state),
-        std::move(*lspSync.state),
-        std::move(*lspFeatures.state),
-        std::move(theme),
-        std::move(palette),
-        std::move(*reconciledFrame),
-        std::move(noticeView),
-        watcherAvailable,
+        std::move(ordinary->syntax),
+        std::move(ordinary->lspSync),
+        std::move(ordinary->lspFeatures),
+        std::move(ordinary->theme),
+        std::move(ordinary->palette),
+        std::move(*uiFrame.frame),
+        std::move(ordinary->noticeView),
+        ordinary->watcherAvailable,
     };
     ClientSnapshotState client = base.client();
     return {SessionSnapshot{
@@ -503,23 +305,19 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     std::optional<DocumentDelta> document,
     std::optional<ByteOffset> documentCaret, SelectionSetDelta selection,
     HistoryDelta history, ClipboardDelta clipboard,
-    PromptStatusDelta promptStatus, SearchDelta search,
-    FindReplaceDelta findReplace, SettingsSectionDelta settings,
-    KeymapDelta keymap, std::optional<TextEncodingDelta> textEncoding,
-    TabDelta tabs, DiffDelta diff,
+    PromptStatusDelta promptStatus, std::optional<SearchViewState> search,
+    std::optional<FindReplaceViewState> findReplace,
+    SettingsSectionDelta settings, KeymapDelta keymap,
+    std::optional<TextEncodingViewState> textEncoding,
+    std::optional<TabViewState> tabs, DiffDelta diff,
     ExternalModificationDelta externalModification,
-    FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
-    LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
-    ThemeSectionDelta theme, StyleSectionDelta style,
-    ShellSectionDelta shell, ViewportDelta viewport,
-    UiFrameDelta uiFrameDelta,
-    std::optional<FocusTarget> focus,
-    SelectionNavigationDelta selectionNav,
-    PromptProjectionDelta promptProjection,
-    TreeWindowsDelta treeWindows, PaletteSectionDelta palette,
-    LegacyPromptViewDelta legacyPromptView,
-    NoticeViewSectionDelta noticeView, std::optional<bool> watcherAvailable,
-    std::optional<bool> externalFocusHeld)
+    std::optional<FollowEditsViewState> followEdits, TreeDelta tree,
+    std::optional<SyntaxViewState> syntax,
+    std::optional<LspSyncViewState> lspSync,
+    std::optional<LspFeatureViewState> lspFeatures,
+    ThemeSectionDelta theme, UiFrameDelta uiFrameDelta,
+    PaletteSectionDelta palette, NoticeViewSectionDelta noticeView,
+    std::optional<bool> watcherAvailable)
     const {
     return SessionDelta{baseRevision,
                         revision,
@@ -547,19 +345,10 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(lspSync),
                         std::move(lspFeatures),
                         std::move(theme),
-                        std::move(style),
-                        std::move(shell),
-                        std::move(viewport),
                         std::move(uiFrameDelta),
-                        focus,
-                        std::move(selectionNav),
-                        std::move(promptProjection),
-                        std::move(treeWindows),
                         std::move(palette),
-                        std::move(legacyPromptView),
                         std::move(noticeView),
-                        watcherAvailable,
-                        externalFocusHeld};
+                        watcherAvailable};
 }
 
 }  // namespace ssg

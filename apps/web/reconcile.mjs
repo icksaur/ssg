@@ -22,12 +22,9 @@ import {
   buildClientInputKeyWire,
   buildClientInputNoticeActionWire,
   buildClientInputPickerWire,
-  buildClientInputPromptControlWire,
-  buildClientInputPublishedUiActionWire,
   buildClientInputResolvedSelectionWire,
   buildClientInputScrollFractionWire,
   buildClientInputScrollLinesWire,
-  buildClientInputStatusActionWire,
   buildClientInputTabWire,
   buildClientInputTreeWire,
   buildClientInputViewNavigationWire,
@@ -39,6 +36,7 @@ import {
   validateUiPresenceSectionWire,
   validateUiSchemaWire,
   validateUiStateSectionWire,
+  replayOrdinarySessionSections,
 } from './generated/semantic_wire_manifest.mjs';
 
 export {
@@ -253,7 +251,7 @@ export function encodeValue(value) {
 }
 
 export function encodeMessage(kind, payload) {
-  return concat([new Uint8Array([4, kind]), encodeValue(payload)]);
+  return concat([new Uint8Array([5, kind]), encodeValue(payload)]);
 }
 
 export function decodeMessage(buffer) {
@@ -261,7 +259,7 @@ export function decodeMessage(buffer) {
   if (dv.byteLength > PROTOCOL_LIMITS.messageBytes) {
     throw new Error('protocol message length exceeded');
   }
-  if (dv.byteLength < 3 || dv.getUint8(0) !== 4) {
+  if (dv.byteLength < 3 || dv.getUint8(0) !== 5) {
     throw new Error('unsupported protocol frame');
   }
   const kind = dv.getUint8(1);
@@ -405,27 +403,10 @@ export const encodeTreePointerInput = (nodeId, revision) =>
     INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS,
     revision, nodeId));
 
-export const encodePromptControlPointerInput = (controlId, revision) =>
-  encodeInput(buildClientInputPromptControlWire(
-    INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS,
-    revision, controlId));
-
 export const encodeExternalActionPointerInput = (action, fileId, revision) =>
   encodeInput(buildClientInputExternalActionWire(
     INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS, revision,
     { fileId, action }));
-
-export const encodeStatusActionPointerInput = (
-    { statusId, actionId, generation }, revision) =>
-  encodeInput(buildClientInputStatusActionWire(
-    INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS, revision,
-    { statusId, actionId, generation }));
-
-export const encodePublishedUiActionPointerInput = (
-    nodeId, schemaGeneration, revision) =>
-  encodeInput(buildClientInputPublishedUiActionWire(
-    INPUT_POINTER_BUTTON.PRIMARY, INPUT_POINTER_PHASE.PRESS,
-    revision, schemaGeneration, nodeId));
 
 export const encodeNoticeActionPointerInput = (actionId, revision) =>
   encodeInput(buildClientInputNoticeActionWire(
@@ -867,46 +848,6 @@ export function clampPaletteSelection(selected, rowCount) {
 }
 
 
-export function applySessionDeltaSections(sections, delta) {
-  if (!sections || !delta) return sections;
-  if (delta.document) {
-    sections.document.text = applyDocumentDelta(sections.document.text, delta.document);
-    if (delta.document_caret != null) sections.document.caret = num(delta.document_caret);
-  } else if (delta.document_caret != null) {
-    sections.document.caret = num(delta.document_caret);
-  }
-  if (delta.selection && delta.selection.replacement != null) sections.selection = delta.selection.replacement;
-  if (delta.tabs && delta.tabs.state != null) sections.tabs = delta.tabs.state;
-  if (delta.syntax && delta.syntax.spans != null) {
-    if (!sections.syntax) sections.syntax = {};
-    sections.syntax.spans = delta.syntax.spans;
-  }
-  if (delta.theme && delta.theme.replacement != null) sections.theme = delta.theme.replacement;
-  const replaceWrapped = (name) => { if (delta[name] && delta[name].replacement != null) sections[name] = delta[name].replacement; };
-  replaceWrapped('prompt_status');
-  replaceWrapped('find_replace');
-  // The draft-conflict notice travels as a changed-flagged delta exactly like the
-  // footer prompt: a null replacement means the notice CLEARED, so it must not go
-  // through replaceWrapped's non-null guard. changed=false leaves the prior notice.
-  if (delta.notice_view && num(delta.notice_view.changed)) {
-    sections.notice_view = delta.notice_view.replacement != null ? delta.notice_view.replacement : null;
-  }
-  // The external-modification section travels as a merge delta (upserted/removed/
-  // selected against a base revision), like the diff section it mirrors. Merge it
-  // into the retained section so the bar tracks live changes without a full
-  // snapshot.
-  if (delta.external_modification) {
-    sections.external_modification =
-      applyExternalModificationDelta(sections.external_modification, delta.external_modification);
-  }
-  if (delta.ui_frame_delta != null && sections.ui_frame != null) {
-    const frame = applyUiFrameDelta(sections.ui_frame, delta.ui_frame_delta);
-    if (frame) sections.ui_frame = frame;
-  }
-  if (delta.palette != null) sections.palette = delta.palette;
-  return sections;
-}
-
 const sameValue = (left, right) => {
   const encode = (value) => JSON.stringify(
     value, (_, item) => typeof item === 'bigint' ? item.toString() : item);
@@ -915,38 +856,6 @@ const sameValue = (left, right) => {
 
 const has = (value, key) =>
   value != null && Object.prototype.hasOwnProperty.call(value, key);
-
-function changedReplacement(current, delta, nullable = false) {
-  if (!delta) return { accepted: true, value: current };
-  const changed = !!num(delta.changed);
-  const replacementPresent = has(delta, 'replacement');
-  if (!changed) {
-    return replacementPresent && delta.replacement != null
-      ? { accepted: false, value: current }
-      : { accepted: true, value: current };
-  }
-  if (!replacementPresent || (!nullable && delta.replacement == null)) {
-    return { accepted: false, value: current };
-  }
-  return { accepted: true, value: delta.replacement };
-}
-
-function revisionReplacement(current, delta) {
-  if (!delta) return { accepted: true, value: current };
-  if (!current ||
-      BigInt(delta.base_revision) !== BigInt(current.revision) ||
-      BigInt(delta.revision) < BigInt(delta.base_revision)) {
-    return { accepted: false, value: current };
-  }
-  if (delta.state == null) {
-    return BigInt(delta.revision) === BigInt(delta.base_revision)
-      ? { accepted: true, value: current }
-      : { accepted: false, value: current };
-  }
-  return BigInt(delta.state.revision) === BigInt(delta.revision)
-    ? { accepted: true, value: delta.state }
-    : { accepted: false, value: current };
-}
 
 function applySettingsDelta(current, delta) {
   if (!delta) return { accepted: true, value: current };
@@ -1040,142 +949,8 @@ function effectiveUiPresence(schema, presence) {
   return visit(schema?.root, true) ? effective : null;
 }
 
-function normalizeRetiredFooterPromptFrame(frame) {
-  const prompt = uiNodeById(frame?.schema?.root, 'footer.prompt');
-  if (num(prompt?.leaf?.surface) !== 5) return frame;
-  const rootChildren = frame?.schema?.root?.container?.children;
-  const leaf = prompt.leaf;
-  const exactRoot = Array.isArray(rootChildren) &&
-    rootChildren.map((node) => node.id).join('\0') ===
-      ['header', 'body', 'footer.prompt', 'footer'].join('\0');
-  const exactLeaf = prompt === rootChildren?.[2] &&
-    num(prompt.size?.kind) === 2 && num(prompt.size?.extent) === 0 &&
-    Object.keys(prompt).every((key) =>
-      ['id', 'size', 'style', 'leaf'].includes(key)) &&
-    !Object.prototype.hasOwnProperty.call(prompt, 'focus_context') &&
-    !Object.prototype.hasOwnProperty.call(prompt, 'accessible_label') &&
-    num(leaf.kind) === 6 && leaf.id === 'footer.prompt' &&
-    leaf.value == null && leaf.checked == null && leaf.width == null &&
-    leaf.role == null && leaf.command == null && num(leaf.rank) === 0 &&
-    !leaf.keep && num(leaf.overflow) === 0 && leaf.sigil === '';
-  if (!exactRoot || !exactLeaf) return null;
-  const normalized = structuredClone(frame);
-  const normalizedPrompt =
-    uiNodeById(normalized.schema.root, 'footer.prompt');
-  delete normalizedPrompt.leaf;
-  normalizedPrompt.container = {
-    axis: 1n,
-    inset: { left: 0n, right: 0n, top: 0n, bottom: 0n },
-    gap: 0n,
-    children: [],
-  };
-  normalizedPrompt.focus_context = 2n;
-  const state = normalized.state?.nodes?.find(
-    (node) => node.id === 'footer.prompt');
-  if (!state) return null;
-  state.leaf = null;
-  return normalized;
-}
-
-export function legacyPromptViewFromFrame(status, frame) {
-  const root = uiNodeById(frame?.schema?.root, 'footer.prompt');
-  if (!root?.container) return { valid: false, view: null };
-  const effective = effectiveUiPresence(frame.schema, frame.presence);
-  if (!effective) return { valid: false, view: null };
-  const activeKind = status?.active_kind;
-  if (activeKind == null || num(activeKind) === 5) {
-    return {
-      valid: effective.get('footer.prompt') !== true ||
-        root.container.children.length === 0,
-      view: null,
-    };
-  }
-  if (num(activeKind) < 0 || num(activeKind) > 4 ||
-      effective.get('footer.prompt') !== true ||
-      typeof root.accessible_label !== 'string') {
-    return { valid: false, view: null };
-  }
-  const states = new Map(
-    (frame.state?.nodes || []).map((record) => [record.id, record.leaf]));
-  const controls = [];
-  let inputCount = 0;
-  let activeInput = null;
-  const add = (node, kind) => {
-    const widget = node?.leaf;
-    const state = states.get(node?.id);
-    if (!widget || !state) return false;
-    const control = {
-      kind: BigInt(kind),
-      id: widget.id,
-      accessible_label: state.label,
-      value: state.value,
-      checked: state.checked ?? false,
-      command: state.command ?? '',
-    };
-    if (kind === 0) {
-      if (num(widget.kind) !== 4 || typeof state.active !== 'boolean' ||
-          !control.command) return false;
-      if (state.active) {
-        if (activeInput != null) return false;
-        activeInput = inputCount;
-      }
-      inputCount++;
-    } else if (kind === 1) {
-      if (num(widget.kind) !== 3 || typeof state.checked !== 'boolean' ||
-          state.active != null || !control.command) return false;
-    } else if (num(widget.kind) !== 1 || state.checked != null ||
-               state.active != null || state.command != null) {
-      return false;
-    }
-    controls.push(control);
-    return true;
-  };
-  let sawOptions = false;
-  for (const child of root.container.children) {
-    if (child.id === 'footer.prompt.options') {
-      if (sawOptions || !child.container) return { valid: false, view: null };
-      sawOptions = true;
-      let sawCount = false;
-      for (const option of child.container.children || []) {
-        if (num(option?.leaf?.kind) === 3) {
-          if (sawCount || !add(option, 1))
-            return { valid: false, view: null };
-        } else if (num(option?.leaf?.kind) === 1) {
-          if (sawCount || !add(option, 2))
-            return { valid: false, view: null };
-          sawCount = true;
-        } else {
-          return { valid: false, view: null };
-        }
-      }
-    } else if (sawOptions || !add(child, 0)) {
-      return { valid: false, view: null };
-    }
-  }
-  if (activeInput == null || inputCount === 0) {
-    return { valid: false, view: null };
-  }
-  return {
-    valid: true,
-    view: {
-      kind: activeKind,
-      accessible_label: root.accessible_label,
-      controls,
-      active_input: BigInt(activeInput),
-    },
-  };
-}
-
-function normalizePromptViewCompatibility(sections) {
-  const derived = legacyPromptViewFromFrame(
-    sections?.prompt_status, sections?.ui_frame);
-  if (!derived.valid ||
-      (has(sections, 'prompt_view') &&
-       !sameValue(sections.prompt_view, derived.view))) {
-    return false;
-  }
-  delete sections.prompt_view;
-  return true;
+function normalizeUiFrameSections(sections) {
+  return validUiFrame(sections.ui_frame);
 }
 
 function validUiFrame(frame) {
@@ -1270,233 +1045,10 @@ export function applyUiFrameDelta(frame, delta) {
   return validUiFrame(candidate) ? candidate : null;
 }
 
-function normalizeUiFrameSections(sections) {
-  const legacyNames = ['ui', 'ui_state', 'ui_presence'];
-  const legacyPresent = legacyNames.filter((name) =>
-    Object.prototype.hasOwnProperty.call(sections, name));
-  if (sections.ui_frame != null) {
-    sections.ui_frame = normalizeRetiredFooterPromptFrame(sections.ui_frame);
-    if (legacyPresent.length !== 0 || !validUiFrame(sections.ui_frame)) {
-      return false;
-    }
-    const pair = uiFrameLegacyFocusPair(sections.ui_frame);
-    const external = sections.external_focus_held == null
-      ? false : strictBoolean(sections.external_focus_held);
-    if (!(pair != null &&
-      sections.focus != null && num(sections.focus) === pair.focus &&
-      external != null && external === pair.external)) return false;
-    return normalizePromptViewCompatibility(sections);
-  }
-  if (legacyPresent.length === 0) return true;
-  if (legacyPresent.length !== legacyNames.length ||
-      legacyNames.some((name) => sections[name] == null)) return false;
-  const schema = structuredClone(sections.ui);
-  const legacyContexts = new Map([
-    ['editor', 0], ['panel', 1], ['input_line', 2],
-    ['footer.prompt', 2], ['externalmod', 3],
-  ]);
-  const annotate = (node) => {
-    if (!node || typeof node.id !== 'string') return;
-    // Preceding schemas had no focus metadata; known host identity supplies it.
-    if (legacyContexts.has(node.id)) {
-      node.focus_context = legacyContexts.get(node.id);
-    }
-    for (const child of (node.container?.children || [])) annotate(child);
-  };
-  annotate(schema.root);
-  const state = { ...sections.ui_state };
-  const external = sections.external_focus_held == null
-    ? false : strictBoolean(sections.external_focus_held);
-  if (sections.focus == null || external == null) return false;
-  if (state.focus_path == null) {
-    const provisional = {
-      schema,
-      state,
-      presence: sections.ui_presence,
-    };
-    state.focus_path = legacyFocusPath(
-      provisional, num(sections.focus),
-      external);
-    if (!state.focus_path) return false;
-  }
-  const frame = {
-    version: {
-      generation: sections.ui.generation,
-      presence_basis: sections.ui_presence.basis,
-    },
-    schema,
-    state,
-    presence: sections.ui_presence,
-  };
-  const normalizedFrame = normalizeRetiredFooterPromptFrame(frame);
-  if (!validUiFrame(normalizedFrame)) return false;
-  sections.ui_frame = normalizedFrame;
-  for (const name of legacyNames) delete sections[name];
-  return normalizePromptViewCompatibility(sections);
-}
-
-function uiFrameLegacyFocusPair(frame) {
-  const resolved = resolveUiFocusPath(
-    frame?.schema, frame?.state, frame?.presence);
-  if (!resolved) return null;
-  const contexts = new Map();
-  const collect = (node) => {
-    if (!node || typeof node.id !== 'string') return;
-    contexts.set(node.id, num(node.focus_context));
-    for (const child of (node.container?.children || [])) collect(child);
-  };
-  collect(frame.schema.root);
-  let focus = null;
-  for (let index = resolved.path.length - 1; index >= 0; --index) {
-    const context = contexts.get(resolved.path[index]);
-    if (context !== 3) {
-      focus = context;
-      break;
-    }
-  }
-  return focus == null || focus < 0 || focus > 2 ? null : {
-    focus,
-    external: resolved.context === 'external',
-  };
-}
-
-function legacyFocusPath(frame, focus, external) {
-  if (!Number.isInteger(focus) || focus < 0 || focus > 2 ||
-      (focus === 2 && external)) {
-    return null;
-  }
-  const base = focus === 1 ? 'panel' : 'editor';
-  const baseNode = uiNodeById(frame.schema.root, base);
-  if (num(baseNode?.focus_context) !== (focus === 1 ? 1 : 0)) return null;
-  const effective = effectiveUiPresence(frame.schema, frame.presence);
-  if (!effective) return null;
-  const path = [base];
-  if (focus === 2) {
-    const prompts = ['input_line', 'footer.prompt'].filter((id) =>
-      num(uiNodeById(frame.schema.root, id)?.focus_context) === 2 &&
-      effective.get(id) === true);
-    if (prompts.length !== 1) return null;
-    path.push(prompts[0]);
-  } else if (effective.get(base) !== true) {
-    return null;
-  }
-  if (external) {
-    if (num(uiNodeById(frame.schema.root, 'externalmod')?.focus_context) !== 3 ||
-        effective.get('externalmod') !== true) {
-      return null;
-    }
-    path.push('externalmod');
-  }
-  return path;
-}
-
-function frameDeltaChangesFocus(delta) {
-  if (delta?.ui_frame_delta != null) {
-    return delta.ui_frame_delta.kind === 'replacement' ||
-      delta.ui_frame_delta.state?.focus_path != null;
-  }
-  return delta?.ui_state?.focus_path != null;
-}
-
-function strictBoolean(value) {
-  return typeof value === 'boolean' ? value : null;
-}
-
-function reconcileLegacyFocusDelta(baseFrame, candidate, delta) {
-  const hasFocus = delta.focus != null;
-  const hasExternal = delta.external_focus_held != null;
-  if (!hasFocus && !hasExternal) return candidate;
-  const external = hasExternal
-    ? strictBoolean(delta.external_focus_held) : null;
-  if (hasExternal && external == null) return null;
-  const actual = uiFrameLegacyFocusPair(candidate);
-  if (!actual) return null;
-  if (frameDeltaChangesFocus(delta)) {
-    if ((hasFocus && actual.focus !== num(delta.focus)) ||
-        (hasExternal && actual.external !== external)) {
-      return null;
-    }
-    return candidate;
-  }
-  const base = uiFrameLegacyFocusPair(baseFrame);
-  if (!base) return null;
-  const focus = hasFocus ? num(delta.focus) : base.focus;
-  const requestedExternal = hasExternal ? external : base.external;
-  const path = legacyFocusPath(candidate, focus, requestedExternal);
-  if (!path) return null;
-  const reconciled = {
-    ...candidate,
-    state: { ...candidate.state, focus_path: path },
-  };
-  return validUiFrame(reconciled) ? reconciled : null;
-}
-
-function validSyntaxState(state) {
-  const textBytes = num(state?.text_bytes);
-  if (!state || textBytes < 0 || !Array.isArray(state.spans) ||
-      !Array.isArray(state.bracket_pairs) ||
-      !Array.isArray(state.unmatched_brackets) ||
-      !Array.isArray(state.comment_tokens) ||
-      !Array.isArray(state.comment_ranges) ||
-      !Array.isArray(state.indentation) || state.indentation.length === 0) {
-    return false;
-  }
-  let cursor = 0;
-  for (const span of state.spans) {
-    const begin = num(span.begin);
-    const end = num(span.end);
-    if (begin !== cursor || begin >= end || end > textBytes) return false;
-    cursor = end;
-  }
-  if (cursor !== textBytes) return false;
-  let previous = -1;
-  for (const pair of state.bracket_pairs) {
-    const open = num(pair.open);
-    const close = num(pair.close);
-    if (open >= close || close >= textBytes || open <= previous) return false;
-    previous = open;
-  }
-  previous = -1;
-  for (const bracket of state.unmatched_brackets) {
-    const offset = num(bracket.offset);
-    if (offset >= textBytes || offset <= previous) return false;
-    previous = offset;
-  }
-  let previousBegin = -1;
-  let previousEnd = -1;
-  for (const token of state.comment_tokens) {
-    const begin = num(token.range?.begin);
-    const end = num(token.range?.end);
-    if (begin >= end || end > textBytes ||
-        (begin < previousBegin ||
-         (begin === previousBegin && end <= previousEnd))) return false;
-    previousBegin = begin;
-    previousEnd = end;
-  }
-  previous = 0;
-  for (const range of state.comment_ranges) {
-    const begin = num(range.range?.begin);
-    const end = num(range.range?.end);
-    if (begin < previous || begin >= end || end > textBytes) return false;
-    previous = end;
-  }
-  previous = -1;
-  for (let index = 0; index < state.indentation.length; ++index) {
-    const line = state.indentation[index];
-    const lineStart = num(line.line_start);
-    const contentStart = num(line.content_start);
-    if (num(line.line) !== index || lineStart > contentStart ||
-        contentStart > textBytes || lineStart <= previous) return false;
-    previous = lineStart;
-  }
-  return true;
-}
-
-// Transactionally apply every semantic section. Unchanged sections retain their
-// identity; failure returns null and leaves the retained frame untouched.
 export function applySessionDeltaCopy(sections, delta) {
   if (!sections || !delta) return null;
-  const next = { ...sections };
+  const next = replayOrdinarySessionSections(sections, delta);
+  if (!next) return null;
   if (delta.document) {
     const document = delta.document;
     if (BigInt(document.base_revision) !== BigInt(sections.document.revision) ||
@@ -1527,41 +1079,9 @@ export function applySessionDeltaCopy(sections, delta) {
     next.document.caret = delta.document_caret;
   }
 
-  const replacements = [
-    ['selection', false], ['history', false], ['clipboard', false],
-    ['prompt_status', false], ['keymap', false],
-    ['notice_view', true],
-  ];
-  for (const [name, nullable] of replacements) {
-    const replayed = changedReplacement(sections[name], delta[name], nullable);
-    if (!replayed.accepted) return null;
-    next[name] = replayed.value;
-  }
-  const find = delta.find_replace;
-  if (find) {
-    if (num(find.base_generation) !== num(sections.find_replace.generation)) {
-      return null;
-    }
-    const replayed = changedReplacement(sections.find_replace, find);
-    if (!replayed.accepted ||
-        (replayed.value !== sections.find_replace &&
-         num(replayed.value.generation) < num(find.base_generation))) return null;
-    next.find_replace = replayed.value;
-  }
-  for (const name of ['search', 'lsp_sync', 'lsp_features']) {
-    const replayed = revisionReplacement(sections[name], delta[name]);
-    if (!replayed.accepted) return null;
-    next[name] = replayed.value;
-  }
   const settings = applySettingsDelta(sections.settings, delta.settings);
   if (!settings.accepted) return null;
   next.settings = settings.value;
-  if (delta.text_encoding) {
-    if (!sameValue(sections.text_encoding, delta.text_encoding.before)) return null;
-    next.text_encoding = delta.text_encoding.after;
-  }
-  if (delta.tabs?.state != null) next.tabs = delta.tabs.state;
-
   const diff = applyIdMerge(sections.diff, delta.diff, 'files');
   if (delta.diff && !diff.accepted) return null;
   if (delta.diff) next.diff = diff.value;
@@ -1571,103 +1091,39 @@ export function applySessionDeltaCopy(sections, delta) {
   if (delta.external_modification && !external.accepted) return null;
   if (delta.external_modification) next.external_modification = external.value;
 
-  if (delta.follow_edits) {
-    if (num(delta.follow_edits.base_generation) !==
-        num(sections.follow_edits.generation)) return null;
-    if (delta.follow_edits.replacement == null) {
-      if (num(delta.follow_edits.generation) !==
-          num(delta.follow_edits.base_generation)) return null;
-    } else {
-      if (num(delta.follow_edits.replacement.generation) !==
-          num(delta.follow_edits.generation)) return null;
-      next.follow_edits = delta.follow_edits.replacement;
-    }
-  }
   if (delta.tree) {
     next.tree = { ...sections.tree };
     if (!applyTreeDelta(next.tree, delta.tree)) return null;
   }
-  if (delta.syntax) {
-    const baseRevision = BigInt(delta.syntax.base_revision);
-    const revision = BigInt(delta.syntax.revision);
-    const members = [
-      'language', 'text_bytes', 'spans', 'bracket_pairs',
-      'unmatched_brackets', 'comment_tokens', 'comment_ranges', 'indentation',
-    ];
-    const changed = members.some((member) => delta.syntax[member] != null);
-    if (baseRevision !== BigInt(sections.syntax.revision) ||
-        revision < baseRevision || (revision === baseRevision && changed)) {
-      return null;
-    }
-    const syntax = { ...sections.syntax, revision: delta.syntax.revision };
-    for (const member of members) {
-      if (delta.syntax[member] != null) syntax[member] = delta.syntax[member];
-    }
-    if (!validSyntaxState(syntax)) return null;
-    next.syntax = syntax;
-  }
-  if (delta.theme?.replacement != null) next.theme = delta.theme.replacement;
-  if (delta.palette != null) {
-    next.palette = delta.palette.replacement ?? delta.palette;
-  }
-  const legacyUiNames = ['ui', 'ui_state', 'ui_presence'];
-  const hasLegacyUi = legacyUiNames.some((name) =>
-    Object.prototype.hasOwnProperty.call(delta, name));
-  if (delta.ui_frame_delta != null && hasLegacyUi) return null;
   if (delta.ui_frame_delta != null) {
     next.ui_frame = applyUiFrameDelta(sections.ui_frame, delta.ui_frame_delta);
     if (!next.ui_frame) return null;
-  } else if (hasLegacyUi) {
-    const schema = delta.ui ?? sections.ui_frame?.schema;
-    const stateReplacement = delta.ui_state ?? sections.ui_frame?.state;
-    const presence = delta.ui_presence ?? sections.ui_frame?.presence;
-    if (!schema || !stateReplacement || !presence) return null;
-    const state = stateReplacement.focus_path == null
-      ? { ...stateReplacement, focus_path: sections.ui_frame.state.focus_path }
-      : stateReplacement;
-    const frame = {
-      version: {
-        generation: schema.generation,
-        presence_basis: presence.basis,
-      },
-      schema, state, presence,
-    };
-    if (!validUiFrame(frame)) return null;
-    next.ui_frame = frame;
   }
-  if (sections.ui_frame != null || next.ui_frame != null) {
-    next.ui_frame = reconcileLegacyFocusDelta(
-      sections.ui_frame, next.ui_frame, delta);
-    if (!next.ui_frame) return null;
-  }
-  if (next.ui_frame != null || delta.prompt_view != null) {
-    const derivedPrompt = legacyPromptViewFromFrame(
-      next.prompt_status, next.ui_frame);
-    if (!derivedPrompt.valid ||
-        (delta.prompt_view && !!num(delta.prompt_view.changed) &&
-         !sameValue(delta.prompt_view.replacement ?? null,
-                    derivedPrompt.view))) {
-      return null;
-    }
-  }
-  delete next.prompt_view;
-  if (delta.watcher_available != null) {
-    next.watcher_available = !!num(delta.watcher_available);
-  }
-  delete next.focus;
-  delete next.external_focus_held;
   return next;
 }
 
-export function applySessionDelta(sections, revision, delta) {
-  if (!sections) return { kind: 'missing-state' };
-  if (!deltaIsContiguous(revision, delta)) return { kind: 'revision-gap' };
-  const next = applySessionDeltaCopy(sections, delta);
-  if (!next) return { kind: 'semantic-rejection' };
+// CONTRACT: The retained session is replaced only after envelope and section
+// replay both accept.
+export function applySessionDelta(session, delta) {
+  if (!session?.sections) return { kind: 'missing-state' };
+  if (!delta ||
+      BigInt(delta.base_revision) !== BigInt(session.revision) ||
+      BigInt(delta.revision) <= BigInt(delta.base_revision) ||
+      BigInt(delta.client_id) !== BigInt(session.client?.client_id) ||
+      BigInt(delta.view_id) !== BigInt(session.client?.view_id) ||
+      !sameValue(delta.capabilities, session.client?.capabilities)) {
+    return { kind: 'semantic-rejection' };
+  }
+  const sections = applySessionDeltaCopy(session.sections, delta);
+  if (!sections) return { kind: 'semantic-rejection' };
   return {
     kind: 'accepted',
-    sections: next,
-    revision: BigInt(delta.revision),
+    session: {
+      revision: BigInt(delta.revision),
+      client: session.client,
+      topology: delta.topology != null ? delta.topology : session.topology,
+      sections,
+    },
   };
 }
 
@@ -1746,7 +1202,7 @@ export function browserRenderPlan(delta) {
       (delta.syntax && delta.syntax.spans != null)) {
     add(SURFACE.DOCUMENT);
   }
-  if (delta.tabs && delta.tabs.state != null) add(SURFACE.TAB_BAR);
+  if (delta.tabs) add(SURFACE.TAB_BAR);
   if (revisionChanged(delta.tree)) add(SURFACE.TREE);
   if (delta.palette) add(SURFACE.FIND_RESULTS);
   if (delta.notice_view && !!num(delta.notice_view.changed))

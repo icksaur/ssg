@@ -232,17 +232,6 @@ CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
     if (id == "status.next") runtime.status.next();
     else if (id == "status.previous") runtime.status.previous();
     else if (id == "status.dismiss") runtime.status.dismiss();
-    else if (id == "status.invoke_action") {
-        auto const* invocation = payloadAs<StatusActionInvocation>(payload);
-        if (invocation == nullptr) return failure("status.invoke_action requires an action payload");
-        auto result = runtime.status.invokeAction(*invocation);
-        if (!result.accepted()) return failure("status action is unavailable");
-        ClientCommand target{*result.commandId,
-                             runtime.session->revision(), {}};
-        return runtime.defer(std::nullopt, std::move(target))
-                   ? success()
-                   : failure("status action target could not be queued");
-    }
     return success();
 }
 
@@ -571,20 +560,6 @@ void registerPromptStatusCommands(CommandCatalog& builder,
                     return activateUiNode(runtime, context, arguments);
                 }));
 
-    builder.add(spec("status.invoke_action", "Invoke Action")
-                    .optionalInProcessHandler<StatusActionInvocation>(
-                        [&runtime](CommandContext& context,
-                                   std::optional<StatusActionInvocation> const&
-                                       invocation) {
-                            return runtime.runTransaction([&] {
-                                return promptStatusCommand(
-                                    runtime, context.viewId(),
-                                    context.revision(),
-                                    "status.invoke_action",
-                                    invocation ? std::any{*invocation}
-                                               : std::any{});
-                            });
-                        }));
     builder.add(spec("prompt.update_value", "Update Value")
                     .handler<PromptValueArguments>(
                         [&runtime](CommandContext& context,

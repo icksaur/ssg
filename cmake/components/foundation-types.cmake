@@ -11,7 +11,7 @@
 # This manifest adds the config-type implementation to the ssg library and
 # registers the standalone type-oracle test executable.
 
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/config.cpp
 )
 
@@ -19,6 +19,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_types
         ${SSG_SOURCE_DIR}/tests/test_types.cpp
     )
-    target_link_libraries(test_types PRIVATE ssg)
+    target_link_libraries(test_types PRIVATE ssg_core)
     add_test(NAME test_types COMMAND test_types)
 endif()

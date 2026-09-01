@@ -1,5 +1,5 @@
 #include "../test_helpers.h"
-#include "../legacy_grid_frame.h"
+#include "../grid_test_frame.h"
 
 #include <ssg/EditorSession.h>
 #include <ssg/Renderer.h>
@@ -14,18 +14,13 @@
 // M9-T layout totality.
 //
 // The library layout is dimension-parametric and must be TOTAL: for any viewport
-// it produces either a well-formed snapshot (>= the 20x4 minimum) or the typed
-// "too small" outcome (snapshot() == nullopt), and render() never throws on a
-// snapshot it hands back.  We sweep sizes crossed with UI states and documents so
-// a resize storm (which sweeps through 1-row / 1-col transients) can never crash
-// the app or produce out-of-bounds geometry.
+// it produces a well-formed frame, including the typed too-small presentation,
+// and render() never throws. We sweep sizes crossed with UI states and documents
+// so a resize storm can never crash the app or produce out-of-bounds geometry.
 
 namespace {
 
 namespace fs = std::filesystem;
-
-constexpr int kMinimumColumns = 20;
-constexpr int kMinimumRows = 4;
 
 fs::path makeRoot(const std::string& name) {
     auto root = fs::current_path() / ("runtime_totality_" + name);
@@ -116,52 +111,8 @@ void runState(const UiState& state) {
     }
 
     for (auto const dims : sweep()) {
-        // snapshot() is total: it always returns a value.  The typed "too small"
-        // outcome is a zeroed shell viewport ({0,0}); a laid-out shell carries the
-        // requested dimensions.
-        auto snapshot = runtime.present(ssg::ClientId{1}, dims);
-        ASSERT_TRUE(snapshot.has_value());
-        if (!snapshot.has_value()) continue;
-        auto const& shell = snapshot->presentation().shell;
-
-        bool const belowMinimum =
-            static_cast<int>(dims.columns) < kMinimumColumns ||
-            static_cast<int>(dims.rows) < kMinimumRows;
-        bool const laidOut =
-            shell.viewport.columns > 0 && shell.viewport.rows > 0;
-
-        // Hard boundary: any viewport below 20x4 is ALWAYS too small, regardless
-        // of UI state.
-        if (belowMinimum) {
-            ASSERT_FALSE(laidOut);
-            ASSERT_EQ(shell.viewport.columns, 0);
-            ASSERT_EQ(shell.viewport.rows, 0);
-        }
-
-        // Positive side of the oracle: a roomy viewport (>= 80x24) must lay out in
-        // every UI state — otherwise an "always too small" regression would pass
-        // the negative checks alone.
-        if (static_cast<int>(dims.columns) >= 80 &&
-            static_cast<int>(dims.rows) >= 24) {
-            ASSERT_TRUE(laidOut);
-        }
-
-        // A too-small snapshot (e.g. a prompt-open state at a height that leaves
-        // no content row) is a valid typed outcome: the app shows a placeholder
-        // and must NOT call render(), which requires a positive viewport.
-        if (!laidOut) {
-            ASSERT_EQ(shell.viewport.columns, 0);
-            ASSERT_EQ(shell.viewport.rows, 0);
-            continue;
-        }
-
-        // Laid out: geometry is well-formed and render() is total.
-        ASSERT_EQ(shell.viewport.columns, static_cast<int>(dims.columns));
-        ASSERT_EQ(shell.viewport.rows, static_cast<int>(dims.rows));
-        assertRegionsInBounds(shell);
-
-        auto frame =
-            ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+        auto frame = ssg::test::projectGridFrame(
+            runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
         ASSERT_TRUE(frame.has_value());
         if (!frame) continue;
         ASSERT_NO_THROW(ssg::Renderer{}.render(*frame));

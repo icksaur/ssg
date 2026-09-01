@@ -391,87 +391,6 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
     ASSERT_EQ(incremental.viewState(), full.viewState());
 }
 
-TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
-    const auto before = SyntaxViewState::plainText(
-        Revision{4}, LanguageId{"toy"}, "alpha\n", 4);
-    SyntaxParseOutput raw{
-        .revision = Revision{5},
-        .status = SyntaxParseStatus::Parsed,
-        .parse = std::make_shared<FakeParse>("let 2\n"),
-        .spans =
-            {
-                {byte(0), byte(3), SyntaxScope::Keyword},
-                {byte(4), byte(5), SyntaxScope::Number},
-            },
-    };
-    const auto after = SyntaxViewState::fromParse(
-        Revision{5}, LanguageId{"toy"}, "let 2\n", raw, {});
-
-    const auto delta = SyntaxDeltaCodec{}.derive(before, after);
-    ASSERT_EQ(delta.baseRevision(), Revision{4});
-    ASSERT_EQ(delta.revision(), Revision{5});
-    ASSERT_TRUE(delta.spans().has_value());
-    ASSERT_FALSE(delta.bracketPairs().has_value());
-    const auto replayed = SyntaxDeltaCodec{}.replay(before, delta);
-    ASSERT_TRUE(replayed.accepted());
-    ASSERT_EQ(*replayed.state, after);
-
-    const auto identical = SyntaxDeltaCodec{}.derive(after, after);
-    ASSERT_TRUE(identical.empty());
-    ASSERT_EQ(SyntaxDeltaCodec{}.replay(after, identical).state,
-              std::optional<SyntaxViewState>{after});
-
-    const auto revisionOnlyTarget = SyntaxViewState::plainText(
-        Revision{5}, LanguageId{"toy"}, "alpha\n", 4);
-    const auto revisionOnly =
-        SyntaxDeltaCodec{}.derive(before, revisionOnlyTarget);
-    ASSERT_TRUE(revisionOnly.empty());
-    const auto revisionOnlyReplay =
-        SyntaxDeltaCodec{}.replay(before, revisionOnly);
-    ASSERT_TRUE(revisionOnlyReplay.accepted());
-    ASSERT_EQ(*revisionOnlyReplay.state, revisionOnlyTarget);
-
-    const auto staleBase = SyntaxViewState::plainText(
-        Revision{3}, LanguageId{"toy"}, "alpha\n", 4);
-    ASSERT_EQ(SyntaxDeltaCodec{}.replay(staleBase, delta).error,
-              SyntaxReplayError::StaleRevision);
-
-    const SyntaxDelta malformed{
-        Revision{4},
-        Revision{5},
-        std::nullopt,
-        std::uint64_t{6},
-        std::vector<SyntaxSpan>{
-            {byte(0), byte(4), SyntaxScope::PlainText},
-            {byte(3), byte(6), SyntaxScope::Keyword},
-        },
-        std::nullopt,
-        std::nullopt,
-        std::nullopt,
-        std::nullopt,
-        std::nullopt,
-    };
-    ASSERT_EQ(SyntaxDeltaCodec{}.replay(before, malformed).error,
-              SyntaxReplayError::MalformedDelta);
-
-    const SyntaxDelta sameRevisionChange{
-        Revision{4},
-        Revision{4},
-        std::nullopt,
-        std::nullopt,
-        std::vector<SyntaxSpan>{
-            {byte(0), byte(6), SyntaxScope::Keyword},
-        },
-        std::nullopt,
-        std::nullopt,
-        std::nullopt,
-        std::nullopt,
-        std::nullopt,
-    };
-    ASSERT_EQ(SyntaxDeltaCodec{}.replay(before, sameRevisionChange).error,
-              SyntaxReplayError::MalformedDelta);
-}
-
 TEST(supersededAndCancelledResultsNeverReplaceNewerState) {
     auto parser = std::make_shared<DeterministicParser>();
     SyntaxModel model{parser};
@@ -673,7 +592,6 @@ TEST(parseConvenienceRejectsAParserThatCancelsMidParse) {
 int main() {
     RUN(handComputedMetadataGoldenCoversAllExportedSections);
     RUN(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse);
-    RUN(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly);
     RUN(supersededAndCancelledResultsNeverReplaceNewerState);
     RUN(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot);
     RUN(requestAndResultValidationIsFailureAtomic);

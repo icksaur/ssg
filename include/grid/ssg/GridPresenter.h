@@ -1,0 +1,135 @@
+#pragma once
+
+#include <ssg/ChromeLowering.h>
+#include <ssg/GridAction.h>
+#include <ssg/Layout.h>
+#include <ssg/PaletteSearcher.h>
+#include <ssg/Viewport.h>
+#include <ssg/ClientInput.h>
+#include <ssg/session_snapshot.h>
+
+#include <cstdint>
+#include <memory>
+#include <optional>
+
+namespace ssg {
+
+class EditorSession;
+namespace detail {
+struct GridProjectionState;
+}
+
+struct GridBasis {
+    ViewId viewId;
+    Revision semanticRevision;
+    // Advances whenever a frame is projected or an accepted action consumes the
+    // current basis. Rejection leaves it unchanged.
+    std::uint64_t presentationGeneration = 0;
+
+    friend bool operator==(const GridBasis&, const GridBasis&) = default;
+};
+
+struct GridPresentationRequest {
+    ViewportDimensions dimensions;
+    PaletteReport palette;
+};
+
+struct GridProjection {
+    ViewportViewState viewport;
+    Style style;
+    SelectionNavigation selectionNav;
+};
+
+class GridFrame {
+public:
+    GridFrame(GridFrame const&) = delete;
+    GridFrame& operator=(GridFrame const&) = delete;
+    GridFrame(GridFrame&&) noexcept = default;
+    GridFrame& operator=(GridFrame&&) noexcept = default;
+
+    [[nodiscard]] GridBasis basis() const noexcept { return basis_; }
+    [[nodiscard]] SessionSnapshot const& semantic() const noexcept {
+        return semantic_;
+    }
+    [[nodiscard]] Revision revision() const noexcept {
+        return semantic_.revision();
+    }
+    [[nodiscard]] SessionSnapshotSections const& sections() const noexcept {
+        return semantic_.sections();
+    }
+    [[nodiscard]] GridProjection const& presentation() const noexcept {
+        return projection_;
+    }
+    [[nodiscard]] SolvedGridTree const& layout() const noexcept {
+        return layout_;
+    }
+    [[nodiscard]] PaletteReport const& palette() const noexcept {
+        return palette_;
+    }
+    [[nodiscard]] std::optional<SolvedChromeSurface> const& header() const noexcept {
+        return header_;
+    }
+    [[nodiscard]] std::optional<SolvedChromeSurface> const& footer() const noexcept {
+        return footer_;
+    }
+    [[nodiscard]] std::optional<SolvedPanelSurface> const& panel() const noexcept {
+        return panel_;
+    }
+    [[nodiscard]] std::optional<SolvedDocumentSurface> const& document() const noexcept {
+        return document_;
+    }
+    // CONTRACT: Direct value construction requires a corresponding, solvable
+    // semantic UI frame and throws std::logic_error otherwise. GridPresenter
+    // reports the same rejection through project()'s nullopt result.
+    GridFrame(SessionSnapshot semantic, GridProjection projection,
+              GridBasis basis, PaletteReport palette = {});
+
+private:
+    friend class GridPresenter;
+    friend class EditorSession;
+    GridFrame(SessionSnapshot semantic, GridProjection projection,
+              SolvedGridTree layout, GridBasis basis, PaletteReport palette);
+    [[nodiscard]] static std::optional<GridFrame> fromSemantic(
+        SessionSnapshot semantic, Style style, ViewportDimensions dimensions,
+        GridBasis basis, PaletteReport palette,
+        std::uint32_t treeFirstVisible, bool revealTreeSelection,
+        const ShellState& shell, SelectionNavigation navigation);
+    void finalizeViewport(ViewportViewState viewport,
+                          SelectionNavigation navigation);
+    void solvePanel(std::uint32_t treeFirstVisible, bool revealTreeSelection);
+    void solveDocument(const ShellState* shell);
+    [[nodiscard]] std::optional<std::string> solveChrome();
+
+    SessionSnapshot semantic_;
+    GridProjection projection_;
+    SolvedGridTree layout_;
+    PaletteReport palette_;
+    std::optional<SolvedChromeSurface> header_;
+    std::optional<SolvedChromeSurface> footer_;
+    std::optional<SolvedPanelSurface> panel_;
+    std::optional<SolvedDocumentSurface> document_;
+    GridBasis basis_;
+};
+
+class GridPresenter {
+public:
+    explicit GridPresenter(ViewId viewId);
+    ~GridPresenter();
+
+    GridPresenter(GridPresenter const&) = delete;
+    GridPresenter& operator=(GridPresenter const&) = delete;
+    GridPresenter(GridPresenter&&) noexcept;
+    GridPresenter& operator=(GridPresenter&&) noexcept;
+
+    [[nodiscard]] std::optional<GridFrame> project(
+        EditorSession& session, ClientId client,
+        GridPresentationRequest request);
+    [[nodiscard]] GridActionResult apply(
+        ViewActionRequest const& request, GridFrame const& frame);
+
+private:
+    ViewId viewId_;
+    std::unique_ptr<detail::GridProjectionState> state_;
+};
+
+}  // namespace ssg

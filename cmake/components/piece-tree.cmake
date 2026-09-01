@@ -1,4 +1,4 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/PieceTree.cpp
 )
 
@@ -10,6 +10,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_piece_tree PRIVATE ssg)
+    target_link_libraries(test_piece_tree PRIVATE ssg_core)
     add_test(NAME test_piece_tree COMMAND test_piece_tree)
 endif()

@@ -12,7 +12,7 @@
 # implementation to the ssg library and registers the standalone cell-layout
 # oracle test executable.
 
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/GraphemeLayout.cpp
 )
 
@@ -20,13 +20,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_cell_layout
         ${SSG_SOURCE_DIR}/tests/test_cell_layout.cpp
     )
-    target_link_libraries(test_cell_layout PRIVATE ssg)
+    target_link_libraries(test_cell_layout PRIVATE ssg_core)
     add_test(NAME test_cell_layout COMMAND test_cell_layout)
 
     add_executable(test_gcb_oracle
         ${SSG_SOURCE_DIR}/tests/test_gcb_oracle.cpp
     )
-    target_link_libraries(test_gcb_oracle PRIVATE ssg)
+    target_link_libraries(test_gcb_oracle PRIVATE ssg_core)
     target_compile_definitions(test_gcb_oracle PRIVATE
         UNICODE_DATA_DIR="${SSG_SOURCE_DIR}/data/unicode"
     )

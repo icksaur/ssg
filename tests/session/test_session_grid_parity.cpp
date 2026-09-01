@@ -8,7 +8,7 @@
 // SSG_REGEN_GOLDEN=1.
 
 #include "../test_helpers.h"
-#include "../legacy_grid_frame.h"
+#include "../grid_test_frame.h"
 
 #include <ssg/EditorSession.h>
 #include <ssg/Renderer.h>
@@ -60,14 +60,13 @@ std::string captureGridMatrix() {
     // parity is already covered by the ui-layout golden and test_render. The publish's real
     // risk -- the body/panel/content region -- is fully captured.
     auto emit = [&](const std::string& name) {
-        auto snapshot = runtime.present(ssg::ClientId{1}, dims);
+        auto frame = ssg::test::projectGridFrame(
+            runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
         out << "=== " << name << " ===\n";
-        if (!snapshot) {
+        if (!frame) {
             out << "(no snapshot)\n";
             return;
         }
-        auto frame =
-            ssg::test::gridFrameFromLegacy(std::move(*snapshot));
         std::istringstream lines{
             ssg::Renderer{}.render(*frame).canonical()};
         std::string line;

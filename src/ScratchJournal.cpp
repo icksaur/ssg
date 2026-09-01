@@ -4,27 +4,13 @@
 
 #include <algorithm>
 #include <array>
-#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <iterator>
-#include <limits>
 #include <random>
 #include <stdexcept>
-#include <system_error>
 #include <utility>
-
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#else
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#endif
 
 namespace ssg {
 namespace {
@@ -398,30 +384,6 @@ std::vector<std::byte> readJournalBytes(const std::filesystem::path& path) {
                                                result.bytes.size())};
 }
 
-#ifndef _WIN32
-void throwErrno(std::string_view operation) {
-    throw std::system_error(errno, std::generic_category(),
-                            std::string{operation});
-}
-
-void syncParentDirectory(const std::filesystem::path& path) {
-    const auto parent = path.parent_path().empty()
-                            ? std::filesystem::path{"."}
-                            : path.parent_path();
-    const int descriptor = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY);
-    if (descriptor < 0) throwErrno("open scratch journal parent directory");
-    if (::fsync(descriptor) != 0) {
-        const int failure = errno;
-        ::close(descriptor);
-        errno = failure;
-        throwErrno("flush scratch journal parent directory");
-    }
-    if (::close(descriptor) != 0) {
-        throwErrno("close scratch journal parent directory");
-    }
-}
-#endif
-
 } // namespace
 
 std::uint64_t fastContentHash(std::string_view bytes) noexcept {
@@ -607,85 +569,10 @@ void ScratchJournal::append(std::span<const std::byte> record) const {
             "scratch journal parent directory must already exist");
     }
 
-#ifdef _WIN32
-    const HANDLE handle =
-        CreateFileW(path_.c_str(), FILE_APPEND_DATA,
-                    FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, OPEN_ALWAYS,
-                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr);
-    if (handle == INVALID_HANDLE_VALUE) {
-        throw std::system_error(static_cast<int>(GetLastError()),
-                                std::system_category(),
-                                "open scratch journal for append");
+    const auto result = appendFileDurably(path_, record);
+    if (!result.ok()) {
+        throw std::runtime_error(result.message);
     }
-    const bool created = GetLastError() != ERROR_ALREADY_EXISTS;
-    try {
-        if (created) set_owner_only_permissions(path_);
-        std::size_t written_total = 0;
-        while (written_total < record.size()) {
-            const auto chunk = static_cast<DWORD>(std::min<std::size_t>(
-                record.size() - written_total,
-                std::numeric_limits<DWORD>::max()));
-            DWORD written = 0;
-            if (!WriteFile(handle, record.data() + written_total, chunk,
-                           &written, nullptr) ||
-                written == 0) {
-                throw std::system_error(static_cast<int>(GetLastError()),
-                                        std::system_category(),
-                                        "write scratch journal record");
-            }
-            written_total += written;
-        }
-        if (!FlushFileBuffers(handle)) {
-            throw std::system_error(static_cast<int>(GetLastError()),
-                                    std::system_category(),
-                                    "flush scratch journal record");
-        }
-        CloseHandle(handle);
-    } catch (...) {
-        CloseHandle(handle);
-        throw;
-    }
-#else
-    bool created = false;
-    int descriptor =
-        ::open(path_.c_str(), O_WRONLY | O_APPEND | O_CREAT | O_EXCL, 0600);
-    if (descriptor >= 0) {
-        created = true;
-    } else if (errno == EEXIST) {
-        descriptor = ::open(path_.c_str(), O_WRONLY | O_APPEND);
-    }
-    if (descriptor < 0) throwErrno("open scratch journal for append");
-
-    try {
-        std::size_t writtenTotal = 0;
-        while (writtenTotal < record.size()) {
-            const auto written =
-                ::write(descriptor, record.data() + writtenTotal,
-                        record.size() - writtenTotal);
-            if (written < 0) {
-                if (errno == EINTR) continue;
-                throwErrno("write scratch journal record");
-            }
-            if (written == 0) {
-                throw std::system_error(EIO, std::generic_category(),
-                                        "write scratch journal record");
-            }
-            writtenTotal += static_cast<std::size_t>(written);
-        }
-        if (::fsync(descriptor) != 0) {
-            throwErrno("flush scratch journal record");
-        }
-        if (::close(descriptor) != 0) {
-            descriptor = -1;
-            throwErrno("close scratch journal");
-        }
-        descriptor = -1;
-        if (created) syncParentDirectory(path_);
-    } catch (...) {
-        if (descriptor >= 0) ::close(descriptor);
-        throw;
-    }
-#endif
 }
 
 } // namespace ssg

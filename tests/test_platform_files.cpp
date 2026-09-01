@@ -163,6 +163,21 @@ TEST(identityIsStableAcrossReopenAndRename) {
     ASSERT_NE(ssg::fileIdentity(other), before);
 }
 
+TEST(durableAppendSyncAndRenamePreserveBytes) {
+    TemporaryDirectory temporary;
+    const auto original = temporary.path() / "journal";
+    const auto renamed = temporary.path() / "renamed";
+
+    ASSERT_TRUE(ssg::appendFileDurably(original, bytes("first")).ok());
+    ASSERT_TRUE(ssg::appendFileDurably(original, bytes("-second")).ok());
+    ASSERT_TRUE(ssg::syncFile(original).ok());
+    ASSERT_EQ(readText(original), "first-second");
+
+    ASSERT_TRUE(ssg::renamePathDurably(original, renamed).ok());
+    ASSERT_FALSE(std::filesystem::exists(original));
+    ASSERT_EQ(readText(renamed), "first-second");
+}
+
 TEST(lockContentionAndReleaseFollowRaii) {
     TemporaryDirectory temporary;
     const auto lockPath = temporary.path() / "session.lock";
@@ -401,6 +416,7 @@ TEST(atomicReplacementNeverExposesPartialBytes) {
 int main() {
     RUN(pathPolicyDecisionTable);
     RUN(identityIsStableAcrossReopenAndRename);
+    RUN(durableAppendSyncAndRenamePreserveBytes);
     RUN(lockContentionAndReleaseFollowRaii);
     RUN(ownerOnlyPermissionsAreApplied);
     RUN(cacheRootContainsValidatedApplicationComponent);

@@ -1,6 +1,6 @@
 // Kind: seam.
 //
-// Proves SessionSnapshotBuilder is faithful: a snapshot it builds renders the
+// Proves SessionSnapshotBuilder is faithful: a frame it builds renders the
 // document region identically to one the real EditorSession produces for the
 // same text.
 //
@@ -10,7 +10,7 @@
 // production projection, this fails and the cheap tests stay honest.
 
 #include "session_snapshot_builder.h"
-#include "legacy_grid_frame.h"
+#include "grid_test_frame.h"
 #include "test_helpers.h"
 
 #include <ssg/EditorSession.h>
@@ -70,19 +70,16 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
                                {"file.open", runtime->revision(),
                                 std::string{"a.txt"}})
                     .accepted());
-    auto real = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(real.has_value());
-    if (!real) return;
+    auto realFrame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
+    ASSERT_TRUE(realFrame.has_value());
+    if (!realFrame) return;
 
     auto built = ssg::test::SessionSnapshotBuilder{}
                      .document(text)
                      .viewport(80, 24)
                      .build();
 
-    auto realFrame =
-        ssg::test::gridFrameFromLegacy(std::move(*real));
-    ASSERT_TRUE(realFrame.has_value());
-    if (!realFrame) return;
     auto const realGrid = ssg::Renderer{}.render(*realFrame);
     auto const builtGrid = ssg::Renderer{}.render(built);
 

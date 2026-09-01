@@ -68,11 +68,10 @@ function activateUiNode(nodeId) {
 const DOCUMENT_VIEWPORT_NODE_ID = 'document.viewport';
 const PANEL_NODE_ID = 'panel';
 
-// Persistent client model: the authoritative sections plus the still-unsettled
-// local predictions. Snapshots replace `sections`; deltas mutate it in place.
+// Persistent client model: one authoritative session plus still-unsettled local
+// predictions.
 const state = {
-  sections: null,
-  revision: 0n,
+  session: null,
   pending: [],
   inputQueue: [],
   nextEditId: 1,
@@ -86,6 +85,10 @@ const state = {
     pendingSubmit: null, error: '',
   },
 };
+Object.defineProperties(state, {
+  sections: { get: () => state.session?.sections ?? null },
+  revision: { get: () => state.session?.revision ?? 0n },
+});
 const retainedNodes = new GenerationRetainedCache();
 const responsiveObserver = typeof ResizeObserver === 'undefined'
   ? null
@@ -952,11 +955,10 @@ function refreshFinder() {
 }
 
 function applyDelta(d) {
-  const applied = applySessionDelta(state.sections, state.revision, d);
+  const applied = applySessionDelta(state.session, d);
   if (applied.kind !== 'accepted') return applied.kind;
   const pointerBasis = currentPointerBasis();
-  state.sections = applied.sections;
-  state.revision = applied.revision;
+  state.session = applied.session;
   if (!samePointerBasis(pointerBasis, currentPointerBasis())) {
     invalidatePointerOffsets();
   }
@@ -1585,10 +1587,12 @@ function applyProtocolFrame(buffer) {
       reconnect('state snapshot rejected');
       return false;
     }
-    delete sections.focus;
-    delete sections.external_focus_held;
-    state.sections = sections;
-    state.revision = BigInt(payload.revision);
+    state.session = {
+      revision: BigInt(payload.revision),
+      client: payload.client,
+      topology: payload.topology,
+      sections,
+    };
     reconnectAttempts = 0;
     frameRenderPlan = fullRenderPlan();
     invalidatePointerOffsets();
@@ -1600,9 +1604,8 @@ function applyProtocolFrame(buffer) {
     }
     const applied = applyDelta(payload);
     if (applied !== 'accepted') {
-      if (applied !== 'revision-gap') state.sections = null;
-      reconnect(applied === 'revision-gap'
-        ? 'state revision gap' : 'state delta rejected');
+      state.session = null;
+      reconnect('state delta rejected');
       return false;
     }
     frameRenderPlan = browserRenderPlan(payload);

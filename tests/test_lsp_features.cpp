@@ -249,22 +249,6 @@ TEST(definitionAndReferencesPublishUserNavigationTargets) {
               std::optional<std::size_t>{0});
 }
 
-TEST(viewDeltaRoundTripAndStaleReplay) {
-    ssg::LspFeatureViewState before;
-    before.revision = Revision{7};
-    auto after = before;
-    after.revision = Revision{8};
-    after.status = "ready";
-    const auto delta = ssg::LspFeatureDeltaCodec{}.derive(before, after);
-    const auto replayed = ssg::LspFeatureDeltaCodec{}.replay(before, delta);
-    ASSERT_TRUE(replayed.accepted());
-    ASSERT_EQ(*replayed.state, after);
-
-    auto wrong = before;
-    wrong.revision = Revision{6};
-    ASSERT_FALSE(ssg::LspFeatureDeltaCodec{}.replay(wrong, delta).accepted());
-}
-
 } // namespace
 
 int main() {
@@ -277,6 +261,5 @@ int main() {
     RUN(malformedAndServerErrorResponsesAreCorrelatedAndBounded);
     RUN(supersededCompletionResponseCannotReplaceTheNewerResult);
     RUN(definitionAndReferencesPublishUserNavigationTargets);
-    RUN(viewDeltaRoundTripAndStaleReplay);
     return failed == 0 ? 0 : 1;
 }

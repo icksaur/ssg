@@ -1,4 +1,4 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/TextCodec.cpp
 )
 
@@ -12,6 +12,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_compile_definitions(test_text_encoding PRIVATE
         SSG_ENCODING_FIXTURE_DIR="${SSG_SOURCE_DIR}/tests/fixtures/encoding"
     )
-    target_link_libraries(test_text_encoding PRIVATE ssg)
+    target_link_libraries(test_text_encoding PRIVATE ssg_core)
     add_test(NAME test_text_encoding COMMAND test_text_encoding)
 endif()

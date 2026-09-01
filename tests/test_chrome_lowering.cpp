@@ -1,4 +1,5 @@
 #include "ssg/ChromeLowering.h"
+#include "ssg/UiStateResolver.h"
 
 #include "chrome_authoring.h"
 #include "ssg/ChromeRegionShape.h"
@@ -31,13 +32,12 @@ UiChromeLowerResult lowerUiChromeRegion(
     auto result = ssg::lowerUiChromeRegion(
         region, rect, role, style, resolver, solved, status, input);
     for (const auto& item : solved.items) {
-        auto itemKind = item.statusInvocation
-                            ? ShellNodeKind::FooterAction
-                            : item.id == "footer.hint"
-                                  ? ShellNodeKind::FooterHint
-                                  : kind;
+        auto itemKind =
+            item.id.starts_with("footer.status_action/")
+                ? ShellNodeKind::FooterAction
+                : item.id == "footer.hint" ? ShellNodeKind::FooterHint : kind;
         out.push_back({itemKind, item.id, item.label, item.rect, item.role,
-                       item.content, item.command, item.statusInvocation});
+                       item.content, item.command});
     }
     if (solved.input) {
         out.push_back({kind, "input_line.query", "Input line",
@@ -297,7 +297,7 @@ TEST(composedProviderHeaderMatchesBuiltinSpanForSpan) {
     ASSERT_TRUE(composedNodes == builtin);
 }
 
-TEST(statusActionItemsKeepTypedInvocationAndPlainFooterWidgetsKeepRegionKind) {
+TEST(statusActionItemsUsePublishedUiNodeIdentityAndPlainWidgetsKeepRegionKind) {
     auto hint = providerField("footer.hint", "footer.hint", 0);
     hint.overflow = Overflow::Truncate;
     auto region = chromeRegion(kFooterNodeId,
@@ -324,15 +324,14 @@ TEST(statusActionItemsKeepTypedInvocationAndPlainFooterWidgetsKeepRegionKind) {
     ASSERT_EQ(out[2].id, std::string{"footer.hint"});
     ASSERT_EQ(out[2].rect.width, 4 + style.dimensions.labelPadding);
     ASSERT_EQ(out[3].kind, ShellNodeKind::FooterAction);
-    ASSERT_EQ(out[3].id, std::string{"first"});
+    ASSERT_EQ(out[3].id,
+              std::string{"footer.status_action/42/7/6669727374"});
     ASSERT_TRUE(out[3].role == SemanticRole::StatusInfo);
-    ASSERT_EQ(out[3].statusInvocation,
-              (StatusActionInvocation{StatusId{42}, "first", 7}));
-    ASSERT_FALSE(out[3].commandId.has_value());
+    ASSERT_EQ(out[3].commandId, std::optional<std::string>{"ignored.first"});
     ASSERT_EQ(out[4].kind, ShellNodeKind::FooterAction);
-    ASSERT_EQ(out[4].id, std::string{"second"});
-    ASSERT_EQ(out[4].statusInvocation,
-              (StatusActionInvocation{StatusId{42}, "second", 7}));
+    ASSERT_EQ(out[4].id,
+              std::string{"footer.status_action/42/7/7365636f6e64"});
+    ASSERT_EQ(out[4].commandId, std::optional<std::string>{"ignored.second"});
     ASSERT_EQ(out[3].rect.width, 5 + style.dimensions.labelPadding);
 }
 
@@ -356,9 +355,11 @@ TEST(statusActionItemsCollapseBeforeHintAndFieldsAtNarrowWidth) {
     ASSERT_TRUE(lowered.ok());
     ASSERT_EQ(out.size(), std::size_t{2});
     ASSERT_EQ(out[0].kind, ShellNodeKind::FooterAction);
-    ASSERT_EQ(out[0].id, std::string{"first"});
+    ASSERT_EQ(out[0].id,
+              std::string{"footer.status_action/42/7/6669727374"});
     ASSERT_EQ(out[1].kind, ShellNodeKind::FooterAction);
-    ASSERT_EQ(out[1].id, std::string{"second"});
+    ASSERT_EQ(out[1].id,
+              std::string{"footer.status_action/42/7/7365636f6e64"});
 }
 
 TEST(emptyStatusViewProducesNoActionItems) {
@@ -370,6 +371,20 @@ TEST(emptyStatusViewProducesNoActionItems) {
     const auto lowered = ssg::lowerUiChromeRegion(
         region, {0, 0, 80, 1}, SemanticRole::Footer,
         defaultStyle(), resolverFrom({}), solved, &empty);
+    ASSERT_TRUE(lowered.ok());
+    ASSERT_TRUE(solved.items.empty());
+}
+
+TEST(outOfRangeStatusSelectionProducesNoActionItems) {
+    auto region =
+        chromeRegion(kFooterNodeId, {}, {statusActions()}, std::nullopt,
+                     CenterWidth::Flex, 0, 1);
+    auto invalid = twoActionStatus();
+    invalid.selected = invalid.items.size();
+    SolvedChromeSurface solved;
+    const auto lowered = ssg::lowerUiChromeRegion(
+        region, {0, 0, 80, 1}, SemanticRole::Footer,
+        defaultStyle(), resolverFrom({}), solved, &invalid);
     ASSERT_TRUE(lowered.ok());
     ASSERT_TRUE(solved.items.empty());
 }
@@ -589,9 +604,10 @@ int main() {
     RUN(labelItemsNeverCarryCommands);
     RUN(spacerCreatesGapWithoutANode);
     RUN(composedProviderHeaderMatchesBuiltinSpanForSpan);
-    RUN(statusActionItemsKeepTypedInvocationAndPlainFooterWidgetsKeepRegionKind);
+    RUN(statusActionItemsUsePublishedUiNodeIdentityAndPlainWidgetsKeepRegionKind);
     RUN(statusActionItemsCollapseBeforeHintAndFieldsAtNarrowWidth);
     RUN(emptyStatusViewProducesNoActionItems);
+    RUN(outOfRangeStatusSelectionProducesNoActionItems);
     RUN(semanticStateChromeSolveValidatesCorrespondenceAndBuildsInput);
     RUN(thePromptInputFloorsTheFieldsGrowsAndScrollsItsTailAtEveryWidth);
     RUN(aVisiblePromptProjectionWithoutTheCanonicalNodeEmitsNoInputNodes);

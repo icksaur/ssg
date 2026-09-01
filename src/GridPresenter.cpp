@@ -48,8 +48,13 @@ std::vector<GridIntrinsicSize> semanticIntrinsicSizes(
 
 SolveUiFrameResult trySolveFrameLayout(
     const SessionSnapshot& semantic,
-    GridSize dimensions) {
+    GridSize dimensions, const Style& style) {
     if (dimensions.columns <= 0 || dimensions.rows <= 0) {
+        return {SolvedGridTree{}, {}};
+    }
+    if (dimensions.columns <
+            static_cast<int>(style.dimensions.minimumColumns) ||
+        dimensions.rows < static_cast<int>(style.dimensions.minimumRows)) {
         return {SolvedGridTree{}, {}};
     }
 
@@ -93,7 +98,12 @@ SolveUiFrameResult trySolveFrameLayout(
         }
         --external->size.rows;
     }
-    if (!result.tree) return result;
+    if (!result.tree) {
+        if (result.error == "UI frame does not fit grid bounds") {
+            return {SolvedGridTree{}, {}};
+        }
+        return result;
+    }
 
     // Only migrated placements are exposed. Unit intrinsic sizes let the outer
     // tree solve while unmigrated surfaces still own their legacy projections;
@@ -180,8 +190,8 @@ SolveUiFrameResult trySolveFrameLayout(
 
 SolvedGridTree requireFrameLayout(
     const SessionSnapshot& semantic,
-    GridSize dimensions) {
-    auto result = trySolveFrameLayout(semantic, dimensions);
+    GridSize dimensions, const Style& style) {
+    auto result = trySolveFrameLayout(semantic, dimensions, style);
     if (!result.tree) {
         throw std::logic_error(
             "GridFrame: semantic UI frame cannot be solved: " + result.error);
@@ -189,54 +199,26 @@ SolvedGridTree requireFrameLayout(
     return std::move(*result.tree);
 }
 
-void adoptLegacyPalette(PaletteReport& palette,
-                        PresentationSnapshot const& presentation) {
-    // This bridge copies compatibility content but deliberately ignores legacy
-    // geometry. It leaves with the LegacyPresentationSnapshot path in Plan 6.
-    if (!palette.rows.empty() || !palette.query.empty() ||
-        !presentation.shell.palette) {
-        return;
-    }
-    const auto& legacy = *presentation.shell.palette;
-    palette.selected = legacy.selected;
-    palette.firstVisible = legacy.firstVisible;
-    palette.scrollbar = legacy.scrollbar;
-    for (const auto& row : legacy.rows) {
-        palette.rows.push_back({"", row.label, row.detail});
-    }
-}
-
 }  // namespace
 
 GridFrame::GridFrame(SessionSnapshot semantic,
-                     PresentationSnapshot presentation, GridBasis basis,
+                     GridProjection projection, GridBasis basis,
                      PaletteReport palette)
     : semantic_{std::move(semantic)},
-      projection_{std::move(presentation.viewport),
-                  std::move(presentation.style),
-                  std::move(presentation.selectionNav)},
-      layout_{requireFrameLayout(semantic_, presentation.shell.viewport)},
+      projection_{std::move(projection)},
+      layout_{requireFrameLayout(
+          semantic_,
+          {static_cast<int>(projection_.viewport.dimensions.columns),
+           static_cast<int>(projection_.viewport.dimensions.rows)},
+          projection_.style)},
       palette_{std::move(palette)},
       basis_{basis} {
-    adoptLegacyPalette(palette_, presentation);
     if (auto error = solveChrome()) {
         throw std::logic_error("GridFrame: " + *error);
     }
     solvePanel(0, false);
     solveDocument(nullptr);
 }
-
-GridFrame::GridFrame(SessionSnapshot semantic,
-                     PresentationSnapshot presentation,
-                     SolvedGridTree layout, GridBasis basis,
-                     PaletteReport palette)
-    : semantic_{std::move(semantic)},
-      projection_{std::move(presentation.viewport),
-                  std::move(presentation.style),
-                  std::move(presentation.selectionNav)},
-      layout_{std::move(layout)},
-      palette_{std::move(palette)},
-      basis_{basis} {}
 
 GridFrame::GridFrame(SessionSnapshot semantic, GridProjection projection,
                      SolvedGridTree layout, GridBasis basis,
@@ -338,25 +320,6 @@ void GridFrame::solveDocument(const ShellState* shell) {
         projection_.style.dimensions);
 }
 
-std::optional<GridFrame> GridFrame::fromLegacy(
-    LegacyPresentationSnapshot legacy, GridBasis basis,
-    PaletteReport palette, std::uint32_t treeFirstVisible,
-    bool revealTreeSelection, const ShellState& shell) {
-    auto result =
-        trySolveFrameLayout(legacy.semantic_,
-                            legacy.presentation_.shell.viewport);
-    if (!result.tree) return std::nullopt;
-    adoptLegacyPalette(palette, legacy.presentation_);
-    GridFrame frame{std::move(legacy.semantic_),
-                    std::move(legacy.presentation_),
-                    std::move(*result.tree),
-                    basis, std::move(palette)};
-    if (frame.solveChrome()) return std::nullopt;
-    frame.solvePanel(treeFirstVisible, revealTreeSelection);
-    frame.solveDocument(&shell);
-    return frame;
-}
-
 std::optional<GridFrame> GridFrame::fromSemantic(
     SessionSnapshot semantic, Style style, ViewportDimensions dimensions,
     GridBasis basis, PaletteReport palette,
@@ -364,17 +327,7 @@ std::optional<GridFrame> GridFrame::fromSemantic(
     const ShellState& shell, SelectionNavigation navigation) {
     const GridSize gridSize{static_cast<int>(dimensions.columns),
                             static_cast<int>(dimensions.rows)};
-    SolveUiFrameResult result;
-    if (dimensions.columns < style.dimensions.minimumColumns ||
-        dimensions.rows < style.dimensions.minimumRows) {
-        result.tree = SolvedGridTree{};
-    } else {
-        result = trySolveFrameLayout(semantic, gridSize);
-        if (!result.tree &&
-            result.error == "UI frame does not fit grid bounds") {
-            result = {SolvedGridTree{}, {}};
-        }
-    }
+    auto result = trySolveFrameLayout(semantic, gridSize, style);
     if (!result.tree) return std::nullopt;
     GridFrame frame{
         std::move(semantic),
@@ -405,7 +358,7 @@ std::optional<GridFrame> GridPresenter::project(
     auto& state = *state_;
     constexpr int kProjectionAttempts = 3;
     for (int attempt = 0; attempt < kProjectionAttempts; ++attempt) {
-        auto captured = session.captureForGridPresenter(
+        auto captured = session.capturePresentation(
             client, viewId_, request.palette);
         if (!captured) return std::nullopt;
         if (state.adoptedRevision &&
@@ -475,10 +428,11 @@ std::optional<GridFrame> GridPresenter::project(
             paneColumns =
                 static_cast<std::uint32_t>(std::max(pane.width, 1));
         }
-        auto viewport = session.finalizeGridViewport(
-            client, viewId_, revision, request.dimensions, paneRows,
-            paneColumns, proposedNavigation,
-            documentChanged && !confirmedSelection, state);
+        auto viewport = session.projectViewport(
+            {client, viewId_, revision, request.dimensions, paneRows,
+             paneColumns, proposedNavigation,
+             documentChanged && !confirmedSelection},
+            state.viewport);
         if (!viewport) continue;
 
         frame->finalizeViewport(std::move(viewport->viewport),

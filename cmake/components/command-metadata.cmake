@@ -5,6 +5,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_command_metadata PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_command_metadata PRIVATE ssg)
+    target_link_libraries(test_command_metadata PRIVATE ssg_core)
     add_test(NAME test_command_metadata COMMAND test_command_metadata)
 endif()

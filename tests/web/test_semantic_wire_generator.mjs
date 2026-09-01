@@ -30,6 +30,7 @@ try {
     const destinations = {
       cpp: path.join(temporary, 'generated', 'manifest.h'),
       wireCpp: path.join(temporary, 'generated', 'wire-schema.h'),
+      replayCpp: path.join(temporary, 'generated', 'ordinary-replay.h'),
       js: path.join(temporary, 'generated', 'manifest.mjs'),
     };
     await writeOutputs(first, destinations);
@@ -206,6 +207,71 @@ try {
       command,
       picker_activation: null,
     }), true);
+    const ordinaryBase = {
+      selection: {}, history: {}, clipboard: {}, prompt_status: {}, keymap: {},
+      notice_view: { text: 'notice' }, theme: {}, palette: {},
+      watcher_available: true,
+    };
+    const unchangedSelection = ordinaryBase.selection;
+    const ordinary = generated.replayOrdinarySessionSections(ordinaryBase, {
+      selection: { changed: false },
+      history: { changed: false, replacement: null },
+      clipboard: { changed: false },
+      prompt_status: { changed: false },
+      keymap: { changed: false },
+      notice_view: { changed: true },
+      theme: {},
+      palette: null,
+      watcher_available: null,
+    });
+    assert.ok(ordinary);
+    assert.equal(ordinary.selection, unchangedSelection);
+    assert.equal(ordinary.notice_view, null);
+    assert.equal(ordinary.watcher_available, true);
+    assert.equal(generated.replayOrdinarySessionSections(ordinaryBase, {
+      selection: { changed: false, replacement: {} },
+      history: { changed: false },
+      clipboard: { changed: false },
+      prompt_status: { changed: false },
+      keymap: { changed: false },
+      theme: {},
+    }), null);
+    assert.equal(generated.replayOrdinarySessionSections(ordinaryBase, {
+      selection: { changed: false },
+      history: { changed: false },
+      clipboard: { changed: false },
+      prompt_status: { changed: false },
+      keymap: { changed: false },
+      theme: {},
+      watcher_available: 'false',
+    }), null);
+    assert.equal(generated.replayOrdinarySessionSections(ordinaryBase, {
+      selection: { changed: false },
+      history: { changed: false },
+      clipboard: { changed: false },
+      prompt_status: { changed: false },
+      keymap: { changed: false },
+      theme: {},
+      watcher_available: 1,
+    }), null);
+    assert.match(first.replayCpp, /replayOrdinarySessionSections/);
+    assert.match(first.replayCpp, /requires \{ delta\.replacement; \}/);
+    assert.match(
+      first.cpp,
+      /kSpecializedSemanticSections\{\s*std::string_view\{"Document"\},\s*std::string_view\{"Settings"\},\s*std::string_view\{"Diff"\},\s*std::string_view\{"ExternalModification"\},\s*std::string_view\{"Tree"\},\s*std::string_view\{"UiFrame"\},\s*\}/s);
+    const bytesReplay = structuredClone(manifest);
+    const byteType = { kind: 'bytes', length: 2 };
+    bytesReplay.wireTypes.find(
+      (wireType) => wireType.symbol === 'SessionSnapshotSections')
+      .schema.fields.find((field) => field.wireName === 'watcher_available')
+      .type = byteType;
+    bytesReplay.wireTypes.find(
+      (wireType) => wireType.symbol === 'SessionDelta')
+      .schema.fields.find((field) => field.wireName === 'watcher_available')
+      .type = { kind: 'nullable', value: byteType };
+    assert.match(
+      renderOutputs(bytesReplay).js,
+      /replacement instanceof Uint8Array && replacement\.length === 2/);
     await fsp.appendFile(destinations.js, '// stale\n');
     await assert.rejects(
       checkOutputs(second, destinations), /output is stale/);
@@ -226,6 +292,82 @@ try {
     assert.throws(
       () => validateManifest(mismatchedCompatibility),
       /invalid section declaration/);
+
+    const missingDecision = structuredClone(manifest);
+    delete missingDecision.semanticSections.find(
+      (section) => section.symbol === 'Document').retention;
+    assert.throws(
+      () => validateManifest(missingDecision),
+      /missing specialized decision: Document/);
+
+    const misplacedDecision = structuredClone(manifest);
+    misplacedDecision.semanticSections.find(
+      (section) => section.symbol === 'Selection').retention = 'payload';
+    assert.throws(
+      () => validateManifest(misplacedDecision),
+      /non-specialized decision: Selection/);
+
+    const mismatchedOrdinaryPolicy = structuredClone(manifest);
+    mismatchedOrdinaryPolicy.semanticSections.find(
+      (section) => section.symbol === 'Selection').replay = 'replacement';
+    assert.throws(
+      () => validateManifest(mismatchedOrdinaryPolicy),
+      /invalid ordinary replay shape: Selection/);
+
+    const requiredNullableSnapshot = structuredClone(manifest);
+    requiredNullableSnapshot.wireTypes.find(
+      (wireType) => wireType.symbol === 'SessionSnapshotSections')
+      .schema.fields.find((field) => field.wireName === 'notice_view')
+      .required = true;
+    assert.throws(
+      () => validateManifest(requiredNullableSnapshot),
+      /invalid ordinary replay shape: NoticeView/);
+
+    const requiredDirectDelta = structuredClone(manifest);
+    requiredDirectDelta.wireTypes.find(
+      (wireType) => wireType.symbol === 'SessionDelta')
+      .schema.fields.find((field) => field.wireName === 'palette')
+      .required = true;
+    assert.throws(
+      () => validateManifest(requiredDirectDelta),
+      /invalid ordinary replay shape: Palette/);
+
+    const mismatchedReplacementType = structuredClone(manifest);
+    mismatchedReplacementType.wireTypes.find(
+      (wireType) => wireType.symbol === 'ThemeSectionDelta')
+      .schema.fields.find((field) => field.wireName === 'replacement')
+      .type.value.type = 'PaletteViewState';
+    assert.throws(
+      () => validateManifest(mismatchedReplacementType),
+      /invalid ordinary replay shape: Theme/);
+
+    const mismatchedPrimitiveConstraints = structuredClone(manifest);
+    mismatchedPrimitiveConstraints.wireTypes.find(
+      (wireType) => wireType.symbol === 'SessionSnapshotSections')
+      .schema.fields.find((field) => field.wireName === 'watcher_available')
+      .type = { kind: 'uint', maxHostInt: true };
+    mismatchedPrimitiveConstraints.wireTypes.find(
+      (wireType) => wireType.symbol === 'SessionDelta')
+      .schema.fields.find((field) => field.wireName === 'watcher_available')
+      .type = { kind: 'nullable', value: { kind: 'uint' } };
+    assert.throws(
+      () => validateManifest(mismatchedPrimitiveConstraints),
+      /invalid ordinary replay shape: WatcherAvailable/);
+
+    const multipleOrdinaryDeltaFields = structuredClone(manifest);
+    multipleOrdinaryDeltaFields.semanticSections.find(
+      (section) => section.symbol === 'Theme').delta.push('theme_extra');
+    assert.throws(
+      () => validateManifest(multipleOrdinaryDeltaFields),
+      /invalid ordinary replay shape: Theme/);
+
+    const overlappingForbiddenField = structuredClone(manifest);
+    overlappingForbiddenField.wireTypes.find(
+      (wireType) => wireType.symbol === 'SessionDelta')
+      .schema.forbiddenFields.push('revision');
+    assert.throws(
+      () => validateManifest(overlappingForbiddenField),
+      /invalid forbidden wire field: SessionDelta/);
 
     const invalidBytes = structuredClone(manifest);
     invalidBytes.wireTypes.find(
@@ -258,6 +400,7 @@ export default {
       '--manifest', invalidManifest,
       '--cpp', path.join(invalidDestinations, 'manifest.h'),
       '--wire-cpp', path.join(invalidDestinations, 'wire-schema.h'),
+      '--replay-cpp', path.join(invalidDestinations, 'ordinary-replay.h'),
       '--js', path.join(invalidDestinations, 'manifest.mjs'),
     ]), /duplicate message symbol/);
     await assert.rejects(fsp.access(invalidDestinations), { code: 'ENOENT' });
@@ -455,7 +598,7 @@ export default {
       'ShellNodeKind=Header/header/0/current,HeaderField/header_field/1/current,Footer/footer/2/current,FooterField/footer_field/3/current,FooterAction/footer_action/4/current,TabBar/tab_bar/5/current,Tab/tab/6/current,Panel/panel/7/current,PanelProvider/panel_provider/8/current,Pane/pane/9/current,Scrollbar/scrollbar/10/current,PromptReservation/prompt_reservation/11/current,EmptyState/empty_state/12/current,NoticeBar/notice_bar/13/current,NoticeAction/notice_action/14/current,FooterHint/footer_hint/15/current,TabSeparator/tab_separator/16/current,ExternalModificationBar/external_modification_bar/17/current,ExternalModificationRow/external_modification_row/18/current,ExternalModificationAction/external_modification_action/19/current',
       'FocusTarget=Editor/editor/0/current,Panel/panel/1/current,Prompt/prompt/2/current,ExternalModification/external_modification/3/current',
       'SemanticRole=Text/text/0/current,Canvas/canvas/1/current,Caret/caret/2/current,Selection/selection/3/current,TreeBackground/tree_background/4/current,TreeFocus/tree_focus/5/current,TabActive/tab_active/6/current,TabInactive/tab_inactive/7/current,PanelActive/panel_active/8/current,PanelInactive/panel_inactive/9/current,Header/header/10/current,Footer/footer/11/current,StatusInfo/status_info/12/current,StatusWarning/status_warning/13/current,LineNumber/line_number/14/current,SearchMatch/search_match/15/current,Prompt/prompt/16/current,ScrollbarTrack/scrollbar_track/17/current,ScrollbarThumb/scrollbar_thumb/18/current,DiffAdded/diff_added/19/current,DiffRemoved/diff_removed/20/current,DiffModified/diff_modified/21/current,TabInactiveBackground/tab_inactive_background/22/current,HeaderBackground/header_background/23/current,FooterBackground/footer_background/24/current,CurrentLineNumber/current_line_number/25/current,CurrentLineNumberBackground/current_line_number_background/26/current,LineNumberBackground/line_number_background/27/current',
-      'ClientInputKind=Key/key/0/current,Tab/tab/1/current,Tree/tree/2/current,Picker/picker/3/current,PromptControl/prompt_control/4/current,ExternalAction/external_action/5/current,StatusAction/status_action/6/current,PublishedUiAction/published_ui_action/7/current,NoticeAction/notice_action/8/current,Document/document/9/current,ScrollLines/scroll_lines/10/current,ScrollFraction/scroll_fraction/11/current,ViewNavigation/view_navigation/12/current,ResolvedPaneFocus/resolved_pane_focus/13/current,ResolvedSelection/resolved_selection/14/current',
+      'ClientInputKind=Key/key/0/current,Tab/tab/1/current,Tree/tree/2/current,Picker/picker/3/current,PromptControl/prompt_control/4/retired,ExternalAction/external_action/5/current,StatusAction/status_action/6/retired,PublishedUiAction/published_ui_action/7/retired,NoticeAction/notice_action/8/current,Document/document/9/current,ScrollLines/scroll_lines/10/current,ScrollFraction/scroll_fraction/11/current,ViewNavigation/view_navigation/12/current,ResolvedPaneFocus/resolved_pane_focus/13/current,ResolvedSelection/resolved_selection/14/current',
       'InputPointerButton=Primary/primary/0/current,Auxiliary/auxiliary/1/current,Secondary/secondary/2/current',
       'InputPointerPhase=Press/press/0/current,Move/move/1/current,Release/release/2/current,Cancel/cancel/3/current',
       'DocumentPointerEdge=None/none/0/current,Before/before/1/current,After/after/2/current',
@@ -483,7 +626,13 @@ export default {
   await check('lifecycle metadata stays outside runtime consumers', async () => {
     const root = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)), '../..');
-    const protocol = fs.readFileSync(path.join(root, 'src/Protocol.cpp'), 'utf8');
+    const protocol = [
+      'src/Protocol.cpp',
+      'src/protocol/editor_state_codec.cpp',
+      'src/protocol/session_codec.cpp',
+      'src/protocol/ui_codec.cpp',
+      'src/protocol/workspace_state_codec.cpp',
+    ].map((file) => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
     const reconcile =
       fs.readFileSync(path.join(root, 'apps/web/reconcile.mjs'), 'utf8');
     assert.doesNotMatch(protocol, /ManifestLifecycle|\\.lifecycle/);
@@ -493,7 +642,13 @@ export default {
   await check('production consumers contain no handwritten enum mirrors', () => {
     const root = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)), '../..');
-    const protocol = fs.readFileSync(path.join(root, 'src/Protocol.cpp'), 'utf8');
+    const protocol = [
+      'src/Protocol.cpp',
+      'src/protocol/editor_state_codec.cpp',
+      'src/protocol/session_codec.cpp',
+      'src/protocol/ui_codec.cpp',
+      'src/protocol/workspace_state_codec.cpp',
+    ].map((file) => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
     const uiTree =
       fs.readFileSync(path.join(root, 'src/UiTreeProtocol.cpp'), 'utf8');
     const palette =
@@ -502,9 +657,9 @@ export default {
       fs.readFileSync(path.join(root, 'apps/web/reconcile.mjs'), 'utf8');
     const client = fs.readFileSync(path.join(root, 'apps/web/client.mjs'), 'utf8');
     assert.equal(fs.existsSync(path.join(
-      root, 'include/ssg/detail/generated/ui_wire_schema.h')), false);
+      root, 'include/protocol/ssg/detail/generated/ui_wire_schema.h')), false);
     assert.equal(fs.existsSync(path.join(
-      root, 'include/ssg/detail/generated/wire_schema.h')), true);
+      root, 'include/protocol/ssg/detail/generated/wire_schema.h')), true);
     assert.doesNotMatch(
       uiTree, /kAll(?:Axes|ScrollAxes|SizeKinds|Overflows)/);
     assert.doesNotMatch(
@@ -528,14 +683,23 @@ export default {
     assert.match(protocol, /validateSessionDeltaWire\(payload\)/);
     assert.match(palette, /validatePaletteViewStateWire\(value\)/);
     assert.doesNotMatch(palette, /\bkAllSearchModes\b/);
-    assert.match(protocol, /ShellNodeKind::Header/);
+    assert.doesNotMatch(protocol, /ShellNodeKind::Header/);
     assert.match(protocol, /FocusTarget::Editor/);
     assert.doesNotMatch(protocol, /\bhasExactly\b|\bviewEnumField\b/);
+    const snapshot =
+      fs.readFileSync(path.join(root, 'src/session_snapshot.cpp'), 'utf8');
+    assert.doesNotMatch(snapshot, /\bselectionDelta\b|\breplayReplacement\b/);
+    assert.doesNotMatch(
+      reconcile,
+      /\bchangedReplacement\b|\bapplySessionDeltaSections\b|const replacements\b/);
+    assert.doesNotMatch(
+      reconcile,
+      /next\.theme\s*=|next\.palette\s*=|next\.watcher_available\s*=/);
+    assert.match(reconcile, /replayOrdinarySessionSections\(sections, delta\)/);
     const compatibilityArrays =
       protocol.match(/static constexpr std::array values/g) ?? [];
-    assert.equal(compatibilityArrays.length, 2);
+    assert.equal(compatibilityArrays.length, 1);
     for (const symbol of [
-      'StatusActionInvocation',
       'ResolvedSelectionRange',
       'ExternalActionInvocation',
     ]) {
@@ -545,6 +709,42 @@ export default {
       assert.ok(start >= 0 && end > start);
       assert.doesNotMatch(
         protocol.slice(start, end), /object->size\(\)\s*[!=]=?\s*\d/);
+    }
+  });
+
+  await check('private protocol translation units own their codec groups', () => {
+    const root = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)), '../..');
+    const files = Object.fromEntries([
+      'core', 'editor_state', 'workspace_state', 'ui', 'session',
+    ].map((name) => {
+      const relative = name === 'core'
+        ? 'src/Protocol.cpp'
+        : `src/protocol/${name}_codec.cpp`;
+      return [name, fs.readFileSync(path.join(root, relative), 'utf8')];
+    }));
+    const ownership = {
+      core: [
+        /ProtocolValue::ProtocolValue\(\)/,
+        /ProtocolCodec::encodeCommandRequest/,
+        /ProtocolCodec::encodeClientInput/,
+      ],
+      editor_state: [/toValue\(DocumentViewState/, /toValue\(TabViewState/],
+      workspace_state: [/toValue\(DiffWordRange/, /toValue\(LspFeatureViewState/],
+      ui: [/toValue\(ThemeSnapshot/, /encodeUiFrame\(const UiFrame&/],
+      session: [
+        /toValue\(SessionSnapshotSections/,
+        /ProtocolCodec::encodeSessionSnapshot/,
+        /ProtocolCodec::decodeSessionDelta/,
+      ],
+    };
+    for (const [owner, patterns] of Object.entries(ownership)) {
+      for (const pattern of patterns) {
+        assert.match(files[owner], pattern);
+        for (const [other, source] of Object.entries(files)) {
+          if (other !== owner) assert.doesNotMatch(source, pattern);
+        }
+      }
     }
   });
 } finally {

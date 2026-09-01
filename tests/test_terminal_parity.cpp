@@ -23,7 +23,7 @@
 
 #include "ssg_terminal.h"  // encode_ansi_frame, for the decoder round-trip only.
 #include "test_helpers.h"
-#include "legacy_grid_frame.h"
+#include "grid_test_frame.h"
 
 #include <pty.h>
 #include <poll.h>
@@ -403,11 +403,8 @@ TEST(decoderRoundtripsTheEncodedFrame) {
                                   {"file.open", runtime->revision(),
                                    std::string{"alpha.txt"}})
                     .accepted());
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) { fs::remove_all(root); return; }
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) { fs::remove_all(root); return; }
     auto grid = ssg::Renderer{}.render(*frame);
@@ -463,11 +460,8 @@ TEST(realBinaryOutputMatchesRenderSnapshot) {
     auto runtime = makeHeadless(root, true);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) { fs::remove_all(root); return; }
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) { fs::remove_all(root); return; }
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) { fs::remove_all(root); return; }
     auto grid = ssg::Renderer{}.render(*frame);
@@ -511,11 +505,8 @@ TEST(realBinaryWideGlyphOutputMatchesRender) {
     // startup focuses the editor after opening it (see "Always open Files
     // sidebar at startup"); mirror that here so the reference matches.
     runtime->focusEditor();
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) { fs::remove_all(root); return; }
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) { fs::remove_all(root); return; }
     auto grid = ssg::Renderer{}.render(*frame);

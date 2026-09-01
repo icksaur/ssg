@@ -456,6 +456,77 @@ FileIoResult createFileExclusively(const std::filesystem::path& target,
     return syncParentDirectory(target);
 }
 
+FileIoResult appendFileDurably(const std::filesystem::path& target,
+                               std::span<const std::byte> contents) {
+    if (const auto injected = injectedFailure("appendFileDurably", target)) {
+        return {*injected, "injected fault: appendFileDurably"};
+    }
+
+    bool created = false;
+    int descriptor =
+        open(target.c_str(), O_WRONLY | O_APPEND | O_CREAT | O_EXCL | O_CLOEXEC,
+             0600);
+    if (descriptor >= 0) {
+        created = true;
+    } else if (errno == EEXIST) {
+        descriptor = open(target.c_str(), O_WRONLY | O_APPEND | O_CLOEXEC);
+    }
+    if (descriptor < 0) {
+        return errnoFailure(errno, "open file for append", target);
+    }
+    if (auto written = writeAll(descriptor, contents, target); !written.ok()) {
+        close(descriptor);
+        return written;
+    }
+    if (fsync(descriptor) != 0) {
+        const int saved = errno;
+        close(descriptor);
+        return errnoFailure(saved, "flush appended file", target);
+    }
+    if (close(descriptor) != 0) {
+        return errnoFailure(errno, "close appended file", target);
+    }
+    return created ? syncParentDirectory(target)
+                   : FileIoResult{FileIoStatus::Ok, {}};
+}
+
+FileIoResult syncFile(const std::filesystem::path& path) {
+    if (const auto injected = injectedFailure("syncFile", path)) {
+        return {*injected, "injected fault: syncFile"};
+    }
+    const int descriptor = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (descriptor < 0) {
+        return errnoFailure(errno, "open file for flush", path);
+    }
+    if (fsync(descriptor) != 0) {
+        const int saved = errno;
+        close(descriptor);
+        return errnoFailure(saved, "flush file", path);
+    }
+    if (close(descriptor) != 0) {
+        return errnoFailure(errno, "close flushed file", path);
+    }
+    return {FileIoStatus::Ok, {}};
+}
+
+FileIoResult renamePathDurably(const std::filesystem::path& source,
+                               const std::filesystem::path& destination) {
+    if (const auto injected = injectedFailure("renamePathDurably", source)) {
+        return {*injected, "injected fault: renamePathDurably"};
+    }
+    if (rename(source.c_str(), destination.c_str()) != 0) {
+        return errnoFailure(errno, "rename path", destination);
+    }
+    if (auto result = syncParentDirectory(source); !result.ok()) {
+        return result;
+    }
+    if (source.parent_path().lexically_normal() !=
+        destination.parent_path().lexically_normal()) {
+        return syncParentDirectory(destination);
+    }
+    return {FileIoStatus::Ok, {}};
+}
+
 FileIoResult renameFileNoClobber(const std::filesystem::path& source,
                                  const std::filesystem::path& destination) {
     if (const auto injected = injectedFailure("renameFileNoClobber", source)) {

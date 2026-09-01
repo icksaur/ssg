@@ -1,7 +1,8 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/PromptSurface.cpp
     ${SSG_SOURCE_DIR}/src/StatusQueue.cpp
 )
+target_sources(ssg_grid PRIVATE ${SSG_SOURCE_DIR}/src/PromptLayout.cpp)
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(ssg_prompt_status_tests
@@ -13,6 +14,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_compile_definitions(ssg_prompt_status_tests PRIVATE
         SSG_SOURCE_DIR="${SSG_SOURCE_DIR}"
     )
-    target_link_libraries(ssg_prompt_status_tests PRIVATE ssg)
+    target_link_libraries(ssg_prompt_status_tests PRIVATE ssg_grid)
     add_test(NAME ssg_prompt_status_tests COMMAND ssg_prompt_status_tests)
 endif()

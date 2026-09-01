@@ -457,9 +457,7 @@ void paintChromeSurface(CellGrid& grid, const SolvedChromeSurface& surface,
     for (const auto& item : surface.items) {
         if (item.content.empty()) continue;
         const auto foregroundRole =
-            item.statusInvocation
-                ? item.role
-                : chromeGlyphForeground(ui, item.id, item.role);
+            chromeGlyphForeground(ui, item.id, item.role);
         paintText(grid, item.rect.x, item.rect.y, item.rect.right(),
                   item.content, semanticIndex(theme, foregroundRole),
                   background, foregroundRole, style);

@@ -1,14 +1,9 @@
 #include "editor_session_internal.h"
 #include "prompt_resolution.h"
-#include "../grid_projection_state.h"
-
 #include <ssg/CommandCatalog.h>
-
-#include <ssg/CommandCatalog.h>
-#include <ssg/ChromeLowering.h>
-#include <ssg/Layout.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/UiTree.h>
+#include <ssg/UiStateResolver.h>
 
 #include <algorithm>
 #include <cstdlib>

@@ -2,6 +2,7 @@
 
 #include <ssg/Style.h>
 #include <ssg/UiTree.h>
+#include <ssg/UiStateResolver.h>
 #include <ssg/WholeScreenAssembly.h>
 
 #include <algorithm>
@@ -113,14 +114,6 @@ FocusTarget UiFrame::effectiveFocus() const noexcept {
     return *findUiNode(schema_, focusPath().back())->focusContext;
 }
 
-FocusTarget UiFrame::legacyFocus() const noexcept {
-    for (auto it = focusPath().rbegin(); it != focusPath().rend(); ++it) {
-        const FocusTarget context = *findUiNode(schema_, *it)->focusContext;
-        if (context != FocusTarget::ExternalModification) return context;
-    }
-    return *findUiNode(schema_, focusPath().front())->focusContext;
-}
-
 std::optional<UiFrame> UiFrame::create(UiSchema schema, UiStateSection state,
                                        UiPresenceSection presence) {
     const auto validated = ValidatedSchema::validate(schema);
@@ -160,10 +153,6 @@ UiFrameDelta UiFrameDelta::changes(UiFrameVersion base,
     return UiFrameDelta{base, target, std::move(changes)};
 }
 
-UiFrameDelta UiFrameDelta::legacyChanges(LegacyUiFrameChanges changes) {
-    return UiFrameDelta{{}, {}, std::move(changes)};
-}
-
 UiFrameDelta UiFrameDeltaCodec::derive(const UiFrame& base,
                                        const UiFrame& target) const {
     if (base.schema() != target.schema()) {
@@ -193,17 +182,6 @@ UiFrameDelta UiFrameDeltaCodec::derive(const UiFrame& base,
 
 UiFrameReplayResult UiFrameDeltaCodec::replay(
     const UiFrame& base, const UiFrameDelta& delta) const {
-    if (const auto* legacy =
-            std::get_if<LegacyUiFrameChanges>(&delta.body())) {
-        auto state = legacy->state.value_or(base.state());
-        if (!state.focusPath) state.focusPath = base.focusPath();
-        auto frame = UiFrame::create(
-            legacy->schema.value_or(base.schema()),
-            std::move(state),
-            legacy->presence.value_or(base.presence()));
-        if (!frame) return {std::nullopt, UiFrameReplayError::InvalidFrame};
-        return {std::move(frame), UiFrameReplayError::None};
-    }
     if (base.version() != delta.base()) {
         return {std::nullopt, UiFrameReplayError::StaleVersion};
     }

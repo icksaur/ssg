@@ -1,4 +1,4 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/TreeModel.cpp
 )
 
@@ -9,6 +9,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_tree PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_tree PRIVATE ssg)
+    target_link_libraries(test_tree PRIVATE ssg_core)
     add_test(NAME test_tree COMMAND test_tree)
 endif()

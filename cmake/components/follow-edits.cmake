@@ -1,4 +1,4 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/FollowEditsModel.cpp
 )
 
@@ -12,6 +12,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_compile_definitions(test_follow_edits PRIVATE
         SSG_FOLLOW_EDITS_FIXTURE_DIR="${SSG_SOURCE_DIR}/tests/fixtures/follow_edits"
     )
-    target_link_libraries(test_follow_edits PRIVATE ssg)
+    target_link_libraries(test_follow_edits PRIVATE ssg_core)
     add_test(NAME test_follow_edits COMMAND test_follow_edits)
 endif()

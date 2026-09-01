@@ -30,7 +30,6 @@
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
 #include <ssg/WorkspaceFileIndex.h>
-#include <ssg/ShellState.h>
 #include <ssg/Workspace.h>
 
 #include <any>
@@ -51,10 +50,6 @@
 #include "command_executor.h"
 
 namespace ssg {
-namespace detail {
-struct GridProjectionState;
-}
-
 // Casts a command payload to the expected type, or null when it holds something
 // else. The one definition shared by every runtime handler file, which each
 // used to re-declare in its own anonymous namespace.
@@ -428,7 +423,7 @@ struct EditorSession::Impl final : CommandServices,
     // off or there is no editor document, else digits(lineCount)+1. The whole-
     // document line count is cached by revision.
     [[nodiscard]] int lineNumberGutterWidth(
-        detail::GridProjectionState& presentation) const;
+        ViewportProjectionState::Impl& presentation) const;
     void resetSelectionForActiveDocument();
     // Collapses to a SINGLE caret at the primary's clamped position.  For a
     // document switch, where the carried selection belongs to the previous
@@ -439,15 +434,17 @@ struct EditorSession::Impl final : CommandServices,
     // (typing over N selections leaves N carets, Sublime-style).
     void clampSelectionsToActiveDocument();
     [[nodiscard]] const std::vector<CellRun>& activeCellRuns(
-        detail::GridProjectionState& presentation) const;
+        ViewportProjectionState::Impl& presentation) const;
     // The editor viewport, gated on word wrap: exact wrapped geometry when word
     // wrap is on; O(visible rows) unwrapped projection (compute_viewport_unwrapped)
     // when off, so a large document's first frame is viewport-bounded (M12).
     [[nodiscard]] ViewportViewState computeEditorViewport(
-        detail::GridProjectionState& presentation, std::uint32_t firstRow,
+        ViewportProjectionState::Impl& presentation,
+        ViewportDimensions dimensions,
+        std::uint32_t paneContentRows,
+        std::uint32_t paneContentColumns,
+        std::uint32_t firstRow,
         std::uint32_t firstColumn) const;
-    [[nodiscard]] ViewportViewState viewport(
-        detail::GridProjectionState& presentation) const;
     [[nodiscard]] SessionSnapshotSections sections(
         PaletteReport const& paletteReport = {}) const;
     [[nodiscard]] PromptStatusViewState promptStatusView() const;

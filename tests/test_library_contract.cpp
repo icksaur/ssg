@@ -4,7 +4,7 @@
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"
-#include "legacy_grid_frame.h"
+#include "grid_test_frame.h"
 
 #include <any>
 #include <cstdlib>
@@ -117,9 +117,9 @@ std::vector<ssg::PaletteCandidate> publishedCandidates(
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"palette.open", runtime.revision(), {}})
                     .accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     if (!snapshot) return {};
-    return snapshot->semantic().sections().palette.commandCandidates;
+    return snapshot->sections().palette.commandCandidates;
 }
 
 // Reconstruct grid row `row` as a plain string (continuation cells contribute no
@@ -198,11 +198,8 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     ASSERT_TRUE(!report.rows.empty());
     if (report.rows.empty()) return;
 
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot), report);
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24}, report);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -238,11 +235,8 @@ TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
                                   {"file.open", runtime->revision(),
                                    std::string{"alpha.txt"}})
                     .accepted());
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -275,11 +269,8 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     report.rows = {{"file.save", "Save File", ""},
                    {"file.save_as", "Save As", ""}};
     report.selected = std::uint32_t{0};
-    auto snapshot = runtime->present(ssg::ClientId{1}, {80, 24}, report);
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot), report);
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24}, report);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -301,11 +292,8 @@ TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
                                   {"file.open", runtime->revision(),
                                    std::string{"alpha.txt"}})
                     .accepted());
-    auto snapshot = runtime->present(ssg::ClientId{1}, {24, 3});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto frame =
-        ssg::test::gridFrameFromLegacy(std::move(*snapshot));
+    auto frame = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {24, 3});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -338,28 +326,27 @@ TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
         {"select.line_down", {}},
         {"panel.toggle", {}},
         {"view.scroll_lines", ssg::ScrollLinesArguments{1}},
-        // A footer-anchored prompt opening and closing: the footer prompt lives in
-        // PresentationSnapshot and MUST round-trip through the delta (it had no
-        // delta member once, so a prompt change replayed to a stale prompt).
         {"goto.line", {}},
         {"prompt.cancel", {}},
     };
 
-    auto previous = runtime->present(ssg::ClientId{1}, dims);
+    auto previous = ssg::test::projectGridFrame(
+        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
     ASSERT_TRUE(previous.has_value());
     if (!previous) return;
 
     for (auto const& step : script) {
         (void)runtime->dispatch(
             ssg::ClientId{1}, {step.command, runtime->revision(), step.payload});
-        auto fresh = runtime->present(ssg::ClientId{1}, dims);
+        auto fresh = ssg::test::projectGridFrame(
+            *runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
         ASSERT_TRUE(fresh.has_value());
         if (!fresh) break;
 
         if (fresh->semantic().revision().value() == previous->semantic().revision().value()) {
             // A command with no authoritative change produces no delta (the delta
             // API requires the revision to advance); the snapshot is unchanged.
-            ASSERT_TRUE(*fresh == *previous);
+            ASSERT_TRUE(fresh->semantic() == previous->semantic());
             continue;
         }
 
@@ -374,7 +361,8 @@ TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
         // by the owning presenter.
         ASSERT_TRUE(*replayed.snapshot == fresh->semantic());
 
-        previous = runtime->present(ssg::ClientId{1}, dims);
+        previous = ssg::test::projectGridFrame(
+            *runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
         ASSERT_TRUE(previous.has_value());
         if (!previous) break;
     }

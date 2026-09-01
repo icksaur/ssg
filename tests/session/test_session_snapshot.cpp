@@ -1,11 +1,11 @@
 #include "command_cases.h"
 #include "../grid_test_view.h"
 #include "../test_helpers.h"
-#include "../../src/legacy_prompt_compat.h"
 
 #include <ssg/EditorSession.h>
 #include <ssg/GridPresenter.h>
 #include <ssg/Keymap.h>
+#include <ssg/ViewportProjection.h>
 
 #include <algorithm>
 #include <concepts>
@@ -33,6 +33,9 @@ static_assert(!HasPresentation<ssg::SessionSnapshot>);
 static_assert(std::same_as<
               decltype(std::declval<ssg::GridFrame const&>().presentation()),
               ssg::GridProjection const&>);
+static_assert(std::constructible_from<
+              ssg::GridFrame, ssg::SessionSnapshot, ssg::GridProjection,
+              ssg::GridBasis, ssg::PaletteReport>);
 
 std::filesystem::path uniqueRoot(std::string_view name) {
     auto root = std::filesystem::current_path() / ("runtime_snapshot_" + std::string{name});
@@ -69,183 +72,49 @@ TEST(runtimeConstructsAttachesAndProducesLiveSnapshot) {
     ssg::InvocationPrincipal principal{ssg::ClientId{7}, ssg::InvocationOrigin::InProcess};
     ASSERT_TRUE(runtime.attach(std::move(principal), ssg::ViewId{9}).accepted());
 
-    auto snapshot = runtime.present(ssg::ClientId{7}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{7});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->semantic().revision(), runtime.revision());
-    ASSERT_EQ(snapshot->semantic().client().clientId, ssg::ClientId{7});
-    ASSERT_EQ(snapshot->semantic().client().viewId, ssg::ViewId{9});
+    ASSERT_EQ(snapshot->revision(), runtime.revision());
+    ASSERT_EQ(snapshot->client().clientId, ssg::ClientId{7});
+    ASSERT_EQ(snapshot->client().viewId, ssg::ViewId{9});
 }
 
-TEST(legacyPresentationAdapterUsesTheDirectSolvedFrame) {
-    auto root = uniqueRoot("legacy_adapter");
-    std::ofstream{root / "workspace" / "doc.txt"} << "alpha\nbeta\n";
+TEST(presentationProjectionRejectsARevisionThatChangedAfterCapture) {
+    auto root = uniqueRoot("presentation_projection_basis");
     auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
+
     auto& runtime = *created.session;
     const ssg::ClientId client{7};
     const ssg::ViewId view{9};
-    ASSERT_TRUE(
-        runtime
-            .attach({client, ssg::InvocationOrigin::InProcess}, view)
-            .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"file.open", runtime.revision(),
-                               std::string{"doc.txt"}})
+                    .attach({client, ssg::InvocationOrigin::InProcess}, view)
                     .accepted());
-    ssg::GridPresenter presenter{view};
 
-    const auto compare = [&] {
-        auto direct = presenter.project(runtime, client, {{80, 24}, {}});
-        auto legacy = runtime.present(client, {80, 24});
-        ASSERT_TRUE(direct.has_value());
-        ASSERT_TRUE(legacy.has_value());
-        if (!direct || !legacy) return;
-        const auto& projected = legacy->presentation();
-        ASSERT_EQ(projected.viewport, direct->presentation().viewport);
-        ASSERT_EQ(projected.style, direct->presentation().style);
-        ASSERT_EQ(projected.selectionNav,
-                  direct->presentation().selectionNav);
-        const auto* rootNode = direct->layout().find(
-            ssg::UiNodeId{std::string{ssg::kRootNodeId}});
-        ASSERT_TRUE(rootNode != nullptr);
-        if (rootNode) {
-            ASSERT_EQ(projected.shell.viewport.columns,
-                      rootNode->rect.width);
-            ASSERT_EQ(projected.shell.viewport.rows,
-                      rootNode->rect.height);
-        }
+    auto capture = runtime.capturePresentation(client, view, {});
+    ASSERT_TRUE(capture.has_value());
+    if (!capture) return;
 
-        const auto compareChrome =
-            [&](const std::optional<ssg::SolvedChromeSurface>& surface,
-                const std::optional<ssg::Rect>& rect) {
-                ASSERT_EQ(rect.has_value(), surface.has_value());
-                if (!surface) return;
-                ASSERT_EQ(*rect, surface->rect);
-                for (const auto& item : surface->items) {
-                    const auto found = std::ranges::find(
-                        projected.shell.accessibilityNodes, item.id,
-                        &ssg::AccessibilityNode::id);
-                    ASSERT_TRUE(
-                        found != projected.shell.accessibilityNodes.end());
-                    if (found != projected.shell.accessibilityNodes.end()) {
-                        ASSERT_EQ(found->rect, item.rect);
-                    }
-                }
-            };
-        compareChrome(direct->header(), projected.shell.header);
-        compareChrome(direct->footer(), projected.shell.footer);
-
-        ASSERT_EQ(projected.shell.panes.size(),
-                  direct->document()
-                      ? direct->document()->panes.size()
-                      : std::size_t{0});
-        if (direct->document()) {
-            for (std::size_t index = 0;
-                 index < direct->document()->panes.size(); ++index) {
-                const auto& solved = direct->document()->panes[index];
-                const auto& adapted = projected.shell.panes[index];
-                ASSERT_EQ(adapted.frame, solved.frame);
-                ASSERT_EQ(adapted.content, solved.content);
-                ASSERT_EQ(adapted.scrollbar, solved.scrollbarGutter);
-                ASSERT_EQ(adapted.lineNumbers, solved.lineNumbers);
-            }
-        }
-
-        ASSERT_EQ(projected.shell.panel.has_value(),
-                  direct->panel().has_value());
-        if (direct->panel()) {
-            ASSERT_EQ(*projected.shell.panel, direct->panel()->rect);
-            ASSERT_EQ(projected.shell.panelScrollbar,
-                      direct->panel()->scrollbarGutter);
-            ASSERT_EQ(projected.treeWindows.size(), std::size_t{1});
-            if (!projected.treeWindows.empty()) {
-                ASSERT_EQ(projected.treeWindows.front().firstVisible,
-                          direct->panel()->firstVisible);
-                ASSERT_EQ(projected.treeWindows.front().scrollbar,
-                          direct->panel()->scrollbar);
-            }
-        }
-
-        const auto* tabNode = direct->layout().find(
-            ssg::UiNodeId{std::string{ssg::kTabBarNodeId}});
-        ASSERT_EQ(projected.shell.tabBar.has_value(), tabNode != nullptr);
-        if (tabNode) {
-            const auto tabs = ssg::solveTabBar(
-                direct->sections().tabs, direct->presentation().style.tab,
-                tabNode->rect);
-            ASSERT_EQ(projected.shell.tabHits.size(), tabs.tabs.size());
-            for (std::size_t index = 0; index < tabs.tabs.size(); ++index) {
-                ASSERT_EQ(projected.shell.tabHits[index].rect,
-                          tabs.tabs[index].rect);
-                ASSERT_EQ(projected.shell.tabHits[index].index,
-                          tabs.tabs[index].index);
-            }
-        }
-
-        const auto promptView = ssg::detail::legacyPromptView(
-            direct->sections().promptStatus, direct->sections().uiFrame);
-        ASSERT_TRUE(promptView.valid);
-        ASSERT_EQ(projected.prompt.has_value(), promptView.view.has_value());
-        if (projected.prompt && promptView.view) {
-            ASSERT_EQ(projected.shell.prompt,
-                      std::optional<ssg::Rect>{projected.prompt->rect});
-            ASSERT_EQ(projected.prompt->controls.size(),
-                      promptView.view->controls.size());
-            for (std::size_t index = 0;
-                 index < projected.prompt->controls.size(); ++index) {
-                const auto* node = direct->layout().find(
-                    ssg::footerPromptControlNodeId(
-                        promptView.view->controls[index].id));
-                ASSERT_TRUE(node != nullptr);
-                if (node) {
-                    ASSERT_EQ(projected.prompt->controls[index].rect,
-                              node->rect);
-                }
-            }
-        }
-
-        ASSERT_EQ(projected.shell.palette.has_value(),
-                  direct->sections().palette.activePicker.has_value());
-        if (projected.shell.palette) {
-            const auto* node = direct->layout().find(
-                ssg::UiNodeId{
-                    std::string{ssg::kFindResultsViewportNodeId}});
-            ASSERT_TRUE(node != nullptr);
-            if (node) {
-                const auto solved = ssg::solvePaletteSurface(
-                    direct->palette(), node->rect,
-                    direct->presentation()
-                        .style.dimensions.scrollbarGutterWidth);
-                ASSERT_EQ(projected.shell.palette->rect, solved.rows);
-                ASSERT_EQ(projected.shell.palette->scrollbarRect,
-                          solved.scrollbar);
-            }
-        }
+    ssg::ViewportProjectionState state;
+    ssg::ViewportProjectionRequest request{
+        client,
+        view,
+        capture->semantic.revision(),
+        ssg::ViewportDimensions{80, 24},
+        20,
+        80,
+        {},
+        false,
     };
+    auto projected = runtime.projectViewport(request, state);
+    ASSERT_TRUE(projected.has_value());
 
-    compare();
-    ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"panel.show_files", runtime.revision(), {}})
-                    .accepted());
-    compare();
-    ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"palette.open", runtime.revision(), {}})
-                    .accepted());
-    compare();
-    ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"palette.close", runtime.revision(), {}})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"find.open", runtime.revision(), {}})
-                    .accepted());
-    compare();
+    ASSERT_TRUE(
+        runtime.dispatch(client, {"panel.show_files", runtime.revision(), {}})
+            .accepted());
+    ASSERT_FALSE(runtime.projectViewport(request, state).has_value());
 }
 
 TEST(runtimeSourcesDoNotIncludeFixtureModel) {
@@ -269,40 +138,6 @@ TEST(runtimeSourcesDoNotIncludeFixtureModel) {
     ASSERT_FALSE(snapshotConstCast);
 }
 
-TEST(currentSourcesRetainNoSecondPromptPresentationPath) {
-    const auto root = std::filesystem::path{SSG_SOURCE_SCAN_ROOT};
-    const auto read = [](const std::filesystem::path& path) {
-        std::ifstream input{path};
-        return std::string{std::istreambuf_iterator<char>{input},
-                           std::istreambuf_iterator<char>{}};
-    };
-    const std::string snapshotHeader =
-        read(root / "include/ssg/session_snapshot.h");
-    const std::string editor = read(root / "src/EditorSession.cpp");
-    const std::string widget = read(root / "include/ssg/Widget.h");
-    const std::string browser = read(root / "apps/web/reconcile.mjs");
-
-    ASSERT_TRUE(snapshotHeader.find("PromptViewSectionDelta") ==
-                std::string::npos);
-    ASSERT_TRUE(snapshotHeader.find("promptView()") == std::string::npos);
-    ASSERT_TRUE(widget.find("ViewSurface::FooterPrompt") == std::string::npos);
-    ASSERT_TRUE(browser.find("SURFACE.FOOTER_PROMPT") == std::string::npos);
-
-    const auto pointerBegin = editor.find("Input, PromptControlPointerInput");
-    const auto pointerEnd =
-        editor.find("Input, ExternalActionPointerInput", pointerBegin);
-    ASSERT_TRUE(pointerBegin != std::string::npos);
-    ASSERT_TRUE(pointerEnd != std::string::npos);
-    if (pointerBegin != std::string::npos &&
-        pointerEnd != std::string::npos) {
-        const auto adapter =
-            editor.substr(pointerBegin, pointerEnd - pointerBegin);
-        ASSERT_TRUE(adapter.find("\"ui.activate\"") != std::string::npos);
-        ASSERT_TRUE(adapter.find("\"prompt.focus_control\"") ==
-                    std::string::npos);
-    }
-}
-
 TEST(runtimePublishesValidCuratedKeymap) {
     auto root = uniqueRoot("keymap_valid");
     auto created = ssg::EditorSession::create(configFor(root));
@@ -310,10 +145,10 @@ TEST(runtimePublishesValidCuratedKeymap) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto& keymap = snapshot->semantic().sections().keymap;
+    const auto& keymap = snapshot->sections().keymap;
     ASSERT_FALSE(keymap.bindings.empty());
     ASSERT_TRUE(ssg::KeymapMatcher{keymap}.validate({}).empty());
     ASSERT_TRUE(ssg::KeymapMatcher{keymap}.hasGlobalBinding("settings.open", {}));
@@ -403,7 +238,8 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
                                  {"file.open", runtime.revision(),
                                   std::string{"snug.txt"}}).accepted());
     runtime.focusEditor();
-    auto snapshot = runtime.present(ssg::ClientId{1}, dims);
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
+    auto snapshot = grid.present(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& view = snapshot->presentation().viewport;
@@ -428,8 +264,8 @@ TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
     runtime.focusEditor();
 
     auto const dirty = [&] {
-        auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
-        auto const& tabs = snapshot->semantic().sections().tabs.tabs;
+        auto snapshot = runtime.snapshot(ssg::ClientId{1});
+        auto const& tabs = snapshot->sections().tabs.tabs;
         return !tabs.empty() && tabs.front().dirty;
     };
     ASSERT_FALSE(dirty());
@@ -454,9 +290,9 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     auto const tabLabels = [&] {
-        auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
+        auto snapshot = runtime.snapshot(ssg::ClientId{1});
         std::vector<std::string> labels;
-        for (auto const& tab : snapshot->semantic().sections().tabs.tabs) {
+        for (auto const& tab : snapshot->sections().tabs.tabs) {
             labels.push_back(tab.label);
         }
         return labels;
@@ -537,12 +373,12 @@ TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"file.open", runtime.revision(),
                                   std::string{"alpha.txt"}}).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     bool keptScratch = false;
     bool openedFile = false;
-    for (auto const& tab : snapshot->semantic().sections().tabs.tabs) {
+    for (auto const& tab : snapshot->sections().tabs.tabs) {
         if (tab.label == "[new buffer]") keptScratch = true;
         if (tab.label == "alpha.txt") openedFile = true;
     }
@@ -570,11 +406,11 @@ TEST(anEmptySavedFileIsNeverDiscardedAsScratch) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"file.open", runtime.revision(),
                                   std::string{"alpha.txt"}}).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, {80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     bool keptBlank = false;
-    for (auto const& tab : snapshot->semantic().sections().tabs.tabs) {
+    for (auto const& tab : snapshot->sections().tabs.tabs) {
         if (tab.label == "blank.txt") keptBlank = true;
     }
     ASSERT_TRUE(keptBlank);
@@ -611,9 +447,9 @@ TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"panel.show_files", runtime.revision(), {}})
                     .accepted());
-    // Prime the pane-size cache, then read the frame laid out against it.
-    (void)runtime.present(ssg::ClientId{1}, dims);
-    auto snapshot = runtime.present(ssg::ClientId{1}, dims);
+    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
+    (void)grid.present(runtime);
+    auto snapshot = grid.present(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& view = snapshot->presentation().viewport;
@@ -630,7 +466,7 @@ TEST(curatedKeymapBindingsAreArgumentFree) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     (void)runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"doc.txt"}});
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
@@ -639,7 +475,7 @@ TEST(curatedKeymapBindingsAreArgumentFree) {
     // command with no open prompt) are allowed; an argument-shaped failure is
     // not.
     std::set<std::string> commands;
-    for (const auto& binding : snapshot->semantic().sections().keymap.bindings) {
+    for (const auto& binding : snapshot->sections().keymap.bindings) {
         commands.insert(binding.commandId);
     }
     for (const auto& command : commands) {
@@ -663,10 +499,10 @@ TEST(curatedKeymapResolvesPerContext) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto& keymap = snapshot->semantic().sections().keymap;
+    const auto& keymap = snapshot->sections().keymap;
 
     const auto down = *ssg::KeyCodec{}.parseSequence({"ArrowDown"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(down, "editor").commandId,
@@ -805,19 +641,19 @@ TEST(addCursorChordProducesMultipleSelections) {
 
     // Resolve the add-cursor-down chord from the published keymap, then dispatch
     // the resolved command: the snapshot must show more than one selection.
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     const auto chord = *ssg::KeyCodec{}.parseSequence({"Alt+KeyJ"});
-    auto resolved = ssg::KeymapMatcher{snapshot->semantic().sections().keymap}.resolveSequence(chord, "editor");
+    auto resolved = ssg::KeymapMatcher{snapshot->sections().keymap}.resolveSequence(chord, "editor");
     ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::Resolved);
     ASSERT_EQ(resolved.commandId, std::string{"select.add_cursor_down"});
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {resolved.commandId, runtime.revision(), {}}).accepted());
 
-    auto after = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto after = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(after.has_value());
     if (!after) return;
-    ASSERT_TRUE(after->semantic().sections().selection.items().size() > std::size_t{1});
+    ASSERT_TRUE(after->sections().selection.items().size() > std::size_t{1});
 }
 
 TEST(settingsOpenFocusesASettingsPrompt) {
@@ -828,13 +664,12 @@ TEST(settingsOpenFocusesASettingsPrompt) {
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.open", runtime.revision(), {}}).accepted());
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The chord actually opens: focus moves to the prompt with a visible input.
-    ASSERT_EQ(snapshot->semantic().sections().uiFrame.effectiveFocus(),
+    ASSERT_EQ(snapshot->sections().uiFrame.effectiveFocus(),
               ssg::FocusTarget::Prompt);
-    ASSERT_TRUE(snapshot->presentation().prompt.has_value());
 }
 
 TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
@@ -857,20 +692,16 @@ TEST(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection) {
 
     // A grid client (with dimensions) and a native client (without) taken at the
     // same revision.
-    auto grid = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ssg::test::GridTestView gridView{
+        ssg::ClientId{1}, ssg::ViewId{1}, {80, 24}};
+    auto grid = gridView.present(runtime);
     auto semantic = runtime.snapshot(ssg::ClientId{1});
     ASSERT_TRUE(grid.has_value());
     ASSERT_TRUE(semantic.has_value());
     if (!grid || !semantic) return;
 
-    // Only the legacy envelope carries grid projection; the semantic snapshot
-    // type has no presentation surface.
-    ASSERT_FALSE(grid->presentation().shell.panes.empty());
-
-    // The grid client's tree scroll window is live (populated), proving the
-    // windowing happens in presentation -- not in the semantic tree section.
-    ASSERT_FALSE(grid->presentation().treeWindows.empty());
-    ASSERT_FALSE(grid->presentation().treeWindows.front().visibleNodeIds.empty());
+    ASSERT_TRUE(grid->document().has_value());
+    ASSERT_TRUE(grid->panel().has_value());
 
     // The semantic sections are byte-for-byte identical: document, selection set,
     // tabs, keymap, theme roles, focus, AND the tree (nodes/selection/expansion,
@@ -1022,23 +853,15 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     if (!scrolled) return;
     ASSERT_EQ(scrolled->presentation().viewport.firstVisualRow, 5U);
 
-    auto compatibility = runtime.present(client, {80, 12});
-    ASSERT_TRUE(compatibility.has_value());
-    if (compatibility) {
-        ASSERT_EQ(compatibility->presentation().viewport.firstVisualRow, 0U);
-    }
-
-    const auto selectionBefore = runtime.present(client, {80, 12})
-                                     ->semantic().sections()
-                                     .selection;
+    const auto selectionBefore = runtime.snapshot(client)->sections().selection;
     auto visual = runtime.dispatch(
         client, {"cursor.page_down", runtime.revision(), {}});
     ASSERT_EQ(visual.outcome(),
               ssg::CommandResult::Outcome::ViewActionRequired);
-    auto selectionAfter = runtime.present(client, {80, 12});
+    auto selectionAfter = runtime.snapshot(client);
     ASSERT_TRUE(selectionAfter.has_value());
     if (selectionAfter) {
-        ASSERT_EQ(selectionAfter->semantic().sections().selection, selectionBefore);
+        ASSERT_EQ(selectionAfter->sections().selection, selectionBefore);
     }
 }
 
@@ -1051,13 +874,21 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     const ssg::ClientId firstClient{1};
     const ssg::ClientId secondClient{2};
     ASSERT_TRUE(runtime
-                    .attach({firstClient, ssg::InvocationOrigin::InProcess},
+                    .attach({firstClient, ssg::InvocationOrigin::InProcess,
+                             {ssg::CapabilityId{"local_file_drop"}}},
                             ssg::ViewId{1})
                     .accepted());
     ASSERT_TRUE(runtime
                     .attach({secondClient, ssg::InvocationOrigin::InProcess},
                             ssg::ViewId{2})
                     .accepted());
+    auto firstSnapshot = runtime.snapshot(firstClient);
+    auto secondSnapshot = runtime.snapshot(secondClient);
+    ASSERT_TRUE(firstSnapshot.has_value());
+    ASSERT_TRUE(secondSnapshot.has_value());
+    if (!firstSnapshot || !secondSnapshot) return;
+    ASSERT_EQ(firstSnapshot->client().capabilities.size(), std::size_t{1});
+    ASSERT_TRUE(secondSnapshot->client().capabilities.empty());
 
     ssg::GridPresenter first{ssg::ViewId{1}};
     ssg::GridPresenter second{ssg::ViewId{2}};
@@ -1198,11 +1029,13 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     ASSERT_TRUE(closeApplied.accepted());
     ASSERT_FALSE(closeApplied.transition.has_value());
 
-    auto compatibility = runtime.present(firstClient, {80, 24});
-    ASSERT_TRUE(compatibility.has_value());
-    if (compatibility) {
-        ASSERT_EQ(compatibility->presentation().shell.panes.size(),
-                  std::size_t{1});
+    auto closedFrame = first.project(runtime, firstClient, {{80, 24}, {}});
+    ASSERT_TRUE(closedFrame.has_value());
+    if (closedFrame) {
+        ASSERT_TRUE(closedFrame->document().has_value());
+        if (closedFrame->document()) {
+            ASSERT_EQ(closedFrame->document()->panes.size(), std::size_t{1});
+        }
     }
 }
 
@@ -1396,8 +1229,8 @@ TEST(visualMovementUsesActivePaneAndDiscardsMismatchedProposal) {
 int main() {
     RUN(constructionRejectsInvalidCwd);
     RUN(runtimeConstructsAttachesAndProducesLiveSnapshot);
+    RUN(presentationProjectionRejectsARevisionThatChangedAfterCapture);
     RUN(runtimeSourcesDoNotIncludeFixtureModel);
-    RUN(currentSourcesRetainNoSecondPromptPresentationPath);
     RUN(runtimePublishesValidCuratedKeymap);
     RUN(everyDocumentLineIsReachableAndTheCaretIsNeverLost);
     RUN(aDocumentClippedByTheChromeStillReportsAScrollbar);

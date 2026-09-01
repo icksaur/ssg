@@ -83,7 +83,7 @@ std::string readSource(const fs::path& path) {
             std::istreambuf_iterator<char>()};
 }
 
-// Every filesystem read and write must go through include/ssg/platform_files.h.
+// Every filesystem read and write must go through platform_files.h.
 // Routing the existing call sites once is worthless without this: the next
 // feature would simply add a fresh raw stream, and the seam would rot back into
 // being optional.
@@ -159,10 +159,78 @@ void libraryAndApplicationCodeUseTheFileSeam() {
     check(offenders.empty(), "no raw stream I/O outside the seam");
 }
 
+struct PlatformHeaderOwner {
+    std::string_view spelling;
+    std::string_view path;
+    std::string_view reason;
+};
+
+constexpr PlatformHeaderOwner kPlatformHeaderOwners[] = {
+    {"<windows.h>", "src/platform/windows_files.cpp",
+     "implements Windows file services"},
+    {"<windows.h>", "src/platform/windows_watcher.cpp",
+     "implements the Windows filesystem watcher"},
+    {"<windows.h>", "src/platform/windows_git_metadata_watcher.cpp",
+     "implements the Windows Git metadata watcher"},
+    {"<sys/inotify.h>", "src/platform/linux_watcher.cpp",
+     "implements the Linux filesystem watcher"},
+    {"<sys/inotify.h>", "src/platform/linux_git_metadata_watcher.cpp",
+     "implements the Linux Git metadata watcher"},
+    {"<git2.h>", "src/platform/git_repository.cpp",
+     "implements the core-owned Git repository adapter"},
+    {"<lua.h>", "src/LuaCommandHost.cpp",
+     "implements the Lua adapter"},
+};
+
+void platformHeadersStayInTheirAdapters() {
+    const auto root = repositoryRoot();
+    if (root.empty()) return;
+
+    std::vector<std::string> offenders;
+    for (const auto& directory : {"src", "include", "apps"}) {
+        const auto base = root / directory;
+        if (!fs::exists(base)) continue;
+        for (fs::recursive_directory_iterator it{base}, end; it != end; ++it) {
+            if (!it->is_regular_file()) continue;
+            const auto extension = it->path().extension().string();
+            if (extension != ".cpp" && extension != ".h" && extension != ".hpp") {
+                continue;
+            }
+            const auto relative =
+                fs::relative(it->path(), root).generic_string();
+            const auto source = readSource(it->path());
+            for (const auto& owner : kPlatformHeaderOwners) {
+                if (source.find("#include " + std::string{owner.spelling}) ==
+                    std::string::npos) {
+                    continue;
+                }
+                const bool allowed = std::any_of(
+                    std::begin(kPlatformHeaderOwners),
+                    std::end(kPlatformHeaderOwners),
+                    [&](const PlatformHeaderOwner& candidate) {
+                        return candidate.spelling == owner.spelling &&
+                               candidate.path == relative;
+                    });
+                if (!allowed) {
+                    offenders.push_back(relative + " includes " +
+                                        std::string{owner.spelling});
+                }
+            }
+        }
+    }
+
+    for (const auto& offender : offenders) {
+        std::fprintf(stderr, "FAIL: platform header outside its adapter: %s\n",
+                     offender.c_str());
+    }
+    check(offenders.empty(), "platform headers stay in named adapters");
+}
+
 }  // namespace
 
 int main() {
     libraryAndApplicationCodeUseTheFileSeam();
+    platformHeadersStayInTheirAdapters();
 
     if (failures != 0) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);

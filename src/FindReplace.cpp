@@ -639,27 +639,6 @@ FindReplaceCommandSet::descriptors() const noexcept {
     return descriptors_;
 }
 
-FindReplaceDelta FindReplaceDeltaCodec::derive(
-    const FindReplaceViewState& before,
-    const FindReplaceViewState& after) const {
-    if (before == after) {
-        return {false, before.generation, std::nullopt};
-    }
-    return {true, before.generation, after};
-}
-
-FindReplaceReplayResult FindReplaceDeltaCodec::replay(
-    const FindReplaceViewState& base, const FindReplaceDelta& delta) const {
-    if (base.generation != delta.baseGeneration) {
-        return {FindReplaceReplayError::BaseMismatch, base};
-    }
-    if (delta.changed != delta.replacement.has_value()) {
-        return {FindReplaceReplayError::MalformedDelta, base};
-    }
-    return {FindReplaceReplayError::None,
-            delta.replacement ? *delta.replacement : base};
-}
-
 void FindReplaceController::open(const DocumentSnapshot& document,
                                  FindRequest request) {
     request_ = std::move(request);

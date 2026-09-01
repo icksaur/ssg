@@ -586,28 +586,6 @@ LspByteOffsetResult lspPositionToByteOffset(std::string_view text,
     }
 }
 
-LspSyncDelta LspSyncDeltaCodec::derive(const LspSyncViewState& base,
-                                   const LspSyncViewState& target) {
-    return {base.revision, target.revision,
-            base == target ? std::nullopt
-                           : std::optional<LspSyncViewState>{target}};
-}
-
-LspSyncReplayResult LspSyncDeltaCodec::replay(const LspSyncViewState& base,
-                                          const LspSyncDelta& delta) {
-    if (delta.baseRevision != base.revision) {
-        return {std::nullopt, LspSyncReplayError::StaleRevision};
-    }
-    if (delta.revision < delta.baseRevision ||
-        (delta.state && delta.state->revision != delta.revision) ||
-        (!delta.state && delta.revision != delta.baseRevision)) {
-        return {std::nullopt, LspSyncReplayError::MalformedDelta};
-    }
-    return {delta.state ? delta.state
-                        : std::optional<LspSyncViewState>{base},
-            LspSyncReplayError::None};
-}
-
 struct LspSyncClient::Impl {
     struct DocumentState {
         std::string languageId;

@@ -1,4 +1,5 @@
 #include "ssg/PromptSurface.h"
+#include "ssg/PromptLayout.h"
 #include "ssg/StatusQueue.h"
 #include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
@@ -339,29 +340,6 @@ TEST(statusCapacityAdmissionAndEvictionTable) {
     ASSERT_EQ(view.items.front().id, StatusId{18});
 }
 
-TEST(statusStaleActionsAreRejectedWithoutMutation) {
-    StatusQueue queue;
-    StatusAction retry{"retry", "Retry build", "build.retry"};
-    auto first = queue.enqueue(
-        status(7, StatusPriority::Error, "Build failed", {retry}));
-    const StatusActionInvocation stale{StatusId{7}, "retry", first.generation};
-    queue.dismiss();
-    auto replacement = queue.enqueue(
-        status(7, StatusPriority::Error, "Build failed again", {retry}));
-    ASSERT_NE(first.generation, replacement.generation);
-    const auto before = queue.viewState();
-    const auto rejected = queue.invokeAction(stale);
-    ASSERT_FALSE(rejected.accepted());
-    ASSERT_EQ(rejected.error, StatusActionError::Stale);
-    ASSERT_EQ(queue.viewState(), before);
-
-    const StatusActionInvocation current{
-        StatusId{7}, "retry", replacement.generation};
-    const auto invoked = queue.invokeAction(current);
-    ASSERT_TRUE(invoked.accepted());
-    ASSERT_EQ(invoked.commandId, std::optional<std::string>{"build.retry"});
-}
-
 TEST(statusActionsProjectCanonicalOpaqueNodeIdentities) {
     StatusQueue queue;
     const auto enqueued = queue.enqueue(status(
@@ -444,7 +422,6 @@ int main() {
     RUN(theSemanticAndGridControlsComeFromTheOneResolver);
     RUN(statusPriorityAndNavigationTransitionTable);
     RUN(statusCapacityAdmissionAndEvictionTable);
-    RUN(statusStaleActionsAreRejectedWithoutMutation);
     RUN(statusActionsProjectCanonicalOpaqueNodeIdentities);
     RUN(statusQueueRejectsDuplicateActionIdentityBeforeMutation);
     RUN(footerProjectionAndAccessibilityMatchGolden);

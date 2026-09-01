@@ -29,7 +29,7 @@ ssg::UiChromeLowerResult lowerLegacyChromeForTest(
         region, rect, role, style, resolver, solved);
     for (const auto& item : solved.items) {
         out.push_back({kind, item.id, item.label, item.rect, item.role,
-                       item.content, item.command, item.statusInvocation});
+                       item.content, item.command});
     }
     return result;
 }

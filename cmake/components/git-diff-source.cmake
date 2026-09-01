@@ -1,4 +1,4 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/GitDiffSource.cpp
     ${SSG_SOURCE_DIR}/src/platform/git_repository.cpp
 )
@@ -49,11 +49,11 @@ if(EXISTS "${SSG_SOURCE_DIR}/vendor/libgit2/CMakeLists.txt")
     else()
         unset(CMAKE_C_EXTENSIONS CACHE)
     endif()
-    target_link_libraries(ssg PUBLIC libgit2package)
+    target_link_libraries(ssg_core PUBLIC libgit2package)
     if(DEFINED LIBGIT2_SYSTEM_LIBS)
-        target_link_libraries(ssg PUBLIC ${LIBGIT2_SYSTEM_LIBS})
+        target_link_libraries(ssg_core PUBLIC ${LIBGIT2_SYSTEM_LIBS})
     endif()
-    target_compile_definitions(ssg PRIVATE SSG_LIBGIT2)
+    target_compile_definitions(ssg_core PRIVATE SSG_LIBGIT2)
 endif()
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -63,7 +63,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_git_diff_source PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_git_diff_source PRIVATE ssg)
+    target_link_libraries(test_git_diff_source PRIVATE ssg_core)
     add_test(NAME test_git_diff_source COMMAND test_git_diff_source)
 
     add_executable(test_git_repository
@@ -72,7 +72,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_git_repository PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_git_repository PRIVATE ssg)
+    target_link_libraries(test_git_repository PRIVATE ssg_core)
     add_test(NAME test_git_repository COMMAND test_git_repository)
 
     add_executable(test_git_diff_host
@@ -81,6 +81,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_git_diff_host PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_git_diff_host PRIVATE ssg)
+    target_link_libraries(test_git_diff_host PRIVATE ssg_core)
     add_test(NAME test_git_diff_host COMMAND test_git_diff_host)
 endif()

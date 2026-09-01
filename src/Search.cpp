@@ -445,29 +445,4 @@ SearchPublishResult SearchController::publish(
 
 SearchCommandSet searchCommandSet() { return {}; }
 
-SearchDelta SearchDeltaCodec::derive(const SearchViewState& base,
-                                     const SearchViewState& target) const {
-    return {.baseRevision = base.revision,
-            .revision = target.revision,
-            .state = base == target ? std::nullopt
-                                    : std::optional<SearchViewState>{target}};
-}
-
-SearchReplayResult SearchDeltaCodec::replay(const SearchViewState& base,
-                                            const SearchDelta& delta) const {
-    if (base.revision != delta.baseRevision) {
-        return {.error = SearchReplayError::StaleRevision};
-    }
-    if (!delta.state) {
-        if (delta.revision == base.revision) {
-            return {.state = base};
-        }
-        return {.error = SearchReplayError::MalformedDelta};
-    }
-    if (delta.state->revision != delta.revision) {
-        return {.error = SearchReplayError::MalformedDelta};
-    }
-    return {.state = delta.state};
-}
-
 } // namespace ssg

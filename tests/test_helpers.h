@@ -31,9 +31,7 @@ inline int failed = 0;
 // Equality: requires operator== on the two operands.
 #define ASSERT_EQ(a, b)                                                 \
     do {                                                                 \
-        const auto& _a = (a);                                           \
-        const auto& _b = (b);                                           \
-        if (!(_a == _b)) {                                              \
+        if (!((a) == (b))) {                                            \
             std::cerr << "  FAIL: " << #a << " == " << #b              \
                       << " at " << __FILE__ << ":" << __LINE__ << "\n"; \
             ++failed;                                                   \
@@ -45,9 +43,7 @@ inline int failed = 0;
 // Inequality: requires operator== (derives != from it).
 #define ASSERT_NE(a, b)                                                       \
     do {                                                                       \
-        const auto& _a = (a);                                                 \
-        const auto& _b = (b);                                                 \
-        if (_a == _b) {                                                       \
+        if ((a) == (b)) {                                                     \
             std::cerr << "  FAIL: " << #a << " != " << #b                    \
                       << " (equal) at " << __FILE__ << ":" << __LINE__ << "\n"; \
             ++failed;                                                         \

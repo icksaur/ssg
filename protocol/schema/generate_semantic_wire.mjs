@@ -8,9 +8,11 @@ const root = path.resolve(here, '../..');
 const defaults = Object.freeze({
   manifest: path.join(here, 'semantic_wire.mjs'),
   cpp: path.join(
-    root, 'include/ssg/detail/generated/semantic_wire_manifest.h'),
+    root, 'include/core/ssg/detail/generated/semantic_wire_manifest.h'),
   wireCpp: path.join(
-    root, 'include/ssg/detail/generated/wire_schema.h'),
+    root, 'include/protocol/ssg/detail/generated/wire_schema.h'),
+  replayCpp: path.join(
+    root, 'include/core/ssg/detail/generated/ordinary_replay.h'),
   js: path.join(root, 'apps/web/generated/semantic_wire_manifest.mjs'),
 });
 
@@ -20,6 +22,9 @@ const wireFieldName = /^[a-z][A-Za-z0-9_]*$/;
 const lifecycles = new Set(['current', 'compatibility', 'retired']);
 const replayPolicies = new Set([
   'replacement', 'changed-replacement', 'specialized', 'compatibility',
+]);
+const specializedDecisions = new Set([
+  'ordinary', 'payload', 'latency', 'asymptotic',
 ]);
 const enumUnknownPolicies = new Set(['reject', 'map-to']);
 const fallbackWireEnums = new Set(['ScrollAxis']);
@@ -50,6 +55,105 @@ function requireOnlyKeys(value, permitted, label) {
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) throw new Error(`unknown ${label} property: ${key}`);
   }
+}
+
+const expressionKind = (expression) =>
+  typeof expression === 'string' ? expression : expression?.kind;
+
+function replayTypeIdentity(expression) {
+  const kind = expressionKind(expression);
+  if (wirePrimitiveKinds.has(kind)) {
+    const declaration = typeof expression === 'string'
+      ? { kind }
+      : Object.fromEntries(
+        Object.entries(expression).sort(([left], [right]) =>
+          left.localeCompare(right)));
+    return `primitive:${JSON.stringify(declaration)}`;
+  }
+  if (kind === 'ref') return `ref:${expression.type}`;
+  return null;
+}
+
+export function resolveOrdinaryReplay(manifest) {
+  const types = new Map(
+    manifest.wireTypes.map((wireType) => [wireType.symbol, wireType.schema]));
+  const snapshotRoot = types.get('SessionSnapshotSections');
+  const deltaRoot = types.get('SessionDelta');
+  if (expressionKind(snapshotRoot) !== 'record' ||
+      expressionKind(deltaRoot) !== 'record') {
+    throw new Error('ordinary replay requires session root records');
+  }
+  const findField = (schema, name) =>
+    schema.fields.find((field) => field.wireName === name);
+  const referencedRecord = (expression) => {
+    if (expressionKind(expression) !== 'ref') return null;
+    const schema = types.get(expression.type);
+    return expressionKind(schema) === 'record' ? schema : null;
+  };
+  const nullable = (expression) =>
+    expressionKind(expression) === 'nullable' ? expression.value : null;
+  const fail = (section) => {
+    throw new Error(`invalid ordinary replay shape: ${section.symbol}`);
+  };
+  const descriptors = [];
+  for (const section of manifest.semanticSections) {
+    if (section.replay !== 'changed-replacement' &&
+        section.replay !== 'replacement') continue;
+    if (section.delta.length !== 1) fail(section);
+    const snapshotField = findField(snapshotRoot, section.snapshot);
+    const deltaField = findField(deltaRoot, section.delta[0]);
+    if (!snapshotField || !deltaField) fail(section);
+    const nullableSnapshot = nullable(snapshotField.type);
+    const stateType = nullableSnapshot ?? snapshotField.type;
+    if (replayTypeIdentity(stateType) == null) fail(section);
+    const common = {
+      symbol: section.symbol,
+      snapshot: section.snapshot,
+      delta: section.delta[0],
+      stateType,
+      nullable: nullableSnapshot != null,
+    };
+    if (section.replay === 'changed-replacement') {
+      if (snapshotField.required === common.nullable ||
+          deltaField.required === common.nullable) fail(section);
+      const change = referencedRecord(deltaField.type);
+      if (!change || change.fields.length !== 2) fail(section);
+      const changed = findField(change, 'changed');
+      const replacement = findField(change, 'replacement');
+      const replacementType = replacement && nullable(replacement.type);
+      if (!changed || !changed.required ||
+          expressionKind(changed.type) !== 'bool' ||
+          !replacement || replacement.required || !replacementType ||
+          replayTypeIdentity(replacementType) !== replayTypeIdentity(stateType)) {
+        fail(section);
+      }
+      descriptors.push({ ...common, form: 'changed-replacement' });
+      continue;
+    }
+
+    if (common.nullable) fail(section);
+    const directType = nullable(deltaField.type);
+    if (!deltaField.required && directType &&
+        replayTypeIdentity(directType) === replayTypeIdentity(stateType)) {
+      descriptors.push({ ...common, form: 'direct-replacement' });
+      continue;
+    }
+    if (!snapshotField.required) fail(section);
+    const envelope = deltaField.required
+      ? referencedRecord(deltaField.type)
+      : null;
+    const fields = envelope?.fields ?? [];
+    const replacement = fields.length === 1
+      ? findField(envelope, 'replacement')
+      : null;
+    const replacementType = replacement && nullable(replacement.type);
+    if (!replacement || replacement.required || !replacementType ||
+        replayTypeIdentity(replacementType) !== replayTypeIdentity(stateType)) {
+      fail(section);
+    }
+    descriptors.push({ ...common, form: 'replacement-envelope' });
+  }
+  return descriptors;
 }
 
 export function validateManifest(manifest) {
@@ -88,6 +192,15 @@ export function validateManifest(manifest) {
         ((section.lifecycle === 'compatibility') !==
          (section.replay === 'compatibility'))) {
       throw new Error(`invalid section declaration: ${section.symbol ?? '?'}`);
+    }
+    if (section.replay === 'specialized') {
+      if (!specializedDecisions.has(section.retention)) {
+        throw new Error(
+          `missing specialized decision: ${section.symbol}`);
+      }
+    } else if (section.retention != null) {
+      throw new Error(
+        `non-specialized decision: ${section.symbol}`);
     }
     for (const field of section.delta) {
       if (deltaFields.has(field)) throw new Error(`duplicate delta field: ${field}`);
@@ -234,12 +347,23 @@ export function validateManifest(manifest) {
       validateExpression(expression.items, owner);
     } else if (kind === 'record') {
       requireOnlyKeys(
-        expression, ['kind', 'fields', 'unknownFields'], 'wire record');
+        expression,
+        ['kind', 'fields', 'unknownFields', 'forbiddenFields'],
+        'wire record');
       if (expression.unknownFields !== 'allow' &&
           expression.unknownFields !== 'reject') {
         throw new Error(`invalid unknown-field policy: ${owner}`);
       }
       validateFields(expression.fields, owner);
+      if (!Array.isArray(expression.forbiddenFields) ||
+          expression.forbiddenFields.some(
+            (field) => typeof field !== 'string' || field.length === 0) ||
+          new Set(expression.forbiddenFields).size !==
+            expression.forbiddenFields.length ||
+          expression.forbiddenFields.some((name) =>
+            expression.fields.some((field) => field.wireName === name))) {
+        throw new Error(`invalid forbidden wire field: ${owner}`);
+      }
       if (expression.unknownFields === 'reject' &&
           expression.fields.some((field) => !field.required)) {
         throw new Error(`optional field in exact wire record: ${owner}`);
@@ -309,7 +433,7 @@ export function validateManifest(manifest) {
         if ((kind === 'discriminated-record' &&
              !declaration.values.some((value) =>
                value.symbol === variant.value &&
-               value.lifecycle === 'current')) ||
+               value.lifecycle !== 'retired')) ||
             (kind === 'text-discriminated-record' &&
              !wireName.test(variant.value))) {
           throw new Error(`invalid wire discriminator value: ${owner}`);
@@ -385,6 +509,7 @@ export function validateManifest(manifest) {
     visited.add(symbol);
   };
   for (const symbol of typeSymbols) visit(symbol);
+  resolveOrdinaryReplay(manifest);
   return manifest;
 }
 
@@ -400,6 +525,12 @@ const replayCpp = (value) => ({
   specialized: 'Specialized',
   compatibility: 'Compatibility',
 })[value];
+const specializedDecisionCpp = (value) => ({
+  ordinary: 'Ordinary',
+  payload: 'Payload',
+  latency: 'Latency',
+  asymptotic: 'Asymptotic',
+})[value] ?? 'None';
 
 function renderCpp(manifest) {
   const currentMessages = manifest.messageKinds.filter(
@@ -415,11 +546,21 @@ function renderCpp(manifest) {
     `    ProtocolMessageKindFact{${quote(message.symbol)}, ` +
     `${quote(message.wireName)}, ${message.ordinal}, ` +
     `ManifestLifecycle::${lifecycleCpp(message.lifecycle)}},`);
-  const sectionFacts = manifest.semanticSections.map((section) =>
-    `    SemanticSectionFact{${quote(section.symbol)}, ` +
+  let deltaOffset = 0;
+  const sectionFacts = manifest.semanticSections.map((section) => {
+    const fact = `    SemanticSectionFact{${quote(section.symbol)}, ` +
     `${quote(section.snapshot)}, ManifestLifecycle::` +
     `${lifecycleCpp(section.lifecycle)}, ReplayPolicy::` +
-    `${replayCpp(section.replay)}},`);
+    `${replayCpp(section.replay)}, SpecializedDecision::` +
+    `${specializedDecisionCpp(section.retention)}, ${deltaOffset}, ` +
+    `${section.delta.length}},`;
+    deltaOffset += section.delta.length;
+    return fact;
+  });
+  const specializedSections = manifest.semanticSections
+    .filter((section) => section.lifecycle === 'current' &&
+      section.replay === 'specialized')
+    .map((section) => section.symbol);
   const strings = (values) => values.map(
     (value) => `    std::string_view{${quote(value)}},`);
   const enumMacroName = (wireEnum) =>
@@ -439,6 +580,11 @@ function renderCpp(manifest) {
       `${value.ordinal}, ManifestLifecycle::${lifecycleCpp(value.lifecycle)}},`);
     const currentValues = wireEnum.values.filter(
       (value) => value.lifecycle === 'current');
+    const compatibilityOrdinals = wireEnum.values
+      .filter((value) => value.lifecycle === 'compatibility')
+      .map((value) =>
+        `inline constexpr std::uint64_t k${wireEnum.symbol}${value.symbol}` +
+        `CompatibilityOrdinal = ${value.ordinal};`);
     const fallback = wireEnum.unknown.policy === 'map-to'
       ? wireEnum.values.find(
         (value) => value.symbol === wireEnum.unknown.fallback).ordinal
@@ -453,13 +599,16 @@ function renderCpp(manifest) {
       `${facts(wireEnum.values).join('\n')}\n};\n` +
       `inline constexpr std::array k${wireEnum.symbol}CurrentWireNames{\n` +
       `${strings(currentValues
-        .map((value) => value.wireName)).join('\n')}\n};`;
+        .map((value) => value.wireName)).join('\n')}\n};` +
+      (compatibilityOrdinals.length === 0
+        ? '' : `\n${compatibilityOrdinals.join('\n')}`);
   });
   return `// Generated by protocol/schema/generate_semantic_wire.mjs.
 // Source: protocol/schema/semantic_wire.mjs. Do not edit.
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -484,6 +633,14 @@ enum class ReplayPolicy : std::uint8_t {
     Compatibility,
 };
 
+enum class SpecializedDecision : std::uint8_t {
+    None,
+    Ordinary,
+    Payload,
+    Latency,
+    Asymptotic,
+};
+
 enum class UnknownEnumPolicy : std::uint8_t {
     Reject,
     MapTo,
@@ -501,6 +658,9 @@ struct SemanticSectionFact {
     std::string_view snapshotField;
     ManifestLifecycle lifecycle;
     ReplayPolicy replay;
+    SpecializedDecision retention;
+    std::size_t deltaOffset;
+    std::size_t deltaCount;
 };
 
 struct WireEnumFact {
@@ -524,6 +684,10 @@ inline constexpr std::array kSemanticSections{
 ${sectionFacts.join('\n')}
 };
 
+inline constexpr std::array kSpecializedSemanticSections{
+${strings(specializedSections).join('\n')}
+};
+
 inline constexpr std::array kSemanticSnapshotFields{
 ${strings(snapshots).join('\n')}
 };
@@ -533,6 +697,64 @@ ${strings(deltas).join('\n')}
 };
 
 ${enumFacts.join('\n\n')}
+
+}  // namespace ssg::detail::generated
+`;
+}
+
+const lowerCamel = (name) =>
+  name.replace(/_([a-z0-9])/g, (_, character) => character.toUpperCase());
+
+function renderCppOrdinaryReplay(manifest) {
+  const descriptors = resolveOrdinaryReplay(manifest);
+  const operations = descriptors.map((descriptor) => {
+    const state = lowerCamel(descriptor.snapshot);
+    const delta = lowerCamel(descriptor.delta);
+    if (descriptor.form === 'changed-replacement') {
+      if (descriptor.nullable) {
+        return `    {
+        const auto& change = delta.${delta}();
+        if (!change.changed && change.replacement) return std::nullopt;
+        if (change.changed) next.${state} = change.replacement;
+    }`;
+      }
+      return `    {
+        const auto& change = delta.${delta}();
+        if (change.changed != change.replacement.has_value()) return std::nullopt;
+        if (change.replacement) next.${state} = *change.replacement;
+    }`;
+    }
+    return `    {
+        const auto& replacement = ordinaryReplacement(delta.${delta}());
+        if (replacement) next.${state} = *replacement;
+    }`;
+  });
+  return `// Generated by protocol/schema/generate_semantic_wire.mjs.
+// Source: protocol/schema/semantic_wire.mjs. Do not edit.
+#pragma once
+
+#include <optional>
+
+namespace ssg::detail::generated {
+
+template <typename Delta>
+decltype(auto) ordinaryReplacement(const Delta& delta) {
+    if constexpr (requires { delta.replacement; }) {
+        return (delta.replacement);
+    } else {
+        return (delta);
+    }
+}
+
+// CONTRACT: This is the sole ordinary-section replay inventory. It returns a
+// candidate and never mutates the retained base.
+template <typename Sections, typename Delta>
+std::optional<Sections> replayOrdinarySessionSections(
+    const Sections& base, const Delta& delta) {
+    auto next = base;
+${operations.join('\n')}
+    return next;
+}
 
 }  // namespace ssg::detail::generated
 `;
@@ -677,10 +899,13 @@ function renderCppWireValidators(manifest) {
         `        return ${call(node.items, 'item')};\n    });`;
     }
     if (kind === 'record') {
+      const forbidden = expression.forbiddenFields.map(
+        (name) => `value.field(${quote(name)})`).join(' || ');
       return `    const auto* object = value.asObject();\n` +
         `    if (!object${
           expression.unknownFields === 'reject'
-            ? ` || object->size() != ${node.fields.length}` : ''}) return false;\n${
+            ? ` || object->size() != ${node.fields.length}` : ''}${
+          forbidden ? ` || ${forbidden}` : ''}) return false;\n${
         node.fields.map(renderField).join('\n')}\n    return true;`;
     }
     if (kind === 'field-union') {
@@ -861,9 +1086,12 @@ function renderJsWireValidators(manifest) {
         `      value.every((item) => ${call(node.items, 'item')});`;
     }
     if (kind === 'record') {
+      const forbidden = expression.forbiddenFields.map(
+        (name) => `Object.hasOwn(value, ${quote(name)})`).join(' || ');
       return `    if (!value || typeof value !== 'object' || Array.isArray(value)${
         expression.unknownFields === 'reject'
-          ? ` || Object.keys(value).length !== ${node.fields.length}` : ''}) return false;\n${
+          ? ` || Object.keys(value).length !== ${node.fields.length}` : ''}${
+        forbidden ? ` || ${forbidden}` : ''}) return false;\n${
         node.fields.map(renderField).join('\n')}\n    return true;`;
     }
     if (kind === 'field-union') {
@@ -997,6 +1225,90 @@ function renderJsWireValidators(manifest) {
     builders.join('\n\n')}\n`;
 }
 
+function renderJsOrdinaryReplay(manifest) {
+  const descriptors = resolveOrdinaryReplay(manifest);
+  const valueCheck = (descriptor, name) => {
+    const kind = expressionKind(descriptor.stateType);
+    if (kind === 'ref') {
+      return `validate${descriptor.stateType.type}Wire(${name})`;
+    }
+    return {
+      bool: `typeof ${name} === 'boolean'`,
+      bytes: `${name} instanceof Uint8Array && ${name}.length === ${
+        descriptor.stateType.length}`,
+      int: `Number.isInteger(${name}) || typeof ${name} === 'bigint'`,
+      uint: `(Number.isInteger(${name}) && ${name} >= 0) || ` +
+        `(typeof ${name} === 'bigint' && ${name} >= 0n)`,
+      text: `typeof ${name} === 'string'`,
+    }[kind] ?? 'false';
+  };
+  const operations = descriptors.map((descriptor) => {
+    const field = quote(descriptor.delta);
+    const state = descriptor.snapshot;
+    if (descriptor.form === 'changed-replacement') {
+      const presence = descriptor.nullable
+        ? 'if (present) {'
+        : 'if (!present) return null;';
+      const closePresence = descriptor.nullable ? '\n    }' : '';
+      const replacement = valueCheck(descriptor, 'replacement');
+      return `  {
+    const present = Object.prototype.hasOwnProperty.call(delta, ${field});
+    ${presence}
+    const change = delta[${field}];
+    if (!change || typeof change !== 'object' || Array.isArray(change) ||
+        typeof change.changed !== 'boolean') return null;
+    const replacement = change.replacement;
+    if (!change.changed) {
+      if (replacement != null) return null;
+    } else {${
+      descriptor.nullable
+        ? `\n      if (replacement != null && !(${replacement})) return null;\n` +
+          `      next.${state} = replacement ?? null;`
+        : `\n      if (replacement == null || !(${replacement})) return null;\n` +
+          `      next.${state} = replacement;`}
+    }
+${closePresence}
+  }`;
+    }
+    if (descriptor.form === 'replacement-envelope') {
+      const replacement = valueCheck(descriptor, 'replacement');
+      return `  {
+    if (!Object.prototype.hasOwnProperty.call(delta, ${field})) return null;
+    const envelope = delta[${field}];
+    if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
+      return null;
+    }
+    const replacement = envelope.replacement;
+    if (replacement != null) {
+      if (!(${replacement})) return null;
+      next.${state} = replacement;
+    }
+  }`;
+    }
+    const replacement = valueCheck(descriptor, 'replacement');
+    return `  {
+    if (Object.prototype.hasOwnProperty.call(delta, ${field})) {
+      const replacement = delta[${field}];
+      if (replacement != null) {
+        if (!(${replacement})) return null;
+        next.${state} = replacement;
+      }
+    }
+  }`;
+  });
+  return `
+// CONTRACT: This is the sole ordinary-section replay inventory. It returns a
+// candidate and never mutates the retained base.
+export function replayOrdinarySessionSections(baseSections, delta) {
+  if (!baseSections || typeof baseSections !== 'object' ||
+      !delta || typeof delta !== 'object') return null;
+  const next = { ...baseSections };
+${operations.join('\n')}
+  return next;
+}
+`;
+}
+
 function renderJs(manifest) {
   return `// Generated by protocol/schema/generate_semantic_wire.mjs.
 // Source: protocol/schema/semantic_wire.mjs. Do not edit.
@@ -1033,6 +1345,7 @@ ${manifest.wireEnums.map((wireEnum) => {
       values.join('\n')}\n});`;
   }).join('\n')}
 ${renderJsWireValidators(manifest)}
+${renderJsOrdinaryReplay(manifest)}
 `;
 }
 
@@ -1041,6 +1354,7 @@ export function renderOutputs(manifest) {
   return {
     cpp: renderCpp(manifest),
     wireCpp: renderCppWireValidators(manifest),
+    replayCpp: renderCppOrdinaryReplay(manifest),
     js: renderJs(manifest),
   };
 }
@@ -1116,6 +1430,7 @@ function parseArguments(args) {
     else if (argument === '--manifest') options.manifest = args[++index];
     else if (argument === '--cpp') options.cpp = args[++index];
     else if (argument === '--wire-cpp') options.wireCpp = args[++index];
+    else if (argument === '--replay-cpp') options.replayCpp = args[++index];
     else if (argument === '--js') options.js = args[++index];
     else throw new Error(`unknown argument: ${argument}`);
   }
@@ -1126,7 +1441,8 @@ export async function run(args) {
   const options = parseArguments(args);
   const outputs = renderOutputs(await loadManifest(options.manifest));
   const destinations = {
-    cpp: options.cpp, wireCpp: options.wireCpp, js: options.js,
+    cpp: options.cpp, wireCpp: options.wireCpp,
+    replayCpp: options.replayCpp, js: options.js,
   };
   if (options.mode === 'write') await writeOutputs(outputs, destinations);
   else await checkOutputs(outputs, destinations);

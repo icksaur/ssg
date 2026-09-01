@@ -1,4 +1,4 @@
-target_sources(ssg PRIVATE
+target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/LspFeatureController.cpp
 )
 
@@ -13,6 +13,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_compile_definitions(test_lsp_features PRIVATE
         SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}"
     )
-    target_link_libraries(test_lsp_features PRIVATE ssg)
+    target_link_libraries(test_lsp_features PRIVATE ssg_core)
     add_test(NAME test_lsp_features COMMAND test_lsp_features)
 endif()

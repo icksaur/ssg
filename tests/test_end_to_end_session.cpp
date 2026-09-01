@@ -1,4 +1,5 @@
 #include "test_helpers.h"
+#include "grid_test_frame.h"
 #include "tui_fixture.h"
 
 #include <ssg/EditorSession.h>
@@ -87,9 +88,8 @@ TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
     ssg::tui::TuiClient client{
         tui, tuiPrincipal, ssg::ViewId{2}, ssg::ViewportDimensions{80, 24}};
 
-    auto directSnapshot =
-        direct.present(directPrincipal.clientId(),
-                        ssg::ViewportDimensions{80, 24});
+    auto directSnapshot = ssg::test::projectGridFrame(
+        direct, directPrincipal.clientId(), ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(directSnapshot.has_value());
     ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));
 
@@ -111,8 +111,8 @@ TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
         auto tuiResult = client.submit(step.command, step.payload);
         ASSERT_TRUE(directResult.accepted());
         ASSERT_TRUE(tuiResult.accepted());
-        directSnapshot = direct.present(
-            directPrincipal.clientId(), ssg::ViewportDimensions{80, 24});
+        directSnapshot = ssg::test::projectGridFrame(
+            direct, directPrincipal.clientId(), ssg::ViewId{1}, {80, 24});
         ASSERT_TRUE(directSnapshot.has_value());
         ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));
     }

@@ -8,7 +8,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_compile_definitions(test_protocol PRIVATE
         SSG_PROTOCOL_FIXTURES_DIR="${SSG_SOURCE_DIR}/tests/fixtures/protocol"
     )
-    target_link_libraries(test_protocol PRIVATE ssg)
+    target_link_libraries(test_protocol PRIVATE ssg_grid ssg_protocol)
     add_test(NAME test_protocol COMMAND test_protocol)
 
     find_program(SSG_PROTOCOL_NODE_EXECUTABLE node)

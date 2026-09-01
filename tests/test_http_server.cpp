@@ -590,7 +590,7 @@ TEST(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot) {
     server.stop();
 }
 
-TEST(statusUsesTypedInputAndDroppedContentUsesAggregateCommand) {
+TEST(noticeUsesTypedInputAndDroppedContentUsesAggregateCommand) {
     Fixture fixture{/*remote=*/true};
     constexpr std::uint16_t port = 18777;
     ssg::HttpEditorServer server{
@@ -603,17 +603,16 @@ TEST(statusUsesTypedInputAndDroppedContentUsesAggregateCommand) {
     attach(socket.socket);
     ASSERT_TRUE(ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload).accepted());
 
-    auto const status = ssg::ProtocolCodec{}.encodeClientInput(
-        ssg::StatusActionPointerInput{
-            {fixture.runtime->revision()},
-            {ssg::StatusId{3}, "run", 1}});
-    ASSERT_TRUE(ssg::ProtocolCodec{}.decodeClientInput(status).accepted());
-    sendAll(socket.socket, maskedFrame(0x2, status));
-    auto statusResult =
+    auto const notice = ssg::ProtocolCodec{}.encodeClientInput(
+        ssg::NoticeActionPointerInput{
+            {fixture.runtime->revision()}, "draft.notice.dismiss"});
+    ASSERT_TRUE(ssg::ProtocolCodec{}.decodeClientInput(notice).accepted());
+    sendAll(socket.socket, maskedFrame(0x2, notice));
+    auto noticeResult =
         ssg::ProtocolCodec{}.decodeClientInputResult(reader.next().payload);
-    ASSERT_TRUE(statusResult.accepted());
-    ASSERT_TRUE(statusResult.result->command.has_value());
-    ASSERT_FALSE(statusResult.result->command->accepted());
+    ASSERT_TRUE(noticeResult.accepted());
+    ASSERT_TRUE(noticeResult.result->command.has_value());
+    ASSERT_FALSE(noticeResult.result->command->accepted());
 
     auto registry = ssg::CommandArgumentCodecRegistry{
         fixture.runtime->commandCatalog()};
@@ -867,7 +866,7 @@ int main() {
     RUN(acceptedNoChangeCommandStillReceivesAResult);
     RUN(deferredFailurePublishesAdvancedStateBeforeRejectedResult);
     RUN(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot);
-    RUN(statusUsesTypedInputAndDroppedContentUsesAggregateCommand);
+    RUN(noticeUsesTypedInputAndDroppedContentUsesAggregateCommand);
     RUN(replayLargerThanTheOutboundQueueFallsBackToSnapshot);
     RUN(attachRequestNeverCarriesAClientGrantedCapability);
     RUN(attachRejectsAForeignPreambleWithoutAPartialRequest);

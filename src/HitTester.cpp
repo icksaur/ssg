@@ -103,13 +103,8 @@ RegionHit chromeHit(const SolvedChromeSurface& surface, HitRegion fieldRegion,
         if (!contains(item.rect, column, row)) continue;
         RegionHit hit;
         hit.fieldId = item.id;
-        if (item.statusInvocation) {
-            hit.region = HitRegion::StatusAction;
-            hit.statusInvocation = item.statusInvocation;
-        } else {
-            hit.region = fieldRegion;
-            hit.commandId = item.command;
-        }
+        hit.region = fieldRegion;
+        hit.commandId = item.command;
         return hit;
     }
     return {};

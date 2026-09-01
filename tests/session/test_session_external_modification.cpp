@@ -106,20 +106,20 @@ struct Session {
 
 std::vector<ssg::ExternalDocumentView> externalFiles(
     ssg::EditorSession& runtime) {
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     if (!snapshot) return {};
-    return snapshot->semantic().sections().externalModification.files;
+    return snapshot->sections().externalModification.files;
 }
 
 bool watcherAvailable(ssg::EditorSession& runtime) {
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    return snapshot && snapshot->semantic().sections().watcherAvailable;
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
+    return snapshot && snapshot->sections().watcherAvailable;
 }
 
 std::string activeTabLabel(ssg::EditorSession& runtime) {
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     if (!snapshot) return {};
-    const auto& tabs = snapshot->semantic().sections().tabs;
+    const auto& tabs = snapshot->sections().tabs;
     if (!tabs.active) return {};
     for (const auto& tab : tabs.tabs) {
         if (tab.id == *tabs.active) return tab.label;
@@ -128,9 +128,9 @@ std::string activeTabLabel(ssg::EditorSession& runtime) {
 }
 
 bool activeTabIsLiveDiff(ssg::EditorSession& runtime) {
-    auto snapshot = runtime.present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1});
     if (!snapshot) return false;
-    const auto& tabs = snapshot->semantic().sections().tabs;
+    const auto& tabs = snapshot->sections().tabs;
     if (!tabs.active) return false;
     for (const auto& tab : tabs.tabs) {
         if (tab.id == *tabs.active) return tab.kind == ssg::TabKind::LiveDiff;
@@ -271,10 +271,9 @@ TEST(exmdStaleIdDoesNotActOnThePreviousSelection) {
         {"external.select", session.runtime->revision(),
          ssg::DiffFileId{"external:not-a-real-file.txt"}});
     ASSERT_FALSE(stale.accepted());
-    auto snapshot =
-        session.runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = session.runtime->snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
-    const auto& external = snapshot->semantic().sections().externalModification;
+    const auto& external = snapshot->sections().externalModification;
     ASSERT_TRUE(external.selected.has_value());
     ASSERT_EQ(*external.selected, present);
 }
@@ -820,14 +819,13 @@ TEST(aStatusErrorOnAMissingBaselineRaisesOnTheOverflowPath) {
     std::filesystem::remove(root / "workspace" / "sub" / "note.txt");
     runtime->reconcileExternalWatchEventsForTest(
         {watchEvent(ssg::WatchEventKind::Remove, "sub/note.txt", 1)});
-    auto snapshot0 =
-        runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    ASSERT_EQ(snapshot0->semantic().sections().externalModification.files.size(), 1U);
+    auto snapshot0 = runtime->snapshot(ssg::ClientId{1});
+    ASSERT_EQ(snapshot0->sections().externalModification.files.size(), 1U);
     ASSERT_TRUE(
         runtime
             ->dispatch(ssg::ClientId{1},
                        {"external.keep_buffer", runtime->revision(),
-                        snapshot0->semantic().sections().externalModification.files[0].id})
+                        snapshot0->sections().externalModification.files[0].id})
             .accepted());
 
     // Deny search permission on the parent: symlink_status of the child now errors.
@@ -835,9 +833,8 @@ TEST(aStatusErrorOnAMissingBaselineRaisesOnTheOverflowPath) {
                                  std::filesystem::perms::none);
     runtime->reconcileExternalWatchEventsForTest(
         {watchEvent(ssg::WatchEventKind::Overflow, "", 2)});
-    auto snapshot1 =
-        runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    const auto& raised = snapshot1->semantic().sections().externalModification.files;
+    auto snapshot1 = runtime->snapshot(ssg::ClientId{1});
+    const auto& raised = snapshot1->sections().externalModification.files;
     // Restore permission before asserting so the test dir is always cleanable.
     std::filesystem::permissions(root / "workspace" / "sub",
                                  std::filesystem::perms::owner_all);
@@ -1013,10 +1010,9 @@ TEST(externalPresenceAndSelectionRefreshInTheWatcherDrainNotOnlyOnDispatch) {
     session.runtime->reconcileExternalWatchEventsForTest(
         {watchEvent(ssg::WatchEventKind::Modify, "note.txt", 1)});
 
-    auto snapshot =
-        session.runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = session.runtime->snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
-    const auto& external = snapshot->semantic().sections().externalModification;
+    const auto& external = snapshot->sections().externalModification;
     ASSERT_EQ(external.files.size(), 1U);
     // The library-owned selection homed to the raised file in the watcher drain,
     // not on a later dispatch: it is already populated in the very first snapshot.
@@ -1038,10 +1034,9 @@ TEST(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld) {
                                {"external.focus", session.runtime->revision(), {}})
                     .accepted());
 
-    auto snapshot =
-        session.runtime->present(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    auto snapshot = session.runtime->snapshot(ssg::ClientId{1});
     ASSERT_TRUE(snapshot.has_value());
-    const auto& sections = snapshot->semantic().sections();
+    const auto& sections = snapshot->sections();
     ASSERT_TRUE(sections.uiFrame.effectiveFocus() ==
                 ssg::FocusTarget::ExternalModification);
 
