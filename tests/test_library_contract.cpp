@@ -304,12 +304,8 @@ TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
     fs::remove_all(root);
 }
 
-TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
-    // M11-3: the "delta" leg of the command/snapshot/delta contract. After every
-    // command, the delta between the prior and current production snapshots,
-    // replayed onto the prior snapshot, reconstructs the SAME authoritative
-    // snapshot as a fresh one — and renders to an identical grid.
-    auto root = uniqueRoot("delta");
+TEST(inMemorySnapshotsPublishTheUiVm) {
+    auto root = uniqueRoot("snapshot");
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
@@ -343,23 +339,10 @@ TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
         ASSERT_TRUE(fresh.has_value());
         if (!fresh) break;
 
-        if (fresh->semantic().revision().value() == previous->semantic().revision().value()) {
-            // A command with no authoritative change produces no delta (the delta
-            // API requires the revision to advance); the snapshot is unchanged.
-            ASSERT_TRUE(fresh->semantic() == previous->semantic());
-            continue;
-        }
-
-        auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(
-            previous->semantic(), fresh->semantic());
-        auto replayed = ssg::SessionSnapshotCodec{}.replay(
-            previous->semantic(), delta);
-        ASSERT_TRUE(replayed.accepted());
-        if (!replayed.accepted()) break;
-
-        // Delta replay is semantic-only; presentation is independently projected
-        // by the owning presenter.
-        ASSERT_TRUE(*replayed.snapshot == fresh->semantic());
+        auto const& frame = fresh->semantic().sections().uiFrame;
+        ASSERT_TRUE(!frame.schema().root.id.empty());
+        ASSERT_TRUE(!frame.presence().nodes.empty());
+        ASSERT_TRUE(!frame.state().nodes.empty());
 
         previous = ssg::test::projectGridFrame(
             *runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
@@ -373,7 +356,7 @@ int main() {
     RUN(productionRuntimeNormalScreenSatisfiesTheScreenContract);
     RUN(productionRuntimePaletteScreenSatisfiesTheScreenContract);
     RUN(productionRuntimeTooSmallScreenSatisfiesTheScreenContract);
-    RUN(deltaReplayReconstructsTheSameSnapshotAndGrid);
+    RUN(inMemorySnapshotsPublishTheUiVm);
     RUN(paletteReportIsAPureFunctionOfCandidatesAndQuery);
     RUN(renderedPaletteLabelsTraceToPublishedCandidates);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

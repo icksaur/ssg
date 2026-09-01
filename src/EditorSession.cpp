@@ -2592,9 +2592,8 @@ void EditorSession::Impl::primeDeferred() {
         refreshSyntax();
         ran = true;
     }
-    // Advance the session revision so delta-based clients observe the primed
-    // enrichment; a same-revision snapshot pair yields no delta (derive_session_
-    // delta rejects it), so without this a WebSocket client would miss it.
+    // Advance the session revision so attached clients observe the primed
+    // enrichment when comparing snapshots.
     if (ran && session) session->advanceRevision();
 }
 
@@ -3002,10 +3001,9 @@ void EditorSession::setComposedUi(std::optional<ValidatedComposition> compositio
     std::lock_guard operationLock{impl_->operationMutex};
     // A composition-only reload (a script that just calls ssg.chrome, or one
     // that drops the call) runs outside command dispatch, so nothing else
-    // advances the session revision. Delta-gated clients derive a frame only
-    // from a revision change (derive_session_delta rejects a same-revision
-    // pair), so bump on a real CHANGE -- and only then, to avoid a redundant
-    // repaint when the host re-pushes an identical composition on every reload.
+    // advances the session revision. Bump on a real change, and only then, to
+    // avoid a redundant repaint when the host re-pushes an identical
+    // composition on every reload.
     if (impl_->composedUi == composition) return;
     // Migrate the schema over the new composition FIRST; adopt chrome truth only if it
     // succeeds, so a failure cannot leave composedUi/chromeGeneration ahead of the schema.
@@ -3041,10 +3039,11 @@ EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
         // deterministic and testable. Its result is deliberately ignored: a
         // corrupt archive entry must never stop a user opening their workspace.
         (void)impl->workspace.pruneArchive();
-        impl->keymap = defaultTerminalKeymap();        if (auto errors = KeymapMatcher{impl->keymap}.validate({}); !errors.empty()) {
+        impl->keymap = defaultTerminalKeymap();
+        if (auto errors = KeymapMatcher{impl->keymap}.validate(); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
         }
-        if (!KeymapMatcher{impl->keymap}.hasGlobalBinding("settings.open", {})) {
+        if (!KeymapMatcher{impl->keymap}.hasGlobalBinding("settings.open")) {
             return {nullptr,
                     "default keymap lacks a global settings.open escape hatch"};
         }

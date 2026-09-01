@@ -199,7 +199,7 @@ public:
     // already reflects rollback: a rejected reload keeps the prior value). Like
     // resetKeymapToDefault(), an app/runtime seam rather than a Lua command:
     // ssg.chrome stages a nested widget tree, not a flat command argument. A real
-    // change advances the session revision so delta-based clients repaint; an
+    // change advances the session revision so attached clients repaint; an
     // identical re-push is a no-op.
     void setComposedUi(std::optional<ValidatedComposition> composition);
     // M10 fast startup: run the enrichment work that was deferred when the

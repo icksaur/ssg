@@ -10,10 +10,8 @@
 #   --no-deps      Skip the pacman dependency step (assume tools are present).
 #   --build-only   Configure and build, but do not install.
 #
-# SSG depends on a sibling checkout of the `http` library at ../http relative to
-# the SSG source tree. If it is missing this script clones it from
-# https://github.com/icksaur/cpphttp.git. libgit2 and the tree-sitter grammars
-# are vendored in-tree and built from source, so they need no system packages.
+# libgit2 and the tree-sitter grammars are vendored in-tree and built from
+# source, so they need no system packages.
 
 set -euo pipefail
 
@@ -35,7 +33,6 @@ done
 # Resolve the SSG source root from this script's location, independent of cwd.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SSG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HTTP_DIR="$(cd "$SSG_ROOT/.." && pwd)/http"
 BUILD_DIR="$SSG_ROOT/build-release"
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
@@ -57,14 +54,6 @@ for tool in cmake ninja git; do
     command -v "$tool" >/dev/null 2>&1 || {
         echo "required tool '$tool' not found on PATH" >&2; exit 1; }
 done
-
-# --- Sibling http library -------------------------------------------------
-if [[ ! -e "$HTTP_DIR/CMakeLists.txt" ]]; then
-    say "Sibling http library not found at $HTTP_DIR; cloning it"
-    git clone https://github.com/icksaur/cpphttp.git "$HTTP_DIR"
-else
-    say "Using existing http library at $HTTP_DIR"
-fi
 
 # --- Configure & build ----------------------------------------------------
 # Configure directly (no preset) so ccache is optional: the release preset

@@ -72,10 +72,10 @@ TEST(localDropRequiresHostCapabilityAndSanitizesLabel) {
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const std::array<std::uint8_t, 5> bytes{{'h', 'i', '\r', '\n', '!'}};
     const ssg::InvocationPrincipal local{
-        ssg::ClientId{1}, ssg::InvocationOrigin::Websocket,
+        ssg::ClientId{1}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
     const ssg::InvocationPrincipal remote{
-        ssg::ClientId{2}, ssg::InvocationOrigin::Websocket};
+        ssg::ClientId{2}, ssg::InvocationOrigin::InProcess};
     const ssg::InvocationPrincipal lua{
         ssg::ClientId{3}, ssg::InvocationOrigin::Lua,
         {ssg::CapabilityId{"local_file_drop"}}};

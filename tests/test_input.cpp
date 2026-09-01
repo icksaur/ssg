@@ -41,13 +41,13 @@ TEST(keyStrokesHaveACanonicalRoundTrip) {
     ASSERT_FALSE(ssg::KeyCodec{}.parseStroke("Ctrl+").has_value());
 }
 
-TEST(validateKeymapFlagsDuplicateUnreachableAndReservedBindings) {
+TEST(validateKeymapFlagsDuplicateAndUnreachableBindings) {
     const auto sequence = *ssg::KeyCodec{}.parseSequence(
         {"Ctrl+Shift+KeyM", "KeyA", "KeyA"});
     ssg::KeymapViewState duplicate{
         "bad", {{sequence, "cursor.left", "editor"},
                 {sequence, "cursor.right", "editor"}}};
-    const auto duplicateErrors = ssg::KeymapMatcher{duplicate}.validate({});
+    const auto duplicateErrors = ssg::KeymapMatcher{duplicate}.validate();
     ASSERT_TRUE(std::ranges::any_of(duplicateErrors, [](const auto& error) {
         return error.code == ssg::KeymapErrorCode::DuplicateBinding;
     }));
@@ -55,27 +55,11 @@ TEST(validateKeymapFlagsDuplicateUnreachableAndReservedBindings) {
     ssg::KeymapViewState unreachable{
         "bad", {{sequence, "cursor.left", "*"},
                 {sequence, "cursor.right", "editor"}}};
-    const auto unreachableErrors = ssg::KeymapMatcher{unreachable}.validate({});
+    const auto unreachableErrors = ssg::KeymapMatcher{unreachable}.validate();
     ASSERT_TRUE(std::ranges::any_of(unreachableErrors, [](const auto& error) {
         return error.code == ssg::KeymapErrorCode::UnreachableBinding;
     }));
 
-    const auto reserved = *ssg::KeyCodec{}.parseSequence({"Ctrl+KeyL"});
-    ssg::KeymapViewState reservedMap{
-        "bad", {{reserved, "cursor.left", "*"}}};
-    const auto reservedErrors =
-        ssg::KeymapMatcher{reservedMap}.validate({&reserved, 1});
-    ASSERT_TRUE(std::ranges::any_of(reservedErrors, [](const auto& error) {
-        return error.code == ssg::KeymapErrorCode::ReservedBinding;
-    }));
-    const auto longer = *ssg::KeyCodec{}.parseSequence({"Ctrl+KeyL", "KeyA"});
-    ssg::KeymapViewState reservedPrefixMap{
-        "bad", {{longer, "cursor.left", "*"}}};
-    const auto prefixErrors =
-        ssg::KeymapMatcher{reservedPrefixMap}.validate({&reserved, 1});
-    ASSERT_TRUE(std::ranges::any_of(prefixErrors, [](const auto& error) {
-        return error.code == ssg::KeymapErrorCode::ReservedBinding;
-    }));
 }
 
 TEST(keymapContextsAreStarPlusFocusNames) {
@@ -110,14 +94,14 @@ TEST(validateKeymapRejectsModifiedEnterBindings) {
     // rather than accept a dead binding.
     const auto bareEnter = *ssg::KeyCodec{}.parseSequence({"Enter"});
     ssg::KeymapViewState ok{"m", {{bareEnter, "text.newline", "editor"}}};
-    ASSERT_FALSE(hasError(ssg::KeymapMatcher{ok}.validate({}),
+    ASSERT_FALSE(hasError(ssg::KeymapMatcher{ok}.validate(),
                           ssg::KeymapErrorCode::ModifiedEnterBinding));
 
     for (const auto* modified : {"Shift+Enter", "Ctrl+Enter", "Alt+Enter",
                                  "Meta+Enter"}) {
         const auto sequence = *ssg::KeyCodec{}.parseSequence({modified});
         ssg::KeymapViewState bad{"m", {{sequence, "text.newline", "editor"}}};
-        ASSERT_TRUE(hasError(ssg::KeymapMatcher{bad}.validate({}),
+        ASSERT_TRUE(hasError(ssg::KeymapMatcher{bad}.validate(),
                              ssg::KeymapErrorCode::ModifiedEnterBinding));
     }
 
@@ -136,11 +120,11 @@ TEST(validateKeymapRejectsUnknownContext) {
     const auto seq = *ssg::KeyCodec{}.parseSequence({"ArrowDown"});
     ssg::KeymapViewState bad{"bad", {{seq, "cursor.line_down", "sidebar"}}};
     ASSERT_TRUE(
-        hasError(ssg::KeymapMatcher{bad}.validate({}), ssg::KeymapErrorCode::UnknownContext));
+        hasError(ssg::KeymapMatcher{bad}.validate(), ssg::KeymapErrorCode::UnknownContext));
 
     for (const auto context : {"*", "editor", "panel", "prompt"}) {
         ssg::KeymapViewState good{"ok", {{seq, "cursor.line_down", context}}};
-        ASSERT_FALSE(hasError(ssg::KeymapMatcher{good}.validate({}),
+        ASSERT_FALSE(hasError(ssg::KeymapMatcher{good}.validate(),
                                ssg::KeymapErrorCode::UnknownContext));
     }
 }
@@ -152,10 +136,10 @@ TEST(validateKeymapRejectsMultiStrokeBindings) {
     // A single-stroke binding is fine; any longer sequence is rejected -- the
     // multi-stroke chord model is gone.
     ssg::KeymapViewState ok{"m", {{single, "a", "*"}}};
-    ASSERT_FALSE(hasError(ssg::KeymapMatcher{ok}.validate({}),
+    ASSERT_FALSE(hasError(ssg::KeymapMatcher{ok}.validate(),
                           ssg::KeymapErrorCode::MultiStrokeBinding));
     ssg::KeymapViewState twoStroke{"m", {{multi, "b", "*"}}};
-    ASSERT_TRUE(hasError(ssg::KeymapMatcher{twoStroke}.validate({}),
+    ASSERT_TRUE(hasError(ssg::KeymapMatcher{twoStroke}.validate(),
                          ssg::KeymapErrorCode::MultiStrokeBinding));
 }
 
@@ -216,26 +200,23 @@ TEST(textRoutingIsPerContext) {
     ASSERT_EQ(ssg::SemanticInputRouter{}.textRouting("*"), ssg::TextRouting::Ignore);
 }
 
-TEST(hasGlobalBindingRequiresUnreservedUnshadowedStar) {
+TEST(hasGlobalBindingRequiresUnshadowedStar) {
     const auto seq = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyF", "KeyT"});
 
     ssg::KeymapViewState present{"m", {{seq, "settings.open", "*"}}};
-    ASSERT_TRUE(ssg::KeymapMatcher{present}.hasGlobalBinding("settings.open", {}));
+    ASSERT_TRUE(ssg::KeymapMatcher{present}.hasGlobalBinding("settings.open"));
 
     // Focus-context (not global) does not count.
     ssg::KeymapViewState contextual{"m", {{seq, "settings.open", "editor"}}};
-    ASSERT_FALSE(ssg::KeymapMatcher{contextual}.hasGlobalBinding("settings.open", {}));
-
-    // Reserved sequence does not count.
-    ASSERT_FALSE(ssg::KeymapMatcher{present}.hasGlobalBinding("settings.open", {&seq, 1}));
+    ASSERT_FALSE(ssg::KeymapMatcher{contextual}.hasGlobalBinding("settings.open"));
 
     // Shadowed by an earlier "*" binding of the same sequence does not count.
     ssg::KeymapViewState shadowed{
         "m", {{seq, "other.command", "*"}, {seq, "settings.open", "*"}}};
-    ASSERT_FALSE(ssg::KeymapMatcher{shadowed}.hasGlobalBinding("settings.open", {}));
+    ASSERT_FALSE(ssg::KeymapMatcher{shadowed}.hasGlobalBinding("settings.open"));
 
     // Absent command.
-    ASSERT_FALSE(ssg::KeymapMatcher{present}.hasGlobalBinding("file.save", {}));
+    ASSERT_FALSE(ssg::KeymapMatcher{present}.hasGlobalBinding("file.save"));
 }
 
 TEST(validateKeymapFlagsGlobalShadowRegardlessOfOrder) {
@@ -245,9 +226,9 @@ TEST(validateKeymapFlagsGlobalShadowRegardlessOfOrder) {
         "m", {{seq, "file.save", "*"}, {seq, "focus.only", "editor"}}};
     ssg::KeymapViewState focusFirst{
         "m", {{seq, "focus.only", "editor"}, {seq, "file.save", "*"}}};
-    ASSERT_TRUE(hasError(ssg::KeymapMatcher{globalFirst}.validate({}),
+    ASSERT_TRUE(hasError(ssg::KeymapMatcher{globalFirst}.validate(),
                           ssg::KeymapErrorCode::UnreachableBinding));
-    ASSERT_TRUE(hasError(ssg::KeymapMatcher{focusFirst}.validate({}),
+    ASSERT_TRUE(hasError(ssg::KeymapMatcher{focusFirst}.validate(),
                           ssg::KeymapErrorCode::UnreachableBinding));
 }
 
@@ -264,8 +245,8 @@ TEST(resolverAndHasGlobalBindingAgreeOnDuplicateGlobals) {
         ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::Resolved);
         // First "*" binding wins in both functions.
         ASSERT_EQ(resolved.commandId, first);
-        ASSERT_EQ(ssg::KeymapMatcher{keymap}.hasGlobalBinding(first, {}), true);
-        ASSERT_EQ(ssg::KeymapMatcher{keymap}.hasGlobalBinding(second, {}), false);
+        ASSERT_EQ(ssg::KeymapMatcher{keymap}.hasGlobalBinding(first), true);
+        ASSERT_EQ(ssg::KeymapMatcher{keymap}.hasGlobalBinding(second), false);
     }
 }
 
@@ -507,7 +488,7 @@ TEST(compiledKeymapCarriesTheNameOfAnUncataloguedCommand) {
 
 int main() {
     RUN(keyStrokesHaveACanonicalRoundTrip);
-    RUN(validateKeymapFlagsDuplicateUnreachableAndReservedBindings);
+    RUN(validateKeymapFlagsDuplicateAndUnreachableBindings);
     RUN(keymapContextsAreStarPlusFocusNames);
     RUN(validateKeymapRejectsModifiedEnterBindings);
     RUN(validateKeymapRejectsUnknownContext);
@@ -518,7 +499,7 @@ int main() {
     RUN(compiledKeymapResolvesIdenticallyToTheAuthoredMatcher);
     RUN(compiledKeymapCarriesTheNameOfAnUncataloguedCommand);
     RUN(textRoutingIsPerContext);
-    RUN(hasGlobalBindingRequiresUnreservedUnshadowedStar);
+    RUN(hasGlobalBindingRequiresUnshadowedStar);
     RUN(validateKeymapFlagsGlobalShadowRegardlessOfOrder);
     RUN(resolverAndHasGlobalBindingAgreeOnDuplicateGlobals);
     RUN(imeAcceptsOnlyCommittedUtf8Text);

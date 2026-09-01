@@ -981,12 +981,12 @@ TEST(droppedContentRequiresRealCapability) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto denied = runtime.dispatch(ssg::ClientId{1}, {"file.open_dropped_content", runtime.revision(), ssg::DroppedContentArguments{{'a'}, "a.txt"}});
     ASSERT_FALSE(denied.accepted());
 
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{2}, ssg::InvocationOrigin::Websocket, {ssg::CapabilityId{"local_file_drop"}}}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{2}, ssg::InvocationOrigin::InProcess, {ssg::CapabilityId{"local_file_drop"}}}, ssg::ViewId{1}).accepted());
     auto accepted = runtime.dispatch(ssg::ClientId{2}, {"file.open_dropped_content", runtime.revision(), ssg::DroppedContentArguments{{'a'}, "a.txt"}});
     ASSERT_TRUE(accepted.accepted());
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"a"});

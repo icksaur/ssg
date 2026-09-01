@@ -16,8 +16,8 @@ scripts/install.sh --prefix ~/.local  # install somewhere on your PATH instead
 scripts/install.sh --build-only    # just build; run ./build-release/ssg .
 ```
 
-It installs the build tools via `pacman`, fetches the sibling `http` library if
-needed, and builds. Pass `--no-deps` if you manage the toolchain yourself.
+It installs the build tools via `pacman` and builds. Pass `--no-deps` if you
+manage the toolchain yourself.
 
 ## Run from source
 
@@ -101,14 +101,9 @@ target_link_libraries(my_app PRIVATE ssg)
 batteries-included editor session. See
 [`development.md`](development.md) for the API surface, building, and testing.
 
-> A versioned WebSocket server adapter (`ssg::HttpEditorServer`) is included, and
-> the protocol is designed to be browser-deliverable, but SSG ships no browser
-> client of its own yet — a remote/browser front end is bring-your-own.
-
 ## Requirements
 
-A C++20 compiler, CMake 3.14+, Lua 5.4, and the [`http`](../http) library checked
-out beside SSG as `../http`. Linux and Windows are supported. Full build and test
+A C++20 compiler, CMake 3.14+, and Lua 5.4. Linux and Windows are supported. Full build and test
 instructions are in [`development.md`](development.md).
 
 ## License

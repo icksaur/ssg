@@ -3,11 +3,10 @@
 // The generation-scoped dynamic node state: the resolved, geometry-independent
 // state a client needs to PRESENT and focus a schema node it cannot resolve itself. The
 // published `ui` schema carries value SOURCES (a literal or a provider id); a
-// non-grid client (the web) has no status-field registry and cannot resolve a
-// provider id. So the runtime resolves each leaf's source here and publishes the
-// result, in exact correspondence with the schema it names: one record per schema
-// node plus the authoritative ordered focus path, all keyed to the schema's
-// generation.
+// non-grid client has no status-field registry and cannot resolve a provider id.
+// So the runtime resolves each leaf's source here and publishes the result, in
+// exact correspondence with the schema it names: one record per schema node plus
+// the authoritative ordered focus path, all keyed to the schema's generation.
 //
 // Presence and renderability are distinct AND separately published. This section
 // carries only a leaf's resolved semantic state; a node's authoritative presence is
@@ -34,7 +33,7 @@ namespace ssg {
 // the library resolved (the widget's own role, or the region's default), so a
 // client colors the widget by a semantic role ordinal and never re-derives role
 // names. `active` is present only for a stateful TextInput; its absence keeps
-// browser-local inputs, such as the header picker query, entirely client-owned.
+// client-local inputs entirely client-owned.
 struct UiLeafState {
     std::string value;
     std::string label;

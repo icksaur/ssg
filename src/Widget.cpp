@@ -14,10 +14,14 @@
 namespace ssg {
 
 namespace {
-inline constexpr auto& kWidgetKindNames =
-    detail::generated::kWidgetKindCurrentWireNames;
-inline constexpr auto& kViewSurfaceNames =
-    detail::generated::kViewSurfaceCurrentWireNames;
+inline constexpr std::array kWidgetKindNames{
+    "container", "label", "field", "checkbox", "text_input", "spacer",
+    "view", "status_actions",
+};
+inline constexpr std::array kViewSurfaceNames{
+    "tabbar", "findresults", "notice", "external_modification", "document",
+    "tree",
+};
 }  // namespace
 
 std::string_view widgetKindName(WidgetKind kind) {

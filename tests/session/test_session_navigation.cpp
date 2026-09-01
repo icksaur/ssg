@@ -1504,7 +1504,7 @@ TEST(workerFilesystemRefreshPublishesChangedFileCandidates) {
     auto& runtime = *created.session;
     ASSERT_TRUE(
         runtime
-            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket},
+            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                     ssg::ViewId{1})
             .accepted());
     const auto before = runtime.revision();
@@ -1568,7 +1568,7 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     std::filesystem::remove_all(root);
 }
 
-TEST(websocketPickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
+TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
     auto root = uniqueRoot();
     auto workspace = root / "workspace";
     std::ofstream{workspace / "present.txt"} << "present\n";
@@ -1582,7 +1582,7 @@ TEST(websocketPickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket},
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                             ssg::ViewId{1})
                     .accepted());
 
@@ -1637,9 +1637,8 @@ TEST(websocketPickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
                 ssg::FocusTarget::Panel);
 }
 
-TEST(commandPickerSubmissionHasOriginParity) {
-    for (auto const origin : {ssg::InvocationOrigin::InProcess,
-                              ssg::InvocationOrigin::Websocket}) {
+TEST(commandPickerSubmissionUsesTheInProcessAuthority) {
+    for (auto const origin : {ssg::InvocationOrigin::InProcess}) {
         auto root = uniqueRoot();
         auto created = ssg::EditorSession::create(
             {root / "workspace", root / "scratch", root / "recovery"});
@@ -1702,7 +1701,7 @@ TEST(commandPickerActionThatOpensPromptDismissesPickerWithoutFailure) {
     auto& runtime = *created.session;
     ASSERT_TRUE(
         runtime
-            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket},
+            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                     ssg::ViewId{1})
             .accepted());
     ASSERT_TRUE(runtime
@@ -1744,7 +1743,7 @@ TEST(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision) {
                 ssg::CommandRevisionPolicy::StateValidated);
     ASSERT_TRUE(
         runtime
-            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket},
+            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                     ssg::ViewId{1})
             .accepted());
     ASSERT_TRUE(runtime
@@ -2474,8 +2473,7 @@ TEST(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath) {
 }
 
 TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
-    for (auto const origin : {ssg::InvocationOrigin::InProcess,
-                              ssg::InvocationOrigin::Websocket}) {
+    for (auto const origin : {ssg::InvocationOrigin::InProcess}) {
         auto root = uniqueRoot();
         auto created = ssg::EditorSession::create(
             {root / "workspace", root / "scratch", root / "recovery"});
@@ -2612,7 +2610,7 @@ TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
         auto& runtime = *created.session;
         ASSERT_TRUE(runtime
                         .attach({ssg::ClientId{1},
-                                 ssg::InvocationOrigin::Websocket},
+                                 ssg::InvocationOrigin::InProcess},
                                 ssg::ViewId{1})
                         .accepted());
         ASSERT_TRUE(runtime
@@ -2652,7 +2650,7 @@ TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
     auto& runtime = *created.session;
     ASSERT_TRUE(
         runtime
-            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket},
+            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                     ssg::ViewId{1})
             .accepted());
     ASSERT_TRUE(runtime
@@ -3523,8 +3521,8 @@ int main() {
     RUN(togglingGitignoreRebuildsTheOpenFilePickerIndex);
     RUN(workerFilesystemRefreshPublishesChangedFileCandidates);
     RUN(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure);
-    RUN(websocketPickerSubmissionRequiresAndClosesTheAuthoritativePicker);
-    RUN(commandPickerSubmissionHasOriginParity);
+    RUN(pickerSubmissionRequiresAndClosesTheAuthoritativePicker);
+    RUN(commandPickerSubmissionUsesTheInProcessAuthority);
     RUN(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision);
     RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
     RUN(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity);

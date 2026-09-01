@@ -27,10 +27,15 @@ enum class SettingKey : std::uint8_t {
     SSG_SETTING_KEY_ENUMERATORS(SSG_ENUMERATOR)
 #undef SSG_ENUMERATOR
 };
-#undef SSG_SETTING_KEY_ENUMERATORS
 
-inline constexpr std::size_t kSettingKeyCount =
-    detail::generated::kSettingKeyWireValues.size();
+inline constexpr std::size_t kSettingKeyCount = [] {
+    std::size_t count = 0;
+#define SSG_COUNT_SETTING_KEY(symbol, ordinal) ++count;
+    SSG_SETTING_KEY_ENUMERATORS(SSG_COUNT_SETTING_KEY)
+#undef SSG_COUNT_SETTING_KEY
+    return count;
+}();
+#undef SSG_SETTING_KEY_ENUMERATORS
 
 enum class TextEncoding : std::uint8_t {
 #define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,

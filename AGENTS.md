@@ -1,6 +1,6 @@
 # SSG
 
-SSG is a C++20 editor library with terminal and web clients. The library owns
+SSG is a C++20 editor library with a terminal client. The library owns
 editor behavior and authoritative product state. Each client owns presentation,
 native layout, and device I/O. The library may provide optional presentation
 services, but no client-specific representation is the product contract.
@@ -14,8 +14,8 @@ are not the maintained description of a stable feature.
   transport, renderer, or platform adapter.
 - Do not create a second behavior path for another client. All client input must
   converge on the same typed authoritative transitions.
-- Do not make cells, pixels, resolved rectangles, terminal capabilities, browser
-  APIs, or transport framing part of the editor-core contract.
+- Do not make cells, pixels, resolved rectangles, terminal capabilities,
+  sockets, or transport framing part of the editor-core contract.
 - Do not add a feature-specific transport verb or client/server side channel
   when the typed client API can carry the same command, state, or update.
 - Do not duplicate an inventory, mapping, default, label, or semantic conversion

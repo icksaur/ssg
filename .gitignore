@@ -8,7 +8,6 @@ build_*/
 
 # Runtime test artifacts (created under CWD when test binaries run outside build/)
 /runtime_*/
-/http_server_runtime/
 /hit_test_root/
 /script_host_root_*/
 # Stale help exports a test used to drop in the repo root (kept ignored so such

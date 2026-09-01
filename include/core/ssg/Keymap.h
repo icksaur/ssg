@@ -78,7 +78,6 @@ enum class KeymapErrorCode : std::uint8_t {
     EmptyContext,
     DuplicateBinding,
     UnreachableBinding,
-    ReservedBinding,
     UnknownContext,
     MultiStrokeBinding,
     ModifiedEnterBinding,
@@ -105,13 +104,10 @@ class KeymapMatcher {
 public:
     explicit KeymapMatcher(const KeymapViewState& keymap) : keymap_{keymap} {}
 
-    [[nodiscard]] std::vector<KeymapError> validate(
-        std::span<const KeySequence> reservedSequences) const;
+    [[nodiscard]] std::vector<KeymapError> validate() const;
     [[nodiscard]] KeymapResolution resolveSequence(const KeySequence& pending,
                                                    std::string_view context) const;
-    [[nodiscard]] bool hasGlobalBinding(
-        std::string_view commandId,
-        std::span<const KeySequence> reservedSequences) const;
+    [[nodiscard]] bool hasGlobalBinding(std::string_view commandId) const;
     [[nodiscard]] std::optional<KeySequence> preferredBinding(
         std::string_view commandId) const;
     [[nodiscard]] static KeymapDelta deriveDelta(

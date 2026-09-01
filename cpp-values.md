@@ -464,7 +464,6 @@ Targets, tracked before/after a cleanup:
 
 ### ssg (this project)
 
-- Repo-wide naming conversion to the case table above; the wire protocol was
   untouched because it serializes by explicit string literals, not C++
   identifiers.
 - "Objectify" pass: verb/feature files became composable objects — `hit_test` →

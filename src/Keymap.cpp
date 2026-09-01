@@ -252,8 +252,7 @@ std::string KeyCodec::formatSequence(const KeySequence& sequence) const {
     return result;
 }
 
-std::vector<KeymapError> KeymapMatcher::validate(
-    std::span<const KeySequence> reservedSequences) const {
+std::vector<KeymapError> KeymapMatcher::validate() const {
     std::vector<KeymapError> errors;
     if (keymap_.name.empty()) {
         errors.push_back(
@@ -298,13 +297,6 @@ std::vector<KeymapError> KeymapMatcher::validate(
         } else if (!knownContext(binding.context)) {
             errors.push_back({KeymapErrorCode::UnknownContext, index,
                               "binding context is not '*' or a focus target"});
-        }
-        if (std::ranges::any_of(
-                reservedSequences, [&](const auto& reserved) {
-                    return startsWithSequence(binding.sequence, reserved);
-                })) {
-            errors.push_back({KeymapErrorCode::ReservedBinding, index,
-                              "binding uses a browser-reserved sequence"});
         }
         for (std::size_t previous = 0; previous < index; ++previous) {
             const auto& earlier = keymap_.bindings[previous];
@@ -390,17 +382,10 @@ TextRouting SemanticInputRouter::textRouting(std::string_view context) const noe
     return TextRouting::Ignore;
 }
 
-bool KeymapMatcher::hasGlobalBinding(
-    std::string_view commandId,
-    std::span<const KeySequence> reservedSequences) const {
+bool KeymapMatcher::hasGlobalBinding(std::string_view commandId) const {
     for (std::size_t index = 0; index < keymap_.bindings.size(); ++index) {
         const auto& binding = keymap_.bindings[index];
         if (binding.context != "*" || binding.commandId != commandId) {
-            continue;
-        }
-        if (std::ranges::any_of(reservedSequences, [&](const auto& reserved) {
-                return startsWithSequence(binding.sequence, reserved);
-            })) {
             continue;
         }
         const bool shadowed = std::any_of(
@@ -462,10 +447,10 @@ KeymapMutationResult applyKeymapBind(
     });
     proposed.bindings.push_back({*sequence, arguments.command, context});
 
-    if (auto errors = KeymapMatcher{proposed}.validate({}); !errors.empty()) {
+    if (auto errors = KeymapMatcher{proposed}.validate(); !errors.empty()) {
         return {KeymapMutationError{errors.front().message}, {}};
     }
-    if (!KeymapMatcher{proposed}.hasGlobalBinding("settings.open", {})) {
+    if (!KeymapMatcher{proposed}.hasGlobalBinding("settings.open")) {
         return {KeymapMutationError{
                     "keymap.bind must not remove the settings.open "
                     "global escape hatch"},
@@ -496,7 +481,7 @@ KeymapMutationResult applyKeymapUnbind(
     std::erase_if(proposed.bindings, [&](const KeyBinding& binding) {
         return binding.context == context && binding.sequence == *sequence;
     });
-    if (!KeymapMatcher{proposed}.hasGlobalBinding("settings.open", {})) {
+    if (!KeymapMatcher{proposed}.hasGlobalBinding("settings.open")) {
         return {KeymapMutationError{
                     "keymap.unbind must not remove the settings.open "
                     "global escape hatch"},

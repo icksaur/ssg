@@ -69,8 +69,7 @@ private:
 struct UiNode;
 
 // A container arranges its children on an axis, after reserving its inset. `gap`
-// is the generic spacing between adjacent children on the axis (flexbox's gap):
-// a grid client renders it as separator cells, a DOM client as a gap.
+// is the generic spacing between adjacent children on the axis.
 struct UiContainer {
     Axis axis = Axis::Column;
     Inset inset;

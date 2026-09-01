@@ -234,19 +234,17 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
     ASSERT_TRUE(violations.empty());
 }
 
-TEST(theWebRendererRoleOrdinalsMatchTheSemanticRoleEnum) {
-    // The served web client indexes theme.role_colors by these ordinals to build
-    // its CSS custom properties (const ROLE in http_serve.cpp's page). A reorder
-    // of SemanticRole without updating the client would silently mis-color it.
+TEST(semanticRoleOrdinalsAreStable) {
+    // Clients index theme.roleColors by these ordinals. A reorder without an
+    // accompanying presentation mapping would silently mis-color content.
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Text), 0);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Canvas), 1);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Caret), 2);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Selection), 3);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::TabActive), 6);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::TabInactive), 7);
-    // The web chrome interpreter colors a composed widget by the effective role the
-    // SERVER resolves and publishes as a SemanticRole ordinal (reconcile.mjs indexes
-    // theme.role_colors by it); these ordinals pin that wire contract.
+    // The library publishes each composed widget's effective semantic role;
+    // these ordinals keep client presentation mappings stable.
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Header), 10);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::Footer), 11);
     ASSERT_EQ(static_cast<int>(ssg::SemanticRole::StatusInfo), 12);
@@ -267,7 +265,7 @@ int main() {
     RUN(anEmptyThemeSetTableIsAcceptedAndChangesNothing);
     RUN(editorRuntimeStartsFromTheDefaultTheme);
     RUN(sourceAndConfigHaveNoIndependentColorSources);
-    RUN(theWebRendererRoleOrdinalsMatchTheSemanticRoleEnum);
+    RUN(semanticRoleOrdinalsAreStable);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

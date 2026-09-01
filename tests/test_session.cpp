@@ -194,7 +194,7 @@ TEST(clientIdentityAndPrincipalAreIsolated) {
     ssg::CommandExecutor session{catalog};
     ASSERT_TRUE(session.attach(principal(7), ssg::ViewId{70}).accepted());
     ASSERT_TRUE(session.attach(
-        principal(8, ssg::InvocationOrigin::Websocket), ssg::ViewId{80})
+        principal(8, ssg::InvocationOrigin::InProcess), ssg::ViewId{80})
                     .accepted());
 
     auto client7 = session.attachedClient(ssg::ClientId{7});
@@ -274,7 +274,7 @@ TEST(handlerFailureIsAtomic) {
 // assembled from several sets before reaching the session.  There is one place
 // now.
 
-TEST(principalCapabilityEnforcementHasOriginParity) {
+TEST(principalCapabilityEnforcementUsesTheInProcessAuthority) {
     int calls = 0;
     auto catalog = catalogOf({command(
         "local.ingress", ssg::CommandEffect::Observation,
@@ -290,14 +290,14 @@ TEST(principalCapabilityEnforcementHasOriginParity) {
                   {ssg::CapabilityId{"local_file_drop"}}),
         ssg::ViewId{1}).accepted());
     ASSERT_TRUE(session.attach(
-        principal(2, ssg::InvocationOrigin::Websocket,
+        principal(2, ssg::InvocationOrigin::InProcess,
                   {ssg::CapabilityId{"local_file_drop"}}),
         ssg::ViewId{2}).accepted());
     ASSERT_TRUE(session.attach(
         principal(3, ssg::InvocationOrigin::InProcess), ssg::ViewId{3})
                     .accepted());
     ASSERT_TRUE(session.attach(
-        principal(4, ssg::InvocationOrigin::Websocket), ssg::ViewId{4})
+        principal(4, ssg::InvocationOrigin::InProcess), ssg::ViewId{4})
                     .accepted());
 
     ASSERT_TRUE(
@@ -323,7 +323,7 @@ int main() {
     RUN(viewActionsAreStampedWithoutAdvancingSemanticState);
     RUN(clientIdentityAndPrincipalAreIsolated);
     RUN(handlerFailureIsAtomic);
-    RUN(principalCapabilityEnforcementHasOriginParity);
+    RUN(principalCapabilityEnforcementUsesTheInProcessAuthority);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

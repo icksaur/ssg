@@ -39,7 +39,7 @@ struct PalettePresenceOp {
                            const PalettePresenceOp&) = default;
 };
 
-// A browser-local derived presence layer. Unlike MutationPatch, this does not
+// A client-local derived presence layer. Unlike MutationPatch, this does not
 // advance an authoritative basis and carries no prediction acknowledgment.
 struct PalettePresenceOverlay {
     Generation generation{0};

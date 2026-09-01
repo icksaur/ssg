@@ -3,8 +3,8 @@
 // The authoritative cell renderer.  ssg::Renderer{}.render turns a
 // SessionSnapshot into a
 // deterministic monospace CellGrid: the single place where shell geometry and
-// content become cells.  Clients (terminal, browser) only translate the grid to
-// their medium; they add no layout, content, or color.
+// content become cells. The terminal client translates the grid to its medium;
+// it adds no layout, content, or color.
 
 #include <ssg/GridPresenter.h>
 #include <ssg/Style.h>

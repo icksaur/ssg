@@ -146,7 +146,7 @@ Do these in order. The first item is the generator of everything else.
 > - Facts live in one place. If adding a command, field, or glyph requires editing
 >   a list that duplicates another list, delete the duplicate instead.
 > - Before review, build the affected target and run its focused suite. Run the
->   fast gate for ordinary changes; run push, sanitizer, platform, or browser
+>   fast gate for ordinary changes; run push, sanitizer, or platform
 >   gates only when the changed risk requires them.
 
 ## What must NOT change

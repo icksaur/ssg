@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 // The medium-agnostic layout constraint vocabulary.
 //
 // A layout tree is a tree of containers whose children carry these constraints:
@@ -10,9 +8,8 @@
 // interprets in its own unit (cells for the terminal grid, a ch/px unit for a DOM
 // client), and there is no Rect and no grid node kind here. The grid solver in
 // Layout.h consumes these to produce cell rectangles; a native client maps the
-// same constraints to its own layout. Keeping this header free of any grid type
-// (ShellState.h, Rect, ShellNodeKind) is what lets a medium-agnostic tree be
-// built on the constraints without pulling in the grid.
+// same constraints to its own layout. Keeping this header free of grid types is
+// what lets a medium-agnostic tree be built without pulling in the grid.
 
 #include <cstdint>
 #include <stdexcept>
@@ -21,12 +18,7 @@ namespace ssg {
 
 // How a container arranges its children. Row: children share the cross extent,
 // placed along the main (leading-to-trailing) axis. Column: placed top-to-bottom.
-enum class Axis : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_AXIS_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
-};
-#undef SSG_AXIS_ENUMERATORS
+enum class Axis : std::uint8_t { Row, Column };
 
 // Whether a node is an independent scroll viewport. None: the node sizes to its
 // content and does not clip. Vertical: the node is a viewport -- its content is
@@ -35,22 +27,11 @@ enum class Axis : std::uint8_t {
 // client-owned interaction state, never carried here; this only declares that a
 // region is a viewport, so every client derives which regions scroll from the
 // tree instead of inventing it per medium. Unit-neutral like the rest of this
-// header: a grid client reserves a scrollbar gutter, a DOM client sets an
-// overflow container. A decoder treats any unrecognized value as None so a future
-// axis degrades to "not a viewport" rather than failing.
-enum class ScrollAxis : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_SCROLL_AXIS_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
-};
-#undef SSG_SCROLL_AXIS_ENUMERATORS
+// header: a grid client reserves a scrollbar gutter and a native client provides
+// its equivalent overflow presentation.
+enum class ScrollAxis : std::uint8_t { None, Vertical };
 
-enum class SizeKind : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_SIZE_KIND_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
-};
-#undef SSG_SIZE_KIND_ENUMERATORS
+enum class SizeKind : std::uint8_t { Exact, Flex, Auto, Responsive };
 
 // A node's size along its PARENT's axis. Exact reserves `extent` units of the
 // consumer's medium; Flex takes an equal share of whatever remains after the

@@ -12,8 +12,6 @@
 
 namespace ssg {
 
-class ProtocolCodec;
-
 struct UiFrameVersion {
     Generation generation{0};
     PresenceBasis presenceBasis{0};

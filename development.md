@@ -8,7 +8,6 @@ and how to embed it, see [`README.md`](README.md).
 - CMake 3.14 or newer
 - A C++20 compiler
 - Lua 5.4 headers and library
-- The `http` repository checked out beside SSG as `../http`
 
 Linux and Windows are the required platforms.
 
@@ -61,9 +60,7 @@ The user-facing capability set, stated as engineering deliverables:
   status header/footer, and fully themeable per-role and per-syntax-scope colors.
 - Tree-sitter syntax state, LSP synchronization/diagnostics/language features
   and atomic workspace edits, plus a capability-limited Lua 5.4 command host.
-- Versioned, bounded binary protocol and an HTTP/WebSocket server adapter with
-  reconnect/replay, backpressure, clipboard exchange, and typed errors.
-- A reference TUI adapter (`examples/tui/`) and cross-transport parity fixtures.
+- A reference TUI adapter (`examples/tui/`) and focused presentation fixtures.
 - A deterministic 10,000-operation performance benchmark.
 
 ## Performance benchmark

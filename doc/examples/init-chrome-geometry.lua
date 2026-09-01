@@ -4,7 +4,6 @@
 --
 --   cp doc/examples/init-chrome-geometry.lua ~/.config/ssg/init.lua
 --   ./build/ssg .            # TUI: the schema lowers to cells
---   ./build/ssg --http 8971  # web: open http://127.0.0.1:8971/ (DOM interprets it)
 --
 -- The TUI and the web draw the SAME published schema, so every case below must
 -- look the same in both (geometry is each client's medium; the tree is shared).

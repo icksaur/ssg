@@ -4,8 +4,8 @@
 //
 // Project invariant I12: constructing and using the basic in-process editor —
 // and producing the first frame — must construct NO optional subsystem (Lua,
-// LSP, a real Tree-sitter grammar, a filesystem watcher, or the HTTP/WebSocket
-// server).  Each optional subsystem notes its own construction here; the startup
+// LSP, a real Tree-sitter grammar, or a filesystem watcher). Each optional
+// subsystem notes its own construction here; the startup
 // oracle drives the first-frame path and asserts the ledger stayed empty, and
 // checks the ledger is empty at process entry (no self-registering static init).
 //

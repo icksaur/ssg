@@ -150,8 +150,8 @@ TEST(runtimePublishesValidCuratedKeymap) {
     if (!snapshot) return;
     const auto& keymap = snapshot->sections().keymap;
     ASSERT_FALSE(keymap.bindings.empty());
-    ASSERT_TRUE(ssg::KeymapMatcher{keymap}.validate({}).empty());
-    ASSERT_TRUE(ssg::KeymapMatcher{keymap}.hasGlobalBinding("settings.open", {}));
+    ASSERT_TRUE(ssg::KeymapMatcher{keymap}.validate().empty());
+    ASSERT_TRUE(ssg::KeymapMatcher{keymap}.hasGlobalBinding("settings.open"));
 }
 
 TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {

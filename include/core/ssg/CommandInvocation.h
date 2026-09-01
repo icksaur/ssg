@@ -78,7 +78,6 @@ private:
 
 enum class InvocationOrigin : std::uint8_t {
     InProcess,
-    Websocket,
     Lua,
     System,
 };

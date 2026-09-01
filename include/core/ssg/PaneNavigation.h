@@ -3,6 +3,7 @@
 #include <ssg/detail/generated/semantic_wire_manifest.h>
 
 #include <cstdint>
+#include <compare>
 
 namespace ssg {
 

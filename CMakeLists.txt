@@ -42,7 +42,6 @@ add_library(ssg_platform STATIC)
 add_library(ssg_core STATIC
     src/ssg.cpp
 )
-add_library(ssg_protocol STATIC)
 add_library(ssg_grid STATIC)
 
 ssg_declare_layer(
@@ -53,20 +52,15 @@ ssg_declare_layer(
     ROOT "${SSG_SOURCE_DIR}/include/core"
     ALLOWS ssg_platform)
 ssg_declare_layer(
-    TARGET ssg_protocol
-    ROOT "${SSG_SOURCE_DIR}/include/protocol"
-    ALLOWS ssg_core)
-ssg_declare_layer(
     TARGET ssg_grid
     ROOT "${SSG_SOURCE_DIR}/include/grid"
     ALLOWS ssg_core)
 
 target_link_libraries(ssg_core PUBLIC ssg_platform)
-target_link_libraries(ssg_protocol PUBLIC ssg_core)
 target_link_libraries(ssg_grid PUBLIC ssg_core)
 
 add_library(ssg INTERFACE)
-target_link_libraries(ssg INTERFACE ssg_core ssg_protocol ssg_grid)
+target_link_libraries(ssg INTERFACE ssg_core ssg_platform ssg_grid)
 add_library(ssg::ssg ALIAS ssg)
 
 # Warnings are errors for THIS project's own code, so the fourteen that had
@@ -92,7 +86,6 @@ endfunction()
 
 ssg_configure_component(ssg_platform)
 ssg_configure_component(ssg_core)
-ssg_configure_component(ssg_protocol)
 ssg_configure_component(ssg_grid)
 
 # Auto-discover component manifests.  CONFIGURE_DEPENDS causes Ninja and
@@ -105,8 +98,8 @@ ssg_configure_component(ssg_grid)
 # (e.g., on Windows with parity gates, prefer -G Ninja).
 #
 # Manifest contract — a fragment in cmake/components/*.cmake may:
-#   1. Add sources only to their owning ssg_core, ssg_platform, ssg_protocol,
-#      ssg_grid, or ssg_http_server target.
+#   1. Add sources only to their owning ssg_core, ssg_platform, or ssg_grid
+#      target.
 #      Use ${SSG_SOURCE_DIR}/<rel-path> for project-root-relative paths.
 #      Never use CMAKE_SOURCE_DIR (breaks add_subdirectory consumers).
 #   2. Inside "if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)":
