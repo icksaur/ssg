@@ -3503,15 +3503,7 @@ core/ssg/TreeSitterGrammars.h	var	ssg::TreeSitterGrammar::inheritedHighlightQuer
 core/ssg/TreeSitterGrammars.h	var	ssg::TreeSitterGrammar::injection	std::optional<Injection>
 core/ssg/TreeSitterGrammars.h	var	ssg::TreeSitterGrammar::language	SyntaxLanguageFactory
 core/ssg/TreeSitterGrammars.h	var	ssg::TreeSitterGrammar::languageIds	std::vector<std::string>
-core/ssg/UiFrame.h	alias	ssg::UiFrameDeltaBody
 core/ssg/UiFrame.h	class	ssg::UiFrame
-core/ssg/UiFrame.h	class	ssg::UiFrameDelta
-core/ssg/UiFrame.h	class	ssg::UiFrameDeltaCodec
-core/ssg/UiFrame.h	enum	ssg::UiFrameReplayError
-core/ssg/UiFrame.h	enumerator	ssg::UiFrameReplayError::InvalidFrame
-core/ssg/UiFrame.h	enumerator	ssg::UiFrameReplayError::MalformedDelta
-core/ssg/UiFrame.h	enumerator	ssg::UiFrameReplayError::None
-core/ssg/UiFrame.h	enumerator	ssg::UiFrameReplayError::StaleVersion
 core/ssg/UiFrame.h	func	ssg::UiFrame::UiFrame	void ()
 core/ssg/UiFrame.h	func	ssg::UiFrame::create	std::optional<UiFrame> (UiSchema, UiStateSection, UiPresenceSection)
 core/ssg/UiFrame.h	func	ssg::UiFrame::effectiveFocus	FocusTarget () const noexcept
@@ -3521,27 +3513,9 @@ core/ssg/UiFrame.h	func	ssg::UiFrame::require	UiFrame (UiSchema, UiStateSection,
 core/ssg/UiFrame.h	func	ssg::UiFrame::schema	const UiSchema &() const noexcept
 core/ssg/UiFrame.h	func	ssg::UiFrame::state	const UiStateSection &() const noexcept
 core/ssg/UiFrame.h	func	ssg::UiFrame::version	UiFrameVersion () const noexcept
-core/ssg/UiFrame.h	func	ssg::UiFrameDelta::base	UiFrameVersion () const noexcept
-core/ssg/UiFrame.h	func	ssg::UiFrameDelta::body	const UiFrameDeltaBody &() const noexcept
-core/ssg/UiFrame.h	func	ssg::UiFrameDelta::changes	UiFrameDelta (UiFrameVersion, UiFrameVersion, UiFrameChanges)
-core/ssg/UiFrame.h	func	ssg::UiFrameDelta::replacement	UiFrameDelta (UiFrameVersion, UiFrame)
-core/ssg/UiFrame.h	func	ssg::UiFrameDelta::target	UiFrameVersion () const noexcept
-core/ssg/UiFrame.h	func	ssg::UiFrameDeltaCodec::derive	UiFrameDelta (const UiFrame &, const UiFrame &) const
-core/ssg/UiFrame.h	func	ssg::UiFrameDeltaCodec::replay	UiFrameReplayResult (const UiFrame &, const UiFrameDelta &) const
-core/ssg/UiFrame.h	func	ssg::UiFrameReplayResult::accepted	bool () const noexcept
 core/ssg/UiFrame.h	func	ssg::operator==	bool (const UiFrame &, const UiFrame &)
 core/ssg/UiFrame.h	func	ssg::operator==	bool (const UiFrameVersion &, const UiFrameVersion &)
-core/ssg/UiFrame.h	struct	ssg::UiFrameChanges
-core/ssg/UiFrame.h	struct	ssg::UiFrameReplacement
-core/ssg/UiFrame.h	struct	ssg::UiFrameReplayResult
 core/ssg/UiFrame.h	struct	ssg::UiFrameVersion
-core/ssg/UiFrame.h	var	ssg::UiFrameChanges::focusPath	std::optional<std::vector<UiNodeId>>
-core/ssg/UiFrame.h	var	ssg::UiFrameChanges::focusPathChanged	bool
-core/ssg/UiFrame.h	var	ssg::UiFrameChanges::presence	std::vector<UiPresenceRecord>
-core/ssg/UiFrame.h	var	ssg::UiFrameChanges::state	std::vector<UiNodeState>
-core/ssg/UiFrame.h	var	ssg::UiFrameReplacement::frame	UiFrame
-core/ssg/UiFrame.h	var	ssg::UiFrameReplayResult::error	UiFrameReplayError
-core/ssg/UiFrame.h	var	ssg::UiFrameReplayResult::frame	std::optional<UiFrame>
 core/ssg/UiFrame.h	var	ssg::UiFrameVersion::generation	Generation
 core/ssg/UiFrame.h	var	ssg::UiFrameVersion::presenceBasis	PresenceBasis
 core/ssg/UiNodeState.h	func	ssg::operator==	bool (const UiLeafState &, const UiLeafState &) noexcept(false)

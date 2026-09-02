@@ -65,26 +65,6 @@ bool validFocusPath(const UiSchema& schema, const UiStateSection& state,
            active->second;
 }
 
-template <typename Record>
-bool hasDuplicateIds(const std::vector<Record>& records) {
-    std::set<UiNodeId> ids;
-    return std::any_of(records.begin(), records.end(),
-                       [&](const Record& record) {
-                           return !ids.insert(record.id).second;
-                       });
-}
-
-template <typename Record>
-void replaceRecords(std::vector<Record>& target,
-                    const std::vector<Record>& changes) {
-    for (const auto& change : changes) {
-        const auto found = std::find_if(
-            target.begin(), target.end(),
-            [&](const Record& record) { return record.id == change.id; });
-        *found = change;
-    }
-}
-
 }  // namespace
 
 UiFrame::UiFrame() {
@@ -139,101 +119,6 @@ UiFrame UiFrame::require(UiSchema schema, UiStateSection state,
         create(std::move(schema), std::move(state), std::move(presence));
     if (!frame) throw std::invalid_argument("invalid UI frame");
     return std::move(*frame);
-}
-
-UiFrameDelta UiFrameDelta::replacement(UiFrameVersion base, UiFrame frame) {
-    const UiFrameVersion target = frame.version();
-    return UiFrameDelta{base, target,
-                        UiFrameReplacement{std::move(frame)}};
-}
-
-UiFrameDelta UiFrameDelta::changes(UiFrameVersion base,
-                                   UiFrameVersion target,
-                                   UiFrameChanges changes) {
-    return UiFrameDelta{base, target, std::move(changes)};
-}
-
-UiFrameDelta UiFrameDeltaCodec::derive(const UiFrame& base,
-                                       const UiFrame& target) const {
-    if (base.schema() != target.schema()) {
-        return UiFrameDelta::replacement(base.version(), target);
-    }
-
-    UiFrameChanges changes;
-    for (const auto& next : target.state().nodes) {
-        const auto before = std::find_if(
-            base.state().nodes.begin(), base.state().nodes.end(),
-            [&](const UiNodeState& record) { return record.id == next.id; });
-        if (*before != next) changes.state.push_back(next);
-    }
-    for (const auto& next : target.presence().nodes) {
-        const auto before = std::find_if(
-            base.presence().nodes.begin(), base.presence().nodes.end(),
-            [&](const UiPresenceRecord& record) { return record.id == next.id; });
-        if (*before != next) changes.presence.push_back(next);
-    }
-    if (base.focusPath() != target.focusPath()) {
-        changes.focusPathChanged = true;
-        changes.focusPath = target.focusPath();
-    }
-    return UiFrameDelta::changes(base.version(), target.version(),
-                                 std::move(changes));
-}
-
-UiFrameReplayResult UiFrameDeltaCodec::replay(
-    const UiFrame& base, const UiFrameDelta& delta) const {
-    if (base.version() != delta.base()) {
-        return {std::nullopt, UiFrameReplayError::StaleVersion};
-    }
-
-    if (const auto* replacement =
-            std::get_if<UiFrameReplacement>(&delta.body())) {
-        if (replacement->frame.version() != delta.target() ||
-            replacement->frame.schema() == base.schema() ||
-            replacement->frame.version().generation ==
-                base.version().generation) {
-            return {std::nullopt, UiFrameReplayError::MalformedDelta};
-        }
-        return {replacement->frame, UiFrameReplayError::None};
-    }
-
-    const auto& changes = std::get<UiFrameChanges>(delta.body());
-    if (delta.target().generation != base.version().generation ||
-        delta.target().presenceBasis < base.version().presenceBasis ||
-        (!changes.presence.empty() &&
-         delta.target().presenceBasis <= base.version().presenceBasis) ||
-        hasDuplicateIds(changes.state) ||
-        hasDuplicateIds(changes.presence) ||
-        (changes.focusPathChanged && !changes.focusPath) ||
-        (!changes.focusPathChanged && changes.focusPath)) {
-        return {std::nullopt, UiFrameReplayError::MalformedDelta};
-    }
-
-    UiStateSection state = base.state();
-    UiPresenceSection presence = base.presence();
-    const auto ids = uiSchemaNodeIds(base.schema());
-    const auto knownState =
-        std::all_of(changes.state.begin(), changes.state.end(),
-                    [&](const UiNodeState& record) {
-                        return ids.contains(record.id);
-                    });
-    const auto knownPresence =
-        std::all_of(changes.presence.begin(), changes.presence.end(),
-                    [&](const UiPresenceRecord& record) {
-                        return ids.contains(record.id);
-                    });
-    if (!knownState || !knownPresence) {
-        return {std::nullopt, UiFrameReplayError::MalformedDelta};
-    }
-    replaceRecords(state.nodes, changes.state);
-    replaceRecords(presence.nodes, changes.presence);
-    presence.basis = delta.target().presenceBasis;
-    if (changes.focusPathChanged) state.focusPath = changes.focusPath;
-
-    auto frame = UiFrame::create(base.schema(), std::move(state),
-                                 std::move(presence));
-    if (!frame) return {std::nullopt, UiFrameReplayError::InvalidFrame};
-    return {std::move(frame), UiFrameReplayError::None};
 }
 
 }  // namespace ssg
