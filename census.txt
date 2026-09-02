@@ -254,9 +254,6 @@ core/ssg/CommandInvocation.h	var	ssg::CommandHandlerResult::viewAction	std::opti
 core/ssg/CommandInvocation.h	var	ssg::ViewActionRequest::action	ViewAction
 core/ssg/CommandInvocation.h	var	ssg::ViewActionRequest::semanticRevision	Revision
 core/ssg/CommandInvocation.h	var	ssg::ViewActionRequest::viewId	ViewId
-core/ssg/CommandReference.h	class	ssg::CommandCatalog
-core/ssg/CommandReference.h	class	ssg::CommandReferenceRenderer
-core/ssg/CommandReference.h	func	ssg::CommandReferenceRenderer::render	std::string (const CommandCatalog &) const
 core/ssg/CommandSpecBuilder.h	class	ssg::CommandSpecBuilder
 core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::CommandSpecBuilder	void (std::string)
 core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::capability	CommandSpecBuilder &(std::string)

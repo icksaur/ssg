@@ -12,9 +12,21 @@
 #include "test_helpers.h"
 
 #include <ssg/CommandCatalog.h>
+#include <ssg/EditCommands.h>
 #include <ssg/EditorSession.h>
-
-#include <ssg/CommandReference.h>
+#include <ssg/ExternalModificationFlow.h>
+#include <ssg/FindReplace.h>
+#include <ssg/Keymap.h>
+#include <ssg/PaletteSearcher.h>
+#include <ssg/PromptSurface.h>
+#include <ssg/Search.h>
+#include <ssg/Selection.h>
+#include <ssg/Settings.h>
+#include <ssg/TabManager.h>
+#include <ssg/TextCodec.h>
+#include <ssg/TextInputCommands.h>
+#include <ssg/TreeModel.h>
+#include <ssg/UiNodeState.h>
 
 #include "all_command_ids.h"
 #include <array>
@@ -32,15 +44,87 @@
 #include <fstream>
 #include <map>
 #include <set>
+#include <sstream>
+#include <stdexcept>
 #include <string>
+#include <typeindex>
+#include <unordered_map>
 #include <vector>
 
 namespace {
 
+std::string_view commandArgumentName(ssg::CommandEntry const& command) {
+    if (!command.argument.type || !command.argument.wire) return "none";
 
+    static std::unordered_map<std::type_index, std::string_view> const names{
+        {typeid(ssg::TextInputArguments), "text"},
+        {typeid(ssg::SelectionCommandArguments), "selection"},
+        {typeid(ssg::ScrollLinesArguments), "scroll lines"},
+        {typeid(ssg::ScrollPagesArguments), "scroll pages"},
+        {typeid(ssg::ScrollFractionArguments), "scroll fraction"},
+        {typeid(ssg::DroppedContentArguments), "dropped content"},
+        {typeid(ssg::ReopenWithEncodingArguments), "encoding"},
+        {typeid(ssg::SetEncodingArguments), "encoding"},
+        {typeid(ssg::SetLineEndingArguments), "line ending"},
+        {typeid(ssg::SetFinalNewlineArguments), "final newline"},
+        {typeid(ssg::SettingSetArguments), "setting"},
+        {typeid(ssg::SettingResetArguments), "setting key"},
+        {typeid(ssg::SettingResetScopeArguments), "setting scope"},
+        {typeid(ssg::WorkspaceReplaceArguments), "workspace replace"},
+        {typeid(ssg::WorkspaceReplacePreview), "workspace apply"},
+        {typeid(ssg::PaletteExecuteArguments), "palette selection"},
+        {typeid(ssg::PickerSubmitArguments), "picker candidate"},
+        {typeid(ssg::TreeSelectArguments), "tree node"},
+        {typeid(ssg::ExternalActionInvocation), "external action"},
+        {typeid(ssg::FindQueryArguments), "query"},
+        {typeid(ssg::PromptValueArguments), "prompt value"},
+        {typeid(ssg::PromptFocusArguments), "prompt focus"},
+        {typeid(ssg::UiNodeActivationArguments), "UI node activation"},
+        {typeid(ssg::TabId), "tab"},
+    };
+    auto const found = names.find(*command.argument.type);
+    if (found == names.end()) {
+        throw std::invalid_argument{
+            "command \"" + command.id +
+            "\" declares an argument type with no name for the reference"};
+    }
+    return found->second;
+}
 
+std::string_view commandSurfaces(ssg::CommandEntry const& command) {
+    if (command.initScript) return "lua, init.lua";
+    if (command.luaApi) return "lua";
+    return "—";
+}
 
+std::string renderCommandReference(ssg::CommandCatalog const& catalog) {
+    auto const commands = catalog.commands();
+    std::map<std::string_view, std::vector<ssg::CommandEntry const*>> byOwner;
+    for (auto const* command : commands) {
+        byOwner[command->owner].push_back(command);
+    }
 
+    std::ostringstream out;
+    out << "# Commands\n\n"
+        << "Generated from the command catalog by `test_commands`. Do not\n"
+        << "edit: change the command's registration instead, then regenerate\n"
+        << "with `SSG_UPDATE_DOCS=1 ./build/test_commands`.\n\n"
+        << "`init.lua` may call the commands marked `init.lua`; the rest are\n"
+        << "available to the Lua API when a host grants them.\n\n"
+        << "There are " << commands.size() << " commands.\n";
+
+    for (auto const& [owner, owned] : byOwner) {
+        out << "\n## " << owner << "\n\n"
+            << "| Command | Summary | Arguments | Surfaces |\n"
+            << "|---|---|---|---|\n";
+        for (auto const* command : owned) {
+            out << "| `" << command->id << "` | " << command->summary << " | "
+                << commandArgumentName(*command) << " | "
+                << commandSurfaces(*command) << " |\n";
+        }
+    }
+    return out.str();
+}
 
 TEST(featureMetadataTablesAnnotateCatalogCommandsAndDeclareNoNewOnes) {
     // Some features keep their own descriptor table because it carries data the
@@ -88,7 +172,7 @@ TEST(theGeneratedCommandReferenceIsCurrent) {
     ASSERT_TRUE(created.session != nullptr);
     if (!created.session) return;
     auto const catalog = created.session->commandCatalog();
-    auto const rendered = ssg::CommandReferenceRenderer{}.render(*catalog);
+    auto const rendered = renderCommandReference(*catalog);
     std::filesystem::remove_all(root);
 
     if (std::getenv("SSG_UPDATE_DOCS") != nullptr) {
