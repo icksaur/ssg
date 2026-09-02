@@ -2409,7 +2409,7 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
         auto const* input =
             std::get_if<ssg::ScrollFractionInput>(&*plan.semantic_input);
         return input &&
-                       input->target == ssg::SemanticScrollTarget::Document
+                       input->action.target == ssg::ScrollTarget::Document
                    ? input
                    : nullptr;
     };
@@ -2426,8 +2426,8 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
         auto const* args = scrollArgs(plan);
         ASSERT_TRUE(args != nullptr);
         if (args) {
-            ASSERT_EQ(args->numerator, std::uint32_t{7});
-            ASSERT_EQ(args->denominator, std::uint32_t{7});
+            ASSERT_EQ(args->action.numerator, std::uint32_t{7});
+            ASSERT_EQ(args->action.denominator, std::uint32_t{7});
         }
         ASSERT_FALSE(plan.begins_drag);
         ASSERT_FALSE(plan.ends_drag);
@@ -2443,8 +2443,8 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
     auto const* topArgs = scrollArgs(topPlan);
     ASSERT_TRUE(topArgs != nullptr);
     if (topArgs) {
-        ASSERT_EQ(topArgs->numerator, std::uint32_t{0});
-        ASSERT_EQ(topArgs->denominator, std::uint32_t{7});
+        ASSERT_EQ(topArgs->action.numerator, std::uint32_t{0});
+        ASSERT_EQ(topArgs->action.denominator, std::uint32_t{7});
     }
 
     // A mid-drag onto the editor gutter scrolls even while a selection drag is
@@ -2496,13 +2496,13 @@ TEST(everyScrollableGutterAnswersPressAndDrag) {
                         : nullptr;
                 ASSERT_TRUE(input != nullptr);
                 if (input) {
-                    ASSERT_EQ(input->numerator, std::uint32_t{3});
-                    ASSERT_EQ(input->denominator, std::uint32_t{4});
+                    ASSERT_EQ(input->action.numerator, std::uint32_t{3});
+                    ASSERT_EQ(input->action.denominator, std::uint32_t{4});
                     ASSERT_EQ(
-                        input->target,
+                        input->action.target,
                         descriptor.target == ssg::app::WheelTarget::editor
-                            ? ssg::SemanticScrollTarget::Document
-                            : ssg::SemanticScrollTarget::Tree);
+                            ? ssg::ScrollTarget::Document
+                            : ssg::ScrollTarget::Tree);
                 }
                 ASSERT_FALSE(plan.client_scroll.has_value());
             }

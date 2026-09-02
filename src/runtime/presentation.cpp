@@ -436,23 +436,23 @@ void registerViewportCommands(CommandCatalog& builder,
                         [](CommandContext&,
                            ScrollLinesArguments const& arguments) {
                             return CommandHandlerResult::requireView(
-                                ViewScrollLines{ViewScrollTarget::Document,
-                                                arguments.rows});
+                                ScrollLines{ScrollTarget::Document,
+                                            arguments.rows});
                         }));
     builder.add(scroll("view.scroll_pages", "Scroll Pages")
                     .handler<ScrollPagesArguments>(
                         [](CommandContext&,
                            ScrollPagesArguments const& arguments) {
                             return CommandHandlerResult::requireView(
-                                ViewScrollPages{arguments.pages});
+                                ScrollPages{arguments.pages});
                         }));
     builder.add(scroll("view.scroll_to_fraction", "Scroll To Fraction")
                     .handler<ScrollFractionArguments>(
                         [](CommandContext&,
                            ScrollFractionArguments const& arguments) {
                             return CommandHandlerResult::requireView(
-                                ViewScrollFraction{
-                                    ViewScrollTarget::Document,
+                                ScrollFraction{
+                                    ScrollTarget::Document,
                                     arguments.numerator,
                                     arguments.denominator});
                         }));

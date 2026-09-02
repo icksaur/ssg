@@ -78,15 +78,7 @@ std::vector<std::string_view> keyboardRoutes(
             "tree.select_next", "tree.select_previous"};
 }
 std::vector<std::string_view> keyboardRoutes(
-    std::type_identity<ssg::ViewNavigationInput>) {
-    return {};
-}
-std::vector<std::string_view> keyboardRoutes(
-    std::type_identity<ssg::ResolvedPaneFocusInput>) {
-    return {};
-}
-std::vector<std::string_view> keyboardRoutes(
-    std::type_identity<ssg::ResolvedSelectionInput>) {
+    std::type_identity<ssg::ViewTransitionInput>) {
     return {};
 }
 
@@ -1900,15 +1892,15 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
              actionNode->id}});
     ASSERT_TRUE(publishedAction.accepted());
 
-    for (auto target : {ssg::SemanticScrollTarget::Document,
-                        ssg::SemanticScrollTarget::Tree}) {
+    for (auto target : {ssg::ScrollTarget::Document,
+                        ssg::ScrollTarget::Tree}) {
         auto scroll = runtime.input(
             client, ssg::ScrollLinesInput{
-                        {runtime.revision()}, target, 1});
+                        {runtime.revision()}, {target, 1}});
         ASSERT_TRUE(scroll.command.has_value() && scroll.command->accepted());
         auto fraction = runtime.input(
             client, ssg::ScrollFractionInput{
-                        {runtime.revision()}, target, 0, 1});
+                        {runtime.revision()}, {target, 0, 1}});
         ASSERT_TRUE(fraction.command.has_value() &&
                     fraction.command->accepted());
     }
@@ -1917,7 +1909,7 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     auto invalidScroll = runtime.input(
         client, ssg::ScrollFractionInput{
                     {beforeInvalidScroll},
-                    ssg::SemanticScrollTarget::Document, 2, 1});
+                    {ssg::ScrollTarget::Document, 2, 1}});
     ASSERT_EQ(invalidScroll.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_EQ(runtime.revision(), beforeInvalidScroll);
 
@@ -1982,13 +1974,15 @@ TEST(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity) {
     const auto basis = ssg::SemanticInputBasis{runtime->revision()};
     const auto tab = *snapshot->sections().tabs.active;
     const auto documentRevision = snapshot->sections().document.revision;
-    const auto valid = ssg::ResolvedSelectionInput{
-        basis, tab, documentRevision,
-        {{ssg::ByteOffset{1}, ssg::ByteOffset{3}}}};
+    const auto valid = ssg::ViewTransitionInput{
+        basis,
+        ssg::SelectionTransition{
+            tab, documentRevision,
+            {{ssg::ByteOffset{1}, ssg::ByteOffset{3}}}}};
 
     const auto beforeSelection = snapshot->sections().selection;
     const auto beforeRevision = runtime->revision();
-    const auto expectRejected = [&](ssg::ResolvedSelectionInput input) {
+    const auto expectRejected = [&](ssg::ViewTransitionInput input) {
         const auto result =
             runtime->input(ssg::ClientId{1},
                            ssg::ClientInput{std::move(input)});
@@ -2006,20 +2000,24 @@ TEST(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity) {
         ssg::Revision{beforeRevision.value() + 1};
     expectRejected(stale);
     auto wrongTab = valid;
-    wrongTab.activeTab = ssg::TabId{tab.value() + 1};
+    std::get<ssg::SelectionTransition>(wrongTab.transition).activeTab =
+        ssg::TabId{tab.value() + 1};
     expectRejected(wrongTab);
     auto wrongDocument = valid;
-    wrongDocument.documentRevision =
+    std::get<ssg::SelectionTransition>(wrongDocument.transition)
+        .documentRevision =
         ssg::Revision{documentRevision.value() + 1};
     expectRejected(wrongDocument);
     auto empty = valid;
-    empty.selections.clear();
+    std::get<ssg::SelectionTransition>(empty.transition).selections.clear();
     expectRejected(empty);
     auto outside = valid;
-    outside.selections.front().active = ssg::ByteOffset{99};
+    std::get<ssg::SelectionTransition>(outside.transition)
+        .selections.front().active = ssg::ByteOffset{99};
     expectRejected(outside);
     auto insideCodePoint = valid;
-    insideCodePoint.selections.front().active = ssg::ByteOffset{2};
+    std::get<ssg::SelectionTransition>(insideCodePoint.transition)
+        .selections.front().active = ssg::ByteOffset{2};
     expectRejected(insideCodePoint);
 
     const auto accepted =
@@ -2234,6 +2232,12 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     auto frame = presenter.project(runtime, client, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
+    const auto noGesture = runtime.input(
+        client,
+        ssg::ViewTransitionInput{
+            {runtime.revision()},
+            ssg::PointerSelectionTransition{ssg::ByteOffset{1}}});
+    ASSERT_EQ(noGesture.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_TRUE(runtime
                     .input(client, ssg::DocumentPointerInput{
                                        {runtime.revision()},
@@ -2242,6 +2246,11 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     frame = presenter.project(runtime, client, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
+    const auto invalidEdge = presenter.apply(
+        {ssg::ViewId{1}, runtime.revision(),
+         ssg::ContinuePointerEdge{ssg::DocumentPointerEdge::None}},
+        *frame);
+    ASSERT_FALSE(invalidEdge.accepted());
 
     for (const auto expected :
          {ssg::ByteOffset{4}, ssg::ByteOffset{7}, ssg::ByteOffset{10}}) {
@@ -2256,14 +2265,14 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
         if (!edge.command || !edge.command->viewAction) return;
         const auto expectedAction = ssg::ViewAction{
             ssg::ContinuePointerEdge{
-                ssg::PointerEdgeDirection::After}};
+                ssg::DocumentPointerEdge::After}};
         ASSERT_EQ(edge.command->viewAction->action, expectedAction);
         auto applied = presenter.apply(*edge.command->viewAction, *frame);
         ASSERT_TRUE(applied.accepted() && applied.transition.has_value());
         ASSERT_TRUE(
             applied.transition &&
-            std::holds_alternative<ssg::DocumentPointerInput>(
-                *applied.transition));
+            std::holds_alternative<ssg::PointerSelectionTransition>(
+                applied.transition->transition));
         ASSERT_FALSE(
             presenter.apply(*edge.command->viewAction, *frame).accepted());
         if (!applied.transition) return;
@@ -2287,7 +2296,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     ASSERT_TRUE(beforeEdge.command && beforeEdge.command->viewAction);
     if (!beforeEdge.command || !beforeEdge.command->viewAction) return;
     const auto beforeAction = ssg::ViewAction{
-        ssg::ContinuePointerEdge{ssg::PointerEdgeDirection::Before}};
+        ssg::ContinuePointerEdge{ssg::DocumentPointerEdge::Before}};
     ASSERT_EQ(beforeEdge.command->viewAction->action, beforeAction);
     auto beforeApplied =
         presenter.apply(*beforeEdge.command->viewAction, *frame);

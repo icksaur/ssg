@@ -136,7 +136,7 @@ TEST(viewActionsAreStampedWithoutAdvancingSemanticState) {
         command("view.scroll", ssg::CommandEffect::ViewAction,
                 [](ssg::CommandContext&, std::any const&) {
                     return ssg::CommandHandlerResult::requireView(
-                        ssg::ViewScrollLines{ssg::ViewScrollTarget::Tree, -3});
+                        ssg::ScrollLines{ssg::ScrollTarget::Tree, -3});
                 }),
         command("view.missing_action", ssg::CommandEffect::ViewAction,
                 [](ssg::CommandContext&, std::any const&) {
@@ -161,8 +161,8 @@ TEST(viewActionsAreStampedWithoutAdvancingSemanticState) {
         ASSERT_EQ(result.viewAction->viewId, ssg::ViewId{42});
         ASSERT_EQ(result.viewAction->semanticRevision, ssg::Revision{1});
         ASSERT_EQ(result.viewAction->action,
-                  (ssg::ViewAction{ssg::ViewScrollLines{
-                      ssg::ViewScrollTarget::Tree, -3}}));
+                  (ssg::ViewAction{ssg::ScrollLines{
+                      ssg::ScrollTarget::Tree, -3}}));
     }
 
     auto stale =

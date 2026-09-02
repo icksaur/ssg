@@ -106,7 +106,7 @@ TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
             .viewAction()
             .handler([](ssg::CommandContext&) {
                 return ssg::CommandHandlerResult::requireView(
-                    ssg::ViewScrollPages{-2});
+                    ssg::ScrollPages{-2});
             }));
 
     ASSERT_TRUE(
@@ -132,7 +132,7 @@ TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
         ASSERT_EQ(result.viewAction->viewId, ssg::ViewId{1});
         ASSERT_EQ(result.viewAction->semanticRevision, revision);
         ASSERT_EQ(result.viewAction->action,
-                  ssg::ViewAction{ssg::ViewScrollPages{-2}});
+                  ssg::ViewAction{ssg::ScrollPages{-2}});
     }
 
     ssg::KeyStroke stroke;

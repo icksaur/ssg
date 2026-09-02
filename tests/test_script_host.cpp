@@ -86,8 +86,8 @@ TEST(viewActionsRequireAndUseAHostSuppliedSink) {
             .initScript()
             .handler([](ssg::CommandContext&) {
                 return ssg::CommandHandlerResult::requireView(
-                    ssg::ViewScrollLines{
-                        ssg::ViewScrollTarget::Document, 1});
+                    ssg::ScrollLines{
+                        ssg::ScrollTarget::Document, 1});
             }));
 
     {
@@ -109,8 +109,9 @@ TEST(viewActionsRequireAndUseAHostSuppliedSink) {
             ASSERT_EQ(request.viewId, ssg::ViewId{1});
             return ssg::ViewActionResult{
                 ssg::ViewActionStatus::TransitionRequired,
-                ssg::ClientInput{ssg::ViewNavigationInput{
-                    {request.semanticRevision}}},
+                ssg::ViewTransitionInput{
+                    {request.semanticRevision},
+                    ssg::PauseFollowTransition{}},
                 {}};
         }};
     ASSERT_TRUE(

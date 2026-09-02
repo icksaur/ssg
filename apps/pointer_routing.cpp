@@ -46,10 +46,10 @@ PointerDispatch gutterScroll(ScrollableRegionDescriptor const& descriptor,
     }
     dispatch.semantic_input = ssg::ScrollFractionInput{
         {observedRevision},
-        descriptor.target == WheelTarget::editor
-            ? ssg::SemanticScrollTarget::Document
-            : ssg::SemanticScrollTarget::Tree,
-        hit.scrollNumerator, hit.scrollDenominator};
+        {descriptor.target == WheelTarget::editor
+             ? ssg::ScrollTarget::Document
+             : ssg::ScrollTarget::Tree,
+         hit.scrollNumerator, hit.scrollDenominator}};
     return dispatch;
 }
 

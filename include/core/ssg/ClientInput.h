@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <variant>
+#include <vector>
 
 namespace ssg {
 
@@ -23,13 +24,6 @@ struct ClientKeyInput {
 
     friend bool operator==(const ClientKeyInput&, const ClientKeyInput&) = default;
 };
-
-enum class ClientInputKind : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_CLIENT_INPUT_KIND_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
-};
-#undef SSG_CLIENT_INPUT_KIND_ENUMERATORS
 
 enum class InputPointerButton : std::uint8_t {
 #define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
@@ -44,13 +38,6 @@ enum class InputPointerPhase : std::uint8_t {
 #undef SSG_ENUMERATOR
 };
 #undef SSG_INPUT_POINTER_PHASE_ENUMERATORS
-
-enum class DocumentPointerEdge : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_DOCUMENT_POINTER_EDGE_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
-};
-#undef SSG_DOCUMENT_POINTER_EDGE_ENUMERATORS
 
 struct SemanticInputBasis {
     Revision observedRevision;
@@ -122,17 +109,9 @@ struct DocumentPointerInput {
                            const DocumentPointerInput&) = default;
 };
 
-enum class SemanticScrollTarget : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_SEMANTIC_SCROLL_TARGET_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
-};
-#undef SSG_SEMANTIC_SCROLL_TARGET_ENUMERATORS
-
 struct ScrollLinesInput {
     SemanticInputBasis basis;
-    SemanticScrollTarget target = SemanticScrollTarget::Document;
-    std::int64_t rows = 0;
+    ScrollLines action;
 
     friend bool operator==(const ScrollLinesInput&,
                            const ScrollLinesInput&) = default;
@@ -140,48 +119,61 @@ struct ScrollLinesInput {
 
 struct ScrollFractionInput {
     SemanticInputBasis basis;
-    SemanticScrollTarget target = SemanticScrollTarget::Document;
-    std::uint32_t numerator = 0;
-    std::uint32_t denominator = 1;
+    ScrollFraction action;
 
     friend bool operator==(const ScrollFractionInput&,
                            const ScrollFractionInput&) = default;
 };
 
-struct ViewNavigationInput {
-    // CONTRACT: observedRevision identifies the active document as well as its
-    // state because every active-document switch advances EditorSession's
-    // revision; exact revision validation must precede the follow transition.
-    SemanticInputBasis basis;
-
-    friend bool operator==(const ViewNavigationInput&,
-                           const ViewNavigationInput&) = default;
+struct PauseFollowTransition {
+    friend bool operator==(const PauseFollowTransition&,
+                           const PauseFollowTransition&) = default;
 };
 
-struct ResolvedPaneFocusInput {
-    SemanticInputBasis basis;
+struct PaneFocusTransition {
     PaneId pane;
 
-    friend bool operator==(const ResolvedPaneFocusInput&,
-                           const ResolvedPaneFocusInput&) = default;
+    friend bool operator==(const PaneFocusTransition&,
+                           const PaneFocusTransition&) = default;
 };
 
-struct ResolvedSelectionRange {
+struct SelectionRangeTransition {
     ByteOffset anchor;
     ByteOffset active;
 
-    friend bool operator==(const ResolvedSelectionRange&,
-                           const ResolvedSelectionRange&) = default;
+    friend bool operator==(const SelectionRangeTransition&,
+                           const SelectionRangeTransition&) = default;
 };
 
-struct ResolvedSelectionInput {
-    SemanticInputBasis basis;
+struct SelectionTransition {
     TabId activeTab;
     Revision documentRevision;
-    std::vector<ResolvedSelectionRange> selections;
+    std::vector<SelectionRangeTransition> selections;
 
-    friend bool operator==(const ResolvedSelectionInput&,
-                           const ResolvedSelectionInput&) = default;
+    friend bool operator==(const SelectionTransition&,
+                           const SelectionTransition&) = default;
+};
+
+struct PointerSelectionTransition {
+    ByteOffset position;
+
+    friend bool operator==(const PointerSelectionTransition&,
+                           const PointerSelectionTransition&) = default;
+};
+
+using ViewTransition =
+    std::variant<PauseFollowTransition, PaneFocusTransition,
+                 SelectionTransition, PointerSelectionTransition>;
+
+struct ViewTransitionInput {
+    // CONTRACT: observedRevision identifies the active document as well as its
+    // state because every active-document switch advances EditorSession's
+    // revision; exact revision validation precedes every transition.
+    SemanticInputBasis basis;
+    ViewTransition transition;
+
+    friend bool operator==(const ViewTransitionInput&,
+                           const ViewTransitionInput&) = default;
 };
 
 using ClientInput =
@@ -189,8 +181,7 @@ using ClientInput =
                  PickerPointerInput, ExternalActionPointerInput,
                  NoticeActionPointerInput,
                  DocumentPointerInput, ScrollLinesInput,
-                 ScrollFractionInput, ViewNavigationInput,
-                 ResolvedPaneFocusInput, ResolvedSelectionInput>;
+                 ScrollFractionInput, ViewTransitionInput>;
 
 enum class ClientOwnedInputKind : std::uint8_t {
 #define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,

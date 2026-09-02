@@ -114,8 +114,9 @@ TEST(closeUsesStableOrderAndRejectsTheOnlyPane) {
                     .completed());
 
     auto focus = session.input(
-        client, ssg::ResolvedPaneFocusInput{
-                    {session.revision()}, ssg::PaneId{1}});
+        client, ssg::ViewTransitionInput{
+                    {session.revision()},
+                    ssg::PaneFocusTransition{ssg::PaneId{1}}});
     ASSERT_EQ(focus.outcome, ssg::ClientInputOutcome::Dispatched);
     auto closed =
         session.dispatch(client, {"pane.close", session.revision(), {}});
@@ -156,7 +157,8 @@ TEST(focusByIdentityValidatesTheCallingAttachment) {
     const auto revision = session.revision();
     auto focused = session.input(
         client,
-        ssg::ResolvedPaneFocusInput{{revision}, ssg::PaneId{1}});
+        ssg::ViewTransitionInput{
+            {revision}, ssg::PaneFocusTransition{ssg::PaneId{1}}});
     ASSERT_EQ(focused.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_EQ(session.revision(), ssg::Revision{revision.value() + 1});
     auto snapshot = session.snapshot(client);
@@ -167,7 +169,8 @@ TEST(focusByIdentityValidatesTheCallingAttachment) {
     const auto focusRevision = session.revision();
     auto rejected = session.input(
         client,
-        ssg::ResolvedPaneFocusInput{{focusRevision}, ssg::PaneId{999}});
+        ssg::ViewTransitionInput{
+            {focusRevision}, ssg::PaneFocusTransition{ssg::PaneId{999}}});
     ASSERT_EQ(rejected.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_EQ(session.revision(), focusRevision);
     snapshot = session.snapshot(client);

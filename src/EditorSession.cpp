@@ -3393,22 +3393,14 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                 if constexpr (!std::same_as<Input, DocumentPointerInput> &&
                               !std::same_as<Input, ScrollLinesInput> &&
                               !std::same_as<Input, ScrollFractionInput> &&
-                              !std::same_as<Input, ViewNavigationInput> &&
-                              !std::same_as<Input,
-                                            ResolvedPaneFocusInput> &&
-                              !std::same_as<Input,
-                                            ResolvedSelectionInput>) {
+                              !std::same_as<Input, ViewTransitionInput>) {
                     if (semantic.phase != InputPointerPhase::Press) {
                         return unhandled();
                     }
                 }
                 if constexpr (!std::same_as<Input, ScrollLinesInput> &&
                               !std::same_as<Input, ScrollFractionInput> &&
-                              !std::same_as<Input, ViewNavigationInput> &&
-                              !std::same_as<Input,
-                                            ResolvedPaneFocusInput> &&
-                              !std::same_as<Input,
-                                            ResolvedSelectionInput>) {
+                              !std::same_as<Input, ViewTransitionInput>) {
                     if (semantic.button != InputPointerButton::Primary &&
                         !std::same_as<Input, TabPointerInput>) {
                         return unhandled();
@@ -3450,114 +3442,170 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                     }
                 }
                 if constexpr (std::same_as<Input, ScrollLinesInput>) {
-                    if (semantic.rows == 0) {
+                    if (semantic.action.rows == 0) {
                         return rejectTarget(
                             "line-scroll input must move at least one row");
                     }
-                    switch (semantic.target) {
-                        case SemanticScrollTarget::Document:
+                    switch (semantic.action.target) {
+                        case ScrollTarget::Document:
                             return dispatch(
                                 "view.scroll_lines",
-                                ScrollLinesArguments{semantic.rows});
-                        case SemanticScrollTarget::Tree:
+                                ScrollLinesArguments{semantic.action.rows});
+                        case ScrollTarget::Tree:
                             return dispatch(
                                 "tree.scroll",
-                                ScrollLinesArguments{semantic.rows});
+                                ScrollLinesArguments{semantic.action.rows});
                     }
                     return rejectTarget("line-scroll target is invalid");
                 } else if constexpr (std::same_as<Input,
                                                   ScrollFractionInput>) {
-                    if (semantic.denominator == 0 ||
-                        semantic.numerator > semantic.denominator) {
+                    if (semantic.action.denominator == 0 ||
+                        semantic.action.numerator >
+                            semantic.action.denominator) {
                         return rejectTarget(
                             "fraction-scroll input is invalid");
                     }
                     const auto fraction = ScrollFractionArguments{
-                        semantic.numerator, semantic.denominator};
-                    switch (semantic.target) {
-                        case SemanticScrollTarget::Document:
+                        semantic.action.numerator,
+                        semantic.action.denominator};
+                    switch (semantic.action.target) {
+                        case ScrollTarget::Document:
                             return dispatch("view.scroll_to_fraction",
                                             fraction);
-                        case SemanticScrollTarget::Tree:
+                        case ScrollTarget::Tree:
                             return dispatch("tree.scroll_to_fraction",
                                             fraction);
                     }
                     return rejectTarget("fraction-scroll target is invalid");
                 } else if constexpr (std::same_as<Input,
-                                                  ViewNavigationInput>) {
-                    if (impl_->follow.viewState().mode ==
-                        FollowMode::Paused) {
-                        return unhandled();
-                    }
-                    return dispatch("follow_edits.pause", std::any{});
-                } else if constexpr (std::same_as<
-                                         Input, ResolvedPaneFocusInput>) {
-                    if (!impl_->focusPane(clientId, semantic.pane)) {
-                        return rejectTarget(
-                            "pane focus target is not in this attachment");
-                    }
-                    const bool focusChanged =
-                        impl_->interaction.effectiveFocus() !=
-                        FocusTarget::Editor;
-                    if (focusChanged) impl_->interaction.focusEditor();
-                    impl_->recordNavigation(
-                        clientId, impl_->clientViews.at(clientId),
-                        NavigationClass::User);
-                    impl_->session->advanceRevision();
-                    return {
-                        ClientInputOutcome::Dispatched, std::nullopt,
-                        CommandResult{
-                            CommandError::None, impl_->session->revision(), {},
-                            {/*routingChanged=*/focusChanged,
-                             /*geometryChanged=*/true}}};
-                } else if constexpr (std::same_as<
-                                        Input, ResolvedSelectionInput>) {
-                    const auto* tab = impl_->activeTabState();
-                    const auto* document = impl_->activeDocument();
-                    if (tab == nullptr || tab->id != semantic.activeTab) {
-                        return rejectTarget(
-                            "resolved selection active tab is stale");
-                    }
-                    if (document == nullptr ||
-                        impl_->documentView().revision !=
-                            semantic.documentRevision) {
-                        return rejectTarget(
-                            "resolved selection document is stale");
-                    }
-                    if (semantic.selections.empty()) {
-                        return rejectTarget(
-                            "resolved selection must not be empty");
-                    }
-                    std::vector<Selection> selections;
-                    selections.reserve(semantic.selections.size());
-                    const auto& text = impl_->activeText();
-                    for (const auto& range : semantic.selections) {
-                        auto anchor = SelectionNavigator::resolvePosition(
-                            text, range.anchor);
-                        auto active = SelectionNavigator::resolvePosition(
-                            text, range.active);
-                        if (!anchor || !active) {
-                            return rejectTarget(
-                               "resolved selection range is invalid");
-                        }
-                        selections.push_back({*anchor, *active});
-                    }
-                    impl_->selection.selections =
-                        SelectionSet{std::move(selections)};
-                    if (const auto documentId =
-                            impl_->activeDocumentId()) {
-                        impl_->historyFor(*documentId).breakCoalescing();
-                    }
-                    impl_->recordNavigation(
-                        clientId, impl_->clientViews.at(clientId),
-                        NavigationClass::User);
-                    impl_->session->advanceRevision();
-                    return {
-                        ClientInputOutcome::Dispatched, std::nullopt,
-                        CommandResult{
-                            CommandError::None, impl_->session->revision(), {},
-                            {/*routingChanged=*/false,
-                            /*geometryChanged=*/false}}};
+                                                  ViewTransitionInput>) {
+                    return std::visit(
+                        [&](const auto& transition) -> ClientInputResult {
+                            using Transition =
+                                std::decay_t<decltype(transition)>;
+                            if constexpr (std::same_as<Transition,
+                                                       PauseFollowTransition>) {
+                                if (impl_->follow.viewState().mode ==
+                                    FollowMode::Paused) {
+                                    return unhandled();
+                                }
+                                return dispatch("follow_edits.pause",
+                                                std::any{});
+                            } else if constexpr (std::same_as<
+                                                     Transition,
+                                                     PaneFocusTransition>) {
+                                if (!impl_->focusPane(clientId,
+                                                      transition.pane)) {
+                                    return rejectTarget(
+                                        "pane focus target is not in this "
+                                        "attachment");
+                                }
+                                const bool focusChanged =
+                                    impl_->interaction.effectiveFocus() !=
+                                    FocusTarget::Editor;
+                                if (focusChanged) {
+                                    impl_->interaction.focusEditor();
+                                }
+                                impl_->recordNavigation(
+                                    clientId, impl_->clientViews.at(clientId),
+                                    NavigationClass::User);
+                                impl_->session->advanceRevision();
+                                return {ClientInputOutcome::Dispatched,
+                                        std::nullopt,
+                                        CommandResult{
+                                            CommandError::None,
+                                            impl_->session->revision(),
+                                            {},
+                                            {/*routingChanged=*/focusChanged,
+                                             /*geometryChanged=*/true}}};
+                            } else if constexpr (std::same_as<
+                                                     Transition,
+                                                     SelectionTransition>) {
+                                const auto* tab = impl_->activeTabState();
+                                const auto* document = impl_->activeDocument();
+                                if (tab == nullptr ||
+                                    tab->id != transition.activeTab) {
+                                    return rejectTarget(
+                                        "resolved selection active tab is "
+                                        "stale");
+                                }
+                                if (document == nullptr ||
+                                    impl_->documentView().revision !=
+                                        transition.documentRevision) {
+                                    return rejectTarget(
+                                        "resolved selection document is "
+                                        "stale");
+                                }
+                                if (transition.selections.empty()) {
+                                    return rejectTarget(
+                                        "resolved selection must not be "
+                                        "empty");
+                                }
+                                std::vector<Selection> selections;
+                                selections.reserve(
+                                    transition.selections.size());
+                                const auto& text = impl_->activeText();
+                                for (const auto& range :
+                                     transition.selections) {
+                                    auto anchor =
+                                        SelectionNavigator::resolvePosition(
+                                            text, range.anchor);
+                                    auto active =
+                                        SelectionNavigator::resolvePosition(
+                                            text, range.active);
+                                    if (!anchor || !active) {
+                                        return rejectTarget(
+                                            "resolved selection range is "
+                                            "invalid");
+                                    }
+                                    selections.push_back({*anchor, *active});
+                                }
+                                impl_->selection.selections =
+                                    SelectionSet{std::move(selections)};
+                                if (const auto documentId =
+                                        impl_->activeDocumentId()) {
+                                    impl_->historyFor(*documentId)
+                                        .breakCoalescing();
+                                }
+                                impl_->recordNavigation(
+                                    clientId, impl_->clientViews.at(clientId),
+                                    NavigationClass::User);
+                                impl_->session->advanceRevision();
+                                return {
+                                    ClientInputOutcome::Dispatched,
+                                    std::nullopt,
+                                    CommandResult{CommandError::None,
+                                                  impl_->session->revision(),
+                                                  {},
+                                                  {/*routingChanged=*/false,
+                                                   /*geometryChanged=*/false}}};
+                            } else if constexpr (std::same_as<
+                                                     Transition,
+                                                     PointerSelectionTransition>) {
+                                if (impl_->documentPointerGestures.find(
+                                        clientId) ==
+                                    impl_->documentPointerGestures.end()) {
+                                    return rejectTarget(
+                                        "pointer selection has no active "
+                                        "gesture");
+                                }
+                                return inputLocked(
+                                    impl_, clientId,
+                                    ClientInput{DocumentPointerInput{
+                                        semantic.basis, transition.position,
+                                        false, false,
+                                        InputPointerButton::Primary,
+                                        InputPointerPhase::Move,
+                                        DocumentPointerEdge::None}});
+                            } else {
+                                static_assert(
+                                    std::same_as<
+                                        Transition,
+                                        PointerSelectionTransition>,
+                                    "unhandled view transition");
+                            }
+                        },
+                        semantic.transition);
                 } else if constexpr (std::same_as<Input,
                                                   DocumentPointerInput>) {
                     const auto handled = [&] {
@@ -3668,11 +3716,7 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                             CommandError::None, impl_->session->revision(), {}};
                         result.viewAction = ViewActionRequest{
                             client->viewId, impl_->session->revision(),
-                            ContinuePointerEdge{
-                                semantic.edge ==
-                                        DocumentPointerEdge::Before
-                                    ? PointerEdgeDirection::Before
-                                    : PointerEdgeDirection::After}};
+                            ContinuePointerEdge{semantic.edge}};
                         return {ClientInputOutcome::ViewOwned, std::nullopt,
                                 std::move(result)};
                     }

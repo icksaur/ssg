@@ -9,42 +9,33 @@
 
 namespace ssg {
 
-enum class ViewActionKind : std::uint8_t {
+enum class ScrollTarget : std::uint8_t {
 #define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_VIEW_ACTION_KIND_ENUMERATORS(SSG_ENUMERATOR)
+    SSG_SCROLL_TARGET_ENUMERATORS(SSG_ENUMERATOR)
 #undef SSG_ENUMERATOR
 };
-#undef SSG_VIEW_ACTION_KIND_ENUMERATORS
+#undef SSG_SCROLL_TARGET_ENUMERATORS
 
-enum class ViewScrollTarget : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_VIEW_SCROLL_TARGET_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
-};
-#undef SSG_VIEW_SCROLL_TARGET_ENUMERATORS
-
-struct ViewScrollLines {
-    ViewScrollTarget target = ViewScrollTarget::Document;
+struct ScrollLines {
+    ScrollTarget target = ScrollTarget::Document;
     std::int64_t rows = 0;
 
-    friend bool operator==(const ViewScrollLines&,
-                           const ViewScrollLines&) = default;
+    friend bool operator==(const ScrollLines&, const ScrollLines&) = default;
 };
 
-struct ViewScrollPages {
+struct ScrollPages {
     std::int64_t pages = 0;
 
-    friend bool operator==(const ViewScrollPages&,
-                           const ViewScrollPages&) = default;
+    friend bool operator==(const ScrollPages&, const ScrollPages&) = default;
 };
 
-struct ViewScrollFraction {
-    ViewScrollTarget target = ViewScrollTarget::Document;
+struct ScrollFraction {
+    ScrollTarget target = ScrollTarget::Document;
     std::uint32_t numerator = 0;
     std::uint32_t denominator = 1;
 
-    friend bool operator==(const ViewScrollFraction&,
-                           const ViewScrollFraction&) = default;
+    friend bool operator==(const ScrollFraction&,
+                           const ScrollFraction&) = default;
 };
 
 enum class VisualSelectionDirection : std::uint8_t {
@@ -79,22 +70,22 @@ struct ResolvePaneFocus {
                            const ResolvePaneFocus&) = default;
 };
 
-enum class PointerEdgeDirection : std::uint8_t {
+enum class DocumentPointerEdge : std::uint8_t {
 #define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_POINTER_EDGE_DIRECTION_ENUMERATORS(SSG_ENUMERATOR)
+    SSG_DOCUMENT_POINTER_EDGE_ENUMERATORS(SSG_ENUMERATOR)
 #undef SSG_ENUMERATOR
 };
-#undef SSG_POINTER_EDGE_DIRECTION_ENUMERATORS
+#undef SSG_DOCUMENT_POINTER_EDGE_ENUMERATORS
 
 struct ContinuePointerEdge {
-    PointerEdgeDirection direction = PointerEdgeDirection::After;
+    DocumentPointerEdge direction = DocumentPointerEdge::After;
 
     friend bool operator==(const ContinuePointerEdge&,
                            const ContinuePointerEdge&) = default;
 };
 
 using ViewAction =
-    std::variant<ViewScrollLines, ViewScrollPages, ViewScrollFraction,
+    std::variant<ScrollLines, ScrollPages, ScrollFraction,
                  MoveVisualSelection, RevealSelection, CenterSelection,
                  ResolvePaneFocus,
                  ContinuePointerEdge>;

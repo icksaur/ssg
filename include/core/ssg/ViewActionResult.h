@@ -16,7 +16,7 @@ enum class ViewActionStatus : std::uint8_t {
 
 struct ViewActionResult {
     ViewActionStatus status = ViewActionStatus::Rejected;
-    std::optional<ClientInput> transition;
+    std::optional<ViewTransitionInput> transition;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {

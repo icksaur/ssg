@@ -995,12 +995,12 @@ TEST(sessionOwnsIndependentPaneTopologyForEachAttachment) {
     ASSERT_TRUE(focusedApplied.accepted());
     ASSERT_TRUE(
         focusedApplied.transition &&
-        std::holds_alternative<ssg::ResolvedPaneFocusInput>(
-            *focusedApplied.transition));
+        std::holds_alternative<ssg::PaneFocusTransition>(
+            focusedApplied.transition->transition));
     if (!focusedApplied.transition) return;
     const auto* focusedPane =
-        std::get_if<ssg::ResolvedPaneFocusInput>(
-            &*focusedApplied.transition);
+        std::get_if<ssg::PaneFocusTransition>(
+            &focusedApplied.transition->transition);
     ASSERT_TRUE(focusedPane != nullptr);
     if (!focusedPane) return;
     ASSERT_EQ(focusedPane->pane, ssg::PaneId{1});
@@ -1034,12 +1034,12 @@ TEST(sessionOwnsIndependentPaneTopologyForEachAttachment) {
     ASSERT_TRUE(focusedAgainApplied.accepted());
     ASSERT_TRUE(
         focusedAgainApplied.transition &&
-        std::holds_alternative<ssg::ResolvedPaneFocusInput>(
-            *focusedAgainApplied.transition));
+        std::holds_alternative<ssg::PaneFocusTransition>(
+            focusedAgainApplied.transition->transition));
     if (!focusedAgainApplied.transition) return;
     const auto* focusedAgainPane =
-        std::get_if<ssg::ResolvedPaneFocusInput>(
-            &*focusedAgainApplied.transition);
+        std::get_if<ssg::PaneFocusTransition>(
+            &focusedAgainApplied.transition->transition);
     ASSERT_TRUE(focusedAgainPane != nullptr);
     if (!focusedAgainPane) return;
     ASSERT_EQ(focusedAgainPane->pane, ssg::PaneId{2});
@@ -1129,8 +1129,8 @@ TEST(visualLineMovementRequiresPresenterResolution) {
     ASSERT_TRUE(applied.accepted());
     ASSERT_TRUE(
         applied.transition &&
-        std::holds_alternative<ssg::ResolvedSelectionInput>(
-            *applied.transition));
+        std::holds_alternative<ssg::SelectionTransition>(
+            applied.transition->transition));
     const auto submitted = runtime.input(client, *applied.transition);
     ASSERT_EQ(submitted.outcome, ssg::ClientInputOutcome::Dispatched);
     auto confirmed = presenter.project(runtime, client, {{80, 12}, {}});
@@ -1240,8 +1240,9 @@ TEST(visualMovementUsesActivePaneAndDiscardsMismatchedProposal) {
     ASSERT_EQ(
         runtime
             .input(client,
-                   ssg::ResolvedPaneFocusInput{
-                       {runtime.revision()}, ssg::PaneId{1}})
+                   ssg::ViewTransitionInput{
+                       {runtime.revision()},
+                       ssg::PaneFocusTransition{ssg::PaneId{1}}})
             .outcome,
         ssg::ClientInputOutcome::Dispatched);
     ASSERT_EQ(runtime.input(client, *staleProposal.transition).outcome,

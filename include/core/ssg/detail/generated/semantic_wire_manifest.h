@@ -69,14 +69,9 @@
     X(DiffRemoved, 20) X(DiffModified, 21) X(TabInactiveBackground, 22) \
     X(HeaderBackground, 23) X(FooterBackground, 24) X(CurrentLineNumber, 25) \
     X(CurrentLineNumberBackground, 26) X(LineNumberBackground, 27)
-#define SSG_CLIENT_INPUT_KIND_ENUMERATORS(X) \
-    X(Key, 0) X(Tab, 1) X(Tree, 2) X(Picker, 3) X(ExternalAction, 5) \
-    X(NoticeAction, 8) X(Document, 9) X(ScrollLines, 10) X(ScrollFraction, 11) \
-    X(ViewNavigation, 12) X(ResolvedPaneFocus, 13) X(ResolvedSelection, 14)
 #define SSG_INPUT_POINTER_BUTTON_ENUMERATORS(X) X(Primary, 0) X(Auxiliary, 1) X(Secondary, 2)
 #define SSG_INPUT_POINTER_PHASE_ENUMERATORS(X) X(Press, 0) X(Move, 1) X(Release, 2) X(Cancel, 3)
 #define SSG_DOCUMENT_POINTER_EDGE_ENUMERATORS(X) X(None, 0) X(Before, 1) X(After, 2)
-#define SSG_SEMANTIC_SCROLL_TARGET_ENUMERATORS(X) X(Document, 0) X(Tree, 1)
 #define SSG_CLIENT_OWNED_INPUT_KIND_ENUMERATORS(X) \
     X(AppendText, 0) X(DeleteGraphemeBackward, 1) X(DeleteWordBackward, 2) \
     X(SelectNext, 3) X(SelectPrevious, 4) X(Submit, 5)
@@ -89,14 +84,9 @@
     X(TabBar, 0) X(FindResults, 3) X(Notice, 6) X(ExternalModification, 7) \
     X(Document, 8) X(Tree, 9)
 #define SSG_OVERFLOW_ENUMERATORS(X) X(None, 0) X(Truncate, 1) X(ScrollTail, 2)
-#define SSG_VIEW_ACTION_KIND_ENUMERATORS(X) \
-    X(ScrollLines, 0) X(ScrollPages, 1) X(ScrollFraction, 2) X(MoveVisualSelection, 3) \
-    X(RevealSelection, 4) X(CenterSelection, 5) X(ResolvePaneFocus, 9) \
-    X(ContinuePointerEdge, 10)
-#define SSG_VIEW_SCROLL_TARGET_ENUMERATORS(X) X(Document, 0) X(Tree, 1)
+#define SSG_SCROLL_TARGET_ENUMERATORS(X) X(Document, 0) X(Tree, 1)
 #define SSG_VISUAL_SELECTION_DIRECTION_ENUMERATORS(X) X(LineUp, 0) X(LineDown, 1) X(PageUp, 2) X(PageDown, 3)
 #define SSG_SPLIT_AXIS_ENUMERATORS(X) X(Horizontal, 0) X(Vertical, 1)
 #define SSG_PANE_CYCLE_DIRECTION_ENUMERATORS(X) X(Next, 0) X(Previous, 1)
 #define SSG_PANE_DIRECTION_ENUMERATORS(X) X(Left, 0) X(Right, 1) X(Up, 2) X(Down, 3)
-#define SSG_POINTER_EDGE_DIRECTION_ENUMERATORS(X) X(Before, 0) X(After, 1)
 #define SSG_PALETTE_PRESENCE_OP_KIND_ENUMERATORS(X) X(Show, 0) X(Hide, 1)

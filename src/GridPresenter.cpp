@@ -479,7 +479,7 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
     bool supported = true;
     bool changed = false;
     bool pausesFollow = false;
-    std::optional<ClientInput> resolvedInput;
+    std::optional<ViewTransitionInput> resolvedInput;
     auto resolveVisualSelection = [&](SelectionCommand command,
                                       bool primaryOnly) {
         auto inputSelections = frame.sections().selection;
@@ -535,25 +535,23 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
             selections.back() = resolved.selections.primary();
             resolvedSelections = SelectionSet{std::move(selections)};
         }
-        std::vector<ResolvedSelectionRange> ranges;
+        std::vector<SelectionRangeTransition> ranges;
         ranges.reserve(resolvedSelections.items().size());
         for (const auto& selection : resolvedSelections.items()) {
             ranges.push_back(
                 {selection.anchor.byteOffset, selection.active.byteOffset});
         }
         if (primaryOnly) {
-            resolvedInput = DocumentPointerInput{
+            resolvedInput = ViewTransitionInput{
                 SemanticInputBasis{basis.semanticRevision},
-                resolvedSelections.primary().active.byteOffset,
-                false,
-                false,
-                InputPointerButton::Primary,
-                InputPointerPhase::Move};
+                PointerSelectionTransition{
+                    resolvedSelections.primary().active.byteOffset}};
         } else {
-            resolvedInput = ResolvedSelectionInput{
+            resolvedInput = ViewTransitionInput{
                 SemanticInputBasis{basis.semanticRevision},
-                *frame.sections().tabs.active,
-                frame.sections().document.revision, std::move(ranges)};
+                SelectionTransition{*frame.sections().tabs.active,
+                                    frame.sections().document.revision,
+                                    std::move(ranges)}};
         }
         if (resolvedSelections != frame.sections().selection) {
             state.pendingSelection =
@@ -570,12 +568,12 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
     std::visit(
         [&](auto const& action) {
             using Action = std::decay_t<decltype(action)>;
-            if constexpr (std::same_as<Action, ViewScrollLines>) {
+            if constexpr (std::same_as<Action, ScrollLines>) {
                 if (action.rows == 0) {
                     supported = false;
                     return;
                 }
-                if (action.target == ViewScrollTarget::Document) {
+                if (action.target == ScrollTarget::Document) {
                     pausesFollow = true;
                     ScrollOffset offset{state.navigation.firstVisualRow};
                     offset.byLines(
@@ -586,7 +584,8 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                         state.navigation.firstVisualRow;
                     state.navigation.firstVisualRow =
                         offset.firstVisible();
-                } else if (frame.panel()) {
+                } else if (action.target == ScrollTarget::Tree &&
+                           frame.panel()) {
                     auto const& tree = *frame.panel();
                     ScrollOffset offset{state.treeFirstVisible};
                     offset.byLines(action.rows, tree.scrollbar.totalRows,
@@ -594,8 +593,10 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                     changed =
                         offset.firstVisible() != state.treeFirstVisible;
                     state.treeFirstVisible = offset.firstVisible();
+                } else if (action.target != ScrollTarget::Tree) {
+                    supported = false;
                 }
-            } else if constexpr (std::same_as<Action, ViewScrollPages>) {
+            } else if constexpr (std::same_as<Action, ScrollPages>) {
                 pausesFollow = true;
                 if (action.pages == 0) {
                     supported = false;
@@ -609,13 +610,13 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                           state.navigation.firstVisualRow;
                 state.navigation.firstVisualRow = offset.firstVisible();
             } else if constexpr (std::same_as<Action,
-                                              ViewScrollFraction>) {
+                                              ScrollFraction>) {
                 if (action.denominator == 0 ||
                     action.numerator > action.denominator) {
                     supported = false;
                     return;
                 }
-                if (action.target == ViewScrollTarget::Document) {
+                if (action.target == ScrollTarget::Document) {
                     pausesFollow = true;
                     ScrollOffset offset{state.navigation.firstVisualRow};
                     offset.toFraction(
@@ -627,7 +628,8 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                         state.navigation.firstVisualRow;
                     state.navigation.firstVisualRow =
                         offset.firstVisible();
-                } else if (frame.panel()) {
+                } else if (action.target == ScrollTarget::Tree &&
+                           frame.panel()) {
                     auto const& tree = *frame.panel();
                     ScrollOffset offset{state.treeFirstVisible};
                     offset.toFraction(action.numerator, action.denominator,
@@ -636,6 +638,8 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                     changed =
                         offset.firstVisible() != state.treeFirstVisible;
                     state.treeFirstVisible = offset.firstVisible();
+                } else if (action.target != ScrollTarget::Tree) {
+                    supported = false;
                 }
             } else if constexpr (std::same_as<Action, RevealSelection> ||
                                  std::same_as<Action, CenterSelection>) {
@@ -702,9 +706,13 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                 return;
             } else if constexpr (std::same_as<Action,
                                                ContinuePointerEdge>) {
+                if (action.direction == DocumentPointerEdge::None) {
+                    supported = false;
+                    return;
+                }
                 if (!frame.sections().tabs.active ||
                     !resolveVisualSelection(
-                        action.direction == PointerEdgeDirection::Before
+                        action.direction == DocumentPointerEdge::Before
                             ? SelectionCommand::SelectLineUp
                             : SelectionCommand::SelectLineDown,
                         true)) {
@@ -718,8 +726,9 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                 }
                 if (const auto pane =
                         paneInDirection(*frame.document(), action.direction)) {
-                    resolvedInput = ResolvedPaneFocusInput{
-                        SemanticInputBasis{basis.semanticRevision}, *pane};
+                    resolvedInput = ViewTransitionInput{
+                        SemanticInputBasis{basis.semanticRevision},
+                        PaneFocusTransition{*pane}};
                 }
             } else {
                 supported = false;
@@ -739,8 +748,9 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
     if (pausesFollow &&
         frame.sections().followEdits.mode == FollowMode::Following) {
         return {ViewActionStatus::TransitionRequired,
-                ClientInput{ViewNavigationInput{
-                    SemanticInputBasis{basis.semanticRevision}}},
+                ViewTransitionInput{
+                    SemanticInputBasis{basis.semanticRevision},
+                    PauseFollowTransition{}},
                 {}};
     }
     return {ViewActionStatus::Applied, std::nullopt, {}};

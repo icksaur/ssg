@@ -1,23 +1,9 @@
 core/ssg/ClientInput.h	alias	ssg::ClientInput
-core/ssg/ClientInput.h	enum	ssg::ClientInputKind
+core/ssg/ClientInput.h	alias	ssg::ViewTransition
 core/ssg/ClientInput.h	enum	ssg::ClientInputOutcome
 core/ssg/ClientInput.h	enum	ssg::ClientOwnedInputKind
-core/ssg/ClientInput.h	enum	ssg::DocumentPointerEdge
 core/ssg/ClientInput.h	enum	ssg::InputPointerButton
 core/ssg/ClientInput.h	enum	ssg::InputPointerPhase
-core/ssg/ClientInput.h	enum	ssg::SemanticScrollTarget
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::Document
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::ExternalAction
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::Key
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::NoticeAction
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::Picker
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::ResolvedPaneFocus
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::ResolvedSelection
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::ScrollFraction
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::ScrollLines
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::Tab
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::Tree
-core/ssg/ClientInput.h	enumerator	ssg::ClientInputKind::ViewNavigation
 core/ssg/ClientInput.h	enumerator	ssg::ClientInputOutcome::ClientOwned
 core/ssg/ClientInput.h	enumerator	ssg::ClientInputOutcome::Dispatched
 core/ssg/ClientInput.h	enumerator	ssg::ClientInputOutcome::Rejected
@@ -29,9 +15,6 @@ core/ssg/ClientInput.h	enumerator	ssg::ClientOwnedInputKind::DeleteWordBackward
 core/ssg/ClientInput.h	enumerator	ssg::ClientOwnedInputKind::SelectNext
 core/ssg/ClientInput.h	enumerator	ssg::ClientOwnedInputKind::SelectPrevious
 core/ssg/ClientInput.h	enumerator	ssg::ClientOwnedInputKind::Submit
-core/ssg/ClientInput.h	enumerator	ssg::DocumentPointerEdge::After
-core/ssg/ClientInput.h	enumerator	ssg::DocumentPointerEdge::Before
-core/ssg/ClientInput.h	enumerator	ssg::DocumentPointerEdge::None
 core/ssg/ClientInput.h	enumerator	ssg::InputPointerButton::Auxiliary
 core/ssg/ClientInput.h	enumerator	ssg::InputPointerButton::Primary
 core/ssg/ClientInput.h	enumerator	ssg::InputPointerButton::Secondary
@@ -39,39 +22,41 @@ core/ssg/ClientInput.h	enumerator	ssg::InputPointerPhase::Cancel
 core/ssg/ClientInput.h	enumerator	ssg::InputPointerPhase::Move
 core/ssg/ClientInput.h	enumerator	ssg::InputPointerPhase::Press
 core/ssg/ClientInput.h	enumerator	ssg::InputPointerPhase::Release
-core/ssg/ClientInput.h	enumerator	ssg::SemanticScrollTarget::Document
-core/ssg/ClientInput.h	enumerator	ssg::SemanticScrollTarget::Tree
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const ClientKeyInput &, const ClientKeyInput &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const ClientOwnedInput &, const ClientOwnedInput &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const DocumentPointerInput &, const DocumentPointerInput &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const ExternalActionPointerInput &, const ExternalActionPointerInput &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const NoticeActionPointerInput &, const NoticeActionPointerInput &)
+core/ssg/ClientInput.h	func	ssg::operator==	bool (const PaneFocusTransition &, const PaneFocusTransition &) noexcept
+core/ssg/ClientInput.h	func	ssg::operator==	bool (const PauseFollowTransition &, const PauseFollowTransition &) noexcept
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const PickerPointerInput &, const PickerPointerInput &)
-core/ssg/ClientInput.h	func	ssg::operator==	bool (const ResolvedPaneFocusInput &, const ResolvedPaneFocusInput &)
-core/ssg/ClientInput.h	func	ssg::operator==	bool (const ResolvedSelectionInput &, const ResolvedSelectionInput &)
-core/ssg/ClientInput.h	func	ssg::operator==	bool (const ResolvedSelectionRange &, const ResolvedSelectionRange &)
+core/ssg/ClientInput.h	func	ssg::operator==	bool (const PointerSelectionTransition &, const PointerSelectionTransition &) noexcept
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const ScrollFractionInput &, const ScrollFractionInput &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const ScrollLinesInput &, const ScrollLinesInput &)
+core/ssg/ClientInput.h	func	ssg::operator==	bool (const SelectionRangeTransition &, const SelectionRangeTransition &)
+core/ssg/ClientInput.h	func	ssg::operator==	bool (const SelectionTransition &, const SelectionTransition &) noexcept(false)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const SemanticInputBasis &, const SemanticInputBasis &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const TabPointerInput &, const TabPointerInput &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const TreePointerInput &, const TreePointerInput &)
-core/ssg/ClientInput.h	func	ssg::operator==	bool (const ViewNavigationInput &, const ViewNavigationInput &)
+core/ssg/ClientInput.h	func	ssg::operator==	bool (const ViewTransitionInput &, const ViewTransitionInput &)
 core/ssg/ClientInput.h	struct	ssg::ClientInputResult
 core/ssg/ClientInput.h	struct	ssg::ClientKeyInput
 core/ssg/ClientInput.h	struct	ssg::ClientOwnedInput
 core/ssg/ClientInput.h	struct	ssg::DocumentPointerInput
 core/ssg/ClientInput.h	struct	ssg::ExternalActionPointerInput
 core/ssg/ClientInput.h	struct	ssg::NoticeActionPointerInput
+core/ssg/ClientInput.h	struct	ssg::PaneFocusTransition
+core/ssg/ClientInput.h	struct	ssg::PauseFollowTransition
 core/ssg/ClientInput.h	struct	ssg::PickerPointerInput
-core/ssg/ClientInput.h	struct	ssg::ResolvedPaneFocusInput
-core/ssg/ClientInput.h	struct	ssg::ResolvedSelectionInput
-core/ssg/ClientInput.h	struct	ssg::ResolvedSelectionRange
+core/ssg/ClientInput.h	struct	ssg::PointerSelectionTransition
 core/ssg/ClientInput.h	struct	ssg::ScrollFractionInput
 core/ssg/ClientInput.h	struct	ssg::ScrollLinesInput
+core/ssg/ClientInput.h	struct	ssg::SelectionRangeTransition
+core/ssg/ClientInput.h	struct	ssg::SelectionTransition
 core/ssg/ClientInput.h	struct	ssg::SemanticInputBasis
 core/ssg/ClientInput.h	struct	ssg::TabPointerInput
 core/ssg/ClientInput.h	struct	ssg::TreePointerInput
-core/ssg/ClientInput.h	struct	ssg::ViewNavigationInput
+core/ssg/ClientInput.h	struct	ssg::ViewTransitionInput
 core/ssg/ClientInput.h	var	ssg::ClientInputResult::clientOwned	std::optional<ClientOwnedInput>
 core/ssg/ClientInput.h	var	ssg::ClientInputResult::command	std::optional<CommandResult>
 core/ssg/ClientInput.h	var	ssg::ClientInputResult::outcome	ClientInputOutcome
@@ -95,25 +80,21 @@ core/ssg/ClientInput.h	var	ssg::NoticeActionPointerInput::actionId	std::string
 core/ssg/ClientInput.h	var	ssg::NoticeActionPointerInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::NoticeActionPointerInput::button	InputPointerButton
 core/ssg/ClientInput.h	var	ssg::NoticeActionPointerInput::phase	InputPointerPhase
+core/ssg/ClientInput.h	var	ssg::PaneFocusTransition::pane	PaneId
 core/ssg/ClientInput.h	var	ssg::PickerPointerInput::activation	PickerActivation
 core/ssg/ClientInput.h	var	ssg::PickerPointerInput::button	InputPointerButton
 core/ssg/ClientInput.h	var	ssg::PickerPointerInput::candidateId	std::string
 core/ssg/ClientInput.h	var	ssg::PickerPointerInput::phase	InputPointerPhase
-core/ssg/ClientInput.h	var	ssg::ResolvedPaneFocusInput::basis	SemanticInputBasis
-core/ssg/ClientInput.h	var	ssg::ResolvedPaneFocusInput::pane	PaneId
-core/ssg/ClientInput.h	var	ssg::ResolvedSelectionInput::activeTab	TabId
-core/ssg/ClientInput.h	var	ssg::ResolvedSelectionInput::basis	SemanticInputBasis
-core/ssg/ClientInput.h	var	ssg::ResolvedSelectionInput::documentRevision	Revision
-core/ssg/ClientInput.h	var	ssg::ResolvedSelectionInput::selections	std::vector<ResolvedSelectionRange>
-core/ssg/ClientInput.h	var	ssg::ResolvedSelectionRange::active	ByteOffset
-core/ssg/ClientInput.h	var	ssg::ResolvedSelectionRange::anchor	ByteOffset
+core/ssg/ClientInput.h	var	ssg::PointerSelectionTransition::position	ByteOffset
+core/ssg/ClientInput.h	var	ssg::ScrollFractionInput::action	ScrollFraction
 core/ssg/ClientInput.h	var	ssg::ScrollFractionInput::basis	SemanticInputBasis
-core/ssg/ClientInput.h	var	ssg::ScrollFractionInput::denominator	std::uint32_t
-core/ssg/ClientInput.h	var	ssg::ScrollFractionInput::numerator	std::uint32_t
-core/ssg/ClientInput.h	var	ssg::ScrollFractionInput::target	SemanticScrollTarget
+core/ssg/ClientInput.h	var	ssg::ScrollLinesInput::action	ScrollLines
 core/ssg/ClientInput.h	var	ssg::ScrollLinesInput::basis	SemanticInputBasis
-core/ssg/ClientInput.h	var	ssg::ScrollLinesInput::rows	std::int64_t
-core/ssg/ClientInput.h	var	ssg::ScrollLinesInput::target	SemanticScrollTarget
+core/ssg/ClientInput.h	var	ssg::SelectionRangeTransition::active	ByteOffset
+core/ssg/ClientInput.h	var	ssg::SelectionRangeTransition::anchor	ByteOffset
+core/ssg/ClientInput.h	var	ssg::SelectionTransition::activeTab	TabId
+core/ssg/ClientInput.h	var	ssg::SelectionTransition::documentRevision	Revision
+core/ssg/ClientInput.h	var	ssg::SelectionTransition::selections	std::vector<SelectionRangeTransition>
 core/ssg/ClientInput.h	var	ssg::SemanticInputBasis::observedRevision	Revision
 core/ssg/ClientInput.h	var	ssg::TabPointerInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::TabPointerInput::button	InputPointerButton
@@ -123,7 +104,8 @@ core/ssg/ClientInput.h	var	ssg::TreePointerInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::TreePointerInput::button	InputPointerButton
 core/ssg/ClientInput.h	var	ssg::TreePointerInput::nodeId	TreeNodeId
 core/ssg/ClientInput.h	var	ssg::TreePointerInput::phase	InputPointerPhase
-core/ssg/ClientInput.h	var	ssg::ViewNavigationInput::basis	SemanticInputBasis
+core/ssg/ClientInput.h	var	ssg::ViewTransitionInput::basis	SemanticInputBasis
+core/ssg/ClientInput.h	var	ssg::ViewTransitionInput::transition	ViewTransition
 core/ssg/ClipboardRegister.h	class	ssg::ClipboardCommandSet
 core/ssg/ClipboardRegister.h	class	ssg::ClipboardDeltaCodec
 core/ssg/ClipboardRegister.h	class	ssg::ClipboardRegister
@@ -3648,22 +3630,14 @@ core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::surface	std::optional<ViewSurface
 core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::value	std::optional<ValueSource>
 core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::width	std::optional<int>
 core/ssg/ViewAction.h	alias	ssg::ViewAction
-core/ssg/ViewAction.h	enum	ssg::PointerEdgeDirection
-core/ssg/ViewAction.h	enum	ssg::ViewActionKind
-core/ssg/ViewAction.h	enum	ssg::ViewScrollTarget
+core/ssg/ViewAction.h	enum	ssg::DocumentPointerEdge
+core/ssg/ViewAction.h	enum	ssg::ScrollTarget
 core/ssg/ViewAction.h	enum	ssg::VisualSelectionDirection
-core/ssg/ViewAction.h	enumerator	ssg::PointerEdgeDirection::After
-core/ssg/ViewAction.h	enumerator	ssg::PointerEdgeDirection::Before
-core/ssg/ViewAction.h	enumerator	ssg::ViewActionKind::CenterSelection
-core/ssg/ViewAction.h	enumerator	ssg::ViewActionKind::ContinuePointerEdge
-core/ssg/ViewAction.h	enumerator	ssg::ViewActionKind::MoveVisualSelection
-core/ssg/ViewAction.h	enumerator	ssg::ViewActionKind::ResolvePaneFocus
-core/ssg/ViewAction.h	enumerator	ssg::ViewActionKind::RevealSelection
-core/ssg/ViewAction.h	enumerator	ssg::ViewActionKind::ScrollFraction
-core/ssg/ViewAction.h	enumerator	ssg::ViewActionKind::ScrollLines
-core/ssg/ViewAction.h	enumerator	ssg::ViewActionKind::ScrollPages
-core/ssg/ViewAction.h	enumerator	ssg::ViewScrollTarget::Document
-core/ssg/ViewAction.h	enumerator	ssg::ViewScrollTarget::Tree
+core/ssg/ViewAction.h	enumerator	ssg::DocumentPointerEdge::After
+core/ssg/ViewAction.h	enumerator	ssg::DocumentPointerEdge::Before
+core/ssg/ViewAction.h	enumerator	ssg::DocumentPointerEdge::None
+core/ssg/ViewAction.h	enumerator	ssg::ScrollTarget::Document
+core/ssg/ViewAction.h	enumerator	ssg::ScrollTarget::Tree
 core/ssg/ViewAction.h	enumerator	ssg::VisualSelectionDirection::LineDown
 core/ssg/ViewAction.h	enumerator	ssg::VisualSelectionDirection::LineUp
 core/ssg/ViewAction.h	enumerator	ssg::VisualSelectionDirection::PageDown
@@ -3673,27 +3647,27 @@ core/ssg/ViewAction.h	func	ssg::operator==	bool (const ContinuePointerEdge &, co
 core/ssg/ViewAction.h	func	ssg::operator==	bool (const MoveVisualSelection &, const MoveVisualSelection &)
 core/ssg/ViewAction.h	func	ssg::operator==	bool (const ResolvePaneFocus &, const ResolvePaneFocus &)
 core/ssg/ViewAction.h	func	ssg::operator==	bool (const RevealSelection &, const RevealSelection &)
-core/ssg/ViewAction.h	func	ssg::operator==	bool (const ViewScrollFraction &, const ViewScrollFraction &)
-core/ssg/ViewAction.h	func	ssg::operator==	bool (const ViewScrollLines &, const ViewScrollLines &)
-core/ssg/ViewAction.h	func	ssg::operator==	bool (const ViewScrollPages &, const ViewScrollPages &)
+core/ssg/ViewAction.h	func	ssg::operator==	bool (const ScrollFraction &, const ScrollFraction &)
+core/ssg/ViewAction.h	func	ssg::operator==	bool (const ScrollLines &, const ScrollLines &)
+core/ssg/ViewAction.h	func	ssg::operator==	bool (const ScrollPages &, const ScrollPages &)
 core/ssg/ViewAction.h	struct	ssg::CenterSelection
 core/ssg/ViewAction.h	struct	ssg::ContinuePointerEdge
 core/ssg/ViewAction.h	struct	ssg::MoveVisualSelection
 core/ssg/ViewAction.h	struct	ssg::ResolvePaneFocus
 core/ssg/ViewAction.h	struct	ssg::RevealSelection
-core/ssg/ViewAction.h	struct	ssg::ViewScrollFraction
-core/ssg/ViewAction.h	struct	ssg::ViewScrollLines
-core/ssg/ViewAction.h	struct	ssg::ViewScrollPages
-core/ssg/ViewAction.h	var	ssg::ContinuePointerEdge::direction	PointerEdgeDirection
+core/ssg/ViewAction.h	struct	ssg::ScrollFraction
+core/ssg/ViewAction.h	struct	ssg::ScrollLines
+core/ssg/ViewAction.h	struct	ssg::ScrollPages
+core/ssg/ViewAction.h	var	ssg::ContinuePointerEdge::direction	DocumentPointerEdge
 core/ssg/ViewAction.h	var	ssg::MoveVisualSelection::direction	VisualSelectionDirection
 core/ssg/ViewAction.h	var	ssg::MoveVisualSelection::extend	bool
 core/ssg/ViewAction.h	var	ssg::ResolvePaneFocus::direction	PaneDirection
-core/ssg/ViewAction.h	var	ssg::ViewScrollFraction::denominator	std::uint32_t
-core/ssg/ViewAction.h	var	ssg::ViewScrollFraction::numerator	std::uint32_t
-core/ssg/ViewAction.h	var	ssg::ViewScrollFraction::target	ViewScrollTarget
-core/ssg/ViewAction.h	var	ssg::ViewScrollLines::rows	std::int64_t
-core/ssg/ViewAction.h	var	ssg::ViewScrollLines::target	ViewScrollTarget
-core/ssg/ViewAction.h	var	ssg::ViewScrollPages::pages	std::int64_t
+core/ssg/ViewAction.h	var	ssg::ScrollFraction::denominator	std::uint32_t
+core/ssg/ViewAction.h	var	ssg::ScrollFraction::numerator	std::uint32_t
+core/ssg/ViewAction.h	var	ssg::ScrollFraction::target	ScrollTarget
+core/ssg/ViewAction.h	var	ssg::ScrollLines::rows	std::int64_t
+core/ssg/ViewAction.h	var	ssg::ScrollLines::target	ScrollTarget
+core/ssg/ViewAction.h	var	ssg::ScrollPages::pages	std::int64_t
 core/ssg/ViewActionResult.h	enum	ssg::ViewActionStatus
 core/ssg/ViewActionResult.h	enumerator	ssg::ViewActionStatus::Applied
 core/ssg/ViewActionResult.h	enumerator	ssg::ViewActionStatus::Rejected
@@ -3702,7 +3676,7 @@ core/ssg/ViewActionResult.h	func	ssg::ViewActionResult::accepted	bool () const n
 core/ssg/ViewActionResult.h	struct	ssg::ViewActionResult
 core/ssg/ViewActionResult.h	var	ssg::ViewActionResult::message	std::string
 core/ssg/ViewActionResult.h	var	ssg::ViewActionResult::status	ViewActionStatus
-core/ssg/ViewActionResult.h	var	ssg::ViewActionResult::transition	std::optional<ClientInput>
+core/ssg/ViewActionResult.h	var	ssg::ViewActionResult::transition	std::optional<ViewTransitionInput>
 core/ssg/ViewSurfaceBacking.h	enum	ssg::SnapshotSection
 core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::Document
 core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::ExternalModification

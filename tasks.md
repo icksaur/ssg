@@ -21,7 +21,7 @@ move editor behavior or product policy into a client to make core smaller.
 | Completed | Collapse publication delta surface | Removed the unused `UiFrame` delta/replay protocol while retaining `UiFrameVersion` for stale UI-activation validation. Complete immutable `UiFrame` publications remain the client contract. |
 | Completed | Remove custom chrome composition | Deleted `ssg.chrome`, its decoder and composition plumbing. Core now publishes fixed semantic header/footer `UiNode` subtrees, while terminal row packing and glyph projection remain in `ssg_grid` behind neutral UI-region APIs. |
 | Completed | Separate UI-VM from grid helpers | `Widget.h` now contains only medium-neutral widget vocabulary. Terminal row fitting, cell measurement, glyph/text composition, input-line layout, and `WidgetStack` live in `ssg_grid::WidgetLayout`; `ViewSurface` remains the required opaque data-channel identity. |
-| Later | Unify input and view-action vocabularies | Consolidate overlapping scroll, selection, pane-focus, and client-owned input forms into a smaller medium-neutral typed action model. Preserve authoritative editor handling and local client responsiveness. |
+| Completed | Unify input and view-action vocabularies | Shared scroll actions now serve direct input and view requests; geometry-resolved follow, pane, selection, and pointer results return through one narrow basis-stamped transition variant. Local palette directives remain core-routed and client-applied. |
 
 ## Execution rule
 

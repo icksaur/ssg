@@ -122,6 +122,12 @@ features. `PreparedTransition` validates the complete proposal before it is
 installed, preventing a client from observing partially applied prompt, panel,
 picker, focus, or tree state.
 
+Commands that require native layout return a medium-neutral `ViewAction`.
+The client resolves it against the matching presentation basis and may apply a
+presentation-only change locally or return a basis-stamped `ViewTransitionInput`.
+That transition vocabulary is intentionally narrow: only resolved follow,
+pane-focus, selection, and active pointer-gesture results can return to core.
+
 `MutationPatch` carries library-owned visibility mutations. A client may make an
 optimistic local presentation change against a `PresenceBasis`; the next
 authoritative `UiPresenceSection` settles that prediction. This supports
@@ -163,7 +169,8 @@ device interaction.
 Routine client responsiveness remains local: a native widget can retain content,
 filter the published palette candidate universe, and predict published presence
 changes without a round trip. Commands and authoritative state changes still
-return through the typed library ingress.
+return through the typed library ingress. Core keymap and focus routing explicitly
+identify the small set of palette edits a client performs locally.
 
 ## Directory map
 

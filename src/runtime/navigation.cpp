@@ -443,8 +443,8 @@ void registerTreeCommands(CommandCatalog& builder,
                         [](CommandContext&,
                            ScrollLinesArguments const& arguments) {
                             return CommandHandlerResult::requireView(
-                                ViewScrollLines{ViewScrollTarget::Tree,
-                                                arguments.rows});
+                                ScrollLines{ScrollTarget::Tree,
+                                            arguments.rows});
                         }));
     builder.add(CommandSpecBuilder{"tree.scroll_to_fraction"}
                     .owner("tree-providers")
@@ -455,8 +455,8 @@ void registerTreeCommands(CommandCatalog& builder,
                         [](CommandContext&,
                            ScrollFractionArguments const& arguments) {
                             return CommandHandlerResult::requireView(
-                                ViewScrollFraction{
-                                    ViewScrollTarget::Tree,
+                                ScrollFraction{
+                                    ScrollTarget::Tree,
                                     arguments.numerator,
                                     arguments.denominator});
                         }));

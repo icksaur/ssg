@@ -1580,16 +1580,16 @@ int main(int argc, char** argv) {
                             client,
                             ssg::ScrollLinesInput{
                                 {runtime.revision()},
-                                ssg::SemanticScrollTarget::Document,
-                                decoded.scroll}));
+                                {ssg::ScrollTarget::Document,
+                                 decoded.scroll}}));
                         break;
                     case ssg::app::WheelTarget::tree:
                         (void)handleInputResult(runtime.input(
                             client,
                             ssg::ScrollLinesInput{
                                 {runtime.revision()},
-                                ssg::SemanticScrollTarget::Tree,
-                                decoded.scroll}));
+                                {ssg::ScrollTarget::Tree,
+                                 decoded.scroll}}));
                         break;
                     case ssg::app::WheelTarget::palette:
                         scrollPalette(decoded.scroll);
