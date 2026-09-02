@@ -11,7 +11,7 @@ namespace {
 
 struct RuntimeFixture {
     RuntimeFixture() {
-        root = std::filesystem::current_path() / "tui_runtime";
+        root = testRuntimePath("tui_runtime");
         std::filesystem::remove_all(root);
         std::filesystem::create_directories(root / "workspace");
         auto created = ssg::EditorSession::create(

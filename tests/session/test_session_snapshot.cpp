@@ -49,7 +49,7 @@ static_assert(std::constructible_from<
               ssg::GridBasis, ssg::PaletteReport>);
 
 std::filesystem::path uniqueRoot(std::string_view name) {
-    auto root = std::filesystem::current_path() / ("runtime_snapshot_" + std::string{name});
+    auto root = testRuntimePath("runtime_snapshot_" + std::string{name});
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");

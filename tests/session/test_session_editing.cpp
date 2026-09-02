@@ -689,7 +689,7 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
 
 TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     // A document taller than the pane, one single-cell line per row.
-    auto root = std::filesystem::current_path() / "runtime_editing_reveal";
+    auto root = testRuntimePath("runtime_editing_reveal");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -776,7 +776,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
 }
 
 TEST(undoAndPasteRevealTheCaret) {
-    auto root = std::filesystem::current_path() / "runtime_editing_reveal2";
+    auto root = testRuntimePath("runtime_editing_reveal2");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -822,7 +822,7 @@ TEST(undoAndPasteRevealTheCaret) {
 }
 
 TEST(multiCursorPastePreservesAllCursors) {
-    auto root = std::filesystem::current_path() / "runtime_editing_mcpaste";
+    auto root = testRuntimePath("runtime_editing_mcpaste");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -857,7 +857,7 @@ TEST(multiCursorPastePreservesAllCursors) {
 }
 
 TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
-    auto root = std::filesystem::current_path() / "runtime_editing_mctype";
+    auto root = testRuntimePath("runtime_editing_mctype");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -930,7 +930,7 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
 }
 
 TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
-    auto root = std::filesystem::current_path() / "runtime_editing_replacereveal";
+    auto root = testRuntimePath("runtime_editing_replacereveal");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -965,7 +965,7 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
 }
 
 TEST(promptCommandsFulfillFindReplaceByActiveKind) {
-    auto root = std::filesystem::current_path() / "runtime_editing_prompt_fulfillment";
+    auto root = testRuntimePath("runtime_editing_prompt_fulfillment");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");

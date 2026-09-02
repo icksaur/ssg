@@ -15,7 +15,32 @@
 //   TEST(my_test) { ASSERT_EQ(a, b); }
 //   int main() { RUN(my_test); ... }
 
+#include <filesystem>
 #include <iostream>
+#include <source_location>
+#include <stdexcept>
+#include <utility>
+
+inline std::filesystem::path testRuntimePath(
+    std::filesystem::path const& name,
+    std::source_location location = std::source_location::current()) {
+    if (name.empty() || name.is_absolute() || name.has_parent_path()) {
+        throw std::runtime_error{"test runtime name must be one relative component"};
+    }
+    auto source = std::filesystem::absolute(location.file_name()).parent_path();
+    while (!source.empty()) {
+        if (source.filename() == "tests" &&
+            std::filesystem::exists(source.parent_path() / "CMakeLists.txt")) {
+            auto root = source.parent_path() / ".test-runtime";
+            std::filesystem::create_directories(root);
+            return root / name;
+        }
+        auto parent = source.parent_path();
+        if (parent == source) break;
+        source = std::move(parent);
+    }
+    throw std::runtime_error{"test source is outside the repository test tree"};
+}
 
 inline int passed = 0;
 inline int failed = 0;

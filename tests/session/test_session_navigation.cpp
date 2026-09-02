@@ -98,7 +98,7 @@ std::vector<std::string_view> allKeyboardRoutes(
 }
 
 std::filesystem::path uniqueRoot() {
-    auto root = std::filesystem::current_path() / "runtime_navigation";
+    auto root = testRuntimePath("runtime_navigation");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -2757,7 +2757,7 @@ TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
 }
 
 TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
-    auto root = std::filesystem::current_path() / "runtime_nav_treescroll";
+    auto root = testRuntimePath("runtime_nav_treescroll");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -2849,7 +2849,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
 }
 
 TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
-    auto root = std::filesystem::current_path() / "runtime_nav_treeselect";
+    auto root = testRuntimePath("runtime_nav_treeselect");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -2905,7 +2905,7 @@ TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
 }
 
 TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
-    auto root = std::filesystem::current_path() / "runtime_nav_treefocus";
+    auto root = testRuntimePath("runtime_nav_treefocus");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace" / "dir");
     std::filesystem::create_directories(root / "scratch");
@@ -2966,7 +2966,7 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
 }
 
 TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
-    auto root = std::filesystem::current_path() / "runtime_nav_treescroll_wheel";
+    auto root = testRuntimePath("runtime_nav_treescroll_wheel");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -3101,7 +3101,7 @@ namespace {
 // past the pane width scrolls horizontally so the caret stays visible; returning
 // to the line start resets the offset. A short (fitting) line never scrolls.
 TEST(wordWrapOffRevealsCaretHorizontally) {
-    auto root = std::filesystem::current_path() / "runtime_hscroll";
+    auto root = testRuntimePath("runtime_hscroll");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -3157,7 +3157,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
 // row and scrolls horizontally.  Locks both directions of the wrap gate so the
 // M12 projection can never silently disable wrapping.
 TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
-    auto root = std::filesystem::current_path() / "runtime_wrap_gate";
+    auto root = testRuntimePath("runtime_wrap_gate");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -3222,7 +3222,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
 // compute_cell_run counter: two identical wrap snapshots segment the same
 // (small, non-document-scaled) amount; an edit adds a full-document re-shape.
 TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
-    auto root = std::filesystem::current_path() / "runtime_wrapcache";
+    auto root = testRuntimePath("runtime_wrapcache");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -3281,7 +3281,7 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
 // keying only on the session revision (geometry) would wrongly treat a
 // prompt-open as a non-routing change.
 TEST(dispatchEffectsSeparateRoutingFromGeometryAcrossRoutes) {
-    auto root = std::filesystem::current_path() / "runtime_effects";
+    auto root = testRuntimePath("runtime_effects");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -3342,7 +3342,7 @@ TEST(dispatchEffectsSeparateRoutingFromGeometryAcrossRoutes) {
 // length — not the whole document. Proven by the compute_cell_run counter: the
 // per-move segmentation count is identical for a 50-line and a 20000-line file.
 TEST(wordWrapOffNavigationIsViewportBounded) {
-    auto root = std::filesystem::current_path() / "runtime_navbound";
+    auto root = testRuntimePath("runtime_navbound");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");

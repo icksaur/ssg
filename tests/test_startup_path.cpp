@@ -21,7 +21,7 @@ namespace {
 namespace fs = std::filesystem;
 
 fs::path makeWorkspace(std::string const& name) {
-    auto root = fs::current_path() / ("startup_path_" + name);
+    auto root = testRuntimePath("startup_path_" + name);
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
     fs::create_directories(root / "scratch");

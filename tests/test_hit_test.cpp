@@ -22,7 +22,7 @@ namespace {
 namespace fs = std::filesystem;
 
 fs::path uniqueRoot() {
-    auto root = fs::current_path() / "hit_test_root";
+    auto root = testRuntimePath("hit_test_root");
     fs::remove_all(root);
     fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");

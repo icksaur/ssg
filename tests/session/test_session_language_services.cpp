@@ -10,7 +10,7 @@
 namespace {
 
 std::filesystem::path uniqueRoot() {
-    auto root = std::filesystem::current_path() / "runtime_language";
+    auto root = testRuntimePath("runtime_language");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");

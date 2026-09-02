@@ -24,8 +24,8 @@ struct Fixture {
 };
 
 Fixture makeFixture(std::string_view text) {
-    auto root = fs::current_path() /
-                ("runtime_renderer_diff_" + std::to_string(std::rand()));
+    auto root =
+        testRuntimePath("runtime_renderer_diff_" + std::to_string(std::rand()));
     fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     std::ofstream{root / "overlay.cpp"} << text;

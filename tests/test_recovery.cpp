@@ -29,12 +29,11 @@ class TemporaryDirectory {
 public:
     TemporaryDirectory() {
         static std::atomic_uint64_t sequence{0};
-        path_ = std::filesystem::current_path() /
-                (".ssg-recovery-test-" +
-                 std::to_string(std::chrono::steady_clock::now()
-                                    .time_since_epoch()
-                                    .count()) +
-                 "-" + std::to_string(sequence++));
+        path_ = testRuntimePath(
+            ".ssg-recovery-test-" +
+            std::to_string(
+                std::chrono::steady_clock::now().time_since_epoch().count()) +
+            "-" + std::to_string(sequence++));
         std::filesystem::create_directories(path_);
     }
 

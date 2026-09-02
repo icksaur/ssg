@@ -20,8 +20,7 @@ struct SessionFixture {
 };
 
 SessionFixture sessionFixture(std::string_view name) {
-    auto root =
-        std::filesystem::current_path() / ("pane_topology_" + std::string{name});
+    auto root = testRuntimePath("pane_topology_" + std::string{name});
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     auto created = ssg::EditorSession::create(

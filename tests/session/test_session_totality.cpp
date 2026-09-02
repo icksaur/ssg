@@ -23,7 +23,7 @@ namespace {
 namespace fs = std::filesystem;
 
 fs::path makeRoot(const std::string& name) {
-    auto root = fs::current_path() / ("runtime_totality_" + name);
+    auto root = testRuntimePath("runtime_totality_" + name);
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
     fs::create_directories(root / "scratch");

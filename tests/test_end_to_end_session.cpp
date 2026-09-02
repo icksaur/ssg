@@ -48,7 +48,7 @@ CanonicalState canonical(Snapshot const& snapshot) {
 
 struct RuntimeFixture {
     explicit RuntimeFixture(std::string name) {
-        root = std::filesystem::current_path() / std::move(name);
+        root = testRuntimePath(name);
         std::filesystem::remove_all(root);
         std::filesystem::create_directories(root / "workspace");
         std::ofstream{root / "workspace" / "doc.txt"} << "alpha";

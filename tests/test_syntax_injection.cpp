@@ -57,10 +57,8 @@ private:
 
 std::filesystem::path uniqueRoot() {
     static std::atomic<int> counter{0};
-    auto root = std::filesystem::temp_directory_path() /
-                ("ssg-syntax-injection-" + std::to_string(++counter) + "-" +
-                 std::to_string(std::filesystem::hash_value(
-                     std::filesystem::current_path())));
+    auto root =
+        testRuntimePath("runtime_syntax_injection_" + std::to_string(++counter));
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     return root;

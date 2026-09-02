@@ -22,7 +22,7 @@
 namespace {
 
 std::filesystem::path uniqueRoot() {
-    auto root = std::filesystem::current_path() / "runtime_grid_parity";
+    auto root = testRuntimePath("runtime_grid_parity");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");

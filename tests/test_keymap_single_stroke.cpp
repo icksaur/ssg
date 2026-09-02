@@ -21,8 +21,8 @@ namespace {
 namespace fs = std::filesystem;
 
 fs::path uniqueRoot() {
-    auto root = fs::current_path() /
-                ("keymap_single_stroke_root_" + std::to_string(::getpid()));
+    auto root =
+        testRuntimePath("keymap_single_stroke_root_" + std::to_string(::getpid()));
     fs::remove_all(root);
     fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");

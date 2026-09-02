@@ -16,7 +16,7 @@
 namespace {
 
 std::filesystem::path uniqueRoot(std::string_view name) {
-    auto root = std::filesystem::current_path() / ("runtime_help_" + std::string{name});
+    auto root = testRuntimePath("runtime_help_" + std::string{name});
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");

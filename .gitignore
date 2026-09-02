@@ -6,10 +6,8 @@ build_*/
 # Ignored wholesale so a future subdirectory cannot leak into git status.
 .ssg/
 
-# Runtime test artifacts (created under CWD when test binaries run outside build/)
-/runtime_*/
-/hit_test_root/
-/script_host_root_*/
+# Runtime test artifacts.
+/.test-runtime/
 # Stale help exports a test used to drop in the repo root (kept ignored so such
 # an artifact can never be accidentally committed even if one reappears).
 /help.md
