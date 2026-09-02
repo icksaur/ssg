@@ -32,7 +32,6 @@
 #define SSG_LINE_ENDING_ENUMERATORS(X) X(Lf, 0) X(Crlf, 1) X(Cr, 2) X(Mixed, 3)
 #define SSG_TAB_KIND_ENUMERATORS(X) \
     X(Document, 0) X(LiveDiff, 1) X(ReadOnlyOutput, 2) X(SearchResults, 3) X(TreeView, 4)
-#define SSG_TAB_RECOVERY_BADGE_ENUMERATORS(X) X(None, 0) X(Pending, 1) X(Durable, 2) X(Failed, 3)
 #define SSG_JOURNAL_DOCUMENT_KEY_KIND_ENUMERATORS(X) X(Saved, 0) X(Untitled, 1)
 #define SSG_DIFF_LINE_KIND_ENUMERATORS(X) X(Added, 0) X(Removed, 1) X(Modified, 2)
 #define SSG_DIFF_FILE_STATUS_ENUMERATORS(X) X(Added, 0) X(Modified, 1) X(Deleted, 2) X(Renamed, 3)
@@ -42,8 +41,6 @@
 #define SSG_TREE_PROVIDER_KIND_ENUMERATORS(X) X(Filesystem, 0) X(Git, 1) X(Symbols, 2)
 #define SSG_TREE_NODE_KIND_ENUMERATORS(X) \
     X(Root, 0) X(Directory, 1) X(File, 2) X(Symlink, 3) X(GitEntry, 4) X(Symbol, 5)
-#define SSG_GIT_TREE_STATUS_ENUMERATORS(X) \
-    X(Added, 0) X(Modified, 1) X(Deleted, 2) X(Renamed, 3) X(Untracked, 4)
 #define SSG_SYNTAX_SCOPE_ENUMERATORS(X) \
     X(PlainText, 0) X(Comment, 1) X(Keyword, 2) X(String, 3) X(Number, 4) \
     X(Type, 5) X(Function, 6) X(Variable, 7) X(OperatorToken, 8) X(Punctuation, 9) X(Invalid, 10)

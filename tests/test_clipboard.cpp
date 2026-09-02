@@ -157,21 +157,6 @@ TEST(everyCopyPublishesAStrictlyNewerSystemWriteId) {
     ASSERT_EQ(published->text, std::string{"b"});
 }
 
-TEST(viewDeltaReportsRegisterAndRequestChanges) {
-    ssg::ClipboardRegister clipboard;
-    const auto empty = clipboard.viewState();
-    ASSERT_FALSE(ssg::ClipboardDeltaCodec{}.derive(empty, empty).changed);
-
-    ssg::Document document{"a"};
-    const auto copyResult =
-        clipboard.copy(document.snapshot(), selections("a", {{0, 1}}));
-    ASSERT_TRUE(copyResult.accepted());
-    const auto copiedState = clipboard.viewState();
-    const auto delta = ssg::ClipboardDeltaCodec{}.derive(empty, copiedState);
-    ASSERT_TRUE(delta.changed);
-    ASSERT_EQ(*delta.replacement, copiedState);
-}
-
 }  // namespace
 
 SSG_TEST_SUITE(test_clipboard) {
@@ -181,6 +166,5 @@ SSG_TEST_SUITE(test_clipboard) {
     RUN(lineCutMergesDuplicateRangesAndIsUndoable);
     RUN(nonEditModesAreAtomic);
     RUN(everyCopyPublishesAStrictlyNewerSystemWriteId);
-    RUN(viewDeltaReportsRegisterAndRequestChanges);
     return failed == 0 ? 0 : 1;
 }

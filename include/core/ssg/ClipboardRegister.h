@@ -70,19 +70,6 @@ struct ClipboardViewState {
     bool operator==(const ClipboardViewState&) const = default;
 };
 
-struct ClipboardDelta {
-    bool changed;
-    std::optional<ClipboardViewState> replacement;
-
-    bool operator==(const ClipboardDelta&) const = default;
-};
-
-class ClipboardDeltaCodec {
-public:
-    [[nodiscard]] ClipboardDelta derive(const ClipboardViewState& before,
-                                        const ClipboardViewState& after);
-};
-
 // CONTRACT
 // ClipboardRegister: the register is authoritative for every editor operation;
 //   the system clipboard is best-effort export only. There is no system

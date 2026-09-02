@@ -3,6 +3,7 @@
 #include <ssg/detail/generated/semantic_wire_manifest.h>
 
 #include "ssg/RecoveryManager.h"
+#include "ssg/ScratchStore.h"
 #include "ssg/Workspace.h"
 
 #include <chrono>
@@ -35,13 +36,7 @@ enum class TabKind : std::uint8_t {
 #undef SSG_ENUMERATOR
 };
 
-enum class TabRecoveryBadge : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_TAB_RECOVERY_BADGE_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
-};
 #undef SSG_TAB_KIND_ENUMERATORS
-#undef SSG_TAB_RECOVERY_BADGE_ENUMERATORS
 
 struct TabState {
     TabId id;
@@ -52,7 +47,7 @@ struct TabState {
     std::string label;
     DocumentMode mode = DocumentMode::Edit;
     bool dirty = false;
-    TabRecoveryBadge recovery = TabRecoveryBadge::None;
+    std::optional<ScratchDurability> recovery;
 
     friend bool operator==(const TabState&, const TabState&) = default;
 };
@@ -153,7 +148,7 @@ public:
     [[nodiscard]] TabResult openDocument(
         FileDocumentId document, JournalDocumentKey identity,
         std::string_view label, DocumentMode mode, bool dirty,
-        TabRecoveryBadge recovery = TabRecoveryBadge::None);
+        std::optional<ScratchDurability> recovery = std::nullopt);
     [[nodiscard]] TabResult openContent(TabKind kind,
                                          std::string_view contentIdentity,
                                          std::string_view label,
@@ -165,7 +160,7 @@ public:
     [[nodiscard]] TabResult updateDocument(
         FileDocumentId document, JournalDocumentKey identity,
         std::string_view label, DocumentMode mode, bool dirty,
-        TabRecoveryBadge recovery);
+        std::optional<ScratchDurability> recovery);
 
     // Removes every tab for a document that NO LONGER EXISTS, without running
     // the close lifecycle. Distinct from close(): closing flushes a document

@@ -117,9 +117,9 @@ const ssg::TreeProviderView* findProvider(const ssg::TreeViewState& tree,
     return nullptr;
 }
 
-std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
+std::map<std::string, ssg::DiffFileStatus> gitProviderStatuses(
     const ssg::TreeProviderView& provider) {
-    std::map<std::string, ssg::GitTreeStatus> statuses;
+    std::map<std::string, ssg::DiffFileStatus> statuses;
     for (const auto& node : provider.nodes) {
         ASSERT_TRUE(node.node.workspacePath.has_value());
         ASSERT_TRUE(node.node.gitStatus.has_value());
@@ -128,6 +128,15 @@ std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
         }
         statuses.emplace(*node.node.workspacePath,
                          node.node.gitStatus->status);
+    }
+    return statuses;
+}
+
+std::map<std::string, ssg::DiffFileStatus> diffStatuses(
+    const ssg::DiffViewState& diff) {
+    std::map<std::string, ssg::DiffFileStatus> statuses;
+    for (const auto& file : diff.files) {
+        statuses.emplace(file.path.generic_string(), file.status);
     }
     return statuses;
 }
@@ -536,6 +545,12 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
                                   .previousPath = std::filesystem::path{"old-name.txt"},
                                   .baselineContent = std::string{"same\n"},
                                   .workingContent = std::string{"same\n"}},
+                                 {.id = ssg::DiffFileId{"deleted-rename.txt"},
+                                  .path = "deleted-rename.txt",
+                                  .previousPath =
+                                      std::filesystem::path{"old-deleted.txt"},
+                                  .baselineContent = std::string{"gone\n"},
+                                  .workingContent = std::nullopt},
                              }})
                     .accepted());
 
@@ -548,11 +563,15 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
     if (!firstGit) return;
 
     const auto firstStatuses = gitProviderStatuses(*firstGit);
-    ASSERT_EQ(firstStatuses.size(), std::size_t{4});
-    ASSERT_EQ(firstStatuses.at("added.txt"), ssg::GitTreeStatus::Added);
-    ASSERT_EQ(firstStatuses.at("modified.txt"), ssg::GitTreeStatus::Modified);
-    ASSERT_EQ(firstStatuses.at("deleted.txt"), ssg::GitTreeStatus::Deleted);
-    ASSERT_EQ(firstStatuses.at("renamed.txt"), ssg::GitTreeStatus::Renamed);
+    ASSERT_EQ(firstStatuses.size(), std::size_t{5});
+    ASSERT_EQ(firstStatuses.at("added.txt"), ssg::DiffFileStatus::Added);
+    ASSERT_EQ(firstStatuses.at("modified.txt"), ssg::DiffFileStatus::Modified);
+    ASSERT_EQ(firstStatuses.at("deleted.txt"), ssg::DiffFileStatus::Deleted);
+    ASSERT_EQ(firstStatuses.at("renamed.txt"), ssg::DiffFileStatus::Renamed);
+    ASSERT_EQ(firstStatuses.at("deleted-rename.txt"),
+              ssg::DiffFileStatus::Deleted);
+    ASSERT_EQ(firstStatuses,
+              diffStatuses(first->semantic().sections().diff));
 
     std::uint64_t firstRevision = first->semantic().sections().tree.revision.value();
 
@@ -584,8 +603,8 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
 
     const auto secondStatuses = gitProviderStatuses(*secondGit);
     ASSERT_EQ(secondStatuses.size(), std::size_t{2});
-    ASSERT_EQ(secondStatuses.at("modified.txt"), ssg::GitTreeStatus::Modified);
-    ASSERT_EQ(secondStatuses.at("renamed.txt"), ssg::GitTreeStatus::Renamed);
+    ASSERT_EQ(secondStatuses.at("modified.txt"), ssg::DiffFileStatus::Modified);
+    ASSERT_EQ(secondStatuses.at("renamed.txt"), ssg::DiffFileStatus::Renamed);
     ASSERT_TRUE(second->semantic().sections().tree.revision.value() > firstRevision);
 }
 

@@ -34,22 +34,11 @@ struct GitDiffConfig {
     std::size_t maxBytesPerFile = 4 * 1024 * 1024;
 };
 
-struct GitDiffScanFile {
-    DiffFileId id;
-    std::filesystem::path path;
-    std::optional<std::filesystem::path> previousPath;
-    std::optional<std::string> baselineContent;
-    std::optional<std::string> workingContent;
-
-    friend bool operator==(const GitDiffScanFile&, const GitDiffScanFile&) =
-        default;
-};
-
 struct GitDiffScan {
     Revision revision{0};
     std::string baselineIdentity;
     std::optional<std::string> currentBranch;
-    std::vector<GitDiffScanFile> files;
+    std::vector<GitDiffFile> files;
     bool complete = true;
 
     friend bool operator==(const GitDiffScan&, const GitDiffScan&) = default;
@@ -59,7 +48,7 @@ struct GitWorkingTreeScan {
     Revision revision{0};
     std::string baselineIdentity;
     std::vector<std::filesystem::path> requestedPaths;
-    std::vector<GitDiffScanFile> files;
+    std::vector<GitDiffFile> files;
     bool complete = true;
 
     friend bool operator==(const GitWorkingTreeScan&,
@@ -149,7 +138,7 @@ private:
     GitDiffConfig config_{};
     Revision nextRevision_{1};
     Revision publishedRevision_{1};
-    std::map<DiffFileId, GitDiffScanFile> currentFiles_;
+    std::map<DiffFileId, GitDiffFile> currentFiles_;
     std::string baselineIdentity_;
     std::optional<std::string> currentBranch_;
     std::optional<std::string> publishedBranch_;

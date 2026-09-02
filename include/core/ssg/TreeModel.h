@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ssg/DiffModel.h>
 #include <ssg/detail/generated/semantic_wire_manifest.h>
 
 #include <ssg/Theme.h>
@@ -72,21 +73,14 @@ enum class TreeNodeKind {
 #undef SSG_ENUMERATOR
 };
 #undef SSG_TREE_NODE_KIND_ENUMERATORS
-enum class GitTreeStatus {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_GIT_TREE_STATUS_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
-};
-#undef SSG_GIT_TREE_STATUS_ENUMERATORS
-
 struct GitTreeAffordance {
-    GitTreeStatus status = GitTreeStatus::Modified;
+    DiffFileStatus status = DiffFileStatus::Modified;
     std::string shortLabel;
     SemanticRole role = SemanticRole::DiffModified;
     bool operator==(const GitTreeAffordance&) const = default;
 };
 
-[[nodiscard]] GitTreeAffordance gitTreeAffordance(GitTreeStatus status);
+[[nodiscard]] GitTreeAffordance gitTreeAffordance(DiffFileStatus status);
 
 struct GitTreeRecord;
 struct SymbolTreeRecord;
@@ -140,7 +134,7 @@ private:
 struct GitTreeRecord {
     std::string workspacePath;
     std::string label;
-    GitTreeStatus status = GitTreeStatus::Modified;
+    DiffFileStatus status = DiffFileStatus::Modified;
     std::vector<TreeNodeCommand> commands;
 };
 
@@ -310,48 +304,6 @@ private:
     std::vector<ProviderState> providers_;
     std::optional<TreeProviderId> activeProviderId_;
     std::optional<TreeNodeId> selected_;
-};
-
-struct TreeProviderDelta {
-    TreeProviderId providerId;
-    TreeProviderKind kind;
-    bool removeProvider = false;
-    std::size_t start = 0;
-    std::size_t eraseCount = 0;
-    std::vector<TreeNodeView> insert;
-    std::optional<TreeNodeId> selected;
-    bool operator==(const TreeProviderDelta&) const = default;
-};
-
-struct TreeDelta {
-    TreeRevision baseRevision{0};
-    TreeRevision revision{0};
-    bool snapshotRequired = false;
-    std::vector<TreeProviderDelta> providers;
-    // The complete target ordering. The active provider is first, followed by
-    // inactive providers; node splices alone cannot express that permutation.
-    std::vector<TreeProviderId> providerOrder;
-    std::optional<TreeProviderBinding> activeBinding;
-
-    std::size_t operationCount() const noexcept;
-    bool operator==(const TreeDelta&) const = default;
-};
-
-enum class TreeReplayError { None, StaleRevision, SnapshotRequired, MalformedDelta };
-
-struct TreeReplayResult {
-    std::optional<TreeViewState> state;
-    TreeReplayError error = TreeReplayError::None;
-    bool accepted() const noexcept { return state.has_value(); }
-};
-
-class TreeDeltaCodec {
-public:
-    [[nodiscard]] TreeDelta derive(const TreeViewState& base,
-                                   const TreeViewState& target,
-                                   std::size_t maximumOperations) const;
-    [[nodiscard]] TreeReplayResult replay(const TreeViewState& base,
-                                          const TreeDelta& delta) const;
 };
 
 } // namespace ssg

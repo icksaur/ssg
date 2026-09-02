@@ -205,14 +205,6 @@ struct DocumentHistory::Impl {
     }
 };
 
-HistoryDelta HistoryDeltaCodec::derive(const HistoryViewState& before,
-                                  const HistoryViewState& after) {
-    if (before == after) {
-        return {false, std::nullopt};
-    }
-    return {true, after};
-}
-
 DocumentHistory::DocumentHistory(HistoryConfig config)
     : impl_(std::make_unique<Impl>(config)) {}
 

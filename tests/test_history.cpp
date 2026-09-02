@@ -301,21 +301,17 @@ TEST(undoRedoAdvanceRevisionAndKeepDirty) {
     ASSERT_TRUE(document.dirty());
 }
 
-TEST(viewStateAndDeltaTrackHistoryAvailability) {
+TEST(viewStateTracksHistoryAvailability) {
     ssg::Document document;
     ssg::DocumentHistory history{{4096, 750}};
     const auto empty = history.viewState();
     ASSERT_FALSE(empty.canUndo);
     ASSERT_FALSE(empty.canRedo);
-    ASSERT_FALSE(ssg::HistoryDeltaCodec{}.derive(empty, empty).changed);
 
     auto selections = caret(0);
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 0, "a");
     const auto edited = history.viewState();
-    const auto delta = ssg::HistoryDeltaCodec{}.derive(empty, edited);
-    ASSERT_TRUE(delta.changed);
-    ASSERT_EQ(*delta.replacement, edited);
     ASSERT_TRUE(edited.canUndo);
 
     selections = *history.undo(document).selections;
@@ -336,6 +332,6 @@ SSG_TEST_SUITE(test_history) {
     RUN(byteBudgetEvictsOldestAndRejectsOversizeUnits);
     RUN(rejectionAndStaleDocumentAreFailureAtomic);
     RUN(undoRedoAdvanceRevisionAndKeepDirty);
-    RUN(viewStateAndDeltaTrackHistoryAvailability);
+    RUN(viewStateTracksHistoryAvailability);
     return failed == 0 ? 0 : 1;
 }

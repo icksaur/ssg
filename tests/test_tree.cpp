@@ -100,9 +100,9 @@ TEST(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys) {
     const auto git = TreeProviderSnapshot::fromGit(
         TreeProviderId{"git"}, TreeRevision{7},
         {{.workspacePath = "z.cpp", .label = "renamed label",
-          .status = GitTreeStatus::Modified},
+          .status = DiffFileStatus::Modified},
          {.workspacePath = "a.cpp", .label = "a.cpp",
-          .status = GitTreeStatus::Added}});
+          .status = DiffFileStatus::Added}});
     ASSERT_EQ(nodeIds(git),
               (std::vector<std::string>{"git:a.cpp", "git:z.cpp"}));
     ASSERT_EQ(git.nodes()[1].id, TreeNodeId{"git:z.cpp"});
@@ -241,71 +241,6 @@ TEST(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes) {
     if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:A/one"});
 }
 
-TEST(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase) {
-    TreeModel model;
-    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{1},
-        {{.stableKey = "A", .label = "A"},
-         {.stableKey = "A/one", .parentKey = "A", .label = "one"}}));
-    model.toggleExpanded(TreeProviderId{"symbols"}, TreeNodeId{"symbols:A"});
-    const auto base = model.viewState();
-
-    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{2},
-        {{.stableKey = "A", .label = "A"},
-         {.stableKey = "A/one", .parentKey = "A", .label = "renamed one"},
-         {.stableKey = "A/two", .parentKey = "A", .label = "two"}}));
-    const auto target = model.viewState();
-    const auto delta = TreeDeltaCodec{}.derive(base, target, 8);
-    ASSERT_FALSE(delta.snapshotRequired);
-    ASSERT_TRUE(delta.operationCount() <= std::size_t{8});
-
-    const auto replay = TreeDeltaCodec{}.replay(base, delta);
-    ASSERT_TRUE(replay.accepted());
-    ASSERT_EQ(*replay.state, target);
-
-    auto stale = base;
-    stale.revision = TreeRevision{base.revision.value() + 1};
-    const auto staleReplay = TreeDeltaCodec{}.replay(stale, delta);
-    ASSERT_FALSE(staleReplay.accepted());
-    ASSERT_EQ(staleReplay.error, TreeReplayError::StaleRevision);
-}
-
-TEST(treeDeltaPublishesActiveBindingAndPreservesCompatibilityOrder) {
-    TemporaryDirectory directory;
-    TreeModel model;
-    model.replaceProvider(TreeProviderSnapshot::fromFilesystem(
-        TreeProviderId{"filesystem"}, directory.path(), TreeRevision{1}));
-    model.replaceProvider(TreeProviderSnapshot::fromGit(
-        TreeProviderId{"git"}, TreeRevision{2},
-        {{.workspacePath = "changed.txt", .label = "changed.txt",
-          .status = GitTreeStatus::Modified}}));
-    const auto base = model.viewState();
-    ASSERT_TRUE((base.activeBinding ==
-                 TreeProviderBinding{TreeProviderId{"filesystem"},
-                                     TreeProviderKind::Filesystem}));
-    ASSERT_EQ(base.providers.front().providerId, TreeProviderId{"filesystem"});
-
-    ASSERT_TRUE(model.activateProvider(TreeProviderId{"git"}));
-    const auto target = model.viewState();
-    ASSERT_TRUE((target.activeBinding ==
-                 TreeProviderBinding{TreeProviderId{"git"},
-                                     TreeProviderKind::Git}));
-    ASSERT_EQ(target.providers.front().providerId, TreeProviderId{"git"});
-
-    const auto delta = TreeDeltaCodec{}.derive(base, target, 8);
-    ASSERT_FALSE(delta.snapshotRequired);
-    const auto replay = TreeDeltaCodec{}.replay(base, delta);
-    ASSERT_TRUE(replay.accepted());
-    ASSERT_EQ(*replay.state, target);
-
-    auto legacyDelta = delta;
-    legacyDelta.activeBinding.reset();
-    const auto legacyReplay = TreeDeltaCodec{}.replay(base, legacyDelta);
-    ASSERT_TRUE(legacyReplay.accepted());
-    ASSERT_EQ(*legacyReplay.state, target);
-}
-
 TEST(treeViewStateRejectsMissingMismatchedAndDuplicateActiveBindings) {
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
@@ -327,33 +262,6 @@ TEST(treeViewStateRejectsMissingMismatchedAndDuplicateActiveBindings) {
     duplicate.providers.push_back(duplicate.providers.front());
     ASSERT_FALSE(isValidTreeViewState(duplicate));
 
-    auto malformedDelta = TreeDeltaCodec{}.derive(valid, valid, 8);
-    malformedDelta.activeBinding =
-        TreeProviderBinding{TreeProviderId{"missing"}, TreeProviderKind::Symbols};
-    const auto replay = TreeDeltaCodec{}.replay(valid, malformedDelta);
-    ASSERT_FALSE(replay.accepted());
-    ASSERT_EQ(replay.error, TreeReplayError::MalformedDelta);
-}
-
-TEST(overBudgetDeltaRequiresSnapshotWithoutPartialOperations) {
-    TreeModel model;
-    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{1},
-        {{.stableKey = "A", .label = "A"}}));
-    const auto base = model.viewState();
-    model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{2},
-        {{.stableKey = "A", .label = "A"},
-         {.stableKey = "B", .label = "B"},
-         {.stableKey = "C", .label = "C"}}));
-    const auto target = model.viewState();
-
-    const auto delta = TreeDeltaCodec{}.derive(base, target, 1);
-    ASSERT_TRUE(delta.snapshotRequired);
-    ASSERT_TRUE(delta.providers.empty());
-    ASSERT_EQ(delta.operationCount(), std::size_t{0});
-    const auto replay = TreeDeltaCodec{}.replay(base, delta);
-    ASSERT_EQ(replay.error, TreeReplayError::SnapshotRequired);
 }
 
 } // namespace
@@ -504,10 +412,7 @@ SSG_TEST_SUITE(test_tree) {
     RUN(nodeCommandInvocationIsProviderDataOnly);
     RUN(selectionNavigatesExpandsAndReportsSelectedNode);
     RUN(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes);
-    RUN(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase);
-    RUN(treeDeltaPublishesActiveBindingAndPreservesCompatibilityOrder);
     RUN(treeViewStateRejectsMissingMismatchedAndDuplicateActiveBindings);
-    RUN(overBudgetDeltaRequiresSnapshotWithoutPartialOperations);
     RUN(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem);
     RUN(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation);
     return failed == 0 ? 0 : 1;

@@ -34,7 +34,7 @@ std::set<DiffFileId> currentIds(const DiffModel& model) {
     return ids;
 }
 
-GitDiffScan buildPublishedScan(const std::map<DiffFileId, GitDiffScanFile>& files,
+GitDiffScan buildPublishedScan(const std::map<DiffFileId, GitDiffFile>& files,
                                const std::string& baselineIdentity,
                                const std::optional<std::string>& currentBranch,
                                Revision publishedRevision) {
@@ -90,15 +90,7 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
         seen.insert(file.id);
         stagedFiles.insert_or_assign(file.id, file);
         auto result = stagedDiff.updateGitFile(
-            GitDiffFile{
-                .id = file.id,
-                .path = file.path,
-                .previousPath = file.previousPath,
-                .baselineContent = file.baselineContent,
-                .workingContent = file.workingContent,
-                .baselineIdentity = scan.baselineIdentity,
-            },
-            nextMutationRevision());
+            file, scan.baselineIdentity, nextMutationRevision());
         if (!result.accepted()) {
             if (result.error == DiffError::WorkLimitExceeded) {
                 auto removed =
@@ -200,15 +192,7 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
         present.insert(file.id);
         stagedFiles.insert_or_assign(file.id, file);
         auto result = stagedDiff.updateGitFile(
-            GitDiffFile{
-                .id = file.id,
-                .path = file.path,
-                .previousPath = file.previousPath,
-                .baselineContent = file.baselineContent,
-                .workingContent = file.workingContent,
-                .baselineIdentity = scan.baselineIdentity,
-            },
-            nextMutationRevision());
+            file, scan.baselineIdentity, nextMutationRevision());
         if (!result.accepted()) {
             if (result.error == DiffError::WorkLimitExceeded) {
                 auto removed =

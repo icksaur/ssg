@@ -40,24 +40,24 @@ std::string run(const fs::path& root, std::string_view command) {
     return output;
 }
 
-ssg::GitTreeStatus gitStatusFromPorcelainLine(std::string_view line) {
+ssg::DiffFileStatus gitStatusFromPorcelainLine(std::string_view line) {
     if (line.size() >= 2 && line[0] == '?' && line[1] == '?') {
-        return ssg::GitTreeStatus::Added;
+        return ssg::DiffFileStatus::Added;
     }
     if (line.size() >= 2 && (line[0] == 'D' || line[1] == 'D')) {
-        return ssg::GitTreeStatus::Deleted;
+        return ssg::DiffFileStatus::Deleted;
     }
     if (line.size() >= 2 && (line[0] == 'A' || line[1] == 'A')) {
-        return ssg::GitTreeStatus::Added;
+        return ssg::DiffFileStatus::Added;
     }
     if (line.size() >= 2 && (line[0] == 'R' || line[1] == 'R')) {
-        return ssg::GitTreeStatus::Renamed;
+        return ssg::DiffFileStatus::Renamed;
     }
-    return ssg::GitTreeStatus::Modified;
+    return ssg::DiffFileStatus::Modified;
 }
 
-std::map<std::string, ssg::GitTreeStatus> porcelainStatuses(const fs::path& root) {
-    std::map<std::string, ssg::GitTreeStatus> statuses;
+std::map<std::string, ssg::DiffFileStatus> porcelainStatuses(const fs::path& root) {
+    std::map<std::string, ssg::DiffFileStatus> statuses;
     std::istringstream input{run(root, "status --porcelain=v1")};
     for (std::string line; std::getline(input, line);) {
         if (line.size() < 4) {
@@ -73,7 +73,7 @@ std::map<std::string, ssg::GitTreeStatus> porcelainStatuses(const fs::path& root
     return statuses;
 }
 
-std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
+std::map<std::string, ssg::DiffFileStatus> gitProviderStatuses(
     ssg::EditorSession& runtime) {
     (void)runtime.pump();
     auto snapshot = runtime.snapshot(ssg::ClientId{1});
@@ -81,7 +81,7 @@ std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
     if (!snapshot) {
         return {};
     }
-    std::map<std::string, ssg::GitTreeStatus> statuses;
+    std::map<std::string, ssg::DiffFileStatus> statuses;
     for (const auto& provider : snapshot->sections().tree.providers) {
         if (provider.kind != ssg::TreeProviderKind::Git) {
             continue;
@@ -142,7 +142,7 @@ bool waitForDiffCount(ssg::EditorSession& runtime, std::size_t expectedCount,
 }
 
 bool waitForGitTreeStatuses(ssg::EditorSession& runtime,
-                            const std::map<std::string, ssg::GitTreeStatus>& expected,
+                            const std::map<std::string, ssg::DiffFileStatus>& expected,
                             std::chrono::milliseconds timeout) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {

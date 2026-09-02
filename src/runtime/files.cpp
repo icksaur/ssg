@@ -13,15 +13,6 @@ std::optional<std::string> stringPayload(std::any const& payload) {
     return std::nullopt;
 }
 
-TabRecoveryBadge badgeFor(ScratchDurabilityState state) {
-    switch (state.kind) {
-        case ScratchDurability::Durable: return TabRecoveryBadge::Durable;
-        case ScratchDurability::Pending: return TabRecoveryBadge::Pending;
-        case ScratchDurability::Failed: return TabRecoveryBadge::Failed;
-    }
-    return TabRecoveryBadge::None;
-}
-
 // The live-diff rule's classification, read from the command's own descriptor
 // rather than re-derived here, so the rule and the catalog cannot disagree.
 bool mutatesTheActiveDocumentsFile(FileCommand command) {
@@ -342,7 +333,7 @@ CommandHandlerResult EditorSession::Impl::updateTabsFor(FileDocumentId document)
     if (opened == nullptr) return failure("workspace document does not exist");
     auto result = tabs.updateDocument(document, state->key, state->displayLabel,
                                        opened->mode(), state->dirty,
-                                       badgeFor(scratch.durabilityState()));
+                                       scratch.durabilityState().kind);
     return result.accepted() ? success() : failure(tabMessage(result));
 }
 
@@ -379,7 +370,7 @@ CommandHandlerResult EditorSession::Impl::activateDocument(FileDocumentId docume
     state = workspace.state(document);
     auto result = tabs.openDocument(document, state->key, state->displayLabel,
                                      opened->mode(), state->dirty,
-                                     badgeFor(scratch.durabilityState()));
+                                     scratch.durabilityState().kind);
     if (!result.accepted()) return failure(tabMessage(result));
     // Closed only after the open succeeded, so a failed open never costs the
     // buffer the user still has.  TabManager::close takes the tab's ID; the

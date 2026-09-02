@@ -76,42 +76,6 @@ struct ExternalModificationViewState {
                            const ExternalModificationViewState&) = default;
 };
 
-struct ExternalModificationDelta {
-    Revision baseRevision{0};
-    Revision revision{0};
-    std::string message;
-    std::vector<ExternalDocumentView> upserted;
-    std::vector<DiffFileId> removed;
-    // The target's selection (a selection-only move is a real delta: files
-    // unchanged, selected moved, revision advanced).
-    std::optional<DiffFileId> selected;
-
-    friend bool operator==(const ExternalModificationDelta&,
-                           const ExternalModificationDelta&) = default;
-};
-
-enum class ExternalDeltaError : std::uint8_t {
-    None,
-    StaleRevision,
-    MalformedDelta,
-};
-
-struct ExternalDeltaReplayResult {
-    std::optional<ExternalModificationViewState> state;
-    ExternalDeltaError error = ExternalDeltaError::None;
-    [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
-};
-
-class ExternalModificationDeltaCodec {
-public:
-    [[nodiscard]] ExternalModificationDelta derive(
-        const ExternalModificationViewState& base,
-        const ExternalModificationViewState& target);
-    [[nodiscard]] ExternalDeltaReplayResult replay(
-        const ExternalModificationViewState& base,
-        const ExternalModificationDelta& delta);
-};
-
 struct ExternalEventInput {
     WatchEvent event;
     DiffFileId id;

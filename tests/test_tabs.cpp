@@ -84,7 +84,7 @@ TEST(duplicateDocumentIdentityActivatesExistingTab) {
     (void)openSaved(tabs, 2, "src/b.cpp");
     const auto duplicate = tabs.openDocument(
         ssg::FileDocumentId{99}, saved("src/a.cpp"), "other",
-        ssg::DocumentMode::ReadOnly, true, ssg::TabRecoveryBadge::Failed);
+        ssg::DocumentMode::ReadOnly, true, ssg::ScratchDurability::Failed);
 
     ASSERT_TRUE(duplicate.accepted());
     ASSERT_EQ(duplicate.tab, std::optional{first});
@@ -285,12 +285,13 @@ TEST(badgesUpdateExactly) {
     ASSERT_TRUE(tabs.updateDocument(
                         ssg::FileDocumentId{7}, saved("a"), "a",
                         ssg::DocumentMode::ReadOnly, true,
-                        ssg::TabRecoveryBadge::Pending)
+                        ssg::ScratchDurability::Pending)
                     .accepted());
     const auto target = tabs.viewState();
     ASSERT_EQ(target.tabs[0].mode, ssg::DocumentMode::ReadOnly);
     ASSERT_TRUE(target.tabs[0].dirty);
-    ASSERT_EQ(target.tabs[0].recovery, ssg::TabRecoveryBadge::Pending);
+    ASSERT_EQ(target.tabs[0].recovery,
+              std::optional{ssg::ScratchDurability::Pending});
 }
 
 TEST(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab) {

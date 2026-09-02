@@ -66,7 +66,7 @@ bool loadBlob(git_repository* repository, const git_oid* oid,
 bool collectDiffFiles(git_repository* repository, git_diff* diff,
                       const std::filesystem::path& root,
                       const GitDiffConfig& config,
-                      std::vector<GitDiffScanFile>& files) {
+                      std::vector<GitDiffFile>& files) {
     git_diff_find_options findOptions = GIT_DIFF_FIND_OPTIONS_INIT;
     findOptions.flags = GIT_DIFF_FIND_RENAMES;
     (void)git_diff_find_similar(diff, &findOptions);
@@ -89,7 +89,7 @@ bool collectDiffFiles(git_repository* repository, git_diff* diff,
         if (delta->status == GIT_DELTA_RENAMED) {
             previousPath = std::filesystem::path{delta->old_file.path};
         }
-        GitDiffScanFile file{.id = DiffFileId{currentPath.generic_string()},
+        GitDiffFile file{.id = DiffFileId{currentPath.generic_string()},
                              .path = currentPath,
                              .previousPath = previousPath};
         if (!loadBlob(repository, &delta->old_file.id, config.maxBytesPerFile,

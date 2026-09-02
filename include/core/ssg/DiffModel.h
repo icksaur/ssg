@@ -144,7 +144,9 @@ struct GitDiffFile {
     std::optional<std::filesystem::path> previousPath;
     std::optional<std::string> baselineContent;
     std::optional<std::string> workingContent;
-    std::string baselineIdentity;
+
+    [[nodiscard]] DiffFileStatus status() const noexcept;
+    friend bool operator==(const GitDiffFile&, const GitDiffFile&) = default;
 };
 
 struct SeededDiffFile {
@@ -168,8 +170,8 @@ class DiffModel {
 public:
     explicit DiffModel(DiffConfig config = {});
 
-    [[nodiscard]] DiffMutationResult updateGitFile(GitDiffFile file,
-                                                      Revision revision);
+    [[nodiscard]] DiffMutationResult updateGitFile(
+        GitDiffFile file, std::string baselineIdentity, Revision revision);
     [[nodiscard]] DiffMutationResult removeFile(const DiffFileId& id,
                                                 Revision revision);
     [[nodiscard]] DiffMutationResult seedNonGit(
@@ -217,30 +219,5 @@ struct DiffOpenTarget {
 };
 
 [[nodiscard]] DiffOpenTarget diffOpenFile(const DiffFileView& file);
-
-struct DiffDelta {
-    Revision baseRevision{0};
-    Revision revision{0};
-    std::vector<DiffFileView> upserted;
-    std::vector<DiffFileId> removed;
-
-    friend bool operator==(const DiffDelta&, const DiffDelta&) = default;
-};
-
-enum class DiffReplayError { None, StaleRevision, MalformedDelta };
-
-struct DiffReplayResult {
-    std::optional<DiffViewState> state;
-    DiffReplayError error = DiffReplayError::None;
-    [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
-};
-
-class DiffDeltaCodec {
-public:
-    [[nodiscard]] DiffDelta derive(const DiffViewState& base,
-                                   const DiffViewState& target);
-    [[nodiscard]] DiffReplayResult replay(const DiffViewState& base,
-                                          const DiffDelta& delta);
-};
 
 } // namespace ssg

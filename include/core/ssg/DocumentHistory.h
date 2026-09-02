@@ -52,19 +52,6 @@ struct HistoryViewState {
     bool operator==(const HistoryViewState&) const noexcept = default;
 };
 
-struct HistoryDelta {
-    bool changed;
-    std::optional<HistoryViewState> replacement;
-
-    bool operator==(const HistoryDelta&) const noexcept = default;
-};
-
-class HistoryDeltaCodec {
-public:
-    [[nodiscard]] HistoryDelta derive(const HistoryViewState& before,
-                                      const HistoryViewState& after);
-};
-
 class DocumentHistory {
 public:
     explicit DocumentHistory(HistoryConfig config = HistoryConfig::defaults());

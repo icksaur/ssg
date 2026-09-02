@@ -239,7 +239,7 @@ TabResult TabManager::openDocument(FileDocumentId document,
                                     std::string_view label,
                                     DocumentMode mode,
                                     bool dirty,
-                                    TabRecoveryBadge recovery) {
+                                    std::optional<ScratchDurability> recovery) {
     if (document.value() == 0) {
         return failure(TabError::InvalidArgument,
                        "document id must be non-zero");
@@ -302,7 +302,7 @@ TabResult TabManager::openContent(TabKind kind,
     const auto id = TabId{impl_->nextId++};
     impl_->view.tabs.push_back(
         {id, kind, {}, {}, std::string{contentIdentity}, std::string{label},
-         mode, false, TabRecoveryBadge::None});
+         mode, false, std::nullopt});
     impl_->view.active = id;
     return {TabError::None, {}, id, {}};
 }
@@ -312,7 +312,7 @@ TabResult TabManager::updateDocument(FileDocumentId document,
                                       std::string_view label,
                                       DocumentMode mode,
                                       bool dirty,
-                                      TabRecoveryBadge recovery) {
+                                      std::optional<ScratchDurability> recovery) {
     const auto found = std::find_if(
         impl_->view.tabs.begin(), impl_->view.tabs.end(),
         [document](const TabState& tab) {

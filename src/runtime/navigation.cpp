@@ -221,7 +221,7 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
                 });
             if (file == diffView.files.end()) {
                 if (selected->gitStatus &&
-                    selected->gitStatus->status == GitTreeStatus::Deleted) {
+                    selected->gitStatus->status == DiffFileStatus::Deleted) {
                     return failure("detailed view is unavailable for deleted file");
                 }
             } else {

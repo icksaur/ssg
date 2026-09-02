@@ -89,17 +89,4 @@ struct PromptStatusViewState {
                            const PromptStatusViewState&) = default;
 };
 
-struct PromptStatusDelta {
-    bool changed = false;
-    std::optional<PromptStatusViewState> replacement;
-    friend bool operator==(const PromptStatusDelta&,
-                           const PromptStatusDelta&) = default;
-};
-
-class PromptStatusDeltaCodec {
-public:
-    [[nodiscard]] PromptStatusDelta derive(const PromptStatusViewState& before,
-                                           const PromptStatusViewState& after);
-};
-
 } // namespace ssg

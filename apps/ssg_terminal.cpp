@@ -268,15 +268,15 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
     auto color = [&](ssg::SrgbColor c, char kind) -> std::string {
         auto const resolved = ssg::ColorResolver{depth}.resolve(c);
         switch (resolved.encoding) {
-            case ssg::ResolvedColor::Encoding::Truecolor:
+            case ssg::ColorDepth::Truecolor:
                 return "\x1b[" + std::string{kind} + "8;2;" +
                        std::to_string(resolved.rgb.red) + ";" +
                        std::to_string(resolved.rgb.green) + ";" +
                        std::to_string(resolved.rgb.blue) + "m";
-            case ssg::ResolvedColor::Encoding::Indexed256:
+            case ssg::ColorDepth::Indexed256:
                 return "\x1b[" + std::string{kind} + "8;5;" +
                        std::to_string(resolved.index) + "m";
-            case ssg::ResolvedColor::Encoding::Ansi16: {
+            case ssg::ColorDepth::Ansi16: {
                 int const base = kind == '3' ? 30 : 40;
                 int const bright = kind == '3' ? 90 : 100;
                 int const code = resolved.index < 8

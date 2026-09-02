@@ -286,14 +286,6 @@ struct ClipboardRegister::Impl {
     }
 };
 
-ClipboardDelta ClipboardDeltaCodec::derive(const ClipboardViewState& before,
-                                      const ClipboardViewState& after) {
-    if (before == after) {
-        return {false, std::nullopt};
-    }
-    return {true, after};
-}
-
 ClipboardRegister::ClipboardRegister(int tabWidth)
     : impl_(std::make_unique<Impl>(tabWidth)) {
     if (tabWidth < 1 || tabWidth > 16) {

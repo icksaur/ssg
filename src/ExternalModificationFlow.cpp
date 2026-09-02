@@ -70,63 +70,6 @@ ExternalActionAffordance externalActionAffordance(ExternalAction action) {
     throw std::invalid_argument("unknown external action");
 }
 
-ExternalModificationDelta ExternalModificationDeltaCodec::derive(
-    const ExternalModificationViewState& base,
-    const ExternalModificationViewState& target) {
-    ExternalModificationDelta delta{base.revision, target.revision,
-                                    target.message};
-    for (const auto& targetFile : target.files) {
-        const auto baseFile = findFile(base.files, targetFile.id);
-        if (baseFile == base.files.end() || *baseFile != targetFile) {
-            delta.upserted.push_back(targetFile);
-        }
-    }
-    for (const auto& baseFile : base.files) {
-        if (findFile(target.files, baseFile.id) == target.files.end()) {
-            delta.removed.push_back(baseFile.id);
-        }
-    }
-    delta.selected = target.selected;
-    return delta;
-}
-
-ExternalDeltaReplayResult ExternalModificationDeltaCodec::replay(
-    const ExternalModificationViewState& base,
-    const ExternalModificationDelta& delta) {
-    if (base.revision != delta.baseRevision) {
-        return {std::nullopt, ExternalDeltaError::StaleRevision};
-    }
-    if (delta.revision < delta.baseRevision) {
-        return {std::nullopt, ExternalDeltaError::MalformedDelta};
-    }
-
-    auto files = base.files;
-    for (const auto& removed : delta.removed) {
-        const auto found = findFile(files, removed);
-        if (found == files.end()) {
-            return {std::nullopt, ExternalDeltaError::MalformedDelta};
-        }
-        files.erase(found);
-    }
-    for (const auto& upserted : delta.upserted) {
-        const auto found = findFile(files, upserted.id);
-        if (found == files.end()) {
-            files.push_back(upserted);
-        } else {
-            *found = upserted;
-        }
-    }
-    // A present selection must name a surviving file, or the replayed state would
-    // carry a dangling selection -- fail loud rather than replay it.
-    if (delta.selected.has_value() &&
-        findFile(files, *delta.selected) == files.end()) {
-        return {std::nullopt, ExternalDeltaError::MalformedDelta};
-    }
-    return {ExternalModificationViewState{delta.revision, delta.message,
-                                          std::move(files), delta.selected},
-            ExternalDeltaError::None};
-}
-
 class ExternalModificationFlow::Impl {
 public:
     struct PendingChange {

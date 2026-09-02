@@ -56,7 +56,7 @@ public:
     }
 };
 
-using OracleState = std::map<std::string, GitDiffScanFile>;
+using OracleState = std::map<std::string, GitDiffFile>;
 
 OracleState applyFullOracle(const GitDiffScan& scan) {
     OracleState state;

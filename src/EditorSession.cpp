@@ -55,22 +55,15 @@ bool setNonBlocking(int descriptor) {
     return ::fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
-GitTreeStatus gitTreeStatusForScanFile(const GitDiffScanFile& file) {
-    if (file.previousPath) return GitTreeStatus::Renamed;
-    if (!file.workingContent) return GitTreeStatus::Deleted;
-    if (!file.baselineContent) return GitTreeStatus::Added;
-    return GitTreeStatus::Modified;
-}
-
 std::vector<GitTreeRecord> gitTreeRecordsFromScan(
-    const std::vector<GitDiffScanFile>& files) {
+    const std::vector<GitDiffFile>& files) {
     std::vector<GitTreeRecord> records;
     records.reserve(files.size());
     for (const auto& file : files) {
         records.push_back(
             {.workspacePath = file.path.generic_string(),
              .label = file.path.generic_string(),
-             .status = gitTreeStatusForScanFile(file),
+             .status = file.status(),
              .commands = {}});
     }
     return records;
@@ -2830,9 +2823,8 @@ DiffIngressResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
              .path = file.path,
              .previousPath = file.previousPath,
              .baselineContent = std::move(file.baselineContent),
-             .workingContent = std::move(file.workingContent),
-             .baselineIdentity = scan.baselineIdentity},
-            revision);
+             .workingContent = std::move(file.workingContent)},
+            scan.baselineIdentity, revision);
         if (!applied.accepted()) {
             if (applied.error != DiffError::WorkLimitExceeded) {
                 return {DiffIngressError::DiffRejected};

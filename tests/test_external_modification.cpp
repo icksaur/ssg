@@ -276,23 +276,6 @@ TEST(diffRejectionDoesNotSuppressDirtyBufferSafetyStatus) {
     ASSERT_EQ(flow.viewState().files.size(), 1U);
 }
 
-TEST(viewDeltaReplaysAsTargetState) {
-    Fixture fixture;
-    std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    const auto base = fixture.flow.viewState();
-    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), ssg::Revision{2}, open).accepted());
-    const auto target = fixture.flow.viewState();
-
-    const auto delta = ssg::ExternalModificationDeltaCodec{}.derive(base, target);
-    const auto replayed = ssg::ExternalModificationDeltaCodec{}.replay(base, delta);
-
-    ASSERT_TRUE(replayed.accepted());
-    ASSERT_EQ(*replayed.state, target);
-    const auto stale = ssg::ExternalModificationDeltaCodec{}.replay(target, delta);
-    ASSERT_FALSE(stale.accepted());
-    ASSERT_EQ(stale.error, ssg::ExternalDeltaError::StaleRevision);
-}
-
 TEST(aFailedWorkspaceCommitLeavesThePendingActionRaised) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
@@ -472,41 +455,6 @@ TEST(theExternalModSelectionFollowsTheListAndSurvivesResolves) {
     ASSERT_FALSE(flow.viewState().selected.has_value());
 }
 
-TEST(aSelectionOnlyExternalDeltaReplaysToTheMovedSelection) {
-    ssg::ExternalDocumentView fa{ssg::DiffFileId{"a"}, "a.txt",
-                                 ssg::ExternalDocumentStatus::ExternallyModified,
-                                 "x", "M",
-                                 {ssg::externalActionAffordance(
-                                     ssg::ExternalAction::Reload)}};
-    ssg::ExternalDocumentView fb{ssg::DiffFileId{"b"}, "b.txt",
-                                 ssg::ExternalDocumentStatus::ExternallyModified,
-                                 "y", "M",
-                                 {ssg::externalActionAffordance(
-                                     ssg::ExternalAction::Reload)}};
-    ssg::ExternalModificationViewState base{ssg::Revision{5}, "two files",
-                                            {fa, fb},
-                                            ssg::DiffFileId{"a"}};
-    ssg::ExternalModificationViewState target{ssg::Revision{6}, "two files",
-                                              {fa, fb},
-                                              ssg::DiffFileId{"b"}};
-    ssg::ExternalModificationDeltaCodec codec;
-    const auto delta = codec.derive(base, target);
-    // A selection-only move: files unchanged, the selected id moved.
-    ASSERT_TRUE(delta.upserted.empty());
-    ASSERT_TRUE(delta.removed.empty());
-    ASSERT_TRUE(delta.selected == ssg::DiffFileId{"b"});
-    const auto replayed = codec.replay(base, delta);
-    ASSERT_TRUE(replayed.accepted());
-    ASSERT_TRUE(replayed.state->selected == ssg::DiffFileId{"b"});
-    ASSERT_TRUE(replayed.state->files == base.files);
-
-    // A delta whose selection names no surviving file fails loud, never replaying a
-    // dangling selection.
-    auto dangling = delta;
-    dangling.selected = ssg::DiffFileId{"ghost"};
-    ASSERT_FALSE(codec.replay(base, dangling).accepted());
-}
-
 SSG_TEST_SUITE(test_external_modification) {
     RUN(externalActionAffordanceReturnsLabelAndCommandForEachAction);
     RUN(cleanExternalEditAutoReloadsWithoutRecoveryStatus);
@@ -520,11 +468,9 @@ SSG_TEST_SUITE(test_external_modification) {
     RUN(genuineExternalEditIsNotConsumedBySaveCorrelation);
     RUN(staleEventIsFailureAtomic);
     RUN(diffRejectionDoesNotSuppressDirtyBufferSafetyStatus);
-    RUN(viewDeltaReplaysAsTargetState);
     RUN(aFailedWorkspaceCommitLeavesThePendingActionRaised);
     RUN(aFailedKeepBufferCommitLeavesTheConflictRaised);
     RUN(keepBufferWithNoBaselineAdvancingCommitNeverClears);
     RUN(theExternalModSelectionFollowsTheListAndSurvivesResolves);
-    RUN(aSelectionOnlyExternalDeltaReplaysToTheMovedSelection);
     return failed == 0 ? 0 : 1;
 }

@@ -64,7 +64,7 @@ int refNearest(ssg::SrgbColor color, int first, int last) {
 TEST(truecolorIsIdentity) {
     ssg::SrgbColor const c{37, 200, 9};
     auto r = ssg::ColorResolver{ssg::ColorDepth::Truecolor}.resolve(c);
-    ASSERT_TRUE(r.encoding == ssg::ResolvedColor::Encoding::Truecolor);
+    ASSERT_TRUE(r.encoding == ssg::ColorDepth::Truecolor);
     ASSERT_TRUE(r.rgb == c);
 }
 
@@ -94,7 +94,7 @@ TEST(indexed256MatchesReferenceOverBroadSample) {
                 auto got = ssg::ColorResolver{ssg::ColorDepth::Indexed256}.resolve(c);
                 int const expected = refNearest(c, 16, 255);
                 ASSERT_TRUE(got.encoding ==
-                            ssg::ResolvedColor::Encoding::Indexed256);
+                            ssg::ColorDepth::Indexed256);
                 ASSERT_EQ(static_cast<int>(got.index), expected);
                 ASSERT_TRUE(got.rgb == refXterm(expected));
             }
@@ -112,7 +112,7 @@ TEST(ansi16MatchesReferenceOverBroadSample) {
                 auto got = ssg::ColorResolver{ssg::ColorDepth::Ansi16}.resolve(c);
                 int const expected = refNearest(c, 0, 15);
                 ASSERT_TRUE(got.encoding ==
-                            ssg::ResolvedColor::Encoding::Ansi16);
+                            ssg::ColorDepth::Ansi16);
                 ASSERT_EQ(static_cast<int>(got.index), expected);
             }
         }
@@ -154,4 +154,3 @@ SSG_TEST_SUITE(test_color) {
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
-

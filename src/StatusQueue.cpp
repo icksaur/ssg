@@ -156,12 +156,4 @@ std::vector<StatusActionNode> projectStatusActionNodes(
     return nodes;
 }
 
-PromptStatusDelta PromptStatusDeltaCodec::derive(
-    const PromptStatusViewState& before, const PromptStatusViewState& after) {
-    if (before == after) {
-        return {};
-    }
-    return {true, after};
-}
-
 } // namespace ssg

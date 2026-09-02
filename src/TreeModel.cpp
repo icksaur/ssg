@@ -177,28 +177,22 @@ std::vector<TreeNodeView> computeVisibleNodes(
     return result;
 }
 
-std::size_t providerDeltaCost(const TreeProviderDelta& delta) {
-    return 1 + delta.eraseCount + delta.insert.size();
-}
-
 // Per-thread, like Renderer's segmentation counter: tests run single-threaded,
 // and a per-thread counter needs no synchronization on the hot path.
 thread_local std::uint64_t g_visibleNodesRecomputes = 0;
 
 } // namespace
 
-GitTreeAffordance gitTreeAffordance(GitTreeStatus status) {
+GitTreeAffordance gitTreeAffordance(DiffFileStatus status) {
     switch (status) {
-    case GitTreeStatus::Added:
+    case DiffFileStatus::Added:
         return {status, "A", SemanticRole::DiffAdded};
-    case GitTreeStatus::Modified:
+    case DiffFileStatus::Modified:
         return {status, "M", SemanticRole::DiffModified};
-    case GitTreeStatus::Deleted:
+    case DiffFileStatus::Deleted:
         return {status, "D", SemanticRole::DiffRemoved};
-    case GitTreeStatus::Renamed:
+    case DiffFileStatus::Renamed:
         return {status, "R", SemanticRole::DiffModified};
-    case GitTreeStatus::Untracked:
-        return {status, "U", SemanticRole::DiffAdded};
     }
     throw std::invalid_argument("unknown git tree status");
 }
@@ -718,174 +712,6 @@ bool isValidTreeViewState(const TreeViewState& state) noexcept {
                        [&](const TreeProviderView& provider) {
                            return ids.insert(provider.providerId).second;
                        });
-}
-
-std::size_t TreeDelta::operationCount() const noexcept {
-    std::size_t result = 0;
-    for (const auto& provider : providers) {
-        result += providerDeltaCost(provider);
-    }
-    return result;
-}
-
-TreeDelta TreeDeltaCodec::derive(const TreeViewState& base,
-                                 const TreeViewState& target,
-                                 std::size_t maximumOperations) const {
-    TreeDelta result{base.revision, target.revision, false, {}, {},
-                     target.activeBinding};
-    result.providerOrder.reserve(target.providers.size());
-    for (const auto& provider : target.providers) {
-        result.providerOrder.push_back(provider.providerId);
-    }
-    for (const auto& before : base.providers) {
-        const auto targetProvider = std::find_if(
-            target.providers.begin(), target.providers.end(),
-            [&](const TreeProviderView& candidate) {
-                return candidate.providerId == before.providerId;
-            });
-        if (targetProvider == target.providers.end()) {
-            result.providers.push_back(TreeProviderDelta{
-                before.providerId, before.kind, true});
-        }
-    }
-
-    for (const auto& after : target.providers) {
-        const auto baseProvider = std::find_if(
-            base.providers.begin(), base.providers.end(),
-            [&](const TreeProviderView& candidate) {
-                return candidate.providerId == after.providerId;
-            });
-        if (baseProvider == base.providers.end()) {
-            result.providers.push_back(TreeProviderDelta{
-                after.providerId, after.kind, false, 0, 0, after.nodes,
-                after.selected});
-            continue;
-        }
-        const auto& before = *baseProvider;
-        if (before == after) continue;
-        std::size_t prefix = 0;
-        while (prefix < before.nodes.size() &&
-               prefix < after.nodes.size() &&
-               before.nodes[prefix] == after.nodes[prefix] &&
-               before.kind == after.kind) {
-            ++prefix;
-        }
-        std::size_t suffix = 0;
-        while (suffix < before.nodes.size() - prefix &&
-               suffix < after.nodes.size() - prefix &&
-               before.nodes[before.nodes.size() - 1 - suffix] ==
-                    after.nodes[after.nodes.size() - 1 - suffix] &&
-               before.kind == after.kind) {
-            ++suffix;
-        }
-        result.providers.push_back(TreeProviderDelta{
-            after.providerId,
-            after.kind,
-            false,
-            prefix,
-            before.nodes.size() - prefix - suffix,
-            std::vector<TreeNodeView>{
-                after.nodes.begin() + static_cast<std::ptrdiff_t>(prefix),
-                after.nodes.end() - static_cast<std::ptrdiff_t>(suffix)},
-            after.selected});
-    }
-
-    if (result.operationCount() > maximumOperations) {
-        result.snapshotRequired = true;
-        result.providers.clear();
-        result.providerOrder.clear();
-    }
-    return result;
-}
-
-TreeReplayResult TreeDeltaCodec::replay(const TreeViewState& base,
-                                        const TreeDelta& delta) const {
-    if (base.revision != delta.baseRevision) {
-        return {std::nullopt, TreeReplayError::StaleRevision};
-    }
-    if (delta.snapshotRequired) {
-        return {std::nullopt, TreeReplayError::SnapshotRequired};
-    }
-
-    auto state = base;
-    std::set<TreeProviderId> changed;
-    for (const auto& change : delta.providers) {
-        if (!changed.insert(change.providerId).second) {
-            return {std::nullopt, TreeReplayError::MalformedDelta};
-        }
-        auto provider = std::find_if(
-            state.providers.begin(), state.providers.end(),
-            [&](const TreeProviderView& candidate) {
-                return candidate.providerId == change.providerId;
-            });
-        if (change.removeProvider) {
-            if (provider == state.providers.end() ||
-                provider->providerId != change.providerId ||
-                change.start != 0 || change.eraseCount != 0 ||
-                !change.insert.empty()) {
-                return {std::nullopt, TreeReplayError::MalformedDelta};
-            }
-            state.providers.erase(provider);
-            continue;
-        }
-        if (provider == state.providers.end() ||
-            provider->providerId != change.providerId) {
-            if (change.start != 0 || change.eraseCount != 0) {
-                return {std::nullopt, TreeReplayError::MalformedDelta};
-            }
-            state.providers.insert(
-                provider, TreeProviderView{change.providerId, change.kind,
-                                           change.insert, change.selected});
-            continue;
-        }
-        if (change.start > provider->nodes.size() ||
-            change.eraseCount > provider->nodes.size() - change.start) {
-            return {std::nullopt, TreeReplayError::MalformedDelta};
-        }
-        provider->kind = change.kind;
-        auto first = provider->nodes.begin() +
-                     static_cast<std::ptrdiff_t>(change.start);
-        auto last = first +
-                    static_cast<std::ptrdiff_t>(change.eraseCount);
-        first = provider->nodes.erase(first, last);
-        provider->nodes.insert(first, change.insert.begin(), change.insert.end());
-        provider->selected = change.selected;
-    }
-    if (delta.providerOrder.size() != state.providers.size()) {
-        return {std::nullopt, TreeReplayError::MalformedDelta};
-    }
-    std::vector<TreeProviderView> ordered;
-    ordered.reserve(state.providers.size());
-    for (const auto& id : delta.providerOrder) {
-        const auto provider = std::find_if(
-            state.providers.begin(), state.providers.end(),
-            [&](const TreeProviderView& candidate) {
-                return candidate.providerId == id;
-            });
-        if (provider == state.providers.end() ||
-            std::any_of(ordered.begin(), ordered.end(),
-                        [&](const TreeProviderView& candidate) {
-                            return candidate.providerId == id;
-                        })) {
-            return {std::nullopt, TreeReplayError::MalformedDelta};
-        }
-        ordered.push_back(*provider);
-    }
-    state.providers = std::move(ordered);
-    if (delta.activeBinding) {
-        state.activeBinding = delta.activeBinding;
-    } else if (!state.providers.empty()) {
-        // Deltas encoded before active_binding was added used active-first order.
-        state.activeBinding = TreeProviderBinding{
-            state.providers.front().providerId, state.providers.front().kind};
-    } else {
-        state.activeBinding.reset();
-    }
-    state.revision = delta.revision;
-    if (!isValidTreeViewState(state)) {
-        return {std::nullopt, TreeReplayError::MalformedDelta};
-    }
-    return {std::move(state), TreeReplayError::None};
 }
 
 } // namespace ssg

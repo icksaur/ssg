@@ -542,23 +542,6 @@ auto findEntry(Entries& entries, const DiffFileId& id) {
                         [&](const auto& entry) { return entry.view.id == id; });
 }
 
-bool containsId(const std::vector<DiffFileId>& ids, const DiffFileId& id) {
-    return std::find(ids.begin(), ids.end(), id) != ids.end();
-}
-
-DiffFileStatus gitFileStatus(const GitDiffFile& file) {
-    if (!file.workingContent.has_value()) {
-        return DiffFileStatus::Deleted;
-    }
-    if (!file.baselineContent.has_value()) {
-        return DiffFileStatus::Added;
-    }
-    if (file.previousPath.has_value()) {
-        return DiffFileStatus::Renamed;
-    }
-    return DiffFileStatus::Modified;
-}
-
 DiffFileStatus nonGitFileStatus(NonGitDiffEventKind kind,
                                 bool deleted,
                                 const std::optional<std::filesystem::path>& previousPath) {
@@ -579,6 +562,13 @@ DiffFileStatus nonGitFileStatus(NonGitDiffEventKind kind,
 }
 
 } // namespace
+
+DiffFileStatus GitDiffFile::status() const noexcept {
+    if (!workingContent.has_value()) return DiffFileStatus::Deleted;
+    if (!baselineContent.has_value()) return DiffFileStatus::Added;
+    if (previousPath.has_value()) return DiffFileStatus::Renamed;
+    return DiffFileStatus::Modified;
+}
 
 DiffFileId::DiffFileId(std::string value) : value_(std::move(value)) {
     if (value_.empty()) {
@@ -622,8 +612,8 @@ DiffModel::DiffModel(DiffConfig config) : config_(config) {
     }
 }
 
-DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
-                                               Revision revision) {
+DiffMutationResult DiffModel::updateGitFile(
+    GitDiffFile file, std::string baselineIdentity, Revision revision) {
     if (revision <= revision_) {
         return {DiffError::StaleRevision};
     }
@@ -631,7 +621,7 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
         (file.previousPath && !validWorkspacePath(*file.previousPath))) {
         return {DiffError::InvalidPath};
     }
-    if (file.baselineIdentity.empty()) {
+    if (baselineIdentity.empty()) {
         return {DiffError::BaselineIdentityRequired};
     }
     const auto existing = findEntry(entries_, file.id);
@@ -639,7 +629,7 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
         return {DiffError::DuplicateFile};
     }
 
-    const auto status = gitFileStatus(file);
+    const auto status = file.status();
     const std::string baseline = file.baselineContent.value_or("");
     const std::string target = file.workingContent.value_or("");
     auto computed = computeDiff(baseline, target, config_);
@@ -652,7 +642,7 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
                       .previousPath = std::move(file.previousPath),
                       .deleted = !file.workingContent.has_value(),
                       .status = status,
-                      .baselineIdentity = std::move(file.baselineIdentity),
+                      .baselineIdentity = std::move(baselineIdentity),
                       .currentContent = target,
                       .hunks = std::move(computed->hunks),
                       .changedLines = std::move(computed->changes)};
@@ -841,69 +831,6 @@ DiffOpenTarget diffOpenFile(const DiffFileView& file) {
     return {file.id,
             file.deleted && file.previousPath ? *file.previousPath : file.path,
             file.deleted};
-}
-
-DiffDelta DiffDeltaCodec::derive(const DiffViewState& base,
-                            const DiffViewState& target) {
-    DiffDelta delta{.baseRevision = base.revision,
-                    .revision = target.revision};
-    for (const auto& targetFile : target.files) {
-        const auto baseFile = std::find_if(
-            base.files.begin(), base.files.end(),
-            [&](const auto& candidate) { return candidate.id == targetFile.id; });
-        if (baseFile == base.files.end() || *baseFile != targetFile) {
-            delta.upserted.push_back(targetFile);
-        }
-    }
-    for (const auto& baseFile : base.files) {
-        const auto targetFile = std::find_if(
-            target.files.begin(), target.files.end(),
-            [&](const auto& candidate) { return candidate.id == baseFile.id; });
-        if (targetFile == target.files.end()) {
-            delta.removed.push_back(baseFile.id);
-        }
-    }
-    return delta;
-}
-
-DiffReplayResult DiffDeltaCodec::replay(const DiffViewState& base,
-                                   const DiffDelta& delta) {
-    if (base.revision != delta.baseRevision) {
-        return {std::nullopt, DiffReplayError::StaleRevision};
-    }
-    DiffViewState result = base;
-    for (const auto& id : delta.removed) {
-        if (containsId(delta.removed, id) &&
-            std::count(delta.removed.begin(), delta.removed.end(), id) != 1) {
-            return {std::nullopt, DiffReplayError::MalformedDelta};
-        }
-        result.files.erase(
-            std::remove_if(result.files.begin(), result.files.end(),
-                           [&](const auto& file) { return file.id == id; }),
-            result.files.end());
-    }
-    std::vector<DiffFileId> upsertedIds;
-    for (const auto& file : delta.upserted) {
-        if (containsId(upsertedIds, file.id) ||
-            containsId(delta.removed, file.id)) {
-            return {std::nullopt, DiffReplayError::MalformedDelta};
-        }
-        upsertedIds.push_back(file.id);
-        const auto existing = std::find_if(
-            result.files.begin(), result.files.end(),
-            [&](const auto& candidate) { return candidate.id == file.id; });
-        if (existing == result.files.end()) {
-            result.files.push_back(file);
-        } else {
-            *existing = file;
-        }
-    }
-    std::sort(result.files.begin(), result.files.end(),
-              [](const auto& left, const auto& right) {
-                  return left.id < right.id;
-              });
-    result.revision = delta.revision;
-    return {std::move(result), DiffReplayError::None};
 }
 
 } // namespace ssg
