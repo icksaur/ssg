@@ -10,6 +10,9 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/CommandTransition.cpp
     ${SSG_SOURCE_DIR}/src/InteractionAuthority.cpp
 )
+target_sources(ssg_grid PRIVATE
+    ${SSG_SOURCE_DIR}/src/WidgetLayout.cpp
+)
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_widget
@@ -17,6 +20,12 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_widget PRIVATE ssg_core)
     add_test(NAME test_widget COMMAND test_widget)
+
+    add_executable(test_widget_layout
+        ${SSG_SOURCE_DIR}/tests/test_widget_layout.cpp
+    )
+    target_link_libraries(test_widget_layout PRIVATE ssg_grid)
+    add_test(NAME test_widget_layout COMMAND test_widget_layout)
 
     add_executable(test_ui_tree
         ${SSG_SOURCE_DIR}/tests/test_ui_tree.cpp

@@ -5,7 +5,7 @@
 #include <ssg/StatusQueue.h>
 #include <ssg/Theme.h>  // semanticRoleFromName
 #include <ssg/UiStateResolver.h>
-#include <ssg/Widget.h>
+#include <ssg/WidgetLayout.h>
 
 #include <optional>
 #include <ranges>

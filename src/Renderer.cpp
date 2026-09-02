@@ -2,7 +2,7 @@
 
 #include <ssg/GraphemeLayout.h>
 #include <ssg/SyntaxModel.h>
-#include <ssg/Widget.h>
+#include <ssg/WidgetLayout.h>
 
 #include <algorithm>
 #include <iomanip>

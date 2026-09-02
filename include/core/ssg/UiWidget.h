@@ -3,7 +3,7 @@
 // The UI-VM leaf vocabulary: the widget descriptor a UiTree leaf carries and
 // the value/provider types it resolves from.
 
-#include <ssg/Widget.h>  // WidgetKind, Overflow, CenterWidth
+#include <ssg/Widget.h>  // WidgetKind, ViewSurface, Overflow
 
 #include <functional>
 #include <optional>

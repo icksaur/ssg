@@ -78,7 +78,7 @@ knowledge elsewhere.
 | `CommandCatalog` and `CommandSpecBuilder` | Own the named command vocabulary, metadata, capability requirements, and handlers. |
 | `CommandTransition` and `PreparedTransition` | Preflight and atomically install changes spanning prompt, panel, picker, focus, and tree-provider state. |
 | `assembleWholeScreen` | Build the canonical medium-independent whole-screen UI tree. |
-| `UiFrame` and `UiFrameDeltaCodec` | Keep schema, dynamic node state, presence, and focus in one validated publication and derive/replay its in-memory changes. |
+| `UiFrame` | Keep schema, dynamic node state, presence, and focus in one validated publication. |
 | `GridPresenter` | Project semantic state through the grid-specific layout service and resolve grid view actions against a presentation basis. |
 | Platform file and watcher seams | Hide Linux and Windows durability, filesystem-watch, and Git-watch implementations from core behavior. |
 
@@ -101,9 +101,7 @@ or resolved rectangles.
   authoritative focus path.
 - `UiPresenceSection` contains the present state of nodes at a
   `PresenceBasis`.
-- `UiFrame` validates and publishes those three parts together. Its in-memory
-  delta is either a full replacement or generation-preserving state, presence,
-  and focus changes.
+- `UiFrame` validates and publishes those three parts together.
 
 `assembleWholeScreen` owns the canonical root/header/body/panel/content/footer
 structure. `InteractionAuthority` rebuilds focus and presence from

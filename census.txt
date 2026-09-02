@@ -3843,16 +3843,9 @@ core/ssg/WholeScreenAssembly.h	func	ssg::assembleFooterPrompt	UiNode (const Prom
 core/ssg/WholeScreenAssembly.h	func	ssg::assembleWholeScreen	UiComposition (const std::vector<StatusFieldCatalogEntry> &, std::string_view, const StyleDimensions &, std::string_view)
 core/ssg/WholeScreenAssembly.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
 core/ssg/WholeScreenAssembly.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)
-core/ssg/Widget.h	class	ssg::WidgetStack
-core/ssg/Widget.h	enum	ssg::Align
-core/ssg/Widget.h	enum	ssg::CenterWidth
 core/ssg/Widget.h	enum	ssg::Overflow
 core/ssg/Widget.h	enum	ssg::ViewSurface
 core/ssg/Widget.h	enum	ssg::WidgetKind
-core/ssg/Widget.h	enumerator	ssg::Align::End
-core/ssg/Widget.h	enumerator	ssg::Align::Start
-core/ssg/Widget.h	enumerator	ssg::CenterWidth::Fixed
-core/ssg/Widget.h	enumerator	ssg::CenterWidth::Flex
 core/ssg/Widget.h	enumerator	ssg::Overflow::None
 core/ssg/Widget.h	enumerator	ssg::Overflow::ScrollTail
 core/ssg/Widget.h	enumerator	ssg::Overflow::Truncate
@@ -3870,59 +3863,8 @@ core/ssg/Widget.h	enumerator	ssg::WidgetKind::Spacer
 core/ssg/Widget.h	enumerator	ssg::WidgetKind::StatusActions
 core/ssg/Widget.h	enumerator	ssg::WidgetKind::TextInput
 core/ssg/Widget.h	enumerator	ssg::WidgetKind::View
-core/ssg/Widget.h	func	ssg::WidgetStack::WidgetStack	void (int)
-core/ssg/Widget.h	func	ssg::WidgetStack::center	WidgetStack &(StackItem, CenterWidth, int)
-core/ssg/Widget.h	func	ssg::WidgetStack::packLeft	WidgetStack &(StackItem)
-core/ssg/Widget.h	func	ssg::WidgetStack::packRight	WidgetStack &(StackItem)
-core/ssg/Widget.h	func	ssg::WidgetStack::resolve	std::optional<StackLayout> (int) const
-core/ssg/Widget.h	func	ssg::checkboxText	std::string (bool, std::string_view, const ToggleGlyphs &)
-core/ssg/Widget.h	func	ssg::fitRow	RowFit (const std::vector<FitItem> &, int, int, Align)
-core/ssg/Widget.h	func	ssg::layoutInputLine	InputLineLayout (std::string_view, std::string_view, std::string_view, int)
-core/ssg/Widget.h	func	ssg::layoutTextInput	TextInputLayout (std::string_view, std::string_view, int)
-core/ssg/Widget.h	func	ssg::measureFieldCells	int (std::string_view)
-core/ssg/Widget.h	func	ssg::operator==	bool (const PlacedItem &, const PlacedItem &)
-core/ssg/Widget.h	func	ssg::operator==	bool (const RowFit &, const RowFit &)
-core/ssg/Widget.h	func	ssg::operator==	bool (const StackLayout &, const StackLayout &)
-core/ssg/Widget.h	func	ssg::operator==	bool (const StackPlacement &, const StackPlacement &)
-core/ssg/Widget.h	func	ssg::packEnd	RowFit (const std::vector<FitItem> &, int)
-core/ssg/Widget.h	func	ssg::textInputText	std::string (std::string_view, std::string_view, std::string_view)
 core/ssg/Widget.h	func	ssg::viewSurfaceName	std::string_view (ViewSurface)
-core/ssg/Widget.h	func	ssg::visibleTail	std::string (std::string_view, int)
 core/ssg/Widget.h	func	ssg::widgetKindName	std::string_view (WidgetKind)
-core/ssg/Widget.h	struct	ssg::FitItem
-core/ssg/Widget.h	struct	ssg::InputLineLayout
-core/ssg/Widget.h	struct	ssg::PlacedItem
-core/ssg/Widget.h	struct	ssg::RowFit
-core/ssg/Widget.h	struct	ssg::StackItem
-core/ssg/Widget.h	struct	ssg::StackLayout
-core/ssg/Widget.h	struct	ssg::StackPlacement
-core/ssg/Widget.h	struct	ssg::TextInputLayout
-core/ssg/Widget.h	var	ssg::FitItem::desired	int
-core/ssg/Widget.h	var	ssg::FitItem::id	std::string
-core/ssg/Widget.h	var	ssg::FitItem::rank	int
-core/ssg/Widget.h	var	ssg::InputLineLayout::ghostText	std::string
-core/ssg/Widget.h	var	ssg::InputLineLayout::ghostWidth	int
-core/ssg/Widget.h	var	ssg::InputLineLayout::text	std::string
-core/ssg/Widget.h	var	ssg::InputLineLayout::width	int
-core/ssg/Widget.h	var	ssg::PlacedItem::id	std::string
-core/ssg/Widget.h	var	ssg::PlacedItem::index	std::size_t
-core/ssg/Widget.h	var	ssg::PlacedItem::offset	int
-core/ssg/Widget.h	var	ssg::PlacedItem::size	int
-core/ssg/Widget.h	var	ssg::RowFit::placed	std::vector<PlacedItem>
-core/ssg/Widget.h	var	ssg::StackItem::content	std::string
-core/ssg/Widget.h	var	ssg::StackItem::desired	int
-core/ssg/Widget.h	var	ssg::StackItem::id	std::string
-core/ssg/Widget.h	var	ssg::StackItem::keep	bool
-core/ssg/Widget.h	var	ssg::StackItem::overflow	Overflow
-core/ssg/Widget.h	var	ssg::StackItem::rank	int
-core/ssg/Widget.h	var	ssg::StackItem::sigil	std::string
-core/ssg/Widget.h	var	ssg::StackLayout::placed	std::vector<StackPlacement>
-core/ssg/Widget.h	var	ssg::StackPlacement::id	std::string
-core/ssg/Widget.h	var	ssg::StackPlacement::offset	int
-core/ssg/Widget.h	var	ssg::StackPlacement::size	int
-core/ssg/Widget.h	var	ssg::StackPlacement::text	std::string
-core/ssg/Widget.h	var	ssg::TextInputLayout::text	std::string
-core/ssg/Widget.h	var	ssg::TextInputLayout::width	int
 core/ssg/Widget.h	var	ssg::kAllViewSurfaces	const std::array<enable_if_t<is_same_v<ssg::ViewSurface, ssg::ViewSurface> && is_same_v<ssg::ViewSurface, ssg::ViewSurface> && is_same_v<ssg::ViewSurface, ssg::ViewSurface> && is_same_v<ssg::ViewSurface, ssg::ViewSurface> && is_same_v<ssg::ViewSurface, ssg::ViewSurface>, ssg::ViewSurface>, 1 + sizeof...(_Up)>
 core/ssg/Widget.h	var	ssg::kAllWidgetKinds	const std::array<enable_if_t<is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind> && is_same_v<ssg::WidgetKind, ssg::WidgetKind>, ssg::WidgetKind>, 1 + sizeof...(_Up)>
 core/ssg/Widget.h	var	ssg::kViewSurfaceCount	const std::size_t
@@ -4727,6 +4669,64 @@ grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiRegion::items	std::vector<SolvedU
 grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiRegion::rect	Rect
 grid/ssg/UiRegionProjection.h	var	ssg::UiRegionProjectionResult::error	std::optional<std::string>
 grid/ssg/UiRegionProjection.h	var	ssg::UiRegionProjectionResult::rightEdge	int
+grid/ssg/WidgetLayout.h	class	ssg::WidgetStack
+grid/ssg/WidgetLayout.h	enum	ssg::Align
+grid/ssg/WidgetLayout.h	enum	ssg::CenterWidth
+grid/ssg/WidgetLayout.h	enumerator	ssg::Align::End
+grid/ssg/WidgetLayout.h	enumerator	ssg::Align::Start
+grid/ssg/WidgetLayout.h	enumerator	ssg::CenterWidth::Fixed
+grid/ssg/WidgetLayout.h	enumerator	ssg::CenterWidth::Flex
+grid/ssg/WidgetLayout.h	func	ssg::WidgetStack::WidgetStack	void (int)
+grid/ssg/WidgetLayout.h	func	ssg::WidgetStack::center	WidgetStack &(StackItem, CenterWidth, int)
+grid/ssg/WidgetLayout.h	func	ssg::WidgetStack::packLeft	WidgetStack &(StackItem)
+grid/ssg/WidgetLayout.h	func	ssg::WidgetStack::packRight	WidgetStack &(StackItem)
+grid/ssg/WidgetLayout.h	func	ssg::WidgetStack::resolve	std::optional<StackLayout> (int) const
+grid/ssg/WidgetLayout.h	func	ssg::checkboxText	std::string (bool, std::string_view, const ToggleGlyphs &)
+grid/ssg/WidgetLayout.h	func	ssg::fitRow	RowFit (const std::vector<FitItem> &, int, int, Align)
+grid/ssg/WidgetLayout.h	func	ssg::layoutInputLine	InputLineLayout (std::string_view, std::string_view, std::string_view, int)
+grid/ssg/WidgetLayout.h	func	ssg::layoutTextInput	TextInputLayout (std::string_view, std::string_view, int)
+grid/ssg/WidgetLayout.h	func	ssg::measureFieldCells	int (std::string_view)
+grid/ssg/WidgetLayout.h	func	ssg::operator==	bool (const PlacedItem &, const PlacedItem &)
+grid/ssg/WidgetLayout.h	func	ssg::operator==	bool (const RowFit &, const RowFit &)
+grid/ssg/WidgetLayout.h	func	ssg::operator==	bool (const StackLayout &, const StackLayout &)
+grid/ssg/WidgetLayout.h	func	ssg::operator==	bool (const StackPlacement &, const StackPlacement &)
+grid/ssg/WidgetLayout.h	func	ssg::packEnd	RowFit (const std::vector<FitItem> &, int)
+grid/ssg/WidgetLayout.h	func	ssg::textInputText	std::string (std::string_view, std::string_view, std::string_view)
+grid/ssg/WidgetLayout.h	func	ssg::visibleTail	std::string (std::string_view, int)
+grid/ssg/WidgetLayout.h	struct	ssg::FitItem
+grid/ssg/WidgetLayout.h	struct	ssg::InputLineLayout
+grid/ssg/WidgetLayout.h	struct	ssg::PlacedItem
+grid/ssg/WidgetLayout.h	struct	ssg::RowFit
+grid/ssg/WidgetLayout.h	struct	ssg::StackItem
+grid/ssg/WidgetLayout.h	struct	ssg::StackLayout
+grid/ssg/WidgetLayout.h	struct	ssg::StackPlacement
+grid/ssg/WidgetLayout.h	struct	ssg::TextInputLayout
+grid/ssg/WidgetLayout.h	var	ssg::FitItem::desired	int
+grid/ssg/WidgetLayout.h	var	ssg::FitItem::id	std::string
+grid/ssg/WidgetLayout.h	var	ssg::FitItem::rank	int
+grid/ssg/WidgetLayout.h	var	ssg::InputLineLayout::ghostText	std::string
+grid/ssg/WidgetLayout.h	var	ssg::InputLineLayout::ghostWidth	int
+grid/ssg/WidgetLayout.h	var	ssg::InputLineLayout::text	std::string
+grid/ssg/WidgetLayout.h	var	ssg::InputLineLayout::width	int
+grid/ssg/WidgetLayout.h	var	ssg::PlacedItem::id	std::string
+grid/ssg/WidgetLayout.h	var	ssg::PlacedItem::index	std::size_t
+grid/ssg/WidgetLayout.h	var	ssg::PlacedItem::offset	int
+grid/ssg/WidgetLayout.h	var	ssg::PlacedItem::size	int
+grid/ssg/WidgetLayout.h	var	ssg::RowFit::placed	std::vector<PlacedItem>
+grid/ssg/WidgetLayout.h	var	ssg::StackItem::content	std::string
+grid/ssg/WidgetLayout.h	var	ssg::StackItem::desired	int
+grid/ssg/WidgetLayout.h	var	ssg::StackItem::id	std::string
+grid/ssg/WidgetLayout.h	var	ssg::StackItem::keep	bool
+grid/ssg/WidgetLayout.h	var	ssg::StackItem::overflow	Overflow
+grid/ssg/WidgetLayout.h	var	ssg::StackItem::rank	int
+grid/ssg/WidgetLayout.h	var	ssg::StackItem::sigil	std::string
+grid/ssg/WidgetLayout.h	var	ssg::StackLayout::placed	std::vector<StackPlacement>
+grid/ssg/WidgetLayout.h	var	ssg::StackPlacement::id	std::string
+grid/ssg/WidgetLayout.h	var	ssg::StackPlacement::offset	int
+grid/ssg/WidgetLayout.h	var	ssg::StackPlacement::size	int
+grid/ssg/WidgetLayout.h	var	ssg::StackPlacement::text	std::string
+grid/ssg/WidgetLayout.h	var	ssg::TextInputLayout::text	std::string
+grid/ssg/WidgetLayout.h	var	ssg::TextInputLayout::width	int
 platform/ssg/FilesystemWatcher.h	alias	ssg::WatchClock
 platform/ssg/FilesystemWatcher.h	alias	ssg::WatchTimePoint
 platform/ssg/FilesystemWatcher.h	alias	ssg::WorkspaceScanner
