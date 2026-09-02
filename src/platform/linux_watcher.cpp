@@ -21,42 +21,6 @@
 namespace ssg {
 namespace {
 
-std::int64_t modificationTime(const std::filesystem::path& path,
-                               std::error_code& error) {
-    const auto value = std::filesystem::last_write_time(path, error);
-    if (error) {
-        return 0;
-    }
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(
-               value.time_since_epoch()).count();
-}
-
-std::optional<WatchFileState> observe(const std::filesystem::path& path) {
-    std::error_code error;
-    const auto status = std::filesystem::symlink_status(path, error);
-    if (error || status.type() == std::filesystem::file_type::not_found) {
-        return std::nullopt;
-    }
-    std::uint64_t size = 0;
-    if (std::filesystem::is_regular_file(status)) {
-        size = std::filesystem::file_size(path, error);
-        if (error) {
-            return std::nullopt;
-        }
-    }
-    const auto modified = modificationTime(path, error);
-    if (error) {
-        return std::nullopt;
-    }
-    try {
-        return WatchFileState{fileIdentity(path), size, modified};
-    } catch (const std::filesystem::filesystem_error&) {
-        return std::nullopt;
-    } catch (const std::system_error&) {
-        return std::nullopt;
-    }
-}
-
 WorkspaceScan scanWorkspace(const std::filesystem::path& root,
                              std::size_t maximum) {
     WorkspaceScan result;
@@ -88,7 +52,7 @@ WorkspaceScan scanWorkspace(const std::filesystem::path& root,
         if (result.entries.size() == maximum) {
             return {{}, false};
         }
-        if (auto state = observe(current->path())) {
+        if (auto state = WatchFileState::observe(current->path())) {
             result.entries.push_back(
                 {current->path().lexically_relative(root), *state});
         } else {
@@ -272,7 +236,7 @@ private:
         const auto absolute = directory->second / native.name;
         const auto relative = absolute.lexically_relative(root_);
         const auto now = WatchClock::now();
-        const auto observed = observe(absolute);
+        const auto observed = WatchFileState::observe(absolute);
         if ((native.mask & IN_ISDIR) != 0 &&
             (native.mask & (IN_CREATE | IN_MOVED_TO)) != 0) {
             if ((native.mask & IN_MOVED_TO) != 0) {

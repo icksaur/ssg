@@ -94,11 +94,27 @@ struct UiLeaf {
     friend bool operator==(const UiLeaf&, const UiLeaf&) = default;
 };
 
+struct ResolvedUiNodeStyle {
+    std::optional<SemanticRole> foreground;
+    std::optional<SemanticRole> background;
+
+    friend bool operator==(const ResolvedUiNodeStyle&,
+                           const ResolvedUiNodeStyle&) = default;
+};
+
 // CONTRACT: UI nodes carry semantic role identities only. ThemeSnapshot remains
-// the sole owner of concrete colors.
+// the sole owner of concrete colors. Each channel resolves independently over
+// inherited style, so clients consume rather than reproduce cascade semantics.
 struct UiNodeStyle {
     std::optional<SemanticRole> foreground;
     std::optional<SemanticRole> background;
+
+    [[nodiscard]] ResolvedUiNodeStyle resolve(
+        ResolvedUiNodeStyle inherited) const noexcept {
+        if (foreground) inherited.foreground = foreground;
+        if (background) inherited.background = background;
+        return inherited;
+    }
 
     friend bool operator==(const UiNodeStyle&, const UiNodeStyle&) = default;
 };
@@ -225,14 +241,6 @@ struct UiSchema {
     UiNode root = emptyUiRoot();
 
     friend bool operator==(const UiSchema&, const UiSchema&) = default;
-};
-
-struct ResolvedUiNodeStyle {
-    std::optional<SemanticRole> foreground;
-    std::optional<SemanticRole> background;
-
-    friend bool operator==(const ResolvedUiNodeStyle&,
-                           const ResolvedUiNodeStyle&) = default;
 };
 
 // CONTRACT: each channel resolves independently to the nearest

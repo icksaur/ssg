@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -457,6 +458,46 @@ std::filesystem::path uniqueTempDirectory() {
     return path;
 }
 
+TEST(watchFileStateObservesFilesystemMetadata) {
+    const auto root = uniqueTempDirectory();
+    const auto file = root / "file.txt";
+    const std::string contents{"watch-state"};
+    std::ofstream{file} << contents;
+
+    const auto observedFile = WatchFileState::observe(file);
+    ASSERT_TRUE(observedFile.has_value());
+    if (observedFile) {
+        std::error_code error;
+        const auto modified = std::filesystem::last_write_time(file, error);
+        ASSERT_FALSE(error);
+        ASSERT_EQ(observedFile->identity, ssg::fileIdentity(file));
+        ASSERT_EQ(observedFile->size,
+                  static_cast<std::uint64_t>(contents.size()));
+        ASSERT_EQ(
+            observedFile->modificationTime,
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                modified.time_since_epoch()).count());
+    }
+
+    const auto emptyFile = root / "empty.txt";
+    std::ofstream{emptyFile};
+    const auto observedEmptyFile = WatchFileState::observe(emptyFile);
+    ASSERT_TRUE(observedEmptyFile.has_value());
+    if (observedEmptyFile) {
+        ASSERT_EQ(observedEmptyFile->size, std::uint64_t{0});
+    }
+
+    const auto observedDirectory = WatchFileState::observe(root);
+    ASSERT_TRUE(observedDirectory.has_value());
+    if (observedDirectory) {
+        ASSERT_EQ(observedDirectory->identity, ssg::fileIdentity(root));
+        ASSERT_EQ(observedDirectory->size, std::uint64_t{0});
+    }
+    ASSERT_FALSE(WatchFileState::observe(root / "missing").has_value());
+
+    std::filesystem::remove_all(root);
+}
+
 std::vector<WatchEvent> pollUntil(
     ssg::FilesystemWatcher& watcher, WatchEventKind kind,
     std::chrono::milliseconds budget = 2s) {
@@ -562,6 +603,7 @@ SSG_TEST_SUITE(ssg_watcher_tests) {
     RUN(renameQueueOverflowDoesNotInvalidateActivePair);
     RUN(expiringRenameQueueOverflowDoesNotInvalidateIteration);
     RUN(invalidBoundsAreRejectedAtConstruction);
+    RUN(watchFileStateObservesFilesystemMetadata);
     RUN(platformAdapterReportsRecursiveNormalizedEvents);
     RUN(platformPollTimeoutIsFinite);
     RUN(platformGitMetadataWatcherIgnoresObjectsAndReportsGitStateChanges);

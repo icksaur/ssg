@@ -35,6 +35,9 @@ struct WatchFileState {
     std::uint64_t size = 0;
     std::int64_t modificationTime = 0;
 
+    [[nodiscard]] static std::optional<WatchFileState> observe(
+        const std::filesystem::path& path);
+
     friend bool operator==(const WatchFileState&, const WatchFileState&) = default;
 };
 

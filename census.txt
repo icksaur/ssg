@@ -604,27 +604,6 @@ core/ssg/EditCommands.h	var	ssg::EditCommandSettings::indentWidth	std::uint32_t
 core/ssg/EditCommands.h	var	ssg::EditCommandSettings::lineCommentToken	std::string
 core/ssg/EditCommands.h	var	ssg::EditCommandSettings::lineEnding	LineEnding
 core/ssg/EditCommands.h	var	ssg::EditCommandSettings::tabWidth	std::uint32_t
-core/ssg/EditHistoryCoordinator.h	class	ssg::EditHistoryCoordinator
-core/ssg/EditHistoryCoordinator.h	enum	ssg::EditHistoryError
-core/ssg/EditHistoryCoordinator.h	enumerator	ssg::EditHistoryError::EditCommandRejected
-core/ssg/EditHistoryCoordinator.h	enumerator	ssg::EditHistoryError::HistoryRejected
-core/ssg/EditHistoryCoordinator.h	enumerator	ssg::EditHistoryError::InvalidCommandResult
-core/ssg/EditHistoryCoordinator.h	enumerator	ssg::EditHistoryError::None
-core/ssg/EditHistoryCoordinator.h	enumerator	ssg::EditHistoryError::TextInputRejected
-core/ssg/EditHistoryCoordinator.h	func	ssg::EditHistoryCoordinator::EditHistoryCoordinator	void (Document &, DocumentHistory &) noexcept
-core/ssg/EditHistoryCoordinator.h	func	ssg::EditHistoryCoordinator::applyEditCommand	EditHistoryResult (const SelectionSet &, EditCommandSettings, EditCommand, std::uint64_t)
-core/ssg/EditHistoryCoordinator.h	func	ssg::EditHistoryCoordinator::applyTextInput	EditHistoryResult (const SelectionSet &, TextInputSettings, TextInputCommand, TextInputArguments, std::uint64_t)
-core/ssg/EditHistoryCoordinator.h	func	ssg::EditHistoryCoordinator::editKind	HistoryEditKind (EditCommand) noexcept
-core/ssg/EditHistoryCoordinator.h	func	ssg::EditHistoryCoordinator::editKind	HistoryEditKind (TextInputCommand) noexcept
-core/ssg/EditHistoryCoordinator.h	func	ssg::EditHistoryResult::accepted	bool () const noexcept
-core/ssg/EditHistoryCoordinator.h	func	ssg::EditHistoryResult::documentChanged	bool () const noexcept
-core/ssg/EditHistoryCoordinator.h	struct	ssg::EditHistoryResult
-core/ssg/EditHistoryCoordinator.h	var	ssg::EditHistoryResult::editCommandError	std::optional<EditCommandError>
-core/ssg/EditHistoryCoordinator.h	var	ssg::EditHistoryResult::error	EditHistoryError
-core/ssg/EditHistoryCoordinator.h	var	ssg::EditHistoryResult::historyResult	std::optional<HistoryResult>
-core/ssg/EditHistoryCoordinator.h	var	ssg::EditHistoryResult::message	std::string
-core/ssg/EditHistoryCoordinator.h	var	ssg::EditHistoryResult::selections	std::optional<SelectionSet>
-core/ssg/EditHistoryCoordinator.h	var	ssg::EditHistoryResult::textInputError	std::optional<TextInputError>
 core/ssg/EditorClient.h	enum	ssg::AttachError
 core/ssg/EditorClient.h	enum	ssg::CommandError
 core/ssg/EditorClient.h	enum	ssg::CommandResult::Outcome
@@ -3376,6 +3355,7 @@ core/ssg/UiTree.h	func	ssg::UiNodeId::UiNodeId	void (std::string)
 core/ssg/UiTree.h	func	ssg::UiNodeId::empty	bool () const noexcept
 core/ssg/UiTree.h	func	ssg::UiNodeId::operator<=>	std::strong_ordering (const UiNodeId &) const noexcept
 core/ssg/UiTree.h	func	ssg::UiNodeId::value	const std::string &() const noexcept
+core/ssg/UiTree.h	func	ssg::UiNodeStyle::resolve	ResolvedUiNodeStyle (ResolvedUiNodeStyle) const noexcept
 core/ssg/UiTree.h	func	ssg::UiSchemaValidation::ok	bool () const
 core/ssg/UiTree.h	func	ssg::ValidatedSchema::contains	bool (const UiNodeId &) const
 core/ssg/UiTree.h	func	ssg::ValidatedSchema::find	const UiNode *(const UiNodeId &) const noexcept
@@ -4101,6 +4081,7 @@ platform/ssg/FilesystemWatcher.h	func	ssg::WatchEventNormalizer::operator=	Watch
 platform/ssg/FilesystemWatcher.h	func	ssg::WatchEventNormalizer::push	void (NativeWatchEvent, WatchTimePoint)
 platform/ssg/FilesystemWatcher.h	func	ssg::WatchEventNormalizer::registerSave	void (SaveExpectation)
 platform/ssg/FilesystemWatcher.h	func	ssg::WatchEventNormalizer::takeReady	std::vector<WatchEvent> (WatchTimePoint)
+platform/ssg/FilesystemWatcher.h	func	ssg::WatchFileState::observe	std::optional<WatchFileState> (const std::filesystem::path &)
 platform/ssg/FilesystemWatcher.h	func	ssg::makePlatformFilesystemWatcher	std::unique_ptr<FilesystemWatcher> (const std::filesystem::path &, WatcherConfig)
 platform/ssg/FilesystemWatcher.h	func	ssg::operator==	bool (const SaveExpectation &, const SaveExpectation &)
 platform/ssg/FilesystemWatcher.h	func	ssg::operator==	bool (const WatchEvent &, const WatchEvent &)

@@ -22,35 +22,6 @@
 namespace ssg {
 namespace {
 
-std::optional<WatchFileState> observe(const std::filesystem::path& path) {
-    std::error_code error;
-    const auto status = std::filesystem::symlink_status(path, error);
-    if (error || status.type() == std::filesystem::file_type::not_found) {
-        return std::nullopt;
-    }
-    std::uint64_t size = 0;
-    if (std::filesystem::is_regular_file(status)) {
-        size = std::filesystem::file_size(path, error);
-        if (error) {
-            return std::nullopt;
-        }
-    }
-    const auto time = std::filesystem::last_write_time(path, error);
-    if (error) {
-        return std::nullopt;
-    }
-    try {
-        return WatchFileState{
-            fileIdentity(path), size,
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                time.time_since_epoch()).count()};
-    } catch (const std::filesystem::filesystem_error&) {
-        return std::nullopt;
-    } catch (const std::system_error&) {
-        return std::nullopt;
-    }
-}
-
 WorkspaceScan scan_workspace(const std::filesystem::path& root,
                              std::size_t maximum) {
     WorkspaceScan result;
@@ -80,7 +51,7 @@ WorkspaceScan scan_workspace(const std::filesystem::path& root,
         if (result.entries.size() == maximum) {
             return {{}, false};
         }
-        if (auto state = observe(current->path())) {
+        if (auto state = WatchFileState::observe(current->path())) {
             result.entries.push_back(
                 {current->path().lexically_relative(root), *state});
         } else {
@@ -232,7 +203,7 @@ private:
                 native->FileName,
                 native->FileNameLength / sizeof(wchar_t));
             const std::filesystem::path relative{name};
-            const auto observed = observe(root_ / relative);
+            const auto observed = WatchFileState::observe(root_ / relative);
             const auto now = WatchClock::now();
             switch (native->Action) {
             case FILE_ACTION_ADDED:

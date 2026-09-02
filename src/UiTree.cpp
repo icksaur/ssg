@@ -24,8 +24,7 @@ const UiNode* findNode(const UiNode& node, const UiNodeId& id) noexcept {
 std::optional<ResolvedUiNodeStyle> resolveStyle(
     const UiNode& node, std::string_view target,
     ResolvedUiNodeStyle inherited) {
-    if (node.style.foreground) inherited.foreground = node.style.foreground;
-    if (node.style.background) inherited.background = node.style.background;
+    inherited = node.style.resolve(inherited);
     if (node.id.value() == target) return inherited;
     if (const auto* container = std::get_if<UiContainer>(&node.content)) {
         for (const auto& child : container->children) {

@@ -696,8 +696,7 @@ std::optional<LoweredUiNode> lowerUiNode(
         return std::nullopt;
     }
 
-    if (node.style.foreground) inherited.foreground = node.style.foreground;
-    if (node.style.background) inherited.background = node.style.background;
+    inherited = node.style.resolve(inherited);
 
     LayoutNode layout{node.id, node.size};
     GridSize natural{};

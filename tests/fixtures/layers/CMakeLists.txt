@@ -20,6 +20,8 @@ foreach(_fixture IN LISTS _SSG_ALLOWED_LAYER_FIXTURES)
             -DSSG_LAYER_TARGET=layer_${_fixture}
             -DSSG_LAYER_EXPECT_SUCCESS=ON
             -P ${SSG_SOURCE_DIR}/cmake/run_layer_fixture.cmake)
+    set_tests_properties(test_layer_include_${_fixture}
+        PROPERTIES RESOURCE_LOCK ssg_layer_fixture_build)
 endforeach()
 
 ssg_add_layer_fixture(
@@ -31,6 +33,8 @@ add_test(NAME test_layer_include_facade_to_tui
         -DSSG_LAYER_HEADER=Renderer.h
         -DSSG_LAYER_EXPECT_SUCCESS=OFF
         -P ${SSG_SOURCE_DIR}/cmake/run_layer_fixture.cmake)
+set_tests_properties(test_layer_include_facade_to_tui
+    PROPERTIES RESOURCE_LOCK ssg_layer_fixture_build)
 
 foreach(_entry IN LISTS _SSG_FORBIDDEN_LAYER_FIXTURES)
     string(REPLACE ":" ";" _fields "${_entry}")
@@ -47,4 +51,6 @@ foreach(_entry IN LISTS _SSG_FORBIDDEN_LAYER_FIXTURES)
             -DSSG_LAYER_HEADER=${_header}
             -DSSG_LAYER_EXPECT_SUCCESS=OFF
             -P ${SSG_SOURCE_DIR}/cmake/run_layer_fixture.cmake)
+    set_tests_properties(test_layer_include_${_fixture}
+        PROPERTIES RESOURCE_LOCK ssg_layer_fixture_build)
 endforeach()

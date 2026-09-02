@@ -1672,38 +1672,6 @@ CommandHandlerResult EditorSession::Impl::openDraftDiff() {
                                   std::nullopt);
 }
 
-namespace {
-
-// The one runtime routine that captures a file's watch state, used both to record
-// a save expectation and to correlate an event whose state the injecting caller
-// did not supply. Consistency between the two is what makes an SSG save match.
-std::optional<WatchFileState> observeWatchState(
-    const std::filesystem::path& path) {
-    std::error_code error;
-    const auto status = std::filesystem::symlink_status(path, error);
-    if (error || status.type() == std::filesystem::file_type::not_found) {
-        return std::nullopt;
-    }
-    std::uint64_t size = 0;
-    if (std::filesystem::is_regular_file(status)) {
-        size = std::filesystem::file_size(path, error);
-        if (error) return std::nullopt;
-    }
-    const auto modified = std::filesystem::last_write_time(path, error);
-    if (error) return std::nullopt;
-    const auto nanos = static_cast<std::int64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            modified.time_since_epoch())
-            .count());
-    try {
-        return WatchFileState{fileIdentity(path), size, nanos};
-    } catch (const std::exception&) {
-        return std::nullopt;
-    }
-}
-
-}  // namespace
-
 DiffFileId EditorSession::Impl::externalDiffFileId(std::string_view savedPath) {
     return DiffFileId{"external:" + std::string{savedPath}};
 }
@@ -1748,7 +1716,8 @@ EditorSession::Impl::resolveOpenSavedDocumentByPath(
 
 void EditorSession::Impl::registerExternalSaveExpectation(
     const std::filesystem::path& relativePath) {
-    const auto observed = observeWatchState(workspace.root() / relativePath);
+    const auto observed =
+        WatchFileState::observe(workspace.root() / relativePath);
     if (!observed) return;
     SaveExpectation expectation{relativePath, *observed};
     {
@@ -1794,7 +1763,8 @@ void EditorSession::Impl::reconcileExternalWatchEvents(
                 observed = WatchFileState{*event.identity, *event.size,
                                           *event.modificationTime};
             } else {
-                observed = observeWatchState(workspace.root() / event.path);
+                observed =
+                    WatchFileState::observe(workspace.root() / event.path);
             }
             bool selfSave = false;
             if (observed) {
