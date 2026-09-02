@@ -772,7 +772,6 @@ std::optional<LoweredUiNode> lowerUiNode(
 SolveUiFrameResult solveUiFrame(
     const ValidatedSchema& schema, const UiStateSection& stateSection,
     const UiPresenceSection& presenceSection,
-    const ClientUiProfile& profile,
     const std::vector<GridIntrinsicSize>& intrinsicSizes, Rect bounds) {
     if (stateSection.generation != schema.generation() ||
         presenceSection.generation != schema.generation() ||
@@ -816,33 +815,6 @@ SolveUiFrameResult solveUiFrame(
                     "intrinsic sizes contain duplicate node identities"};
         }
     }
-
-    std::string profileError;
-    const auto inspectProfile = [&](const auto& self, const UiNode& node) -> void {
-        if (!profileError.empty()) return;
-        if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
-            if (!profile.supports(leaf->widget.kind)) {
-                profileError = "grid profile does not support node \"" +
-                               node.id.value() + "\" widget " +
-                               std::string{widgetKindName(leaf->widget.kind)};
-                return;
-            }
-            if (leaf->widget.surface &&
-                !profile.supports(*leaf->widget.surface)) {
-                profileError = "grid profile does not support node \"" +
-                               node.id.value() + "\" surface " +
-                               std::string{
-                                   viewSurfaceName(*leaf->widget.surface)};
-            }
-            return;
-        }
-        for (const auto& child :
-             std::get<UiContainer>(node.content).children) {
-            self(self, child);
-        }
-    };
-    inspectProfile(inspectProfile, schema.schema().root);
-    if (!profileError.empty()) return {std::nullopt, std::move(profileError)};
 
     std::map<UiNodeId, UiNodeMetadata> metadata;
     std::string error;

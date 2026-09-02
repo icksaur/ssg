@@ -18,12 +18,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(test_widget PRIVATE ssg_core)
     add_test(NAME test_widget COMMAND test_widget)
 
-    add_executable(test_ui_profile
-        ${SSG_SOURCE_DIR}/tests/test_ui_profile.cpp
-    )
-    target_link_libraries(test_ui_profile PRIVATE ssg_core)
-    add_test(NAME test_ui_profile COMMAND test_ui_profile)
-
     add_executable(test_ui_tree
         ${SSG_SOURCE_DIR}/tests/test_ui_tree.cpp
     )

@@ -74,8 +74,7 @@ SolveUiFrameResult trySolveFrameLayout(
     for (;;) {
         result = solveUiFrame(
             validated.schema(), semantic.sections().uiFrame.state(), presence,
-            ClientUiProfile::full(), intrinsicSizes,
-            {0, 0, dimensions.columns, dimensions.rows});
+            intrinsicSizes, {0, 0, dimensions.columns, dimensions.rows});
         // WholeScreenAssembly's exhaustive replaceable content branches are
         // editor and find-results. Extend this check with that topology.
         const auto* content =

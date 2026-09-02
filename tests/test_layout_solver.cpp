@@ -537,8 +537,7 @@ TEST(uiFrameSolvesOnlyEffectivelyPresentNodes) {
         if (record.id == UiNodeId{"hidden"}) record.present = false;
     }
 
-    auto solved = solveUiFrame(schema, state, presence,
-                               ClientUiProfile::full(), {}, {0, 0, 12, 8});
+    auto solved = solveUiFrame(schema, state, presence, {}, {0, 0, 12, 8});
     ASSERT_TRUE(solved.accepted());
     if (!solved.tree) return;
     ASSERT_EQ(solved.tree->nodes.size(), std::size_t{3});
@@ -566,8 +565,8 @@ TEST(uiFrameCarriesResolvedStateStyleAndScrollOwnership) {
         }
     }
 
-    auto solved = solveUiFrame(schema, state, presenceFor(schema),
-                               ClientUiProfile::full(), {}, {0, 0, 10, 6});
+    auto solved = solveUiFrame(schema, state, presenceFor(schema), {},
+                               {0, 0, 10, 6});
     ASSERT_TRUE(solved.accepted());
     if (!solved.tree) return;
     const auto* rootNode = solved.tree->find(UiNodeId{"root"});
@@ -591,10 +590,9 @@ TEST(uiFrameResolvesAutoLeavesFromIntrinsicSizes) {
                     {view("auto", Size::autoSize(), ViewSurface::Notice),
                      view("rest", Size::flex())}}};
     auto schema = validated(std::move(root));
-    auto solved = solveUiFrame(
-        schema, stateFor(schema), presenceFor(schema),
-        ClientUiProfile::full(),
-        {{UiNodeId{"auto"}, GridSize{4, 2}}}, {0, 0, 10, 3});
+    auto solved = solveUiFrame(schema, stateFor(schema), presenceFor(schema),
+                               {{UiNodeId{"auto"}, GridSize{4, 2}}},
+                               {0, 0, 10, 3});
     ASSERT_TRUE(solved.accepted());
     if (!solved.tree) return;
     ASSERT_EQ(solved.tree->find(UiNodeId{"auto"})->rect,
@@ -603,24 +601,17 @@ TEST(uiFrameResolvesAutoLeavesFromIntrinsicSizes) {
               (Rect{5, 0, 5, 3}));
 }
 
-TEST(uiFrameRejectsInconsistentOrUnsupportedFramesVisibly) {
+TEST(uiFrameRejectsInconsistentFramesVisibly) {
     UiNode root{
         UiNodeId{"root"}, Size::flex(),
         UiContainer{Axis::Column, {}, {}, {view("document")}}};
     auto schema = validated(std::move(root));
     auto state = stateFor(schema);
     state.generation = Generation{9};
-    auto mismatch = solveUiFrame(schema, state, presenceFor(schema),
-                                 ClientUiProfile::full(), {}, {0, 0, 8, 4});
+    auto mismatch =
+        solveUiFrame(schema, state, presenceFor(schema), {}, {0, 0, 8, 4});
     ASSERT_FALSE(mismatch.accepted());
     ASSERT_FALSE(mismatch.error.empty());
-
-    ClientUiProfile unsupported;
-    unsupported.allow(WidgetKind::View);
-    auto rejected = solveUiFrame(schema, stateFor(schema), presenceFor(schema),
-                                 unsupported, {}, {0, 0, 8, 4});
-    ASSERT_FALSE(rejected.accepted());
-    ASSERT_TRUE(rejected.error.find("document") != std::string::npos);
 }
 
 TEST(uiFrameRejectsUnrepresentableIntrinsicExtent) {
@@ -631,8 +622,9 @@ TEST(uiFrameRejectsUnrepresentableIntrinsicExtent) {
             {view("a", Size::exact(std::numeric_limits<int>::max())),
              view("b", Size::exact(std::numeric_limits<int>::max()))}}};
     auto schema = validated(std::move(root));
-    auto solved = solveUiFrame(schema, stateFor(schema), presenceFor(schema),
-                               ClientUiProfile::full(), {}, {0, 0, 8, 4});
+    auto solved =
+        solveUiFrame(schema, stateFor(schema), presenceFor(schema), {},
+                     {0, 0, 8, 4});
     ASSERT_FALSE(solved.accepted());
     ASSERT_FALSE(solved.error.empty());
 }
@@ -658,9 +650,8 @@ TEST(generatedWholeScreenSolvesEveryPresentNodeExactlyOnce) {
     };
     collect(collect, schema.schema().root);
 
-    auto solved =
-        solveUiFrame(schema, stateFor(schema), presenceFor(schema),
-                     ClientUiProfile::full(), intrinsic, {0, 0, 200, 80});
+    auto solved = solveUiFrame(schema, stateFor(schema), presenceFor(schema),
+                               intrinsic, {0, 0, 200, 80});
     ASSERT_TRUE(solved.accepted());
     if (!solved.tree) return;
     ASSERT_EQ(solved.tree->nodes.size(), schema.nodeIds().size());
@@ -741,7 +732,7 @@ int main() {
     RUN(uiFrameSolvesOnlyEffectivelyPresentNodes);
     RUN(uiFrameCarriesResolvedStateStyleAndScrollOwnership);
     RUN(uiFrameResolvesAutoLeavesFromIntrinsicSizes);
-    RUN(uiFrameRejectsInconsistentOrUnsupportedFramesVisibly);
+    RUN(uiFrameRejectsInconsistentFramesVisibly);
     RUN(uiFrameRejectsUnrepresentableIntrinsicExtent);
     RUN(generatedWholeScreenSolvesEveryPresentNodeExactlyOnce);
     RUN(constraintsRejectNegativeGeometryAtConstruction);

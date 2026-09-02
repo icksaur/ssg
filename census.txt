@@ -3600,17 +3600,6 @@ core/ssg/UiPresence.h	var	ssg::UiPresenceRecord::present	bool
 core/ssg/UiPresence.h	var	ssg::UiPresenceSection::basis	PresenceBasis
 core/ssg/UiPresence.h	var	ssg::UiPresenceSection::generation	Generation
 core/ssg/UiPresence.h	var	ssg::UiPresenceSection::nodes	std::vector<UiPresenceRecord>
-core/ssg/UiProfile.h	class	ssg::ClientUiProfile
-core/ssg/UiProfile.h	func	ssg::ClientUiProfile::ClientUiProfile	void () noexcept
-core/ssg/UiProfile.h	func	ssg::ClientUiProfile::ClientUiProfile	void (std::initializer_list<WidgetKind>)
-core/ssg/UiProfile.h	func	ssg::ClientUiProfile::allow	ClientUiProfile &(ViewSurface)
-core/ssg/UiProfile.h	func	ssg::ClientUiProfile::allow	ClientUiProfile &(WidgetKind)
-core/ssg/UiProfile.h	func	ssg::ClientUiProfile::allowSurfaces	ClientUiProfile &(std::initializer_list<ViewSurface>)
-core/ssg/UiProfile.h	func	ssg::ClientUiProfile::firstUnsupported	std::optional<std::ranges::range_value_t<Range>> (const Range &) const
-core/ssg/UiProfile.h	func	ssg::ClientUiProfile::full	ClientUiProfile ()
-core/ssg/UiProfile.h	func	ssg::ClientUiProfile::operator==	bool (const ClientUiProfile &) const
-core/ssg/UiProfile.h	func	ssg::ClientUiProfile::supports	bool (ViewSurface) const
-core/ssg/UiProfile.h	func	ssg::ClientUiProfile::supports	bool (WidgetKind) const
 core/ssg/UiStateResolver.h	func	ssg::resolveUiLeafState	std::optional<UiLeafState> (const WidgetDescriptor &, const ChromeProviderResolver &, SemanticRole)
 core/ssg/UiStateResolver.h	func	ssg::resolveUiState	UiStateSection (const ValidatedSchema &, const ChromeProviderResolver &)
 core/ssg/UiTree.h	class	ssg::UiNodeId
@@ -4599,7 +4588,7 @@ grid/ssg/Layout.h	func	ssg::solveNoticeSurface	SolvedNoticeSurface (const Notice
 grid/ssg/Layout.h	func	ssg::solvePaletteSurface	SolvedPaletteSurface (const PaletteReport &, Rect, int)
 grid/ssg/Layout.h	func	ssg::solvePanelSurface	SolvedPanelSurface (const TreeViewState &, const SolvedGridNode &, std::uint32_t, bool, const Style &)
 grid/ssg/Layout.h	func	ssg::solveTabBar	SolvedTabBar (const TabViewState &, const TabGlyphs &, Rect)
-grid/ssg/Layout.h	func	ssg::solveUiFrame	SolveUiFrameResult (const ValidatedSchema &, const UiStateSection &, const UiPresenceSection &, const ClientUiProfile &, const std::vector<GridIntrinsicSize> &, Rect)
+grid/ssg/Layout.h	func	ssg::solveUiFrame	SolveUiFrameResult (const ValidatedSchema &, const UiStateSection &, const UiPresenceSection &, const std::vector<GridIntrinsicSize> &, Rect)
 grid/ssg/Layout.h	struct	ssg::GridIntrinsicSize
 grid/ssg/Layout.h	struct	ssg::LayoutNode
 grid/ssg/Layout.h	struct	ssg::NoticeView

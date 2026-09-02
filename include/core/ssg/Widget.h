@@ -36,10 +36,7 @@ enum class WidgetKind : std::uint8_t {
 };
 
 // The vocabulary made enumerable, mirroring SemanticRole's discipline: a count,
-// a mirrored array, and a static_assert binding them. A client's UI profile
-// (UiProfile.h) is a subset of this set, so both must enumerate the same kinds;
-// keeping the enum, the count, and the array bound at compile time is what makes
-// "the profile says X" and "the vocabulary has X" checkable against one source.
+// a mirrored array, and a static_assert binding them.
 inline constexpr std::array kAllWidgetKinds{
 #define SSG_ENUMERATOR(symbol, ordinal) WidgetKind::symbol,
     SSG_WIDGET_KIND_ENUMERATORS(SSG_ENUMERATOR)
@@ -50,9 +47,7 @@ inline constexpr std::size_t kWidgetKindCount = kAllWidgetKinds.size();
 
 // The closed set of opaque client-rendered surfaces a View leaf may name. The
 // library owns each surface's placement/size/presence in the tree and its
-// authoritative data channel; a client owns the pixels. A client's UI profile
-// declares which surfaces it implements, so this enum, its count, and its name
-// array are bound like WidgetKind's.
+// authoritative data channel; a client owns the pixels.
 enum class ViewSurface : std::uint8_t {
 #define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
     SSG_VIEW_SURFACE_ENUMERATORS(SSG_ENUMERATOR)
@@ -67,10 +62,8 @@ inline constexpr std::array kAllViewSurfaces{
 #undef SSG_VIEW_SURFACE_ENUMERATORS
 inline constexpr std::size_t kViewSurfaceCount = kAllViewSurfaces.size();
 
-// The stable wire/diagnostic name of a widget kind. Used to name the unsupported
-// kind when a composition exceeds a client's UI profile. Throws
-// std::invalid_argument on a corrupt/out-of-range enumerator, never a silent
-// wrong slot.
+// The stable diagnostic name of a widget kind. Throws std::invalid_argument on
+// a corrupt/out-of-range enumerator, never a silent wrong slot.
 [[nodiscard]] std::string_view widgetKindName(WidgetKind kind);
 
 // The stable wire/diagnostic name of a view surface, mirroring widgetKindName.

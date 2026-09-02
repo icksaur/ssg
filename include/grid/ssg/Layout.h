@@ -21,7 +21,6 @@
 #include <ssg/TreeModel.h>
 #include <ssg/UiNodeState.h>
 #include <ssg/UiPresence.h>
-#include <ssg/UiProfile.h>
 #include <ssg/UiTree.h>
 
 #include <map>
@@ -274,7 +273,7 @@ struct SolveUiFrameResult {
 // caller-measured intrinsic size; Auto containers derive theirs from children.
 [[nodiscard]] SolveUiFrameResult solveUiFrame(
     const ValidatedSchema& schema, const UiStateSection& state,
-    const UiPresenceSection& presence, const ClientUiProfile& profile,
+    const UiPresenceSection& presence,
     const std::vector<GridIntrinsicSize>& intrinsicSizes, Rect bounds);
 
 }  // namespace ssg

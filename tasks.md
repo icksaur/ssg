@@ -16,7 +16,7 @@ move editor behavior or product policy into a client to make core smaller.
 | Completed | Put pane/view behavior in core | Pane topology and active-pane policy now live per attachment in core; grid projects the published topology and resolves directional neighbors. |
 | Completed | Remove grid leakage from core | Replaced `GridActionResult` with the medium-neutral `ViewActionResult` at the ScriptHost/client seam. |
 | Completed | Reduce `GridFrame` | `GridPresentation` now owns the matched semantic snapshot and reduced grid result; `GridFrame` retains only grid projection products and `GridProjectionState` remains presenter-private. |
-| Next | Remove premature client-profile policy | Evaluate deleting `ClientUiProfile`, which the current grid path always fixes to the full profile; introduce capability negotiation only when an actual differing client needs it. |
+| Completed | Remove premature client-profile policy | Deleted `ClientUiProfile` and its unsupported-profile solver branch; no current client requires capability negotiation. |
 | Next | Privatize interaction intermediates | Keep `UiFrame` public while moving mutable/intermediate types such as `WholeScreenTruth`, `UiInteractionState`, and `WholeScreenSchema` behind `InteractionAuthority` where native clients do not need them. |
 | Next | Collapse publication delta surface | Audit feature-specific public delta codecs. Retain only the in-memory delta contract a retained client demonstrably consumes; move derivation helpers and unused codecs to implementation detail. |
 | Later | Simplify chrome decoding | Make Lua-value mirrors and decoder-result types implementation details. Preserve a typed, validated composition boundary rather than exposing decoder machinery. |
