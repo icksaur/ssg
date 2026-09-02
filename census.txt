@@ -3902,19 +3902,8 @@ core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::theme	ThemeSnapsho
 core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::tree	TreeViewState
 core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::uiFrame	UiFrame
 core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::watcherAvailable	bool
-core/ssg/snapshot.h	class	ssg::DocumentSnapshotCodec
-core/ssg/snapshot.h	func	ssg::DocumentDelta::operator==	bool (const DocumentDelta &) const
-core/ssg/snapshot.h	func	ssg::DocumentSnapshotCodec::deriveDelta	std::optional<DocumentDelta> (const DocumentViewState &, const DocumentViewState &) const
-core/ssg/snapshot.h	func	ssg::DocumentSnapshotCodec::replay	std::optional<DocumentViewState> (const DocumentViewState &, const DocumentDelta &, ByteOffset) const
 core/ssg/snapshot.h	func	ssg::DocumentViewState::operator==	bool (const DocumentViewState &) const
-core/ssg/snapshot.h	struct	ssg::DocumentDelta
 core/ssg/snapshot.h	struct	ssg::DocumentViewState
-core/ssg/snapshot.h	var	ssg::DocumentDelta::baseRevision	Revision
-core/ssg/snapshot.h	var	ssg::DocumentDelta::diffFileIdentity	std::optional<std::string>
-core/ssg/snapshot.h	var	ssg::DocumentDelta::erasedBytes	std::uint64_t
-core/ssg/snapshot.h	var	ssg::DocumentDelta::insertedText	std::string
-core/ssg/snapshot.h	var	ssg::DocumentDelta::revision	Revision
-core/ssg/snapshot.h	var	ssg::DocumentDelta::start	ByteOffset
 core/ssg/snapshot.h	var	ssg::DocumentViewState::caret	ByteOffset
 core/ssg/snapshot.h	var	ssg::DocumentViewState::diffFileIdentity	std::optional<std::string>
 core/ssg/snapshot.h	var	ssg::DocumentViewState::revision	Revision

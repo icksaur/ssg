@@ -1,7 +1,3 @@
-target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/snapshot.cpp
-)
-
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
         NAME test_session_snapshot_builder

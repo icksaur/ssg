@@ -3,8 +3,6 @@
 #include <ssg/CommandInvocation.h>
 #include <ssg/Document.h>
 #include <ssg/GraphemeLayout.h>
-#include <ssg/snapshot.h>
-
 #include "../src/runtime/command_executor.h"
 #include <ssg/Viewport.h>
 
@@ -50,7 +48,7 @@ struct Operation {
 
 struct Timings {
     std::vector<double> editMicroseconds;
-    std::vector<double> commandDeltaMicroseconds;
+    std::vector<double> commandEditMicroseconds;
     std::vector<double> openViewportMilliseconds;
     double idleCpuMilliseconds{};
 };
@@ -290,8 +288,8 @@ void measureEdits(std::string const& base,
     }
 }
 
-void measureCommandDelta(std::vector<Operation> const& operations,
-                           Timings& timings) {
+void measureCommandEdit(std::vector<Operation> const& operations,
+                        Timings& timings) {
     std::string const initial(16U * 1024U, 'a');
     for (std::size_t repetition = 0; repetition < kRepetitions; ++repetition) {
         ssg::Document document{initial};
@@ -314,9 +312,6 @@ void measureCommandDelta(std::vector<Operation> const& operations,
             ssg::ClientId{1}, ssg::InvocationOrigin::InProcess};
         if (!session.attach(principal, ssg::ViewId{1}).accepted())
             throw std::runtime_error{"benchmark client attach failed"};
-        ssg::DocumentViewState view{
-            document.revision(), initial, ssg::ByteOffset{0}};
-
         for (std::size_t i = 0; i < operations.size(); ++i) {
             Operation normalized = operations[i];
             normalized.offset = 0;
@@ -324,20 +319,14 @@ void measureCommandDelta(std::vector<Operation> const& operations,
             auto result = session.dispatch(
                 principal.clientId(),
                 {"benchmark.edit", session.revision(), normalized});
-            auto snapshot = document.snapshot();
-            ssg::DocumentViewState after{
-                snapshot.revision, std::move(snapshot.text),
-                ssg::ByteOffset{normalized.insert ? 1U : 0U}};
-            auto delta = ssg::DocumentSnapshotCodec{}.deriveDelta(view, after);
             auto const elapsed = Clock::now() - start;
-            if (!result.accepted() || !delta.has_value())
-                throw std::runtime_error{"command-to-delta cycle failed"};
-            view = std::move(after);
+            if (!result.accepted())
+                throw std::runtime_error{"command edit failed"};
             if (i >= kWarmupCount)
-                timings.commandDeltaMicroseconds.push_back(
+                timings.commandEditMicroseconds.push_back(
                     std::chrono::duration<double, std::micro>(elapsed).count());
         }
-        if (view.text != initial)
+        if (document.snapshot().text != initial)
             throw std::runtime_error{"command repetition diverged"};
     }
 }
@@ -383,10 +372,10 @@ void printReport(Timings const& timings) {
               << timings.editMicroseconds.size() << '\n'
               << "edit_us p50=" << percentile(timings.editMicroseconds, 0.50)
               << " p99=" << percentile(timings.editMicroseconds, 0.99) << '\n'
-              << "command_delta_us p50="
-              << percentile(timings.commandDeltaMicroseconds, 0.50)
+              << "command_edit_us p50="
+              << percentile(timings.commandEditMicroseconds, 0.50)
               << " p99="
-              << percentile(timings.commandDeltaMicroseconds, 0.99) << '\n'
+              << percentile(timings.commandEditMicroseconds, 0.99) << '\n'
               << "open_viewport_ms max="
               << *std::max_element(timings.openViewportMilliseconds.begin(),
                                    timings.openViewportMilliseconds.end())
@@ -398,9 +387,9 @@ void enforce(Timings const& timings) {
     if (percentile(timings.editMicroseconds, 0.50) >= 1'000.0 ||
         percentile(timings.editMicroseconds, 0.99) >= 4'000.0)
         throw std::runtime_error{"edit latency budget exceeded"};
-    if (percentile(timings.commandDeltaMicroseconds, 0.50) >= 2'000.0 ||
-        percentile(timings.commandDeltaMicroseconds, 0.99) >= 8'000.0)
-        throw std::runtime_error{"command-to-delta latency budget exceeded"};
+    if (percentile(timings.commandEditMicroseconds, 0.50) >= 2'000.0 ||
+        percentile(timings.commandEditMicroseconds, 0.99) >= 8'000.0)
+        throw std::runtime_error{"command edit latency budget exceeded"};
     if (*std::max_element(timings.openViewportMilliseconds.begin(),
                           timings.openViewportMilliseconds.end()) >= 250.0)
         throw std::runtime_error{"10 MiB first-viewport budget exceeded"};
@@ -429,7 +418,7 @@ int main(int argc, char** argv) {
             return 0;
         }
         measureEdits(base, operations, timings);
-        measureCommandDelta(operations, timings);
+        measureCommandEdit(operations, timings);
         measureOpenViewport(base, timings);
         printReport(timings);
         if (enforceLimits) enforce(timings);
