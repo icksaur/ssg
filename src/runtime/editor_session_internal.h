@@ -225,18 +225,11 @@ struct EditorSession::Impl final : CommandServices,
     std::optional<std::uint64_t> inputKeymapGeneration;
     std::optional<CatalogRevision> inputCatalogRevision;
     ThemeSnapshot theme{};
-    // Chrome glyphs and dimensions, beside the theme because they are the same
+    // UI glyphs and dimensions, beside the theme because they are the same
     // kind of thing: presentation this runtime owns and hands to layout.
     Style style{};
     // The init.lua-composed header/footer,
     // pushed by the host after each init.lua evaluation via
-    // EditorSession::setComposedUi. nullopt keeps the built-in chrome; a
-    // present region REPLACES that region's built-in status fields in shellView.
-    std::optional<ValidatedComposition> composedUi;
-    // Bumped whenever composedUi changes, so the published medium-agnostic UI
-    // schema is stamped with a generation that advances only
-    // on a real chrome/structure change.
-    std::uint64_t chromeGeneration = 0;
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
     mutable std::mutex operationMutex;
     std::shared_ptr<CommandCatalog> catalog =
@@ -472,13 +465,13 @@ struct EditorSession::Impl final : CommandServices,
     // document identity or revision no longer matches what it evaluated against,
     // so stale matches are never navigable or projected.
     void reconcileFindDocument();
-    // The projected + command-bound header/footer status fields the composed chrome
+    // The projected and command-bound header/footer status fields the UI tree
     // resolves its provider widgets against.
-    // The status-field styling a chrome resolution wants: the grid path prefixes
+    // The status-field styling UI resolution wants: the grid path prefixes
     // the cwd with a terminal glyph; the semantic dynamic-state path takes none, so
     // a native client receives no presentation styling. A strong mode (not a raw
     // prefix) makes semantic purity a named choice at each call site.
-    [[nodiscard]] StatusFieldProjection chromeStatusFields() const;
+    [[nodiscard]] StatusFieldProjection uiStatusFields() const;
     [[nodiscard]] PaletteViewState paletteView() const;
     // The geometry-free tree state; GridPresenter resolves its visible window.
     [[nodiscard]] TreeViewState treeView() const;
@@ -579,13 +572,11 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] bool focusPane(ClientId client, PaneId pane);
     [[nodiscard]] bool refreshTree();
     void refreshTreeForPublication(Revision drainEntryRevision);
-    // Re-assemble the authority-owned whole-screen schema from the given chrome inputs and
+    // Re-assemble the authority-owned whole-screen schema from the given UI inputs and
     // migrate the interaction over it. Takes the inputs as parameters (not members) so a
-    // caller can build+migrate BEFORE adopting the new style/composition, keeping chrome
-    // truth and the schema consistent if assembly ever throws.
+    // caller can build and migrate before adopting the new style.
     void rebuildInteractionSchema(const StyleDimensions& dimensions,
-                                  std::string_view promptSigil,
-                                  const std::optional<ValidatedComposition>& composed);
+                                  std::string_view promptSigil);
     // Refresh the file picker's candidates off the authority's picker epoch: a newly
     // (re)opened File picker rebuilds synchronously, any other picker state clears.
     [[nodiscard]] bool openPickerPrompt(PickerKind kind);

@@ -77,7 +77,7 @@ knowledge elsewhere.
 | `Workspace` | Own file/document identity, open/save/close policy, baselines, archives, recovery, and observation of self-saves. |
 | `CommandCatalog` and `CommandSpecBuilder` | Own the named command vocabulary, metadata, capability requirements, and handlers. |
 | `CommandTransition` and `PreparedTransition` | Preflight and atomically install changes spanning prompt, panel, picker, focus, and tree-provider state. |
-| `assembleWholeScreen` | Build the canonical medium-independent whole-screen UI tree and apply chrome override/fallback policy. |
+| `assembleWholeScreen` | Build the canonical medium-independent whole-screen UI tree. |
 | `UiFrame` and `UiFrameDeltaCodec` | Keep schema, dynamic node state, presence, and focus in one validated publication and derive/replay its in-memory changes. |
 | `GridPresenter` | Project semantic state through the grid-specific layout service and resolve grid view actions against a presentation basis. |
 | Platform file and watcher seams | Hide Linux and Windows durability, filesystem-watch, and Git-watch implementations from core behavior. |

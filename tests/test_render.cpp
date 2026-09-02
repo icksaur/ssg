@@ -352,7 +352,7 @@ TEST(rendererGetsRegionBackgroundsFromTheUiTree) {
               styled.semantic().sections().theme.color(
                   ssg::SemanticRole::FooterBackground));
     const auto headerGlyph = std::ranges::find_if(
-        styled.header()->items, [](const ssg::SolvedChromeItem& item) {
+        styled.header()->items, [](const ssg::SolvedUiItem& item) {
             return !item.content.empty();
         });
     ASSERT_TRUE(headerGlyph != styled.header()->items.end());
@@ -2056,8 +2056,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
         ssg::UiSchema schema;
         schema.root = ssg::assembleWholeScreen(
                           catalog, "help.open", ssg::StyleDimensions{},
-                          ssg::Style{}.inputLineSigil,
-                          std::nullopt)
+                          ssg::Style{}.inputLineSigil)
                           .root;
         auto validated = ssg::ValidatedSchema::validate(std::move(schema));
         ASSERT_TRUE(validated.ok());
@@ -2074,7 +2073,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
             .tabs({{"a.txt", "Tab a.txt", true, false},
                    {"b.txt", "Tab b.txt", false, false}})
             .noticePresent()
-            .chromeProviderResolver(
+            .widgetProviderResolver(
                 [](std::string_view id)
                     -> std::optional<ssg::ResolvedProvider> {
                 if (id == "cwd") {

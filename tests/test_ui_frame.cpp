@@ -22,7 +22,7 @@ Parts parts() {
     UiSchema schema{
         Generation{3},
         assembleWholeScreen({}, "help.open", StyleDimensions{},
-                            Style{}.inputLineSigil, std::nullopt)
+                            Style{}.inputLineSigil)
             .root};
     const auto validated = ValidatedSchema::validate(schema);
     ASSERT_TRUE(validated.ok());

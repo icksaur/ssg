@@ -65,11 +65,6 @@ public:
     // real content before reading a file's contents this far.
     [[nodiscard]] LuaResult evaluate(std::string_view script);
 
-    // The header/footer chrome the last successful evaluation composed via
-    // `ssg.chrome`, or nullopt when the current script composes none (fall back
-    // to built-in chrome). Replaced wholesale by each successful evaluation.
-    [[nodiscard]] std::optional<ValidatedComposition> const& composedUi() const;
-
 private:
     LuaResult offerGeneration(std::vector<std::string> const& commandIds);
 

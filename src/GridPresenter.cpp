@@ -211,7 +211,7 @@ GridFrame::GridFrame(SessionSnapshot const& semantic,
           projection_.style)},
       palette_{std::move(palette)},
       basis_{basis} {
-    if (auto error = solveChrome(semantic)) {
+    if (auto error = solveUiRegions(semantic)) {
         throw std::logic_error("GridFrame: " + *error);
     }
     solvePanel(semantic, 0, false);
@@ -226,15 +226,15 @@ GridFrame::GridFrame(GridProjection projection, SolvedGridTree layout,
       palette_{std::move(palette)},
       basis_{basis} {}
 
-std::optional<std::string> GridFrame::solveChrome(
+std::optional<std::string> GridFrame::solveUiRegions(
     SessionSnapshot const& semantic) {
     const auto& schema = semantic.sections().uiFrame.schema();
     const auto& state = semantic.sections().uiFrame.state();
     if (schema.generation != state.generation) {
-        return "chrome schema and state generations differ";
+        return "UI schema and state generations differ";
     }
     const auto solve = [&](std::string_view id, SemanticRole role,
-                           std::optional<SolvedChromeSurface>& output,
+                           std::optional<SolvedUiRegion>& output,
                            const StatusViewState* status,
                            const PromptInputProjection* input)
         -> std::optional<std::string> {
@@ -248,14 +248,12 @@ std::optional<std::string> GridFrame::solveChrome(
             return "solved " + std::string{id} +
                    " band has no schema subtree";
         }
-        SolvedChromeSurface surface;
+        SolvedUiRegion surface;
         const auto lowered =
-            solveUiChromeRegion(*subtree, solved->rect, role,
-                                projection_.style, schema.generation,
-                                state, surface,
-                                status, input);
+            solveUiRegion(*subtree, solved->rect, role, projection_.style,
+                          schema.generation, state, surface, status, input);
         if (!lowered.ok()) {
-            return std::string{id} + " chrome lowering failed: " +
+            return std::string{id} + " UI projection failed: " +
                    *lowered.error;
         }
         output = std::move(surface);
@@ -328,7 +326,7 @@ std::optional<GridFrame> GridFrame::fromSemantic(
         GridProjection{ViewportViewState{dimensions}, std::move(style),
                        navigation},
         std::move(*result.tree), basis, std::move(palette)};
-    if (frame.solveChrome(semantic)) return std::nullopt;
+    if (frame.solveUiRegions(semantic)) return std::nullopt;
     frame.solvePanel(semantic, treeFirstVisible, revealTreeSelection);
     frame.solveDocument(semantic);
     return frame;

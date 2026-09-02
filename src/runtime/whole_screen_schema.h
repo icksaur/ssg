@@ -3,8 +3,8 @@
 // Private runtime owner of the whole-screen schema and its generation. The schema is
 // STRUCTURALLY STABLE (WholeScreenAssembly builds it from the stable catalog + provider-
 // backed content), so its generation must advance ONLY when the structure actually
-// changes -- a dimensions change, a catalog change, or a composed-chrome override
-// changing the header/footer subtree. This owner enforces exactly that: update() with a
+// changes -- a dimensions change or a catalog change that alters the
+// header/footer subtree. This owner enforces exactly that: update() with a
 // freshly assembled composition advances the generation iff the root differs
 // structurally from the current one, and otherwise keeps the generation fixed. A caller
 // that rebuilds the interaction aggregate on a generation change therefore rebuilds only

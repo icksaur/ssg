@@ -1,9 +1,7 @@
 #pragma once
 
-// The UI-VM leaf vocabulary: the widget descriptor a UiTree leaf carries and the
-// value/provider types it composes from. Split out of the chrome decoder so
-// UiTree.h depends only on this vocabulary, never on the decoder (which in turn
-// depends on UiTree for its UiComposition output) -- the split breaks that cycle.
+// The UI-VM leaf vocabulary: the widget descriptor a UiTree leaf carries and
+// the value/provider types it resolves from.
 
 #include <ssg/Widget.h>  // WidgetKind, Overflow, CenterWidth
 
@@ -25,9 +23,7 @@ struct ValueSource {
     friend bool operator==(const ValueSource&, const ValueSource&) = default;
 };
 
-// One composed widget. The SUPERSET type that also serves forms; the per-kind
-// CHROME-context field matrix governs which
-// fields are required/allowed/forbidden here, enforced by the decoder. `value`
+// One semantic widget descriptor. `value`
 // is the text/caption source, `checked` the checkbox state source, `width` a
 // left/right `Spacer`'s blank width, `command` the click target (validated at
 // dispatch, not here), `role` a SemanticRole name (validated at lowering).
@@ -64,7 +60,7 @@ struct ResolvedProvider {
     std::optional<bool> active;
 };
 
-using ChromeProviderResolver =
+using WidgetProviderResolver =
     std::function<std::optional<ResolvedProvider>(std::string_view id)>;
 
 }  // namespace ssg

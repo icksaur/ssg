@@ -67,7 +67,7 @@ std::size_t tabCount(ssg::EditorSession& runtime) {
     return snapshot ? snapshot->sections().tabs.tabs.size() : 0;
 }
 
-std::optional<ssg::SolvedChromeItem> footerHelpNode(
+std::optional<ssg::SolvedUiItem> footerHelpNode(
     ssg::EditorSession& runtime) {
     auto frame = ssg::test::projectGridFrame(
         runtime, ssg::ClientId{1}, ssg::ViewId{1}, {120, 24});

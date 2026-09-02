@@ -450,7 +450,7 @@ void paintTabBar(CellGrid& grid, const SolvedTabBar& solved,
     }
 }
 
-void paintChromeSurface(CellGrid& grid, const SolvedChromeSurface& surface,
+void paintUiRegion(CellGrid& grid, const SolvedUiRegion& surface,
                         ThemeSnapshot const& theme, const UiSchema& ui,
                         SemanticRole backgroundRole, const Style& style) {
     const auto background = semanticIndex(theme, backgroundRole);
@@ -1263,14 +1263,14 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
     }
 
     if (snapshot.header()) {
-        paintChromeSurface(
+        paintUiRegion(
             grid, *snapshot.header(), theme, ui,
             nodeBackground(ui, kHeaderNodeId,
                            SemanticRole::HeaderBackground),
             style);
     }
     if (snapshot.footer()) {
-        paintChromeSurface(
+        paintUiRegion(
             grid, *snapshot.footer(), theme, ui,
             nodeBackground(ui, kFooterNodeId,
                            SemanticRole::FooterBackground),

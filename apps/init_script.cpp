@@ -15,11 +15,6 @@ void evaluateInitScript(ScriptHost& scripts, EditorSession& runtime,
         std::fprintf(stderr, "ssg: %s: %s\n", scriptPath.string().c_str(),
                      result.message.c_str());
     }
-    // Push the currently PUBLISHED composition (already reflects rollback: a
-    // rejected reload keeps the prior value) into the runtime on BOTH the
-    // startup and auto-reload paths, since this is their shared funnel. An
-    // unchanged composition is a no-op inside setComposedUi.
-    runtime.setComposedUi(scripts.composedUi());
 }
 
 }  // namespace ssg::app

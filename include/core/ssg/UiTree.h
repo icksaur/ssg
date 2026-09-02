@@ -130,7 +130,7 @@ struct UiNode {
 
 // The well-known node ids the whole-screen tree is built from. Placement is a
 // property of tree structure + these ids, not an out-of-band region enum: a client
-// finds a well-known area by id. Header/footer are the chrome subtrees; the root is
+// finds a well-known area by id. Header/footer are semantic UI subtrees; the root is
 // their column parent.
 inline constexpr std::string_view kRootNodeId = "root";
 inline constexpr std::string_view kHeaderNodeId = "header";
@@ -213,8 +213,8 @@ inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
     throw std::invalid_argument("wellKnownAreaId: unrecognized WellKnownArea");
 }
 
-// A well-formed empty root (id "root", an empty Column): the "no composed chrome"
-// tree. A default-constructed UiNode has an empty id, which fails validation, so
+// A well-formed empty root (id "root", an empty Column). A default-constructed
+// UiNode has an empty id, which fails validation, so
 // this is the default for UiSchema/UiComposition and the absent-UI schema.
 [[nodiscard]] UiNode emptyUiRoot();
 
@@ -241,11 +241,8 @@ struct ResolvedUiNodeStyle {
 [[nodiscard]] std::optional<ResolvedUiNodeStyle> resolveUiNodeStyle(
     const UiSchema& schema, std::string_view nodeId);
 
-// A generationless root tree: what the chrome decoder produces and the runtime OWNS
-// as composed input. It carries no Generation because a generation belongs to one
-// PUBLISHED schema; the runtime stamps the current generation when it publishes a
-// composition as a UiSchema, so authorship (decode) never fixes a generation and the
-// runtime stays the sole generation authority.
+// A generationless root tree owned by the runtime. A generation belongs to one
+// published schema, so the runtime stamps it when publishing a composition.
 struct UiComposition {
     UiNode root = emptyUiRoot();
 

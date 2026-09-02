@@ -88,7 +88,7 @@ RegionHit panelHit(SolvedPanelSurface const& panel, int column, int row) {
     return {};
 }
 
-RegionHit chromeHit(const SolvedChromeSurface& surface, HitRegion fieldRegion,
+RegionHit uiRegionHit(const SolvedUiRegion& surface, HitRegion fieldRegion,
                     int column, int row) {
     if (surface.input &&
         (contains(surface.input->query, column, row) ||
@@ -262,12 +262,12 @@ RegionHit HitTester::at(int column, int row) const {
 
     if (snapshot.header() &&
         contains(snapshot.header()->rect, column, row)) {
-        return chromeHit(*snapshot.header(), HitRegion::HeaderField,
+        return uiRegionHit(*snapshot.header(), HitRegion::HeaderField,
                          column, row);
     }
     if (snapshot.footer() &&
         contains(snapshot.footer()->rect, column, row)) {
-        return chromeHit(*snapshot.footer(), HitRegion::FooterField,
+        return uiRegionHit(*snapshot.footer(), HitRegion::FooterField,
                          column, row);
     }
 

@@ -114,9 +114,9 @@ public:
         return *this;
     }
 
-    SessionSnapshotBuilder& chromeProviderResolver(
-        ChromeProviderResolver resolver) {
-        chromeProviderResolver_ = std::move(resolver);
+    SessionSnapshotBuilder& widgetProviderResolver(
+        WidgetProviderResolver resolver) {
+        widgetProviderResolver_ = std::move(resolver);
         return *this;
     }
 
@@ -164,7 +164,7 @@ public:
             schema_
                 ? schema_->schema().root
                 : assembleWholeScreen({}, "help.open", style_.dimensions,
-                                      style_.inputLineSigil, std::nullopt)
+                                      style_.inputLineSigil)
                       .root;
         TreeModel tree;
         InteractionAuthority interaction{
@@ -213,8 +213,8 @@ public:
             LspFeatureViewState{},
             defaultTheme(),
             PaletteViewState{}};
-        const ChromeProviderResolver resolver =
-            [configured = chromeProviderResolver_,
+        const WidgetProviderResolver resolver =
+            [configured = widgetProviderResolver_,
              statusActions](std::string_view id)
                 -> std::optional<ResolvedProvider> {
             if (configured) {
@@ -308,7 +308,7 @@ private:
     std::optional<PromptInput> promptInput_;
     bool noticePresent_ = false;
     bool externalModificationPresent_ = false;
-    ChromeProviderResolver chromeProviderResolver_;
+    WidgetProviderResolver widgetProviderResolver_;
     StatusViewState status_;
 };
 

@@ -5,10 +5,9 @@
 // INDEPENDENT expectation derived from its sources, because the TUI node exposes
 // only the composed glyph, not the semantic checked/caption/label.
 
-#include "ssg/ChromeLowering.h"
+#include "ssg/UiRegionProjection.h"
 #include "ssg/ShellViewState.h"
 
-#include "chrome_authoring.h"
 #include "ssg/Style.h"
 #include "ssg/UiNodeState.h"
 #include "ssg/UiStateResolver.h"
@@ -24,14 +23,39 @@ namespace {
 
 using namespace ssg;
 
-UiChromeLowerResult lowerUiChromeRegion(
+UiComposition composeFooter(std::vector<WidgetDescriptor> widgets) {
+    UiContainer left;
+    left.axis = Axis::Row;
+    for (std::size_t index = 0; index < widgets.size(); ++index) {
+        left.children.push_back(
+            UiNode{UiNodeId{"footer.left." + std::to_string(index)},
+                   Size::autoSize(), UiLeaf{std::move(widgets[index])}});
+    }
+    UiContainer footer;
+    footer.axis = Axis::Row;
+    footer.children.push_back(
+        UiNode{UiNodeId{"footer.left"}, Size::autoSize(), std::move(left)});
+    footer.children.push_back(
+        UiNode{UiNodeId{"footer.middle"}, Size::flex(), UiContainer{Axis::Row}});
+    footer.children.push_back(
+        UiNode{UiNodeId{"footer.right"}, Size::autoSize(), UiContainer{Axis::Row}});
+    UiContainer root;
+    root.children.push_back(
+        UiNode{UiNodeId{std::string{kFooterNodeId}}, Size::exact(1),
+               std::move(footer)});
+    return UiComposition{
+        UiNode{UiNodeId{std::string{kRootNodeId}}, Size::flex(),
+               std::move(root)}};
+}
+
+UiRegionProjectionResult projectRegion(
     const UiNode& region, Rect rect, ShellNodeKind kind,
     SemanticRole role, const Style& style,
-    const ChromeProviderResolver& resolver,
+    const WidgetProviderResolver& resolver,
     std::vector<AccessibilityNode>& out) {
-    SolvedChromeSurface solved;
+    SolvedUiRegion solved;
     auto result =
-        ssg::lowerUiChromeRegion(region, rect, role, style, resolver, solved);
+        ssg::projectUiRegion(region, rect, role, style, resolver, solved);
     for (const auto& item : solved.items) {
         out.push_back({kind, item.id, item.label, item.rect, item.role,
                        item.content, item.command});
@@ -42,7 +66,7 @@ UiChromeLowerResult lowerUiChromeRegion(
 // A wide rect: no widget rank-collapses, so the TUI emits every non-dropped widget.
 constexpr int kWideWidth = 1000;
 
-ChromeProviderResolver resolverFrom(
+WidgetProviderResolver resolverFrom(
     std::vector<std::pair<std::string, ResolvedProvider>> table) {
     return [table = std::move(table)](
                std::string_view id) -> std::optional<ResolvedProvider> {
@@ -102,14 +126,14 @@ TEST(labelFieldStateMatchesTuiNodeOrDrop) {
     const auto resolver = resolverFrom(
         {{"path", {"~/proj", "Current path",
                    std::optional<std::string>{"panel.show_files"}}}});
-    const auto comp = ssgtest::composeFooter(
+    const auto comp = composeFooter(
         {literalField("f.lit", "hello"), providerField("f.prov", "path"),
          providerField("f.empty", "missing")});
     const UiSchema schema{Generation{1}, comp.root};
 
     const auto section = resolveUiState(ValidatedSchema::validate(schema).takeSchema(), resolver);
     std::vector<AccessibilityNode> nodes;
-    const auto lowered = lowerUiChromeRegion(
+    const auto lowered = projectRegion(
         footerArea(schema), {0, 0, kWideWidth, 1}, ShellNodeKind::FooterField,
         SemanticRole::Footer, Style{}, resolver, nodes);
     ASSERT_TRUE(lowered.ok());
@@ -148,7 +172,7 @@ TEST(explicitRoleOverridesRegionDefault) {
     roled.role = "status_warning";
     WidgetDescriptor bogus = literalField("f.bogus", "plain");
     bogus.role = "not_a_role";
-    const auto comp = ssgtest::composeFooter({roled, bogus});
+    const auto comp = composeFooter({roled, bogus});
     const UiSchema schema{Generation{1}, comp.root};
     const auto section =
         resolveUiState(ValidatedSchema::validate(schema).takeSchema(), empty);
@@ -188,7 +212,7 @@ TEST(checkboxStateMatchesIndependentExpectation) {
     provBox.value = ValueSource{true, "", "wrapcap"};
     provBox.checked = ValueSource{true, "", "wrapchk"};
 
-    const auto comp = ssgtest::composeFooter({litBox, provBox});
+    const auto comp = composeFooter({litBox, provBox});
     const UiSchema schema{Generation{1}, comp.root};
     const auto section = resolveUiState(ValidatedSchema::validate(schema).takeSchema(), resolver);
 
@@ -226,7 +250,7 @@ TEST(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord) {
     spacer.id = "sp";
     spacer.width = 3;
     const auto comp =
-        ssgtest::composeFooter({literalField("f", "x"), spacer});
+        composeFooter({literalField("f", "x"), spacer});
     const UiSchema schema{Generation{4}, comp.root};
     const auto empty = [](std::string_view) -> std::optional<ResolvedProvider> {
         return std::nullopt;
@@ -259,8 +283,7 @@ TEST(footerTextInputIsStatefulWhileHeaderPickerInputRemainsLocal) {
             ASSERT_TRUE(prompt.open(request).accepted());
 
             const auto composition = withFooterPrompt(
-                assembleWholeScreen({}, "help.open", StyleDimensions{}, "> ",
-                                    std::nullopt),
+                assembleWholeScreen({}, "help.open", StyleDimensions{}, "> "),
                 prompt);
             const auto schema = UiSchema{Generation{3}, composition.root};
             const auto resolver = resolverFrom(

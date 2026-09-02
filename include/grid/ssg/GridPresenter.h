@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/ChromeLowering.h>
+#include <ssg/UiRegionProjection.h>
 #include <ssg/ViewActionResult.h>
 #include <ssg/Layout.h>
 #include <ssg/PaletteSearcher.h>
@@ -57,10 +57,10 @@ public:
     [[nodiscard]] PaletteReport const& palette() const noexcept {
         return palette_;
     }
-    [[nodiscard]] std::optional<SolvedChromeSurface> const& header() const noexcept {
+    [[nodiscard]] std::optional<SolvedUiRegion> const& header() const noexcept {
         return header_;
     }
-    [[nodiscard]] std::optional<SolvedChromeSurface> const& footer() const noexcept {
+    [[nodiscard]] std::optional<SolvedUiRegion> const& footer() const noexcept {
         return footer_;
     }
     [[nodiscard]] std::optional<SolvedPanelSurface> const& panel() const noexcept {
@@ -89,14 +89,14 @@ private:
     void solvePanel(SessionSnapshot const& semantic,
                     std::uint32_t treeFirstVisible, bool revealTreeSelection);
     void solveDocument(SessionSnapshot const& semantic);
-    [[nodiscard]] std::optional<std::string> solveChrome(
+    [[nodiscard]] std::optional<std::string> solveUiRegions(
         SessionSnapshot const& semantic);
 
     GridProjection projection_;
     SolvedGridTree layout_;
     PaletteReport palette_;
-    std::optional<SolvedChromeSurface> header_;
-    std::optional<SolvedChromeSurface> footer_;
+    std::optional<SolvedUiRegion> header_;
+    std::optional<SolvedUiRegion> footer_;
     std::optional<SolvedPanelSurface> panel_;
     std::optional<SolvedDocumentSurface> document_;
     GridBasis basis_;
@@ -132,10 +132,10 @@ public:
     [[nodiscard]] PaletteReport const& palette() const noexcept {
         return frame_.palette();
     }
-    [[nodiscard]] std::optional<SolvedChromeSurface> const& header() const noexcept {
+    [[nodiscard]] std::optional<SolvedUiRegion> const& header() const noexcept {
         return frame_.header();
     }
-    [[nodiscard]] std::optional<SolvedChromeSurface> const& footer() const noexcept {
+    [[nodiscard]] std::optional<SolvedUiRegion> const& footer() const noexcept {
         return frame_.footer();
     }
     [[nodiscard]] std::optional<SolvedPanelSurface> const& panel() const noexcept {

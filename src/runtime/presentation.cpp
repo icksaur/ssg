@@ -359,8 +359,7 @@ void registerAppearanceCommands(CommandCatalog& builder,
                                 // interaction schema inconsistent.
                                 runtime.rebuildInteractionSchema(
                                     result.style.dimensions,
-                                    result.style.inputLineSigil,
-                                    runtime.composedUi);
+                                    result.style.inputLineSigil);
                                 runtime.style = std::move(result.style);
                                 return success();
                             });

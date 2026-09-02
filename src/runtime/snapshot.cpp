@@ -17,7 +17,7 @@ namespace {
 // A resolver from projected status fields: id -> (value, label, command). Shared by
 // the grid lowering and the semantic dynamic-state resolution so a composed
 // provider widget resolves to the same values on either path.
-ChromeProviderResolver chromeResolverFor(std::vector<StatusField> header,
+WidgetProviderResolver widgetResolverFor(std::vector<StatusField> header,
                                          std::vector<StatusField> footer,
                                          std::string helpLabel,
                                          std::vector<StatusActionNode> statusActions,
@@ -167,7 +167,7 @@ bool EditorSession::Impl::noticePresent() const {
     return draftNotice().has_value();
 }
 
-StatusFieldProjection EditorSession::Impl::chromeStatusFields() const {
+StatusFieldProjection EditorSession::Impl::uiStatusFields() const {
     auto statusProjection = status.footerProjection();
     auto followProjection = follow.footerProjection();
     auto fields = projectStatusFields(
@@ -203,9 +203,9 @@ SessionSnapshotSections EditorSession::Impl::sections(
             "resolveUiState: composed schema violates the well-known-area contract");
     }
     UiStateSection uiState = [&] {
-        auto fields = chromeStatusFields();
+        auto fields = uiStatusFields();
         return resolveUiState(
-            validatedSchema, chromeResolverFor(std::move(fields.header),
+            validatedSchema, widgetResolverFor(std::move(fields.header),
                                                std::move(fields.footer),
                                                helpHintLabel(keymap),
                                                interaction.statusActions(),

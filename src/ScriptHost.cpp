@@ -49,16 +49,6 @@ std::string argumentField(
     return it == arguments.end() ? std::string{} : it->second;
 }
 
-// The live provider ids a composed `ssg.chrome` widget may reference, taken from
-// the built-in status-field providers so the two cannot drift: a provider that
-// exists at runtime is exactly one a composition may name.
-std::vector<std::string> scriptChromeProviders() {
-    std::vector<std::string> ids;
-    for (auto const& binding : defaultStatusFieldProviders())
-        ids.push_back(binding.id);
-    return ids;
-}
-
 }  // namespace
 
 struct ScriptHost::Impl {
@@ -208,7 +198,6 @@ ScriptHost::ScriptHost(EditorSession& runtime, ViewId viewId,
     options.pluginId = kScriptClientId;
     options.capabilities = scriptCapabilities();
     options.commands = scriptCommandCatalog(*runtime.commandCatalog());
-    options.chromeProviders = scriptChromeProviders();
     options.publishGate = [this](std::vector<std::string> const& ids) {
         return offerGeneration(ids);
     };
@@ -232,10 +221,6 @@ LuaResult ScriptHost::evaluate(std::string_view script) {
     // the script already caused before failing: a theme it applied stays
     // applied.
     return impl_->host.evaluate(script);
-}
-
-std::optional<ValidatedComposition> const& ScriptHost::composedUi() const {
-    return impl_->host.composedUi();
 }
 
 // Offers what an evaluation registered to the catalog, before the host makes

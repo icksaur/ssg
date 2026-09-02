@@ -1,6 +1,5 @@
 #include <ssg/WholeScreenAssembly.h>
 
-#include <ssg/ChromeRegionShape.h>
 #include <ssg/Widget.h>  // ViewSurface, Overflow
 
 #include <string>
@@ -15,7 +14,7 @@ namespace {
 // A built-in status field is a provider-backed Field keyed by the catalog entry id. It
 // carries only STABLE structure -- the id and the collapse rank; its value, accessible
 // label, and click command all ride uiState (resolved per frame by the
-// ChromeProviderResolver keyed by id), so a field whose value, command, or provider
+// WidgetProviderResolver keyed by id), so a field whose value, command, or provider
 // presence changes never alters the schema structure. A field the resolver has no value
 // for resolves to no leaf state (the semantic drop), exactly as the grid drops an empty
 // status field.
@@ -47,8 +46,21 @@ WidgetDescriptor hintField(std::string_view hintCommandId) {
     return widget;
 }
 
-// A built-in header/footer region: catalog fields as the left group, `right` as the
-// right group, no center, in the shared canonical region shape.
+UiNode regionGroup(std::string id, std::vector<WidgetDescriptor> widgets,
+                   Size size, int gap = 0) {
+    UiContainer group;
+    group.axis = Axis::Row;
+    group.gap = Gap::of(gap);
+    for (std::size_t index = 0; index < widgets.size(); ++index) {
+        group.children.push_back(
+            UiNode{UiNodeId{id + "." + std::to_string(index)}, Size::autoSize(),
+                   UiLeaf{std::move(widgets[index])}});
+    }
+    return UiNode{UiNodeId{std::move(id)}, size, std::move(group)};
+}
+
+// A fixed header/footer region expressed only through the published UiNode
+// vocabulary: content-sized end groups and a flex spacer group between them.
 UiNode builtinRegion(std::string_view base,
                      const std::vector<StatusFieldCatalogEntry>& entries,
                      std::vector<WidgetDescriptor> right) {
@@ -56,8 +68,16 @@ UiNode builtinRegion(std::string_view base,
     left.reserve(entries.size());
     for (const StatusFieldCatalogEntry& entry : entries)
         left.push_back(fieldFor(entry));
-    return chromeRegion(base, left, right, /*center=*/std::nullopt,
-                        CenterWidth::Flex, /*centerFixed=*/0, /*separator=*/1);
+    const std::string baseId{base};
+    UiContainer region;
+    region.axis = Axis::Row;
+    region.children.push_back(
+        regionGroup(baseId + ".left", std::move(left), Size::autoSize(), 1));
+    region.children.push_back(
+        regionGroup(baseId + ".middle", {}, Size::flex()));
+    region.children.push_back(
+        regionGroup(baseId + ".right", std::move(right), Size::autoSize()));
+    return UiNode{UiNodeId{baseId}, Size::flex(), std::move(region)};
 }
 
 UiNode viewLeaf(std::string_view id, ViewSurface surface, Size size) {
@@ -76,21 +96,6 @@ UiNode container(std::string_view id, Axis axis, Size size,
     body.scroll = scroll;
     body.children = std::move(children);
     return UiNode{UiNodeId{std::string{id}}, size, std::move(body)};
-}
-
-// The composed area with `id`, if the override carries one as a direct child of its
-// root. A composed override is a root Column of the header/footer subtrees it defines;
-// an area it omits falls through to the built-in.
-const UiNode* composedArea(const std::optional<ValidatedComposition>& override,
-                           std::string_view id) {
-    if (!override) return nullptr;
-    const UiComposition& comp = override->composition();
-    if (const auto* root = std::get_if<UiContainer>(&comp.root.content)) {
-        for (const UiNode& child : root->children) {
-            if (child.id.value() == id) return &child;
-        }
-    }
-    return nullptr;
 }
 
 UiNode withSize(UiNode node, Size size) {
@@ -162,13 +167,8 @@ UiNode footerPromptCount(const PromptControl& control) {
                   UiLeaf{std::move(widget)}};
 }
 
-// Insert the prompt input right after the header's left group (the status
-// fields), so tree order matches the visual order the query line occupies: a
-// client that lays out in tree order renders it immediately after the fields and
-// before the flex middle, rather than pushed to the far right past the middle.
-// The grid extracts it by id (position-independent) and places it by the
-// reserve/expand rule. Applies to both the built-in and a composed header, each
-// the canonical [left, middle, right].
+// Insert the prompt input after the header's status fields so tree order matches
+// the visual order the query line occupies.
 void insertPromptInput(UiNode& header, std::string_view promptSigil) {
     if (auto* root = std::get_if<UiContainer>(&header.content)) {
         const auto afterLeftGroup =
@@ -183,10 +183,7 @@ UiComposition assembleWholeScreen(
     const std::vector<StatusFieldCatalogEntry>& catalog,
     std::string_view hintCommandId,
     const StyleDimensions& dimensions,
-    std::string_view promptSigil,
-    const std::optional<ValidatedComposition>& composedOverride) {
-    const UiNode* composedHeader = composedArea(composedOverride, kHeaderNodeId);
-    const UiNode* composedFooter = composedArea(composedOverride, kFooterNodeId);
+    std::string_view promptSigil) {
 
     // Split the stable catalog superset by region -- the entry's own region, so a
     // caller cannot mis-split header/footer or smuggle in a projected subset.
@@ -197,24 +194,18 @@ UiComposition assembleWholeScreen(
             .push_back(entry);
     }
 
-    // The built-in footer carries the provider-backed hint and an ordinary
-    // status-action container. A composed footer replaces both.
+    // The footer carries the provider-backed hint and an ordinary status-action
+    // container as fixed semantic nodes.
     std::vector<WidgetDescriptor> footerRight;
     footerRight.push_back(hintField(hintCommandId));
 
-    UiNode header = composedHeader
-                        ? *composedHeader
-                        : builtinRegion(kHeaderNodeId, headerEntries, {});
-    UiNode footer = composedFooter
-                        ? *composedFooter
-                        : builtinRegion(kFooterNodeId, footerEntries,
-                                        std::move(footerRight));
-    if (!composedFooter) {
-        auto& region = std::get<UiContainer>(footer.content);
-        auto& right = std::get<UiContainer>(region.children[2].content);
-        right.children.push_back(
-            container("footer.status_actions", Axis::Row, Size::autoSize(), {}));
-    }
+    UiNode header = builtinRegion(kHeaderNodeId, headerEntries, {});
+    UiNode footer =
+        builtinRegion(kFooterNodeId, footerEntries, std::move(footerRight));
+    auto& region = std::get<UiContainer>(footer.content);
+    auto& right = std::get<UiContainer>(region.children[2].content);
+    right.children.push_back(
+        container("footer.status_actions", Axis::Row, Size::autoSize(), {}));
     header = withStyle(
         withSize(std::move(header), Size::exact(dimensions.headerHeight)),
         SemanticRole::Header, SemanticRole::HeaderBackground);
@@ -231,7 +222,7 @@ UiComposition assembleWholeScreen(
             ScrollAxis::Vertical),
         SemanticRole::PanelInactive, SemanticRole::TreeBackground),
         FocusTarget::Panel);
-    // Editor-owned transient chrome sits after tabs and before the document. It
+    // Editor-owned transient UI sits after tabs and before the document. It
     // consumes document rows without spanning or moving the side panel.
     UiNode notice = withStyle(
         viewLeaf(kNoticeNodeId, ViewSurface::Notice, Size::autoSize()),
@@ -314,9 +305,7 @@ UiComposition withFooterPrompt(UiComposition base,
 UiComposition withStatusActions(
     UiComposition base, const std::vector<StatusActionNode>& actions) {
     UiNode* actionContainer = nullptr;
-    // Only assembleWholeScreen's direct built-in footer anchor is eligible.
-    // Decoder-validated composed chrome cannot author this structural position,
-    // so a composed footer explicitly suppresses the retained projection.
+    // The fixed whole-screen footer owns the sole status-action anchor.
     if (auto* root = std::get_if<UiContainer>(&base.root.content)) {
         for (auto& area : root->children) {
             if (area.id.value() != kFooterNodeId) continue;

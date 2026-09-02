@@ -1,4 +1,4 @@
-#include <ssg/ChromeLowering.h>
+#include <ssg/UiRegionProjection.h>
 
 #include <ssg/GraphemeLayout.h>
 #include <ssg/StatusFieldGrid.h>
@@ -46,7 +46,7 @@ bool truthy(std::string_view value) { return value == "true"; }
 // box), and a literal checkbox labels itself with that glyph. Byte-identical to the
 // shipped behavior; the semantic resolution below is a separate, glyph-free path.
 Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
-                       const ChromeProviderResolver& resolveProvider) {
+                       const WidgetProviderResolver& resolveProvider) {
     Resolved r;
     const auto semantic =
         resolveUiLeafState(w, resolveProvider, SemanticRole::Text);
@@ -133,16 +133,16 @@ StackItem stackItemFor(const WidgetDescriptor& w, std::string stackId,
 }  // namespace
 
 // Shared core: lower three ordered widget groups (left, optional center, right)
-// plus their separator/center params into accessibility nodes. lowerUiChromeRegion
+// plus their separator/center params into accessibility nodes. projectUiRegion
 // reads these groups off the canonical region tree and feeds them here, so the
 // grid lowering has one entry point.
-static int lowerChromeGroups(
+static int lowerUiRegionGroups(
     const std::vector<const WidgetDescriptor*>& left,
     const std::vector<const WidgetDescriptor*>& right,
     const WidgetDescriptor* center, int separator, CenterWidth centerWidth,
     int centerFixed, const Rect& rect, SemanticRole defaultRole, const Style& style,
-    const ChromeProviderResolver& resolveProvider,
-    std::vector<SolvedChromeItem>& out, const StatusViewState* statusView) {
+    const WidgetProviderResolver& resolveProvider,
+    std::vector<SolvedUiItem>& out, const StatusViewState* statusView) {
     WidgetStack stack{separator};
     std::vector<Packed> packed;
 
@@ -251,7 +251,7 @@ static int lowerChromeGroups(
 namespace {
 
 // The leaves of a group container, in order; nullopt if any child is not a leaf
-// (a malformed chrome group).
+// (a malformed UI-region group).
 std::optional<std::vector<const WidgetDescriptor*>> groupLeaves(
     const UiNode& group) {
     const auto* container = std::get_if<UiContainer>(&group.content);
@@ -281,21 +281,21 @@ std::optional<std::vector<const WidgetDescriptor*>> groupLeaves(
 
 }  // namespace
 
-UiChromeLowerResult lowerUiChromeRegion(
+UiRegionProjectionResult projectUiRegion(
     const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
     const Style& style,
-    const ChromeProviderResolver& resolveProvider,
-    SolvedChromeSurface& out, const StatusViewState* statusView,
+    const WidgetProviderResolver& resolveProvider,
+    SolvedUiRegion& out, const StatusViewState* statusView,
     const PromptInputProjection* input) {
-    out = SolvedChromeSurface{rect};
-    // The canonical chrome shape: a Row root of exactly three groups --
+    out = SolvedUiRegion{rect};
+    // The canonical UI-region shape: a Row root of exactly three groups --
     // left(Auto, Row), middle(Flex, Row), right(Auto, Row) -- so the packing is
     // encoded in the sizing. Every field the shape depends on is CHECKED here (no
     // silently-ignored axis/size/gap), so a tree a generic client would lay out
     // differently is rejected rather than lowered.
     const auto* root = std::get_if<UiContainer>(&regionRoot.content);
     if (!root || root->axis != Axis::Row) {
-        return {"chrome region root must be a Row container"};
+        return {"UI region root must be a Row container"};
     }
     // The header's canonical prompt-input TextInput is not one of the three
     // collapse groups: it is extracted by its well-known id (wherever it sits in
@@ -310,11 +310,11 @@ UiChromeLowerResult lowerUiChromeRegion(
             leaf && leaf->widget.kind == WidgetKind::TextInput) {
             if (child.id.value() != kHeaderPromptInputNodeId ||
                 leaf->widget.id != kHeaderPromptInputNodeId) {
-                return {"chrome region prompt input must be the canonical "
+                return {"UI region prompt input must be the canonical "
                         "input_line node"};
             }
             if (promptInput) {
-                return {"chrome region must have at most one prompt input"};
+                return {"UI region must have at most one prompt input"};
             }
             promptInput = &leaf->widget;
             continue;
@@ -322,7 +322,7 @@ UiChromeLowerResult lowerUiChromeRegion(
         groups.push_back(&child);
     }
     if (groups.size() != 3) {
-        return {"chrome region root must have exactly three groups "
+        return {"UI region root must have exactly three groups "
                 "(left, middle, right)"};
     }
 
@@ -334,60 +334,60 @@ UiChromeLowerResult lowerUiChromeRegion(
     const auto* middleContainer = std::get_if<UiContainer>(&middleGroup.content);
     const auto* rightContainer = std::get_if<UiContainer>(&rightGroup.content);
     if (!leftContainer || !middleContainer || !rightContainer) {
-        return {"chrome region groups must be containers"};
+        return {"UI region groups must be containers"};
     }
     if (leftContainer->axis != Axis::Row || middleContainer->axis != Axis::Row ||
         rightContainer->axis != Axis::Row) {
-        return {"chrome region groups must be Row containers"};
+        return {"UI region groups must be Row containers"};
     }
     // Sizing encodes the packing: Auto ends, Flex middle. A deviation would render
     // differently on a generic client, so reject it.
     if (leftGroup.size.kind() != SizeKind::Auto ||
         rightGroup.size.kind() != SizeKind::Auto ||
         middleGroup.size.kind() != SizeKind::Flex) {
-        return {"chrome region groups must be Auto/Flex/Auto sized"};
+        return {"UI region groups must be Auto/Flex/Auto sized"};
     }
-    // A chrome row reserves no inset at the root or any group, and only the left
+    // A UI-region row reserves no inset at the root or any group, and only the left
     // group carries a gap (the separator); the right group's gap is zero. Checked,
     // not ignored, so a generic client and the grid agree on the geometry.
     if (root->inset != Inset{} || leftContainer->inset != Inset{} ||
         middleContainer->inset != Inset{} || rightContainer->inset != Inset{}) {
-        return {"chrome region reserves no inset"};
+        return {"UI region reserves no inset"};
     }
     // The root spaces its three groups by the packing sizing alone, not a gap;
     // a root gap would be honored by a generic client but ignored by the grid.
     if (root->gap != Gap{} || rightContainer->gap != Gap{}) {
-        return {"chrome region root/right group must have no gap"};
+        return {"UI region root/right group must have no gap"};
     }
 
     const auto leftWidgets = groupLeaves(leftGroup);
     const auto rightWidgets = groupLeaves(rightGroup);
     if (!leftWidgets || !rightWidgets) {
-        return {"chrome region left/right groups must hold only leaves"};
+        return {"UI region left/right groups must hold only leaves"};
     }
     // Every left/right leaf is content-sized (Auto), matching the group's packing.
     for (const auto& child :
          std::get<UiContainer>(leftGroup.content).children) {
         if (child.size.kind() != SizeKind::Auto) {
-            return {"chrome region left leaves must be Auto sized"};
+            return {"UI region left leaves must be Auto sized"};
         }
     }
     for (const auto& child :
          std::get<UiContainer>(rightGroup.content).children) {
         if (child.size.kind() != SizeKind::Auto) {
-            return {"chrome region right leaves must be Auto sized"};
+            return {"UI region right leaves must be Auto sized"};
         }
     }
 
-    // The grid chrome lowering renders only chrome widget kinds; an opaque View
-    // surface is not lowerable to chrome cells, so a View reaching this path is a
+    // UI-region projection renders only directly projected widget kinds; an opaque
+    // View surface is not lowerable to cells, so a View reaching this path is a
     // loud conformance failure, never silently emitted as empty content.
     for (const auto* group : {leftWidgets ? &*leftWidgets : nullptr,
                               rightWidgets ? &*rightWidgets : nullptr}) {
         if (!group) continue;
         for (const WidgetDescriptor* w : *group) {
             if (w->kind == WidgetKind::View) {
-                return {"chrome region cannot render a view leaf"};
+                return {"UI region cannot render a view leaf"};
             }
         }
     }
@@ -400,18 +400,18 @@ UiChromeLowerResult lowerUiChromeRegion(
     CenterWidth centerWidth = CenterWidth::Flex;
     int centerFixed = 0;
     if (middleContainer->children.size() > 1) {
-        return {"chrome region middle group has more than one widget"};
+        return {"UI region middle group has more than one widget"};
     }
     if (middleContainer->children.size() == 1) {
         const UiNode& centerNode = middleContainer->children.front();
         const auto* leaf = std::get_if<UiLeaf>(&centerNode.content);
-        if (!leaf) return {"chrome region center is not a leaf"};
+        if (!leaf) return {"UI region center is not a leaf"};
         center = &leaf->widget;
         if (center->kind == WidgetKind::View) {
-            return {"chrome region cannot render a view leaf"};
+            return {"UI region cannot render a view leaf"};
         }
         if (centerNode.size.kind() == SizeKind::Auto) {
-            return {"chrome region center leaf must be Flex or Exact sized"};
+            return {"UI region center leaf must be Flex or Exact sized"};
         }
         if (centerNode.size.kind() == SizeKind::Exact) {
             centerWidth = CenterWidth::Fixed;
@@ -432,7 +432,7 @@ UiChromeLowerResult lowerUiChromeRegion(
         groupsRect.width = std::max(0, rect.width - reserved);
     }
 
-    const int rightEdge = lowerChromeGroups(
+    const int rightEdge = lowerUiRegionGroups(
         *leftWidgets, *rightWidgets, center, separator, centerWidth, centerFixed,
         groupsRect, defaultRole, style, resolveProvider, out.items,
         statusView);
@@ -447,7 +447,7 @@ UiChromeLowerResult lowerUiChromeRegion(
         const int available = std::max(0, rect.x + rect.width - inputX);
         const auto line =
             layoutInputLine(promptInput->sigil, input->query, input->ghost, available);
-        SolvedChromeInput solvedInput;
+        SolvedUiInput solvedInput;
         solvedInput.nodeId =
             UiNodeId{std::string{kHeaderPromptInputNodeId}};
         solvedInput.query = {inputX, rect.y, line.width, 1};
@@ -464,15 +464,15 @@ UiChromeLowerResult lowerUiChromeRegion(
     return {std::nullopt, rightEdge};
 }
 
-UiChromeLowerResult solveUiChromeRegion(
+UiRegionProjectionResult solveUiRegion(
     const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
     const Style& style, Generation schemaGeneration,
     const UiStateSection& state,
-    SolvedChromeSurface& out, const StatusViewState* statusView,
+    SolvedUiRegion& out, const StatusViewState* statusView,
     const PromptInputProjection* input) {
     if (state.generation != schemaGeneration) {
         return {regionRoot.id.value() +
-                " chrome UI state generation does not match schema"};
+                " UI state generation does not match schema"};
     }
     struct ProviderState {
         std::string id;
@@ -515,7 +515,7 @@ UiChromeLowerResult solveUiChromeRegion(
                               const UiNode& node) -> std::optional<std::string> {
         if (!stateFor(node.id)) {
             return regionRoot.id.value() +
-                   " chrome UI state is missing node " + node.id.value();
+                   " UI state is missing node " + node.id.value();
         }
         if (const auto* container =
                 std::get_if<UiContainer>(&node.content)) {
@@ -529,7 +529,7 @@ UiChromeLowerResult solveUiChromeRegion(
         return {*error};
     }
     collect(collect, regionRoot);
-    const ChromeProviderResolver resolver =
+    const WidgetProviderResolver resolver =
         [providers = std::move(providers)](
             std::string_view id) -> std::optional<ResolvedProvider> {
         const auto found = std::ranges::find(providers, id, &ProviderState::id);
@@ -537,7 +537,7 @@ UiChromeLowerResult solveUiChromeRegion(
                    ? std::nullopt
                    : std::optional<ResolvedProvider>{found->value};
     };
-    return lowerUiChromeRegion(regionRoot, rect, defaultRole, style, resolver,
+    return projectUiRegion(regionRoot, rect, defaultRole, style, resolver,
                                out, statusView, input);
 }
 

@@ -1,10 +1,10 @@
 // Contract oracle for the opaque View surface vocabulary: every ViewSurface names
 // a non-empty, stable set of authoritative snapshot sections that back it, and the
-// grid chrome path refuses a View it cannot render (rather than emitting empty).
+// grid UI-region path refuses a View it cannot render (rather than emitting empty).
 // The surface->section mapping is the enforced data-channel contract for the
 // closed surface set.
 
-#include "ssg/ChromeLowering.h"
+#include "ssg/UiRegionProjection.h"
 #include "ssg/ShellViewState.h"
 #include "ssg/UiTree.h"
 #include "ssg/ViewSurfaceBacking.h"
@@ -19,14 +19,14 @@
 
 namespace {
 
-ssg::UiChromeLowerResult lowerLegacyChromeForTest(
+ssg::UiRegionProjectionResult projectRegionForTest(
     const ssg::UiNode& region, ssg::Rect rect,
     ssg::ShellNodeKind kind, ssg::SemanticRole role,
     const ssg::Style& style,
-    const ssg::ChromeProviderResolver& resolver,
+    const ssg::WidgetProviderResolver& resolver,
     std::vector<ssg::AccessibilityNode>& out) {
-    ssg::SolvedChromeSurface solved;
-    auto result = ssg::lowerUiChromeRegion(
+    ssg::SolvedUiRegion solved;
+    auto result = ssg::projectUiRegion(
         region, rect, role, style, resolver, solved);
     for (const auto& item : solved.items) {
         out.push_back({kind, item.id, item.label, item.rect, item.role,
@@ -110,11 +110,11 @@ TEST(externalModSurfaceIsBackedOnlyByTheExternalModSection) {
     ASSERT_TRUE(sections.front() == SnapshotSection::ExternalModification);
 }
 
-// The grid chrome lowering renders only chrome widget kinds; a View reaching it is
+// Grid UI-region projection cannot render an opaque View; a View reaching it is
 // a loud conformance failure, never silent empty content. A left/right leaf must be
 // Auto-sized while a View must be Exact/Flex, so the only View shape reachable
-// through a validated chrome region is the Flex/Exact center -- exercise that.
-TEST(gridChromeLoweringRefusesAViewCenter) {
+// through a header/footer region is the Flex/Exact center -- exercise that.
+TEST(gridUiRegionProjectionRefusesAViewCenter) {
     WidgetDescriptor view;
     view.kind = WidgetKind::View;
     view.id = "footer.middle.0";
@@ -138,10 +138,26 @@ TEST(gridChromeLoweringRefusesAViewCenter) {
         [](std::string_view) -> std::optional<ssg::ResolvedProvider> {
         return std::nullopt;
     };
-    const auto result = lowerLegacyChromeForTest(
+    const auto result = projectRegionForTest(
         regionRoot, {0, 0, 100, 1}, ssg::ShellNodeKind::FooterField,
         ssg::SemanticRole::Footer, ssg::Style{}, empty, out);
     ASSERT_TRUE(!result.ok());
+}
+
+TEST(gridUiRegionProjectionRefusesMalformedShape) {
+    UiContainer root{Axis::Column, {}, {}, {}};
+    UiNode malformed{UiNodeId{"footer"}, Size::flex(), std::move(root)};
+    std::vector<ssg::AccessibilityNode> out;
+    const auto empty =
+        [](std::string_view) -> std::optional<ssg::ResolvedProvider> {
+        return std::nullopt;
+    };
+    const auto result = projectRegionForTest(
+        malformed, {0, 0, 100, 1}, ssg::ShellNodeKind::FooterField,
+        ssg::SemanticRole::Footer, ssg::Style{}, empty, out);
+    ASSERT_TRUE(!result.ok());
+    ASSERT_EQ(result.error, std::string{"UI region root must be a Row container"});
+    ASSERT_TRUE(out.empty());
 }
 
 }  // namespace
@@ -153,6 +169,7 @@ int main() {
     RUN(theSurfaceBackingMappingIsTheSpecifiedContract);
     RUN(externalModSurfaceIsBackedOnlyByTheExternalModSection);
     RUN(statusActionsIsBackedByPromptStatus);
-    RUN(gridChromeLoweringRefusesAViewCenter);
+    RUN(gridUiRegionProjectionRefusesAViewCenter);
+    RUN(gridUiRegionProjectionRefusesMalformedShape);
     return failed == 0 ? 0 : 1;
 }

@@ -42,7 +42,7 @@ Churn of the artifacts that were *suspected* of causing the slowdown:
 
 The oracle and the end-to-end tests are the **cheapest artifacts in the
 repository**. They are large but inert. The expensive tests are the
-*presentation* tests, which are re-blessed on every chrome change.
+*presentation* tests, which are re-blessed on every presentation change.
 
 ## Verdicts on the five theories
 

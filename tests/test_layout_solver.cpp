@@ -632,8 +632,7 @@ TEST(uiFrameRejectsUnrepresentableIntrinsicExtent) {
 TEST(generatedWholeScreenSolvesEveryPresentNodeExactlyOnce) {
     UiSchema authored{
         Generation{4},
-        assembleWholeScreen({}, "help.open", StyleDimensions{}, "> ",
-                            std::nullopt)
+        assembleWholeScreen({}, "help.open", StyleDimensions{}, "> ")
             .root};
     auto result = ValidatedSchema::validate(std::move(authored));
     ASSERT_TRUE(result.ok());

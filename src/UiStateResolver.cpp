@@ -20,7 +20,7 @@ struct Sources {
 };
 
 Sources resolveSources(const WidgetDescriptor& widget,
-                       const ChromeProviderResolver& resolveProvider) {
+                       const WidgetProviderResolver& resolveProvider) {
     Sources sources;
     if (!widget.value) return sources;
     if (!widget.value->isProvider) {
@@ -39,7 +39,7 @@ Sources resolveSources(const WidgetDescriptor& widget,
 }
 
 bool resolveChecked(const WidgetDescriptor& widget,
-                    const ChromeProviderResolver& resolveProvider) {
+                    const WidgetProviderResolver& resolveProvider) {
     if (!widget.checked) return false;
     if (!widget.checked->isProvider) {
         return truthy(widget.checked->literal);
@@ -65,7 +65,7 @@ SemanticRole defaultRoleForArea(const UiNodeId& id) {
 }
 
 void collectNodeStates(const UiNode& node,
-                       const ChromeProviderResolver& resolveProvider,
+                       const WidgetProviderResolver& resolveProvider,
                        SemanticRole defaultRole,
                        std::vector<UiNodeState>& out) {
     UiNodeState state;
@@ -86,7 +86,7 @@ void collectNodeStates(const UiNode& node,
 
 std::optional<UiLeafState> resolveUiLeafState(
     const WidgetDescriptor& widget,
-    const ChromeProviderResolver& resolveProvider,
+    const WidgetProviderResolver& resolveProvider,
     SemanticRole defaultRole) {
     const Sources sources = resolveSources(widget, resolveProvider);
     const std::string label =
@@ -114,7 +114,7 @@ std::optional<UiLeafState> resolveUiLeafState(
 
 UiStateSection resolveUiState(
     const ValidatedSchema& schema,
-    const ChromeProviderResolver& resolveProvider) {
+    const WidgetProviderResolver& resolveProvider) {
     UiStateSection section;
     section.generation = schema.generation();
     const UiNode& root = schema.schema().root;

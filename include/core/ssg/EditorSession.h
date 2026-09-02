@@ -1,7 +1,6 @@
 #pragma once
 
 #include <ssg/DiffModel.h>
-#include <ssg/ChromeDecode.h>
 #include <ssg/ClientInput.h>
 #include <ssg/CommandSpecBuilder.h>
 #include <ssg/EditorClient.h>
@@ -108,8 +107,8 @@ struct PumpResult {
 };
 
 // CONTRACT
-// EditorSession: resetKeymapToDefault, focusEditor, setComposedUi,
-//   primeDeferred, and the autosave-flush methods are host-only orchestration
+// EditorSession: resetKeymapToDefault, focusEditor, primeDeferred, and the
+//   autosave-flush methods are host-only orchestration
 //   seams, called on the session thread. They deliberately bypass the command
 //   registry and are not user-visible actions, so they are never registered or
 //   exposed through the Lua API; that omission is intentional, not a gap.
@@ -191,16 +190,6 @@ public:
     // Lua/keymap/palette command -- an app/runtime seam only, like
     // resetKeymapToDefault() above.
     void focusEditor();
-    // Installs the init.lua-composed header/footer, or nullopt to keep/restore
-    // the built-in chrome. Called by
-    // the host (apps/ssg_main.cpp) after every init.lua evaluation -- startup AND
-    // auto-reload -- with the ScriptHost's currently published composition (which
-    // already reflects rollback: a rejected reload keeps the prior value). Like
-    // resetKeymapToDefault(), an app/runtime seam rather than a Lua command:
-    // ssg.chrome stages a nested widget tree, not a flat command argument. A real
-    // change advances the session revision so attached clients repaint; an
-    // identical re-push is a no-op.
-    void setComposedUi(std::optional<ValidatedComposition> composition);
     // M10 fast startup: run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
     // syntax highlighting), then publish it through the normal snapshot/delta

@@ -19,8 +19,8 @@ move editor behavior or product policy into a client to make core smaller.
 | Completed | Remove premature client-profile policy | Deleted `ClientUiProfile` and its unsupported-profile solver branch; no current client requires capability negotiation. |
 | Completed | Privatize interaction intermediates | Kept `UiFrame` public while moving mutable/intermediate types such as `WholeScreenTruth`, `UiInteractionState`, and `WholeScreenSchema` behind `InteractionAuthority` where native clients do not need them. |
 | Completed | Collapse publication delta surface | Removed the unused `UiFrame` delta/replay protocol while retaining `UiFrameVersion` for stale UI-activation validation. Complete immutable `UiFrame` publications remain the client contract. |
-| Later | Simplify chrome decoding | Make Lua-value mirrors and decoder-result types implementation details. Preserve a typed, validated composition boundary rather than exposing decoder machinery. |
-| Later | Separate UI-VM from grid chrome helpers | Keep semantic widgets, constraints, state, presence, and focus in core. Move row packing, text-input layout, paint helpers, and other cell-oriented operations to `ssg_grid` or implementation files. Evaluate whether `ViewSurface` duplicates tree placement. |
+| Completed | Remove custom chrome composition | Deleted `ssg.chrome`, its decoder and composition plumbing. Core now publishes fixed semantic header/footer `UiNode` subtrees, while terminal row packing and glyph projection remain in `ssg_grid` behind neutral UI-region APIs. |
+| Later | Separate UI-VM from grid helpers | Keep semantic widgets, constraints, state, presence, and focus in core. Move row packing, text-input layout, paint helpers, and other cell-oriented operations to `ssg_grid` or implementation files. Evaluate whether `ViewSurface` duplicates tree placement. |
 | Later | Unify input and view-action vocabularies | Consolidate overlapping scroll, selection, pane-focus, and client-owned input forms into a smaller medium-neutral typed action model. Preserve authoritative editor handling and local client responsiveness. |
 
 ## Execution rule

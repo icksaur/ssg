@@ -492,8 +492,7 @@ EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
       syntaxParser{std::move(parser)},
       statusFieldCatalog{p0StatusFieldCatalog()},
       interaction{assembleWholeScreen(statusFieldCatalog, "help.open",
-                                     StyleDimensions{}, Style{}.inputLineSigil,
-                                     std::nullopt),
+                                     StyleDimensions{}, Style{}.inputLineSigil),
                   tree, 1},
       search{*this, *this},
       theme{defaultTheme()},
@@ -2500,11 +2499,10 @@ void EditorSession::Impl::refreshTreeForPublication(
 
 void EditorSession::Impl::rebuildInteractionSchema(
     const StyleDimensions& dimensions,
-    std::string_view promptSigil,
-    const std::optional<ValidatedComposition>& composed) {
+    std::string_view promptSigil) {
     (void)interaction.updateComposition(
         assembleWholeScreen(statusFieldCatalog, "help.open", dimensions,
-                            promptSigil, composed));
+                            promptSigil));
 }
 
 bool EditorSession::Impl::openPickerPrompt(PickerKind kind) {
@@ -3046,23 +3044,6 @@ void EditorSession::resetKeymapToDefault() {
 void EditorSession::focusEditor() {
     std::lock_guard operationLock{impl_->operationMutex};
     impl_->interaction.focusEditor();
-}
-
-void EditorSession::setComposedUi(std::optional<ValidatedComposition> composition) {
-    std::lock_guard operationLock{impl_->operationMutex};
-    // A composition-only reload (a script that just calls ssg.chrome, or one
-    // that drops the call) runs outside command dispatch, so nothing else
-    // advances the session revision. Bump on a real change, and only then, to
-    // avoid a redundant repaint when the host re-pushes an identical
-    // composition on every reload.
-    if (impl_->composedUi == composition) return;
-    // Migrate the schema over the new composition FIRST; adopt chrome truth only if it
-    // succeeds, so a failure cannot leave composedUi/chromeGeneration ahead of the schema.
-    impl_->rebuildInteractionSchema(impl_->style.dimensions,
-                                    impl_->style.inputLineSigil, composition);
-    impl_->composedUi = std::move(composition);
-    ++impl_->chromeGeneration;
-    if (impl_->session) impl_->session->advanceRevision();
 }
 
 EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {

@@ -500,7 +500,7 @@ void solveNode(const LayoutNode& node, Rect frame,
     for (const auto& child : node.children) {
         // The grid box solver distributes Exact and Flex space; it does not do
         // intrinsic (Auto) content sizing. Auto reaching here is a misuse (a
-        // content-aware lowering such as lowerUiChromeRegion resolves Auto), so
+        // content-aware projection such as projectUiRegion resolves Auto), so
         // fail with a distinct error rather than the nullopt that means "no fit".
         if (child.size.kind() == SizeKind::Auto) {
             throw std::invalid_argument(

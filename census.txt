@@ -1,34 +1,3 @@
-core/ssg/ChromeDecode.h	class	ssg::ValidatedComposition
-core/ssg/ChromeDecode.h	enum	ssg::ChromeValue::Kind
-core/ssg/ChromeDecode.h	enumerator	ssg::ChromeValue::Kind::Array
-core/ssg/ChromeDecode.h	enumerator	ssg::ChromeValue::Kind::Boolean
-core/ssg/ChromeDecode.h	enumerator	ssg::ChromeValue::Kind::Integer
-core/ssg/ChromeDecode.h	enumerator	ssg::ChromeValue::Kind::String
-core/ssg/ChromeDecode.h	enumerator	ssg::ChromeValue::Kind::Table
-core/ssg/ChromeDecode.h	func	ssg::ChromeDecodeResult::ok	bool () const
-core/ssg/ChromeDecode.h	func	ssg::ChromeValue::find	const ChromeValue *(std::string_view) const
-core/ssg/ChromeDecode.h	func	ssg::ChromeValue::ofArray	ChromeValue (std::vector<ChromeValue>)
-core/ssg/ChromeDecode.h	func	ssg::ChromeValue::ofBool	ChromeValue (bool)
-core/ssg/ChromeDecode.h	func	ssg::ChromeValue::ofInt	ChromeValue (long long)
-core/ssg/ChromeDecode.h	func	ssg::ChromeValue::ofString	ChromeValue (std::string)
-core/ssg/ChromeDecode.h	func	ssg::ChromeValue::ofTable	ChromeValue (std::vector<std::pair<std::string, ChromeValue>>)
-core/ssg/ChromeDecode.h	func	ssg::ValidatedComposition::composition	const UiComposition &() const noexcept
-core/ssg/ChromeDecode.h	func	ssg::decodeChrome	ChromeDecodeResult (const ChromeValue &, const std::vector<std::string> &)
-core/ssg/ChromeDecode.h	func	ssg::operator==	bool (const ValidatedComposition &, const ValidatedComposition &)
-core/ssg/ChromeDecode.h	struct	ssg::ChromeDecodeResult
-core/ssg/ChromeDecode.h	struct	ssg::ChromeValue
-core/ssg/ChromeDecode.h	var	ssg::ChromeDecodeResult::composition	std::optional<ValidatedComposition>
-core/ssg/ChromeDecode.h	var	ssg::ChromeDecodeResult::error	std::optional<std::string>
-core/ssg/ChromeDecode.h	var	ssg::ChromeValue::array	std::vector<ChromeValue>
-core/ssg/ChromeDecode.h	var	ssg::ChromeValue::boolean	bool
-core/ssg/ChromeDecode.h	var	ssg::ChromeValue::integer	long long
-core/ssg/ChromeDecode.h	var	ssg::ChromeValue::kind	Kind
-core/ssg/ChromeDecode.h	var	ssg::ChromeValue::string	std::string
-core/ssg/ChromeDecode.h	var	ssg::ChromeValue::table	std::vector<std::pair<std::string, ChromeValue>>
-core/ssg/ChromeDecode.h	var	ssg::kChromeMaxPerSide	const int
-core/ssg/ChromeDecode.h	var	ssg::kChromeMaxTotalWidgets	const int
-core/ssg/ChromeRegionShape.h	func	ssg::chromeGroup	UiNode (std::string, const std::vector<WidgetDescriptor> &, int)
-core/ssg/ChromeRegionShape.h	func	ssg::chromeRegion	UiNode (std::string_view, const std::vector<WidgetDescriptor> &, const std::vector<WidgetDescriptor> &, const std::optional<WidgetDescriptor> &, CenterWidth, int, int)
 core/ssg/ClientInput.h	alias	ssg::ClientInput
 core/ssg/ClientInput.h	enum	ssg::ClientInputKind
 core/ssg/ClientInput.h	enum	ssg::ClientInputOutcome
@@ -802,7 +771,6 @@ core/ssg/EditorSession.h	func	ssg::EditorSession::reportWatcherAvailabilityForTe
 core/ssg/EditorSession.h	func	ssg::EditorSession::resetKeymapToDefault	void ()
 core/ssg/EditorSession.h	func	ssg::EditorSession::revision	Revision () const
 core/ssg/EditorSession.h	func	ssg::EditorSession::setAutosaveDraftByteCapForTests	void (std::uint64_t)
-core/ssg/EditorSession.h	func	ssg::EditorSession::setComposedUi	void (std::optional<ValidatedComposition>)
 core/ssg/EditorSession.h	func	ssg::EditorSession::snapshot	std::optional<SessionSnapshot> (ClientId, PaletteReport) const
 core/ssg/EditorSession.h	func	ssg::EditorSession::workspaceRoot	const std::filesystem::path &() const noexcept
 core/ssg/EditorSession.h	func	ssg::EditorSessionCreateResult::accepted	bool () const noexcept
@@ -1813,7 +1781,6 @@ core/ssg/LuaCommandHost.h	enumerator	ssg::LuaError::UnknownCommand
 core/ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::LuaCommandHost	void (LuaCommandHost &&) noexcept
 core/ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::LuaCommandHost	void (LuaCommandHostOptions, LuaDispatcher)
 core/ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::LuaCommandHost	void (const LuaCommandHost &)
-core/ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::composedUi	const std::optional<ValidatedComposition> &() const noexcept
 core/ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::evaluate	LuaResult (std::string_view)
 core/ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::expose	LuaHandle (void *)
 core/ssg/LuaCommandHost.h	func	ssg::LuaCommandHost::hasCommand	bool (std::string_view) const
@@ -1832,9 +1799,8 @@ core/ssg/LuaCommandHost.h	struct	ssg::LuaInvocation
 core/ssg/LuaCommandHost.h	struct	ssg::LuaResult
 core/ssg/LuaCommandHost.h	var	ssg::LuaCommand::id	std::string
 core/ssg/LuaCommandHost.h	var	ssg::LuaCommand::requiredCapabilities	std::vector<CapabilityId>
-core/ssg/LuaCommandHost.h	var	ssg::LuaCommandHost::kApiFunctions	const std::string_view[3]
+core/ssg/LuaCommandHost.h	var	ssg::LuaCommandHost::kApiFunctions	const std::string_view[2]
 core/ssg/LuaCommandHost.h	var	ssg::LuaCommandHostOptions::capabilities	std::vector<CapabilityId>
-core/ssg/LuaCommandHost.h	var	ssg::LuaCommandHostOptions::chromeProviders	std::vector<std::string>
 core/ssg/LuaCommandHost.h	var	ssg::LuaCommandHostOptions::commands	std::vector<LuaCommand>
 core/ssg/LuaCommandHost.h	var	ssg::LuaCommandHostOptions::instructionBudget	std::uint64_t
 core/ssg/LuaCommandHost.h	var	ssg::LuaCommandHostOptions::pluginId	ClientId
@@ -2319,7 +2285,6 @@ core/ssg/ScriptHost.h	class	ssg::ScriptHost
 core/ssg/ScriptHost.h	func	ssg::ScriptHost::ScriptHost	void (EditorSession &)
 core/ssg/ScriptHost.h	func	ssg::ScriptHost::ScriptHost	void (EditorSession &, ViewId, ViewActionSink)
 core/ssg/ScriptHost.h	func	ssg::ScriptHost::ScriptHost	void (const ScriptHost &)
-core/ssg/ScriptHost.h	func	ssg::ScriptHost::composedUi	const std::optional<ValidatedComposition> &() const
 core/ssg/ScriptHost.h	func	ssg::ScriptHost::evaluate	LuaResult (std::string_view)
 core/ssg/ScriptHost.h	func	ssg::ScriptHost::operator=	ScriptHost &(const ScriptHost &)
 core/ssg/ScriptHost.h	var	ssg::kScriptClientId	const ClientId
@@ -3550,8 +3515,8 @@ core/ssg/UiPresence.h	var	ssg::UiPresenceRecord::present	bool
 core/ssg/UiPresence.h	var	ssg::UiPresenceSection::basis	PresenceBasis
 core/ssg/UiPresence.h	var	ssg::UiPresenceSection::generation	Generation
 core/ssg/UiPresence.h	var	ssg::UiPresenceSection::nodes	std::vector<UiPresenceRecord>
-core/ssg/UiStateResolver.h	func	ssg::resolveUiLeafState	std::optional<UiLeafState> (const WidgetDescriptor &, const ChromeProviderResolver &, SemanticRole)
-core/ssg/UiStateResolver.h	func	ssg::resolveUiState	UiStateSection (const ValidatedSchema &, const ChromeProviderResolver &)
+core/ssg/UiStateResolver.h	func	ssg::resolveUiLeafState	std::optional<UiLeafState> (const WidgetDescriptor &, const WidgetProviderResolver &, SemanticRole)
+core/ssg/UiStateResolver.h	func	ssg::resolveUiState	UiStateSection (const ValidatedSchema &, const WidgetProviderResolver &)
 core/ssg/UiTree.h	class	ssg::UiNodeId
 core/ssg/UiTree.h	class	ssg::ValidatedSchema
 core/ssg/UiTree.h	class	ssg::ValidatedSchemaResult
@@ -3657,7 +3622,7 @@ core/ssg/UiTree.h	var	ssg::kRootNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kSymbolsNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kTabBarNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kTreeNodeId	const std::string_view
-core/ssg/UiWidget.h	alias	ssg::ChromeProviderResolver
+core/ssg/UiWidget.h	alias	ssg::WidgetProviderResolver
 core/ssg/UiWidget.h	func	ssg::operator==	bool (const ValueSource &, const ValueSource &) noexcept
 core/ssg/UiWidget.h	func	ssg::operator==	bool (const WidgetDescriptor &, const WidgetDescriptor &)
 core/ssg/UiWidget.h	struct	ssg::ResolvedProvider
@@ -3875,7 +3840,7 @@ core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionRequest::viewId	ViewId
 core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionResult::navigation	SelectionNavigation
 core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionResult::viewport	ViewportViewState
 core/ssg/WholeScreenAssembly.h	func	ssg::assembleFooterPrompt	UiNode (const PromptSurface &)
-core/ssg/WholeScreenAssembly.h	func	ssg::assembleWholeScreen	UiComposition (const std::vector<StatusFieldCatalogEntry> &, std::string_view, const StyleDimensions &, std::string_view, const std::optional<ValidatedComposition> &)
+core/ssg/WholeScreenAssembly.h	func	ssg::assembleWholeScreen	UiComposition (const std::vector<StatusFieldCatalogEntry> &, std::string_view, const StyleDimensions &, std::string_view)
 core/ssg/WholeScreenAssembly.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
 core/ssg/WholeScreenAssembly.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)
 core/ssg/Widget.h	class	ssg::WidgetStack
@@ -4371,38 +4336,6 @@ core/ssg/types.h	struct	ssg::Revision
 core/ssg/types.h	var	ssg::DocumentPosition::byteOffset	ByteOffset
 core/ssg/types.h	var	ssg::DocumentPosition::cell	CellIndex
 core/ssg/types.h	var	ssg::DocumentPosition::line	LineIndex
-grid/ssg/ChromeLowering.h	func	ssg::UiChromeLowerResult::ok	bool () const
-grid/ssg/ChromeLowering.h	func	ssg::lowerUiChromeRegion	UiChromeLowerResult (const UiNode &, const Rect &, SemanticRole, const Style &, const ChromeProviderResolver &, SolvedChromeSurface &, const StatusViewState *, const PromptInputProjection *)
-grid/ssg/ChromeLowering.h	func	ssg::operator==	bool (const SolvedChromeInput &, const SolvedChromeInput &) noexcept(false)
-grid/ssg/ChromeLowering.h	func	ssg::operator==	bool (const SolvedChromeItem &, const SolvedChromeItem &)
-grid/ssg/ChromeLowering.h	func	ssg::operator==	bool (const SolvedChromeSurface &, const SolvedChromeSurface &)
-grid/ssg/ChromeLowering.h	func	ssg::solveUiChromeRegion	UiChromeLowerResult (const UiNode &, const Rect &, SemanticRole, const Style &, Generation, const UiStateSection &, SolvedChromeSurface &, const StatusViewState *, const PromptInputProjection *)
-grid/ssg/ChromeLowering.h	struct	ssg::PromptInputProjection
-grid/ssg/ChromeLowering.h	struct	ssg::SolvedChromeInput
-grid/ssg/ChromeLowering.h	struct	ssg::SolvedChromeItem
-grid/ssg/ChromeLowering.h	struct	ssg::SolvedChromeSurface
-grid/ssg/ChromeLowering.h	struct	ssg::StatusViewState
-grid/ssg/ChromeLowering.h	struct	ssg::UiChromeLowerResult
-grid/ssg/ChromeLowering.h	var	ssg::PromptInputProjection::ghost	std::string
-grid/ssg/ChromeLowering.h	var	ssg::PromptInputProjection::query	std::string
-grid/ssg/ChromeLowering.h	var	ssg::PromptInputProjection::visible	bool
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeInput::caret	Rect
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeInput::ghost	std::optional<Rect>
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeInput::ghostText	std::string
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeInput::nodeId	UiNodeId
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeInput::query	Rect
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeInput::queryText	std::string
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeItem::command	std::optional<std::string>
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeItem::content	std::string
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeItem::id	std::string
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeItem::label	std::string
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeItem::rect	Rect
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeItem::role	SemanticRole
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeSurface::input	std::optional<SolvedChromeInput>
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeSurface::items	std::vector<SolvedChromeItem>
-grid/ssg/ChromeLowering.h	var	ssg::SolvedChromeSurface::rect	Rect
-grid/ssg/ChromeLowering.h	var	ssg::UiChromeLowerResult::error	std::optional<std::string>
-grid/ssg/ChromeLowering.h	var	ssg::UiChromeLowerResult::rightEdge	int
 grid/ssg/GridPresenter.h	class	ssg::EditorSession
 grid/ssg/GridPresenter.h	class	ssg::GridFrame
 grid/ssg/GridPresenter.h	class	ssg::GridPresentation
@@ -4412,8 +4345,8 @@ grid/ssg/GridPresenter.h	func	ssg::GridFrame::GridFrame	void (const GridFrame &)
 grid/ssg/GridPresenter.h	func	ssg::GridFrame::GridFrame	void (const SessionSnapshot &, GridProjection, GridBasis, PaletteReport)
 grid/ssg/GridPresenter.h	func	ssg::GridFrame::basis	GridBasis () const noexcept
 grid/ssg/GridPresenter.h	func	ssg::GridFrame::document	const std::optional<SolvedDocumentSurface> &() const noexcept
-grid/ssg/GridPresenter.h	func	ssg::GridFrame::footer	const std::optional<SolvedChromeSurface> &() const noexcept
-grid/ssg/GridPresenter.h	func	ssg::GridFrame::header	const std::optional<SolvedChromeSurface> &() const noexcept
+grid/ssg/GridPresenter.h	func	ssg::GridFrame::footer	const std::optional<SolvedUiRegion> &() const noexcept
+grid/ssg/GridPresenter.h	func	ssg::GridFrame::header	const std::optional<SolvedUiRegion> &() const noexcept
 grid/ssg/GridPresenter.h	func	ssg::GridFrame::layout	const SolvedGridTree &() const noexcept
 grid/ssg/GridPresenter.h	func	ssg::GridFrame::operator=	GridFrame &(GridFrame &&) noexcept
 grid/ssg/GridPresenter.h	func	ssg::GridFrame::operator=	GridFrame &(const GridFrame &)
@@ -4425,9 +4358,9 @@ grid/ssg/GridPresenter.h	func	ssg::GridPresentation::GridPresentation	void (Sess
 grid/ssg/GridPresenter.h	func	ssg::GridPresentation::GridPresentation	void (const GridPresentation &)
 grid/ssg/GridPresenter.h	func	ssg::GridPresentation::basis	GridBasis () const noexcept
 grid/ssg/GridPresenter.h	func	ssg::GridPresentation::document	const std::optional<SolvedDocumentSurface> &() const noexcept
-grid/ssg/GridPresenter.h	func	ssg::GridPresentation::footer	const std::optional<SolvedChromeSurface> &() const noexcept
+grid/ssg/GridPresenter.h	func	ssg::GridPresentation::footer	const std::optional<SolvedUiRegion> &() const noexcept
 grid/ssg/GridPresenter.h	func	ssg::GridPresentation::frame	const GridFrame &() const noexcept
-grid/ssg/GridPresenter.h	func	ssg::GridPresentation::header	const std::optional<SolvedChromeSurface> &() const noexcept
+grid/ssg/GridPresenter.h	func	ssg::GridPresentation::header	const std::optional<SolvedUiRegion> &() const noexcept
 grid/ssg/GridPresenter.h	func	ssg::GridPresentation::layout	const SolvedGridTree &() const noexcept
 grid/ssg/GridPresenter.h	func	ssg::GridPresentation::operator=	GridPresentation &(GridPresentation &&) noexcept
 grid/ssg/GridPresenter.h	func	ssg::GridPresentation::operator=	GridPresentation &(const GridPresentation &)
@@ -4762,6 +4695,38 @@ grid/ssg/ShellViewState.h	var	ssg::ShellViewState::viewport	GridSize
 grid/ssg/ShellViewState.h	var	ssg::TabHit::index	std::uint32_t
 grid/ssg/ShellViewState.h	var	ssg::TabHit::rect	Rect
 grid/ssg/StatusFieldGrid.h	func	ssg::statusFieldGridDisplay	std::string (std::string_view, std::string_view, const Style &)
+grid/ssg/UiRegionProjection.h	func	ssg::UiRegionProjectionResult::ok	bool () const
+grid/ssg/UiRegionProjection.h	func	ssg::operator==	bool (const SolvedUiInput &, const SolvedUiInput &) noexcept(false)
+grid/ssg/UiRegionProjection.h	func	ssg::operator==	bool (const SolvedUiItem &, const SolvedUiItem &)
+grid/ssg/UiRegionProjection.h	func	ssg::operator==	bool (const SolvedUiRegion &, const SolvedUiRegion &)
+grid/ssg/UiRegionProjection.h	func	ssg::projectUiRegion	UiRegionProjectionResult (const UiNode &, const Rect &, SemanticRole, const Style &, const WidgetProviderResolver &, SolvedUiRegion &, const StatusViewState *, const PromptInputProjection *)
+grid/ssg/UiRegionProjection.h	func	ssg::solveUiRegion	UiRegionProjectionResult (const UiNode &, const Rect &, SemanticRole, const Style &, Generation, const UiStateSection &, SolvedUiRegion &, const StatusViewState *, const PromptInputProjection *)
+grid/ssg/UiRegionProjection.h	struct	ssg::PromptInputProjection
+grid/ssg/UiRegionProjection.h	struct	ssg::SolvedUiInput
+grid/ssg/UiRegionProjection.h	struct	ssg::SolvedUiItem
+grid/ssg/UiRegionProjection.h	struct	ssg::SolvedUiRegion
+grid/ssg/UiRegionProjection.h	struct	ssg::StatusViewState
+grid/ssg/UiRegionProjection.h	struct	ssg::UiRegionProjectionResult
+grid/ssg/UiRegionProjection.h	var	ssg::PromptInputProjection::ghost	std::string
+grid/ssg/UiRegionProjection.h	var	ssg::PromptInputProjection::query	std::string
+grid/ssg/UiRegionProjection.h	var	ssg::PromptInputProjection::visible	bool
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiInput::caret	Rect
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiInput::ghost	std::optional<Rect>
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiInput::ghostText	std::string
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiInput::nodeId	UiNodeId
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiInput::query	Rect
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiInput::queryText	std::string
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiItem::command	std::optional<std::string>
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiItem::content	std::string
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiItem::id	std::string
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiItem::label	std::string
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiItem::rect	Rect
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiItem::role	SemanticRole
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiRegion::input	std::optional<SolvedUiInput>
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiRegion::items	std::vector<SolvedUiItem>
+grid/ssg/UiRegionProjection.h	var	ssg::SolvedUiRegion::rect	Rect
+grid/ssg/UiRegionProjection.h	var	ssg::UiRegionProjectionResult::error	std::optional<std::string>
+grid/ssg/UiRegionProjection.h	var	ssg::UiRegionProjectionResult::rightEdge	int
 platform/ssg/FilesystemWatcher.h	alias	ssg::WatchClock
 platform/ssg/FilesystemWatcher.h	alias	ssg::WatchTimePoint
 platform/ssg/FilesystemWatcher.h	alias	ssg::WorkspaceScanner

@@ -2,16 +2,8 @@
 
 #include <ssg/detail/generated/semantic_wire_manifest.h>
 
-// Composable chrome widgets.
-//
-// A widget is a self-contained UI element positioned by RELATIVE layout inside
-// its container. This header is the geometry core of the model: the widget
-// primitive kinds, and the pure fit + layout functions that turn a row of
-// measured, collapsible items into placements. `paint`/`project` (the render and
-// accessibility projections) land with their first callers as the header,
-// footer, and prompt are ported (spec Plan steps 2-4); Step 1 is the geometry
-// the rest is built on, kept free of any renderer or runtime dependency so its
-// fit rule is a pure, hand-checkable integer computation.
+// UI widget kinds and the grid's pure fit vocabulary for measured,
+// collapsible row items.
 
 #include <ssg/Geometry.h>    // Rect
 #include <ssg/Style.h>       // ToggleGlyphs
@@ -26,9 +18,7 @@
 
 namespace ssg {
 
-// The closed set of chrome widget primitives. init.lua (eventually) COMPOSES
-// trees of these; it does not add kinds. Kept as a fixed enum for exactly that
-// reason (spec §Widget primitives).
+// The closed set of semantic UI leaf kinds.
 enum class WidgetKind : std::uint8_t {
 #define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
     SSG_WIDGET_KIND_ENUMERATORS(SSG_ENUMERATOR)

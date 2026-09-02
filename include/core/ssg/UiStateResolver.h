@@ -8,11 +8,11 @@ namespace ssg {
 
 [[nodiscard]] std::optional<UiLeafState> resolveUiLeafState(
     const WidgetDescriptor& widget,
-    const ChromeProviderResolver& resolveProvider,
+    const WidgetProviderResolver& resolveProvider,
     SemanticRole defaultRole);
 
 [[nodiscard]] UiStateSection resolveUiState(
     const ValidatedSchema& schema,
-    const ChromeProviderResolver& resolveProvider);
+    const WidgetProviderResolver& resolveProvider);
 
 }  // namespace ssg

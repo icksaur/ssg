@@ -197,7 +197,7 @@ TEST(footerActionHitCarriesPublishedUiNodeIdentity) {
         "footer.status_action/77/9/7265747279";
     const auto found = std::ranges::find(
         frame.footer()->items, nodeId,
-        &ssg::SolvedChromeItem::id);
+        &ssg::SolvedUiItem::id);
     ASSERT_TRUE(found != frame.footer()->items.end());
     if (found == frame.footer()->items.end()) return;
     auto hit = ssg::HitTester{frame}.at(found->rect.x, found->rect.y);
@@ -206,7 +206,7 @@ TEST(footerActionHitCarriesPublishedUiNodeIdentity) {
     ASSERT_EQ(hit.commandId, std::optional<std::string>{"ignored"});
 }
 
-TEST(headerInputAndGhostUseSolvedChromeHits) {
+TEST(headerInputAndGhostUseSolvedUiRegionHits) {
     auto frame =
         ssg::test::SessionSnapshotBuilder{}
             .viewport(40, 8)
@@ -967,12 +967,12 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
 
-    const auto item = [](const std::optional<ssg::SolvedChromeSurface>& surface,
+    const auto item = [](const std::optional<ssg::SolvedUiRegion>& surface,
                          std::string_view id)
-        -> const ssg::SolvedChromeItem* {
+        -> const ssg::SolvedUiItem* {
         if (!surface) return nullptr;
         const auto found = std::ranges::find(surface->items, id,
-                                             &ssg::SolvedChromeItem::id);
+                                             &ssg::SolvedUiItem::id);
         return found == surface->items.end() ? nullptr : &*found;
     };
     const auto* path = item(frame->header(), "path");
@@ -1043,7 +1043,7 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
         ASSERT_TRUE(surface.has_value());
         if (!surface) return false;
         const auto item = std::ranges::find_if(
-            surface->items, [&](const ssg::SolvedChromeItem& candidate) {
+            surface->items, [&](const ssg::SolvedUiItem& candidate) {
                 return candidate.id == id;
             });
         ASSERT_TRUE(item != surface->items.end());
@@ -1155,7 +1155,7 @@ int main() {
     RUN(tabBarCellMapsToItsTabIndex);
     RUN(tabHitsUseSemanticTabsAndSolvedGeometry);
     RUN(footerActionHitCarriesPublishedUiNodeIdentity);
-    RUN(headerInputAndGhostUseSolvedChromeHits);
+    RUN(headerInputAndGhostUseSolvedUiRegionHits);
     RUN(promptControlHitsCarryPublishedIdentityAndCountCellsAreInert);
     RUN(externalActionHitCarriesPublishedFileAndCommandIdentity);
     RUN(statusFieldHitCoordinatesResolvePublishedFieldCommands);

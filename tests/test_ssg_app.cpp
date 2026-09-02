@@ -2927,58 +2927,6 @@ TEST(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52) {
 
 // Host oracle: the SHARED
 // evaluateInitScript funnel (used by BOTH startup loadInitScript and reload
-// drainAndEvaluate) must push the script's chrome composition into the runtime,
-// so a refactor cannot silently stop wiring one path.
-TEST(evaluateInitScriptPushesComposedChromeToTheRuntime) {
-    auto root = fs::temp_directory_path() / "ssg-init-chrome";
-    fs::remove_all(root);
-    fs::create_directories(root / "workspace");
-    fs::create_directories(root / "scratch");
-    fs::create_directories(root / "recovery");
-    std::ofstream{root / "workspace" / "f.txt"} << "hello\n";
-
-    auto created = ssg::EditorSession::create(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"file.open", runtime.revision(),
-                               std::string{"f.txt"}})
-                    .accepted());
-    ssg::ScriptHost scripts{runtime};
-
-    const ssg::ViewportDimensions dims{80, 12};
-    const auto hasHeaderField = [&](std::string_view id) {
-        auto frame = ssg::test::projectGridFrame(
-            runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
-        if (!frame || !frame->header()) return false;
-        return std::ranges::any_of(
-            frame->header()->items,
-            [&](const ssg::SolvedChromeItem& item) { return item.id == id; });
-    };
-
-    // A script composing a header replaces the built-in path field, once run
-    // through the funnel.
-    ssg::app::evaluateInitScript(
-        scripts, runtime, root / "init.lua",
-        "ssg.chrome{ header = { left = { "
-        "{ kind = 'field', id = 'app.path', provider = 'path' } } } }");
-    ASSERT_TRUE(hasHeaderField("app.path"));
-    ASSERT_FALSE(hasHeaderField("path"));
-
-    // A later reload that drops the ssg.chrome call reverts to built-in, again
-    // via the SAME funnel -- proving both effects flow through it.
-    ssg::app::evaluateInitScript(scripts, runtime, root / "init.lua",
-                                 "local x = 1");
-    ASSERT_FALSE(hasHeaderField("app.path"));
-    ASSERT_TRUE(hasHeaderField("path"));
-}
-
 // Lever 3: the per-drain snapshot-coalescing gate keys on which axis each input
 // kind consumes. This pins the mapping for EVERY DecodeStatus so a newly added
 // kind cannot silently default to "consumes nothing" and be mis-coalesced.
@@ -3132,7 +3080,6 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
 
 int main() {
     RUN(resolveLaunchNoArgumentOpensCwd);
-    RUN(evaluateInitScriptPushesComposedChromeToTheRuntime);
     RUN(resolveLaunchDirectoryOpensThatDirectory);
     RUN(resolveLaunchFileOpensParentDirectoryAndFile);
     RUN(everyDeclaredModeLeavesExactlyWhatItEnters);
