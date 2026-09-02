@@ -1,6 +1,6 @@
 #pragma once
 
-// The runtime owner of the whole-screen schema and its generation. The schema is
+// Private runtime owner of the whole-screen schema and its generation. The schema is
 // STRUCTURALLY STABLE (WholeScreenAssembly builds it from the stable catalog + provider-
 // backed content), so its generation must advance ONLY when the structure actually
 // changes -- a dimensions change, a catalog change, or a composed-chrome override

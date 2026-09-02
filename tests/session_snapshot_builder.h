@@ -22,12 +22,11 @@
 
 #include <ssg/GraphemeLayout.h>
 #include <ssg/GridPresenter.h>
-#include <ssg/InteractionState.h>
+#include <ssg/InteractionAuthority.h>
 #include <ssg/UiStateResolver.h>
 #include <ssg/Renderer.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/WholeScreenAssembly.h>
-#include <ssg/WholeScreenInteraction.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/Theme.h>
 #include <ssg/Viewport.h>
@@ -167,22 +166,21 @@ public:
                 : assembleWholeScreen({}, "help.open", style_.dimensions,
                                       style_.inputLineSigil, std::nullopt)
                       .root;
-        UiSchema effectiveUiSchema;
-        effectiveUiSchema.root =
-            withStatusActions(std::move(composition), statusActions).root;
-        auto effectiveSchema =
-            ValidatedSchema::validate(std::move(effectiveUiSchema)).takeSchema();
-        const ValidatedSchema& schema = effectiveSchema;
-        WholeScreenTruth truth;
-        truth.panelPresent = panel_;
-        truth.baseFocus = focus == FocusTarget::Panel ? BaseFocus::Panel
-                                                      : BaseFocus::Editor;
-        truth.noticePresent = noticePresent_;
-        truth.externalModificationPresent = externalModificationPresent_;
-        if (promptInput_) truth.openPicker = PickerKind::Command;
-        UiInteractionState interaction = buildWholeScreenInteraction(
-            schema, truth,
-            promptInput_ ? std::optional{PromptRegion::Header} : std::nullopt);
+        TreeModel tree;
+        InteractionAuthority interaction{
+            withStatusActions(std::move(composition), statusActions), tree};
+        if (panel_) {
+            (void)interaction.apply(TogglePanel{});
+            if (focus != FocusTarget::Panel) interaction.focusEditor();
+        }
+        if (noticePresent_) (void)interaction.refreshNoticePresence(true);
+        if (externalModificationPresent_) {
+            (void)interaction.refreshExternalModificationPresence(true);
+        }
+        if (promptInput_) {
+            (void)interaction.apply(OpenFinder{PickerKind::Command});
+        }
+        const ValidatedSchema& schema = interaction.validatedSchema();
         ViewportDimensions const dimensions{
             static_cast<std::uint32_t>(columns_),
             static_cast<std::uint32_t>(rows_)};
@@ -236,7 +234,7 @@ public:
         uiState.focusPath = interaction.focusPath();
         sections.uiFrame = UiFrame::require(
             schema.schema(), std::move(uiState),
-            buildPresenceSection(schema, interaction.presence()));
+            interaction.presenceSection(PresenceBasis{0}));
         for (std::size_t index = 0; index < tabs_.size(); ++index) {
             TabState tab;
             tab.id = TabId{index + 1};

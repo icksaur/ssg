@@ -30,7 +30,7 @@ namespace ssg {
 enum class BaseFocus : std::uint8_t { Editor, Panel };
 
 // A transient surface that captured focus. Its keymap context belongs to the
-// schema node and is resolved by UiInteractionState.
+// schema node and is resolved by the interaction authority.
 struct FocusCapture {
     UiNodeId node;
 

@@ -343,40 +343,21 @@ core/ssg/CommandSpecBuilder.h	struct	ssg::CommandArgumentType
 core/ssg/CommandSpecBuilder.h	var	ssg::CommandArgumentType::type	std::optional<std::type_index>
 core/ssg/CommandSpecBuilder.h	var	ssg::CommandArgumentType::wire	bool
 core/ssg/CommandTransition.h	alias	ssg::CommandTransition
-core/ssg/CommandTransition.h	class	ssg::PreparedTransition
 core/ssg/CommandTransition.h	enum	ssg::CycleDirection
 core/ssg/CommandTransition.h	enumerator	ssg::CycleDirection::Next
 core/ssg/CommandTransition.h	enumerator	ssg::CycleDirection::Previous
-core/ssg/CommandTransition.h	func	ssg::PreparedTransition::interaction	const UiInteractionState &() const noexcept
-core/ssg/CommandTransition.h	func	ssg::PreparedTransition::prompt	const PromptSurface &() const noexcept
-core/ssg/CommandTransition.h	func	ssg::PreparedTransition::tree	const std::optional<TreeBackingPlan> &() const noexcept
-core/ssg/CommandTransition.h	func	ssg::PreparedTransition::truth	const WholeScreenTruth &() const noexcept
 core/ssg/CommandTransition.h	func	ssg::activePromptRegion	std::optional<PromptRegion> (const PromptSurface &)
 core/ssg/CommandTransition.h	func	ssg::builtInPanelTreeProvider	TreeProviderBinding (TreeProviderKind)
 core/ssg/CommandTransition.h	func	ssg::builtInPanelTreeProviders	std::span<const TreeProviderBinding> ()
 core/ssg/CommandTransition.h	func	ssg::cyclePanelTreeProvider	TreeProviderBinding (const TreeProviderBinding &, CycleDirection)
-core/ssg/CommandTransition.h	func	ssg::prepareTransition	std::optional<PreparedTransition> (const CommandTransition &, const TransitionInputs &)
 core/ssg/CommandTransition.h	struct	ssg::CloseFinder
 core/ssg/CommandTransition.h	struct	ssg::OpenFinder
 core/ssg/CommandTransition.h	struct	ssg::ShowPanelProvider
 core/ssg/CommandTransition.h	struct	ssg::SwitchPanelProvider
 core/ssg/CommandTransition.h	struct	ssg::TogglePanel
-core/ssg/CommandTransition.h	struct	ssg::TransitionInputs
-core/ssg/CommandTransition.h	struct	ssg::TreeBackingPlan
-core/ssg/CommandTransition.h	struct	ssg::TreeProviderPresence
 core/ssg/CommandTransition.h	var	ssg::OpenFinder::picker	PickerKind
 core/ssg/CommandTransition.h	var	ssg::ShowPanelProvider::binding	TreeProviderBinding
 core/ssg/CommandTransition.h	var	ssg::SwitchPanelProvider::binding	TreeProviderBinding
-core/ssg/CommandTransition.h	var	ssg::TransitionInputs::activeProvider	std::optional<TreeProviderBinding>
-core/ssg/CommandTransition.h	var	ssg::TransitionInputs::nextTreeRevision	TreeRevision
-core/ssg/CommandTransition.h	var	ssg::TransitionInputs::presentProviders	std::vector<TreeProviderPresence>
-core/ssg/CommandTransition.h	var	ssg::TransitionInputs::prompt	PromptSurface
-core/ssg/CommandTransition.h	var	ssg::TransitionInputs::schema	ValidatedSchema
-core/ssg/CommandTransition.h	var	ssg::TransitionInputs::truth	WholeScreenTruth
-core/ssg/CommandTransition.h	var	ssg::TreeBackingPlan::activate	TreeProviderId
-core/ssg/CommandTransition.h	var	ssg::TreeBackingPlan::create	std::optional<TreeProviderSnapshot>
-core/ssg/CommandTransition.h	var	ssg::TreeProviderPresence::binding	TreeProviderBinding
-core/ssg/CommandTransition.h	var	ssg::TreeProviderPresence::revision	TreeRevision
 core/ssg/CompiledKeymap.h	alias	ssg::CompiledSequence
 core/ssg/CompiledKeymap.h	class	ssg::CommandCatalog
 core/ssg/CompiledKeymap.h	class	ssg::CompiledContext
@@ -1308,7 +1289,9 @@ core/ssg/GraphemeLayout.h	var	ssg::CellSpan::cellWidth	uint32_t
 core/ssg/GraphemeLayout.h	var	ssg::CellSpan::kind	CellKind
 core/ssg/HistoryEditClassification.h	func	ssg::historyEditKind	HistoryEditKind (TextInputCommand) noexcept
 core/ssg/InteractionAuthority.h	class	ssg::InteractionAuthority
+core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::InteractionAuthority	void (InteractionAuthority &&) noexcept
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::InteractionAuthority	void (UiComposition, TreeModel &, std::uint64_t, PickerActivationId)
+core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::InteractionAuthority	void (const InteractionAuthority &)
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::allocateTreeRevision	TreeRevision ()
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::apply	bool (const CommandTransition &)
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::cancelPrompt	PromptCommandResult ()
@@ -1317,11 +1300,15 @@ core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::effectiveFocus	F
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::focusEditor	void ()
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::focusNextPromptControl	PromptCommandResult ()
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::focusPanel	bool ()
+core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::focusPath	std::vector<UiNodeId> () const
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::focusPromptControl	PromptCommandResult (std::string_view)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::interaction	const UiInteractionState &() const noexcept
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::openPicker	std::optional<PickerKind> () const noexcept
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::openPickerActivation	const std::optional<PickerActivation> &() const noexcept
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::openPrompt	PromptCommandResult (PromptRequest)
+core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::operator=	InteractionAuthority &(InteractionAuthority &&) noexcept
+core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::operator=	InteractionAuthority &(const InteractionAuthority &)
+core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::pickerPresenceOverlay	PalettePresenceOverlay () const
+core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::presenceSection	UiPresenceSection (PresenceBasis) const
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::prompt	const PromptSurface &() const noexcept
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::refreshExternalModificationPresence	bool (bool)
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::refreshNoticePresence	bool (bool)
@@ -1331,20 +1318,9 @@ core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::routingGeneratio
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::statusActions	const std::vector<StatusActionNode> &() const noexcept
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::submitPrompt	PromptCommandResult ()
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::toggleDistractionFree	void ()
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::truth	const WholeScreenTruth &() const noexcept
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::updateComposition	bool (UiComposition)
 core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::updatePromptValue	PromptCommandResult (std::size_t, std::string)
-core/ssg/InteractionState.h	class	ssg::UiInteractionState
-core/ssg/InteractionState.h	func	ssg::UiInteractionState::UiInteractionState	void (ValidatedSchema, std::vector<UiNodeId>)
-core/ssg/InteractionState.h	func	ssg::UiInteractionState::apply	std::optional<std::string> (const MutationPatch &)
-core/ssg/InteractionState.h	func	ssg::UiInteractionState::captureFocus	void (FocusCapture)
-core/ssg/InteractionState.h	func	ssg::UiInteractionState::effectiveFocus	FocusTarget () const
-core/ssg/InteractionState.h	func	ssg::UiInteractionState::focus	const KeyboardFocus &() const noexcept
-core/ssg/InteractionState.h	func	ssg::UiInteractionState::focusPath	std::vector<UiNodeId> () const
-core/ssg/InteractionState.h	func	ssg::UiInteractionState::presence	const PresenceConfig &() const noexcept
-core/ssg/InteractionState.h	func	ssg::UiInteractionState::releaseFocus	void () noexcept
-core/ssg/InteractionState.h	func	ssg::UiInteractionState::schema	const ValidatedSchema &() const noexcept
-core/ssg/InteractionState.h	func	ssg::UiInteractionState::setBaseFocus	void (BaseFocus)
+core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::validatedSchema	const ValidatedSchema &() const noexcept
 core/ssg/KeyCode.h	enum	ssg::KeyCode
 core/ssg/KeyCode.h	enumerator	ssg::KeyCode::ArrowDown
 core/ssg/KeyCode.h	enumerator	ssg::KeyCode::ArrowLeft
@@ -3928,23 +3904,6 @@ core/ssg/WholeScreenAssembly.h	func	ssg::assembleFooterPrompt	UiNode (const Prom
 core/ssg/WholeScreenAssembly.h	func	ssg::assembleWholeScreen	UiComposition (const std::vector<StatusFieldCatalogEntry> &, std::string_view, const StyleDimensions &, std::string_view, const std::optional<ValidatedComposition> &)
 core/ssg/WholeScreenAssembly.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
 core/ssg/WholeScreenAssembly.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)
-core/ssg/WholeScreenInteraction.h	func	ssg::buildWholeScreenInteraction	UiInteractionState (ValidatedSchema, const WholeScreenTruth &, std::optional<PromptRegion>)
-core/ssg/WholeScreenInteraction.h	func	ssg::derivePickerPresenceOverlay	PalettePresenceOverlay (const ValidatedSchema &, const WholeScreenTruth &)
-core/ssg/WholeScreenInteraction.h	func	ssg::operator==	bool (const WholeScreenTruth &, const WholeScreenTruth &)
-core/ssg/WholeScreenInteraction.h	struct	ssg::WholeScreenTruth
-core/ssg/WholeScreenInteraction.h	var	ssg::WholeScreenTruth::baseFocus	BaseFocus
-core/ssg/WholeScreenInteraction.h	var	ssg::WholeScreenTruth::distractionFree	bool
-core/ssg/WholeScreenInteraction.h	var	ssg::WholeScreenTruth::externalFocusHeld	bool
-core/ssg/WholeScreenInteraction.h	var	ssg::WholeScreenTruth::externalModificationPresent	bool
-core/ssg/WholeScreenInteraction.h	var	ssg::WholeScreenTruth::noticePresent	bool
-core/ssg/WholeScreenInteraction.h	var	ssg::WholeScreenTruth::openPicker	std::optional<PickerKind>
-core/ssg/WholeScreenInteraction.h	var	ssg::WholeScreenTruth::panelPresent	bool
-core/ssg/WholeScreenInteraction.h	var	ssg::WholeScreenTruth::panelReturnFocus	BaseFocus
-core/ssg/WholeScreenSchema.h	class	ssg::WholeScreenSchema
-core/ssg/WholeScreenSchema.h	func	ssg::WholeScreenSchema::WholeScreenSchema	void (UiComposition)
-core/ssg/WholeScreenSchema.h	func	ssg::WholeScreenSchema::generation	Generation () const noexcept
-core/ssg/WholeScreenSchema.h	func	ssg::WholeScreenSchema::update	bool (UiComposition)
-core/ssg/WholeScreenSchema.h	func	ssg::WholeScreenSchema::validated	const ValidatedSchema &() const noexcept
 core/ssg/Widget.h	class	ssg::WidgetStack
 core/ssg/Widget.h	enum	ssg::Align
 core/ssg/Widget.h	enum	ssg::CenterWidth
@@ -4755,7 +4714,6 @@ grid/ssg/Renderer.h	var	ssg::CellHyperlink::uri	std::string
 grid/ssg/Renderer.h	var	ssg::CellHyperlink::width	int
 grid/ssg/Renderer.h	var	ssg::GridPosition::column	int
 grid/ssg/Renderer.h	var	ssg::GridPosition::row	int
-grid/ssg/ShellViewState.h	class	ssg::UiInteractionState
 grid/ssg/ShellViewState.h	enum	ssg::ShellNodeKind
 grid/ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::EmptyState
 grid/ssg/ShellViewState.h	enumerator	ssg::ShellNodeKind::ExternalModificationAction

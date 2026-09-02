@@ -23,7 +23,6 @@
 namespace ssg {
 
 struct StatusViewState;
-class UiInteractionState;
 
 enum class ShellNodeKind : std::uint8_t {
 #define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,

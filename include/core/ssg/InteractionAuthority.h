@@ -1,162 +1,70 @@
 #pragma once
 
-// The runtime's single interaction authority: the sole owner of the whole-screen schema
-// generation, the prompt surface, the semantic truth, the derived interaction projection,
-// and the tree-provider revision source. Every focus/presence/prompt change flows through
-// it, so snapshots and presenters become readers of a projection rather than
-// independent writers.
-//
-// Two mutation shapes, both atomic:
-//   - apply(CommandTransition): the closed multi-subsystem transitions (panel, provider,
-//     finder). prepare + install are hidden behind this ONE method so no revision can be
-//     allocated between peeking the source and consuming the prepared transition; a
-//     rejected preflight mutates nothing.
-//   - openPrompt/submitPrompt/cancelPrompt/updatePromptValue: every generic prompt
-//     lifecycle path. Each mutates a COPY of the prompt, derives the replacement
-//     interaction, then swaps prompt and projection together, so prompt activity and focus
-//     authority never diverge.
-//
-// The authority owns the ONE tree-revision source: allocateTreeRevision is the sole minter
-// for non-transition tree updates, and a transition's create is stamped from the same
-// source inside apply. Workers never mint tree revisions.
-
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 #include <ssg/CommandTransition.h>
-#include <ssg/InteractionState.h>
 #include <ssg/Picker.h>
+#include <ssg/PaletteSearcher.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
-#include <ssg/Widget.h>  // UiComposition
-#include <ssg/WholeScreenInteraction.h>
-#include <ssg/WholeScreenSchema.h>
+#include <ssg/UiPresence.h>
 
 namespace ssg {
 
 class InteractionAuthority {
 public:
-    // Seed from the initial whole-screen assembly at generation 0, over the caller-owned
-    // TreeModel, with the first tree revision the source will hand out.
     InteractionAuthority(UiComposition initialAssembly, TreeModel& tree,
                          std::uint64_t firstTreeRevision = 1,
                          PickerActivationId firstPickerActivation =
                              PickerActivationId{1});
+    ~InteractionAuthority();
 
-    // Apply a transition atomically: prepare against current truth/prompt/tree and, on a
-    // non-null preflight, install as one consuming owner swap. Returns whether it applied;
-    // a rejected transition mutates nothing.
+    InteractionAuthority(InteractionAuthority const&) = delete;
+    InteractionAuthority& operator=(InteractionAuthority const&) = delete;
+    InteractionAuthority(InteractionAuthority&&) noexcept;
+    InteractionAuthority& operator=(InteractionAuthority&&) noexcept;
+
     bool apply(const CommandTransition& transition);
 
-    // Generic prompt lifecycle -- the single typed owner. Each returns the underlying
-    // PromptSurface result and leaves prompt + projection consistent.
     PromptCommandResult openPrompt(PromptRequest request);
     PromptCommandResult submitPrompt();
     PromptCommandResult cancelPrompt();
     PromptCommandResult updatePromptValue(std::size_t index, std::string value);
-    // Move keyboard authority among the active prompt's inputs. focusPromptControl
-    // rejects an id that does not address an input (UnknownInput); both leave
-    // prompt + projection consistent.
     PromptCommandResult focusPromptControl(std::string_view controlId);
     PromptCommandResult focusNextPromptControl();
 
-    // Simple base-focus changes -- editor/panel focus that touch only the aggregate, not a
-    // transition. focusPanel is honored only while the panel is present (returns whether it
-    // took). While a prompt is open its capture still routes effective focus to the prompt;
-    // the base change surfaces when the prompt closes.
     void toggleDistractionFree();
     void focusEditor();
     bool focusPanel();
 
-    // Reconcile the draft-conflict notice presence into truth. The notice's source is
-    // per-document runtime state outside the prompt/panel transitions, so the runtime
-    // calls this after each dispatch; a change rebuilds the projection so the notice
-    // region shows/hides. Returns whether presence changed (no rebuild when unchanged).
     bool refreshNoticePresence(bool present);
-
-    // Reconcile the external-modification section's presence into truth, mirroring
-    // refreshNoticePresence: the runtime calls it after each dispatch AND in the
-    // watcher drain (external state changes there, not only on a command). When the
-    // section becomes absent this also clears the external focus flag, so the
-    // capture auto-pops and a later disk event cannot reactively re-steal focus.
-    // Returns whether truth changed.
     bool refreshExternalModificationPresence(bool present);
-
-    // Focus the external-modification bar: push the derived capture by setting the
-    // truth flag. IDEMPOTENT and present-gated -- a no-op (returns false, no
-    // rebuild) when the bar is absent or focus is already held, so a repeated key
-    // never stacks the capture. releaseExternalFocus pops it (the external.focus_
-    // return command); a no-op when focus is not held.
     bool captureExternalFocus();
     bool releaseExternalFocus();
 
-    // Re-assemble the whole-screen schema; when its generation advances, rebuild the
-    // interaction projection from the SAME truth and prompt over the new schema (the
-    // migration). Returns whether the generation advanced.
     bool updateComposition(UiComposition assembly);
     bool refreshStatusActions(std::vector<StatusActionNode> actions);
-
-    // The sole minter of tree revisions for non-transition tree updates (filesystem/git
-    // refresh, panel-provider create), so all revisions come from one monotonic source.
     TreeRevision allocateTreeRevision();
 
-    [[nodiscard]] const WholeScreenTruth& truth() const noexcept { return truth_; }
-    [[nodiscard]] const UiInteractionState& interaction() const noexcept {
-        return interaction_;
-    }
-    [[nodiscard]] const PromptSurface& prompt() const noexcept { return prompt_; }
-    [[nodiscard]] const std::vector<StatusActionNode>& statusActions() const
-        noexcept {
-        return statusActions_;
-    }
-    [[nodiscard]] FocusTarget effectiveFocus() const noexcept {
-        return interaction_.effectiveFocus();
-    }
-    // The legacy wire projection of the effective focus: the internal
-    // ExternalModification capture is invisible here, so the published `focus`
-    // field stays in the closed set an old client can decode. The external-focus
-    // state is carried separately (WholeScreenTruth::externalFocusHeld).
-    [[nodiscard]] std::optional<PickerKind> openPicker() const noexcept {
-        return truth_.openPicker;
-    }
+    [[nodiscard]] const PromptSurface& prompt() const noexcept;
+    [[nodiscard]] const std::vector<StatusActionNode>& statusActions() const noexcept;
+    [[nodiscard]] FocusTarget effectiveFocus() const noexcept;
+    [[nodiscard]] std::optional<PickerKind> openPicker() const noexcept;
     [[nodiscard]] const std::optional<PickerActivation>&
-    openPickerActivation() const noexcept {
-        return openPickerActivation_;
-    }
-    // A monotonic counter over every change to interaction routing state -- base
-    // focus, the active prompt's kind/value/control focus, and picker/panel
-    // transitions. A host compares it across a dispatch to learn whether the way
-    // the NEXT key routes changed, without rebuilding a snapshot. Bumped at every
-    // owner swap (adopt), every applied transition, and every direct prompt-only
-    // swap (value/control focus).
-    [[nodiscard]] std::uint64_t routingGeneration() const noexcept {
-        return routingGeneration_;
-    }
+    openPickerActivation() const noexcept;
+    [[nodiscard]] std::uint64_t routingGeneration() const noexcept;
+    [[nodiscard]] const ValidatedSchema& validatedSchema() const noexcept;
+    [[nodiscard]] std::vector<UiNodeId> focusPath() const;
+    [[nodiscard]] UiPresenceSection presenceSection(PresenceBasis basis) const;
+    [[nodiscard]] PalettePresenceOverlay pickerPresenceOverlay() const;
 
 private:
-    // Adopt a prospective truth and prompt together: reconcile a stale picker identity
-    // (valid only while a Palette prompt is active), build the projection over the CURRENT
-    // schema, then assign truth, prompt, and projection -- all computed before any owned
-    // state changes, so a rebuild failure cannot leave them divergent.
-    void adopt(WholeScreenTruth next, PromptSurface prompt);
-    [[nodiscard]] UiComposition assembled(
-        const UiComposition& base, const PromptSurface& prompt) const;
-
-    [[nodiscard]] std::vector<TreeProviderPresence> presentProviders() const;
-
-    UiComposition baseComposition_;
-    std::vector<StatusActionNode> statusActions_;
-    WholeScreenSchema schema_;
-    TreeModel& tree_;
-    std::uint64_t nextTreeRevision_;
-    PickerActivationId nextPickerActivation_;
-    std::optional<PickerActivation> openPickerActivation_;
-    std::uint64_t routingGeneration_ = 0;
-    PromptSurface prompt_;
-    WholeScreenTruth truth_;
-    UiInteractionState interaction_;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace ssg

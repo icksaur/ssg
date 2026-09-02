@@ -193,8 +193,7 @@ SessionSnapshotSections EditorSession::Impl::sections(
         }
     }
     auto treeSection = treeView();
-    const UiInteractionState& interactionState = interaction.interaction();
-    const ValidatedSchema& validatedSchema = interactionState.schema();
+    const ValidatedSchema& validatedSchema = interaction.validatedSchema();
     UiSchema uiSchema = validatedSchema.schema();
     // Schema, resolved state, and presence all derive from the interaction
     // authority's single ValidatedSchema, so they correspond node-for-node and
@@ -214,10 +213,9 @@ SessionSnapshotSections EditorSession::Impl::sections(
                                                    interaction.prompt(),
                                                    findReplace.viewState())));
     }();
-    uiState.focusPath = interactionState.focusPath();
+    uiState.focusPath = interaction.focusPath();
     UiPresenceSection uiPresence =
-        buildPresenceSection(validatedSchema, interactionState.presence());
-    uiPresence.basis = PresenceBasis{session->revision().value()};
+        interaction.presenceSection(PresenceBasis{session->revision().value()});
     return {documentView(),
             selection.selections,
             currentHistory,
@@ -251,8 +249,7 @@ TreeViewState EditorSession::Impl::treeView() const {
 
 PaletteViewState EditorSession::Impl::paletteView() const {
     PaletteViewState view;
-    view.presenceOverlay = derivePickerPresenceOverlay(
-        interaction.interaction().schema(), interaction.truth());
+    view.presenceOverlay = interaction.pickerPresenceOverlay();
     if (auto open = interaction.openPicker()) {
         if (auto const* descriptor = pickerCatalog().find(*open)) {
             view.activePicker = interaction.openPickerActivation();

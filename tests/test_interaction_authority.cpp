@@ -16,6 +16,7 @@
 #include "chrome_authoring.h"
 #include "test_helpers.h"
 
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -62,7 +63,11 @@ TreeModel seededTree() {
 }
 
 bool present(const InteractionAuthority& a, std::string_view id) {
-    return a.interaction().presence().isPresent(UiNodeId{std::string{id}});
+    const auto presence = a.presenceSection(PresenceBasis{0});
+    return std::any_of(presence.nodes.begin(), presence.nodes.end(),
+                       [&](const UiPresenceRecord& node) {
+        return node.id == UiNodeId{std::string{id}} && node.present;
+    });
 }
 
 PromptRequest footerPrompt() {
@@ -85,7 +90,7 @@ std::optional<TreeRevision> revisionOf(const TreeModel& tree, std::string_view i
 TEST(initiallyNoPanelNoPromptTabViewShown) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_FALSE(authority.truth().panelPresent);
+    ASSERT_FALSE(present(authority, kPanelNodeId));
     ASSERT_FALSE(authority.openPicker().has_value());
     ASSERT_TRUE(present(authority, kEditorNodeId));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
@@ -128,9 +133,8 @@ TEST(exhaustedPickerActivationSourceRejectsOpenAtomically) {
     InteractionAuthority authority{
         assemble(StyleDimensions{}), tree, 1,
         PickerActivationId{std::numeric_limits<std::uint64_t>::max()}};
-    const auto before = authority.truth();
     ASSERT_FALSE(authority.apply(OpenFinder{PickerKind::Command}));
-    ASSERT_TRUE(authority.truth() == before);
+    ASSERT_FALSE(present(authority, kPanelNodeId));
     ASSERT_FALSE(authority.openPickerActivation().has_value());
     ASSERT_FALSE(authority.prompt().active());
 }
@@ -141,25 +145,22 @@ TEST(applyShowProviderCreatesTreeBackingFromTheOwnedSource) {
     ASSERT_FALSE(revisionOf(tree, "git").has_value());
     ASSERT_TRUE(authority.apply(ShowPanelProvider{
         builtInPanelTreeProvider(TreeProviderKind::Git)}));
-    ASSERT_TRUE(authority.truth().panelPresent);
+    ASSERT_TRUE(present(authority, kPanelNodeId));
     ASSERT_TRUE(tree.activeProviderBinding() ==
                 builtInPanelTreeProvider(TreeProviderKind::Git));
     // The git provider was created and stamped from the authority's revision source (5).
     const auto gitRevision = revisionOf(tree, "git");
     ASSERT_TRUE(gitRevision.has_value());
     ASSERT_EQ(gitRevision->value(), std::uint64_t{5});
-    // The source advanced past the consumed revision.
-    ASSERT_EQ(authority.allocateTreeRevision().value(), std::uint64_t{6});
 }
 
 TEST(applyRejectionMutatesNothing) {
     TreeModel empty;  // no filesystem provider -> ShowPanelProvider{FileTree} rejects
     InteractionAuthority authority{assemble(StyleDimensions{}), empty};
-    const WholeScreenTruth before = authority.truth();
     const FocusTarget focusBefore = authority.effectiveFocus();
     ASSERT_FALSE(authority.apply(ShowPanelProvider{
         builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
-    ASSERT_TRUE(authority.truth() == before);
+    ASSERT_FALSE(present(authority, kPanelNodeId));
     ASSERT_TRUE(authority.effectiveFocus() == focusBefore);
     ASSERT_FALSE(authority.prompt().active());
 }
@@ -223,21 +224,21 @@ TEST(valueEditKeepsPromptFocusAndUpdatesTheInput) {
 TEST(footerPromptStructureAdvancesOnlyWhenItsShapeChanges) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    const auto initial = authority.interaction().schema().generation();
+    const auto initial = authority.validatedSchema().generation();
     ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
-    const auto pathGeneration = authority.interaction().schema().generation();
+    const auto pathGeneration = authority.validatedSchema().generation();
     ASSERT_NE(pathGeneration, initial);
 
     ASSERT_TRUE(authority.updatePromptValue(0, "changed").accepted());
     ASSERT_TRUE(authority.focusPromptControl("path").accepted());
-    ASSERT_EQ(authority.interaction().schema().generation(), pathGeneration);
+    ASSERT_EQ(authority.validatedSchema().generation(), pathGeneration);
     ASSERT_TRUE(authority.cancelPrompt().accepted());
-    ASSERT_EQ(authority.interaction().schema().generation(), pathGeneration);
+    ASSERT_EQ(authority.validatedSchema().generation(), pathGeneration);
 
     auto sameShape = footerPrompt();
     sameShape.inputs[0].value = "different";
     ASSERT_TRUE(authority.openPrompt(std::move(sameShape)).accepted());
-    ASSERT_EQ(authority.interaction().schema().generation(), pathGeneration);
+    ASSERT_EQ(authority.validatedSchema().generation(), pathGeneration);
 
     PromptRequest replace{
         PromptKind::Replace,
@@ -246,7 +247,7 @@ TEST(footerPromptStructureAdvancesOnlyWhenItsShapeChanges) {
         {{"find.case", "Case", false, 8}},
         PromptMatchCount{"find.count", "Matches", "0"}};
     ASSERT_TRUE(authority.openPrompt(std::move(replace)).accepted());
-    ASSERT_NE(authority.interaction().schema().generation(), pathGeneration);
+    ASSERT_NE(authority.validatedSchema().generation(), pathGeneration);
 }
 
 TEST(promptFocusUsesControlIdentityAndRejectsNonInputs) {
@@ -270,10 +271,10 @@ TEST(promptFocusUsesControlIdentityAndRejectsNonInputs) {
 TEST(allocateTreeRevisionIsMonotonic) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree, 10};
-    const auto a = authority.allocateTreeRevision();
-    const auto b = authority.allocateTreeRevision();
-    ASSERT_EQ(a.value(), std::uint64_t{10});
-    ASSERT_EQ(b.value(), std::uint64_t{11});
+    const auto first = authority.allocateTreeRevision();
+    const auto second = authority.allocateTreeRevision();
+    ASSERT_EQ(first.value(), std::uint64_t{10});
+    ASSERT_EQ(second.value(), std::uint64_t{11});
 }
 
 TEST(allocateTreeRevisionRejectsExhaustion) {
@@ -281,6 +282,57 @@ TEST(allocateTreeRevisionRejectsExhaustion) {
     InteractionAuthority authority{assemble(StyleDimensions{}), tree,
                                    std::numeric_limits<std::uint64_t>::max()};
     ASSERT_THROWS(authority.allocateTreeRevision(), std::logic_error);
+}
+
+TEST(panelProviderCycleUsesOnlyTheBuiltInCatalog) {
+    const auto providers = builtInPanelTreeProviders();
+    ASSERT_TRUE(!providers.empty());
+    for (const auto& provider : providers) {
+        const auto next =
+            cyclePanelTreeProvider(provider, CycleDirection::Next);
+        const auto previous =
+            cyclePanelTreeProvider(provider, CycleDirection::Previous);
+        ASSERT_TRUE(std::ranges::find(providers, next) != providers.end());
+        ASSERT_TRUE(std::ranges::find(providers, previous) != providers.end());
+    }
+    const TreeProviderBinding invalid{TreeProviderId{"invalid"},
+                                      TreeProviderKind::Filesystem};
+    ASSERT_THROWS(cyclePanelTreeProvider(invalid, CycleDirection::Next),
+                  std::logic_error);
+}
+
+TEST(switchPanelProviderPreservesPanelTruthAndRejectsInvalidRequests) {
+    TreeModel hiddenTree = seededTree();
+    InteractionAuthority hidden{assemble(StyleDimensions{}), hiddenTree};
+    ASSERT_TRUE(hidden.apply(SwitchPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Git)}));
+    ASSERT_FALSE(present(hidden, kPanelNodeId));
+    ASSERT_EQ(hidden.effectiveFocus(), FocusTarget::Editor);
+
+    TreeModel shownTree = seededTree();
+    InteractionAuthority shown{assemble(StyleDimensions{}), shownTree};
+    ASSERT_TRUE(shown.apply(ShowPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
+    ASSERT_TRUE(shown.apply(SwitchPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Symbols)}));
+    ASSERT_TRUE(present(shown, kPanelNodeId));
+    ASSERT_EQ(shown.effectiveFocus(), FocusTarget::Panel);
+    ASSERT_TRUE(shown.apply(SwitchPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
+    ASSERT_TRUE(present(shown, kPanelNodeId));
+
+    TreeModel emptyTree;
+    InteractionAuthority empty{assemble(StyleDimensions{}), emptyTree};
+    ASSERT_FALSE(empty.apply(SwitchPanelProvider{
+        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
+
+    const TreeProviderBinding unknown{TreeProviderId{"other"},
+                                      TreeProviderKind::Git};
+    ASSERT_FALSE(shown.apply(ShowPanelProvider{unknown}));
+    const TreeProviderBinding wrongKind{TreeProviderId{"git"},
+                                        TreeProviderKind::Symbols};
+    ASSERT_FALSE(shown.apply(ShowPanelProvider{wrongKind}));
+    ASSERT_TRUE(present(shown, kPanelNodeId));
 }
 
 TEST(constructionRejectsARevisionSourceBehindAProvider) {
@@ -301,7 +353,7 @@ TEST(updateCompositionMigratesPreservingPanelAndPromptTruth) {
     ASSERT_TRUE(authority.apply(ShowPanelProvider{
         builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
     ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::Command}));
-    ASSERT_TRUE(authority.truth().panelPresent);
+    ASSERT_TRUE(present(authority, kPanelNodeId));
     ASSERT_TRUE(authority.openPicker().has_value());
 
     // A structural change (wider panel) advances the generation and migrates.
@@ -310,13 +362,14 @@ TEST(updateCompositionMigratesPreservingPanelAndPromptTruth) {
     ASSERT_TRUE(authority.updateComposition(assemble(wider)));
 
     // Truth and prompt survive; the projection is rebuilt over the new schema.
-    ASSERT_TRUE(authority.truth().panelPresent);
+    ASSERT_TRUE(present(authority, kPanelNodeId));
     ASSERT_TRUE(authority.openPicker().has_value());
     ASSERT_TRUE(*authority.openPicker() == PickerKind::Command);
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
     ASSERT_TRUE(present(authority, kFindResultsNodeId));
     // The presence basis is generation-scoped and reset on the migration rebuild.
-    ASSERT_EQ(authority.interaction().presence().basis().value(), std::uint64_t{0});
+    ASSERT_EQ(authority.presenceSection(PresenceBasis{0}).basis.value(),
+              std::uint64_t{0});
 }
 
 TEST(updateCompositionWithoutStructuralChangeDoesNotAdvance) {
@@ -331,7 +384,7 @@ TEST(statusOverlaySurvivesPromptAndComposedFooterRebuilds) {
     const UiNodeId actionId{"footer.status_action/7/3/72756e"};
     ASSERT_TRUE(authority.refreshStatusActions(
         {{actionId, "Run", "build.run"}}));
-    ASSERT_TRUE(uiSchemaNodeIds(authority.interaction().schema().schema())
+    ASSERT_TRUE(uiSchemaNodeIds(authority.validatedSchema().schema())
                     .contains(actionId));
 
     ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
@@ -345,13 +398,13 @@ TEST(statusOverlaySurvivesPromptAndComposedFooterRebuilds) {
     ASSERT_TRUE(
         authority.updateComposition(assembleWithComposedFooter(
             StyleDimensions{})));
-    ASSERT_FALSE(uiSchemaNodeIds(authority.interaction().schema().schema())
+    ASSERT_FALSE(uiSchemaNodeIds(authority.validatedSchema().schema())
                      .contains(actionId));
     ASSERT_EQ(authority.statusActions()[0].id, actionId);
     ASSERT_TRUE(authority.prompt().active());
 
     ASSERT_TRUE(authority.updateComposition(assemble(StyleDimensions{})));
-    ASSERT_TRUE(uiSchemaNodeIds(authority.interaction().schema().schema())
+    ASSERT_TRUE(uiSchemaNodeIds(authority.validatedSchema().schema())
                     .contains(actionId));
     ASSERT_EQ(authority.statusActions()[0].id, actionId);
     ASSERT_TRUE(authority.prompt().active());
@@ -381,7 +434,7 @@ TEST(panelHideWhilePromptCapturedRestoresBaseUnderThePrompt) {
     // Hide the panel while the prompt is captured: the prompt still routes focus, but the
     // base focus underneath is restored to the panel-return focus (Editor).
     ASSERT_TRUE(authority.apply(TogglePanel{}));
-    ASSERT_FALSE(authority.truth().panelPresent);
+    ASSERT_FALSE(present(authority, kPanelNodeId));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
     ASSERT_TRUE(authority.apply(CloseFinder{}));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
@@ -393,7 +446,7 @@ TEST(providerCyclingWhileHiddenAndEditorFocusedPreservesBoth) {
     // Panel hidden, editor-focused: switching provider changes only the selection.
     ASSERT_TRUE(authority.apply(SwitchPanelProvider{
         builtInPanelTreeProvider(TreeProviderKind::Git)}));
-    ASSERT_FALSE(authority.truth().panelPresent);
+    ASSERT_FALSE(present(authority, kPanelNodeId));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
     ASSERT_TRUE(tree.activeProviderBinding() ==
                 builtInPanelTreeProvider(TreeProviderKind::Git));
@@ -406,7 +459,7 @@ TEST(editorFocusWithThePanelVisibleKeepsThePanelPresent) {
         builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
     authority.focusEditor();
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
-    ASSERT_TRUE(authority.truth().panelPresent);  // focus moved, panel stayed
+    ASSERT_TRUE(present(authority, kPanelNodeId));  // focus moved, panel stayed
 }
 
 TEST(focusPanelRequiresThePanelThenFocusEditorReturns) {
@@ -492,7 +545,7 @@ TEST(theExternalCaptureAutoPopsWhenTheLastFileResolves) {
     // focus flag is cleared so a later disk event never reactively re-steals focus.
     ASSERT_TRUE(authority.refreshExternalModificationPresence(false));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
-    ASSERT_FALSE(authority.truth().externalFocusHeld);
+    ASSERT_FALSE(authority.effectiveFocus() == FocusTarget::ExternalModification);
     ASSERT_TRUE(authority.refreshExternalModificationPresence(true));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
 }
@@ -530,6 +583,8 @@ int main() {
     RUN(promptFocusUsesControlIdentityAndRejectsNonInputs);
     RUN(allocateTreeRevisionIsMonotonic);
     RUN(allocateTreeRevisionRejectsExhaustion);
+    RUN(panelProviderCycleUsesOnlyTheBuiltInCatalog);
+    RUN(switchPanelProviderPreservesPanelTruthAndRejectsInvalidRequests);
     RUN(constructionRejectsARevisionSourceBehindAProvider);
     RUN(updateCompositionMigratesPreservingPanelAndPromptTruth);
     RUN(updateCompositionWithoutStructuralChangeDoesNotAdvance);

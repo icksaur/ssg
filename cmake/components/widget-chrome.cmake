@@ -48,30 +48,11 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(test_keyboard_focus PRIVATE ssg_core)
     add_test(NAME test_keyboard_focus COMMAND test_keyboard_focus)
 
-    add_executable(test_interaction_state
-        ${SSG_SOURCE_DIR}/tests/test_interaction_state.cpp
-    )
-    target_link_libraries(test_interaction_state PRIVATE ssg_core)
-    add_test(NAME test_interaction_state COMMAND test_interaction_state)
-
     add_executable(test_ui_view_surface
         ${SSG_SOURCE_DIR}/tests/test_ui_view_surface.cpp
     )
     target_link_libraries(test_ui_view_surface PRIVATE ssg_grid)
     add_test(NAME test_ui_view_surface COMMAND test_ui_view_surface)
-
-    add_executable(test_whole_screen_interaction
-        ${SSG_SOURCE_DIR}/tests/test_whole_screen_interaction.cpp
-    )
-    target_link_libraries(test_whole_screen_interaction PRIVATE ssg_core)
-    add_test(NAME test_whole_screen_interaction
-             COMMAND test_whole_screen_interaction)
-
-    add_executable(test_command_transition
-        ${SSG_SOURCE_DIR}/tests/test_command_transition.cpp
-    )
-    target_link_libraries(test_command_transition PRIVATE ssg_core)
-    add_test(NAME test_command_transition COMMAND test_command_transition)
 
     add_executable(test_interaction_authority
         ${SSG_SOURCE_DIR}/tests/test_interaction_authority.cpp

@@ -1,14 +1,8 @@
 #pragma once
 
-// The closed set of multi-subsystem interaction transitions and their two-phase
-// application. A transition is the sole WRITER of whole-screen truth;
-// buildWholeScreenInteraction is the READER. prepareTransition is a fallible preflight
-// that MUTATES NOTHING and, on success, yields a PreparedTransition -- a data-only bundle
-// of fully-formed replacement values (next truth, the rebuilt interaction aggregate, the
-// post-open/cancel prompt surface, and any tree-provider backing). The runtime installs
-// the bundle as one atomic owner swap; because every fallible step happened in preflight,
-// the install is infallible. A rejected preflight returns nullopt and leaves the caller's
-// subsystems untouched.
+// The closed set of multi-subsystem interaction transitions. InteractionAuthority owns
+// their private preflight and atomic installation, so callers can request a transition
+// without assembling mutable focus, presence, schema, or tree-provider state.
 //
 // Simple pane/editor focus changes are NOT transitions here -- they are typed methods on
 // the interaction aggregate. Only changes that touch several subsystems at once (panel +
@@ -23,8 +17,6 @@
 #include <ssg/PromptSurface.h>   // PromptSurface
 #include <ssg/TreeModel.h>       // TreeProviderBinding, TreeProviderSnapshot, TreeRevision
 #include <ssg/UiTree.h>          // ValidatedSchema, UiSchema, node id constants
-#include <ssg/InteractionState.h>       // UiInteractionState
-#include <ssg/WholeScreenInteraction.h> // WholeScreenTruth
 
 namespace ssg {
 
@@ -68,91 +60,5 @@ struct CloseFinder {};
 
 using CommandTransition = std::variant<TogglePanel, ShowPanelProvider,
                                        SwitchPanelProvider, OpenFinder, CloseFinder>;
-
-// --- The tree-provider backing a commit installs ------------------------------------
-
-// The fully-formed tree-provider state a commit installs. `create`, when set, is a
-// complete snapshot the commit installs for an absent creatable provider;
-// `activate` names the provider that becomes active. Preflight rejects a
-// missing Filesystem provider and any id present under the wrong kind.
-struct TreeBackingPlan {
-    TreeProviderId activate;
-    std::optional<TreeProviderSnapshot> create;
-};
-
-// --- The inputs preflight reads (all by value; no callbacks) ------------------------
-
-// An existing tree provider, as its binding plus current revision. Preflight needs the
-// revision: replacing a provider requires a strictly greater revision, so a wrong-kind
-// recreate must be stamped above the one it replaces for the commit to be infallible.
-struct TreeProviderPresence {
-    TreeProviderBinding binding;
-    TreeRevision revision{0};
-};
-
-struct TransitionInputs {
-    WholeScreenTruth truth;
-    ValidatedSchema schema;                    // to rebuild the replacement aggregate
-    PromptSurface prompt;                       // copied; preflight opens/cancels on it
-    // The tree providers that already exist. Matching needs id+kind (activating by id
-    // alone cannot prove the kind) and the revision (to stamp a valid recreate).
-    std::vector<TreeProviderPresence> presentProviders;
-    std::optional<TreeProviderBinding> activeProvider;
-    TreeRevision nextTreeRevision{0};           // revision stamped on a fresh provider
-};
-
-// --- The prepared, fully-formed replacement state -----------------------------------
-
-// An opaque bundle of fully-formed replacement values, constructed ONLY by
-// prepareTransition so a caller cannot assemble an inconsistent (truth, interaction,
-// prompt, tree) combination. The runtime installs it as one atomic owner swap; it
-// computes nothing and calls nothing fallible. File-finder candidate content is NOT here:
-// the candidate list is picker content on its own data channel, refreshed by the runtime
-// when the open picker becomes File, not part of the interaction aggregate's truth.
-class PreparedTransition {
-public:
-    [[nodiscard]] const WholeScreenTruth& truth() const noexcept { return truth_; }
-    [[nodiscard]] const UiInteractionState& interaction() const noexcept {
-        return interaction_;
-    }
-    [[nodiscard]] const PromptSurface& prompt() const noexcept { return prompt_; }
-    [[nodiscard]] const std::optional<TreeBackingPlan>& tree() const noexcept {
-        return tree_;
-    }
-
-private:
-    PreparedTransition(WholeScreenTruth truth, UiInteractionState interaction,
-                       PromptSurface prompt, std::optional<TreeBackingPlan> tree)
-        : truth_{std::move(truth)},
-          interaction_{std::move(interaction)},
-          prompt_{std::move(prompt)},
-          tree_{std::move(tree)} {}
-
-    // The single consuming install chokepoint: move the prepared replacement into the
-    // authority's owned state in ONE fixed order -- apply the tree plan (replaceProvider a
-    // create, then activateProvider) and advance the revision source past any consumed
-    // create revision, then move in prompt, interaction, and truth. Rvalue-qualified so a
-    // prepared transition installs at most once. PRIVATE to InteractionAuthority so a
-    // bundle can never be installed into unrelated truth/tree/revision objects, which would
-    // invalidate the preflight guarantees. Preflight has made every step here infallible.
-    void installInto(WholeScreenTruth& truth, UiInteractionState& interaction,
-                     PromptSurface& prompt, TreeModel& tree,
-                     std::uint64_t& revisionSource) &&;
-
-    friend struct TransitionBuilder;
-    friend class InteractionAuthority;
-
-    WholeScreenTruth truth_;
-    UiInteractionState interaction_;
-    PromptSurface prompt_;
-    std::optional<TreeBackingPlan> tree_;
-};
-
-// Preflight a transition against `inputs`. Returns nullopt on rejection (an out-of-domain
-// resource: a missing Filesystem tree provider, an unknown picker, or a prompt that
-// refuses to open/cancel), having touched nothing. On success the returned bundle carries
-// the fully-formed replacement state.
-[[nodiscard]] std::optional<PreparedTransition> prepareTransition(
-    const CommandTransition& transition, const TransitionInputs& inputs);
 
 }  // namespace ssg

@@ -1,6 +1,6 @@
 #pragma once
 
-// The canonical owner of focus-affecting presence AND the keyboard-focus capture
+// Private owner of focus-affecting presence and keyboard-focus capture.
 // stack, together. This is the type the runtime uses so the two can never drift:
 // applying a patch updates presence and reconciles focus in ONE call (a hide and
 // its induced capture removal are atomic, never a two-step a caller could half

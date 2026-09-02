@@ -16,6 +16,12 @@
 
 #include <unistd.h>
 
+#if __has_include(<ssg/InteractionState.h>) || \
+    __has_include(<ssg/WholeScreenInteraction.h>) || \
+    __has_include(<ssg/WholeScreenSchema.h>)
+#error "whole-screen interaction intermediates must remain private"
+#endif
+
 template <typename Runtime>
 concept HasDimensionedSnapshot = requires(Runtime& runtime) {
     runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});

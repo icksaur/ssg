@@ -1,5 +1,7 @@
 #include <ssg/CommandTransition.h>
 
+#include "runtime/transition_internals.h"
+
 #include <algorithm>
 #include <limits>
 #include <stdexcept>

@@ -11,7 +11,7 @@
 
 #include <optional>
 
-#include <ssg/InteractionState.h>  // UiInteractionState
+#include "interaction_state.h"
 #include <ssg/KeyboardFocus.h>     // BaseFocus
 #include <ssg/Picker.h>            // PickerKind
 #include <ssg/PaletteSearcher.h>   // PalettePresenceOverlay
