@@ -15,7 +15,7 @@
 #include <ssg/Geometry.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/PaletteSearcher.h>
-#include <ssg/ShellState.h>
+#include <ssg/PaneTopology.h>
 #include <ssg/Style.h>
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
@@ -243,9 +243,11 @@ struct SolvedDocumentSurface {
 // CONTRACT: Document rendering, hits, caret placement, scrollbar interaction,
 // and presenter navigation consume this single authoritative grid geometry.
 [[nodiscard]] SolvedDocumentSurface solveDocumentSurface(
-    const SolvedGridNode& viewport, const std::vector<PaneFrame>& paneFrames,
-    PaneId activePane, bool lineNumbers,
+    const SolvedGridNode& viewport, const PaneTopology& topology,
+    bool lineNumbers,
     std::uint32_t logicalLineCount, const StyleDimensions& dimensions);
+[[nodiscard]] std::optional<PaneId> paneInDirection(
+    const SolvedDocumentSurface& surface, PaneDirection direction) noexcept;
 
 // Returns nullopt when nonnegative bounds cannot contain an inset, gaps, or
 // exact children. Invalid identities and unsupported Auto sizes are misuse and

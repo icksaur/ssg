@@ -6,7 +6,7 @@
 // nodes the built-in status-field projection emits, so a composed region is a
 // transparent replacement.
 
-#include <ssg/ShellState.h>  // Rect
+#include <ssg/Geometry.h>
 #include <ssg/Style.h>
 #include <ssg/UiNodeState.h>  // UiStateSection
 #include <ssg/UiTree.h>      // UiRegion
@@ -17,6 +17,8 @@
 #include <vector>
 
 namespace ssg {
+
+struct StatusViewState;
 
 // The result of lowering a medium-agnostic chrome region tree: on a malformed
 // tree shape, a named error and no nodes emitted (fail-loud, never a plausible

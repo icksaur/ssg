@@ -55,12 +55,6 @@ struct PaneGeometry {
     friend bool operator==(const PaneGeometry&, const PaneGeometry&) = default;
 };
 
-struct PaneFrame {
-    PaneId id;
-    Rect rect;
-    friend bool operator==(const PaneFrame&, const PaneFrame&) = default;
-};
-
 // A clickable tab's rectangle plus its index into `sections().tabs.tabs`. Layout
 // publishes one per visible tab so pointer hit-testing maps a cell to a tab
 // without parsing the stringly-typed `tab.{i}` accessibility-node id.
@@ -135,30 +129,6 @@ struct ShellViewState {
     [[nodiscard]] std::size_t scrollbarCount() const noexcept {
         return panes.size();
     }
-};
-
-class ShellState {
-public:
-    explicit ShellState();
-    ~ShellState();
-    ShellState(ShellState&&) noexcept;
-    ShellState& operator=(ShellState&&) noexcept;
-    ShellState(const ShellState&) = delete;
-    ShellState& operator=(const ShellState&) = delete;
-
-    [[nodiscard]] PaneId activePane() const noexcept;
-    [[nodiscard]] std::size_t paneCount() const noexcept;
-    [[nodiscard]] std::vector<PaneFrame> paneFrames(Rect rect) const;
-    PaneId splitActive(SplitAxis axis);
-    [[nodiscard]] bool closeActivePane();
-    void nextPane() noexcept;
-    void previousPane() noexcept;
-    [[nodiscard]] bool focusPane(PaneDirection direction,
-                                  const std::vector<PaneFrame>& panes) noexcept;
-
-private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace ssg

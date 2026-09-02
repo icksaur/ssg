@@ -94,8 +94,8 @@ ssg::DiffFileView overlayDiff(std::string_view currentContent) {
     };
 }
 
-ssg::GridFrame snapshotWith(
-    const ssg::GridFrame& base,
+ssg::GridPresentation snapshotWith(
+    const ssg::GridPresentation& base,
     ssg::SessionSnapshotSections sections,
     ssg::GridProjection projection) {
     return ssg::test::copyGridFrame(

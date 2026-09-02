@@ -1,7 +1,7 @@
 // Byte-identical TUI rendered-grid parity guard for the whole-screen publish (5b).
 //
 // The terminal renders the server-described grid (CellGrid), NOT the medium-agnostic
-// uiSchema. Publishing the authority's whole-screen schema + real presence on the wire (a
+// uiSchema. Publishing the authority's whole-screen schema + real presence (a
 // web-facing change) must leave that grid byte-for-byte unchanged. This golden captures the
 // rendered grid across representative interaction states; if the publish alters TUI output,
 // canonical() diverges and this fails. Regenerate (only after an intended TUI change) with

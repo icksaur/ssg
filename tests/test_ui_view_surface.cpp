@@ -5,6 +5,7 @@
 // closed surface set.
 
 #include "ssg/ChromeLowering.h"
+#include "ssg/ShellViewState.h"
 #include "ssg/UiTree.h"
 #include "ssg/ViewSurfaceBacking.h"
 #include "ssg/Widget.h"

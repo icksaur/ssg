@@ -31,4 +31,11 @@ enum class PaneDirection : std::uint8_t {
 };
 #undef SSG_PANE_DIRECTION_ENUMERATORS
 
+enum class PaneCycleDirection : std::uint8_t {
+#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
+    SSG_PANE_CYCLE_DIRECTION_ENUMERATORS(SSG_ENUMERATOR)
+#undef SSG_ENUMERATOR
+};
+#undef SSG_PANE_CYCLE_DIRECTION_ENUMERATORS
+
 }  // namespace ssg

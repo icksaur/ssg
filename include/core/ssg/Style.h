@@ -13,7 +13,7 @@ namespace ssg {
 
 // Style is the UI's dimensions and chrome glyphs, separated from color (which
 // is the theme's job) and from layout arithmetic (which
-// is ShellState's).
+// is the presenter's).
 //
 // Everything here is DATA plus the small amount of logic needed to resolve that
 // data into a glyph.  Style deliberately knows nothing about a grid, a snapshot

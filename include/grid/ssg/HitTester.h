@@ -72,7 +72,7 @@ struct RegionHit {
 // row, or in a reserved-but-empty gutter/list area is HitRegion::None.
 class HitTester {
 public:
-    explicit HitTester(GridFrame const& snapshot) noexcept
+    explicit HitTester(GridPresentation const& snapshot) noexcept
         : snapshot_(snapshot) {}
 
     [[nodiscard]] RegionHit at(int column, int row) const;
@@ -94,7 +94,7 @@ public:
     [[nodiscard]] std::optional<GutterThumb> gutterThumb(HitRegion region) const;
 
 private:
-    GridFrame const& snapshot_;
+    GridPresentation const& snapshot_;
 };
 
 }  // namespace ssg

@@ -3,7 +3,7 @@
 // The runtime's single interaction authority: the sole owner of the whole-screen schema
 // generation, the prompt surface, the semantic truth, the derived interaction projection,
 // and the tree-provider revision source. Every focus/presence/prompt change flows through
-// it, so ShellState and the snapshot become READERS of a projection rather than
+// it, so snapshots and presenters become readers of a projection rather than
 // independent writers.
 //
 // Two mutation shapes, both atomic:

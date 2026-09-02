@@ -23,7 +23,6 @@ std::string_view optionalSubsystemName(OptionalSubsystem subsystem) noexcept {
         case OptionalSubsystem::Lsp: return "lsp";
         case OptionalSubsystem::TreeSitterGrammar: return "tree_sitter_grammar";
         case OptionalSubsystem::FilesystemWatcher: return "filesystem_watcher";
-        case OptionalSubsystem::Http: return "http";
         case OptionalSubsystem::Count: break;  // sentinel, never a real subsystem
     }
     return "unknown";

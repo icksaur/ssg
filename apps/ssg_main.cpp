@@ -744,8 +744,8 @@ int main(int argc, char** argv) {
             auto frame = gridPresenter.project(
                 runtime, client, {terminalSize(), {}});
             if (!frame) {
-                return ssg::GridActionResult{
-                    ssg::GridActionStatus::Rejected, std::nullopt,
+                return ssg::ViewActionResult{
+                    ssg::ViewActionStatus::Rejected, std::nullopt,
                     "view action has no current grid frame"};
             }
             return gridPresenter.apply(request, *frame);
@@ -1040,7 +1040,7 @@ int main(int argc, char** argv) {
     // Take a fresh snapshot and adopt its authoritative client state. Called
     // before every input event so coalesced input after a focus-changing command
     // routes against the new focus rather than a stale one.
-    auto refresh = [&]() -> std::optional<ssg::GridFrame> {
+    auto refresh = [&]() -> std::optional<ssg::GridPresentation> {
         auto snapshot = gridPresenter.project(
             runtime, client, {terminalSize(), buildReport()});
         if (snapshot) {
@@ -1100,9 +1100,14 @@ int main(int argc, char** argv) {
         }
         return snapshot;
     };
-    std::optional<ssg::GridFrame> activeSnapshot;
+    std::optional<ssg::GridPresentation> activeSnapshot;
     auto handleInputResult = [&](ssg::ClientInputResult result) {
-        if (result.command) noteEffects(result.command->effects);
+        if (result.command) {
+            noteEffects(result.command->effects);
+            if (result.command->effects.geometryChanged) {
+                activeSnapshot.reset();
+            }
+        }
         if (result.clientOwned) {
             applyClientOwnedInput(*result.clientOwned);
         }
@@ -1198,7 +1203,7 @@ int main(int argc, char** argv) {
                         }
                     }
                     // panel.show_files moves focus to the panel as a side effect
-                    // (ShellState::showPanelProvider -> togglePanel), so editor
+                    // (showing a panel focuses it), so editor
                     // focus is re-asserted here, AFTER it, to be the final word.
                     if (startsWithAnEditableDocument) {
                         runtime.focusEditor();

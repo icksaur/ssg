@@ -70,7 +70,7 @@ bool gridContains(ssg::CellGrid const& grid, std::string_view needle) {
 // reads style from the snapshot, not from a member, so this is how a test
 // restyles -- and doing it through the published section is exactly the proof
 // that the renderer and runtime share the one instance.
-ssg::GridFrame withStyle(ssg::GridFrame const& base, ssg::Style style) {
+ssg::GridPresentation withStyle(ssg::GridPresentation const& base, ssg::Style style) {
     auto projection = base.presentation();
     projection.style = std::move(style);
     return ssg::test::copyGridFrame(
@@ -102,8 +102,8 @@ ssg::UiNode* mutableUiNodeForWidget(ssg::UiNode& node,
     return nullptr;
 }
 
-ssg::GridFrame withUiBackgrounds(
-    ssg::GridFrame const& base,
+ssg::GridPresentation withUiBackgrounds(
+    ssg::GridPresentation const& base,
     std::initializer_list<std::pair<std::string_view, ssg::SemanticRole>>
         backgrounds) {
     auto sections = base.sections();
@@ -119,8 +119,8 @@ ssg::GridFrame withUiBackgrounds(
         base, std::move(sections), base.presentation(), base.palette());
 }
 
-ssg::GridFrame withUiForeground(
-    ssg::GridFrame const& base, std::string_view id,
+ssg::GridPresentation withUiForeground(
+    ssg::GridPresentation const& base, std::string_view id,
     ssg::SemanticRole foreground) {
     auto sections = base.sections();
     auto schema = sections.uiFrame.schema();
@@ -133,8 +133,8 @@ ssg::GridFrame withUiForeground(
         base, std::move(sections), base.presentation(), base.palette());
 }
 
-ssg::GridFrame withUiWidgetRole(
-    ssg::GridFrame const& base,
+ssg::GridPresentation withUiWidgetRole(
+    ssg::GridPresentation const& base,
     std::string_view widgetId, std::string role) {
     auto sections = base.sections();
     auto schema = sections.uiFrame.schema();

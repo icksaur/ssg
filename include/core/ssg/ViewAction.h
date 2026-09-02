@@ -72,33 +72,11 @@ struct CenterSelection {
                            const CenterSelection&) = default;
 };
 
-struct SplitPane {
-    SplitAxis axis = SplitAxis::Horizontal;
-
-    friend bool operator==(const SplitPane&, const SplitPane&) = default;
-};
-
-struct ClosePane {
-    friend bool operator==(const ClosePane&, const ClosePane&) = default;
-};
-
-enum class PaneCycleDirection : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_PANE_CYCLE_DIRECTION_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
-};
-#undef SSG_PANE_CYCLE_DIRECTION_ENUMERATORS
-
-struct CyclePane {
-    PaneCycleDirection direction = PaneCycleDirection::Next;
-
-    friend bool operator==(const CyclePane&, const CyclePane&) = default;
-};
-
-struct FocusPane {
+struct ResolvePaneFocus {
     PaneDirection direction = PaneDirection::Left;
 
-    friend bool operator==(const FocusPane&, const FocusPane&) = default;
+    friend bool operator==(const ResolvePaneFocus&,
+                           const ResolvePaneFocus&) = default;
 };
 
 enum class PointerEdgeDirection : std::uint8_t {
@@ -118,7 +96,7 @@ struct ContinuePointerEdge {
 using ViewAction =
     std::variant<ViewScrollLines, ViewScrollPages, ViewScrollFraction,
                  MoveVisualSelection, RevealSelection, CenterSelection,
-                 SplitPane, ClosePane, CyclePane, FocusPane,
+                 ResolvePaneFocus,
                  ContinuePointerEdge>;
 
 }  // namespace ssg

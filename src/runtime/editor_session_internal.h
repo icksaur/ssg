@@ -187,8 +187,8 @@ struct EditorSession::Impl final : CommandServices,
     std::vector<StatusFieldCatalogEntry> statusFieldCatalog;
     // The single interaction authority: owner of the whole-screen schema generation, the
     // prompt surface, panel/focus/provider truth, the interaction projection, and the tree
-    // revision source. ShellState and the snapshot read its projection; every focus,
-    // presence, and prompt change flows through it. Declared after `tree` and
+    // revision source. The snapshot reads its projection; every focus, presence,
+    // and prompt change flows through it. Declared after `tree` and
     // `statusFieldCatalog` so both are constructed before it.
     InteractionAuthority interaction;
     std::unordered_map<std::string, StatusFieldProvider> statusFieldProviders;
@@ -338,6 +338,7 @@ struct EditorSession::Impl final : CommandServices,
     mutable bool commandCandidateCacheValid = false;
     std::map<ViewId, std::size_t> viewReferences;
     std::map<ClientId, ViewId> clientViews;
+    std::map<ClientId, PaneTopology> clientPaneTopologies;
     struct DocumentPointerGesture {
         FileDocumentId documentId;
         Revision documentRevision;
@@ -569,6 +570,13 @@ struct EditorSession::Impl final : CommandServices,
         const FollowTarget& target, NavigationClass classification);
     void recordNavigation(ClientId client, ViewId viewId,
                           NavigationClass classification);
+    [[nodiscard]] SessionTopology clientTopology(ClientId client) const;
+    [[nodiscard]] CommandHandlerResult splitPane(ClientId client,
+                                                 SplitAxis axis);
+    [[nodiscard]] CommandHandlerResult closePane(ClientId client);
+    [[nodiscard]] CommandHandlerResult cyclePane(
+        ClientId client, PaneCycleDirection direction);
+    [[nodiscard]] bool focusPane(ClientId client, PaneId pane);
     [[nodiscard]] bool refreshTree();
     void refreshTreeForPublication(Revision drainEntryRevision);
     // Re-assemble the authority-owned whole-screen schema from the given chrome inputs and

@@ -323,7 +323,7 @@ CommandHandlerResult followCommand(EditorSession::Impl& runtime, std::string_vie
 //
 // The diff commands take a live document id, which is meaningless to a remote
 // client, so they are in-process only: typed for the handler, absent from the
-// protocol.
+// interface.
 void registerDiffAndFollowCommands(CommandCatalog& builder,
                                    EditorSession::Impl& runtime) {
     auto diff = [&](std::string id, std::string summary) {

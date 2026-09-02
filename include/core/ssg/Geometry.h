@@ -1,11 +1,6 @@
 #pragma once
 
-// The shell's core geometry value types. Extracted from ShellState.h so the
-// widget layer (Widget.h -> WidgetStack) can measure/place rects without pulling
-// in the whole shell surface -- ShellState.h is the HIGH layer (it owns the
-// layout request, which now carries a composed-chrome descriptor), while Rect is
-// the LOW primitive both it and Widget.h share. Keeping this header dependency-
-// free breaks the ShellState <-> Widget include cycle.
+// Medium-neutral geometry values shared by semantic UI and presentation edges.
 
 namespace ssg {
 

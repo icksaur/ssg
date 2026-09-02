@@ -91,8 +91,8 @@
 #define SSG_OVERFLOW_ENUMERATORS(X) X(None, 0) X(Truncate, 1) X(ScrollTail, 2)
 #define SSG_VIEW_ACTION_KIND_ENUMERATORS(X) \
     X(ScrollLines, 0) X(ScrollPages, 1) X(ScrollFraction, 2) X(MoveVisualSelection, 3) \
-    X(RevealSelection, 4) X(CenterSelection, 5) X(SplitPane, 6) X(ClosePane, 7) \
-    X(CyclePane, 8) X(FocusPane, 9) X(ContinuePointerEdge, 10)
+    X(RevealSelection, 4) X(CenterSelection, 5) X(ResolvePaneFocus, 9) \
+    X(ContinuePointerEdge, 10)
 #define SSG_VIEW_SCROLL_TARGET_ENUMERATORS(X) X(Document, 0) X(Tree, 1)
 #define SSG_VISUAL_SELECTION_DIRECTION_ENUMERATORS(X) X(LineUp, 0) X(LineDown, 1) X(PageUp, 2) X(PageDown, 3)
 #define SSG_SPLIT_AXIS_ENUMERATORS(X) X(Horizontal, 0) X(Vertical, 1)

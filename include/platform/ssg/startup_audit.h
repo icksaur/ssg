@@ -23,7 +23,6 @@ enum class OptionalSubsystem : std::uint8_t {
     Lsp,
     TreeSitterGrammar,
     FilesystemWatcher,
-    Http,
     Count,  // sentinel; keep last. Ties optional_subsystem_count to the enum.
 };
 
@@ -38,7 +37,6 @@ inline constexpr auto kAllOptionalSubsystems = std::to_array({
     OptionalSubsystem::Lsp,
     OptionalSubsystem::TreeSitterGrammar,
     OptionalSubsystem::FilesystemWatcher,
-    OptionalSubsystem::Http,
 });
 static_assert(kAllOptionalSubsystems.size() == kOptionalSubsystemCount,
               "every OptionalSubsystem (before the count_ sentinel) must appear "

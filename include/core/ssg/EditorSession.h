@@ -183,9 +183,8 @@ public:
     // method rather
     // than ssg_main.cpp reaching into Impl fields directly.
     void resetKeymapToDefault();
-    // Moves keyboard focus to the editor -- the same effect
-    // ShellState::focusEditor() has internally (e.g. after tab.activate
-    // succeeds), exposed as a dedicated method
+    // Moves keyboard focus to the editor (e.g. after tab.activate succeeds),
+    // exposed as a dedicated method
     // for the host (apps/ssg_main.cpp) to call after opening a
     // command-line file argument at startup, so focus lands on the
     // editor rather than wherever panel.show_files left it. Not a

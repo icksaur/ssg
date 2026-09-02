@@ -3,7 +3,6 @@
 
 #include <ssg/EditorSession.h>
 #include <ssg/Keymap.h>
-#include <ssg/ShellState.h>
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/TextInputCommands.h>

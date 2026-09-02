@@ -8,7 +8,7 @@
 
 namespace ssg::test {
 
-inline std::optional<GridFrame> projectGridFrame(
+inline std::optional<GridPresentation> projectGridFrame(
     EditorSession& session, ClientId client, ViewId view,
     ViewportDimensions dimensions, PaletteReport palette = {}) {
     GridPresenter presenter{view};
@@ -22,15 +22,16 @@ inline SessionSnapshot copySemantic(
             std::move(sections)};
 }
 
-inline GridFrame copyGridFrame(
-    GridFrame const& source, SessionSnapshotSections sections,
+inline GridPresentation copyGridFrame(
+    GridPresentation const& source, SessionSnapshotSections sections,
     GridProjection projection, PaletteReport palette = {}) {
     auto const& semantic = source.semantic();
-    return {
-        copySemantic(semantic, std::move(sections)),
-        std::move(projection),
+    auto copied = copySemantic(semantic, std::move(sections));
+    GridFrame frame{
+        copied, std::move(projection),
         GridBasis{semantic.client().viewId, semantic.revision(), 0},
         std::move(palette)};
+    return {std::move(copied), std::move(frame)};
 }
 
 }  // namespace ssg::test

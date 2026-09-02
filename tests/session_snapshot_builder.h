@@ -2,10 +2,10 @@
 
 // Kind: seam.
 //
-// Builds a GridFrame directly, so a test of presentation does not have to
+// Builds a GridPresentation directly, so a test of presentation does not have to
 // stand up an EditorSession over a real directory first.
 //
-// The renderer is a pure function of a frame, but a frame used to be
+// The renderer is a pure function of a presentation, but a presentation used to be
 // obtainable only from a runtime.  So every presentation test created temp
 // directories, wrote files to disk, constructed the whole editor, attached a
 // client, and dispatched commands -- eight steps of setup to exercise one pure
@@ -25,7 +25,6 @@
 #include <ssg/InteractionState.h>
 #include <ssg/UiStateResolver.h>
 #include <ssg/Renderer.h>
-#include <ssg/ShellState.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/WholeScreenAssembly.h>
 #include <ssg/WholeScreenInteraction.h>
@@ -154,13 +153,9 @@ public:
         return *this;
     }
 
-    [[nodiscard]] GridFrame build() const {
+    [[nodiscard]] GridPresentation build() const {
         auto const caret = caret_ > text_.size() ? text_.size() : caret_;
 
-        // ShellState now owns only panes + distraction-free; panel presence and focus are
-        // authority-owned in production and come from the request/sections here, both
-        // derived from the SAME builder-owned values so the snapshot is coherent.
-        ShellState shell;
         const FocusTarget focus = (panel_ && panelFocused_) ? FocusTarget::Panel
                                                             : FocusTarget::Editor;
 
@@ -264,14 +259,15 @@ public:
         }
 
         ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
-        return GridFrame{
-            SessionSnapshot{
-                revision_, SessionTopology{}, std::move(client),
-                std::move(sections)},
+        auto semantic = SessionSnapshot{
+            revision_, SessionTopology{}, std::move(client), std::move(sections)};
+        GridFrame frame{
+            semantic,
             GridProjection{
                 std::move(viewportState), style_,
                 SelectionNavigation{firstRow_, 0, std::nullopt}},
             GridBasis{ViewId{1}, revision_, 0}, std::move(framePalette)};
+        return {std::move(semantic), std::move(frame)};
     }
 
 private:

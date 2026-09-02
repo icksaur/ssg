@@ -315,8 +315,7 @@ CommandHandlerResult settingsCommand(EditorSession::Impl& runtime, std::string_v
 // editor at startup.
 //
 // Each carries a whole table -- colours, a style value, a key sequence -- as an
-// in-process payload with no wire form, so each is declared with
-// `inProcessHandler`: typed for the handler, absent from the protocol.
+// typed payload, so each is declared with `inProcessHandler`.
 //
 // Declaring each command with the type it actually consumes also removes the
 // id-branching these handlers used to do.  A single `themeCommand(id, payload)`
@@ -584,43 +583,86 @@ void registerPromptStatusCommands(CommandCatalog& builder,
                         }));
 }
 
-// Panes, the sidebar, and distraction-free mode.  None takes an argument; each
-// acts on the current layout.
+// Panes, the sidebar, and distraction-free mode. None takes an argument.
 void registerShellLayoutCommands(CommandCatalog& builder,
                                  EditorSession::Impl& runtime) {
-    struct PaneCommand {
+    struct PaneMutationCommand {
         std::string_view id;
         std::string_view summary;
-        ViewAction action;
+        enum class Kind {
+            SplitHorizontal,
+            SplitVertical,
+            Close,
+            Next,
+            Previous,
+        } kind;
     };
-    const std::array paneCommands{
-        PaneCommand{"pane.split_horizontal", "Split Horizontal",
-                    SplitPane{SplitAxis::Horizontal}},
-        PaneCommand{"pane.split_vertical", "Split Vertical",
-                    SplitPane{SplitAxis::Vertical}},
-        PaneCommand{"pane.close", "Close", ClosePane{}},
-        PaneCommand{"pane.next", "Next",
-                    CyclePane{PaneCycleDirection::Next}},
-        PaneCommand{"pane.previous", "Previous",
-                    CyclePane{PaneCycleDirection::Previous}},
-        PaneCommand{"pane.focus_left", "Focus Left",
-                    FocusPane{PaneDirection::Left}},
-        PaneCommand{"pane.focus_right", "Focus Right",
-                    FocusPane{PaneDirection::Right}},
-        PaneCommand{"pane.focus_up", "Focus Up",
-                    FocusPane{PaneDirection::Up}},
-        PaneCommand{"pane.focus_down", "Focus Down",
-                    FocusPane{PaneDirection::Down}},
+    const std::array paneMutations{
+        PaneMutationCommand{"pane.split_horizontal", "Split Horizontal",
+                           PaneMutationCommand::Kind::SplitHorizontal},
+        PaneMutationCommand{"pane.split_vertical", "Split Vertical",
+                           PaneMutationCommand::Kind::SplitVertical},
+        PaneMutationCommand{"pane.close", "Close",
+                           PaneMutationCommand::Kind::Close},
+        PaneMutationCommand{"pane.next", "Next",
+                           PaneMutationCommand::Kind::Next},
+        PaneMutationCommand{"pane.previous", "Previous",
+                           PaneMutationCommand::Kind::Previous},
     };
-    for (const auto& command : paneCommands) {
+    for (const auto& command : paneMutations) {
         builder.add(CommandSpecBuilder{std::string{command.id}}
-                        .owner("shell-layout")
-                        .summary(std::string{command.summary})
-                        .viewAction()
-                        .lua()
-                        .handler([action = command.action](CommandContext&) {
-                            return CommandHandlerResult::requireView(action);
-                        }));
+                       .owner("shell-layout")
+                       .summary(std::string{command.summary})
+                       .mutates()
+                       .lua()
+                       .handler([&runtime, kind = command.kind](
+                                    CommandContext& context) {
+                           const auto client =
+                               context.principal().clientId();
+                           switch (kind) {
+                               case PaneMutationCommand::Kind::SplitHorizontal:
+                                   return runtime.splitPane(
+                                       client, SplitAxis::Horizontal);
+                               case PaneMutationCommand::Kind::SplitVertical:
+                                   return runtime.splitPane(
+                                       client, SplitAxis::Vertical);
+                               case PaneMutationCommand::Kind::Close:
+                                   return runtime.closePane(client);
+                               case PaneMutationCommand::Kind::Next:
+                                   return runtime.cyclePane(
+                                       client, PaneCycleDirection::Next);
+                               case PaneMutationCommand::Kind::Previous:
+                                   return runtime.cyclePane(
+                                       client, PaneCycleDirection::Previous);
+                           }
+                           return failure("unknown pane mutation");
+                       }));
+    }
+
+    struct PaneFocusCommand {
+        std::string_view id;
+        std::string_view summary;
+        PaneDirection direction;
+    };
+    const std::array paneFocusCommands{
+        PaneFocusCommand{"pane.focus_left", "Focus Left",
+                        PaneDirection::Left},
+        PaneFocusCommand{"pane.focus_right", "Focus Right",
+                        PaneDirection::Right},
+        PaneFocusCommand{"pane.focus_up", "Focus Up", PaneDirection::Up},
+        PaneFocusCommand{"pane.focus_down", "Focus Down",
+                        PaneDirection::Down},
+    };
+    for (const auto& command : paneFocusCommands) {
+        builder.add(
+            CommandSpecBuilder{std::string{command.id}}
+                .owner("shell-layout")
+                .summary(std::string{command.summary})
+                .viewAction()
+                .handler([direction = command.direction](CommandContext&) {
+                    return CommandHandlerResult::requireView(
+                       ResolvePaneFocus{direction});
+                }));
     }
 
     auto declare = [&](std::string id, std::string label, std::string summary) {

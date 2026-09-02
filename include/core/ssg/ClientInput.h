@@ -160,6 +160,7 @@ struct ViewNavigationInput {
 
 struct ResolvedPaneFocusInput {
     SemanticInputBasis basis;
+    PaneId pane;
 
     friend bool operator==(const ResolvedPaneFocusInput&,
                            const ResolvedPaneFocusInput&) = default;

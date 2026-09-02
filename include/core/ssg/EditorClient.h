@@ -3,6 +3,7 @@
 #include <ssg/detail/generated/semantic_wire_manifest.h>
 
 #include <ssg/CommandInvocation.h>
+#include <ssg/PaneTopology.h>
 #include <ssg/ViewAction.h>
 
 #include <any>
@@ -101,6 +102,7 @@ struct AttachedClient {
 struct SessionTopology {
     std::optional<WorkspaceId> activeWorkspace;
     std::optional<ViewId> activeView;
+    PaneTopology panes = PaneTopology::initial();
 
     bool operator==(SessionTopology const&) const = default;
 };

@@ -252,10 +252,10 @@ There are 199 commands.
 | `pane.close` | Close | none | lua |
 | `pane.next` | Next | none | lua |
 | `pane.previous` | Previous | none | lua |
-| `pane.focus_left` | Focus Left | none | lua |
-| `pane.focus_right` | Focus Right | none | lua |
-| `pane.focus_up` | Focus Up | none | lua |
-| `pane.focus_down` | Focus Down | none | lua |
+| `pane.focus_left` | Focus Left | none | — |
+| `pane.focus_right` | Focus Right | none | — |
+| `pane.focus_up` | Focus Up | none | — |
+| `pane.focus_down` | Focus Down | none | — |
 | `panel.toggle` | Toggle Sidebar | none | lua |
 | `panel.focus` | Focus Sidebar | none | lua |
 | `panel.show_files` | Show Files Sidebar | none | lua |

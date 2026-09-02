@@ -9,7 +9,7 @@
 #include <ssg/GridPresenter.h>
 #include <ssg/Style.h>
 #include <ssg/Theme.h>
-#include <ssg/ShellState.h>
+#include <ssg/ShellViewState.h>
 #include <ssg/LineLayoutCache.h>
 
 #include <array>
@@ -99,7 +99,7 @@ public:
     // re-segmenting on-screen lines that a previous frame already shaped; a
     // nullptr cache reproduces the exact pre-cache behaviour (a fresh shape per
     // visible line). The cache holds only stable document-line text.
-    [[nodiscard]] CellGrid render(GridFrame const& snapshot,
+    [[nodiscard]] CellGrid render(GridPresentation const& snapshot,
                                   LineLayoutCache* lineCache = nullptr) const;
 
     // Style is no longer a renderer member: it is read from the snapshot's

@@ -200,7 +200,7 @@ struct TextInputLayout {
 // its own display width. This bundles the query field and the ghost into one
 // widget computation so the reserve/grow + ghost geometry lives in the widget
 // layer, not stitched inline by the shell. The caret column and the node rects/
-// roles stay with the caller (Renderer `inputLineCaret`, ShellState emission);
+// roles stay with the caller (for example Renderer `inputLineCaret`);
 // this owns only text + widths. `ghostWidth` is 0 when there is no ghost or the
 // query consumed the row; `ghostText` is the whole ghost (the renderer clips it
 // to `ghostWidth`).

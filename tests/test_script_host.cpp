@@ -107,8 +107,8 @@ TEST(viewActionsRequireAndUseAHostSuppliedSink) {
         [&](ssg::ViewActionRequest const& request) {
             ++applications;
             ASSERT_EQ(request.viewId, ssg::ViewId{1});
-            return ssg::GridActionResult{
-                ssg::GridActionStatus::TransitionRequired,
+            return ssg::ViewActionResult{
+                ssg::ViewActionStatus::TransitionRequired,
                 ssg::ClientInput{ssg::ViewNavigationInput{
                     {request.semanticRevision}}},
                 {}};

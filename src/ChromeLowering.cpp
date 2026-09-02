@@ -440,7 +440,7 @@ UiChromeLowerResult lowerUiChromeRegion(
     // The input line grows across the header's remaining width after the groups'
     // consumed right edge (which includes node-less spacers), then scrolls its own
     // tail and clamps its ghost inside `layoutInputLine`. The grid host derives the
-    // caret from the emitted query geometry; ShellState only stamps the text/widths.
+    // caret from the emitted query geometry.
     if (showInput) {
         int inputX = rightEdge;
         if (inputX > rect.x) ++inputX;  // a space between the fields and the input

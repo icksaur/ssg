@@ -12,7 +12,7 @@ public:
     GridTestView(ClientId client, ViewId view, ViewportDimensions dimensions)
         : client_{client}, dimensions_{dimensions}, presenter_{view} {}
 
-    [[nodiscard]] std::optional<GridFrame> present(
+    [[nodiscard]] std::optional<GridPresentation> present(
         EditorSession& session, PaletteReport palette = {}) {
         return presenter_.project(
             session, client_, {dimensions_, std::move(palette)});

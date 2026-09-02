@@ -2979,6 +2979,57 @@ void EditorSession::Impl::recordNavigation(
         {.client = client, .classification = classification});
 }
 
+SessionTopology EditorSession::Impl::clientTopology(ClientId client) const {
+    auto topology = session->topology();
+    const auto found = clientPaneTopologies.find(client);
+    if (found == clientPaneTopologies.end()) {
+        throw std::logic_error{"attached client has no pane topology"};
+    }
+    topology.panes = found->second;
+    return topology;
+}
+
+CommandHandlerResult EditorSession::Impl::splitPane(ClientId client,
+                                                    SplitAxis axis) {
+    const auto found = clientPaneTopologies.find(client);
+    if (found == clientPaneTopologies.end()) {
+        return failure("client has no pane topology");
+    }
+    (void)found->second.splitActive(axis);
+    return success();
+}
+
+CommandHandlerResult EditorSession::Impl::closePane(ClientId client) {
+    const auto found = clientPaneTopologies.find(client);
+    if (found == clientPaneTopologies.end()) {
+        return failure("client has no pane topology");
+    }
+    if (!found->second.closeActive()) {
+        return failure("the only pane cannot be closed");
+    }
+    return success();
+}
+
+CommandHandlerResult EditorSession::Impl::cyclePane(
+    ClientId client, PaneCycleDirection direction) {
+    const auto panes = clientPaneTopologies.find(client);
+    const auto view = clientViews.find(client);
+    if (panes == clientPaneTopologies.end() || view == clientViews.end()) {
+        return failure("client has no pane topology");
+    }
+    panes->second.cycle(direction);
+    if (follow.viewState().mode == FollowMode::Following) {
+        (void)follow.pause();
+    }
+    recordNavigation(client, view->second, NavigationClass::User);
+    return success();
+}
+
+bool EditorSession::Impl::focusPane(ClientId client, PaneId pane) {
+    const auto found = clientPaneTopologies.find(client);
+    return found != clientPaneTopologies.end() && found->second.focus(pane);
+}
+
 EditorSession::EditorSession(std::unique_ptr<Impl> implementation) noexcept
     : impl_{std::move(implementation)} {}
 EditorSession::~EditorSession() = default;
@@ -3069,6 +3120,7 @@ AttachResult EditorSession::attach(InvocationPrincipal principal, ViewId viewId)
         auto& references = impl_->viewReferences[viewId];
         ++references;
         impl_->clientViews.emplace(clientId, viewId);
+        impl_->clientPaneTopologies.emplace(clientId, PaneTopology::initial());
         (void)impl_->follow.attachClient(clientId);
     }
     return result;
@@ -3081,6 +3133,7 @@ bool EditorSession::detach(ClientId clientId) {
     auto const detached = impl_->session->detach(clientId);
     if (detached && attached != impl_->clientViews.end()) {
         impl_->documentPointerGestures.erase(clientId);
+        impl_->clientPaneTopologies.erase(clientId);
         auto const viewId = attached->second;
         impl_->clientViews.erase(attached);
         auto references = impl_->viewReferences.find(viewId);
@@ -3458,12 +3511,13 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                     return dispatch("follow_edits.pause", std::any{});
                 } else if constexpr (std::same_as<
                                          Input, ResolvedPaneFocusInput>) {
+                    if (!impl_->focusPane(clientId, semantic.pane)) {
+                        return rejectTarget(
+                            "pane focus target is not in this attachment");
+                    }
                     const bool focusChanged =
                         impl_->interaction.effectiveFocus() !=
                         FocusTarget::Editor;
-                    const bool followChanged =
-                        impl_->follow.viewState().mode ==
-                        FollowMode::Following;
                     if (focusChanged) impl_->interaction.focusEditor();
                     impl_->recordNavigation(
                         clientId, impl_->clientViews.at(clientId),
@@ -3474,7 +3528,7 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                         CommandResult{
                             CommandError::None, impl_->session->revision(), {},
                             {/*routingChanged=*/focusChanged,
-                             /*geometryChanged=*/false}}};
+                             /*geometryChanged=*/true}}};
                 } else if constexpr (std::same_as<
                                         Input, ResolvedSelectionInput>) {
                     const auto* tab = impl_->activeTabState();
@@ -3992,7 +4046,7 @@ std::optional<PresentationCapture> EditorSession::capturePresentation(
     auto sections = impl_->sections(paletteReport);
     return PresentationCapture{
         SessionSnapshot{
-            impl_->session->revision(), impl_->session->topology(),
+            impl_->session->revision(), impl_->clientTopology(clientId),
             {client->principal.clientId(), client->viewId,
              client->principal.capabilities()},
             std::move(sections)},
@@ -4051,7 +4105,8 @@ std::optional<SessionSnapshot> EditorSession::snapshot(ClientId clientId,
     auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
     auto sections = impl_->sections(paletteReport);
-    return SessionSnapshot{impl_->session->revision(), impl_->session->topology(),
+    return SessionSnapshot{impl_->session->revision(),
+                           impl_->clientTopology(clientId),
                            {client->principal.clientId(), client->viewId,
                             client->principal.capabilities()},
                            std::move(sections)};

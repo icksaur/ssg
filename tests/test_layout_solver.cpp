@@ -272,9 +272,9 @@ TEST(documentSurfaceCarvesGuttersAndProtectsMinimumContentWidth) {
     SolvedGridNode viewport{
         UiNodeId{"document.viewport"}, {3, 2, 30, 6}, {3, 2, 30, 6},
         ScrollAxis::Vertical};
+    const auto topology = PaneTopology::initial();
     const auto wide = solveDocumentSurface(
-        viewport, {{PaneId{7}, viewport.rect}}, PaneId{7}, true, 100,
-        StyleDimensions{});
+        viewport, topology, true, 100, StyleDimensions{});
     ASSERT_EQ(wide.rect, viewport.rect);
     ASSERT_EQ(wide.lineNumbers, (Rect{3, 2, 4, 6}));
     ASSERT_EQ(wide.content, (Rect{7, 2, 25, 6}));
@@ -283,8 +283,7 @@ TEST(documentSurfaceCarvesGuttersAndProtectsMinimumContentWidth) {
     viewport.rect.width = 21;
     viewport.content.width = 21;
     const auto narrow = solveDocumentSurface(
-        viewport, {{PaneId{7}, viewport.rect}}, PaneId{7}, true, 100,
-        StyleDimensions{});
+        viewport, topology, true, 100, StyleDimensions{});
     ASSERT_EQ(narrow.lineNumbers, (Rect{}));
     ASSERT_EQ(narrow.content, (Rect{3, 2, 20, 6}));
     ASSERT_EQ(narrow.scrollbarGutter, (Rect{23, 2, 1, 6}));
@@ -294,17 +293,56 @@ TEST(documentSurfaceCarvesEachSplitPaneAndIdentifiesTheActiveOne) {
     SolvedGridNode viewport{
         UiNodeId{"document.viewport"}, {0, 0, 61, 8}, {0, 0, 61, 8},
         ScrollAxis::Vertical};
+    auto topology = PaneTopology::initial();
+    (void)topology.splitActive(SplitAxis::Vertical);
     const auto solved = solveDocumentSurface(
-        viewport,
-        {{PaneId{3}, {0, 0, 21, 8}}, {PaneId{4}, {21, 0, 40, 8}}},
-        PaneId{4}, true, 100, StyleDimensions{});
+        viewport, topology, true, 100, StyleDimensions{});
     ASSERT_EQ(solved.panes.size(), std::size_t{2});
     ASSERT_EQ(solved.activePaneIndex, std::size_t{1});
-    ASSERT_EQ(solved.panes[0].lineNumbers, (Rect{}));
-    ASSERT_EQ(solved.panes[0].content, (Rect{0, 0, 20, 8}));
-    ASSERT_EQ(solved.panes[1].lineNumbers, (Rect{21, 0, 4, 8}));
-    ASSERT_EQ(solved.panes[1].content, (Rect{25, 0, 35, 8}));
+    ASSERT_EQ(solved.panes[0].id, PaneId{1});
+    ASSERT_EQ(solved.panes[0].frame, (Rect{0, 0, 30, 8}));
+    ASSERT_EQ(solved.panes[0].lineNumbers, (Rect{0, 0, 4, 8}));
+    ASSERT_EQ(solved.panes[0].content, (Rect{4, 0, 25, 8}));
+    ASSERT_EQ(solved.panes[1].id, PaneId{2});
+    ASSERT_EQ(solved.panes[1].frame, (Rect{30, 0, 31, 8}));
+    ASSERT_EQ(solved.panes[1].lineNumbers, (Rect{30, 0, 4, 8}));
+    ASSERT_EQ(solved.panes[1].content, (Rect{34, 0, 26, 8}));
     ASSERT_EQ(solved.content, solved.panes.front().content);
+}
+
+TEST(documentSurfaceFallsBackToTheActivePaneWhenSplitsDoNotFit) {
+    SolvedGridNode viewport{
+        UiNodeId{"document.viewport"}, {2, 3, 3, 4}, {2, 3, 3, 4},
+        ScrollAxis::Vertical};
+    auto topology = PaneTopology::initial();
+    (void)topology.splitActive(SplitAxis::Vertical);
+
+    const auto solved = solveDocumentSurface(
+        viewport, topology, false, 1, StyleDimensions{});
+    ASSERT_EQ(solved.panes.size(), std::size_t{1});
+    ASSERT_EQ(solved.panes.front().id, PaneId{2});
+    ASSERT_EQ(solved.panes.front().frame, viewport.rect);
+    ASSERT_EQ(solved.activePaneIndex, std::size_t{0});
+}
+
+TEST(directionalPaneSelectionUsesSolvedGridGeometry) {
+    SolvedGridNode viewport{
+        UiNodeId{"document.viewport"}, {0, 0, 80, 24}, {0, 0, 80, 24},
+        ScrollAxis::Vertical};
+    auto topology = PaneTopology::initial();
+    (void)topology.splitActive(SplitAxis::Vertical);
+    (void)topology.splitActive(SplitAxis::Horizontal);
+    const auto solved = solveDocumentSurface(
+        viewport, topology, false, 1, StyleDimensions{});
+
+    ASSERT_EQ(paneInDirection(solved, PaneDirection::Up),
+              std::optional<PaneId>{PaneId{2}});
+    ASSERT_EQ(paneInDirection(solved, PaneDirection::Left),
+              std::optional<PaneId>{PaneId{1}});
+    ASSERT_EQ(paneInDirection(solved, PaneDirection::Down),
+              std::optional<PaneId>{});
+    ASSERT_EQ(paneInDirection(solved, PaneDirection::Right),
+              std::optional<PaneId>{});
 }
 
 // Two flex siblings split the width equally; the odd cell goes to the LAST child
@@ -686,6 +724,8 @@ int main() {
     RUN(panelSurfaceWithoutAProviderIsEmptyAndBounded);
     RUN(documentSurfaceCarvesGuttersAndProtectsMinimumContentWidth);
     RUN(documentSurfaceCarvesEachSplitPaneAndIdentifiesTheActiveOne);
+    RUN(documentSurfaceFallsBackToTheActivePaneWhenSplitsDoNotFit);
+    RUN(directionalPaneSelectionUsesSolvedGridGeometry);
     RUN(rowFlexSplitsEquallyRemainderToLast);
     RUN(singleFlexTakesAllRemainder);
     RUN(insetReservesTheFrameOnEveryEdge);

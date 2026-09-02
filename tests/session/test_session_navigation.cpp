@@ -22,13 +22,13 @@
 
 namespace {
 
-std::optional<ssg::GridFrame> projectFrame(
+std::optional<ssg::GridPresentation> projectFrame(
     ssg::EditorSession& runtime, ssg::ViewportDimensions dimensions) {
     return ssg::test::projectGridFrame(
         runtime, ssg::ClientId{1}, ssg::ViewId{1}, dimensions);
 }
 
-std::optional<ssg::GridFrame> projectFrame(
+std::optional<ssg::GridPresentation> projectFrame(
     ssg::EditorSession& runtime, ssg::ClientId client,
     ssg::ViewportDimensions dimensions) {
     return ssg::test::projectGridFrame(

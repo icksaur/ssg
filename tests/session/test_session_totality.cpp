@@ -3,7 +3,7 @@
 
 #include <ssg/EditorSession.h>
 #include <ssg/Renderer.h>
-#include <ssg/ShellState.h>
+#include <ssg/ShellViewState.h>
 #include <ssg/Viewport.h>
 
 #include <filesystem>

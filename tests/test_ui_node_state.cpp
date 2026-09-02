@@ -6,6 +6,7 @@
 // only the composed glyph, not the semantic checked/caption/label.
 
 #include "ssg/ChromeLowering.h"
+#include "ssg/ShellViewState.h"
 
 #include "chrome_authoring.h"
 #include "ssg/Style.h"

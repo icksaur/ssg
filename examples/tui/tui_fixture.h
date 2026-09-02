@@ -45,7 +45,7 @@ public:
     [[nodiscard]] CommandResult submit(SemanticCommand const& command);
     [[nodiscard]] CommandResult submit(std::string command_id,
                                        std::any payload = {});
-    [[nodiscard]] GridFrame const& snapshot() const noexcept {
+    [[nodiscard]] GridPresentation const& snapshot() const noexcept {
         return *snapshot_;
     }
 
@@ -57,7 +57,7 @@ private:
     ViewId viewId_;
     ViewportDimensions dimensions_;
     GridPresenter presenter_;
-    std::optional<GridFrame> snapshot_;
+    std::optional<GridPresentation> snapshot_;
 };
 
 }  // namespace ssg::tui

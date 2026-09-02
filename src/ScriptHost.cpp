@@ -113,7 +113,7 @@ struct ScriptHost::Impl {
                 applied.message.empty() ? "view action was rejected"
                                         : applied.message);
         }
-        if ((applied.status == GridActionStatus::TransitionRequired) !=
+        if ((applied.status == ViewActionStatus::TransitionRequired) !=
             applied.transition.has_value()) {
             return CommandHandlerResult::failure(
                 "view action returned an invalid transition");

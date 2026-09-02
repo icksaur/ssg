@@ -1,5 +1,5 @@
 #pragma once
-#include <ssg/GridAction.h>
+#include <ssg/ViewActionResult.h>
 #include <ssg/LuaCommandHost.h>
 
 #include <functional>
@@ -41,7 +41,7 @@ inline constexpr ClientId kScriptClientId{2};
 class ScriptHost {
 public:
     using ViewActionSink =
-        std::function<GridActionResult(ViewActionRequest const&)>;
+        std::function<ViewActionResult(ViewActionRequest const&)>;
 
     // Attaches the script client to `runtime`, which must outlive this host.
     // Throws std::runtime_error if the runtime refuses the attachment.

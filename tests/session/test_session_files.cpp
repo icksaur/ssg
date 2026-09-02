@@ -87,7 +87,7 @@ std::vector<std::filesystem::path> archivedDrafts(const std::filesystem::path& r
     return result;
 }
 
-bool hasNoticeBar(const ssg::GridFrame& snapshot) {
+bool hasNoticeBar(const ssg::GridPresentation& snapshot) {
     return snapshot.layout().find(
                ssg::UiNodeId{std::string{ssg::kNoticeNodeId}}) != nullptr;
 }

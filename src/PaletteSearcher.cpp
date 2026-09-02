@@ -70,7 +70,7 @@ std::vector<std::size_t> rankWith(std::vector<PaletteCandidate> const& candidate
     // Reject loudly at the matcher boundary, matching the web client: malformed input
     // (out-of-domain weights, or a candidate over kMaxCandidateBytes) would breach the
     // score-exactness invariant, so it is refused rather than silently normalized into a
-    // plausible ranking. The honest wire path never reaches here -- decode already
+    // plausible ranking. Valid client input never reaches here -- validation already
     // rejected such a frame -- so this is a programming-error signal for an in-process
     // caller, not an expected runtime outcome.
     if (!matcherParametersInDomain(params)) {

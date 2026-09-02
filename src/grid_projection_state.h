@@ -1,7 +1,6 @@
 #pragma once
 
 #include <ssg/ClientInput.h>
-#include <ssg/ShellState.h>
 #include <ssg/ViewportProjection.h>
 
 #include <optional>
@@ -28,7 +27,6 @@ struct GridProjectionState {
         SelectionNavigation navigation;
     };
     std::optional<PendingSelection> pendingSelection;
-    ShellState shell;
 };
 
 }  // namespace ssg::detail

@@ -12,6 +12,73 @@
 #include <stdexcept>
 
 namespace ssg {
+namespace {
+
+struct PaneCellFrame {
+    PaneId id;
+    Rect rect;
+};
+
+void requireSplitNode(const PaneTopologyNode& node) {
+    if (node.children.size() != 2) {
+        throw std::logic_error{
+            "pane topology split must have exactly two children"};
+    }
+}
+
+bool canLayoutPanes(const PaneTopologyNode& node, Rect rect) {
+    if (node.isLeaf()) return rect.width >= 2 && rect.height >= 1;
+    requireSplitNode(node);
+    if (node.axis == SplitAxis::Vertical) {
+        const int firstWidth = rect.width / 2;
+        return canLayoutPanes(
+                   node.children[0],
+                   {rect.x, rect.y, firstWidth, rect.height}) &&
+               canLayoutPanes(
+                   node.children[1],
+                   {rect.x + firstWidth, rect.y,
+                    rect.width - firstWidth, rect.height});
+    }
+    const int firstHeight = rect.height / 2;
+    return canLayoutPanes(
+               node.children[0],
+               {rect.x, rect.y, rect.width, firstHeight}) &&
+           canLayoutPanes(
+               node.children[1],
+               {rect.x, rect.y + firstHeight, rect.width,
+                rect.height - firstHeight});
+}
+
+void projectPaneCells(const PaneTopologyNode& node, Rect rect,
+                      std::vector<PaneCellFrame>& output) {
+    if (node.isLeaf()) {
+        output.push_back({node.id, rect});
+        return;
+    }
+    requireSplitNode(node);
+    if (node.axis == SplitAxis::Vertical) {
+        const int firstWidth = rect.width / 2;
+        projectPaneCells(node.children[0],
+                         {rect.x, rect.y, firstWidth, rect.height}, output);
+        projectPaneCells(node.children[1],
+                         {rect.x + firstWidth, rect.y,
+                          rect.width - firstWidth, rect.height},
+                         output);
+        return;
+    }
+    const int firstHeight = rect.height / 2;
+    projectPaneCells(node.children[0],
+                     {rect.x, rect.y, rect.width, firstHeight}, output);
+    projectPaneCells(node.children[1],
+                     {rect.x, rect.y + firstHeight, rect.width,
+                      rect.height - firstHeight},
+                     output);
+}
+
+double centerX(const Rect& rect) { return rect.x + rect.width / 2.0; }
+double centerY(const Rect& rect) { return rect.y + rect.height / 2.0; }
+
+}  // namespace
 
 const SolvedGridNode* SolvedGridTree::find(
     const UiNodeId& id) const noexcept {
@@ -300,8 +367,8 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
 }
 
 SolvedDocumentSurface solveDocumentSurface(
-    const SolvedGridNode& viewport, const std::vector<PaneFrame>& paneFrames,
-    PaneId activePane, bool lineNumbers,
+    const SolvedGridNode& viewport, const PaneTopology& topology,
+    bool lineNumbers,
     std::uint32_t logicalLineCount, const StyleDimensions& dimensions) {
     const int scrollbarWidth =
         viewport.scroll == ScrollAxis::Vertical
@@ -316,8 +383,12 @@ SolvedDocumentSurface solveDocumentSurface(
             : 0;
     SolvedDocumentSurface solved;
     solved.rect = viewport.rect;
-    auto frames = paneFrames;
-    if (frames.empty()) frames.push_back({PaneId{0}, viewport.rect});
+    std::vector<PaneCellFrame> frames;
+    if (canLayoutPanes(topology.root(), viewport.rect)) {
+        projectPaneCells(topology.root(), viewport.rect, frames);
+    } else {
+        frames.push_back({topology.activePane(), viewport.rect});
+    }
     solved.panes.reserve(frames.size());
     for (const auto& pane : frames) {
         int lineNumberWidth = requestedLineNumberWidth;
@@ -341,7 +412,7 @@ SolvedDocumentSurface solveDocumentSurface(
         });
     }
     const auto active = std::ranges::find(
-        solved.panes, activePane, &SolvedDocumentPane::id);
+        solved.panes, topology.activePane(), &SolvedDocumentPane::id);
     solved.activePaneIndex =
         active == solved.panes.end()
             ? 0
@@ -351,6 +422,34 @@ SolvedDocumentSurface solveDocumentSurface(
     solved.scrollbarGutter = solved.panes.front().scrollbarGutter;
     solved.lineNumbers = solved.panes.front().lineNumbers;
     return solved;
+}
+
+std::optional<PaneId> paneInDirection(
+    const SolvedDocumentSurface& surface, PaneDirection direction) noexcept {
+    if (surface.activePaneIndex >= surface.panes.size()) return std::nullopt;
+    const auto& current = surface.panes[surface.activePaneIndex];
+    const double currentX = centerX(current.frame);
+    const double currentY = centerY(current.frame);
+    const SolvedDocumentPane* best = nullptr;
+    double bestDistance = std::numeric_limits<double>::max();
+    for (const auto& candidate : surface.panes) {
+        if (candidate.id == current.id) continue;
+        const double dx = centerX(candidate.frame) - currentX;
+        const double dy = centerY(candidate.frame) - currentY;
+        const bool eligible =
+            (direction == PaneDirection::Left && dx < 0) ||
+            (direction == PaneDirection::Right && dx > 0) ||
+            (direction == PaneDirection::Up && dy < 0) ||
+            (direction == PaneDirection::Down && dy > 0);
+        if (!eligible) continue;
+        const double distance = dx * dx + dy * dy;
+        if (distance < bestDistance) {
+            best = &candidate;
+            bestDistance = distance;
+        }
+    }
+    return best == nullptr ? std::nullopt
+                           : std::optional<PaneId>{best->id};
 }
 
 namespace {

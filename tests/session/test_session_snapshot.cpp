@@ -25,11 +25,22 @@ static_assert(!std::is_copy_constructible_v<ssg::GridFrame>);
 static_assert(!std::is_copy_assignable_v<ssg::GridFrame>);
 static_assert(std::is_nothrow_move_constructible_v<ssg::GridFrame>);
 static_assert(std::is_nothrow_move_assignable_v<ssg::GridFrame>);
+static_assert(!std::is_copy_constructible_v<ssg::GridPresentation>);
+static_assert(!std::is_copy_assignable_v<ssg::GridPresentation>);
+static_assert(std::is_nothrow_move_constructible_v<ssg::GridPresentation>);
+static_assert(std::is_nothrow_move_assignable_v<ssg::GridPresentation>);
 template <class T>
 concept HasPresentation = requires(T const& value) {
     value.presentation();
 };
 static_assert(!HasPresentation<ssg::SessionSnapshot>);
+template <class T>
+concept HasSemantic = requires(T const& value) {
+    value.semantic();
+    value.sections();
+};
+static_assert(!HasSemantic<ssg::GridFrame>);
+static_assert(HasSemantic<ssg::GridPresentation>);
 static_assert(std::same_as<
               decltype(std::declval<ssg::GridFrame const&>().presentation()),
               ssg::GridProjection const&>);
@@ -78,6 +89,35 @@ TEST(runtimeConstructsAttachesAndProducesLiveSnapshot) {
     ASSERT_EQ(snapshot->revision(), runtime.revision());
     ASSERT_EQ(snapshot->client().clientId, ssg::ClientId{7});
     ASSERT_EQ(snapshot->client().viewId, ssg::ViewId{9});
+}
+
+TEST(gridPresentationRejectsMismatchedSemanticRevision) {
+    auto root = uniqueRoot("grid_presentation_revision");
+    auto created = ssg::EditorSession::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+
+    auto& runtime = *created.session;
+    const ssg::ClientId client{7};
+    const ssg::ViewId view{9};
+    ASSERT_TRUE(runtime
+                    .attach({client, ssg::InvocationOrigin::InProcess}, view)
+                    .accepted());
+    auto semantic = runtime.snapshot(client);
+    ASSERT_TRUE(semantic.has_value());
+    if (!semantic) return;
+
+    const auto revision =
+        ssg::Revision{semantic->revision().value() + 1};
+    ssg::GridFrame frame{
+        *semantic,
+        ssg::GridProjection{
+            ssg::ViewportViewState{ssg::ViewportDimensions{80, 24}},
+            ssg::Style{}, {}},
+        ssg::GridBasis{view, revision, 0}, {}};
+    ASSERT_THROWS((ssg::GridPresentation{
+                      std::move(*semantic), std::move(frame)}),
+                  std::logic_error);
 }
 
 TEST(presentationProjectionRejectsARevisionThatChangedAfterCapture) {
@@ -865,7 +905,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
     }
 }
 
-TEST(gridPresentersOwnIndependentPaneTopology) {
+TEST(sessionOwnsIndependentPaneTopologyForEachAttachment) {
     auto root = uniqueRoot("grid_presenter_panes");
     auto created = ssg::EditorSession::create(configFor(root));
     ASSERT_TRUE(created.accepted());
@@ -889,6 +929,9 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     if (!firstSnapshot || !secondSnapshot) return;
     ASSERT_EQ(firstSnapshot->client().capabilities.size(), std::size_t{1});
     ASSERT_TRUE(secondSnapshot->client().capabilities.empty());
+    ASSERT_EQ(firstSnapshot->topology().panes.panes().size(), std::size_t{1});
+    ASSERT_EQ(secondSnapshot->topology().panes.panes().size(),
+              std::size_t{1});
 
     ssg::GridPresenter first{ssg::ViewId{1}};
     ssg::GridPresenter second{ssg::ViewId{2}};
@@ -906,16 +949,9 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     const auto revision = runtime.revision();
     auto split = runtime.dispatch(
         firstClient, {"pane.split_horizontal", revision, {}});
-    ASSERT_EQ(split.outcome(),
-              ssg::CommandResult::Outcome::ViewActionRequired);
-    ASSERT_EQ(runtime.revision(), revision);
-    ASSERT_TRUE(split.viewAction.has_value());
-    if (!split.viewAction) return;
-    ASSERT_TRUE(
-        std::holds_alternative<ssg::SplitPane>(split.viewAction->action));
-    auto splitApplied = first.apply(*split.viewAction, *firstFrame);
-    ASSERT_TRUE(splitApplied.accepted());
-    ASSERT_FALSE(splitApplied.transition.has_value());
+    ASSERT_TRUE(split.completed());
+    ASSERT_EQ(runtime.revision(), ssg::Revision{revision.value() + 1});
+    ASSERT_FALSE(split.viewAction.has_value());
 
     firstFrame = first.project(runtime, firstClient, {{80, 24}, {}});
     secondFrame = second.project(runtime, secondClient, {{80, 24}, {}});
@@ -927,6 +963,14 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     if (!firstFrame->document() || !secondFrame->document()) return;
     ASSERT_EQ(firstFrame->document()->panes.size(), std::size_t{2});
     ASSERT_EQ(secondFrame->document()->panes.size(), std::size_t{1});
+    firstSnapshot = runtime.snapshot(firstClient);
+    secondSnapshot = runtime.snapshot(secondClient);
+    ASSERT_TRUE(firstSnapshot.has_value());
+    ASSERT_TRUE(secondSnapshot.has_value());
+    if (!firstSnapshot || !secondSnapshot) return;
+    ASSERT_EQ(firstSnapshot->topology().panes.panes().size(), std::size_t{2});
+    ASSERT_EQ(secondSnapshot->topology().panes.panes().size(),
+              std::size_t{1});
 
     auto blockedFocus = runtime.dispatch(
         firstClient, {"pane.focus_down", runtime.revision(), {}});
@@ -934,14 +978,7 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     if (!blockedFocus.viewAction) return;
     auto blockedApplied = first.apply(*blockedFocus.viewAction, *firstFrame);
     ASSERT_TRUE(blockedApplied.accepted());
-    ASSERT_TRUE(blockedApplied.transition.has_value());
-    ASSERT_TRUE(
-        blockedApplied.transition &&
-        std::holds_alternative<ssg::ViewNavigationInput>(
-            *blockedApplied.transition));
-    const auto paused =
-        runtime.input(firstClient, *blockedApplied.transition);
-    ASSERT_NE(paused.outcome, ssg::ClientInputOutcome::Rejected);
+    ASSERT_FALSE(blockedApplied.transition.has_value());
 
     ASSERT_TRUE(runtime
                     .dispatch(firstClient,
@@ -960,6 +997,13 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
         focusedApplied.transition &&
         std::holds_alternative<ssg::ResolvedPaneFocusInput>(
             *focusedApplied.transition));
+    if (!focusedApplied.transition) return;
+    const auto* focusedPane =
+        std::get_if<ssg::ResolvedPaneFocusInput>(
+            &*focusedApplied.transition);
+    ASSERT_TRUE(focusedPane != nullptr);
+    if (!focusedPane) return;
+    ASSERT_EQ(focusedPane->pane, ssg::PaneId{1});
     const auto generationBeforeFocus =
         firstFrame->sections().followEdits.generation;
     const auto focusRevision = runtime.revision();
@@ -992,6 +1036,13 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
         focusedAgainApplied.transition &&
         std::holds_alternative<ssg::ResolvedPaneFocusInput>(
             *focusedAgainApplied.transition));
+    if (!focusedAgainApplied.transition) return;
+    const auto* focusedAgainPane =
+        std::get_if<ssg::ResolvedPaneFocusInput>(
+            &*focusedAgainApplied.transition);
+    ASSERT_TRUE(focusedAgainPane != nullptr);
+    if (!focusedAgainPane) return;
+    ASSERT_EQ(focusedAgainPane->pane, ssg::PaneId{2});
     const auto generationBeforeRepeatedFocus =
         firstFrame->sections().followEdits.generation;
     const auto repeatedFocusResult =
@@ -1009,25 +1060,20 @@ TEST(gridPresentersOwnIndependentPaneTopology) {
     if (!firstFrame) return;
     auto cycled =
         runtime.dispatch(firstClient, {"pane.next", runtime.revision(), {}});
-    ASSERT_TRUE(cycled.viewAction.has_value());
-    if (!cycled.viewAction) return;
-    auto cycleApplied = first.apply(*cycled.viewAction, *firstFrame);
-    ASSERT_TRUE(cycleApplied.accepted());
-    ASSERT_TRUE(
-        cycleApplied.transition &&
-        std::holds_alternative<ssg::ViewNavigationInput>(
-            *cycleApplied.transition));
+    ASSERT_TRUE(cycled.completed());
+    ASSERT_FALSE(cycled.viewAction.has_value());
+    auto cycledSnapshot = runtime.snapshot(firstClient);
+    ASSERT_TRUE(cycledSnapshot.has_value());
+    if (!cycledSnapshot) return;
+    ASSERT_EQ(cycledSnapshot->topology().panes.activePane(), ssg::PaneId{1});
 
     firstFrame = first.project(runtime, firstClient, {{80, 24}, {}});
     ASSERT_TRUE(firstFrame.has_value());
     if (!firstFrame) return;
     auto closed =
         runtime.dispatch(firstClient, {"pane.close", runtime.revision(), {}});
-    ASSERT_TRUE(closed.viewAction.has_value());
-    if (!closed.viewAction) return;
-    auto closeApplied = first.apply(*closed.viewAction, *firstFrame);
-    ASSERT_TRUE(closeApplied.accepted());
-    ASSERT_FALSE(closeApplied.transition.has_value());
+    ASSERT_TRUE(closed.completed());
+    ASSERT_FALSE(closed.viewAction.has_value());
 
     auto closedFrame = first.project(runtime, firstClient, {{80, 24}, {}});
     ASSERT_TRUE(closedFrame.has_value());
@@ -1159,9 +1205,7 @@ TEST(visualMovementUsesActivePaneAndDiscardsMismatchedProposal) {
     if (!frame) return;
     auto split = runtime.dispatch(
         client, {"pane.split_horizontal", runtime.revision(), {}});
-    ASSERT_TRUE(split.viewAction.has_value());
-    if (!split.viewAction) return;
-    ASSERT_TRUE(presenter.apply(*split.viewAction, *frame).accepted());
+    ASSERT_TRUE(split.completed());
     frame = presenter.project(runtime, client, {{41, 15}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame || !frame->document() ||
@@ -1197,7 +1241,7 @@ TEST(visualMovementUsesActivePaneAndDiscardsMismatchedProposal) {
         runtime
             .input(client,
                    ssg::ResolvedPaneFocusInput{
-                       {runtime.revision()}})
+                       {runtime.revision()}, ssg::PaneId{1}})
             .outcome,
         ssg::ClientInputOutcome::Dispatched);
     ASSERT_EQ(runtime.input(client, *staleProposal.transition).outcome,
@@ -1246,7 +1290,7 @@ int main() {
     RUN(theDimensionlessSnapshotCarriesSemanticStateButNeverGridProjection);
     RUN(gridPresenterCannotChangeOrReassembleSemanticState);
     RUN(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis);
-    RUN(gridPresentersOwnIndependentPaneTopology);
+    RUN(sessionOwnsIndependentPaneTopologyForEachAttachment);
     RUN(visualLineMovementRequiresPresenterResolution);
     RUN(visualMovementUsesActivePaneAndDiscardsMismatchedProposal);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

@@ -3,7 +3,7 @@
 
 #include "chrome_authoring.h"
 #include "ssg/ChromeRegionShape.h"
-#include "ssg/ShellState.h"
+#include "ssg/ShellViewState.h"
 #include "ssg/StatusQueue.h"
 #include "ssg/WholeScreenAssembly.h"
 #include "ssg/Widget.h"

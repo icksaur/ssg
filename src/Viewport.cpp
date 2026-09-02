@@ -534,7 +534,7 @@ ListScrollView Viewport::listScrollView(
                                                  first)};
 }
 // Saturating clamped shift, shared by byLines and byPages. `delta` arrives from
-// the wire and may be any int64, so the extremes are handled before the add
+// an input and may be any int64, so the extremes are handled before the add
 // rather than relying on it not overflowing.
 uint32_t shiftedOffset(uint32_t current, std::int64_t delta,
                        uint32_t maximumFirst) {

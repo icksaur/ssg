@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ssg/ChromeLowering.h>
-#include <ssg/GridAction.h>
+#include <ssg/ViewActionResult.h>
 #include <ssg/Layout.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Viewport.h>
@@ -48,15 +48,6 @@ public:
     GridFrame& operator=(GridFrame&&) noexcept = default;
 
     [[nodiscard]] GridBasis basis() const noexcept { return basis_; }
-    [[nodiscard]] SessionSnapshot const& semantic() const noexcept {
-        return semantic_;
-    }
-    [[nodiscard]] Revision revision() const noexcept {
-        return semantic_.revision();
-    }
-    [[nodiscard]] SessionSnapshotSections const& sections() const noexcept {
-        return semantic_.sections();
-    }
     [[nodiscard]] GridProjection const& presentation() const noexcept {
         return projection_;
     }
@@ -81,26 +72,26 @@ public:
     // CONTRACT: Direct value construction requires a corresponding, solvable
     // semantic UI frame and throws std::logic_error otherwise. GridPresenter
     // reports the same rejection through project()'s nullopt result.
-    GridFrame(SessionSnapshot semantic, GridProjection projection,
+    GridFrame(SessionSnapshot const& semantic, GridProjection projection,
               GridBasis basis, PaletteReport palette = {});
 
 private:
     friend class GridPresenter;
-    friend class EditorSession;
-    GridFrame(SessionSnapshot semantic, GridProjection projection,
-              SolvedGridTree layout, GridBasis basis, PaletteReport palette);
+    GridFrame(GridProjection projection, SolvedGridTree layout, GridBasis basis,
+              PaletteReport palette);
     [[nodiscard]] static std::optional<GridFrame> fromSemantic(
-        SessionSnapshot semantic, Style style, ViewportDimensions dimensions,
+        SessionSnapshot const& semantic, Style style,
+        ViewportDimensions dimensions,
         GridBasis basis, PaletteReport palette,
         std::uint32_t treeFirstVisible, bool revealTreeSelection,
-        const ShellState& shell, SelectionNavigation navigation);
-    void finalizeViewport(ViewportViewState viewport,
-                          SelectionNavigation navigation);
-    void solvePanel(std::uint32_t treeFirstVisible, bool revealTreeSelection);
-    void solveDocument(const ShellState* shell);
-    [[nodiscard]] std::optional<std::string> solveChrome();
+        SelectionNavigation navigation);
+    void finalizeViewport(ViewportViewState viewport, SelectionNavigation navigation);
+    void solvePanel(SessionSnapshot const& semantic,
+                    std::uint32_t treeFirstVisible, bool revealTreeSelection);
+    void solveDocument(SessionSnapshot const& semantic);
+    [[nodiscard]] std::optional<std::string> solveChrome(
+        SessionSnapshot const& semantic);
 
-    SessionSnapshot semantic_;
     GridProjection projection_;
     SolvedGridTree layout_;
     PaletteReport palette_;
@@ -109,6 +100,54 @@ private:
     std::optional<SolvedPanelSurface> panel_;
     std::optional<SolvedDocumentSurface> document_;
     GridBasis basis_;
+};
+
+// A semantic snapshot and the grid presentation derived from that exact
+// revision. Consumers must retain this pair rather than separately pairing a
+// grid result with a snapshot.
+class GridPresentation {
+public:
+    GridPresentation(SessionSnapshot semantic, GridFrame frame);
+
+    GridPresentation(GridPresentation const&) = delete;
+    GridPresentation& operator=(GridPresentation const&) = delete;
+    GridPresentation(GridPresentation&&) noexcept = default;
+    GridPresentation& operator=(GridPresentation&&) noexcept = default;
+
+    [[nodiscard]] SessionSnapshot const& semantic() const noexcept {
+        return semantic_;
+    }
+    [[nodiscard]] SessionSnapshotSections const& sections() const noexcept {
+        return semantic_.sections();
+    }
+    [[nodiscard]] Revision revision() const noexcept { return semantic_.revision(); }
+    [[nodiscard]] GridFrame const& frame() const noexcept { return frame_; }
+    [[nodiscard]] GridBasis basis() const noexcept { return frame_.basis(); }
+    [[nodiscard]] GridProjection const& presentation() const noexcept {
+        return frame_.presentation();
+    }
+    [[nodiscard]] SolvedGridTree const& layout() const noexcept {
+        return frame_.layout();
+    }
+    [[nodiscard]] PaletteReport const& palette() const noexcept {
+        return frame_.palette();
+    }
+    [[nodiscard]] std::optional<SolvedChromeSurface> const& header() const noexcept {
+        return frame_.header();
+    }
+    [[nodiscard]] std::optional<SolvedChromeSurface> const& footer() const noexcept {
+        return frame_.footer();
+    }
+    [[nodiscard]] std::optional<SolvedPanelSurface> const& panel() const noexcept {
+        return frame_.panel();
+    }
+    [[nodiscard]] std::optional<SolvedDocumentSurface> const& document() const noexcept {
+        return frame_.document();
+    }
+
+private:
+    SessionSnapshot semantic_;
+    GridFrame frame_;
 };
 
 class GridPresenter {
@@ -121,11 +160,11 @@ public:
     GridPresenter(GridPresenter&&) noexcept;
     GridPresenter& operator=(GridPresenter&&) noexcept;
 
-    [[nodiscard]] std::optional<GridFrame> project(
+    [[nodiscard]] std::optional<GridPresentation> project(
         EditorSession& session, ClientId client,
         GridPresentationRequest request);
-    [[nodiscard]] GridActionResult apply(
-        ViewActionRequest const& request, GridFrame const& frame);
+    [[nodiscard]] ViewActionResult apply(
+        ViewActionRequest const& request, GridPresentation const& presentation);
 
 private:
     ViewId viewId_;

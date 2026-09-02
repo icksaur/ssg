@@ -8,19 +8,19 @@
 
 namespace ssg {
 
-enum class GridActionStatus : std::uint8_t {
+enum class ViewActionStatus : std::uint8_t {
     Applied,
     TransitionRequired,
     Rejected,
 };
 
-struct GridActionResult {
-    GridActionStatus status = GridActionStatus::Rejected;
+struct ViewActionResult {
+    ViewActionStatus status = ViewActionStatus::Rejected;
     std::optional<ClientInput> transition;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return status != GridActionStatus::Rejected;
+        return status != ViewActionStatus::Rejected;
     }
 };
 

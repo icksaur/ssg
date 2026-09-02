@@ -13,7 +13,6 @@
 #include <ssg/ClientInput.h>
 #include <ssg/HitTester.h>
 #include <ssg/TabManager.h>
-#include <ssg/ShellState.h>
 #include <ssg/ExternalModificationFlow.h>
 
 #include <chrono>

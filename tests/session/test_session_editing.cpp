@@ -19,7 +19,7 @@
 
 namespace {
 
-std::optional<ssg::GridFrame> projectFrame(
+std::optional<ssg::GridPresentation> projectFrame(
     ssg::EditorSession& runtime, ssg::ViewportDimensions dimensions) {
     return ssg::test::projectGridFrame(
         runtime, ssg::ClientId{1}, ssg::ViewId{1}, dimensions);
@@ -1198,11 +1198,6 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"hits.txt"}}).accepted());
 
     const ssg::ViewportDimensions dims{80, 24};
-    const auto hasInputLine = [](const ssg::ShellViewState& shell) {
-        for (const auto& node : shell.accessibilityNodes)
-            if (node.id == "input_line.query") return true;
-        return false;
-    };
 
     // No prompt: focus is not Prompt.
     {

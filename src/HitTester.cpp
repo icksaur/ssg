@@ -24,7 +24,7 @@ RegionHit scrollbarHit(HitRegion region, Rect const& /*gutter*/, int /*row*/) {
     return hit;
 }
 
-RegionHit editorHit(GridFrame const& snapshot, Rect const& content,
+RegionHit editorHit(GridPresentation const& snapshot, Rect const& content,
                      int column, int row) {
     auto const& viewport = snapshot.presentation().viewport;
     auto const viewportRow = static_cast<std::uint32_t>(row - content.y);
@@ -120,7 +120,7 @@ const UiNode* nodeById(const UiNode& node, std::string_view id) {
     return nullptr;
 }
 
-RegionHit promptHit(const GridFrame& snapshot, const UiNode& node,
+RegionHit promptHit(const GridPresentation& snapshot, const UiNode& node,
                     int column, int row) {
     if (const auto* container = std::get_if<UiContainer>(&node.content)) {
         for (const auto& child : container->children) {
