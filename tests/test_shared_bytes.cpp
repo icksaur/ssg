@@ -53,7 +53,7 @@ TEST(alternateBackingWorksThroughTheSameInterface) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_shared_bytes) {
     RUN(owningHoldsBytes);
     RUN(defaultIsEmpty);
     RUN(copiesShareOneBufferNotASecondAllocation);

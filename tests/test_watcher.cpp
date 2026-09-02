@@ -540,7 +540,7 @@ TEST(platformGitMetadataWatcherIgnoresObjectsAndReportsGitStateChanges) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(ssg_watcher_tests) {
     RUN(createModifyDeleteScriptsAreDeterministic);
     RUN(renamePairingPreservesIdentityAndFinalPath);
     RUN(renameThenDeleteReportsTheOriginalPath);

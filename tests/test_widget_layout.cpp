@@ -398,7 +398,7 @@ TEST(widgetStackKeepItemTruncatesRatherThanOverlappingRight) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_widget_layout) {
     RUN(fitRowStartPacksLeftWithSeparators);
     RUN(fitRowEndPacksFlushRight);
     RUN(fitRowStopsAtFirstNonFitNotDropUntilFits);

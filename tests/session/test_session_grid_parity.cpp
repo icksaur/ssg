@@ -123,7 +123,7 @@ TEST(tuiRenderedGridMatchesTheCommittedGoldenAcrossInteractionStates) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_session_grid_parity) {
     RUN(tuiRenderedGridMatchesTheCommittedGoldenAcrossInteractionStates);
     return failed;
 }

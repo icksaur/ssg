@@ -8,9 +8,10 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_shared_bytes
-        ${SSG_SOURCE_DIR}/tests/test_shared_bytes.cpp
-    )
-    target_link_libraries(test_shared_bytes PRIVATE ssg_core)
-    add_test(NAME test_shared_bytes COMMAND test_shared_bytes)
+    ssg_add_test_suite(
+        NAME test_shared_bytes
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_shared_bytes.cpp
+        SYMBOL test_shared_bytes)
+    ssg_test_link_libraries(test_shared_bytes PRIVATE ssg_core)
+
 endif()

@@ -780,7 +780,7 @@ TEST(wordOrCoveredTextReturnsCaretWordOrSelectionSubstring) {
               std::string{"foo bar"});
 }
 
-int main() {
+SSG_TEST_SUITE(test_selection) {
     RUN(commandSetIsExactAndImmutable);
     RUN(selectionSetNormalizesOrderDuplicatesAndOverlaps);
     RUN(asciiCommandsMatchIndependentReferenceEditor);

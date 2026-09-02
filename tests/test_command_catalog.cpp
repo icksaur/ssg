@@ -471,7 +471,7 @@ TEST(aSwapIsNeverObservedWithNeitherGenerationPresent) {
     ASSERT_TRUE(!sawNeither.load());
 }
 
-int main() {
+SSG_TEST_SUITE(test_command_catalog) {
     RUN(aCommandRegisteredAfterExecutorConstructionIsDispatchable);
     RUN(anEmptyCapabilityIsRefusedAtRegistration);
     RUN(registeringPastTheHandleSpaceIsRefused);

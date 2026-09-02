@@ -3,16 +3,18 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_lsp_workspace_edit
-        ${SSG_SOURCE_DIR}/tests/fake_lsp_server.cpp
-        ${SSG_SOURCE_DIR}/tests/test_lsp_workspace_edit.cpp
-    )
-    target_include_directories(test_lsp_workspace_edit PRIVATE
+    ssg_add_test_suite(
+        NAME test_lsp_workspace_edit
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_lsp_workspace_edit.cpp
+        SYMBOL test_lsp_workspace_edit
+        SOURCES
+            ${SSG_SOURCE_DIR}/tests/fake_lsp_server.cpp)
+    ssg_test_include_directories(test_lsp_workspace_edit PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_compile_definitions(test_lsp_workspace_edit PRIVATE
+    ssg_test_compile_definitions(test_lsp_workspace_edit PRIVATE
         SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}"
     )
-    target_link_libraries(test_lsp_workspace_edit PRIVATE ssg_core)
-    add_test(NAME test_lsp_workspace_edit COMMAND test_lsp_workspace_edit)
+    ssg_test_link_libraries(test_lsp_workspace_edit PRIVATE ssg_core)
+
 endif()

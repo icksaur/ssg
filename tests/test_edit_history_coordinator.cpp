@@ -213,7 +213,7 @@ TEST(clipboardAndReplaceAreDistinctNoncoalescingUnits) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_edit_history_integration) {
     RUN(everyMutatingCommandHasTheSpecifiedHistoryKind);
     RUN(noopAndRejectedCommandsDoNotCreateHistory);
     RUN(textInputSequenceHasHandAuthoredUndoBoundaries);

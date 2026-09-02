@@ -346,7 +346,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
               noDiffGrid.canonical());
 }
 
-int main() {
+SSG_TEST_SUITE(test_renderer_diff_overlay) {
     RUN(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab);
     RUN(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence);
     return failed == 0 ? 0 : 1;

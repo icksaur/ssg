@@ -182,8 +182,9 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
         ".tsx",  ".mjs",  ".lua"};
     std::vector<std::string> violations;
     const auto prunedDirectory = [](std::string_view relative) {
-        return relative == ".git" || relative.starts_with("build") ||
-               relative == "doc" || relative == "tasks" || relative == "vendor";
+        return relative == ".git" || relative == ".test-runtime" ||
+               relative.starts_with("build") || relative == "doc" ||
+               relative == "tasks" || relative == "vendor";
     };
     std::error_code walkError;
     std::filesystem::recursive_directory_iterator entry{
@@ -255,7 +256,7 @@ TEST(semanticRoleOrdinalsAreStable) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_theme) {
     RUN(themeColorAccessorsReturnTheDirectRoleAndScopeColors);
     RUN(themeSetFullTableRoundTripsToAByteIdenticalSnapshot);
     RUN(themeSetPartialTableChangesOnlyTheNamedColorsExactly);

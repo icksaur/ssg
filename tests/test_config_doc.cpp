@@ -53,7 +53,7 @@ TEST(configDocDescribesEveryLuaApiFunction) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_config_doc) {
     RUN(configDocMentionsEveryInitScriptCommand);
     RUN(configDocDescribesEveryLuaApiFunction);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

@@ -73,7 +73,7 @@ TEST(noTwoDescriptorsClaimTheSameKind) {
     }
 }
 
-int main() {
+SSG_TEST_SUITE(test_picker) {
     RUN(everyPickerKindHasACompletelyWiredDescriptor);
     RUN(commandPickerDescriptorMatchesThePreRefactorPaletteBehavior);
     RUN(catalogReportsAbsenceRatherThanFabricatingADescriptor);

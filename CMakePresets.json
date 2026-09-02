@@ -4,14 +4,15 @@
   "configurePresets": [
     {
       "name": "dev",
-      "displayName": "Dev (Ninja + ccache, Debug)",
-      "description": "Fast iteration build. Configure once, then `cmake --build build`.",
+      "displayName": "Dev (Ninja + ccache, size optimized + assertions)",
+      "description": "Compact optimized build with assertions for normal development.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_BUILD_TYPE": "MinSizeRel",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "SSG_ASSERTIONS": "ON"
       }
     },
     {
@@ -34,6 +35,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "SSG_ASSERTIONS": "ON",
         "SSG_SANITIZE": "ON"
       }
     }
@@ -67,7 +69,12 @@
       "name": "sanitize",
       "configurePreset": "sanitize",
       "output": { "outputOnFailure": true },
-      "execution": { "jobs": 20 }
+      "execution": { "jobs": 20 },
+      "filter": {
+        "exclude": {
+          "label": "^performance$"
+        }
+      }
     }
   ]
 }

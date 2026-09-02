@@ -141,7 +141,7 @@ TEST(panelFocusIgnoresPrintableText) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_prompt_routing) {
     RUN(editorFocusRoutesPrintableTextToInsert);
     RUN(paletteFocusAppendsToTheClientOwnedQueryOnly);
     RUN(findPromptRoutesTheWholeNewQueryValue);

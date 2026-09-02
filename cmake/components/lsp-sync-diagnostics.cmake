@@ -3,16 +3,18 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_lsp_sync
-        ${SSG_SOURCE_DIR}/tests/fake_lsp_server.cpp
-        ${SSG_SOURCE_DIR}/tests/test_lsp_sync.cpp
-    )
-    target_include_directories(test_lsp_sync PRIVATE
+    ssg_add_test_suite(
+        NAME test_lsp_sync
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_lsp_sync.cpp
+        SYMBOL test_lsp_sync
+        SOURCES
+            ${SSG_SOURCE_DIR}/tests/fake_lsp_server.cpp)
+    ssg_test_include_directories(test_lsp_sync PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_compile_definitions(test_lsp_sync PRIVATE
+    ssg_test_compile_definitions(test_lsp_sync PRIVATE
         SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}"
     )
-    target_link_libraries(test_lsp_sync PRIVATE ssg_core)
-    add_test(NAME test_lsp_sync COMMAND test_lsp_sync)
+    ssg_test_link_libraries(test_lsp_sync PRIVATE ssg_core)
+
 endif()

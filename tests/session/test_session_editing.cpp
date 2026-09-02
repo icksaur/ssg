@@ -1251,7 +1251,7 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_session_editing) {
     RUN(runtimeTextSelectionAndHistoryMatchFeatureOperations);
     RUN(typingUndoBreaksOnWordAndLineBoundaries);
     RUN(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply);

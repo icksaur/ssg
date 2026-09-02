@@ -177,7 +177,7 @@ TEST(viewStateDeltaAndCommandSetCoverAllOwnedSettingsIds) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_settings) {
     RUN(fiveScopeResolutionUsesMostSpecificPresentValue);
     RUN(invalidValuesAndKeysAreFailureAtomic);
     RUN(setAndResetCompensationsRestoreScopedAndEffectiveState);

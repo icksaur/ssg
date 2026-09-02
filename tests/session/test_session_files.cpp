@@ -1284,7 +1284,7 @@ TEST(autosaveFlushAllForcesADirtyDocumentAfterAnEagerFlush) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_session_files) {
     RUN(openEditSaveRoundTripsRealDiskBytes);
     RUN(openingAFileRevealsTheCaretResettingAStaleScroll);
     RUN(droppedContentRequiresRealCapability);

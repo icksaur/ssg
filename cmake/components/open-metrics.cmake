@@ -15,19 +15,19 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_open_equivalence
-        ${SSG_SOURCE_DIR}/tests/test_open_equivalence.cpp
-    )
-    target_link_libraries(test_open_equivalence PRIVATE ssg_core)
-    target_compile_definitions(test_open_equivalence PRIVATE
+    ssg_add_test_suite(
+        NAME test_open_equivalence
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_open_equivalence.cpp
+        SYMBOL test_open_equivalence)
+    ssg_test_link_libraries(test_open_equivalence PRIVATE ssg_core)
+    ssg_test_compile_definitions(test_open_equivalence PRIVATE
         SSG_OPEN_GOLDEN="${SSG_SOURCE_DIR}/tests/fixtures/open/golden.txt")
-    add_test(NAME test_open_equivalence COMMAND test_open_equivalence)
 
-    add_executable(test_open_metrics
-        ${SSG_SOURCE_DIR}/tests/test_open_metrics.cpp
-    )
-    target_link_libraries(test_open_metrics PRIVATE ssg_core)
-    add_test(NAME test_open_metrics COMMAND test_open_metrics)
+    ssg_add_test_suite(
+        NAME test_open_metrics
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_open_metrics.cpp
+        SYMBOL test_open_metrics)
+    ssg_test_link_libraries(test_open_metrics PRIVATE ssg_core)
 
     add_executable(open_path_benchmark
         ${SSG_SOURCE_DIR}/benchmarks/open_path_benchmark.cpp

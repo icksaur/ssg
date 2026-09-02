@@ -358,7 +358,7 @@ TEST(inMemorySnapshotsPublishTheUiVm) {
     fs::remove_all(root);
 }
 
-int main() {
+SSG_TEST_SUITE(test_tui_contract) {
     RUN(productionRuntimeNormalScreenSatisfiesTheScreenContract);
     RUN(productionRuntimePaletteScreenSatisfiesTheScreenContract);
     RUN(productionRuntimeTooSmallScreenSatisfiesTheScreenContract);

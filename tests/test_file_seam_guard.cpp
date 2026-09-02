@@ -1,3 +1,5 @@
+#include "test_helpers.h"
+
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
@@ -228,7 +230,7 @@ void platformHeadersStayInTheirAdapters() {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_file_seam_guard) {
     libraryAndApplicationCodeUseTheFileSeam();
     platformHeadersStayInTheirAdapters();
 

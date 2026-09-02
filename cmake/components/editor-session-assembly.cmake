@@ -19,12 +19,13 @@ ssg_allow_private_roots(
     ssg_core "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_status_fields
-        ${SSG_SOURCE_DIR}/tests/test_status_fields.cpp
-    )
-    target_include_directories(test_status_fields PRIVATE
+    ssg_add_test_suite(
+        NAME test_status_fields
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_status_fields.cpp
+        SYMBOL test_status_fields)
+    ssg_test_include_directories(test_status_fields PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_status_fields PRIVATE ssg_tui_objects)
-    add_test(NAME test_status_fields COMMAND test_status_fields)
+    ssg_test_link_libraries(test_status_fields PRIVATE ssg_tui_objects)
+
 endif()

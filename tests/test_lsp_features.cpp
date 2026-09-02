@@ -251,7 +251,7 @@ TEST(definitionAndReferencesPublishUserNavigationTargets) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_lsp_features) {
     RUN(commandSetExportsTheNormativeReadOnlyActions);
     RUN(requestUsesTheExactSynchronizedSnapshotAndUtf16Position);
     RUN(completionResultsAreSortedAndAcceptTheSelectedEdit);

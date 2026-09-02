@@ -14,35 +14,36 @@ else()
 endif()
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_platform_files
-        ${SSG_SOURCE_DIR}/tests/test_platform_files.cpp
-    )
-    target_include_directories(test_platform_files PRIVATE
+    ssg_add_test_suite(
+        NAME test_platform_files
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_platform_files.cpp
+        SYMBOL test_platform_files)
+    ssg_test_include_directories(test_platform_files PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_platform_files PRIVATE ssg_platform)
-    add_test(NAME test_platform_files COMMAND test_platform_files)
+    ssg_test_link_libraries(test_platform_files PRIVATE ssg_platform)
 
-    add_executable(test_platform_file_seam
-        ${SSG_SOURCE_DIR}/tests/test_platform_file_seam.cpp
-    )
-    target_include_directories(test_platform_file_seam PRIVATE
+    ssg_add_test_suite(
+        NAME test_platform_file_seam
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_platform_file_seam.cpp
+        SYMBOL test_platform_file_seam)
+    ssg_test_include_directories(test_platform_file_seam PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_platform_file_seam PRIVATE ssg_platform)
-    add_test(NAME test_platform_file_seam COMMAND test_platform_file_seam)
+    ssg_test_link_libraries(test_platform_file_seam PRIVATE ssg_platform)
 
-    add_executable(test_platform_interface
-        ${SSG_SOURCE_DIR}/tests/test_platform_interface.cpp
-    )
-    target_link_libraries(test_platform_interface PRIVATE ssg_platform)
-    add_test(NAME test_platform_interface COMMAND test_platform_interface)
+    ssg_add_test_suite(
+        NAME test_platform_interface
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_platform_interface.cpp
+        SYMBOL test_platform_interface)
+    ssg_test_link_libraries(test_platform_interface PRIVATE ssg_platform)
 
-    add_executable(test_file_seam_guard
-        ${SSG_SOURCE_DIR}/tests/test_file_seam_guard.cpp
-    )
-    target_link_libraries(test_file_seam_guard PRIVATE ssg_platform)
-    add_test(NAME test_file_seam_guard COMMAND test_file_seam_guard
+    ssg_add_test_suite(
+        NAME test_file_seam_guard
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_file_seam_guard.cpp
+        SYMBOL test_file_seam_guard)
+    ssg_test_link_libraries(test_file_seam_guard PRIVATE ssg_platform)
+    set_tests_properties(test_file_seam_guard PROPERTIES
         WORKING_DIRECTORY ${SSG_SOURCE_DIR})
 
     foreach(_mode edge root)

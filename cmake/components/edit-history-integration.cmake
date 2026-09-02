@@ -3,10 +3,10 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_edit_history_integration
-        ${SSG_SOURCE_DIR}/tests/test_edit_history_coordinator.cpp
-    )
-    target_link_libraries(test_edit_history_integration PRIVATE ssg_core)
-    add_test(NAME test_edit_history_integration
-             COMMAND test_edit_history_integration)
+    ssg_add_test_suite(
+        NAME test_edit_history_integration
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_edit_history_coordinator.cpp
+        SYMBOL test_edit_history_integration)
+    ssg_test_link_libraries(test_edit_history_integration PRIVATE ssg_core)
+
 endif()

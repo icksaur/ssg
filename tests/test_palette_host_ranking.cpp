@@ -46,7 +46,7 @@ TEST(theHostRanksAQueryThroughTheLibrarySearcherNotItsOwnOrder) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_palette_host_ranking) {
     RUN(theHostRanksAQueryThroughTheLibrarySearcherNotItsOwnOrder);
     return 0;
 }

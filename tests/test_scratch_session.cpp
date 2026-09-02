@@ -25,6 +25,8 @@ namespace {
 
 using namespace std::chrono_literals;
 
+std::filesystem::path testExecutable;
+
 class TemporaryDirectory {
 public:
     TemporaryDirectory() {
@@ -65,9 +67,11 @@ public:
                  const std::filesystem::path& workspace,
                  const std::filesystem::path& ready) {
 #ifdef _WIN32
-        std::wstring command = L"\"" + executable.wstring() + L"\" --hold \"" +
-                               root.wstring() + L"\" \"" + workspace.wstring() +
-                               L"\" \"" + ready.wstring() + L"\"";
+        std::wstring command =
+            L"\"" + executable.wstring() +
+            L"\" --suite test_scratch_session --hold \"" + root.wstring() +
+            L"\" \"" + workspace.wstring() + L"\" \"" + ready.wstring() +
+            L"\"";
         STARTUPINFOW startup{};
         startup.cb = sizeof(startup);
         PROCESS_INFORMATION process{};
@@ -80,8 +84,9 @@ public:
 #else
         pid_ = fork();
         if (pid_ == 0) {
-            execl(executable.c_str(), executable.c_str(), "--hold",
-                  root.c_str(), workspace.c_str(), ready.c_str(), nullptr);
+            execl(executable.c_str(), executable.c_str(), "--suite",
+                  "test_scratch_session", "--hold", root.c_str(),
+                  workspace.c_str(), ready.c_str(), nullptr);
             _exit(127);
         }
         if (pid_ < 0) {
@@ -134,7 +139,7 @@ TEST(concurrentProcessIsHiddenUntilCrashReleasesLock) {
     const auto workspace =
         std::filesystem::absolute(temporary.path() / "workspace").lexically_normal();
     const auto ready = temporary.path() / "ready";
-    ChildProcess child{std::filesystem::absolute("test_scratch_session"),
+    ChildProcess child{testExecutable,
                        temporary.path(), workspace, ready};
     const auto childId = waitForReady(ready);
 
@@ -226,11 +231,12 @@ int childMain(const std::filesystem::path& root,
 
 } // namespace
 
-int main(int argc, char** argv) {
+SSG_TEST_SUITE_ARGS(test_scratch_session) {
     if (argc == 5 && std::string_view{argv[1]} == "--hold") {
         return childMain(argv[2], argv[3], argv[4]);
     }
 
+    testExecutable = std::filesystem::absolute(argv[0]);
     std::cout << "=== Scratch session locking ===\n";
     RUN(concurrentProcessIsHiddenUntilCrashReleasesLock);
     RUN(newestUnlockedRemnantIsClaimedOnce);

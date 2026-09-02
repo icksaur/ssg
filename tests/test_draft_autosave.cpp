@@ -125,7 +125,7 @@ TEST(independentDocumentsDebounceIndependently) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_draft_autosave) {
     RUN(firstDirtyTickFlushesEagerly);
     RUN(unchangedContentIsNeverReflushedEvenAfterInterval);
     RUN(changedContentIsDebouncedThenFlushedAfterInterval);

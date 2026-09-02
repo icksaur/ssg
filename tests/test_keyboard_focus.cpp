@@ -77,7 +77,7 @@ TEST(reconcileDropsOnlyAbsentCaptures) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_keyboard_focus) {
     RUN(baseFocusIsRetainedWhenNoCapture);
     RUN(captureOverridesBaseAndPopRestoresIt);
     RUN(focusNeverReferencesAHiddenNodeAfterReconcile);

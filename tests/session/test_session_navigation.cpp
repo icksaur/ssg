@@ -3508,7 +3508,7 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_session_navigation) {
     RUN(searchTreeDiffAndFollowSectionsUseRuntimeState);
     RUN(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow);
     RUN(attachedClientsShareFollowPauseQueueAndResumeState);

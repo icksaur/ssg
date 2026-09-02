@@ -3,9 +3,10 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_edit_commands
-        ${SSG_SOURCE_DIR}/tests/test_edit_commands.cpp
-    )
-    target_link_libraries(test_edit_commands PRIVATE ssg_core)
-    add_test(NAME test_edit_commands COMMAND test_edit_commands)
+    ssg_add_test_suite(
+        NAME test_edit_commands
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_edit_commands.cpp
+        SYMBOL test_edit_commands)
+    ssg_test_link_libraries(test_edit_commands PRIVATE ssg_core)
+
 endif()

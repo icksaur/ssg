@@ -314,7 +314,7 @@ TEST(footerTextInputIsStatefulWhileHeaderPickerInputRemainsLocal) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_ui_node_state) {
     RUN(labelFieldStateMatchesTuiNodeOrDrop);
     RUN(explicitRoleOverridesRegionDefault);
     RUN(checkboxStateMatchesIndependentExpectation);

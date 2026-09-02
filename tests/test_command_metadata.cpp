@@ -85,7 +85,7 @@ TEST(preferredBindingIsDeterministic) {
     ASSERT_FALSE(ssg::KeymapMatcher{a}.preferredBinding("other").has_value());
 }
 
-int main() {
+SSG_TEST_SUITE(test_command_metadata) {
     RUN(commandLabelUsesAuthoredLabelsAndHumanizesTheRest);
     RUN(formatKeySequenceIsCompactAndHuman);
     RUN(preferredBindingIsDeterministic);

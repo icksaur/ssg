@@ -551,7 +551,7 @@ TEST(theExternalCaptureAndAPromptCoexistWithLifoActiveContext) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_interaction_authority) {
     RUN(initiallyNoPanelNoPromptTabViewShown);
     RUN(applyOpenFinderRoutesThroughOneAtomicInstall);
     RUN(eachSuccessfulFinderOpenMintsANewActivation);

@@ -709,7 +709,7 @@ TEST(theCapabilitiesReportReflectsWhatTheTerminalAnswered) {
                 std::string::npos);
 }
 
-int main() {
+SSG_TEST_SUITE(test_terminal_parity) {
     RUN(decoderRoundtripsTheEncodedFrame);
     RUN(decoderRoundtripsOrthogonalTintBackgrounds);
     RUN(canonicalIncludesTintedBlankCells);

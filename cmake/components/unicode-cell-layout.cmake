@@ -9,26 +9,26 @@
 #   - All target names must be unique across manifests
 #
 # This manifest adds the UTF-8 grapheme segmentation and terminal cell-layout
-# implementation to the ssg library and registers the standalone cell-layout
-# oracle test executable.
+# implementation to the ssg library and registers the cell-layout oracle suite.
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/GraphemeLayout.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_cell_layout
-        ${SSG_SOURCE_DIR}/tests/test_cell_layout.cpp
-    )
-    target_link_libraries(test_cell_layout PRIVATE ssg_core)
-    add_test(NAME test_cell_layout COMMAND test_cell_layout)
+    ssg_add_test_suite(
+        NAME test_cell_layout
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_cell_layout.cpp
+        SYMBOL test_cell_layout)
+    ssg_test_link_libraries(test_cell_layout PRIVATE ssg_core)
 
-    add_executable(test_gcb_oracle
-        ${SSG_SOURCE_DIR}/tests/test_gcb_oracle.cpp
-    )
-    target_link_libraries(test_gcb_oracle PRIVATE ssg_core)
-    target_compile_definitions(test_gcb_oracle PRIVATE
+    ssg_add_test_suite(
+        NAME test_gcb_oracle
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_gcb_oracle.cpp
+        SYMBOL test_gcb_oracle)
+    ssg_test_link_libraries(test_gcb_oracle PRIVATE ssg_core)
+    ssg_test_compile_definitions(test_gcb_oracle PRIVATE
         UNICODE_DATA_DIR="${SSG_SOURCE_DIR}/data/unicode"
     )
-    add_test(NAME test_gcb_oracle COMMAND test_gcb_oracle)
+
 endif()

@@ -436,7 +436,7 @@ TEST(styleDefineKeysAreUniqueSoNoGlyphLivesInTwoCategories) {
     ASSERT_TRUE(std::adjacent_find(keys.begin(), keys.end()) == keys.end());
 }
 
-int main() {
+SSG_TEST_SUITE(test_style) {
     RUN(aStyleGlyphOfTheWrongWidthIsRejectedNamingItsKey);
     RUN(aStyleGlyphMatchingItsFieldsWidthIsAccepted);
     RUN(aRejectedGlyphChangesNothing);

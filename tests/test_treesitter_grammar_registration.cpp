@@ -135,7 +135,7 @@ TEST(aGrammarWithNoLanguageFactoryIsIgnored) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_treesitter_grammar_registration) {
     RUN(aCustomGrammarIsHighlightedUnderItsOwnLanguageId);
     RUN(aCustomGrammarSetReplacesRatherThanExtendsTheVendoredOne);
     RUN(theDefaultParserStillCarriesEveryVendoredGrammar);

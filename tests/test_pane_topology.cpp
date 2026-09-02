@@ -205,7 +205,7 @@ TEST(attachmentsHaveIsolatedPaneTopologies) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_pane_topology) {
     RUN(initialTopologyIsPublishedPerAttachment);
     RUN(paneCommandsMutatePublishedTopologyAndRevision);
     RUN(closeUsesStableOrderAndRejectsTheOnlyPane);

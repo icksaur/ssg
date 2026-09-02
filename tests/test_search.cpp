@@ -250,7 +250,7 @@ TEST(commandExportsAreExact) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_search) {
     RUN(queryModesAreUnambiguousAndLinesAreValidated);
     RUN(acceptedRankingGoldensMatch);
     RUN(cancellationSupersessionAndStaleRevisionAreRejected);

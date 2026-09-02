@@ -698,7 +698,7 @@ TEST(solveGridTreeRejectsAutoSizeDistinctly) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_layout_solver) {
     RUN(columnStackPlacesExactThenFillsFlex);
     RUN(responsivePreferredShrinksBeforeRequiredFlex);
     RUN(responsiveOptionalChildDropsBelowCombinedFloors);

@@ -482,7 +482,7 @@ TEST(ignoreMatcherIsUnusableAndNeverIgnoresOutsideARepository) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_git_repository) {
     RUN(platformRepositoryMatchesGitStatusAcrossWorkflow);
     RUN(platformRepositoryResolvesNormalNestedAndLinkedWorktreeMetadata);
     RUN(platformRepositoryStatusClassificationMatchesGitPorcelain);

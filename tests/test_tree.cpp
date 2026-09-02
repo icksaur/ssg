@@ -510,7 +510,7 @@ TEST(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation) {
     ASSERT_TRUE(TreeModel::visibleNodesRecomputeCount() >= std::uint64_t{1});
 }
 
-int main() {
+SSG_TEST_SUITE(test_tree) {
     RUN(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks);
     RUN(filesystemSnapshotIgnoresAnEntryThatDisappearsDuringInspection);
     RUN(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys);

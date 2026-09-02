@@ -134,7 +134,7 @@ TEST(gridDisplayDecoratesOnlyThePathField) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_status_fields) {
     RUN(pathFieldAbbreviatesTheHomeDirectory);
     RUN(pathFieldKeepsAPathOutsideHomeVerbatim);
     RUN(pathFieldUnknownHomeIsNotAbbreviated);

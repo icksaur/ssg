@@ -55,7 +55,7 @@ TEST(modesWithoutASubmitActionResolveToNothing) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_palette_submit) {
     RUN(commandModeSubmitsThroughTheGenericPickerCommand);
     RUN(fileModeSubmitsThroughTheGenericPickerCommand);
     RUN(modesWithoutASubmitActionResolveToNothing);

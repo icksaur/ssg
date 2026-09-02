@@ -3,13 +3,13 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_session_snapshot_builder
-        ${SSG_SOURCE_DIR}/tests/test_session_snapshot_builder.cpp
-    )
-    target_include_directories(test_session_snapshot_builder PRIVATE
+    ssg_add_test_suite(
+        NAME test_session_snapshot_builder
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_session_snapshot_builder.cpp
+        SYMBOL test_session_snapshot_builder)
+    ssg_test_include_directories(test_session_snapshot_builder PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_session_snapshot_builder PRIVATE ssg_tui_objects)
-    add_test(NAME test_session_snapshot_builder
-             COMMAND test_session_snapshot_builder)
+    ssg_test_link_libraries(test_session_snapshot_builder PRIVATE ssg_tui_objects)
+
 endif()

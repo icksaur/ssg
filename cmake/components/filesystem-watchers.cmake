@@ -15,9 +15,10 @@ else()
 endif()
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(ssg_watcher_tests
-        ${SSG_SOURCE_DIR}/tests/test_watcher.cpp
-    )
-    target_link_libraries(ssg_watcher_tests PRIVATE ssg_platform)
-    add_test(NAME ssg_watcher_tests COMMAND ssg_watcher_tests)
+    ssg_add_test_suite(
+        NAME ssg_watcher_tests
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_watcher.cpp
+        SYMBOL ssg_watcher_tests)
+    ssg_test_link_libraries(ssg_watcher_tests PRIVATE ssg_platform)
+
 endif()

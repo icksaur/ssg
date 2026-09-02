@@ -413,7 +413,7 @@ TEST(atomicReplacementNeverExposesPartialBytes) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_platform_files) {
     RUN(pathPolicyDecisionTable);
     RUN(identityIsStableAcrossReopenAndRename);
     RUN(durableAppendSyncAndRenamePreserveBytes);

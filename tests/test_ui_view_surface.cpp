@@ -162,7 +162,7 @@ TEST(gridUiRegionProjectionRefusesMalformedShape) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_ui_view_surface) {
     RUN(everyViewSurfaceHasANonEmptyBacking);
     RUN(currentViewSurfaceInventoryExcludesProviderSpecificSurfaces);
     RUN(retainedViewSurfaceWireValuesStaySparseAndStable);

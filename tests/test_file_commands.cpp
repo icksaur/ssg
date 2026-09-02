@@ -176,7 +176,7 @@ TEST(saveAllIgnoresUntitledDocuments) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_file_commands) {
     RUN(commandSetOwnsEveryNormativeFileCommand);
     RUN(pathCommandsOpenNonModalPathPrompts);
     RUN(localDropRequiresHostCapabilityAndSanitizesLabel);

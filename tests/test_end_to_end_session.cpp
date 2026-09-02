@@ -120,7 +120,7 @@ TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_end_to_end) {
     RUN(directAndTuiClientsMatchThroughRealRuntimeSnapshots);
     return failed == 0 ? 0 : 1;
 }

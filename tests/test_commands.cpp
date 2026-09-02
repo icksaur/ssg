@@ -127,7 +127,7 @@ TEST(theGeneratedCommandReferenceIsCurrent) {
 //
 // Deleted with the static table at D5.
 
-int main() {
+SSG_TEST_SUITE(test_commands) {
     RUN(featureMetadataTablesAnnotateCatalogCommandsAndDeclareNoNewOnes);
     RUN(theGeneratedCommandReferenceIsCurrent);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

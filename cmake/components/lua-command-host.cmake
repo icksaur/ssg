@@ -31,15 +31,16 @@ ssg_allow_private_roots(ssg_core "${SSG_LUA_INCLUDE_DIR}")
 target_link_libraries(ssg_core PRIVATE ${SSG_LUA_LIBRARY})
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_lua
-        ${SSG_SOURCE_DIR}/tests/test_lua.cpp
-    )
-    target_include_directories(test_lua PRIVATE
+    ssg_add_test_suite(
+        NAME test_lua
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_lua.cpp
+        SYMBOL test_lua)
+    ssg_test_include_directories(test_lua PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_compile_definitions(test_lua PRIVATE
+    ssg_test_compile_definitions(test_lua PRIVATE
         SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}"
     )
-    target_link_libraries(test_lua PRIVATE ssg_core)
-    add_test(NAME test_lua COMMAND test_lua)
+    ssg_test_link_libraries(test_lua PRIVATE ssg_core)
+
 endif()

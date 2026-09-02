@@ -413,7 +413,7 @@ TEST(configurationRejectsInvalidQueueCapacity) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_follow_edits) {
     RUN(independentTransitionTableCoversSharedFollowPolicy);
     RUN(followClientsPublishFixedCompatibilityGeometry);
     RUN(newestIntroducedHunkWinsWhenPriorBottomHunkRemains);

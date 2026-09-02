@@ -1123,7 +1123,7 @@ TEST(scriptMulticursorTypeDelete) {
 
 // ── main ──────────────────────────────────────────────────────────────────
 
-int main() {
+SSG_TEST_SUITE(test_reference_editor) {
     std::cout << "=== Reference editor oracle tests ===\n";
 
     // UTF-8 helpers

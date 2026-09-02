@@ -476,7 +476,7 @@ TEST(OnlyOneScriptHostMayAttachPerRuntime) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_script_host) {
     RUN(theScriptStateOutlivesTheScriptThatCreatedIt);
     RUN(aScriptStillReachesTheEditorThroughTheOrdinaryCommandBoundary);
     RUN(viewActionsRequireAndUseAHostSuppliedSink);

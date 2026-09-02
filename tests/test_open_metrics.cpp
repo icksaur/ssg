@@ -69,7 +69,7 @@ TEST(freshOpenStateMaterializesTreeOnceToday) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_open_metrics) {
     RUN(directUtf8OpenValidatesOnce);
     RUN(freshOpenStateMaterializesTreeOnceToday);
     std::cout << passed << " passed, " << failed << " failed\n";

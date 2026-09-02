@@ -117,54 +117,54 @@ set_source_files_properties(${_SSG_TREESITTER_VENDOR_SOURCES}
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_syntax
-        ${SSG_SOURCE_DIR}/tests/test_syntax.cpp
-    )
-    target_include_directories(test_syntax PRIVATE
+    ssg_add_test_suite(
+        NAME test_syntax
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_syntax.cpp
+        SYMBOL test_syntax)
+    ssg_test_include_directories(test_syntax PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_syntax PRIVATE ssg_core)
-    add_test(NAME test_syntax COMMAND test_syntax)
+    ssg_test_link_libraries(test_syntax PRIVATE ssg_core)
 
-    add_executable(test_syntax_language_detection
-        ${SSG_SOURCE_DIR}/tests/test_syntax_language_detection.cpp
-    )
-    target_include_directories(test_syntax_language_detection PRIVATE
+    ssg_add_test_suite(
+        NAME test_syntax_language_detection
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_syntax_language_detection.cpp
+        SYMBOL test_syntax_language_detection)
+    ssg_test_include_directories(test_syntax_language_detection PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_syntax_language_detection PRIVATE ssg_core)
-    add_test(NAME test_syntax_language_detection COMMAND test_syntax_language_detection)
+    ssg_test_link_libraries(test_syntax_language_detection PRIVATE ssg_core)
 
-    add_executable(test_treesitter_syntax
-        ${SSG_SOURCE_DIR}/tests/test_treesitter_syntax.cpp
-    )
-    target_include_directories(test_treesitter_syntax PRIVATE
+    ssg_add_test_suite(
+        NAME test_treesitter_syntax
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_treesitter_syntax.cpp
+        SYMBOL test_treesitter_syntax)
+    ssg_test_include_directories(test_treesitter_syntax PRIVATE
         ${SSG_SOURCE_DIR}/tests
         ${SSG_SOURCE_DIR}/src
     )
-    target_compile_definitions(test_treesitter_syntax PRIVATE
+    ssg_test_compile_definitions(test_treesitter_syntax PRIVATE
         SSG_TREESITTER_FIXTURE_DIR="${SSG_SOURCE_DIR}/tests/fixtures/syntax"
         SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
         SSG_TREESITTER_SOURCE_DIR="${SSG_SOURCE_DIR}/src"
     )
-    target_link_libraries(test_treesitter_syntax PRIVATE ssg_core)
-    add_test(NAME test_treesitter_syntax COMMAND test_treesitter_syntax)
+    ssg_test_link_libraries(test_treesitter_syntax PRIVATE ssg_core)
 
-    # A separate executable so no earlier test has compiled a query first,
+    # A separate CTest process ensures no earlier suite has compiled a query,
     # which would make these checks vacuous.
-    add_executable(test_treesitter_embedded_queries
-        ${SSG_SOURCE_DIR}/tests/test_treesitter_embedded_queries.cpp
-    )
-    target_include_directories(test_treesitter_embedded_queries PRIVATE
+    ssg_add_test_suite(
+        NAME test_treesitter_embedded_queries
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_treesitter_embedded_queries.cpp
+        SYMBOL test_treesitter_embedded_queries)
+    ssg_test_include_directories(test_treesitter_embedded_queries PRIVATE
         ${SSG_SOURCE_DIR}/tests
         ${SSG_SOURCE_DIR}/src
     )
-    target_compile_definitions(test_treesitter_embedded_queries PRIVATE
+    ssg_test_compile_definitions(test_treesitter_embedded_queries PRIVATE
         SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
     )
-    target_link_libraries(test_treesitter_embedded_queries PRIVATE ssg_core)
-    add_test(NAME test_treesitter_embedded_queries
-             COMMAND test_treesitter_embedded_queries)
+    ssg_test_link_libraries(test_treesitter_embedded_queries PRIVATE ssg_core)
+
     set_tests_properties(test_treesitter_embedded_queries PROPERTIES
         RUN_SERIAL TRUE)
 
@@ -172,13 +172,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     # include directories: it must compile against <ssg/TreeSitterGrammars.h>
     # alone, which is what proves a host is not forced to have tree-sitter's
     # headers.
-    add_executable(test_treesitter_grammar_registration
-        ${SSG_SOURCE_DIR}/tests/test_treesitter_grammar_registration.cpp
-    )
-    target_include_directories(test_treesitter_grammar_registration PRIVATE
+    ssg_add_test_suite(
+        NAME test_treesitter_grammar_registration
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_treesitter_grammar_registration.cpp
+        SYMBOL test_treesitter_grammar_registration)
+    ssg_test_include_directories(test_treesitter_grammar_registration PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_treesitter_grammar_registration PRIVATE ssg_core)
-    add_test(NAME test_treesitter_grammar_registration
-             COMMAND test_treesitter_grammar_registration)
+    ssg_test_link_libraries(test_treesitter_grammar_registration PRIVATE ssg_core)
+
 endif()

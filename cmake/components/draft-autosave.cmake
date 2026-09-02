@@ -4,15 +4,16 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_draft_autosave
-        ${SSG_SOURCE_DIR}/tests/test_draft_autosave.cpp
-    )
-    target_link_libraries(test_draft_autosave PRIVATE ssg_core)
-    add_test(NAME test_draft_autosave COMMAND test_draft_autosave)
+    ssg_add_test_suite(
+        NAME test_draft_autosave
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_draft_autosave.cpp
+        SYMBOL test_draft_autosave)
+    ssg_test_link_libraries(test_draft_autosave PRIVATE ssg_core)
 
-    add_executable(test_draft_reopen
-        ${SSG_SOURCE_DIR}/tests/test_draft_reopen.cpp
-    )
-    target_link_libraries(test_draft_reopen PRIVATE ssg_core)
-    add_test(NAME test_draft_reopen COMMAND test_draft_reopen)
+    ssg_add_test_suite(
+        NAME test_draft_reopen
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_draft_reopen.cpp
+        SYMBOL test_draft_reopen)
+    ssg_test_link_libraries(test_draft_reopen PRIVATE ssg_core)
+
 endif()

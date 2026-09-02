@@ -809,7 +809,7 @@ TEST(unwrappedProjectionReusesCachedVisibleLines) {
     ASSERT_TRUE(ssg::GraphemeLayout::cellRunCalls() > 0);
 }
 
-int main() {
+SSG_TEST_SUITE(test_viewport) {
     RUN(emptyViewportGolden);
     RUN(shortViewportGolden);
     RUN(wideBoundaryGolden);

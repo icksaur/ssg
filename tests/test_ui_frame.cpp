@@ -151,7 +151,7 @@ TEST(frameDerivesEffectiveContextFromTheEndpointHost) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_ui_frame) {
     RUN(frameRejectsMismatchedRecordsGenerationsAndHiddenFocus);
     RUN(frameDerivesEffectiveContextFromTheEndpointHost);
     return failed == 0 ? 0 : 1;

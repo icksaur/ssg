@@ -1,3 +1,5 @@
+#include "test_helpers.h"
+
 #include "ssg/platform_files.h"
 
 #include <cassert>
@@ -232,7 +234,7 @@ void faultInjectionFailsOnlyTheNamedOperation() {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_platform_file_seam) {
     readFileDistinguishesAbsenceFromEmptiness();
     readFileRoundTripsBinaryContent();
     nameTakingPrimitivesRefuseAnOccupiedDestination();

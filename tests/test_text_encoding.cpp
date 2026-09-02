@@ -259,7 +259,7 @@ TEST(fusedDecodePreservesMalformedOffsets) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_text_encoding) {
     RUN(autoDetectsUtf8AndPreservesLfAndFinalNewline);
     RUN(autoDetectsUtf8BomAndPreservesCrlfWithoutFinalNewline);
     RUN(roundTripsUtf16EndiannessBomAndMixedEndings);

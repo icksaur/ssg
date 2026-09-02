@@ -165,7 +165,7 @@ TEST(viewportsRemainSemanticTreeProperties) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_whole_screen_structure) {
     RUN(fixedHeaderAndFooterAreSemanticUiNodes);
     RUN(viewportsRemainSemanticTreeProperties);
     return failed == 0 ? 0 : 1;

@@ -17,6 +17,8 @@
 
 #include <ssg/GraphemeLayout.h>
 
+#include "test_helpers.h"
+
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
@@ -120,7 +122,7 @@ static bool parseLine(const std::string& line,
     return !outEntries.empty();
 }
 
-int main() {
+SSG_TEST_SUITE(test_gcb_oracle) {
     const std::string path = std::string(UNICODE_DATA_DIR) + "/GraphemeBreakTest.txt";
     std::ifstream f(path);
     if (!f.is_open()) {

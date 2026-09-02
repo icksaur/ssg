@@ -302,7 +302,7 @@ TEST(unchangedTransformsAreExplicitNoops) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_edit_commands) {
     RUN(commandSetIsExactAndImmutable);
     RUN(singleSelectionHandFixturesCoverEveryTransform);
     RUN(multipleSelectionHandFixturesCoverEveryTransform);

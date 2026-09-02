@@ -163,7 +163,7 @@ TEST(languageAndDocumentRecordsRoundTripForRecoveryOwner) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_settings_persistence) {
     RUN(linuxAndWindowsSeamsRestartWithTheSameSemantics);
     RUN(workspaceKeysFollowPlatformIdentityRules);
     RUN(unknownFutureFieldSurvivesWithoutBecomingASetting);

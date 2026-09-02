@@ -19,6 +19,15 @@ if(SSG_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
     endif()
 endif()
 
+option(SSG_ASSERTIONS "Keep C and C++ assertions enabled" OFF)
+if(SSG_ASSERTIONS)
+    if(MSVC)
+        add_compile_options(/UNDEBUG)
+    else()
+        add_compile_options(-UNDEBUG)
+    endif()
+endif()
+
 # Capture SSG's own source root immediately after project().  Manifests are
 # included() from this file and share its variable scope, so they see
 # SSG_SOURCE_DIR directly.  Manifests MUST use ${SSG_SOURCE_DIR} for all
@@ -26,13 +35,14 @@ endif()
 # host project root when SSG is loaded via add_subdirectory.
 set(SSG_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 include("${SSG_SOURCE_DIR}/cmake/ssg_layers.cmake")
+include("${SSG_SOURCE_DIR}/cmake/ssg_tests.cmake")
 
 # Sanitizer toggle: -DSSG_SANITIZE=ON enables AddressSanitizer + UBSanitizer.
-# Requires Clang or GCC.  Applied as PUBLIC so linked test executables inherit
+# Requires Clang or GCC.  Applied as PUBLIC so linked test targets inherit
 # the flags and link options.
 option(SSG_SANITIZE "Build with AddressSanitizer and UBSanitizer" OFF)
 # enable_testing() must precede the component-manifest loop so manifests can
-# register test executables.  Skipped when SSG is a subdirectory so host
+# register test suites.  Skipped when SSG is a subdirectory so host
 # projects are not contaminated with SSG's CTest entries.
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     enable_testing()
@@ -79,6 +89,7 @@ endfunction()
 
 ssg_configure_component(ssg_platform)
 ssg_configure_component(ssg_core)
+ssg_initialize_tests()
 
 # Auto-discover component manifests.  CONFIGURE_DEPENDS causes Ninja and
 # Makefile generators to re-glob when cmake/components/ changes, so new
@@ -95,10 +106,10 @@ ssg_configure_component(ssg_core)
 #      Never use CMAKE_SOURCE_DIR (breaks add_subdirectory consumers).
 #      The early app-tui-presentation manifest defines the top-level-only
 #      ssg_tui_objects target; other manifests may link but not extend it.
-#   2. Inside "if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)":
-#      create a standalone test executable, link the narrowest component it
-#      consumes, and register
-#      it with add_test().  Test target names must be unique across manifests.
+#   2. Inside "if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)", register ordinary
+#      runtime suites with ssg_add_test_suite and its ssg_test_* helpers.
+#      Standalone executables are reserved for products, benchmarks, probes, and
+#      build oracles whose executable identity is part of the contract.
 #      This guard is false when SSG is a subdirectory, so consumer projects
 #      are not contaminated with SSG's internal test targets.
 #   3. Add no component link edge absent from cmake/ssg_layers.cmake, use no
@@ -117,10 +128,8 @@ ssg_assert_layer_graph()
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_subdirectory(tests/fixtures/layers)
-
-    add_executable(ssg_tests
-        tests/test_ssg.cpp
-    )
-    target_link_libraries(ssg_tests PRIVATE ssg_core)
-    add_test(NAME ssg_tests COMMAND ssg_tests)
+    ssg_add_test_suite(
+        NAME ssg_tests
+        ENTRY tests/test_ssg.cpp
+        SYMBOL test_ssg)
 endif()

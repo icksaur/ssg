@@ -284,7 +284,7 @@ TEST(wellKnownAreasRejectAnAdditionalPanelChild) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_ui_tree) {
     RUN(wellFormedSchemaValidates);
     RUN(duplicateNodeIdAcrossSubtreesIsRejected);
     RUN(duplicateNodeIdAmongSiblingsIsRejected);

@@ -139,7 +139,7 @@ TEST(layoutIsTotalAcrossSizesAndUiStates) {
     }
 }
 
-int main() {
+SSG_TEST_SUITE(test_session_totality) {
     RUN(layoutIsTotalAcrossSizesAndUiStates);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

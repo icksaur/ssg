@@ -441,7 +441,7 @@ TEST(everyActiveFileMutatorIsRefusedInALiveDiffTab) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_name_clash) {
     RUN(saveAsRefusesAnOccupiedDestinationAndLeavesItIntact);
     RUN(renameRefusesAnOccupiedDestinationAndLeavesBothFilesIntact);
     RUN(newDirectoryRefusesAnOccupiedName);

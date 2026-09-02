@@ -144,7 +144,7 @@ TEST(tiesBreakToTheLowestIndex) {
 }
 
 
-int main() {
+SSG_TEST_SUITE(test_color) {
     RUN(truecolorIsIdentity);
     RUN(xterm256SwatchesMatchTheReference);
     RUN(indexed256MatchesReferenceOverBroadSample);

@@ -1271,7 +1271,7 @@ TEST(visualMovementUsesActivePaneAndDiscardsMismatchedProposal) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_session_snapshot) {
     RUN(constructionRejectsInvalidCwd);
     RUN(runtimeConstructsAttachesAndProducesLiveSnapshot);
     RUN(presentationProjectionRejectsARevisionThatChangedAfterCapture);

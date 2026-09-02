@@ -237,7 +237,7 @@ TEST(reconciledPatchCarriesItsApplicationId) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_mutation_patch) {
     RUN(showingANodeShowsItsAncestors);
     RUN(hidingAContainerHidesItsSubtree);
     RUN(toggleFlipsAgainstThePreState);

@@ -486,7 +486,7 @@ TEST(compiledKeymapCarriesTheNameOfAnUncataloguedCommand) {
     ASSERT_EQ(std::string{resolution.command.name()}, std::string{"file.saev"});
 }
 
-int main() {
+SSG_TEST_SUITE(test_input) {
     RUN(keyStrokesHaveACanonicalRoundTrip);
     RUN(validateKeymapFlagsDuplicateAndUnreachableBindings);
     RUN(keymapContextsAreStarPlusFocusNames);

@@ -229,7 +229,7 @@ TEST(indexDoesNotDescendIntoSymlinkedDirectories) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_workspace_file_index) {
     RUN(indexListsEveryTrackedFileAndNoDirectories);
     RUN(indexCandidateCarriesPathAsIdFilenameAsLabelAndParentAsDetail);
     RUN(indexWithoutGitignoreFilteringReappearsTheIgnoredSubtree);

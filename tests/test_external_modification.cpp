@@ -498,7 +498,7 @@ TEST(aSelectionOnlyExternalDeltaReplaysToTheMovedSelection) {
     ASSERT_FALSE(codec.replay(base, dangling).accepted());
 }
 
-int main() {
+SSG_TEST_SUITE(test_external_modification) {
     RUN(commandSetIsCompleteAndOrdered);
     RUN(cleanExternalEditAutoReloadsWithoutRecoveryStatus);
     RUN(aFailedCleanCommitRaisesTheConflictInsteadOfClearing);

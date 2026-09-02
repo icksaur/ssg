@@ -332,7 +332,7 @@ TEST(viewStateAndCommandExportsAreExact) {
 }  // namespace
 }  // namespace ssg
 
-int main() {
+SSG_TEST_SUITE(test_find_replace) {
     RUN(ssg::literalCaseWordAndSelectionMatchIndependentOracle);
     RUN(ssg::regexOracleCoversGrammarCaseWordAndInvalidPattern);
     RUN(ssg::zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels);

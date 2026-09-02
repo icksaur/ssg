@@ -259,7 +259,7 @@ TEST(editorOverScrollResolvesToTheHandComputedMaximum) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_scroll_offset) {
     RUN(scrollOffsetByLinesMatchesAnIndependentShift);
     RUN(scrollOffsetByPagesEqualsThatManyWindowsOfLines);
     RUN(scrollOffsetToFractionMatchesAnIndependentComputation);

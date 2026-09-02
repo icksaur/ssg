@@ -48,7 +48,7 @@ TEST(languageDetectionFromPath) {
     }
 }
 
-int main() {
+SSG_TEST_SUITE(test_syntax_language_detection) {
     RUN(languageDetectionFromPath);
     if (failed != 0) {
         std::cerr << "FAILED (" << failed << " failures, " << passed

@@ -537,7 +537,7 @@ TEST(supersededRenameResponseCannotReplaceNewerResult) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_lsp_workspace_edit) {
     RUN(commandSetExportsTheSingleNormativeRenameAction);
     RUN(unicodePositionFixtureAppliesExpectedEdit);
     RUN(validationRejectsMalformedRangesBeforeAnyMutation);

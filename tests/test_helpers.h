@@ -47,6 +47,9 @@ inline int failed = 0;
 
 #define TEST(name) static void name()
 
+#define SSG_TEST_SUITE(name) int ssg_test_entry_##name()
+#define SSG_TEST_SUITE_ARGS(name) int ssg_test_entry_##name(int argc, char** argv)
+
 #define RUN(name)                                             \
     do {                                                      \
         std::cout << "  " << #name << "\n";                  \

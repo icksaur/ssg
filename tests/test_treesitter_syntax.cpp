@@ -165,7 +165,7 @@ TEST(embeddedQueryTextMatchesTheVendorFilesByteForByte) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_treesitter_syntax) {
     RUN(treeSitterSyntaxGoldenByLanguage);
     RUN(parserSourceContainsNoRuntimeFileReading);
     RUN(embeddedQueryTextMatchesTheVendorFilesByteForByte);

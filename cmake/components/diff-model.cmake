@@ -3,15 +3,16 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_diff
-        ${SSG_SOURCE_DIR}/tests/test_diff.cpp
-    )
-    target_include_directories(test_diff PRIVATE
+    ssg_add_test_suite(
+        NAME test_diff
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_diff.cpp
+        SYMBOL test_diff)
+    ssg_test_include_directories(test_diff PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_compile_definitions(test_diff PRIVATE
+    ssg_test_compile_definitions(test_diff PRIVATE
         SSG_DIFF_FIXTURE_DIR="${SSG_SOURCE_DIR}/tests/fixtures/diff"
     )
-    target_link_libraries(test_diff PRIVATE ssg_core)
-    add_test(NAME test_diff COMMAND test_diff)
+    ssg_test_link_libraries(test_diff PRIVATE ssg_core)
+
 endif()

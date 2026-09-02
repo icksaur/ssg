@@ -311,7 +311,7 @@ TEST(appendRejectsInvalidSavedIdentityAndInvalidUtf8) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_scratch_journal) {
     RUN(checkpointEncodingMatchesCrossPlatformByteFixture);
     RUN(baselineRoundTripsThroughDocumentAndCheckpoint);
     RUN(legacyV1RecordReplaysWithUnknownBaseline);

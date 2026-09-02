@@ -939,7 +939,7 @@ TEST(advPrependExtendBreaksGb9b) {
 
 // ---------------------------------------------------------------------------
 
-int main() {
+SSG_TEST_SUITE(test_cell_layout) {
 
     // ASCII
     RUN(asciiEmpty);

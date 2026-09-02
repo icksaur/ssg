@@ -317,7 +317,7 @@ TEST(principalCapabilityEnforcementUsesTheInProcessAuthority) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_session) {
     RUN(totalOrderAndRegisteredDispatch);
     RUN(staleRejectionAppliesOnlyToMutations);
     RUN(viewActionsAreStampedWithoutAdvancingSemanticState);

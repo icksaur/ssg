@@ -217,7 +217,7 @@ TEST(lineEndingDistinctValues) {
 
 // ---------------------------------------------------------------------------
 
-int main() {
+SSG_TEST_SUITE(test_types) {
     std::cout << "=== SSG types tests ===" << "\n";
 
     RUN(revisionDefaultIsZero);

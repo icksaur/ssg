@@ -184,7 +184,7 @@ TEST(viewDeltaReportsRegisterAndRequestChanges) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_clipboard) {
     RUN(commandSetOwnsClipboardCommands);
     RUN(copyCapturesFragmentsLinesAndExactPlainPayload);
     RUN(lineCopyPreservesDuplicatesAndEmptyFinalLine);

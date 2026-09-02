@@ -13,8 +13,8 @@ Linux and Windows are the required platforms.
 
 ## Build
 
-Configure once with the `dev` preset (Ninja + ccache, Debug), then iterate with
-a single build command:
+Configure once with the `dev` preset (Ninja + ccache, size optimized with
+assertions enabled), then iterate with a single build command:
 
 ```sh
 cmake --preset dev     # one-time configuration into build/
@@ -24,8 +24,9 @@ cmake --build build    # steady-state build
 Fast inner loop for iteration:
 
 ```sh
-cmake --build build --target test_document   # build only the target you touched
-ctest --preset dev                           # fast unit tests (~0.3s)
+cmake --build build --target ssg_tests
+ctest --test-dir build -R '^test_document$' --output-on-failure
+ctest --preset dev
 ```
 
 `ctest --preset dev` excludes the performance, recovery, and theme suites so the
@@ -35,8 +36,10 @@ unit loop stays sub-second. Run everything with:
 ctest --preset all
 ```
 
-Release and sanitizer builds use their own presets and out-of-source build
-directories (`build-release/`, `build-sanitize/`):
+Production Release and symbolic sanitizer builds use their own presets and
+out-of-source build directories (`build-release/`, `build-sanitize/`). Full
+debug information is kept in the sanitizer build, where failure diagnostics
+need it:
 
 ```sh
 cmake --preset release && cmake --build build-release

@@ -500,7 +500,7 @@ TEST(eventModeRefreshesGitMetadataWithoutIdleFullScans) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_git_diff_host) {
     RUN(gitDiffHostWorkerPollingAndEventRefreshProduceExpectedDiffView);
     RUN(gitDiffHostWorkerStartsFromSubdirectoryWorkspace);
     RUN(gitDiffHostWorkerPublishesGitTreeProviderMatchingPorcelain);

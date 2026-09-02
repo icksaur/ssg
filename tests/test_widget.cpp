@@ -30,7 +30,7 @@ TEST(widgetAndViewSurfaceNamesRejectCorruptValues) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_widget) {
     RUN(widgetAndViewSurfaceNamesCoverTheirClosedInventories);
     RUN(widgetAndViewSurfaceNamesRejectCorruptValues);
     return failed == 0 ? 0 : 1;

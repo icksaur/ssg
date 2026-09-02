@@ -160,7 +160,7 @@ TEST(builderSettersReachTheRenderedScreen) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_session_snapshot_builder) {
     RUN(builtSnapshotRendersTheDocumentLikeTheRealRuntime);
     RUN(theBuilderProducesARenderableScreenWithoutAnyFilesystem);
     RUN(builderSettersReachTheRenderedScreen);

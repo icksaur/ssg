@@ -3,12 +3,14 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_scratch_session
-        ${SSG_SOURCE_DIR}/tests/test_scratch_session.cpp
-    )
-    target_include_directories(test_scratch_session PRIVATE
+    ssg_add_test_suite(
+        NAME test_scratch_session
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_scratch_session.cpp
+        SYMBOL test_scratch_session
+        ARGS)
+    ssg_test_include_directories(test_scratch_session PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_scratch_session PRIVATE ssg_core)
-    add_test(NAME test_scratch_session COMMAND test_scratch_session)
+    ssg_test_link_libraries(test_scratch_session PRIVATE ssg_core)
+
 endif()

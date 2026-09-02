@@ -95,7 +95,7 @@ TEST(realRuntimeSnapshotRendersDeterministicallyWithinTheme) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_tui_fixture) {
     RUN(terminalEventsResolveThroughPublishedInputModels);
     RUN(realRuntimeSnapshotRendersDeterministicallyWithinTheme);
     return failed == 0 ? 0 : 1;

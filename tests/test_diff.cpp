@@ -617,7 +617,7 @@ TEST(gitScanClassificationDistinguishesGitFromNonGitEntries) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_diff) {
     RUN(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines);
     RUN(modifiedLineMarksOnlyChangedWordTokens);
     RUN(wordDiffWorkLimitIsFailureAtomic);

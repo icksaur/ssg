@@ -265,7 +265,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
     fs::remove_all(root);
 }
 
-int main() {
+SSG_TEST_SUITE(test_startup_path) {
     // M10-2 static-init probe: nothing optional may construct before main (no
     // self-registering globals); the ledger must be empty at process entry.
     if (ssg::optionalConstructionTotal() != 0) {

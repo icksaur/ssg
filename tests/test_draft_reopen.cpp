@@ -94,7 +94,7 @@ TEST(crlfFileUsesRawBytesForHashAndDecodedTextForConvergence) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_draft_reopen) {
     RUN(missingDiskContentClassifiesMissing);
     RUN(draftEqualToDiskClassifiesConverged);
     RUN(diskMatchingBaselineHashClassifiesUnchanged);

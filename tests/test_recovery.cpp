@@ -1003,7 +1003,7 @@ TEST(recordKindMismatchesAreTypedAndNonDestructive) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_recovery) {
     RUN(dirtyCloseIsDurableBeforeRemovalAndRestoresExactDocument);
     RUN(dirtyCloseDurabilityFailurePreservesDocumentAndPublishesNothing);
     RUN(reloadCompensationSurvivesReconstructionAndRestoresExactDocument);

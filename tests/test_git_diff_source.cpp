@@ -412,7 +412,7 @@ TEST(gitDiffModeDefaultsToEventWithWatcherAndPollWithout) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_git_diff_source) {
     RUN(referenceReconcileMatchesScriptedScans);
     RUN(fullScanRejectsAtomicallyWithoutPartialPublication);
     RUN(incompleteScanKeepsPublishedDiffSet);

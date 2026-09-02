@@ -224,7 +224,7 @@ TEST(openEquivalenceMatchesGolden) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_open_equivalence) {
     RUN(openEquivalenceMatchesGolden);
     std::cout << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;

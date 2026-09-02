@@ -332,7 +332,7 @@ TEST(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_tabs) {
     RUN(commandSetExactlyOwnsNineTabCommands);
     RUN(duplicateDocumentIdentityActivatesExistingTab);
     RUN(allTabKindsNavigateCyclicallyAndReorder);

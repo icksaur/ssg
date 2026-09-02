@@ -3078,7 +3078,7 @@ TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
     fs::remove_all(root);
 }
 
-int main() {
+SSG_TEST_SUITE(test_ssg_app) {
     RUN(resolveLaunchNoArgumentOpensCwd);
     RUN(resolveLaunchDirectoryOpensThatDirectory);
     RUN(resolveLaunchFileOpensParentDirectoryAndFile);

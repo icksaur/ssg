@@ -326,7 +326,7 @@ TEST(aGateMayNotReEnterTheHostItIsGating) {
     ASSERT_TRUE(host.hasCommand("outer"));
 }
 
-int main() {
+SSG_TEST_SUITE(test_lua) {
     RUN(requiredCatalogMinusExclusionsIsCallable);
     RUN(capabilitiesAreImmutableAndCheckedBeforeDispatch);
     RUN(generationalHandlesRejectStaleAccessAfterReuse);

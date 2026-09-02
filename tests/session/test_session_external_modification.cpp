@@ -1052,7 +1052,7 @@ TEST(aHostRoutesExternalKeysInTheExternalContextWhenExternalFocusHeld) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_session_external_modification) {
     RUN(anOpenDocumentChangedOnDiskPopulatesTheExternalSection);
     RUN(anOpenDocumentRemovedOnDiskPublishesRemovedStatusAndItsActions);
     RUN(aChangeToANonOpenFileRaisesNoExternalSection);

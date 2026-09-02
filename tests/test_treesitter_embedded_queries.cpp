@@ -111,7 +111,7 @@ TEST(derivedGrammarsCarryTheirInheritedQueryText) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_treesitter_embedded_queries) {
     RUN(everyVendoredGrammarCarriesItsQueryTextInMemory);
     RUN(embeddedQueryTextMatchesTheVendorFilesByteForByte);
     RUN(derivedGrammarsCarryTheirInheritedQueryText);

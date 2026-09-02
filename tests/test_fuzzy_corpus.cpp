@@ -110,7 +110,7 @@ TEST(referenceRankRejectsAnOversizedCandidateAtTheBoundary) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_fuzzy_corpus) {
     RUN(referenceRankReproducesTheCorpusOrdering);
     RUN(referenceRankRejectsOutOfDomainParametersAtTheBoundary);
     RUN(referenceRankRejectsAnOversizedCandidateAtTheBoundary);

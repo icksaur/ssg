@@ -51,7 +51,7 @@ TEST(theAuthoritativeKeymapHasNoMultiStrokeBindingSoSingleStrokeResolutionIsComp
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_keymap_single_stroke) {
     RUN(theAuthoritativeKeymapHasNoMultiStrokeBindingSoSingleStrokeResolutionIsComplete);
     return 0;
 }

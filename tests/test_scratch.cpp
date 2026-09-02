@@ -279,7 +279,7 @@ TEST(shutdownDrainsAndRejectsNewMutations) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_scratch) {
     RUN(compactionPreservesReplayAndLeavesOneAtomicCheckpoint);
     RUN(startupImportsBeforeMarkingRemnantRestored);
     RUN(failedImportKeepsRemnantRetryable);

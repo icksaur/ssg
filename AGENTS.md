@@ -96,8 +96,9 @@ it.
 - Do not golden presentation taste, internal structure, inventories, or counts.
 - A behavior-preserving refactor needs no new test when an existing focused test
   would fail on regression.
-- Do not add a test framework; tests are standalone executables using
-  `tests/test_helpers.h`.
+- Do not add a test framework; ordinary tests are suites in the shared
+  `ssg_tests` binary, use `tests/test_helpers.h`, and are registered through
+  `ssg_add_test_suite`.
 
 ## Orientation and workflow
 

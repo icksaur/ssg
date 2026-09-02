@@ -3,9 +3,10 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_clipboard
-        ${SSG_SOURCE_DIR}/tests/test_clipboard.cpp
-    )
-    target_link_libraries(test_clipboard PRIVATE ssg_core)
-    add_test(NAME test_clipboard COMMAND test_clipboard)
+    ssg_add_test_suite(
+        NAME test_clipboard
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_clipboard.cpp
+        SYMBOL test_clipboard)
+    ssg_test_link_libraries(test_clipboard PRIVATE ssg_core)
+
 endif()

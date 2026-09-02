@@ -311,7 +311,7 @@ TEST(historyEditKindClassifiesEveryTextInputCommand) {
                 ssg::HistoryEditKind::DeleteForward);
 }
 
-int main() {
+SSG_TEST_SUITE(test_text_input_commands) {
     RUN(commandSetIsExactAndImmutable);
     RUN(singleCaretInsertAndSelectionReplacement);
     RUN(multipleCaretsInsertOnceEach);

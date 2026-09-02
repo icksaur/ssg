@@ -5,33 +5,34 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_input
-        ${SSG_SOURCE_DIR}/tests/test_input.cpp
-    )
-    target_link_libraries(test_input PRIVATE ssg_core)
-    target_include_directories(test_input PRIVATE
+    ssg_add_test_suite(
+        NAME test_input
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_input.cpp
+        SYMBOL test_input)
+    ssg_test_link_libraries(test_input PRIVATE ssg_core)
+    ssg_test_include_directories(test_input PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_compile_definitions(test_input PRIVATE
+    ssg_test_compile_definitions(test_input PRIVATE
         SSG_SOURCE_PATH="${SSG_SOURCE_DIR}/src"
     )
-    add_test(NAME test_input COMMAND test_input)
 
-    add_executable(test_prompt_routing
-        ${SSG_SOURCE_DIR}/tests/test_prompt_routing.cpp
-    )
-    target_link_libraries(test_prompt_routing PRIVATE ssg_core)
-    target_include_directories(test_prompt_routing PRIVATE
+    ssg_add_test_suite(
+        NAME test_prompt_routing
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_prompt_routing.cpp
+        SYMBOL test_prompt_routing)
+    ssg_test_link_libraries(test_prompt_routing PRIVATE ssg_core)
+    ssg_test_include_directories(test_prompt_routing PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    add_test(NAME test_prompt_routing COMMAND test_prompt_routing)
 
-    add_executable(test_keymap_single_stroke
-        ${SSG_SOURCE_DIR}/tests/test_keymap_single_stroke.cpp
-    )
-    target_link_libraries(test_keymap_single_stroke PRIVATE ssg_core)
-    target_include_directories(test_keymap_single_stroke PRIVATE
+    ssg_add_test_suite(
+        NAME test_keymap_single_stroke
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_keymap_single_stroke.cpp
+        SYMBOL test_keymap_single_stroke)
+    ssg_test_link_libraries(test_keymap_single_stroke PRIVATE ssg_core)
+    ssg_test_include_directories(test_keymap_single_stroke PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    add_test(NAME test_keymap_single_stroke COMMAND test_keymap_single_stroke)
+
 endif()

@@ -589,7 +589,7 @@ TEST(parseConvenienceRejectsAParserThatCancelsMidParse) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_syntax) {
     RUN(handComputedMetadataGoldenCoversAllExportedSections);
     RUN(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse);
     RUN(supersededAndCancelledResultsNeverReplaceNewerState);

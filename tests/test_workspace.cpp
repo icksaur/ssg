@@ -377,7 +377,7 @@ TEST(undoingReloadRestoresThePreReloadBaseline) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_workspace) {
     RUN(openIsByteExactAndPreventsNormalizedDuplicates);
     RUN(pathsCannotEscapeWorkspaceBeforeMutation);
     RUN(untitledIdentityChangesOnlyAfterSuccessfulSave);

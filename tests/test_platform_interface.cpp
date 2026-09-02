@@ -1,3 +1,5 @@
+#include "test_helpers.h"
+
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/platform_files.h>
 
@@ -56,7 +58,7 @@ static_assert(!std::copyable<ssg::ExclusiveFileLock>);
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_platform_interface) {
     // Taking each address in an executable forces the selected platform
     // implementation to provide the public symbol, not merely parse the header.
     [[maybe_unused]] auto validateWorkspaceRelativePath =

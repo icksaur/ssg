@@ -317,7 +317,7 @@ TEST(closingTabDestroysDocumentRuntimeState) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_syntax_injection) {
     RUN(injectedParserDrivesHighlighting);
     RUN(nullParserYieldsPlainText);
     RUN(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame);

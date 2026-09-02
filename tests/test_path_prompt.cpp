@@ -239,7 +239,7 @@ TEST(updatingAValueWithNoPromptOpenIsRejected) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_path_prompt) {
     RUN(pathPromptFlagAgreesWithThePathPromptAccessor);
     RUN(everyPathCommandWithoutAPayloadOpensAPathPrompt);
     RUN(aPathCommandThatCannotRunRefusesInsteadOfPrompting);

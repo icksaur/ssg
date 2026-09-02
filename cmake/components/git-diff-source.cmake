@@ -57,30 +57,31 @@ if(EXISTS "${SSG_SOURCE_DIR}/vendor/libgit2/CMakeLists.txt")
 endif()
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_git_diff_source
-        ${SSG_SOURCE_DIR}/tests/test_git_diff_source.cpp
-    )
-    target_include_directories(test_git_diff_source PRIVATE
+    ssg_add_test_suite(
+        NAME test_git_diff_source
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_git_diff_source.cpp
+        SYMBOL test_git_diff_source)
+    ssg_test_include_directories(test_git_diff_source PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_git_diff_source PRIVATE ssg_core)
-    add_test(NAME test_git_diff_source COMMAND test_git_diff_source)
+    ssg_test_link_libraries(test_git_diff_source PRIVATE ssg_core)
 
-    add_executable(test_git_repository
-        ${SSG_SOURCE_DIR}/tests/test_git_repository.cpp
-    )
-    target_include_directories(test_git_repository PRIVATE
+    ssg_add_test_suite(
+        NAME test_git_repository
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_git_repository.cpp
+        SYMBOL test_git_repository)
+    ssg_test_include_directories(test_git_repository PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_git_repository PRIVATE ssg_core)
-    add_test(NAME test_git_repository COMMAND test_git_repository)
+    ssg_test_link_libraries(test_git_repository PRIVATE ssg_core)
 
-    add_executable(test_git_diff_host
-        ${SSG_SOURCE_DIR}/tests/test_git_diff_host.cpp
-    )
-    target_include_directories(test_git_diff_host PRIVATE
+    ssg_add_test_suite(
+        NAME test_git_diff_host
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_git_diff_host.cpp
+        SYMBOL test_git_diff_host)
+    ssg_test_include_directories(test_git_diff_host PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_git_diff_host PRIVATE ssg_core)
-    add_test(NAME test_git_diff_host COMMAND test_git_diff_host)
+    ssg_test_link_libraries(test_git_diff_host PRIVATE ssg_core)
+
 endif()

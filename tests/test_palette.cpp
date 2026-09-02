@@ -71,7 +71,7 @@ TEST(ghostEmptyWhenQueryIsNotAPrefix) {
     ASSERT_EQ(ssg::PaletteSearcher{}.ghost("Sa", "save"), std::string{});
 }
 
-int main() {
+SSG_TEST_SUITE(test_palette) {
     RUN(emptyQueryKeepsAllInLabelOrder);
     RUN(prefixQueryRanksWordBoundaryMatchesFirst);
     RUN(nonSubsequenceQueryIsFilteredOut);

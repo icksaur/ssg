@@ -31,7 +31,8 @@
 #
 # Env:
 #   BUILD_DIR   build directory (default: build)
-#   BUILD_TYPE  CMake build type (default: Debug)
+#   BUILD_TYPE  CMake build type (default: MinSizeRel)
+#   ASSERTIONS  Keep assertions enabled (default: ON)
 #
 # Ninja is parallel by default (uses all cores); ccache (wired in CMakeLists.txt)
 # makes re-builds of an already-seen tree near-instant.
@@ -39,7 +40,8 @@
 set -u
 BUILD_DIR="${BUILD_DIR:-build}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
-BUILD_TYPE="${BUILD_TYPE:-Debug}"
+BUILD_TYPE="${BUILD_TYPE:-MinSizeRel}"
+ASSERTIONS="${ASSERTIONS:-ON}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
@@ -49,7 +51,8 @@ trap 'rm -f "$log"' EXIT
 configure() {
     if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
         if ! cmake -S . -B "$BUILD_DIR" -G Ninja \
-                -DCMAKE_BUILD_TYPE="$BUILD_TYPE" >"$log" 2>&1; then
+                -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+                -DSSG_ASSERTIONS="$ASSERTIONS" >"$log" 2>&1; then
             echo "CONFIGURE FAILED:"; cat "$log"; return 1
         fi
     fi

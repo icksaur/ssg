@@ -149,7 +149,7 @@ TEST(rejectsOutOfRangeOperationsWithoutMutation) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_piece_tree) {
     RUN(originalBufferAndBoundaryQueries);
     RUN(randomizedStdStringOracleAndInvariants);
     RUN(rejectsOutOfRangeOperationsWithoutMutation);

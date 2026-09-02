@@ -315,7 +315,7 @@ TEST(pruningReportsButNeverFailsTheCallerWhenAnEntryCannotBeRemoved) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_file_archive) {
     RUN(archivingPreservesTheBytesAndTheRelativePath);
     RUN(archivingTheSameNameTwiceKeepsBothCopies);
     RUN(archivingRefusesAPathOutsideTheWorkspace);

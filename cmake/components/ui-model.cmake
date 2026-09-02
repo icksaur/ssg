@@ -11,57 +11,58 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/InteractionAuthority.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_widget
-        ${SSG_SOURCE_DIR}/tests/test_widget.cpp
-    )
-    target_link_libraries(test_widget PRIVATE ssg_core)
-    add_test(NAME test_widget COMMAND test_widget)
+    ssg_add_test_suite(
+        NAME test_widget
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_widget.cpp
+        SYMBOL test_widget)
+    ssg_test_link_libraries(test_widget PRIVATE ssg_core)
 
-    add_executable(test_widget_layout
-        ${SSG_SOURCE_DIR}/tests/test_widget_layout.cpp
-    )
-    target_link_libraries(test_widget_layout PRIVATE ssg_tui_objects)
-    add_test(NAME test_widget_layout COMMAND test_widget_layout)
+    ssg_add_test_suite(
+        NAME test_widget_layout
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_widget_layout.cpp
+        SYMBOL test_widget_layout)
+    ssg_test_link_libraries(test_widget_layout PRIVATE ssg_tui_objects)
 
-    add_executable(test_ui_tree
-        ${SSG_SOURCE_DIR}/tests/test_ui_tree.cpp
-    )
-    target_link_libraries(test_ui_tree PRIVATE ssg_core)
-    add_test(NAME test_ui_tree COMMAND test_ui_tree)
+    ssg_add_test_suite(
+        NAME test_ui_tree
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_ui_tree.cpp
+        SYMBOL test_ui_tree)
+    ssg_test_link_libraries(test_ui_tree PRIVATE ssg_core)
 
-    add_executable(test_ui_node_state
-        ${SSG_SOURCE_DIR}/tests/test_ui_node_state.cpp
-    )
-    target_link_libraries(test_ui_node_state PRIVATE ssg_tui_objects)
-    add_test(NAME test_ui_node_state COMMAND test_ui_node_state)
+    ssg_add_test_suite(
+        NAME test_ui_node_state
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_ui_node_state.cpp
+        SYMBOL test_ui_node_state)
+    ssg_test_link_libraries(test_ui_node_state PRIVATE ssg_tui_objects)
 
-    add_executable(test_ui_frame
-        ${SSG_SOURCE_DIR}/tests/test_ui_frame.cpp
-    )
-    target_link_libraries(test_ui_frame PRIVATE ssg_core)
-    add_test(NAME test_ui_frame COMMAND test_ui_frame)
+    ssg_add_test_suite(
+        NAME test_ui_frame
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_ui_frame.cpp
+        SYMBOL test_ui_frame)
+    ssg_test_link_libraries(test_ui_frame PRIVATE ssg_core)
 
-    add_executable(test_mutation_patch
-        ${SSG_SOURCE_DIR}/tests/test_mutation_patch.cpp
-    )
-    target_link_libraries(test_mutation_patch PRIVATE ssg_core)
-    add_test(NAME test_mutation_patch COMMAND test_mutation_patch)
+    ssg_add_test_suite(
+        NAME test_mutation_patch
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_mutation_patch.cpp
+        SYMBOL test_mutation_patch)
+    ssg_test_link_libraries(test_mutation_patch PRIVATE ssg_core)
 
-    add_executable(test_keyboard_focus
-        ${SSG_SOURCE_DIR}/tests/test_keyboard_focus.cpp
-    )
-    target_link_libraries(test_keyboard_focus PRIVATE ssg_core)
-    add_test(NAME test_keyboard_focus COMMAND test_keyboard_focus)
+    ssg_add_test_suite(
+        NAME test_keyboard_focus
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_keyboard_focus.cpp
+        SYMBOL test_keyboard_focus)
+    ssg_test_link_libraries(test_keyboard_focus PRIVATE ssg_core)
 
-    add_executable(test_ui_view_surface
-        ${SSG_SOURCE_DIR}/tests/test_ui_view_surface.cpp
-    )
-    target_link_libraries(test_ui_view_surface PRIVATE ssg_tui_objects)
-    add_test(NAME test_ui_view_surface COMMAND test_ui_view_surface)
+    ssg_add_test_suite(
+        NAME test_ui_view_surface
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_ui_view_surface.cpp
+        SYMBOL test_ui_view_surface)
+    ssg_test_link_libraries(test_ui_view_surface PRIVATE ssg_tui_objects)
 
-    add_executable(test_interaction_authority
-        ${SSG_SOURCE_DIR}/tests/test_interaction_authority.cpp
-    )
-    target_link_libraries(test_interaction_authority PRIVATE ssg_core)
-    add_test(NAME test_interaction_authority COMMAND test_interaction_authority)
+    ssg_add_test_suite(
+        NAME test_interaction_authority
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_interaction_authority.cpp
+        SYMBOL test_interaction_authority)
+    ssg_test_link_libraries(test_interaction_authority PRIVATE ssg_core)
+
 endif()

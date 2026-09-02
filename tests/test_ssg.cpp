@@ -6,7 +6,7 @@ TEST(testLibraryName) {
     ASSERT_EQ(ssg::kLibraryName, "ssg");
 }
 
-int main() {
+SSG_TEST_SUITE(test_ssg) {
     std::cout << "=== SSG smoke tests ===" << std::endl;
     RUN(testLibraryName);
 

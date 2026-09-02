@@ -374,7 +374,7 @@ TEST(helpTabIsHighlightedAsMarkdown) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_help) {
     RUN(helpOpenOpensAReadOnlyOutputTab);
     RUN(helpDocumentContainsProseAndTheLiveKeybinding);
     RUN(helpDocumentListsChromeGlyphsIncludingTabGlyphsWithValues);

@@ -255,7 +255,7 @@ TEST(softDiagnosticRejectionDoesNotDropLaterFramedMessages) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(test_lsp_sync) {
     RUN(frameDecoderHandlesFragmentationAndMultipleMessages);
     RUN(frameDecoderRejectsMalformedOrUnboundedHeaders);
     RUN(utf8Utf16PositionsMatchHandComputedFixture);

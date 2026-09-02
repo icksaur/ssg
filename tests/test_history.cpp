@@ -332,7 +332,7 @@ TEST(viewStateAndDeltaTrackHistoryAvailability) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_history) {
     RUN(commandSetOwnsUndoAndRedo);
     RUN(referenceForwardUndoRedoRoundTrips);
     RUN(typingCoalescesAtInclusiveClockBoundary);

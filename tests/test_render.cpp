@@ -2259,7 +2259,7 @@ TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
     fs::remove_all(root);
 }
 
-int main() {
+SSG_TEST_SUITE(test_render) {
     RUN(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer);
     RUN(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument);
     RUN(headerAndFooterCellsAndHitsUseTheSolvedTree);

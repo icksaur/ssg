@@ -7,21 +7,22 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    add_executable(test_settings
-        ${SSG_SOURCE_DIR}/tests/test_settings.cpp
-    )
-    target_include_directories(test_settings PRIVATE
+    ssg_add_test_suite(
+        NAME test_settings
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_settings.cpp
+        SYMBOL test_settings)
+    ssg_test_include_directories(test_settings PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_settings PRIVATE ssg_core)
-    add_test(NAME test_settings COMMAND test_settings)
+    ssg_test_link_libraries(test_settings PRIVATE ssg_core)
 
-    add_executable(test_settings_persistence
-        ${SSG_SOURCE_DIR}/tests/test_settings_persistence.cpp
-    )
-    target_include_directories(test_settings_persistence PRIVATE
+    ssg_add_test_suite(
+        NAME test_settings_persistence
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_settings_persistence.cpp
+        SYMBOL test_settings_persistence)
+    ssg_test_include_directories(test_settings_persistence PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_settings_persistence PRIVATE ssg_core)
-    add_test(NAME test_settings_persistence COMMAND test_settings_persistence)
+    ssg_test_link_libraries(test_settings_persistence PRIVATE ssg_core)
+
 endif()

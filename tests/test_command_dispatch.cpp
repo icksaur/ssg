@@ -793,7 +793,7 @@ TEST(aggregateOperationHidesIntermediateDeferredRevisions) {
 
 }  // namespace
 
-int main() {
+SSG_TEST_SUITE(test_command_dispatch) {
     RUN(executorThreadsServicesThroughTheCommonDispatchPath);
     RUN(viewActionResultsRemainExplicitAcrossTheAggregateBoundary);
     RUN(revisionAdvancesExactlyOncePerAcceptedMutation);

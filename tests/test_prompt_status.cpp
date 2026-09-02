@@ -412,7 +412,7 @@ TEST(footerProjectionAndAccessibilityMatchGolden) {
 
 } // namespace
 
-int main() {
+SSG_TEST_SUITE(ssg_prompt_status_tests) {
     RUN(eachPromptKindComposesItsControlsWithinTheReservation);
     RUN(promptRowsAndInvalidReservationAreTyped);
     RUN(promptSubmitAndCancelAreNonModal);
