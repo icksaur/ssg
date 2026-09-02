@@ -74,30 +74,17 @@ struct ExternalDiffRevision {
     Revision revision{0};
 };
 
-enum class ExternalDiffBurstError {
+enum class DiffIngressError {
     None,
     EmptyBurst,
     DiffRejected,
     FollowRejected,
 };
 
-struct ExternalDiffBurstResult {
-    ExternalDiffBurstError error = ExternalDiffBurstError::None;
+struct DiffIngressResult {
+    DiffIngressError error = DiffIngressError::None;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ExternalDiffBurstError::None;
-    }
-};
-
-enum class GitDiffScanError {
-    None,
-    DiffRejected,
-    FollowRejected,
-};
-
-struct GitDiffScanResult {
-    GitDiffScanError error = GitDiffScanError::None;
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == GitDiffScanError::None;
+        return error == DiffIngressError::None;
     }
 };
 
@@ -170,9 +157,9 @@ public:
 
     [[nodiscard]] Revision revision() const;
     [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
-    [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(
+    [[nodiscard]] DiffIngressResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
-    [[nodiscard]] GitDiffScanResult applyGitDiffScan(GitDiffScan scan);
+    [[nodiscard]] DiffIngressResult applyGitDiffScan(GitDiffScan scan);
     // Resets the live keymap to defaultTerminalKeymap() -- the same
     // hand-reviewed keymap installed at EditorSession::create. Called by
     // the host (apps/ssg_main.cpp) immediately before every init.lua

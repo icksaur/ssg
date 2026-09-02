@@ -443,6 +443,4 @@ SearchPublishResult SearchController::publish(
     return SearchPublishResult::Accepted;
 }
 
-SearchCommandSet searchCommandSet() { return {}; }
-
 } // namespace ssg

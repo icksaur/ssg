@@ -1,4 +1,4 @@
-#include <ssg/open_metrics.h>
+#include "open_metrics.h"
 
 #include <array>
 #include <chrono>

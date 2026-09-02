@@ -7,7 +7,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -85,24 +84,6 @@ void runFixture(const Fixture& fixture) {
         document.snapshot(), fixtureSelections(fixture),
         fixture.commandSettings, fixture.command);
     ASSERT_EQ(apply(document, result), fixture.expected);
-}
-
-TEST(commandSetIsExactAndImmutable) {
-    static_assert(!std::is_copy_assignable_v<ssg::EditCommandSuiteCommandSet>);
-    constexpr std::array<std::string_view, 13> expected{{
-        "edit.indent",         "edit.outdent",
-        "edit.duplicate_line", "edit.move_line_up",
-        "edit.move_line_down", "edit.delete_line",
-        "edit.join_lines",     "edit.uppercase",
-        "edit.lowercase",      "edit.swap_case",
-        "edit.sort_lines",     "edit.transpose",
-        "edit.toggle_comment",
-    }};
-    const auto commands = ssg::editCommandSuiteCommandSet();
-    ASSERT_EQ(commands.descriptors().size(), expected.size());
-    for (std::size_t index = 0; index < expected.size(); ++index) {
-        ASSERT_EQ(commands.descriptors()[index].id, expected[index]);
-    }
 }
 
 TEST(singleSelectionHandFixturesCoverEveryTransform) {
@@ -303,7 +284,6 @@ TEST(unchangedTransformsAreExplicitNoops) {
 }  // namespace
 
 SSG_TEST_SUITE(test_edit_commands) {
-    RUN(commandSetIsExactAndImmutable);
     RUN(singleSelectionHandFixturesCoverEveryTransform);
     RUN(multipleSelectionHandFixturesCoverEveryTransform);
     RUN(commentToggleRemovesOnlyWhenAllNonblankLinesAreCommented);

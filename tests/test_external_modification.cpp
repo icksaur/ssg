@@ -64,12 +64,21 @@ struct Fixture {
     }
 };
 
-TEST(commandSetIsCompleteAndOrdered) {
-    const auto descriptors = ssg::externalModificationCommandSet().descriptors();
-    ASSERT_EQ(descriptors.size(), 3U);
-    ASSERT_EQ(descriptors[0].id, "external.reload");
-    ASSERT_EQ(descriptors[1].id, "external.keep_buffer");
-    ASSERT_EQ(descriptors[2].id, "external.open_diff");
+TEST(externalActionAffordanceReturnsLabelAndCommandForEachAction) {
+    const auto reload =
+        ssg::externalActionAffordance(ssg::ExternalAction::Reload);
+    ASSERT_EQ(reload.label, std::string{"Reload"});
+    ASSERT_EQ(reload.command, std::string{"external.reload"});
+
+    const auto keepBuffer =
+        ssg::externalActionAffordance(ssg::ExternalAction::KeepBuffer);
+    ASSERT_EQ(keepBuffer.label, std::string{"Keep"});
+    ASSERT_EQ(keepBuffer.command, std::string{"external.keep_buffer"});
+
+    const auto openDiff =
+        ssg::externalActionAffordance(ssg::ExternalAction::OpenDiff);
+    ASSERT_EQ(openDiff.label, std::string{"Diff"});
+    ASSERT_EQ(openDiff.command, std::string{"external.open_diff"});
 }
 
 TEST(cleanExternalEditAutoReloadsWithoutRecoveryStatus) {
@@ -499,7 +508,7 @@ TEST(aSelectionOnlyExternalDeltaReplaysToTheMovedSelection) {
 }
 
 SSG_TEST_SUITE(test_external_modification) {
-    RUN(commandSetIsCompleteAndOrdered);
+    RUN(externalActionAffordanceReturnsLabelAndCommandForEachAction);
     RUN(cleanExternalEditAutoReloadsWithoutRecoveryStatus);
     RUN(aFailedCleanCommitRaisesTheConflictInsteadOfClearing);
     RUN(aSucceedingCleanCommitAdoptsTheDiskContent);

@@ -1,5 +1,7 @@
 #include "editor_session_internal.h"
 
+#include "../file_commands.h"
+
 #include <algorithm>
 
 namespace ssg {
@@ -23,7 +25,7 @@ TabRecoveryBadge badgeFor(ScratchDurabilityState state) {
 // The live-diff rule's classification, read from the command's own descriptor
 // rather than re-derived here, so the rule and the catalog cannot disagree.
 bool mutatesTheActiveDocumentsFile(FileCommand command) {
-    const auto& descriptors = fileCommandsCommandSet().descriptors();
+    const auto& descriptors = kFileCommands;
     const auto* found = std::find_if(
         descriptors.begin(), descriptors.end(),
         [&](const FileCommandDescriptor& entry) {
@@ -92,7 +94,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
     // one, in ONE place rather than per command. A command that gains the
     // pathPrompt flag is wired by that fact alone, so the flag and the behavior
     // cannot drift apart.
-    const auto& descriptors = fileCommandsCommandSet().descriptors();
+    const auto& descriptors = kFileCommands;
     const auto* descriptor = std::find_if(
         descriptors.begin(), descriptors.end(),
         [&](const FileCommandDescriptor& entry) {
@@ -104,7 +106,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             return failure(*refusal);
         }
         auto opened =
-            runtime.interaction.openPrompt(fileCommandsCommandSet().pathPrompt(command));
+            runtime.interaction.openPrompt(fileCommandPathPrompt(command));
         if (!opened.accepted()) return failure(opened.error->message);
         return success();
     }
@@ -132,7 +134,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             auto path = stringPayload(payload);
             if (!path) {
                 auto opened = runtime.interaction.openPrompt(
-                    fileCommandsCommandSet().pathPrompt(command));
+                    fileCommandPathPrompt(command));
                 if (!opened.accepted()) return failure(opened.error->message);
                 return success();
             }
@@ -170,7 +172,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             if (state &&
                 state->key.kind() != JournalDocumentKeyKind::Saved) {
                 auto opened = runtime.interaction.openPrompt(
-                    fileCommandsCommandSet().pathPrompt(FileCommand::SaveAs));
+                    fileCommandPathPrompt(FileCommand::SaveAs));
                 if (!opened.accepted()) return failure(opened.error->message);
                 return success();
             }

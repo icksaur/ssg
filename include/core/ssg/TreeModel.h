@@ -5,7 +5,6 @@
 #include <ssg/Theme.h>
 #include <ssg/Viewport.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -153,27 +152,6 @@ struct SymbolTreeRecord {
     std::optional<std::uint32_t> sourceLine;
     std::vector<TreeNodeCommand> commands;
 };
-
-struct TreeCommandDescriptor {
-    std::string_view id;
-    bool operator==(const TreeCommandDescriptor&) const = default;
-};
-
-class TreeCommandSet {
-public:
-    TreeCommandSet(const TreeCommandSet&) = default;
-    TreeCommandSet& operator=(const TreeCommandSet&) = delete;
-    const std::array<TreeCommandDescriptor, 8>& descriptors() const noexcept {
-        return descriptors_;
-    }
-
-private:
-    friend TreeCommandSet treeCommandSet();
-    TreeCommandSet();
-    const std::array<TreeCommandDescriptor, 8> descriptors_;
-};
-
-TreeCommandSet treeCommandSet();
 
 struct TreeNodeView {
     TreeNode node;

@@ -381,13 +381,7 @@ TEST(staleChangesAndInvalidClientsAreFailureAtomic) {
     ASSERT_EQ(model.viewState(), paused);
 }
 
-TEST(commandViewAndFooterAreComplete) {
-    const auto commands = followEditsCommandSet().descriptors();
-    ASSERT_EQ(commands.size(), std::size_t{3});
-    ASSERT_EQ(commands[0].id, "follow_edits.resume");
-    ASSERT_EQ(commands[1].id, "follow_edits.pause");
-    ASSERT_EQ(commands[2].id, "follow_edits.toggle");
-
+TEST(footerProjectionTracksPauseAndResume) {
     FollowEditsModel model{{.queueCapacity = 2,
                             .resumeBinding = "Ctrl+Shift+F"}};
     const auto followingFooter = model.footerProjection();
@@ -426,7 +420,7 @@ SSG_TEST_SUITE(test_follow_edits) {
     RUN(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets);
     RUN(resumePreservesNewestIntroducedHunkInsteadOfChoosingBottomHunk);
     RUN(staleChangesAndInvalidClientsAreFailureAtomic);
-    RUN(commandViewAndFooterAreComplete);
+    RUN(footerProjectionTracksPauseAndResume);
     RUN(configurationRejectsInvalidQueueCapacity);
     return failed == 0 ? 0 : 1;
 }

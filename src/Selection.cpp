@@ -1,6 +1,8 @@
 #include <ssg/Selection.h>
 #include <ssg/WordClassification.h>
 
+#include "selection_commands.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
@@ -776,8 +778,7 @@ const Selection& SelectionSet::primary() const noexcept {
     return selections_.back();
 }
 
-SelectionNavigationCommandSet::SelectionNavigationCommandSet()
-    : descriptors_{{
+const std::array<SelectionCommandDescriptor, 38> kSelectionCommands{{
           {"cursor.set_position", SelectionCommand::CursorSetPosition},
           {"cursor.left", SelectionCommand::CursorLeft},
           {"cursor.right", SelectionCommand::CursorRight},
@@ -820,17 +821,8 @@ SelectionNavigationCommandSet::SelectionNavigationCommandSet()
           {"select.word_at_position",
            SelectionCommand::SelectWordAtPosition},
           {"view.reveal_caret", SelectionCommand::ViewRevealCaret},
-          {"view.center_caret", SelectionCommand::ViewCenterCaret},
-      }} {}
-
-const std::array<SelectionCommandDescriptor, 38>&
-SelectionNavigationCommandSet::descriptors() const noexcept {
-    return descriptors_;
-}
-
-SelectionNavigationCommandSet selectionNavigationCommandSet() {
-    return SelectionNavigationCommandSet{};
-}
+    {"view.center_caret", SelectionCommand::ViewCenterCaret},
+}};
 
 std::optional<DocumentPosition> SelectionNavigator::resolvePosition(
     std::string_view text, ByteOffset byteOffset, int tabWidth) {

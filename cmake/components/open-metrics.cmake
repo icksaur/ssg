@@ -27,11 +27,15 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         NAME test_open_metrics
         ENTRY ${SSG_SOURCE_DIR}/tests/test_open_metrics.cpp
         SYMBOL test_open_metrics)
+    ssg_test_include_directories(test_open_metrics PRIVATE
+        ${SSG_SOURCE_DIR}/src)
     ssg_test_link_libraries(test_open_metrics PRIVATE ssg_core)
 
     add_executable(open_path_benchmark
         ${SSG_SOURCE_DIR}/benchmarks/open_path_benchmark.cpp
     )
+    target_include_directories(open_path_benchmark PRIVATE
+        ${SSG_SOURCE_DIR}/src)
     target_link_libraries(open_path_benchmark PRIVATE ssg_core)
     add_test(NAME performance_measurement_open_path COMMAND open_path_benchmark)
     set_tests_properties(performance_measurement_open_path PROPERTIES

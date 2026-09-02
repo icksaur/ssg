@@ -3,7 +3,6 @@
 #include <ssg/types.h>
 #include <ssg/Viewport.h>
 
-#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -137,33 +136,6 @@ enum class SelectionCommand : std::uint8_t {
     ViewRevealCaret,
     ViewCenterCaret,
 };
-
-struct SelectionCommandDescriptor {
-    std::string_view id;
-    SelectionCommand command;
-
-    bool operator==(const SelectionCommandDescriptor&) const noexcept = default;
-};
-
-class SelectionNavigationCommandSet {
-public:
-    SelectionNavigationCommandSet(const SelectionNavigationCommandSet&) =
-        default;
-    SelectionNavigationCommandSet& operator=(
-        const SelectionNavigationCommandSet&) = delete;
-
-    [[nodiscard]] const std::array<SelectionCommandDescriptor, 38>&
-    descriptors() const noexcept;
-
-private:
-    friend SelectionNavigationCommandSet selectionNavigationCommandSet();
-    SelectionNavigationCommandSet();
-
-    const std::array<SelectionCommandDescriptor, 38> descriptors_;
-};
-
-[[nodiscard]] SelectionNavigationCommandSet
-selectionNavigationCommandSet();
 
 struct SelectionCommandArguments {
     std::optional<DocumentPosition> position;

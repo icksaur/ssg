@@ -394,8 +394,6 @@ std::optional<std::vector<LspNavigationTarget>> parseLocations(
 
 } // namespace
 
-LspFeatureCommandSet lspFeatureCommandSet() { return {}; }
-
 LspFeatureController::LspFeatureController(LspSyncClient& client,
                                            LspFeatureConfig config)
     : client_(client), config_(config) {

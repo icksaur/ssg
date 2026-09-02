@@ -4,11 +4,9 @@
 #include <ssg/Document.h>
 #include <ssg/Selection.h>
 
-#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <string_view>
 
 namespace ssg {
 
@@ -20,30 +18,6 @@ enum class TextInputCommand : std::uint8_t {
     DeleteWordBackward,
     DeleteWordForward,
 };
-
-struct TextInputCommandDescriptor {
-    std::string_view id;
-    TextInputCommand command;
-
-    bool operator==(const TextInputCommandDescriptor&) const noexcept = default;
-};
-
-class TextInputCommandSet {
-public:
-    TextInputCommandSet(const TextInputCommandSet&) = default;
-    TextInputCommandSet& operator=(const TextInputCommandSet&) = delete;
-
-    [[nodiscard]] const std::array<TextInputCommandDescriptor, 6>&
-    descriptors() const noexcept;
-
-private:
-    friend TextInputCommandSet textInputCommandSet();
-    TextInputCommandSet();
-
-    const std::array<TextInputCommandDescriptor, 6> descriptors_;
-};
-
-[[nodiscard]] TextInputCommandSet textInputCommandSet();
 
 struct TextInputSettings {
     IndentStyle indentStyle;

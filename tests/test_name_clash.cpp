@@ -7,6 +7,8 @@
 #include <ssg/platform_files.h>
 #include <ssg/Workspace.h>
 
+#include "file_commands.h"
+
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -314,9 +316,8 @@ bool mutatesActiveFile(std::string_view id) {
 }
 
 TEST(theActiveFileMutatorSetIsExactlyTheDeclaredOne) {
-    const auto commands = ssg::fileCommandsCommandSet();
     std::size_t flagged = 0;
-    for (const auto& descriptor : commands.descriptors()) {
+    for (const auto& descriptor : ssg::kFileCommands) {
         ASSERT_EQ(descriptor.mutatesActiveDocumentFile,
                   mutatesActiveFile(descriptor.id));
         if (descriptor.mutatesActiveDocumentFile) ++flagged;
@@ -328,8 +329,7 @@ TEST(theActiveFileMutatorSetIsExactlyTheDeclaredOne) {
 // act on, and refuses without one. file.new and file.new_directory create
 // something new and must NOT be caught by that rule.
 TEST(activeFileMutatorsRefuseWithNoDocumentWhileCreatorsDoNot) {
-    const auto commands = ssg::fileCommandsCommandSet();
-    for (const auto& descriptor : commands.descriptors()) {
+    for (const auto& descriptor : ssg::kFileCommands) {
         if (!descriptor.mutatesActiveDocumentFile) continue;
         TemporaryDirectory directory;
         auto runtime = makeRuntime(directory.path());
@@ -429,8 +429,7 @@ TEST(everyActiveFileMutatorIsRefusedInALiveDiffTab) {
 
     // Driven from the descriptor set, so a command that gains the flag is
     // covered here without editing this test.
-    for (const auto& descriptor :
-         ssg::fileCommandsCommandSet().descriptors()) {
+    for (const auto& descriptor : ssg::kFileCommands) {
         if (!descriptor.mutatesActiveDocumentFile) continue;
         ASSERT_FALSE(run(*runtime, std::string{descriptor.id}).accepted());
     }

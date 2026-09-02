@@ -236,40 +236,4 @@ private:
     std::optional<WorkspaceSearchRequest> activeRequest_;
 };
 
-struct SearchCommandDescriptorExport {
-    std::string_view id;
-    bool userNavigation = false;
-    friend bool operator==(const SearchCommandDescriptorExport&,
-                           const SearchCommandDescriptorExport&) = default;
-};
-
-class SearchCommandSet {
-public:
-    [[nodiscard]] const std::array<SearchCommandDescriptorExport, 15>&
-    descriptors() const noexcept {
-        return descriptors_;
-    }
-
-private:
-    const std::array<SearchCommandDescriptorExport, 15> descriptors_{{
-        {"palette.open", false},
-        {"palette.close", false},
-        {"palette.next", false},
-        {"palette.previous", false},
-        {"palette.execute", false},
-        {"file_finder.open", false},
-        {"file_finder.toggle_gitignore", false},
-        {"goto.file", true},
-        {"goto.line", true},
-        {"goto.symbol", true},
-        {"goto.back", true},
-        {"goto.forward", true},
-        {"search.workspace", false},
-        {"search.results_next", true},
-        {"search.results_previous", true},
-    }};
-};
-
-[[nodiscard]] SearchCommandSet searchCommandSet();
-
 } // namespace ssg

@@ -7,7 +7,7 @@
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Keymap.h>
 #include <ssg/PromptSurface.h>
-#include <ssg/StatusQueue.h>
+#include "status_queue.h"
 #include <ssg/TextInputCommands.h>
 
 #include <algorithm>
@@ -409,7 +409,7 @@ TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
                    .workingContent = std::string{"a changed again\n"}}}};
     auto staleResult = runtime.applyGitDiffScan(std::move(stale));
     ASSERT_FALSE(staleResult.accepted());
-    ASSERT_EQ(staleResult.error, ssg::GitDiffScanError::DiffRejected);
+    ASSERT_EQ(staleResult.error, ssg::DiffIngressError::DiffRejected);
 }
 
 TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {

@@ -28,16 +28,6 @@ ssg::SelectionSet selections(
     return ssg::SelectionSet{std::move(result)};
 }
 
-TEST(commandSetOwnsClipboardCommands) {
-    const auto commands = ssg::clipboardCommandSet();
-    ASSERT_EQ(commands.descriptors()[0].id,
-              std::string_view{"clipboard.copy"});
-    ASSERT_EQ(commands.descriptors()[1].id,
-              std::string_view{"clipboard.cut"});
-    ASSERT_EQ(commands.descriptors()[2].id,
-              std::string_view{"clipboard.paste"});
-}
-
 TEST(copyCapturesFragmentsLinesAndExactPlainPayload) {
     const std::string text = "aa\r\nbb\rc\nlast";
     ssg::Document document{text};
@@ -185,7 +175,6 @@ TEST(viewDeltaReportsRegisterAndRequestChanges) {
 }  // namespace
 
 SSG_TEST_SUITE(test_clipboard) {
-    RUN(commandSetOwnsClipboardCommands);
     RUN(copyCapturesFragmentsLinesAndExactPlainPayload);
     RUN(lineCopyPreservesDuplicatesAndEmptyFinalLine);
     RUN(fragmentDistributionAndPlainPayloadFallbackRoundTrip);

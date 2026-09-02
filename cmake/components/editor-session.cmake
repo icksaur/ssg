@@ -65,6 +65,8 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         NAME test_session_navigation
         ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_navigation.cpp
         SYMBOL test_session_navigation)
+    ssg_test_include_directories(test_session_navigation PRIVATE
+        ${SSG_SOURCE_DIR}/src)
     ssg_test_link_libraries(test_session_navigation PRIVATE ssg_tui_objects)
 
     ssg_add_test_suite(
@@ -83,7 +85,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         NAME test_startup_path
         ENTRY ${SSG_SOURCE_DIR}/tests/test_startup_path.cpp
         SYMBOL test_startup_path)
-    ssg_test_include_directories(test_startup_path PRIVATE ${SSG_SOURCE_DIR}/tests)
+    ssg_test_include_directories(test_startup_path PRIVATE
+        ${SSG_SOURCE_DIR}/src
+        ${SSG_SOURCE_DIR}/tests)
     ssg_test_link_libraries(test_startup_path PRIVATE ssg_core)
 
     ssg_add_test_suite(

@@ -36,15 +36,6 @@ void ready(LspSyncClient& client, FakeLspServer& server,
                     .accepted());
 }
 
-TEST(commandSetExportsTheNormativeReadOnlyActions) {
-    const auto commands = ssg::lspFeatureCommandSet().descriptors();
-    ASSERT_EQ(commands.size(), std::size_t{9});
-    ASSERT_EQ(commands[0].id, std::string_view{"completion.open"});
-    ASSERT_EQ(commands[4].id, std::string_view{"completion.dismiss"});
-    ASSERT_EQ(commands[5].id, std::string_view{"hover.show"});
-    ASSERT_EQ(commands[8].id, std::string_view{"goto.reference"});
-}
-
 TEST(requestUsesTheExactSynchronizedSnapshotAndUtf16Position) {
     FakeLspServer server;
     LspSyncClient client{server};
@@ -252,7 +243,6 @@ TEST(definitionAndReferencesPublishUserNavigationTargets) {
 } // namespace
 
 SSG_TEST_SUITE(test_lsp_features) {
-    RUN(commandSetExportsTheNormativeReadOnlyActions);
     RUN(requestUsesTheExactSynchronizedSnapshotAndUtf16Position);
     RUN(completionResultsAreSortedAndAcceptTheSelectedEdit);
     RUN(nullCompletionResultIsAnAcceptedEmptyList);

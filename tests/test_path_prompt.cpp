@@ -4,6 +4,8 @@
 #include <ssg/FileCommands.h>
 #include <ssg/PromptSurface.h>
 
+#include "file_commands.h"
+
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -81,12 +83,11 @@ bool isPathCommand(std::string_view id) {
 // the pathPrompt() accessor. Three independent expressions of the same fact
 // catch a descriptor added to one and forgotten in the others.
 TEST(pathPromptFlagAgreesWithThePathPromptAccessor) {
-    const auto commands = ssg::fileCommandsCommandSet();
     std::size_t flagged = 0;
-    for (const auto& descriptor : commands.descriptors()) {
+    for (const auto& descriptor : ssg::kFileCommands) {
         bool accessorAccepts = true;
         try {
-            (void)commands.pathPrompt(descriptor.command);
+            (void)ssg::fileCommandPathPrompt(descriptor.command);
         } catch (...) {
             accessorAccepts = false;
         }
@@ -101,10 +102,9 @@ TEST(pathPromptFlagAgreesWithThePathPromptAccessor) {
 // open. Driven from the descriptor table, so a command that gains the flag
 // without the wiring fails here rather than in front of a user.
 TEST(everyPathCommandWithoutAPayloadOpensAPathPrompt) {
-    const auto commands = ssg::fileCommandsCommandSet();
     std::size_t exercised = 0;
 
-    for (const auto& descriptor : commands.descriptors()) {
+    for (const auto& descriptor : ssg::kFileCommands) {
         if (!descriptor.pathPrompt) continue;
 
         TemporaryDirectory directory;

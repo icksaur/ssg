@@ -8,6 +8,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/test_prompt_status.cpp
         SYMBOL ssg_prompt_status_tests)
     ssg_test_include_directories(ssg_prompt_status_tests PRIVATE
+        ${SSG_SOURCE_DIR}/src
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_compile_definitions(ssg_prompt_status_tests PRIVATE

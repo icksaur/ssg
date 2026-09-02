@@ -4,12 +4,10 @@
 #include <ssg/DocumentHistory.h>
 #include <ssg/Selection.h>
 
-#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace ssg {
@@ -19,30 +17,6 @@ enum class ClipboardCommand : std::uint8_t {
     Cut,
     Paste,
 };
-
-struct ClipboardCommandDescriptor {
-    std::string_view id;
-    ClipboardCommand command;
-
-    bool operator==(const ClipboardCommandDescriptor&) const noexcept = default;
-};
-
-class ClipboardCommandSet {
-public:
-    ClipboardCommandSet(const ClipboardCommandSet&) = default;
-    ClipboardCommandSet& operator=(const ClipboardCommandSet&) = delete;
-
-    [[nodiscard]] const std::array<ClipboardCommandDescriptor, 3>&
-    descriptors() const noexcept;
-
-private:
-    friend ClipboardCommandSet clipboardCommandSet();
-    ClipboardCommandSet();
-
-    const std::array<ClipboardCommandDescriptor, 3> descriptors_;
-};
-
-[[nodiscard]] ClipboardCommandSet clipboardCommandSet();
 
 // A copy or cut's text, offered to whatever client can reach a real system
 // clipboard (the terminal writes it with OSC 52).

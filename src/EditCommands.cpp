@@ -544,32 +544,6 @@ std::vector<TextEdit> transposeEdits(const DocumentSnapshot& document,
 
 }  // namespace
 
-EditCommandSuiteCommandSet::EditCommandSuiteCommandSet()
-    : descriptors_{{
-          {"edit.indent", EditCommand::Indent},
-          {"edit.outdent", EditCommand::Outdent},
-          {"edit.duplicate_line", EditCommand::DuplicateLine},
-          {"edit.move_line_up", EditCommand::MoveLineUp},
-          {"edit.move_line_down", EditCommand::MoveLineDown},
-          {"edit.delete_line", EditCommand::DeleteLine},
-          {"edit.join_lines", EditCommand::JoinLines},
-          {"edit.uppercase", EditCommand::Uppercase},
-          {"edit.lowercase", EditCommand::Lowercase},
-          {"edit.swap_case", EditCommand::SwapCase},
-          {"edit.sort_lines", EditCommand::SortLines},
-          {"edit.transpose", EditCommand::Transpose},
-          {"edit.toggle_comment", EditCommand::ToggleComment},
-      }} {}
-
-const std::array<EditCommandDescriptor, 13>&
-EditCommandSuiteCommandSet::descriptors() const noexcept {
-    return descriptors_;
-}
-
-EditCommandSuiteCommandSet editCommandSuiteCommandSet() {
-    return EditCommandSuiteCommandSet{};
-}
-
 EditCommandResult EditInterpreter::apply(
     const DocumentSnapshot& document, const SelectionSet& selections,
     EditCommandSettings settings, EditCommand command) const {

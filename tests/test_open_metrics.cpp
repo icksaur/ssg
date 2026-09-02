@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/open_metrics.h>
+#include "open_metrics.h"
 #include <ssg/Workspace.h>
 #include <ssg/RecoveryManager.h>
 

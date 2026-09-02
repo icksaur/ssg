@@ -286,20 +286,6 @@ struct ClipboardRegister::Impl {
     }
 };
 
-ClipboardCommandSet::ClipboardCommandSet()
-    : descriptors_{{{"clipboard.copy", ClipboardCommand::Copy},
-                    {"clipboard.cut", ClipboardCommand::Cut},
-                    {"clipboard.paste", ClipboardCommand::Paste}}} {}
-
-const std::array<ClipboardCommandDescriptor, 3>&
-ClipboardCommandSet::descriptors() const noexcept {
-    return descriptors_;
-}
-
-ClipboardCommandSet clipboardCommandSet() {
-    return ClipboardCommandSet{};
-}
-
 ClipboardDelta ClipboardDeltaCodec::derive(const ClipboardViewState& before,
                                       const ClipboardViewState& after) {
     if (before == after) {

@@ -1,15 +1,10 @@
-#include <ssg/FileCommands.h>
+#include "file_commands.h"
 
 #include <stdexcept>
 
 namespace ssg {
 
-const FileCommandsCommandSet& fileCommandsCommandSet() {
-    static const FileCommandsCommandSet commands;
-    return commands;
-}
-
-PromptRequest FileCommandsCommandSet::pathPrompt(FileCommand command) const {
+PromptRequest fileCommandPathPrompt(FileCommand command) {
     std::string label;
     std::string id;
     switch (command) {

@@ -203,28 +203,6 @@ private:
 
 [[nodiscard]] std::vector<std::string> splitDiffLines(std::string_view content);
 
-struct DiffCommandDescriptor {
-    std::string_view id;
-    friend bool operator==(const DiffCommandDescriptor&,
-                           const DiffCommandDescriptor&) = default;
-};
-
-class DiffCommandSet {
-public:
-    [[nodiscard]] const std::array<DiffCommandDescriptor, 3>& descriptors()
-        const noexcept {
-        return descriptors_;
-    }
-
-private:
-    const std::array<DiffCommandDescriptor, 3> descriptors_{{
-        {"diff.next_hunk"},
-        {"diff.previous_hunk"},
-        {"diff.open_file"},
-    }};
-};
-
-[[nodiscard]] DiffCommandSet diffCommandSet();
 [[nodiscard]] std::optional<std::size_t> nextDiffHunk(
     const DiffFileView& file, std::optional<std::size_t> currentTargetLine);
 [[nodiscard]] std::optional<std::size_t> previousDiffHunk(

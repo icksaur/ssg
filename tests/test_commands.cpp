@@ -26,6 +26,8 @@
 #include <string>
 #include <ssg/FileCommands.h>
 
+#include "file_commands.h"
+
 #include <algorithm>
 #include <fstream>
 #include <map>
@@ -59,7 +61,7 @@ TEST(featureMetadataTablesAnnotateCatalogCommandsAndDeclareNoNewOnes) {
     };
 
     std::set<std::string> fileIds;
-    for (auto const& descriptor : ssg::fileCommandsCommandSet().descriptors()) {
+    for (auto const& descriptor : ssg::kFileCommands) {
         fileIds.emplace(descriptor.id);
     }
     ASSERT_EQ(fileIds, owned("file-commands"));

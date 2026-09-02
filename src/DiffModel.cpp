@@ -803,10 +803,6 @@ bool DiffModel::isGitFile(const DiffFileId& id) const noexcept {
     return found != entries_.end() && found->source == Source::Git;
 }
 
-DiffCommandSet diffCommandSet() {
-    return {};
-}
-
 std::optional<std::size_t> nextDiffHunk(
     const DiffFileView& file, std::optional<std::size_t> currentTargetLine) {
     if (file.hunks.empty()) {

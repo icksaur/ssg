@@ -4,11 +4,9 @@
 #include <ssg/Document.h>
 #include <ssg/Selection.h>
 
-#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <string_view>
 
 namespace ssg {
 
@@ -27,32 +25,6 @@ enum class EditCommand : std::uint8_t {
     Transpose,
     ToggleComment,
 };
-
-struct EditCommandDescriptor {
-    std::string_view id;
-    EditCommand command;
-
-    bool operator==(const EditCommandDescriptor&) const noexcept = default;
-};
-
-class EditCommandSuiteCommandSet {
-public:
-    EditCommandSuiteCommandSet(const EditCommandSuiteCommandSet&) = default;
-    EditCommandSuiteCommandSet& operator=(
-        const EditCommandSuiteCommandSet&) = delete;
-
-    [[nodiscard]] const std::array<EditCommandDescriptor, 13>&
-    descriptors() const noexcept;
-
-private:
-    friend EditCommandSuiteCommandSet editCommandSuiteCommandSet();
-    EditCommandSuiteCommandSet();
-
-    const std::array<EditCommandDescriptor, 13> descriptors_;
-};
-
-[[nodiscard]] EditCommandSuiteCommandSet
-editCommandSuiteCommandSet();
 
 struct EditCommandSettings {
     IndentStyle indentStyle;

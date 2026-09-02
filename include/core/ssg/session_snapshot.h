@@ -30,16 +30,9 @@
 
 namespace ssg {
 
-struct NoticeAction {
-    std::string id;
-    std::string label;
-    std::string command;
-    friend bool operator==(const NoticeAction&, const NoticeAction&) = default;
-};
-
 struct NoticeView {
     std::string text;
-    std::vector<NoticeAction> actions;
+    std::vector<UiAction> actions;
     friend bool operator==(const NoticeView&, const NoticeView&) = default;
 };
 

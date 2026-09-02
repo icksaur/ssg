@@ -545,9 +545,9 @@ TEST(publishedStatusActionActivatesItsCurrentTargetCommand) {
                 context.services()->publishStatus(ssg::StatusItem{
                     ssg::StatusId{41}, ssg::StatusPriority::Information,
                     "Ready",
-                    {ssg::StatusAction{"run", "Run action",
+                    {ssg::UiAction{"run", "Run action",
                                        "oracle.status_target"},
-                     ssg::StatusAction{"payload", "Payload action",
+                     ssg::UiAction{"payload", "Payload action",
                                        "oracle.status_payload"}}});
                 return ssg::CommandHandlerResult::success();
             }))

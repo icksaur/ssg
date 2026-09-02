@@ -4,7 +4,6 @@
 
 #include <ssg/SharedBytes.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -140,14 +139,6 @@ public:
         const DecodedText& text) const noexcept;
 };
 
-struct TextEncodingCommandDescriptor {
-    std::string_view id;
-};
-
-struct TextEncodingCommandSet {
-    std::array<TextEncodingCommandDescriptor, 4> descriptors;
-};
-
 struct ReopenWithEncodingArguments {
     TextEncoding encoding = TextEncoding::Utf8;
     bool operator==(const ReopenWithEncodingArguments&) const = default;
@@ -167,12 +158,5 @@ struct SetFinalNewlineArguments {
     bool finalNewline = false;
     bool operator==(const SetFinalNewlineArguments&) const = default;
 };
-
-inline constexpr TextEncodingCommandSet kTextEncodingCommandSet{{
-    TextEncodingCommandDescriptor{"file.reopen_with_encoding"},
-    TextEncodingCommandDescriptor{"file.set_encoding"},
-    TextEncodingCommandDescriptor{"file.set_line_ending"},
-    TextEncodingCommandDescriptor{"file.set_final_newline"},
-}};
 
 } // namespace ssg

@@ -11,6 +11,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             ${SSG_SOURCE_DIR}/tests/reference_editor.cpp)
     ssg_test_include_directories(test_selection PRIVATE
         ${SSG_SOURCE_DIR}/tests
+        ${SSG_SOURCE_DIR}/src
     )
     ssg_test_link_libraries(test_selection PRIVATE ssg_core)
 

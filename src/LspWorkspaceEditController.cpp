@@ -707,8 +707,6 @@ LspWorkspaceEditApplyResult rollback(
 
 } // namespace
 
-LspWorkspaceEditCommandSet lspWorkspaceEditCommandSet() { return {}; }
-
 LspWorkspaceEditApplier::LspWorkspaceEditApplier(
     LspWorkspaceEditDocuments& documents, LspWorkspaceFileOperations& files,
     LspWorkspaceEditConfig config)

@@ -1,4 +1,4 @@
-#include "ssg/StatusQueue.h"
+#include "status_queue.h"
 
 #include <algorithm>
 #include <array>
@@ -15,8 +15,8 @@ bool validItem(const StatusItem& item) {
     std::set<std::string_view> actionIds;
     return std::all_of(
         item.actions.begin(), item.actions.end(),
-        [&](const StatusAction& action) {
-            return !action.id.empty() && !action.accessibleLabel.empty() &&
+        [&](const UiAction& action) {
+            return !action.id.empty() && !action.label.empty() &&
                    !action.commandId.empty() &&
                    actionIds.insert(action.id).second;
         });
@@ -130,7 +130,7 @@ StatusFooterProjection StatusQueue::footerProjection() const {
         std::to_string(entries_.size());
     projection.actions.reserve(selected.item.actions.size());
     for (const auto& action : selected.item.actions) {
-        projection.actions.push_back({action.id, action.accessibleLabel});
+        projection.actions.push_back(action);
     }
     return projection;
 }
@@ -151,7 +151,7 @@ std::vector<StatusActionNode> projectStatusActionNodes(
         nodes.push_back(
             {UiNodeId{actionNodeId(selected.id, selected.generation,
                                    action.id)},
-             action.accessibleLabel, action.commandId});
+             action.label, action.commandId});
     }
     return nodes;
 }

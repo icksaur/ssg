@@ -2747,10 +2747,10 @@ std::size_t EditorSession::Impl::flushAllAutosaveDrafts() {
     return flushed;
 }
 
-ExternalDiffBurstResult EditorSession::Impl::applyExternalDiffBurst(
+DiffIngressResult EditorSession::Impl::applyExternalDiffBurst(
     std::vector<ExternalDiffRevision> changes) {
     if (changes.empty()) {
-        return {ExternalDiffBurstError::EmptyBurst};
+        return {DiffIngressError::EmptyBurst};
     }
 
     auto stagedDiff = diff;
@@ -2765,11 +2765,11 @@ ExternalDiffBurstResult EditorSession::Impl::applyExternalDiffBurst(
         const auto applied =
             stagedDiff.applyNonGitEvent(std::move(change.event), change.revision);
         if (!applied.accepted()) {
-            return {ExternalDiffBurstError::DiffRejected};
+            return {DiffIngressError::DiffRejected};
         }
         const auto changedFile = stagedDiff.file(id);
         if (!changedFile) {
-            return {ExternalDiffBurstError::DiffRejected};
+            return {DiffIngressError::DiffRejected};
         }
         followChanges.push_back(
             {changedFile->get(), std::move(priorHunks), change.revision});
@@ -2779,7 +2779,7 @@ ExternalDiffBurstResult EditorSession::Impl::applyExternalDiffBurst(
     const auto followed =
         stagedFollow.acceptExternalChanges(std::move(followChanges));
     if (!followed.accepted()) {
-        return {ExternalDiffBurstError::FollowRejected};
+        return {DiffIngressError::FollowRejected};
     }
 
     const auto previousTarget = follow.viewState().activeTarget;
@@ -2796,7 +2796,7 @@ ExternalDiffBurstResult EditorSession::Impl::applyExternalDiffBurst(
     return {};
 }
 
-GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
+DiffIngressResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
     if (scan.revision.value() == 0) {
         auto const previousBranch = currentGitBranch;
         currentGitBranch = scan.currentBranch;
@@ -2806,7 +2806,7 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
         return {};
     }
     if (scan.revision <= lastGitScanRevision) {
-        return {GitDiffScanError::DiffRejected};
+        return {DiffIngressError::DiffRejected};
     }
     currentGitBranch = scan.currentBranch;
     auto gitRecords = gitTreeRecordsFromScan(scan.files);
@@ -2824,7 +2824,7 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
         return current;
     };
     const auto removeDetailedFile =
-        [&](const DiffFileId& id) -> GitDiffScanResult {
+        [&](const DiffFileId& id) -> DiffIngressResult {
         const auto prior = stagedDiff.file(id);
         if (!prior || !stagedDiff.isGitFile(id)) {
             return {};
@@ -2834,7 +2834,7 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
         const auto revision = nextMutationRevision();
         const auto removed = stagedDiff.removeFile(id, revision);
         if (!removed.accepted()) {
-            return {GitDiffScanError::DiffRejected};
+            return {DiffIngressError::DiffRejected};
         }
         mutated = true;
         removedFile.deleted = true;
@@ -2865,7 +2865,7 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
             revision);
         if (!applied.accepted()) {
             if (applied.error != DiffError::WorkLimitExceeded) {
-                return {GitDiffScanError::DiffRejected};
+                return {DiffIngressError::DiffRejected};
             }
             statusOnlyIds.push_back(file.id);
             if (auto removed = removeDetailedFile(file.id);
@@ -2876,7 +2876,7 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
         }
         const auto changedFile = stagedDiff.file(file.id);
         if (!changedFile) {
-            return {GitDiffScanError::DiffRejected};
+            return {DiffIngressError::DiffRejected};
         }
         mutated = true;
         followChanges.push_back(
@@ -2905,7 +2905,7 @@ GitDiffScanResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
         const auto followed =
             stagedFollow.acceptExternalChanges(std::move(followChanges));
         if (!followed.accepted()) {
-            return {GitDiffScanError::FollowRejected};
+            return {DiffIngressError::FollowRejected};
         }
 
         const auto previousTarget = follow.viewState().activeTarget;
@@ -3794,7 +3794,7 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                     }
                     for (auto const& action : notice->actions) {
                         if (action.id == semantic.actionId) {
-                            return dispatch(action.command, std::any{});
+                            return dispatch(action.commandId, std::any{});
                         }
                     }
                     return rejectTarget("notice action target is not actionable");
@@ -4048,12 +4048,12 @@ std::uint64_t EditorSession::gitFullRefreshCountForTest() const {
 }
 
 std::filesystem::path const& EditorSession::workspaceRoot() const noexcept { return impl_->root; }
-ExternalDiffBurstResult EditorSession::applyExternalDiffBurst(
+DiffIngressResult EditorSession::applyExternalDiffBurst(
     std::vector<ExternalDiffRevision> changes) {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyExternalDiffBurst(std::move(changes));
 }
-GitDiffScanResult EditorSession::applyGitDiffScan(GitDiffScan scan) {
+DiffIngressResult EditorSession::applyGitDiffScan(GitDiffScan scan) {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyGitDiffScan(std::move(scan));
 }

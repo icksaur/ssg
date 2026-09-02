@@ -5,7 +5,6 @@
 #include "ssg/RecoveryManager.h"
 #include "ssg/Workspace.h"
 
-#include <array>
 #include <chrono>
 #include <compare>
 #include <cstddef>
@@ -76,37 +75,6 @@ enum class TabCommand : std::uint8_t {
     MoveLeft,
     MoveRight,
 };
-
-struct TabCommandDescriptor {
-    std::string_view id;
-    TabCommand command;
-
-    friend bool operator==(const TabCommandDescriptor&,
-                           const TabCommandDescriptor&) = default;
-};
-
-class TabManagementCommandSet {
-public:
-    [[nodiscard]] const std::array<TabCommandDescriptor, 9>& descriptors()
-        const noexcept {
-        return descriptors_;
-    }
-
-private:
-    const std::array<TabCommandDescriptor, 9> descriptors_{{
-        {"tab.close", TabCommand::Close},
-        {"tab.close_others", TabCommand::CloseOthers},
-        {"tab.close_all", TabCommand::CloseAll},
-        {"tab.reopen_closed", TabCommand::ReopenClosed},
-        {"tab.next", TabCommand::Next},
-        {"tab.previous", TabCommand::Previous},
-        {"tab.activate", TabCommand::Activate},
-        {"tab.move_left", TabCommand::MoveLeft},
-        {"tab.move_right", TabCommand::MoveRight},
-    }};
-};
-
-[[nodiscard]] TabManagementCommandSet tabManagementCommandSet();
 
 enum class TabError : std::uint8_t {
     None,

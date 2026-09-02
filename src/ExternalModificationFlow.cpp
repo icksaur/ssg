@@ -1,12 +1,26 @@
 #include "ssg/ExternalModificationFlow.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
 namespace ssg {
 namespace {
+
+struct ExternalActionDescriptor {
+    std::string_view id;
+    ExternalAction action;
+    std::string_view label;
+};
+
+constexpr std::array<ExternalActionDescriptor, 3> kExternalActionDescriptors{{
+    {"external.reload", ExternalAction::Reload, "Reload"},
+    {"external.keep_buffer", ExternalAction::KeepBuffer, "Keep"},
+    {"external.open_diff", ExternalAction::OpenDiff, "Diff"},
+}};
 
 NonGitDiffEventKind diffKind(WatchEventKind kind) {
     switch (kind) {
@@ -46,14 +60,8 @@ auto findFile(const std::vector<ExternalDocumentView>& files,
 
 }  // namespace
 
-const ExternalModificationCommandSet& externalModificationCommandSet() {
-    static const ExternalModificationCommandSet commands;
-    return commands;
-}
-
 ExternalActionAffordance externalActionAffordance(ExternalAction action) {
-    for (auto const& descriptor :
-         externalModificationCommandSet().descriptors()) {
+    for (auto const& descriptor : kExternalActionDescriptors) {
         if (descriptor.action == action) {
             return {action, std::string{descriptor.label},
                     std::string{descriptor.id}};

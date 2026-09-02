@@ -63,10 +63,6 @@ std::optional<std::string> invalidState(const TabViewState& state) {
 
 }  // namespace
 
-TabManagementCommandSet tabManagementCommandSet() {
-    return {};
-}
-
 struct TabManager::Impl {
     struct ClosedTab {
         TabState state;

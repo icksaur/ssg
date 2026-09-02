@@ -495,7 +495,7 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
     ASSERT_EQ(model.viewState(), before);
 }
 
-TEST(deltaReplayAndExactCommandNavigationContract) {
+TEST(deltaReplayAndHunkNavigationContract) {
     DiffModel model;
     const auto base = model.viewState();
     ASSERT_TRUE(model
@@ -517,15 +517,6 @@ TEST(deltaReplayAndExactCommandNavigationContract) {
     stale.revision = Revision{99};
     ASSERT_EQ(DiffDeltaCodec{}.replay(stale, delta).error,
               DiffReplayError::StaleRevision);
-
-    const auto commands = diffCommandSet();
-    ASSERT_EQ(commands.descriptors().size(), std::size_t{3});
-    ASSERT_EQ(commands.descriptors()[0].id,
-              std::string_view{"diff.next_hunk"});
-    ASSERT_EQ(commands.descriptors()[1].id,
-              std::string_view{"diff.previous_hunk"});
-    ASSERT_EQ(commands.descriptors()[2].id,
-              std::string_view{"diff.open_file"});
 
     const auto& file = onlyFile(model);
     ASSERT_EQ(nextDiffHunk(file, std::nullopt), std::optional<std::size_t>{0});
@@ -627,7 +618,7 @@ SSG_TEST_SUITE(test_diff) {
     RUN(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete);
     RUN(nonGitStatusUsesSourceAgnosticClassification);
     RUN(staleInvalidAndOverBudgetWorkAreFailureAtomic);
-    RUN(deltaReplayAndExactCommandNavigationContract);
+    RUN(deltaReplayAndHunkNavigationContract);
     RUN(documentDiffLookupUsesIdentityOnly);
     RUN(gitRemoveFileRejectsStaleOrEqualRevisionAndRemovesOnNextRevision);
     RUN(gitScanClassificationDistinguishesGitFromNonGitEntries);

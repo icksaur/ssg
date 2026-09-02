@@ -303,15 +303,7 @@ TEST(workspacePreviewApplyRecoverAndFailuresRoundTrip) {
     ASSERT_EQ(workspace.files(), original);
 }
 
-TEST(viewStateAndCommandExportsAreExact) {
-    const auto commands = FindReplaceCommandSet{};
-    ASSERT_EQ(commands.descriptors().size(), std::size_t{16});
-    ASSERT_EQ(commands.descriptors().front().id, std::string_view{"find.open"});
-    ASSERT_EQ(commands.descriptors()[1].id,
-              std::string_view{"find.word_under_cursor"});
-    ASSERT_EQ(commands.descriptors().back().id,
-              std::string_view{"replace.workspace_apply"});
-
+TEST(viewStateTransitionsAreExact) {
     Document document{"alpha alpha"};
     FindReplaceController controller;
     const auto closed = controller.viewState();
@@ -338,7 +330,7 @@ SSG_TEST_SUITE(test_find_replace) {
     RUN(ssg::zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels);
     RUN(ssg::currentReplaceIsAtomicOneUndoUnitAndStaleSafe);
     RUN(ssg::workspacePreviewApplyRecoverAndFailuresRoundTrip);
-    RUN(ssg::viewStateAndCommandExportsAreExact);
+    RUN(ssg::viewStateTransitionsAreExact);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

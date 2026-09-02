@@ -9,7 +9,7 @@
 // fresh-open tree-materialization count (1 today).  Baseline only; the enforce
 // gate lands at LF-4b.
 
-#include <ssg/open_metrics.h>
+#include "open_metrics.h"
 #include <ssg/RecoveryManager.h>
 #include <ssg/Workspace.h>
 

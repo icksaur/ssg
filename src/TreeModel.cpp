@@ -380,18 +380,6 @@ TreeProviderSnapshot TreeProviderSnapshot::fromSymbols(
                                 std::move(nodes)};
 }
 
-TreeCommandSet::TreeCommandSet()
-    : descriptors_{{{"tree.toggle_expanded"},
-                    {"tree.invoke_node_command"},
-                    {"tree.select"},
-                    {"tree.select_next"},
-                    {"tree.select_previous"},
-                    {"tree.activate"},
-                    {"tree.scroll"},
-                    {"tree.scroll_to_fraction"}}} {}
-
-TreeCommandSet treeCommandSet() { return TreeCommandSet{}; }
-
 void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
     const TreeProviderId providerId = snapshot.providerId();
     auto iterator = std::lower_bound(

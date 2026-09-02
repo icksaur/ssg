@@ -1,6 +1,8 @@
 #include <ssg/Selection.h>
 #include <ssg/DiffModel.h>
 
+#include "selection_commands.h"
+
 #include "reference_editor.h"
 #include "test_helpers.h"
 
@@ -12,7 +14,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -97,58 +98,6 @@ void assertMatchesReference(const SelectionViewState& actual,
     ASSERT_EQ(byteRanges(actual), expectedRanges);
 }
 
-TEST(commandSetIsExactAndImmutable) {
-    static_assert(!std::is_copy_assignable_v<ssg::SelectionNavigationCommandSet>);
-    constexpr std::array<std::string_view, 38> expected{{
-        "cursor.set_position",
-        "cursor.left",
-        "cursor.right",
-        "cursor.word_left",
-        "cursor.word_right",
-        "cursor.line_up",
-        "cursor.line_down",
-        "cursor.line_start",
-        "cursor.line_end",
-        "cursor.page_up",
-        "cursor.page_down",
-        "cursor.document_start",
-        "cursor.document_end",
-        "select.set_range",
-        "select.set_ranges",
-        "select.add_range",
-        "select.left",
-        "select.right",
-        "select.word_left",
-        "select.word_right",
-        "select.line_up",
-        "select.line_down",
-        "select.line_start",
-        "select.line_end",
-        "select.page_up",
-        "select.page_down",
-        "select.document_start",
-        "select.document_end",
-        "select.all",
-        "select.add_next_occurrence",
-        "select.add_cursor_up",
-        "select.add_cursor_down",
-        "select.split_into_lines",
-        "select.to_matching_bracket",
-        "goto.matching_bracket",
-        "select.word_at_position",
-        "view.reveal_caret",
-        "view.center_caret",
-    }};
-
-    const auto commands = ssg::selectionNavigationCommandSet();
-    ASSERT_EQ(commands.descriptors().size(), expected.size());
-    for (std::size_t index = 0; index < expected.size(); ++index) {
-        ASSERT_EQ(commands.descriptors()[index].id, expected[index]);
-        ASSERT_FALSE(commands.descriptors()[index].id.starts_with("text."));
-        ASSERT_FALSE(commands.descriptors()[index].id.starts_with("edit."));
-    }
-}
-
 TEST(selectionSetNormalizesOrderDuplicatesAndOverlaps) {
     const std::string text = "0123456789";
     SelectionSet selections{{
@@ -180,9 +129,8 @@ TEST(asciiCommandsMatchIndependentReferenceEditor) {
             actual = resultingState(
                 actual, ssg::SelectionNavigator{}.apply(
                             text, actual, command, dimensions, arguments));
-            const auto commands = ssg::selectionNavigationCommandSet();
             const auto descriptor = std::find_if(
-                commands.descriptors().begin(), commands.descriptors().end(),
+                ssg::kSelectionCommands.begin(), ssg::kSelectionCommands.end(),
                 [&](const auto& item) { return item.command == command; });
             assertMatchesReference(actual, expected, descriptor->id);
             ASSERT_EQ(actual.firstVisualRow, 0u);
@@ -781,7 +729,6 @@ TEST(wordOrCoveredTextReturnsCaretWordOrSelectionSubstring) {
 }
 
 SSG_TEST_SUITE(test_selection) {
-    RUN(commandSetIsExactAndImmutable);
     RUN(selectionSetNormalizesOrderDuplicatesAndOverlaps);
     RUN(asciiCommandsMatchIndependentReferenceEditor);
     RUN(horizontalMovementUsesExtendedGraphemeBoundaries);

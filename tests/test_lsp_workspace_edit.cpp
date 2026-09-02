@@ -237,14 +237,6 @@ public:
     int operationCalls = 0;
 };
 
-TEST(commandSetExportsTheSingleNormativeRenameAction) {
-    const auto set = ssg::lspWorkspaceEditCommandSet();
-    const auto commands = set.descriptors();
-    ASSERT_EQ(commands.size(), std::size_t{1});
-    ASSERT_EQ(commands[0].id, std::string_view{"rename.symbol"});
-    ASSERT_FALSE(commands[0].userNavigation);
-}
-
 TEST(unicodePositionFixtureAppliesExpectedEdit) {
     FakeDocuments documents;
     documents.documents.emplace(
@@ -538,7 +530,6 @@ TEST(supersededRenameResponseCannotReplaceNewerResult) {
 } // namespace
 
 SSG_TEST_SUITE(test_lsp_workspace_edit) {
-    RUN(commandSetExportsTheSingleNormativeRenameAction);
     RUN(unicodePositionFixtureAppliesExpectedEdit);
     RUN(validationRejectsMalformedRangesBeforeAnyMutation);
     RUN(equalPositionInsertionsPreservePayloadOrder);

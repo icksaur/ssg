@@ -2069,7 +2069,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
             .status(ssg::StatusViewState{{ssg::StatusItemView{
                 ssg::StatusId{1}, ssg::StatusPriority::Information, 1,
                 "Status message",
-                {ssg::StatusAction{"footer.act", "Save", "footer.act"}}}}, 0})
+                {ssg::UiAction{"footer.act", "Save", "footer.act"}}}}, 0})
             .tabs({{"a.txt", "Tab a.txt", true, false},
                    {"b.txt", "Tab b.txt", false, false}})
             .noticePresent()

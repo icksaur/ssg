@@ -53,10 +53,6 @@ const DiffHunk* newestIntroducedHunk(
 
 }  // namespace
 
-FollowEditsCommandSet followEditsCommandSet() {
-    return {};
-}
-
 FollowEditsModel::FollowEditsModel(FollowEditsConfig config)
     : config_{std::move(config)} {
     if (config_.queueCapacity == 0) {

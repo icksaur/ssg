@@ -77,18 +77,6 @@ ssg::TabId openSaved(ssg::TabManager& tabs, std::uint64_t document,
                 .tab;
 }
 
-TEST(commandSetExactlyOwnsNineTabCommands) {
-    const auto descriptors = ssg::tabManagementCommandSet().descriptors();
-    const std::array<std::string_view, 9> expected{
-        "tab.close",       "tab.close_others", "tab.close_all",
-        "tab.reopen_closed", "tab.next",         "tab.previous",
-        "tab.activate",    "tab.move_left",     "tab.move_right",
-    };
-    for (std::size_t index = 0; index < expected.size(); ++index) {
-        ASSERT_EQ(descriptors[index].id, expected[index]);
-    }
-}
-
 TEST(duplicateDocumentIdentityActivatesExistingTab) {
     FakeLifecycle lifecycle;
     ssg::TabManager tabs{lifecycle};
@@ -333,7 +321,6 @@ TEST(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab) {
 }  // namespace
 
 SSG_TEST_SUITE(test_tabs) {
-    RUN(commandSetExactlyOwnsNineTabCommands);
     RUN(duplicateDocumentIdentityActivatesExistingTab);
     RUN(allTabKindsNavigateCyclicallyAndReorder);
     RUN(activeClosePrefersRightThenLeftAndDirtyFailureIsAtomic);

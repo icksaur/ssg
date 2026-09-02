@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 
 #include <ssg/EditorSession.h>
-#include <ssg/startup_audit.h>
+#include "startup_audit.h"
 #include <ssg/FilesystemWatcher.h>
 
 #include <filesystem>

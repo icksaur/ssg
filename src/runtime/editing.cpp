@@ -1,5 +1,7 @@
 #include "editor_session_internal.h"
 
+#include "../selection_commands.h"
+
 #include <ssg/HistoryEditClassification.h>
 
 #include <algorithm>
@@ -744,11 +746,7 @@ void registerSelectionCommands(CommandCatalog& builder,
         return words;
     };
 
-    // Held in a local: descriptors() returns a reference into the command set,
-    // and a range-for over a temporary's member would leave it dangling before
-    // the first iteration (C++20 does not extend the temporary's lifetime).
-    auto const motions = selectionNavigationCommandSet();
-    for (auto const& descriptor : motions.descriptors()) {
+    for (auto const& descriptor : kSelectionCommands) {
         auto const command = descriptor.command;
         const auto visualAction = [command]() -> std::optional<MoveVisualSelection> {
             switch (command) {

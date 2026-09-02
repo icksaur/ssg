@@ -7,13 +7,11 @@
 #include "ssg/PaneNavigation.h"
 #include "ssg/Viewport.h"
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace ssg {
@@ -73,30 +71,6 @@ struct FollowEditsFooterProjection {
     friend bool operator==(const FollowEditsFooterProjection&,
                            const FollowEditsFooterProjection&) = default;
 };
-
-struct FollowEditsCommandDescriptor {
-    std::string_view id;
-    friend bool operator==(const FollowEditsCommandDescriptor&,
-                           const FollowEditsCommandDescriptor&) = default;
-};
-
-class FollowEditsCommandSet {
-public:
-    [[nodiscard]]
-    const std::array<FollowEditsCommandDescriptor, 3>& descriptors()
-        const noexcept {
-        return descriptors_;
-    }
-
-private:
-    const std::array<FollowEditsCommandDescriptor, 3> descriptors_{{
-        {"follow_edits.resume"},
-        {"follow_edits.pause"},
-        {"follow_edits.toggle"},
-    }};
-};
-
-[[nodiscard]] FollowEditsCommandSet followEditsCommandSet();
 
 struct FollowEditsConfig {
     std::size_t queueCapacity = 16;

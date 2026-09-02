@@ -1,6 +1,6 @@
 #include "PieceTree.h"
 
-#include <ssg/open_metrics.h>
+#include "open_metrics.h"
 
 #include <algorithm>
 #include <cstdlib>

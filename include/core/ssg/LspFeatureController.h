@@ -8,40 +8,9 @@
 #include <map>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace ssg {
-
-struct LspFeatureCommandDescriptor {
-    std::string_view id;
-    bool userNavigation = false;
-    friend bool operator==(const LspFeatureCommandDescriptor&,
-                           const LspFeatureCommandDescriptor&) = default;
-};
-
-class LspFeatureCommandSet {
-public:
-    [[nodiscard]] const std::array<LspFeatureCommandDescriptor, 9>&
-    descriptors() const noexcept {
-        return descriptors_;
-    }
-
-private:
-    const std::array<LspFeatureCommandDescriptor, 9> descriptors_{{
-        {"completion.open", false},
-        {"completion.next", false},
-        {"completion.previous", false},
-        {"completion.accept", false},
-        {"completion.dismiss", false},
-        {"hover.show", false},
-        {"hover.dismiss", false},
-        {"goto.definition", true},
-        {"goto.reference", true},
-    }};
-};
-
-[[nodiscard]] LspFeatureCommandSet lspFeatureCommandSet();
 
 struct LspCompletionItem {
     std::string label;

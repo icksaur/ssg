@@ -6,13 +6,11 @@
 #include "ssg/RecoveryManager.h"
 #include "ssg/FilesystemWatcher.h"
 
-#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace ssg {
@@ -38,34 +36,6 @@ enum class ExternalDocumentStatus : std::uint8_t {
 #undef SSG_ENUMERATOR
 };
 #undef SSG_EXTERNAL_DOCUMENT_STATUS_ENUMERATORS
-
-struct ExternalModificationCommandDescriptor {
-    std::string_view id;
-    ExternalAction action;
-    std::string_view label;
-    friend bool operator==(const ExternalModificationCommandDescriptor&,
-                           const ExternalModificationCommandDescriptor&) =
-        default;
-};
-
-class ExternalModificationCommandSet {
-public:
-    [[nodiscard]]
-    const std::array<ExternalModificationCommandDescriptor, 3>& descriptors()
-        const noexcept {
-        return descriptors_;
-    }
-
-private:
-    const std::array<ExternalModificationCommandDescriptor, 3> descriptors_{{
-        {"external.reload", ExternalAction::Reload, "Reload"},
-        {"external.keep_buffer", ExternalAction::KeepBuffer, "Keep"},
-        {"external.open_diff", ExternalAction::OpenDiff, "Diff"},
-    }};
-};
-
-[[nodiscard]] const ExternalModificationCommandSet&
-externalModificationCommandSet();
 
 struct ExternalActionAffordance {
     ExternalAction action = ExternalAction::Reload;

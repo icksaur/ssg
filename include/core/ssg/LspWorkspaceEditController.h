@@ -2,7 +2,6 @@
 
 #include <ssg/lsp_sync_client.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -12,27 +11,6 @@
 #include <vector>
 
 namespace ssg {
-
-struct LspWorkspaceEditCommandDescriptor {
-    std::string_view id;
-    bool userNavigation = false;
-    friend bool operator==(const LspWorkspaceEditCommandDescriptor&,
-                           const LspWorkspaceEditCommandDescriptor&) = default;
-};
-
-class LspWorkspaceEditCommandSet {
-public:
-    [[nodiscard]] const std::array<LspWorkspaceEditCommandDescriptor, 1>&
-    descriptors() const noexcept {
-        return descriptors_;
-    }
-
-private:
-    const std::array<LspWorkspaceEditCommandDescriptor, 1> descriptors_{
-        {{"rename.symbol", false}}};
-};
-
-[[nodiscard]] LspWorkspaceEditCommandSet lspWorkspaceEditCommandSet();
 
 enum class LspWorkspaceDocumentError : std::uint8_t {
     None,

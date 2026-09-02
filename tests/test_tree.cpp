@@ -152,21 +152,7 @@ TEST(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned) {
                                    TreeNodeId{"symbols:type/A"}));
 }
 
-TEST(commandSetIsExactAndInvocationIsProviderDataOnly) {
-    const auto commands = treeCommandSet();
-    ASSERT_EQ(commands.descriptors().size(), std::size_t{8});
-    ASSERT_EQ(commands.descriptors()[0].id, std::string_view{"tree.toggle_expanded"});
-    ASSERT_EQ(commands.descriptors()[1].id,
-              std::string_view{"tree.invoke_node_command"});
-    ASSERT_EQ(commands.descriptors()[2].id, std::string_view{"tree.select"});
-    ASSERT_EQ(commands.descriptors()[3].id, std::string_view{"tree.select_next"});
-    ASSERT_EQ(commands.descriptors()[4].id,
-              std::string_view{"tree.select_previous"});
-    ASSERT_EQ(commands.descriptors()[5].id, std::string_view{"tree.activate"});
-    ASSERT_EQ(commands.descriptors()[6].id, std::string_view{"tree.scroll"});
-    ASSERT_EQ(commands.descriptors()[7].id,
-              std::string_view{"tree.scroll_to_fraction"});
-
+TEST(nodeCommandInvocationIsProviderDataOnly) {
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
         TreeProviderId{"symbols"}, TreeRevision{1},
@@ -515,7 +501,7 @@ SSG_TEST_SUITE(test_tree) {
     RUN(filesystemSnapshotIgnoresAnEntryThatDisappearsDuringInspection);
     RUN(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys);
     RUN(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned);
-    RUN(commandSetIsExactAndInvocationIsProviderDataOnly);
+    RUN(nodeCommandInvocationIsProviderDataOnly);
     RUN(selectionNavigatesExpandsAndReportsSelectedNode);
     RUN(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes);
     RUN(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase);

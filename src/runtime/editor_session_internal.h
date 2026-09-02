@@ -25,11 +25,11 @@
 #include <ssg/Search.h>
 #include <ssg/Settings.h>
 #include <ssg/StatusFields.h>
-#include <ssg/StatusQueue.h>
+#include "../status_queue.h"
 #include <ssg/SyntaxModel.h>
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
-#include <ssg/WorkspaceFileIndex.h>
+#include "../WorkspaceFileIndex.h"
 #include <ssg/Workspace.h>
 
 #include <any>
@@ -479,9 +479,9 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] DocumentViewState documentView() const;
     [[nodiscard]] CommandHandlerResult updateTabsFor(FileDocumentId document);
     [[nodiscard]] CommandHandlerResult activateDocument(FileDocumentId document);
-    [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(
+    [[nodiscard]] DiffIngressResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
-    [[nodiscard]] GitDiffScanResult applyGitDiffScan(GitDiffScan scan);
+    [[nodiscard]] DiffIngressResult applyGitDiffScan(GitDiffScan scan);
     // CONTRACT
     // EditorSession::Impl: reconcileExternalWatchEvents and every mutation of
     //   `external` and its shared DiffModel it drives run only on the runtime

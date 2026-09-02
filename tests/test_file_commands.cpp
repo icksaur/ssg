@@ -2,6 +2,8 @@
 
 #include <ssg/FileCommands.h>
 
+#include "file_commands.h"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -28,37 +30,11 @@ private:
     std::filesystem::path path_;
 };
 
-TEST(commandSetOwnsEveryNormativeFileCommand) {
-    const auto commands = ssg::fileCommandsCommandSet();
-    const std::array<std::string_view, 12> expected{{
-        "workspace.open_directory",
-        "file.new",
-        "file.open",
-        "file.open_recent",
-        "file.open_dropped_content",
-        "file.save",
-        "file.save_all",
-        "file.save_as",
-        "file.reload",
-        "file.rename",
-        "file.delete",
-        "file.new_directory",
-    }};
-    ASSERT_EQ(commands.descriptors().size(), expected.size());
-    for (std::size_t index = 0; index < expected.size(); ++index) {
-        ASSERT_EQ(commands.descriptors()[index].id, expected[index]);
-    }
-    const auto& drop = commands.descriptors()[4];
-    ASSERT_FALSE(drop.lua);
-    ASSERT_EQ(drop.requiredCapability,
-              std::optional<std::string_view>{"local_file_drop"});
-}
-
 TEST(pathCommandsOpenNonModalPathPrompts) {
     for (const auto command :
          {ssg::FileCommand::Open, ssg::FileCommand::SaveAs,
           ssg::FileCommand::Rename, ssg::FileCommand::NewDirectory}) {
-        const auto request = ssg::fileCommandsCommandSet().pathPrompt(command);
+        const auto request = ssg::fileCommandPathPrompt(command);
         ASSERT_EQ(request.kind, ssg::PromptKind::Path);
         ASSERT_EQ(request.inputs.size(), std::size_t{1});
         ASSERT_FALSE(request.inputs[0].accessibleLabel.empty());
@@ -177,7 +153,6 @@ TEST(saveAllIgnoresUntitledDocuments) {
 }  // namespace
 
 SSG_TEST_SUITE(test_file_commands) {
-    RUN(commandSetOwnsEveryNormativeFileCommand);
     RUN(pathCommandsOpenNonModalPathPrompts);
     RUN(localDropRequiresHostCapabilityAndSanitizesLabel);
     RUN(binaryAndInvalidTextDropsOpenReadOnlyWithoutPathAuthority);

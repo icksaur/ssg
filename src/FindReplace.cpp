@@ -606,39 +606,6 @@ FindResult FindMatcher::find(std::string_view text,
     return result;
 }
 
-FindReplaceCommandSet::FindReplaceCommandSet()
-    : descriptors_{{{"find.open", FindReplaceCommand::FindOpen},
-                    {"find.word_under_cursor",
-                     FindReplaceCommand::FindWordUnderCursor},
-                    {"find.close", FindReplaceCommand::FindClose},
-                    {"find.next", FindReplaceCommand::FindNext},
-                    {"find.previous", FindReplaceCommand::FindPrevious},
-                    {"find.update_query",
-                     FindReplaceCommand::FindUpdateQuery},
-                    {"find.toggle_case",
-                     FindReplaceCommand::FindToggleCase},
-                    {"find.toggle_whole_word",
-                     FindReplaceCommand::FindToggleWholeWord},
-                    {"find.toggle_regex",
-                     FindReplaceCommand::FindToggleRegex},
-                    {"find.toggle_selection",
-                     FindReplaceCommand::FindToggleSelection},
-                    {"replace.open", FindReplaceCommand::ReplaceOpen},
-                    {"replace.update_replacement",
-                     FindReplaceCommand::ReplaceUpdateReplacement},
-                    {"replace.current",
-                     FindReplaceCommand::ReplaceCurrent},
-                    {"replace.all", FindReplaceCommand::ReplaceAll},
-                    {"replace.workspace_preview",
-                     FindReplaceCommand::ReplaceWorkspacePreview},
-                    {"replace.workspace_apply",
-                     FindReplaceCommand::ReplaceWorkspaceApply}}} {}
-
-const std::array<FindReplaceCommandDescriptor, 16>&
-FindReplaceCommandSet::descriptors() const noexcept {
-    return descriptors_;
-}
-
 void FindReplaceController::open(const DocumentSnapshot& document,
                                  FindRequest request) {
     request_ = std::move(request);

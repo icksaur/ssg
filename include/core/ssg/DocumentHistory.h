@@ -4,12 +4,10 @@
 #include <ssg/Document.h>
 #include <ssg/Selection.h>
 
-#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 
 namespace ssg {
 
@@ -17,30 +15,6 @@ enum class HistoryCommand : std::uint8_t {
     Undo,
     Redo,
 };
-
-struct HistoryCommandDescriptor {
-    std::string_view id;
-    HistoryCommand command;
-
-    bool operator==(const HistoryCommandDescriptor&) const noexcept = default;
-};
-
-class HistoryCommandSet {
-public:
-    HistoryCommandSet(const HistoryCommandSet&) = default;
-    HistoryCommandSet& operator=(const HistoryCommandSet&) = delete;
-
-    [[nodiscard]] const std::array<HistoryCommandDescriptor, 2>&
-    descriptors() const noexcept;
-
-private:
-    friend HistoryCommandSet historyCommandSet();
-    HistoryCommandSet();
-
-    const std::array<HistoryCommandDescriptor, 2> descriptors_;
-};
-
-[[nodiscard]] HistoryCommandSet historyCommandSet();
 
 enum class HistoryEditKind : std::uint8_t {
     Typing,

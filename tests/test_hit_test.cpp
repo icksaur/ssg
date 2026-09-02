@@ -188,7 +188,7 @@ TEST(footerActionHitCarriesPublishedUiNodeIdentity) {
             .status(ssg::StatusViewState{
                 {{ssg::StatusId{77}, ssg::StatusPriority::Information, 9,
                   "status",
-                  {ssg::StatusAction{"retry", "Retry", "ignored"}}}},
+                  {ssg::UiAction{"retry", "Retry", "ignored"}}}},
                 0})
             .build();
     ASSERT_TRUE(frame.footer().has_value());

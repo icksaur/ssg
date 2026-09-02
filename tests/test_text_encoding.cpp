@@ -2,7 +2,6 @@
 
 #include "test_helpers.h"
 
-#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -155,21 +154,6 @@ TEST(normalizesRequestedEndingsAndAppliesFinalNewlinePolicy) {
         0x6f, 0x6e, 0x65, 0x0d, 0x74, 0x77, 0x6f}));
 }
 
-TEST(exportsExactImmutableCommandSet) {
-    constexpr std::array expected{
-        std::string_view{"file.reopen_with_encoding"},
-        std::string_view{"file.set_encoding"},
-        std::string_view{"file.set_line_ending"},
-        std::string_view{"file.set_final_newline"},
-    };
-    static_assert(ssg::kTextEncodingCommandSet.descriptors.size() == 4);
-    for (std::size_t index = 0; index < expected.size(); ++index) {
-        ASSERT_EQ(ssg::kTextEncodingCommandSet.descriptors[index].id,
-                  expected[index]);
-    }
-
-}
-
 } // namespace
 
 // LF-2b: the fused single-pass UTF-8 decoder must record every terminator and
@@ -267,7 +251,6 @@ SSG_TEST_SUITE(test_text_encoding) {
     RUN(refusesInvalidInputWithoutReplacement);
     RUN(refusesLossySingleByteEncodingAtTheOffendingOffset);
     RUN(normalizesRequestedEndingsAndAppliesFinalNewlinePolicy);
-    RUN(exportsExactImmutableCommandSet);
     RUN(fusedDecodeRecordsEveryLineTerminator);
     RUN(fusedDecodePreservesMalformedOffsets);
     return failed == 0 ? 0 : 1;

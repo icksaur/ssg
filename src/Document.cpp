@@ -2,7 +2,7 @@
 
 #include "PieceTree.h"
 
-#include <ssg/open_metrics.h>
+#include "open_metrics.h"
 #include <ssg/TextCodec.h>
 
 #include <algorithm>

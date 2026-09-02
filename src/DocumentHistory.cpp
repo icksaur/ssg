@@ -205,19 +205,6 @@ struct DocumentHistory::Impl {
     }
 };
 
-HistoryCommandSet::HistoryCommandSet()
-    : descriptors_{{{"edit.undo", HistoryCommand::Undo},
-                    {"edit.redo", HistoryCommand::Redo}}} {}
-
-const std::array<HistoryCommandDescriptor, 2>&
-HistoryCommandSet::descriptors() const noexcept {
-    return descriptors_;
-}
-
-HistoryCommandSet historyCommandSet() {
-    return HistoryCommandSet{};
-}
-
 HistoryDelta HistoryDeltaCodec::derive(const HistoryViewState& before,
                                   const HistoryViewState& after) {
     if (before == after) {

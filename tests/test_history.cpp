@@ -68,12 +68,6 @@ void assertMatches(const ssg::Document& document,
               ref::snapshot_selections(reference));
 }
 
-TEST(commandSetOwnsUndoAndRedo) {
-    const auto commands = ssg::historyCommandSet();
-    ASSERT_EQ(commands.descriptors()[0].id, std::string_view{"edit.undo"});
-    ASSERT_EQ(commands.descriptors()[1].id, std::string_view{"edit.redo"});
-}
-
 TEST(referenceForwardUndoRedoRoundTrips) {
     ssg::Document document{"one"};
     ssg::DocumentHistory history{{4096, 750}};
@@ -333,7 +327,6 @@ TEST(viewStateAndDeltaTrackHistoryAvailability) {
 }  // namespace
 
 SSG_TEST_SUITE(test_history) {
-    RUN(commandSetOwnsUndoAndRedo);
     RUN(referenceForwardUndoRedoRoundTrips);
     RUN(typingCoalescesAtInclusiveClockBoundary);
     RUN(multicaretTypingCoalescesAndRoundTrips);

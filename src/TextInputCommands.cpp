@@ -267,26 +267,6 @@ void normalizeEdits(std::vector<PendingEdit>& edits) {
 
 }  // namespace
 
-TextInputCommandSet::TextInputCommandSet()
-    : descriptors_{{
-          {"text.insert", TextInputCommand::Insert},
-          {"text.newline", TextInputCommand::Newline},
-          {"text.delete_backward", TextInputCommand::DeleteBackward},
-          {"text.delete_forward", TextInputCommand::DeleteForward},
-          {"text.delete_word_backward",
-           TextInputCommand::DeleteWordBackward},
-          {"text.delete_word_forward", TextInputCommand::DeleteWordForward},
-      }} {}
-
-const std::array<TextInputCommandDescriptor, 6>&
-TextInputCommandSet::descriptors() const noexcept {
-    return descriptors_;
-}
-
-TextInputCommandSet textInputCommandSet() {
-    return TextInputCommandSet{};
-}
-
 TextInputResult TextInputInterpreter::apply(
     const DocumentSnapshot& document, const SelectionSet& selections,
     TextInputSettings settings, TextInputCommand command,

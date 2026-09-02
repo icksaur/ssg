@@ -7,7 +7,6 @@
 #include <ssg/Search.h>
 #include <ssg/Selection.h>
 
-#include <array>
 #include <atomic>
 #include <cstdint>
 #include <optional>
@@ -93,23 +92,6 @@ enum class FindReplaceCommand : std::uint8_t {
 struct FindQueryArguments {
     std::string query;
     friend bool operator==(const FindQueryArguments&, const FindQueryArguments&) = default;
-};
-
-struct FindReplaceCommandDescriptor {
-    std::string_view id;
-    FindReplaceCommand command;
-    bool operator==(const FindReplaceCommandDescriptor&) const noexcept = default;
-};
-
-class FindReplaceCommandSet {
-public:
-    FindReplaceCommandSet();
-
-    [[nodiscard]] const std::array<FindReplaceCommandDescriptor, 16>&
-    descriptors() const noexcept;
-
-private:
-    const std::array<FindReplaceCommandDescriptor, 16> descriptors_;
 };
 
 struct FindReplaceViewState {

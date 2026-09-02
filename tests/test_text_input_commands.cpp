@@ -3,12 +3,10 @@
 
 #include "test_helpers.h"
 
-#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -73,24 +71,6 @@ std::string applyResult(Document& document,
     }
     ASSERT_EQ(document.snapshot().text, result.resultingText);
     return document.snapshot().text;
-}
-
-TEST(commandSetIsExactAndImmutable) {
-    static_assert(!std::is_copy_assignable_v<ssg::TextInputCommandSet>);
-    constexpr std::array<std::string_view, 6> expected{{
-        "text.insert",
-        "text.newline",
-        "text.delete_backward",
-        "text.delete_forward",
-        "text.delete_word_backward",
-        "text.delete_word_forward",
-    }};
-
-    const auto commands = ssg::textInputCommandSet();
-    ASSERT_EQ(commands.descriptors().size(), expected.size());
-    for (std::size_t index = 0; index < expected.size(); ++index) {
-        ASSERT_EQ(commands.descriptors()[index].id, expected[index]);
-    }
 }
 
 TEST(singleCaretInsertAndSelectionReplacement) {
@@ -312,7 +292,6 @@ TEST(historyEditKindClassifiesEveryTextInputCommand) {
 }
 
 SSG_TEST_SUITE(test_text_input_commands) {
-    RUN(commandSetIsExactAndImmutable);
     RUN(singleCaretInsertAndSelectionReplacement);
     RUN(multipleCaretsInsertOnceEach);
     RUN(newlineUsesConfiguredEolAndIndentation);

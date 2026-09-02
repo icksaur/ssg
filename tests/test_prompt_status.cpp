@@ -1,6 +1,6 @@
 #include "ssg/PromptSurface.h"
 #include <tui/PromptLayout.h>
-#include "ssg/StatusQueue.h"
+#include "status_queue.h"
 #include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
@@ -280,7 +280,7 @@ TEST(theSemanticAndGridControlsComeFromTheOneResolver) {
 }
 
 StatusItem status(std::uint64_t id, StatusPriority priority,
-                  std::string text, std::vector<StatusAction> actions = {}) {
+                  std::string text, std::vector<UiAction> actions = {}) {
     return StatusItem{StatusId{id}, priority, std::move(text),
                       std::move(actions)};
 }
@@ -344,8 +344,8 @@ TEST(statusActionsProjectCanonicalOpaqueNodeIdentities) {
     StatusQueue queue;
     const auto enqueued = queue.enqueue(status(
         7, StatusPriority::Error, "Build failed",
-        {StatusAction{"retry", "Retry build", "build.retry"},
-         StatusAction{"r\xC3\xA9try", "Retry localized", "build.localized"}}));
+        {UiAction{"retry", "Retry build", "build.retry"},
+         UiAction{"r\xC3\xA9try", "Retry localized", "build.localized"}}));
     ASSERT_TRUE(enqueued.accepted);
     const auto nodes = queue.actionNodes();
     ASSERT_EQ(nodes.size(), std::size_t{2});
@@ -373,8 +373,8 @@ TEST(statusQueueRejectsDuplicateActionIdentityBeforeMutation) {
     StatusQueue queue;
     const auto rejected = queue.enqueue(status(
         7, StatusPriority::Error, "Build failed",
-        {StatusAction{"retry", "Retry build", "build.retry"},
-         StatusAction{"retry", "Retry elsewhere", "build.other"}}));
+        {UiAction{"retry", "Retry build", "build.retry"},
+         UiAction{"retry", "Retry elsewhere", "build.other"}}));
     ASSERT_FALSE(rejected.accepted);
     ASSERT_TRUE(queue.viewState().items.empty());
     ASSERT_TRUE(queue.actionNodes().empty());
@@ -385,7 +385,7 @@ TEST(footerProjectionAndAccessibilityMatchGolden) {
     ASSERT_TRUE(prompt.open(request(PromptKind::Find)).accepted());
     const auto layout = computePromptLayout(prompt, Rect{0, 4, 20, 2});
     StatusQueue queue;
-    std::vector<StatusAction> actions{
+    std::vector<UiAction> actions{
         {"retry", "Retry build", "build.retry"},
         {"log", "Open log", "log.open"}};
     ASSERT_TRUE(queue.enqueue(
@@ -393,7 +393,7 @@ TEST(footerProjectionAndAccessibilityMatchGolden) {
     const auto footer = queue.footerProjection();
     ASSERT_EQ(footer.value, std::string{"Build failed 1/1"});
     ASSERT_EQ(footer.actions[0].id, std::string{"retry"});
-    ASSERT_EQ(footer.actions[1].accessibleLabel, std::string{"Open log"});
+    ASSERT_EQ(footer.actions[1].label, std::string{"Open log"});
 
     // The accessibility contract is that every surfaced element carries a
     // non-empty label, not that the labels read exactly as they do today.
@@ -406,7 +406,7 @@ TEST(footerProjectionAndAccessibilityMatchGolden) {
     const auto statusView = queue.viewState();
     ASSERT_FALSE(statusView.items[0].accessibleLabel.empty());
     for (const auto& action : footer.actions) {
-        ASSERT_FALSE(action.accessibleLabel.empty());
+        ASSERT_FALSE(action.label.empty());
     }
 }
 

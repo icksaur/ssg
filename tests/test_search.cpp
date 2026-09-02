@@ -229,25 +229,6 @@ TEST(paletteUsesInjectedCatalogAndDispatch) {
     ASSERT_FALSE(controller.executePalette().accepted);
 }
 
-TEST(commandExportsAreExact) {
-    const auto set = searchCommandSet();
-    const std::vector<std::string_view> expected{
-        "palette.open",          "palette.close",        "palette.next",
-        "palette.previous",      "palette.execute",      "file_finder.open",
-        "file_finder.toggle_gitignore",                  "goto.file",
-        "goto.line",             "goto.symbol",          "goto.back",
-        "goto.forward",          "search.workspace",     "search.results_next",
-        "search.results_previous"};
-    std::vector<std::string_view> actual;
-    for (const auto& descriptor : set.descriptors()) {
-        actual.push_back(descriptor.id);
-        ASSERT_TRUE(descriptor.userNavigation ==
-                        (descriptor.id.starts_with("goto.") ||
-                         descriptor.id.starts_with("search.results_")));
-    }
-    ASSERT_EQ(actual, expected);
-}
-
 } // namespace
 
 SSG_TEST_SUITE(test_search) {
@@ -256,6 +237,5 @@ SSG_TEST_SUITE(test_search) {
     RUN(cancellationSupersessionAndStaleRevisionAreRejected);
     RUN(navigationHistoryMatchesTransitionTable);
     RUN(paletteUsesInjectedCatalogAndDispatch);
-    RUN(commandExportsAreExact);
     return failed == 0 ? 0 : 1;
 }

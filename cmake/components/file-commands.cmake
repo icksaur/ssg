@@ -15,20 +15,27 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         NAME test_file_commands
         ENTRY ${SSG_SOURCE_DIR}/tests/test_file_commands.cpp
         SYMBOL test_file_commands)
+    ssg_test_include_directories(test_file_commands PRIVATE ${SSG_SOURCE_DIR}/src)
     ssg_test_link_libraries(test_file_commands PRIVATE ssg_core)
 
     ssg_add_test_suite(
         NAME test_path_prompt
         ENTRY ${SSG_SOURCE_DIR}/tests/test_path_prompt.cpp
         SYMBOL test_path_prompt)
-    ssg_test_include_directories(test_path_prompt PRIVATE ${SSG_SOURCE_DIR}/tests)
+    ssg_test_include_directories(test_path_prompt PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+        ${SSG_SOURCE_DIR}/src
+    )
     ssg_test_link_libraries(test_path_prompt PRIVATE ssg_core)
 
     ssg_add_test_suite(
         NAME test_name_clash
         ENTRY ${SSG_SOURCE_DIR}/tests/test_name_clash.cpp
         SYMBOL test_name_clash)
-    ssg_test_include_directories(test_name_clash PRIVATE ${SSG_SOURCE_DIR}/tests)
+    ssg_test_include_directories(test_name_clash PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+        ${SSG_SOURCE_DIR}/src
+    )
     ssg_test_link_libraries(test_name_clash PRIVATE ssg_core)
 
     ssg_add_test_suite(

@@ -158,11 +158,11 @@ static int lowerUiRegionGroups(
             const auto actionNodes = projectStatusActionNodes(*statusView);
             for (std::size_t actionIndex = 0; actionIndex < itemView.actions.size(); ++actionIndex) {
                 const auto& action = itemView.actions[actionIndex];
-                if (action.accessibleLabel.empty()) continue;
+                if (action.label.empty()) continue;
                 const auto& actionNode = actionNodes[actionIndex];
                 Resolved resolved;
-                resolved.content = action.accessibleLabel;
-                resolved.label = action.accessibleLabel;
+                resolved.content = action.label;
+                resolved.label = action.label;
                 const std::string actionStackId = stackId + ".A" + std::to_string(actionIndex);
                 StackItem stackItem = stackItemFor(w, actionStackId, resolved, style);
                 stackItem.rank = w.rank;
