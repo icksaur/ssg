@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ssg/EditorSession.h>
-#include <ssg/GridPresenter.h>
+#include <tui/GridPresenter.h>
 
 #include <optional>
 #include <utility>

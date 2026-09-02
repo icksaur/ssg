@@ -11,7 +11,7 @@
 #include "ssg_terminal.h"
 
 #include <ssg/ClientInput.h>
-#include <ssg/HitTester.h>
+#include <tui/HitTester.h>
 #include <ssg/TabManager.h>
 #include <ssg/ExternalModificationFlow.h>
 

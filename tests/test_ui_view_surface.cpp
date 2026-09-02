@@ -4,8 +4,8 @@
 // The surface->section mapping is the enforced data-channel contract for the
 // closed surface set.
 
-#include "ssg/UiRegionProjection.h"
-#include "ssg/ShellViewState.h"
+#include <tui/UiRegionProjection.h>
+#include <tui/ShellViewState.h>
 #include "ssg/UiTree.h"
 #include "ssg/ViewSurfaceBacking.h"
 #include "ssg/Widget.h"

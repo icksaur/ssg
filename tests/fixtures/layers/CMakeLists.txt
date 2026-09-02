@@ -5,17 +5,13 @@ endfunction()
 
 ssg_add_layer_fixture(platform_standalone ssg_platform allowed_platform.cpp)
 ssg_add_layer_fixture(core_to_platform ssg_core allowed_core_platform.cpp)
-ssg_add_layer_fixture(grid_to_core ssg_grid allowed_grid_core.cpp)
 
 set(_SSG_ALLOWED_LAYER_FIXTURES
     platform_standalone
-    core_to_platform
-    grid_to_core)
+    core_to_platform)
 
 set(_SSG_FORBIDDEN_LAYER_FIXTURES
-    core_to_grid:Renderer.h
-    platform_to_core:EditorSession.h
-    platform_to_grid:Renderer.h)
+    platform_to_core:EditorSession.h)
 
 foreach(_fixture IN LISTS _SSG_ALLOWED_LAYER_FIXTURES)
     add_test(NAME test_layer_include_${_fixture}
@@ -25,6 +21,16 @@ foreach(_fixture IN LISTS _SSG_ALLOWED_LAYER_FIXTURES)
             -DSSG_LAYER_EXPECT_SUCCESS=ON
             -P ${SSG_SOURCE_DIR}/cmake/run_layer_fixture.cmake)
 endforeach()
+
+ssg_add_layer_fixture(
+    facade_to_tui ssg forbidden_facade_to_tui.cpp)
+add_test(NAME test_layer_include_facade_to_tui
+    COMMAND ${CMAKE_COMMAND}
+        -DSSG_LAYER_BINARY_DIR=${CMAKE_BINARY_DIR}
+        -DSSG_LAYER_TARGET=layer_facade_to_tui
+        -DSSG_LAYER_HEADER=Renderer.h
+        -DSSG_LAYER_EXPECT_SUCCESS=OFF
+        -P ${SSG_SOURCE_DIR}/cmake/run_layer_fixture.cmake)
 
 foreach(_entry IN LISTS _SSG_FORBIDDEN_LAYER_FIXTURES)
     string(REPLACE ":" ";" _fields "${_entry}")

@@ -42,7 +42,6 @@ add_library(ssg_platform STATIC)
 add_library(ssg_core STATIC
     src/ssg.cpp
 )
-add_library(ssg_grid STATIC)
 
 ssg_declare_layer(
     TARGET ssg_platform
@@ -51,16 +50,10 @@ ssg_declare_layer(
     TARGET ssg_core
     ROOT "${SSG_SOURCE_DIR}/include/core"
     ALLOWS ssg_platform)
-ssg_declare_layer(
-    TARGET ssg_grid
-    ROOT "${SSG_SOURCE_DIR}/include/grid"
-    ALLOWS ssg_core)
-
 target_link_libraries(ssg_core PUBLIC ssg_platform)
-target_link_libraries(ssg_grid PUBLIC ssg_core)
 
 add_library(ssg INTERFACE)
-target_link_libraries(ssg INTERFACE ssg_core ssg_platform ssg_grid)
+target_link_libraries(ssg INTERFACE ssg_core ssg_platform)
 add_library(ssg::ssg ALIAS ssg)
 
 # Warnings are errors for THIS project's own code, so the fourteen that had
@@ -86,7 +79,6 @@ endfunction()
 
 ssg_configure_component(ssg_platform)
 ssg_configure_component(ssg_core)
-ssg_configure_component(ssg_grid)
 
 # Auto-discover component manifests.  CONFIGURE_DEPENDS causes Ninja and
 # Makefile generators to re-glob when cmake/components/ changes, so new
@@ -98,10 +90,11 @@ ssg_configure_component(ssg_grid)
 # (e.g., on Windows with parity gates, prefer -G Ninja).
 #
 # Manifest contract — a fragment in cmake/components/*.cmake may:
-#   1. Add sources only to their owning ssg_core, ssg_platform, or ssg_grid
-#      target.
+#   1. Add library sources only to their owning ssg_core or ssg_platform target.
 #      Use ${SSG_SOURCE_DIR}/<rel-path> for project-root-relative paths.
 #      Never use CMAKE_SOURCE_DIR (breaks add_subdirectory consumers).
+#      The early app-tui-presentation manifest defines the top-level-only
+#      ssg_tui_objects target; other manifests may link but not extend it.
 #   2. Inside "if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)":
 #      create a standalone test executable, link the narrowest component it
 #      consumes, and register

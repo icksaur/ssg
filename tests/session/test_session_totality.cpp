@@ -2,8 +2,8 @@
 #include "../grid_test_frame.h"
 
 #include <ssg/EditorSession.h>
-#include <ssg/Renderer.h>
-#include <ssg/ShellViewState.h>
+#include <tui/Renderer.h>
+#include <tui/ShellViewState.h>
 #include <ssg/Viewport.h>
 
 #include <filesystem>

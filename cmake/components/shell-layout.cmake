@@ -1,10 +1,6 @@
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/PaneTopology.cpp
 )
-target_sources(ssg_grid PRIVATE
-    ${SSG_SOURCE_DIR}/src/Layout.cpp
-)
-
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_pane_topology
         ${SSG_SOURCE_DIR}/tests/test_pane_topology.cpp
@@ -18,6 +14,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_layout_solver
         ${SSG_SOURCE_DIR}/tests/test_layout_solver.cpp
     )
-    target_link_libraries(test_layout_solver PRIVATE ssg_grid)
+    target_link_libraries(test_layout_solver PRIVATE ssg_tui_objects)
     add_test(NAME test_layout_solver COMMAND test_layout_solver)
 endif()

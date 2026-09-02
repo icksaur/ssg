@@ -5,8 +5,8 @@
 // INDEPENDENT expectation derived from its sources, because the TUI node exposes
 // only the composed glyph, not the semantic checked/caption/label.
 
-#include "ssg/UiRegionProjection.h"
-#include "ssg/ShellViewState.h"
+#include <tui/UiRegionProjection.h>
+#include <tui/ShellViewState.h>
 
 #include "ssg/Style.h"
 #include "ssg/UiNodeState.h"

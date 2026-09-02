@@ -3,9 +3,9 @@
 
 #include <ssg/EditorSession.h>
 #include <ssg/focus.h>
-#include <ssg/HitTester.h>
+#include <tui/HitTester.h>
 #include <ssg/PromptSurface.h>
-#include <ssg/Renderer.h>
+#include <tui/Renderer.h>
 #include <ssg/ScriptHost.h>
 #include <ssg/Selection.h>
 

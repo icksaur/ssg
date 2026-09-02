@@ -1,4 +1,4 @@
-#include <ssg/HitTester.h>
+#include <tui/HitTester.h>
 
 #include <algorithm>
 #include <stdexcept>

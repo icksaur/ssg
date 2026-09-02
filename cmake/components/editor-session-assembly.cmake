@@ -25,6 +25,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_status_fields PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_link_libraries(test_status_fields PRIVATE ssg_grid)
+    target_link_libraries(test_status_fields PRIVATE ssg_tui_objects)
     add_test(NAME test_status_fields COMMAND test_status_fields)
 endif()

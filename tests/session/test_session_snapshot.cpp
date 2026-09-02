@@ -3,7 +3,7 @@
 #include "../test_helpers.h"
 
 #include <ssg/EditorSession.h>
-#include <ssg/GridPresenter.h>
+#include <tui/GridPresenter.h>
 #include <ssg/Keymap.h>
 #include <ssg/ViewportProjection.h>
 

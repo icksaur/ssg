@@ -3,7 +3,7 @@
 #include <ssg/CommandCatalog.h>
 #include <ssg/CommandSpecBuilder.h>
 #include <ssg/EditorSession.h>
-#include <ssg/GridPresenter.h>
+#include <tui/GridPresenter.h>
 
 #include "test_helpers.h"
 

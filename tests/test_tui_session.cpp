@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 #include "tui_fixture.h"
 
-#include <ssg/Renderer.h>
+#include <tui/Renderer.h>
 
 #include <filesystem>
 #include <stdexcept>

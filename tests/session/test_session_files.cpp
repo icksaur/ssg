@@ -5,7 +5,7 @@
 #include <ssg/EditorSession.h>
 #include <ssg/FileCommands.h>
 #include <ssg/GitDiffSource.h>
-#include <ssg/HitTester.h>
+#include <tui/HitTester.h>
 #include <ssg/Keymap.h>
 #include <ssg/Settings.h>
 #include <ssg/session_snapshot.h>

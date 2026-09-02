@@ -16,7 +16,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_include_directories(ssg_startup_probe PRIVATE ${SSG_SOURCE_DIR}/apps)
     target_compile_definitions(ssg_startup_probe PRIVATE SSG_STARTUP_TRACE_ENABLED)
-    target_link_libraries(ssg_startup_probe PRIVATE ssg_grid)
+    target_link_libraries(ssg_startup_probe PRIVATE ssg_tui_objects)
 
     add_executable(startup_benchmark
         ${SSG_SOURCE_DIR}/benchmarks/startup_benchmark.cpp

@@ -1,6 +1,6 @@
-#include <ssg/PromptLayout.h>
+#include <tui/PromptLayout.h>
 
-#include <ssg/Layout.h>
+#include <tui/Layout.h>
 #include <ssg/WholeScreenAssembly.h>
 
 #include <utility>

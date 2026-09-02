@@ -1,11 +1,11 @@
-#include <ssg/UiRegionProjection.h>
+#include <tui/UiRegionProjection.h>
 
 #include <ssg/GraphemeLayout.h>
-#include <ssg/StatusFieldGrid.h>
+#include <tui/StatusFieldGrid.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/Theme.h>  // semanticRoleFromName
 #include <ssg/UiStateResolver.h>
-#include <ssg/WidgetLayout.h>
+#include <tui/WidgetLayout.h>
 
 #include <optional>
 #include <ranges>

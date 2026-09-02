@@ -16,7 +16,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             ${SSG_SOURCE_DIR}/apps
             ${SSG_SOURCE_DIR}/tests
         )
-        target_link_libraries(test_terminal_parity PRIVATE ssg_grid -lutil)
+        target_link_libraries(test_terminal_parity PRIVATE ssg_tui_objects -lutil)
         add_dependencies(test_terminal_parity ssg_app)
         target_compile_definitions(test_terminal_parity PRIVATE
             SSG_APP_BINARY="$<TARGET_FILE:ssg_app>"

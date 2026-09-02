@@ -6,10 +6,10 @@
 // content become cells. The terminal client translates the grid to its medium;
 // it adds no layout, content, or color.
 
-#include <ssg/GridPresenter.h>
+#include <tui/GridPresenter.h>
 #include <ssg/Style.h>
 #include <ssg/Theme.h>
-#include <ssg/ShellViewState.h>
+#include <tui/ShellViewState.h>
 #include <ssg/LineLayoutCache.h>
 
 #include <array>

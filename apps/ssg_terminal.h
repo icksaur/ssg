@@ -8,7 +8,7 @@
 // grid into terminal bytes.
 
 #include <ssg/color.h>
-#include <ssg/Renderer.h>
+#include <tui/Renderer.h>
 
 #include <array>
 #include <chrono>

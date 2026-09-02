@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 
 #include <ssg/StatusFields.h>
-#include <ssg/StatusFieldGrid.h>
+#include <tui/StatusFieldGrid.h>
 
 #include <string>
 #include <unordered_map>

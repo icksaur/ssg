@@ -1,8 +1,8 @@
-#include <ssg/Renderer.h>
+#include <tui/Renderer.h>
 
 #include <ssg/EditorSession.h>
 #include <ssg/FindReplace.h>
-#include <ssg/HitTester.h>
+#include <tui/HitTester.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/StatusFields.h>
 #include <ssg/StatusQueue.h>

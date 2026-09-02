@@ -21,10 +21,10 @@
 // enlarge the public library surface.
 
 #include <ssg/GraphemeLayout.h>
-#include <ssg/GridPresenter.h>
+#include <tui/GridPresenter.h>
 #include <ssg/InteractionAuthority.h>
 #include <ssg/UiStateResolver.h>
-#include <ssg/Renderer.h>
+#include <tui/Renderer.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/WholeScreenAssembly.h>
 #include <ssg/SyntaxModel.h>

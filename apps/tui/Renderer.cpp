@@ -1,8 +1,8 @@
-#include <ssg/Renderer.h>
+#include <tui/Renderer.h>
 
 #include <ssg/GraphemeLayout.h>
 #include <ssg/SyntaxModel.h>
-#include <ssg/WidgetLayout.h>
+#include <tui/WidgetLayout.h>
 
 #include <algorithm>
 #include <iomanip>

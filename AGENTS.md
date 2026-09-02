@@ -2,8 +2,8 @@
 
 SSG is a C++20 editor library with a terminal client. The library owns
 editor behavior and authoritative product state. Each client owns presentation,
-native layout, and device I/O. The library may provide optional presentation
-services, but no client-specific representation is the product contract.
+native layout, and device I/O. No client-specific representation is part of the
+library contract.
 
 The code is the truth. Temporary design documents help ship uncertain work; they
 are not the maintained description of a stable feature.

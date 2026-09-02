@@ -27,8 +27,8 @@ The normal flow is:
 3. Commands and semantic input converge on the same core command and transition
    machinery.
 4. The core publishes revisioned state without deciding presentation.
-5. A client presents that state through the optional grid service or its native
-   UI, and resolves its own device input into the published typed inputs.
+5. A client presents that state through its native UI and resolves its own
+   device input into the published typed inputs.
 
 `EditorSession` serializes state operations across command execution, worker
 publication, revision publication, and result construction. Command handlers
@@ -45,12 +45,10 @@ the last column.
 |---|---|---|---|
 | `ssg_platform` | Operating-system and filesystem adapters | `include/platform` | none |
 | `ssg_core` | Editor behavior and authoritative semantic state | `include/core` | `ssg_platform` |
-| `ssg_grid` | Optional cell-grid layout, rendering, and hit testing | `include/grid` | `ssg_core` |
-| `ssg` | External embedding facade | none; interface target | `ssg_core`, `ssg_platform`, `ssg_grid` |
+| `ssg` | External embedding facade | none; interface target | `ssg_core`, `ssg_platform` |
 
-Core cannot depend on presentation. The grid is an optional presentation
-service, not the editor contract. Executables are composition boundaries and may
-link the components they host.
+Core cannot depend on presentation. Executables are composition boundaries and
+own the presentation implementations they host.
 
 `cmake/ssg_layers.cmake` makes this graph executable. It records each target's
 allowed direct links, public root, private roots, and public-header inventory.
@@ -79,7 +77,7 @@ knowledge elsewhere.
 | `CommandTransition` and `PreparedTransition` | Preflight and atomically install changes spanning prompt, panel, picker, focus, and tree-provider state. |
 | `assembleWholeScreen` | Build the canonical medium-independent whole-screen UI tree. |
 | `UiFrame` | Keep schema, dynamic node state, presence, and focus in one validated publication. |
-| `GridPresenter` | Project semantic state through the grid-specific layout service and resolve grid view actions against a presentation basis. |
+| `GridPresenter` | Let the terminal client project semantic state through its cell-grid layout and resolve grid view actions against a presentation basis. |
 | Platform file and watcher seams | Hide Linux and Windows durability, filesystem-watch, and Git-watch implementations from core behavior. |
 
 Domain models such as selection, history, search, tabs, trees, syntax, LSP,
@@ -148,9 +146,9 @@ and input adapters consume snapshots; they do not mutate them.
 
 ### Grid and terminal
 
-`ssg_grid` is an optional presentation service. `GridPresenter` lowers a
-semantic snapshot to a `CellGrid`; `Layout` solves terminal cell geometry; the
-renderer applies theme roles and syntax state. The terminal application owns raw
+The terminal application's private `GridPresenter` lowers a semantic snapshot
+to a `CellGrid`; `Layout` solves terminal cell geometry; and the renderer
+applies theme roles and syntax state. The terminal application also owns raw
 terminal mode, terminal capability probing, input decoding, pointer routing,
 clipboard escape sequences, frame writes, and restoration.
 
@@ -177,10 +175,9 @@ identify the small set of palette edits a client performs locally.
 | Path | Purpose |
 |---|---|
 | `include/core/ssg` | Public editor and UI-VM contracts |
-| `include/grid/ssg` | Public optional grid presentation contracts |
 | `include/platform/ssg` | Public platform abstraction contracts |
 | `src/` | Implementations, organized by owning library component |
-| `apps/` | Terminal process host, terminal I/O/input adaptation, and init-script bootstrapping |
+| `apps/` | Terminal presentation, process host, terminal I/O/input adaptation, and init-script bootstrapping |
 | `examples/tui/` | Reference terminal fixture and embedding examples |
 | `tests/` | Focused owner tests and layer fixtures |
 | `benchmarks/` | Editor and startup measurements with focused correctness checks |
@@ -193,10 +190,9 @@ identify the small set of palette edits a client performs locally.
 - `EditorSession` is intentionally a central aggregate. Its serialized
   publication and command ingress are the boundary that prevents clients from
   creating competing editor state.
-- The UI-VM is intentionally richer than the grid. It is the shared semantic
-  contract for native clients, while grid geometry remains in `ssg_grid`.
-- `UiFrameDeltaCodec` is an in-memory convenience for retained clients; it does
-  not introduce a transport or a second authority.
+- The UI-VM is intentionally richer than the terminal grid. It is the shared
+  semantic contract for native clients, while grid geometry remains private to
+  the terminal application.
 - `GridPresenter` owns terminal-grid lowering, but the terminal application
   owns terminal APIs and device I/O.
 - Platform adapters are isolated below core so Linux and Windows behavior can

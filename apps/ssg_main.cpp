@@ -15,7 +15,7 @@
 #include <ssg/EditorSession.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/TreeSitterGrammars.h>
-#include <ssg/HitTester.h>
+#include <tui/HitTester.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
 #include <ssg/LuaCommandHost.h>

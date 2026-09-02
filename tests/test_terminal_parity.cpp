@@ -17,7 +17,7 @@
 // portable and would back a Windows ConPTY harness unchanged.
 
 #include <ssg/EditorSession.h>
-#include <ssg/Renderer.h>
+#include <tui/Renderer.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/Theme.h>
 

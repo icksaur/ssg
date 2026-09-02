@@ -1,8 +1,8 @@
 #pragma once
 
-#include <ssg/UiRegionProjection.h>
+#include <tui/UiRegionProjection.h>
 #include <ssg/ViewActionResult.h>
-#include <ssg/Layout.h>
+#include <tui/Layout.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Viewport.h>
 #include <ssg/ClientInput.h>

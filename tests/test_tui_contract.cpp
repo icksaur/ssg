@@ -1,6 +1,6 @@
 #include <ssg/EditorSession.h>
 #include <ssg/Keymap.h>
-#include <ssg/Renderer.h>
+#include <tui/Renderer.h>
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"
@@ -29,7 +29,7 @@ concept HasDimensionedSnapshot = requires(Runtime& runtime) {
 
 static_assert(!HasDimensionedSnapshot<ssg::EditorSession>);
 
-// Milestone 11 — Library API is the contract.
+// Milestone 11 — The semantic library API drives the TUI contract.
 //
 // M11-1: the TUI screen is a pure function of the production EditorSession's
 // SessionSnapshot.  These tests drive the REAL runtime (not a hand-authored

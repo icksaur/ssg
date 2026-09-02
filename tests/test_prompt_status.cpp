@@ -1,5 +1,5 @@
 #include "ssg/PromptSurface.h"
-#include "ssg/PromptLayout.h"
+#include <tui/PromptLayout.h>
 #include "ssg/StatusQueue.h"
 #include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"

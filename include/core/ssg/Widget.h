@@ -10,7 +10,7 @@
 namespace ssg {
 
 // The medium-neutral UI-VM leaf vocabulary. Terminal cell measurement, text
-// composition, and row packing belong to WidgetLayout in ssg_grid.
+// composition, and row packing belong to the TUI's WidgetLayout.
 enum class WidgetKind : std::uint8_t {
 #define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
     SSG_WIDGET_KIND_ENUMERATORS(SSG_ENUMERATOR)
