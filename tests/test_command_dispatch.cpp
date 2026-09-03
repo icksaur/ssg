@@ -176,34 +176,42 @@ TEST(revisionAdvancesExactlyOncePerAcceptedMutation) {
     ASSERT_TRUE(runtime != nullptr);
 
     int acceptedMutations = 0;
-    runtime->registerCommand(ssg::CommandSpecBuilder{"oracle.leaf"}
-                     .owner("test-oracle")
-                     .summary("counts itself")
-                     .mutates()
-                     .handler([&acceptedMutations](ssg::CommandContext&) {
-                         ++acceptedMutations;
-                         return ssg::CommandHandlerResult::success();
-                     }));
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(ssg::CommandSpecBuilder{"oracle.leaf"}
+                                  .owner("test-oracle")
+                                  .summary("counts itself")
+                                  .mutates()
+                                  .handler([&acceptedMutations](
+                                               ssg::CommandContext&) {
+                                      ++acceptedMutations;
+                                      return ssg::CommandHandlerResult::success();
+                                  }))
+            .valid());
 
     // Asks for two more commands, so one dispatch becomes a chain of three
     // accepted mutations.
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.chain"}
-            .owner("test-oracle")
-            .summary("defers two leaves")
-            .mutates()
-            .handler([&acceptedMutations, &runtime](ssg::CommandContext& ctx) {
-                ++acceptedMutations;
-                for (int queued = 0; queued < 2; ++queued) {
-                    if (!runtime->deferDispatch(
-                            ssg::ClientId{1},
-                            {"oracle.leaf", ctx.revision(), {}})) {
-                        return ssg::CommandHandlerResult::failure(
-                            "could not queue");
-                    }
-                }
-                return ssg::CommandHandlerResult::success();
-            }));
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.chain"}
+                    .owner("test-oracle")
+                    .summary("defers two leaves")
+                    .mutates()
+                    .handler([&acceptedMutations,
+                              &runtime](ssg::CommandContext& ctx) {
+                        ++acceptedMutations;
+                        for (int queued = 0; queued < 2; ++queued) {
+                            if (!runtime->deferDispatch(
+                                    ssg::ClientId{1},
+                                    {"oracle.leaf", ctx.revision(), {}})) {
+                                return ssg::CommandHandlerResult::failure(
+                                    "could not queue");
+                            }
+                        }
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
 
     auto const before = runtime->revision().value();
     auto const result = runtime->dispatch(
@@ -223,15 +231,18 @@ TEST(stateValidatedMutationUsesCurrentRevisionWhenClientBasisIsStale) {
     ASSERT_TRUE(runtime != nullptr);
 
     ssg::Revision handledAt;
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.state_validated"}
-            .owner("test-oracle")
-            .summary("validates current domain state")
-            .stateValidatedMutation()
-            .handler([&handledAt](ssg::CommandContext& context) {
-                handledAt = context.revision();
-                return ssg::CommandHandlerResult::success();
-            }));
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.state_validated"}
+                    .owner("test-oracle")
+                    .summary("validates current domain state")
+                    .stateValidatedMutation()
+                    .handler([&handledAt](ssg::CommandContext& context) {
+                        handledAt = context.revision();
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
 
     const auto stale = runtime->revision();
     ASSERT_TRUE(
@@ -258,42 +269,56 @@ TEST(revisionAdvancesOncePerMutationAcrossANestedChain) {
     ASSERT_TRUE(runtime != nullptr);
 
     int acceptedMutations = 0;
-    runtime->registerCommand(ssg::CommandSpecBuilder{"oracle.deep_leaf"}
-                     .owner("test-oracle")
-                     .summary("counts itself")
-                     .mutates()
-                     .handler([&acceptedMutations](ssg::CommandContext&) {
-                         ++acceptedMutations;
-                         return ssg::CommandHandlerResult::success();
-                     }));
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.deep_middle"}
-            .owner("test-oracle")
-            .summary("defers a leaf")
-            .mutates()
-            .handler([&acceptedMutations, &runtime](ssg::CommandContext& ctx) {
-                ++acceptedMutations;
-                if (!runtime->deferDispatch(
-                        ssg::ClientId{1},
-                        {"oracle.deep_leaf", ctx.revision(), {}})) {
-                    return ssg::CommandHandlerResult::failure("could not queue");
-                }
-                return ssg::CommandHandlerResult::success();
-            }));
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.deep_outer"}
-            .owner("test-oracle")
-            .summary("defers a middle")
-            .mutates()
-            .handler([&acceptedMutations, &runtime](ssg::CommandContext& ctx) {
-                ++acceptedMutations;
-                if (!runtime->deferDispatch(
-                        ssg::ClientId{1},
-                        {"oracle.deep_middle", ctx.revision(), {}})) {
-                    return ssg::CommandHandlerResult::failure("could not queue");
-                }
-                return ssg::CommandHandlerResult::success();
-            }));
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(ssg::CommandSpecBuilder{"oracle.deep_leaf"}
+                                  .owner("test-oracle")
+                                  .summary("counts itself")
+                                  .mutates()
+                                  .handler([&acceptedMutations](
+                                               ssg::CommandContext&) {
+                                      ++acceptedMutations;
+                                      return ssg::CommandHandlerResult::success();
+                                  }))
+            .valid());
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.deep_middle"}
+                    .owner("test-oracle")
+                    .summary("defers a leaf")
+                    .mutates()
+                    .handler([&acceptedMutations,
+                              &runtime](ssg::CommandContext& ctx) {
+                        ++acceptedMutations;
+                        if (!runtime->deferDispatch(
+                                ssg::ClientId{1},
+                                {"oracle.deep_leaf", ctx.revision(), {}})) {
+                            return ssg::CommandHandlerResult::failure(
+                                "could not queue");
+                        }
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.deep_outer"}
+                    .owner("test-oracle")
+                    .summary("defers a middle")
+                    .mutates()
+                    .handler([&acceptedMutations,
+                              &runtime](ssg::CommandContext& ctx) {
+                        ++acceptedMutations;
+                        if (!runtime->deferDispatch(
+                                ssg::ClientId{1},
+                                {"oracle.deep_middle", ctx.revision(), {}})) {
+                            return ssg::CommandHandlerResult::failure(
+                                "could not queue");
+                        }
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
 
     auto const before = runtime->revision().value();
     ASSERT_TRUE(runtime
@@ -315,14 +340,16 @@ TEST(anObservingCommandLeavesTheRevisionAlone) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
 
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.observe"}
-            .owner("test-oracle")
-            .summary("changes nothing")
-            .observes()
-            .handler([](ssg::CommandContext&) {
-                return ssg::CommandHandlerResult::success();
-            }));
+    ASSERT_TRUE(runtime
+                    ->registerCommand(
+                        ssg::CommandSpecBuilder{"oracle.observe"}
+                            .owner("test-oracle")
+                            .summary("changes nothing")
+                            .observes()
+                            .handler([](ssg::CommandContext&) {
+                                return ssg::CommandHandlerResult::success();
+                            }))
+                    .valid());
 
     auto const before = runtime->revision().value();
     ASSERT_TRUE(runtime
@@ -342,27 +369,36 @@ TEST(aFailedChainAdvancesTheRevisionOnlyForCommandsThatRan) {
     ASSERT_TRUE(runtime != nullptr);
 
     int acceptedMutations = 0;
-    runtime->registerCommand(ssg::CommandSpecBuilder{"oracle.refuses"}
-                     .owner("test-oracle")
-                     .summary("always fails")
-                     .mutates()
-                     .handler([](ssg::CommandContext&) {
-                         return ssg::CommandHandlerResult::failure("no");
-                     }));
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.queues_a_failure"}
-            .owner("test-oracle")
-            .summary("defers a command that fails")
-            .mutates()
-            .handler([&acceptedMutations, &runtime](ssg::CommandContext& ctx) {
-                ++acceptedMutations;
-                if (!runtime->deferDispatch(
-                        ssg::ClientId{1},
-                        {"oracle.refuses", ctx.revision(), {}})) {
-                    return ssg::CommandHandlerResult::failure("could not queue");
-                }
-                return ssg::CommandHandlerResult::success();
-            }));
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(ssg::CommandSpecBuilder{"oracle.refuses"}
+                                  .owner("test-oracle")
+                                  .summary("always fails")
+                                  .mutates()
+                                  .handler([](ssg::CommandContext&) {
+                                      return ssg::CommandHandlerResult::failure(
+                                          "no");
+                                  }))
+            .valid());
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.queues_a_failure"}
+                    .owner("test-oracle")
+                    .summary("defers a command that fails")
+                    .mutates()
+                    .handler([&acceptedMutations,
+                              &runtime](ssg::CommandContext& ctx) {
+                        ++acceptedMutations;
+                        if (!runtime->deferDispatch(
+                                ssg::ClientId{1},
+                                {"oracle.refuses", ctx.revision(), {}})) {
+                            return ssg::CommandHandlerResult::failure(
+                                "could not queue");
+                        }
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
 
     auto const before = runtime->revision().value();
     auto const result =
@@ -388,16 +424,20 @@ TEST(aHandlerThatDispatchesIsToldToDeferInstead) {
     ASSERT_TRUE(runtime != nullptr);
 
     ssg::CommandResult nested{};
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.dispatches"}
-            .owner("test-oracle")
-            .summary("dispatches from its handler")
-            .mutates()
-            .handler([&nested, &runtime](ssg::CommandContext& ctx) {
-                nested = runtime->dispatch(
-                    ssg::ClientId{1}, {"oracle.dispatches", ctx.revision(), {}});
-                return ssg::CommandHandlerResult::success();
-            }));
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.dispatches"}
+                    .owner("test-oracle")
+                    .summary("dispatches from its handler")
+                    .mutates()
+                    .handler([&nested, &runtime](ssg::CommandContext& ctx) {
+                        nested = runtime->dispatch(
+                            ssg::ClientId{1},
+                            {"oracle.dispatches", ctx.revision(), {}});
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
 
     ASSERT_TRUE(runtime
                     ->dispatch(ssg::ClientId{1},
@@ -629,19 +669,22 @@ TEST(aHandlerThatSnapshotsIsRefusedBeforeTakingTheOperationLock) {
     ASSERT_TRUE(runtime != nullptr);
 
     bool refused = false;
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.presents"}
-            .owner("test-oracle")
-            .summary("attempts snapshot capture from its handler")
-            .observes()
-            .handler([&](ssg::CommandContext&) {
-                try {
-                    (void)runtime->snapshot(ssg::ClientId{1});
-                } catch (const std::logic_error&) {
-                    refused = true;
-                }
-                return ssg::CommandHandlerResult::success();
-            }));
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.presents"}
+                    .owner("test-oracle")
+                    .summary("attempts snapshot capture from its handler")
+                    .observes()
+                    .handler([&](ssg::CommandContext&) {
+                        try {
+                            (void)runtime->snapshot(ssg::ClientId{1});
+                        } catch (const std::logic_error&) {
+                            refused = true;
+                        }
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
 
     ASSERT_TRUE(runtime
                     ->dispatch(ssg::ClientId{1},
@@ -659,32 +702,36 @@ TEST(aHandlerCannotMutateTheCommandCatalogReentrantly) {
 
     bool registrationRefused = false;
     bool replacementRefused = false;
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.registers"}
-            .owner("test-oracle")
-            .summary("attempts catalog mutation")
-            .observes()
-            .handler([&](ssg::CommandContext&) {
-                try {
-                    (void)runtime->registerCommand(
-                        ssg::CommandSpecBuilder{"oracle.illegal"}
-                            .owner("test-oracle")
-                            .summary("must not be registered")
-                            .observes()
-                            .handler([](ssg::CommandContext&) {
-                                return ssg::CommandHandlerResult::success();
-                            }));
-                } catch (std::logic_error const&) {
-                    registrationRefused = true;
-                }
-                try {
-                    (void)runtime->replaceCommandGeneration(
-                        std::span<ssg::CommandHandle const>{}, {});
-                } catch (std::logic_error const&) {
-                    replacementRefused = true;
-                }
-                return ssg::CommandHandlerResult::success();
-            }));
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.registers"}
+                    .owner("test-oracle")
+                    .summary("attempts catalog mutation")
+                    .observes()
+                    .handler([&](ssg::CommandContext&) {
+                        try {
+                            (void)runtime->registerCommand(
+                                ssg::CommandSpecBuilder{"oracle.illegal"}
+                                    .owner("test-oracle")
+                                    .summary("must not be registered")
+                                    .observes()
+                                    .handler([](ssg::CommandContext&) {
+                                        return ssg::CommandHandlerResult::
+                                            success();
+                                    }));
+                        } catch (std::logic_error const&) {
+                            registrationRefused = true;
+                        }
+                        try {
+                            (void)runtime->replaceCommandGeneration(
+                                std::span<ssg::CommandHandle const>{}, {});
+                        } catch (std::logic_error const&) {
+                            replacementRefused = true;
+                        }
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
 
     ASSERT_TRUE(runtime
                     ->dispatch(ssg::ClientId{1},
@@ -709,42 +756,52 @@ TEST(aggregateOperationHidesIntermediateDeferredRevisions) {
     std::atomic<int> stage{0};
     std::atomic<std::uint64_t> observedRevision{0};
 
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.blocking_deferred"}
-            .owner("test-oracle")
-            .summary("blocks the aggregate operation")
-            .mutates()
-            .handler([&](ssg::CommandContext&) {
-                stage.store(2);
-                deferredStartedPromise.set_value();
-                releaseDeferred.wait();
-                stage.store(3);
-                return ssg::CommandHandlerResult::success();
-            }));
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.primary"}
-            .owner("test-oracle")
-            .summary("queues the blocking command")
-            .mutates()
-            .handler([&](ssg::CommandContext& context) {
-                stage.store(1);
-                if (!runtime->deferDispatch(
-                        ssg::ClientId{1},
-                        {"oracle.blocking_deferred", context.revision(), {}})) {
-                    return ssg::CommandHandlerResult::failure(
-                        "could not queue");
-                }
-                return ssg::CommandHandlerResult::success();
-            }));
-    runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.second"}
-            .owner("test-oracle")
-            .summary("records the revision it observes")
-            .observes()
-            .handler([&](ssg::CommandContext& context) {
-                observedRevision.store(context.revision().value());
-                return ssg::CommandHandlerResult::success();
-            }));
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.blocking_deferred"}
+                    .owner("test-oracle")
+                    .summary("blocks the aggregate operation")
+                    .mutates()
+                    .handler([&](ssg::CommandContext&) {
+                        stage.store(2);
+                        deferredStartedPromise.set_value();
+                        releaseDeferred.wait();
+                        stage.store(3);
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.primary"}
+                    .owner("test-oracle")
+                    .summary("queues the blocking command")
+                    .mutates()
+                    .handler([&](ssg::CommandContext& context) {
+                        stage.store(1);
+                        if (!runtime->deferDispatch(
+                                ssg::ClientId{1},
+                                {"oracle.blocking_deferred", context.revision(),
+                                 {}})) {
+                            return ssg::CommandHandlerResult::failure(
+                                "could not queue");
+                        }
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
+    ASSERT_TRUE(
+        runtime
+            ->registerCommand(
+                ssg::CommandSpecBuilder{"oracle.second"}
+                    .owner("test-oracle")
+                    .summary("records the revision it observes")
+                    .observes()
+                    .handler([&](ssg::CommandContext& context) {
+                        observedRevision.store(context.revision().value());
+                        return ssg::CommandHandlerResult::success();
+                    }))
+            .valid());
 
     auto const before = runtime->revision();
     auto first = std::async(std::launch::async, [&] {
