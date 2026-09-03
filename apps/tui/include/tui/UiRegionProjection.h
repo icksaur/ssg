@@ -32,6 +32,7 @@ struct UiRegionProjectionResult {
 
 struct SolvedUiItem {
     std::string id;
+    UiNodeId nodeId;
     std::string label;
     Rect rect;
     SemanticRole role = SemanticRole::Text;

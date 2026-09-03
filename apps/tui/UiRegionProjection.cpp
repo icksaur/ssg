@@ -23,11 +23,17 @@ namespace {
 struct Packed {
     std::string stackId;
     const WidgetDescriptor* descriptor;
-    std::string nodeId;
+    std::string id;
+    UiNodeId nodeId;
     std::string content;
     std::string label;
     std::optional<std::string> command;
     SemanticRole role;
+};
+
+struct RegionLeaf {
+    UiNodeId nodeId;
+    const WidgetDescriptor* descriptor;
 };
 
 struct Resolved {
@@ -137,17 +143,18 @@ StackItem stackItemFor(const WidgetDescriptor& w, std::string stackId,
 // reads these groups off the canonical region tree and feeds them here, so the
 // grid lowering has one entry point.
 static int lowerUiRegionGroups(
-    const std::vector<const WidgetDescriptor*>& left,
-    const std::vector<const WidgetDescriptor*>& right,
-    const WidgetDescriptor* center, int separator, CenterWidth centerWidth,
+    const std::vector<RegionLeaf>& left,
+    const std::vector<RegionLeaf>& right,
+    const RegionLeaf* center, int separator, CenterWidth centerWidth,
     int centerFixed, const Rect& rect, SemanticRole defaultRole, const Style& style,
     const WidgetProviderResolver& resolveProvider,
     std::vector<SolvedUiItem>& out, const StatusViewState* statusView) {
     WidgetStack stack{separator};
     std::vector<Packed> packed;
 
-    const auto pack = [&](const WidgetDescriptor& w, const std::string& stackId,
+    const auto pack = [&](const RegionLeaf& source, const std::string& stackId,
                           bool isLeft, bool isCenter) {
+        const WidgetDescriptor& w = *source.descriptor;
         if (w.kind == WidgetKind::StatusActions) {
             if (!statusView || statusView->items.empty() ||
                 statusView->selected >= statusView->items.size()) {
@@ -175,8 +182,8 @@ static int lowerUiRegionGroups(
                     stack.packRight(std::move(stackItem));
                 }
                 packed.push_back(
-                    {actionStackId, &w, actionNode.id.value(), resolved.content,
-                     resolved.label, actionNode.commandId,
+                    {actionStackId, &w, actionNode.id.value(), actionNode.id,
+                     resolved.content, resolved.label, actionNode.commandId,
                      SemanticRole::StatusInfo});
             }
             return;
@@ -195,14 +202,14 @@ static int lowerUiRegionGroups(
             (w.kind == WidgetKind::Field && w.id == "footer.hint")
                 ? SemanticRole::Footer
                 : widgetRole(w, defaultRole);
-        packed.push_back({stackId, &w, w.id, resolved.content, resolved.label,
-                          resolved.command, role});
+        packed.push_back({stackId, &w, w.id, source.nodeId, resolved.content,
+                          resolved.label, resolved.command, role});
     };
 
     for (std::size_t i = 0; i < left.size(); ++i)
-        pack(*left[i], "L" + std::to_string(i), true, false);
+        pack(left[i], "L" + std::to_string(i), true, false);
     for (std::size_t i = 0; i < right.size(); ++i)
-        pack(*right[i], "R" + std::to_string(i), false, false);
+        pack(right[i], "R" + std::to_string(i), false, false);
     if (center) pack(*center, "C", false, true);
 
     const auto solved = stack.resolve(rect.width);
@@ -226,7 +233,7 @@ static int lowerUiRegionGroups(
         // A Spacer occupies stack space but emits no node -- it is a blank gap,
         // not an interactive element.
         if (item->descriptor->kind == WidgetKind::Spacer) return;
-        out.push_back({item->nodeId, item->label,
+        out.push_back({item->id, item->nodeId, item->label,
                        {rect.x + placement->offset, rect.y, placement->size, 1},
                        item->role, item->content, item->command});
     };
@@ -252,15 +259,15 @@ namespace {
 
 // The leaves of a group container, in order; nullopt if any child is not a leaf
 // (a malformed UI-region group).
-std::optional<std::vector<const WidgetDescriptor*>> groupLeaves(
+std::optional<std::vector<RegionLeaf>> groupLeaves(
     const UiNode& group) {
     const auto* container = std::get_if<UiContainer>(&group.content);
     if (!container) return std::nullopt;
-    std::vector<const WidgetDescriptor*> widgets;
+    std::vector<RegionLeaf> widgets;
     for (const auto& child : container->children) {
         const auto* leaf = std::get_if<UiLeaf>(&child.content);
         if (leaf) {
-            widgets.push_back(&leaf->widget);
+            widgets.push_back({child.id, &leaf->widget});
             continue;
         }
         if (child.id.value() != "footer.status_actions") {
@@ -273,7 +280,7 @@ std::optional<std::vector<const WidgetDescriptor*>> groupLeaves(
             if (!actionLeaf || action.size.kind() != SizeKind::Auto) {
                 return std::nullopt;
             }
-            widgets.push_back(&actionLeaf->widget);
+            widgets.push_back({action.id, &actionLeaf->widget});
         }
     }
     return widgets;
@@ -385,7 +392,8 @@ UiRegionProjectionResult projectUiRegion(
     for (const auto* group : {leftWidgets ? &*leftWidgets : nullptr,
                               rightWidgets ? &*rightWidgets : nullptr}) {
         if (!group) continue;
-        for (const WidgetDescriptor* w : *group) {
+        for (const RegionLeaf& source : *group) {
+            const WidgetDescriptor* w = source.descriptor;
             if (w->kind == WidgetKind::View) {
                 return {"UI region cannot render a view leaf"};
             }
@@ -396,7 +404,7 @@ UiRegionProjectionResult projectUiRegion(
 
     // The middle group holds zero or one leaf (the center); its Size carries the
     // width policy (Flex fills, Exact is a fixed center -- Auto is not valid here).
-    const WidgetDescriptor* center = nullptr;
+    std::optional<RegionLeaf> center;
     CenterWidth centerWidth = CenterWidth::Flex;
     int centerFixed = 0;
     if (middleContainer->children.size() > 1) {
@@ -406,8 +414,8 @@ UiRegionProjectionResult projectUiRegion(
         const UiNode& centerNode = middleContainer->children.front();
         const auto* leaf = std::get_if<UiLeaf>(&centerNode.content);
         if (!leaf) return {"UI region center is not a leaf"};
-        center = &leaf->widget;
-        if (center->kind == WidgetKind::View) {
+        center = RegionLeaf{centerNode.id, &leaf->widget};
+        if (center->descriptor->kind == WidgetKind::View) {
             return {"UI region cannot render a view leaf"};
         }
         if (centerNode.size.kind() == SizeKind::Auto) {
@@ -433,7 +441,8 @@ UiRegionProjectionResult projectUiRegion(
     }
 
     const int rightEdge = lowerUiRegionGroups(
-        *leftWidgets, *rightWidgets, center, separator, centerWidth, centerFixed,
+        *leftWidgets, *rightWidgets, center ? &*center : nullptr, separator,
+        centerWidth, centerFixed,
         groupsRect, defaultRole, style, resolveProvider, out.items,
         statusView);
 

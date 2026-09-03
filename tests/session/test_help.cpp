@@ -7,6 +7,7 @@
 #include <ssg/SyntaxModel.h>
 #include <ssg/TextInputCommands.h>
 #include <ssg/session_snapshot.h>
+#include <tui/HitTester.h>
 
 #include <filesystem>
 #include <fstream>
@@ -97,6 +98,39 @@ TEST(helpOpenOpensAReadOnlyOutputTab) {
     ASSERT_TRUE(tab->kind == ssg::TabKind::ReadOnlyOutput);
     ASSERT_TRUE(tab->mode == ssg::DocumentMode::ReadOnly);
     ASSERT_EQ(tab->label, std::string{"help"});
+}
+
+TEST(clickingFooterHelpHintOpensHelp) {
+    Harness harness{"footer_click"};
+    ASSERT_TRUE(harness.runtime != nullptr);
+    if (!harness.runtime) return;
+    auto& runtime = *harness.runtime;
+
+    auto frame = ssg::test::projectGridFrame(
+        runtime, ssg::ClientId{1}, ssg::ViewId{1}, {120, 24});
+    auto hint = footerHelpNode(runtime);
+    ASSERT_TRUE(frame.has_value());
+    ASSERT_TRUE(hint.has_value());
+    if (!frame || !hint) return;
+
+    const auto hit =
+        ssg::HitTester{*frame}.at(hint->rect.x, hint->rect.y);
+    ASSERT_EQ(hit.region, ssg::HitRegion::FooterField);
+    ASSERT_TRUE(hit.fieldId.has_value());
+    if (!hit.fieldId) return;
+
+    ASSERT_TRUE(
+        runtime
+            .dispatch(
+                ssg::ClientId{1},
+                {"ui.activate", runtime.revision(),
+                 ssg::UiNodeActivationArguments{
+                     frame->sections().uiFrame.version().generation,
+                     ssg::UiNodeId{*hit.fieldId}}})
+            .accepted());
+    const auto tab = activeTab(runtime);
+    ASSERT_TRUE(tab.has_value());
+    if (tab) ASSERT_EQ(tab->label, std::string{"help"});
 }
 
 TEST(helpDocumentContainsProseAndTheLiveKeybinding) {
@@ -376,6 +410,7 @@ TEST(helpTabIsHighlightedAsMarkdown) {
 
 SSG_TEST_SUITE(test_help) {
     RUN(helpOpenOpensAReadOnlyOutputTab);
+    RUN(clickingFooterHelpHintOpensHelp);
     RUN(helpDocumentContainsProseAndTheLiveKeybinding);
     RUN(helpDocumentListsChromeGlyphsIncludingTabGlyphsWithValues);
     RUN(helpGlyphListingEscapesQuotesSoItStaysCopyPasteable);

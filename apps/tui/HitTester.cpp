@@ -102,7 +102,7 @@ RegionHit uiRegionHit(const SolvedUiRegion& surface, HitRegion fieldRegion,
     for (const auto& item : surface.items) {
         if (!contains(item.rect, column, row)) continue;
         RegionHit hit;
-        hit.fieldId = item.id;
+        hit.fieldId = item.nodeId.value();
         hit.region = fieldRegion;
         hit.commandId = item.command;
         return hit;

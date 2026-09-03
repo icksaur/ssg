@@ -983,21 +983,24 @@ TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
 
     auto pathHit = ssg::HitTester{*frame}.at(path->rect.x, path->rect.y);
     ASSERT_EQ(pathHit.region, ssg::HitRegion::HeaderField);
-    ASSERT_EQ(pathHit.fieldId, std::optional<std::string>{"path"});
+    ASSERT_EQ(pathHit.fieldId,
+              std::optional<std::string>{"header.left.0"});
     ASSERT_EQ(pathHit.commandId,
               std::optional<std::string>{"panel.show_files"});
 
     auto branchHit =
         ssg::HitTester{*frame}.at(branch->rect.x, branch->rect.y);
     ASSERT_EQ(branchHit.region, ssg::HitRegion::HeaderField);
-    ASSERT_EQ(branchHit.fieldId, std::optional<std::string>{"branch"});
+    ASSERT_EQ(branchHit.fieldId,
+              std::optional<std::string>{"header.left.1"});
     ASSERT_EQ(branchHit.commandId,
               std::optional<std::string>{"panel.show_git_status"});
 
     auto followHit =
         ssg::HitTester{*frame}.at(follow->rect.x, follow->rect.y);
     ASSERT_EQ(followHit.region, ssg::HitRegion::FooterField);
-    ASSERT_EQ(followHit.fieldId, std::optional<std::string>{"follow"});
+    ASSERT_EQ(followHit.fieldId,
+              std::optional<std::string>{"footer.left.1"});
     ASSERT_EQ(followHit.commandId,
               std::optional<std::string>{"follow_edits.toggle"});
 
@@ -1049,11 +1052,14 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
         ASSERT_TRUE(item != surface->items.end());
         if (item == surface->items.end()) return false;
         auto hit = ssg::HitTester{*frame}.at(item->rect.x, item->rect.y);
-        ASSERT_TRUE(hit.commandId.has_value());
-        if (!hit.commandId) return false;
+        ASSERT_TRUE(hit.fieldId.has_value());
+        if (!hit.fieldId) return false;
         return runtime
             ->dispatch(ssg::ClientId{1},
-                       {*hit.commandId, runtime->revision(), std::any{}})
+                       {"ui.activate", runtime->revision(),
+                        ssg::UiNodeActivationArguments{
+                            frame->sections().uiFrame.version().generation,
+                            ssg::UiNodeId{*hit.fieldId}}})
             .accepted();
     };
     const auto providerLabel = [&]() -> std::optional<std::string> {
