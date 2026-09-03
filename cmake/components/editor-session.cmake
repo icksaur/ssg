@@ -36,6 +36,26 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_files.cpp
         SYMBOL test_session_files)
     ssg_test_link_libraries(test_session_files PRIVATE ssg_tui_objects)
+    ssg_add_test_suite(
+        NAME test_session_reopen
+        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_files.cpp
+        SYMBOL test_session_reopen)
+    ssg_test_link_libraries(test_session_reopen PRIVATE ssg_tui_objects)
+    ssg_add_test_suite(
+        NAME test_session_drafts
+        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_files.cpp
+        SYMBOL test_session_drafts)
+    ssg_test_link_libraries(test_session_drafts PRIVATE ssg_tui_objects)
+    ssg_add_test_suite(
+        NAME test_session_notices
+        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_files.cpp
+        SYMBOL test_session_notices)
+    ssg_test_link_libraries(test_session_notices PRIVATE ssg_tui_objects)
+    ssg_add_test_suite(
+        NAME test_session_conflicts
+        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_files.cpp
+        SYMBOL test_session_conflicts)
+    ssg_test_link_libraries(test_session_conflicts PRIVATE ssg_tui_objects)
 
     ssg_add_test_suite(
         NAME test_session_external_modification
@@ -68,6 +88,34 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_test_include_directories(test_session_navigation PRIVATE
         ${SSG_SOURCE_DIR}/src)
     ssg_test_link_libraries(test_session_navigation PRIVATE ssg_tui_objects)
+    ssg_add_test_suite(
+        NAME test_session_follow
+        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_navigation.cpp
+        SYMBOL test_session_follow)
+    ssg_test_include_directories(test_session_follow PRIVATE
+        ${SSG_SOURCE_DIR}/src)
+    ssg_test_link_libraries(test_session_follow PRIVATE ssg_tui_objects)
+    ssg_add_test_suite(
+        NAME test_session_pickers
+        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_navigation.cpp
+        SYMBOL test_session_pickers)
+    ssg_test_include_directories(test_session_pickers PRIVATE
+        ${SSG_SOURCE_DIR}/src)
+    ssg_test_link_libraries(test_session_pickers PRIVATE ssg_tui_objects)
+    ssg_add_test_suite(
+        NAME test_session_interaction
+        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_navigation.cpp
+        SYMBOL test_session_interaction)
+    ssg_test_include_directories(test_session_interaction PRIVATE
+        ${SSG_SOURCE_DIR}/src)
+    ssg_test_link_libraries(test_session_interaction PRIVATE ssg_tui_objects)
+    ssg_add_test_suite(
+        NAME test_session_layout
+        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_navigation.cpp
+        SYMBOL test_session_layout)
+    ssg_test_include_directories(test_session_layout PRIVATE
+        ${SSG_SOURCE_DIR}/src)
+    ssg_test_link_libraries(test_session_layout PRIVATE ssg_tui_objects)
 
     ssg_add_test_suite(
         NAME test_session_language_services

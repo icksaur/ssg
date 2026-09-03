@@ -37,8 +37,11 @@ fs::path uniqueRoot() {
 }
 
 std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
-    auto created = ssg::EditorSession::create(
-        {root, root / "scratch", root / "recovery"});
+    ssg::EditorSessionConfig config{
+        root, root / "scratch", root / "recovery"};
+    config.enableGitDiffWorker = false;
+    config.enableFilesystemWatcher = false;
+    auto created = ssg::EditorSession::create(config);
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.session);
     (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},

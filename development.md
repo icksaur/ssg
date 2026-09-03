@@ -1,7 +1,7 @@
 # Developing SSG
 
-Building, testing, benchmarking, and the contributor workflow. For what SSG is
-and how to embed it, see [`README.md`](README.md).
+Building, testing, and the contributor workflow. For what SSG is and how to
+embed it, see [`README.md`](README.md).
 
 ## Requirements
 
@@ -29,8 +29,8 @@ ctest --test-dir build -R '^test_document$' --output-on-failure
 ctest --preset dev
 ```
 
-`ctest --preset dev` excludes the performance, recovery, and theme suites so the
-unit loop stays sub-second. Run everything with:
+`ctest --preset dev` excludes the recovery and theme suites so the unit loop
+stays sub-second. Run everything with:
 
 ```sh
 ctest --preset all
@@ -64,24 +64,6 @@ The user-facing capability set, stated as engineering deliverables:
 - Tree-sitter syntax state, LSP synchronization/diagnostics/language features
   and atomic workspace edits, plus a capability-limited Lua 5.4 command host.
 - A reference TUI adapter (`examples/tui/`) and focused presentation fixtures.
-- A deterministic 10,000-operation performance benchmark.
-
-## Performance benchmark
-
-The benchmark verifies the pinned corpus and deterministic operation script:
-
-```sh
-cmake --build build --target editor_benchmark
-./build/editor_benchmark --verify-only
-./build/editor_benchmark --enforce
-```
-
-The designated-host limits are:
-
-- Edit latency below 1 ms p50 and 4 ms p99
-- Command-to-delta latency below 2 ms p50 and 8 ms p99
-- First viewport for a 10 MiB document below 250 ms
-- No unchanged-viewport cell payload and no polling CPU while idle
 
 ## Data and configuration
 

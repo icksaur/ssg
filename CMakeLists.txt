@@ -108,8 +108,8 @@ ssg_initialize_tests()
 #      ssg_tui_objects target; other manifests may link but not extend it.
 #   2. Inside "if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)", register ordinary
 #      runtime suites with ssg_add_test_suite and its ssg_test_* helpers.
-#      Standalone executables are reserved for products, benchmarks, probes, and
-#      build oracles whose executable identity is part of the contract.
+#      Standalone executables are reserved for products and build oracles whose
+#      executable identity is part of the contract.
 #      This guard is false when SSG is a subdirectory, so consumer projects
 #      are not contaminated with SSG's internal test targets.
 #   3. Add no component link edge absent from cmake/ssg_layers.cmake, use no

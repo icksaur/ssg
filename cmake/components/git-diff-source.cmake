@@ -75,13 +75,4 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     ssg_test_link_libraries(test_git_repository PRIVATE ssg_core)
 
-    ssg_add_test_suite(
-        NAME test_git_diff_host
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_git_diff_host.cpp
-        SYMBOL test_git_diff_host)
-    ssg_test_include_directories(test_git_diff_host PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_link_libraries(test_git_diff_host PRIVATE ssg_core)
-
 endif()

@@ -248,9 +248,6 @@ TEST(cacheRootContainsValidatedApplicationComponent) {
 }
 
 #ifndef _WIN32
-// RAII env-var save/restore, mirroring test_git_diff_host.cpp's
-// ScopedGitDiffMode -- Linux-only since userConfigRoot's env-var fallback
-// logic (XDG_CONFIG_HOME / HOME) is Linux-specific.
 class ScopedEnvVar {
 public:
     ScopedEnvVar(const char* name, const char* value) : name_{name} {

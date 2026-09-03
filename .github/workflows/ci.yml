@@ -20,9 +20,7 @@ jobs:
       - name: Platform interface compile and link
         run: cmake --build build --config Release --target test_platform_interface
       - name: Core and platform gates
-        run: ctest --test-dir build -C Release --output-on-failure -LE "performance"
-      - name: Performance correctness
-        run: ctest --test-dir build -C Release --output-on-failure -L performance-correctness
+        run: ctest --test-dir build -C Release --output-on-failure
 
   sanitizer:
     runs-on: ubuntu-latest
@@ -33,4 +31,4 @@ jobs:
       - name: Build
         run: cmake --build build-sanitize --parallel
       - name: Sanitizer gates
-        run: ctest --test-dir build-sanitize --output-on-failure -LE "performance"
+        run: ctest --test-dir build-sanitize --output-on-failure

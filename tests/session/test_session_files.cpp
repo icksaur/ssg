@@ -1297,6 +1297,11 @@ SSG_TEST_SUITE(test_session_files) {
     RUN(autosaveFlushesADirtyDocumentEagerlyThenDebounces);
     RUN(autosaveFlushesNothingWhenNoDocumentIsDirty);
     RUN(autosaveFlushAllForcesADirtyDocumentAfterAnEagerFlush);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_session_reopen) {
     RUN(reopeningADirtyDraftRestoresTheEditsWhenDiskIsUnchanged);
     RUN(reopeningAConvergedDraftDropsItAndOpensClean);
     RUN(reopeningADraftAfterAnExternalChangeFlagsConflict);
@@ -1304,18 +1309,33 @@ SSG_TEST_SUITE(test_session_files) {
     RUN(reactivatingAnOpenTabDoesNotReapplyItsDraft);
     RUN(draftDiffOnAConflictShowsDraftAgainstDiskHunks);
     RUN(draftDiffWithDiskMissingDiffsDraftAgainstEmpty);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_session_drafts) {
     RUN(draftDiffSurvivesAGitScanThatDoesNotMentionTheFile);
     RUN(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile);
     RUN(draftDiscardArchivesTheDraftAndLoadsDiskContent);
     RUN(discardedDraftIsRemovedFromScratchSoReopenIsClean);
     RUN(draftDiscardRefusesACleanSavedDocument);
     RUN(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_session_notices) {
     RUN(conflictNoticeIsPresentOnlyForAConflictReopen);
     RUN(noticeViewIsPresentOnlyOnADraftConflict);
     RUN(theGridNoticeAndSemanticNoticeComeFromTheOneResolver);
     RUN(conflictNoticeReservesChromeWithoutPerturbingTheDocument);
     RUN(clickingNoticeActionsDispatchesTheirCommands);
     RUN(dismissRefusesWhenThereIsNoConflictNotice);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_session_conflicts) {
     RUN(binaryDiskReplacementRaisesConflictNotSilentDraftLoss);
     RUN(oversizedBufferIsNotAutosavedAndIsReportedOnce);
     RUN(loweringAutosaveDebounceMsEnablesAFlushTheDefaultSuppresses);

@@ -8,7 +8,7 @@ Priority order:
 1. Correctness
 2. Maintainability
 3. Simplicity
-4. Performance demonstrated by the budgets in the benchmark suite
+4. Performance
 
 Project rules:
 

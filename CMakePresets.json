@@ -18,7 +18,7 @@
     {
       "name": "release",
       "displayName": "Release (Ninja + ccache)",
-      "description": "Optimized build for performance gates and benchmarks.",
+      "description": "Optimized production build.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-release",
       "cacheVariables": {
@@ -48,13 +48,13 @@
   "testPresets": [
     {
       "name": "dev",
-      "displayName": "Fast unit tests (excludes perf/recovery)",
+      "displayName": "Fast unit tests (excludes recovery/theme)",
       "configurePreset": "dev",
       "output": { "outputOnFailure": true },
       "execution": { "jobs": 20 },
       "filter": {
         "exclude": {
-          "name": "performance_|test_recovery|test_theme"
+          "name": "test_recovery|test_theme"
         }
       }
     },
@@ -69,12 +69,7 @@
       "name": "sanitize",
       "configurePreset": "sanitize",
       "output": { "outputOnFailure": true },
-      "execution": { "jobs": 20 },
-      "filter": {
-        "exclude": {
-          "label": "^performance$"
-        }
-      }
+      "execution": { "jobs": 20 }
     }
   ]
 }

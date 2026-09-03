@@ -3,10 +3,20 @@ target_sources(ssg_core PRIVATE
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    ssg_add_test_suite(
-        NAME test_recovery
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp
-        SYMBOL test_recovery)
+    foreach(_suite IN ITEMS
+            test_recovery
+            test_recovery_tree
+            test_recovery_failures
+            test_recovery_rollback
+            test_recovery_reconstruction
+            test_recovery_retry
+            test_recovery_budget
+            test_recovery_budget_rejection)
+        ssg_add_test_suite(
+            NAME ${_suite}
+            ENTRY ${SSG_SOURCE_DIR}/tests/test_recovery.cpp
+            SYMBOL ${_suite})
+    endforeach()
     ssg_test_include_directories(test_recovery PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )

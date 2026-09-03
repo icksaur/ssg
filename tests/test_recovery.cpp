@@ -1009,24 +1009,59 @@ SSG_TEST_SUITE(test_recovery) {
     RUN(reloadCompensationSurvivesReconstructionAndRestoresExactDocument);
     RUN(overwriteExistingAndNewFilesRoundTripToFilesystemTruth);
     RUN(renameRoundTripRestoresBothPathsAndSourceIdentity);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_recovery_tree) {
     RUN(deleteTreeRoundTripRestoresBinaryFilesAndEmptyDirectories);
     RUN(workspaceReplacementAndCompensationMatchIndependentTreeSnapshots);
     RUN(recordAndArtifactInstallationCompleteBeforeCanonicalMutation);
     RUN(preparationFailurePreservesCanonicalStateAndExistingRecords);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_recovery_failures) {
     RUN(publicationFailureAfterMutationRollsBackCanonicalState);
     RUN(eachActionMutationFailureRollsBackAndDiscardsItsRecord);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_recovery_rollback) {
     RUN(partialWorkspaceMutationFailureRollsBackToExactTree);
     RUN(actionAndRollbackFailureRetainsRecordForSuccessfulRetry);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_recovery_reconstruction) {
     RUN(reconstructionDiscardsPersistedInProgressDocumentRecord);
     RUN(reconstructionAutoRollsBackPersistedInProgressFilesystemRecord);
     RUN(reconstructionDiscardsPartiallyRemovedRecordDirectory);
     RUN(renameFailedPublicationRollbackRemainsSafeAfterReconstruction);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_recovery_retry) {
     RUN(restorationFailureKeepsRecordAndRetryRestoresExactTree);
     RUN(renamePartialRestoreRetryPreservesSourceIdentity);
     RUN(renameCompletedRestoreRetryPreservesSourceIdentity);
     RUN(cleanupFailureKeepsRestoredRecordRetryable);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_recovery_budget) {
     RUN(countBudgetEvictsOldestOnlyAfterNewRecordIsInstalled);
     RUN(byteBudgetEvictsOldestWhenNewRecordFitsAfterEviction);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_recovery_budget_rejection) {
     RUN(byteBudgetRejectsBeforeMutatingWhenNewestRecordCannotFit);
     RUN(compensationRemovesOnlyItsOwnRecordAndArtifacts);
     RUN(recordKindMismatchesAreTypedAndNonDestructive);

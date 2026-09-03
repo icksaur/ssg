@@ -11,6 +11,7 @@
 #include <ssg/TextInputCommands.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -98,7 +99,11 @@ std::vector<std::string_view> allKeyboardRoutes(
 }
 
 std::filesystem::path uniqueRoot() {
-    auto root = testRuntimePath("runtime_navigation");
+    static const auto runtimeName =
+        "runtime_navigation_" +
+        std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+    auto root = testRuntimePath(runtimeName);
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
@@ -3535,6 +3540,11 @@ SSG_TEST_SUITE(test_session_navigation) {
     RUN(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision);
     RUN(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan);
     RUN(gitStatusSurvivesDetailedDiffWorkLimit);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_session_follow) {
     RUN(gitStatusActivationOpensLiveDiffTabAndReusesIt);
     RUN(documentAndLiveDiffTabsCloseIndependently);
     RUN(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile);
@@ -3542,6 +3552,11 @@ SSG_TEST_SUITE(test_session_navigation) {
     RUN(tabSwitchPausesFollowViaNavigationPath);
     RUN(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution);
     RUN(followPauseOnEditTransitionTable);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_session_pickers) {
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
     RUN(everyPaletteClosePathLeavesNoOpenPickerBehind);
     RUN(paletteExecuteValidatesCandidateMembership);
@@ -3551,13 +3566,24 @@ SSG_TEST_SUITE(test_session_navigation) {
     RUN(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure);
     RUN(pickerSubmissionRequiresAndClosesTheAuthoritativePicker);
     RUN(commandPickerSubmissionUsesTheInProcessAuthority);
+    RUN(commandPickerActionThatOpensPromptDismissesPickerWithoutFailure);
     RUN(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_session_interaction) {
     RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
     RUN(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity);
     RUN(documentPointerInputOwnsSelectionGesturePolicy);
     RUN(documentEdgeMovesResolveThroughPresenterAndReveal);
     RUN(documentEdgeContinuationPreservesAdditiveBaseline);
     RUN(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed == 0 ? 0 : 1;
+}
+
+SSG_TEST_SUITE(test_session_layout) {
     RUN(failedSelectedCommandLeavesPickerOpenForEveryOrigin);
     RUN(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker);
     RUN(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation);
