@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include <ssg/Document.h>
 #include <ssg/DocumentHistory.h>
 #include <ssg/Search.h>
@@ -37,11 +35,18 @@ struct FindMatch {
 };
 
 enum class FindReplaceError : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_FIND_REPLACE_ERROR_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    None = 0,
+    InvalidPattern = 1,
+    InvalidUtf8 = 2,
+    InvalidSelection = 3,
+    BudgetExhausted = 4,
+    Cancelled = 5,
+    NoMatch = 6,
+    StaleRevision = 7,
+    DocumentRejected = 8,
+    WorkspaceRejected = 9,
+    RecoveryRejected = 10,
 };
-#undef SSG_FIND_REPLACE_ERROR_ENUMERATORS
 
 struct FindRequest {
     std::string query;

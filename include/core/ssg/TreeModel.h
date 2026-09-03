@@ -1,8 +1,6 @@
 #pragma once
 
 #include <ssg/DiffModel.h>
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include <ssg/Theme.h>
 #include <ssg/Viewport.h>
 
@@ -49,11 +47,10 @@ private:
 };
 
 enum class TreeProviderKind {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_TREE_PROVIDER_KIND_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Filesystem = 0,
+    Git = 1,
+    Symbols = 2,
 };
-#undef SSG_TREE_PROVIDER_KIND_ENUMERATORS
 
 [[nodiscard]] std::string_view treeProviderLabel(TreeProviderKind kind);
 [[nodiscard]] bool treeProviderCanBeCreatedEmpty(TreeProviderKind kind);
@@ -68,11 +65,13 @@ struct TreeProviderBinding {
 };
 
 enum class TreeNodeKind {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_TREE_NODE_KIND_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Root = 0,
+    Directory = 1,
+    File = 2,
+    Symlink = 3,
+    GitEntry = 4,
+    Symbol = 5,
 };
-#undef SSG_TREE_NODE_KIND_ENUMERATORS
 struct GitTreeAffordance {
     DiffFileStatus status = DiffFileStatus::Modified;
     std::string shortLabel;

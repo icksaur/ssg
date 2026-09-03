@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include <ssg/CommandInvocation.h>
 #include <ssg/PaneTopology.h>
 #include <ssg/ViewAction.h>
@@ -23,11 +21,14 @@ struct ClientCommand {
 };
 
 enum class CommandError : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_COMMAND_ERROR_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    None = 0,
+    UnknownClient = 1,
+    UnknownCommand = 2,
+    StaleRevision = 3,
+    CapabilityDenied = 4,
+    HandlerFailed = 5,
+    RevisionExhausted = 6,
 };
-#undef SSG_COMMAND_ERROR_ENUMERATORS
 
 // The routing/geometry consequences of a dispatch, so a host can decide whether
 // a buffered follow-on event needs a fresh snapshot before it is handled

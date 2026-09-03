@@ -170,6 +170,17 @@ TEST(diagnosticsAreVersionCheckedBoundedCoalescedAndReplayable) {
     ASSERT_EQ(client.viewState(), target);
 }
 
+TEST(diagnosticSeverityMatchesLspProtocolValues) {
+    ASSERT_EQ(static_cast<std::uint8_t>(LspDiagnosticSeverity::Error),
+              std::uint8_t{1});
+    ASSERT_EQ(static_cast<std::uint8_t>(LspDiagnosticSeverity::Warning),
+              std::uint8_t{2});
+    ASSERT_EQ(static_cast<std::uint8_t>(LspDiagnosticSeverity::Information),
+              std::uint8_t{3});
+    ASSERT_EQ(static_cast<std::uint8_t>(LspDiagnosticSeverity::Hint),
+              std::uint8_t{4});
+}
+
 TEST(cancellationTimeoutAndMalformedInputAreFailureAtomic) {
     FakeLspServer server;
     LspSyncClient client{server, {}, kTimeout};
@@ -261,6 +272,7 @@ SSG_TEST_SUITE(test_lsp_sync) {
     RUN(utf8Utf16PositionsMatchHandComputedFixture);
     RUN(scriptedServerCoversInitializeSyncAndShutdownLifecycle);
     RUN(diagnosticsAreVersionCheckedBoundedCoalescedAndReplayable);
+    RUN(diagnosticSeverityMatchesLspProtocolValues);
     RUN(cancellationTimeoutAndMalformedInputAreFailureAtomic);
     RUN(writeTimeoutDoesNotAdvanceLifecycleOrDocumentState);
     RUN(softDiagnosticRejectionDoesNotDropLaterFramedMessages);

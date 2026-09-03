@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include <array>
 #include <cstdint>
 #include <string_view>
@@ -11,11 +9,11 @@ namespace ssg {
 // The keymap context declared by a UI focus host. Effective context is derived
 // from the authoritative UiFrame focus-stack endpoint.
 enum class FocusTarget : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_FOCUS_TARGET_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Editor = 0,
+    Panel = 1,
+    Prompt = 2,
+    ExternalModification = 3,
 };
-#undef SSG_FOCUS_TARGET_ENUMERATORS
 
 // The lowercase keymap-context name for a focus target.  A keymap binding's
 // context is this name (or "*"); see keymap_contexts().

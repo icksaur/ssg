@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include "ssg/RecoveryManager.h"
 #include "ssg/ScratchStore.h"
 #include "ssg/Workspace.h"
@@ -31,12 +29,12 @@ private:
 };
 
 enum class TabKind : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_TAB_KIND_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Document = 0,
+    LiveDiff = 1,
+    ReadOnlyOutput = 2,
+    SearchResults = 3,
+    TreeView = 4,
 };
-
-#undef SSG_TAB_KIND_ENUMERATORS
 
 struct TabState {
     TabId id;

@@ -2,8 +2,6 @@
 
 #include "ssg/snapshot.h"
 #include "ssg/types.h"
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include <array>
 #include <cstddef>
 #include <filesystem>
@@ -27,17 +25,16 @@ private:
 };
 
 enum class DiffLineKind {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_DIFF_LINE_KIND_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Added = 0,
+    Removed = 1,
+    Modified = 2,
 };
-#undef SSG_DIFF_LINE_KIND_ENUMERATORS
 enum class DiffFileStatus {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_DIFF_FILE_STATUS_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Added = 0,
+    Modified = 1,
+    Deleted = 2,
+    Renamed = 3,
 };
-#undef SSG_DIFF_FILE_STATUS_ENUMERATORS
 
 struct DiffWordRange {
     std::size_t byteStart = 0;

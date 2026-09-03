@@ -8,8 +8,6 @@
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -26,18 +24,17 @@ struct ClientKeyInput {
 };
 
 enum class InputPointerButton : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_INPUT_POINTER_BUTTON_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Primary = 0,
+    Auxiliary = 1,
+    Secondary = 2,
 };
-#undef SSG_INPUT_POINTER_BUTTON_ENUMERATORS
 
 enum class InputPointerPhase : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_INPUT_POINTER_PHASE_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Press = 0,
+    Move = 1,
+    Release = 2,
+    Cancel = 3,
 };
-#undef SSG_INPUT_POINTER_PHASE_ENUMERATORS
 
 struct SemanticInputBasis {
     Revision observedRevision;
@@ -184,11 +181,13 @@ using ClientInput =
                  ScrollFractionInput, ViewTransitionInput>;
 
 enum class ClientOwnedInputKind : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_CLIENT_OWNED_INPUT_KIND_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    AppendText = 0,
+    DeleteGraphemeBackward = 1,
+    DeleteWordBackward = 2,
+    SelectNext = 3,
+    SelectPrevious = 4,
+    Submit = 5,
 };
-#undef SSG_CLIENT_OWNED_INPUT_KIND_ENUMERATORS
 
 struct ClientOwnedInput {
     ClientOwnedInputKind kind;
@@ -199,11 +198,12 @@ struct ClientOwnedInput {
 };
 
 enum class ClientInputOutcome : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_CLIENT_INPUT_OUTCOME_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Unhandled = 0,
+    ClientOwned = 1,
+    Dispatched = 2,
+    Rejected = 3,
+    ViewOwned = 4,
 };
-#undef SSG_CLIENT_INPUT_OUTCOME_ENUMERATORS
 
 struct ClientInputResult {
     ClientInputOutcome outcome;

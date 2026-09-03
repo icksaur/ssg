@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 // Strong domain types for canonical document positions and state.
 //
 // These types are shared across all SSG feature components. They carry their
@@ -77,10 +75,9 @@ struct DocumentPosition {
 // Document editing mode (spec §Design, DocumentMode).
 // The set of modes is closed; all values are always valid.
 enum class DocumentMode : uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_DOCUMENT_MODE_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Edit = 0,
+    ReadOnly = 1,
+    Diff = 2,
 };
-#undef SSG_DOCUMENT_MODE_ENUMERATORS
 
 }  // namespace ssg

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include <cstdint>
 #include <compare>
 
@@ -18,24 +16,20 @@ private:
 };
 
 enum class SplitAxis : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_SPLIT_AXIS_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Horizontal = 0,
+    Vertical = 1,
 };
-#undef SSG_SPLIT_AXIS_ENUMERATORS
 
 enum class PaneDirection : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_PANE_DIRECTION_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Left = 0,
+    Right = 1,
+    Up = 2,
+    Down = 3,
 };
-#undef SSG_PANE_DIRECTION_ENUMERATORS
 
 enum class PaneCycleDirection : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_PANE_CYCLE_DIRECTION_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Next = 0,
+    Previous = 1,
 };
-#undef SSG_PANE_CYCLE_DIRECTION_ENUMERATORS
 
 }  // namespace ssg

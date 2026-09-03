@@ -1,7 +1,6 @@
 #pragma once
 
 #include <ssg/PaneNavigation.h>
-#include <ssg/detail/generated/semantic_wire_manifest.h>
 #include <ssg/types.h>
 
 #include <cstdint>
@@ -10,11 +9,9 @@
 namespace ssg {
 
 enum class ScrollTarget : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_SCROLL_TARGET_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Document = 0,
+    Tree = 1,
 };
-#undef SSG_SCROLL_TARGET_ENUMERATORS
 
 struct ScrollLines {
     ScrollTarget target = ScrollTarget::Document;
@@ -39,11 +36,11 @@ struct ScrollFraction {
 };
 
 enum class VisualSelectionDirection : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_VISUAL_SELECTION_DIRECTION_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    LineUp = 0,
+    LineDown = 1,
+    PageUp = 2,
+    PageDown = 3,
 };
-#undef SSG_VISUAL_SELECTION_DIRECTION_ENUMERATORS
 
 struct MoveVisualSelection {
     VisualSelectionDirection direction = VisualSelectionDirection::LineDown;
@@ -71,11 +68,10 @@ struct ResolvePaneFocus {
 };
 
 enum class DocumentPointerEdge : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_DOCUMENT_POINTER_EDGE_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    None = 0,
+    Before = 1,
+    After = 2,
 };
-#undef SSG_DOCUMENT_POINTER_EDGE_ENUMERATORS
 
 struct ContinuePointerEdge {
     DocumentPointerEdge direction = DocumentPointerEdge::After;

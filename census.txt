@@ -2370,7 +2370,6 @@ core/ssg/Settings.h	struct	ssg::SettingsDelta
 core/ssg/Settings.h	struct	ssg::SettingsIoResult
 core/ssg/Settings.h	struct	ssg::SettingsPaths
 core/ssg/Settings.h	struct	ssg::SettingsViewState
-core/ssg/Settings.h	var	ssg::(lambda at /home/carl/repo/ssg/include/core/ssg/Settings.h:31:49)::operator()::count	std::size_t
 core/ssg/Settings.h	var	ssg::EffectiveSetting::source	SettingScope
 core/ssg/Settings.h	var	ssg::EffectiveSetting::value	SettingValue
 core/ssg/Settings.h	var	ssg::SettingCompensation::expected	std::optional<SettingValue>

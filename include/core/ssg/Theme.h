@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -30,31 +28,74 @@ struct SrgbColor {
 };
 
 enum class SemanticRole : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_SEMANTIC_ROLE_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Text = 0,
+    Canvas = 1,
+    Caret = 2,
+    Selection = 3,
+    TreeBackground = 4,
+    TreeFocus = 5,
+    TabActive = 6,
+    TabInactive = 7,
+    PanelActive = 8,
+    PanelInactive = 9,
+    Header = 10,
+    Footer = 11,
+    StatusInfo = 12,
+    StatusWarning = 13,
+    LineNumber = 14,
+    SearchMatch = 15,
+    Prompt = 16,
+    ScrollbarTrack = 17,
+    ScrollbarThumb = 18,
+    DiffAdded = 19,
+    DiffRemoved = 20,
+    DiffModified = 21,
+    TabInactiveBackground = 22,
+    HeaderBackground = 23,
+    FooterBackground = 24,
+    CurrentLineNumber = 25,
+    CurrentLineNumberBackground = 26,
+    LineNumberBackground = 27,
 };
 
 inline constexpr std::array kAllSemanticRoles{
-#define SSG_ENUMERATOR(symbol, ordinal) SemanticRole::symbol,
-    SSG_SEMANTIC_ROLE_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    SemanticRole::Text, SemanticRole::Canvas, SemanticRole::Caret,
+    SemanticRole::Selection, SemanticRole::TreeBackground,
+    SemanticRole::TreeFocus, SemanticRole::TabActive,
+    SemanticRole::TabInactive, SemanticRole::PanelActive,
+    SemanticRole::PanelInactive, SemanticRole::Header, SemanticRole::Footer,
+    SemanticRole::StatusInfo, SemanticRole::StatusWarning,
+    SemanticRole::LineNumber, SemanticRole::SearchMatch, SemanticRole::Prompt,
+    SemanticRole::ScrollbarTrack, SemanticRole::ScrollbarThumb,
+    SemanticRole::DiffAdded, SemanticRole::DiffRemoved,
+    SemanticRole::DiffModified, SemanticRole::TabInactiveBackground,
+    SemanticRole::HeaderBackground, SemanticRole::FooterBackground,
+    SemanticRole::CurrentLineNumber,
+    SemanticRole::CurrentLineNumberBackground,
+    SemanticRole::LineNumberBackground,
 };
-#undef SSG_SEMANTIC_ROLE_ENUMERATORS
 inline constexpr std::size_t kSemanticRoleCount = kAllSemanticRoles.size();
 
 enum class SyntaxScope : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_SYNTAX_SCOPE_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    PlainText = 0,
+    Comment = 1,
+    Keyword = 2,
+    String = 3,
+    Number = 4,
+    Type = 5,
+    Function = 6,
+    Variable = 7,
+    OperatorToken = 8,
+    Punctuation = 9,
+    Invalid = 10,
 };
 
 inline constexpr std::array kAllSyntaxScopes{
-#define SSG_ENUMERATOR(symbol, ordinal) SyntaxScope::symbol,
-    SSG_SYNTAX_SCOPE_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    SyntaxScope::PlainText, SyntaxScope::Comment, SyntaxScope::Keyword,
+    SyntaxScope::String, SyntaxScope::Number, SyntaxScope::Type,
+    SyntaxScope::Function, SyntaxScope::Variable, SyntaxScope::OperatorToken,
+    SyntaxScope::Punctuation, SyntaxScope::Invalid,
 };
-#undef SSG_SYNTAX_SCOPE_ENUMERATORS
 inline constexpr std::size_t kSyntaxScopeCount = kAllSyntaxScopes.size();
 
 // The flat render color table = every role color followed by every scope color.

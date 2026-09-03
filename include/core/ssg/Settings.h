@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include "ssg/config.h"
 
 #include <array>
@@ -16,33 +14,46 @@
 namespace ssg {
 
 enum class SettingScope : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_SETTING_SCOPE_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Defaults = 0,
+    User = 1,
+    Workspace = 2,
+    Language = 3,
+    Document = 4,
 };
-#undef SSG_SETTING_SCOPE_ENUMERATORS
 
 enum class SettingKey : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_SETTING_KEY_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    IndentWidth = 0,
+    IndentStyle = 1,
+    IndentDetection = 2,
+    AutoIndent = 3,
+    LineEnding = 4,
+    FinalNewline = 5,
+    Encoding = 6,
+    WordWrap = 7,
+    Theme = 8,
+    Keymap = 9,
+    SearchCaseSensitive = 10,
+    SearchWholeWord = 11,
+    SearchRegularExpression = 12,
+    UndoByteBudget = 13,
+    RecoveryByteBudget = 14,
+    TypingCoalescingMs = 15,
+    FileFinderRespectGitignore = 16,
+    AutosaveDebounceMs = 17,
+    LineNumbers = 18,
 };
 
-inline constexpr std::size_t kSettingKeyCount = [] {
-    std::size_t count = 0;
-#define SSG_COUNT_SETTING_KEY(symbol, ordinal) ++count;
-    SSG_SETTING_KEY_ENUMERATORS(SSG_COUNT_SETTING_KEY)
-#undef SSG_COUNT_SETTING_KEY
-    return count;
-}();
-#undef SSG_SETTING_KEY_ENUMERATORS
+inline constexpr std::size_t kSettingKeyCount =
+    static_cast<std::size_t>(SettingKey::LineNumbers) + 1;
 
 enum class TextEncoding : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_TEXT_ENCODING_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Utf8 = 0,
+    Utf8Bom = 1,
+    Utf16le = 2,
+    Utf16be = 3,
+    Windows1252 = 4,
+    Iso88591 = 5,
 };
-#undef SSG_TEXT_ENCODING_ENUMERATORS
 
 using SettingValue =
     std::variant<bool, std::uint32_t, std::uint64_t, IndentStyle, LineEnding,

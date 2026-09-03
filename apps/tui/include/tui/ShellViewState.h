@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include "ssg/UiTree.h"
 #include "ssg/UiWidget.h"
 #include "ssg/focus.h"
@@ -25,11 +23,27 @@ namespace ssg {
 struct StatusViewState;
 
 enum class ShellNodeKind : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_SHELL_NODE_KIND_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Header = 0,
+    HeaderField = 1,
+    Footer = 2,
+    FooterField = 3,
+    FooterAction = 4,
+    TabBar = 5,
+    Tab = 6,
+    Panel = 7,
+    PanelProvider = 8,
+    Pane = 9,
+    Scrollbar = 10,
+    PromptReservation = 11,
+    EmptyState = 12,
+    NoticeBar = 13,
+    NoticeAction = 14,
+    FooterHint = 15,
+    TabSeparator = 16,
+    ExternalModificationBar = 17,
+    ExternalModificationRow = 18,
+    ExternalModificationAction = 19,
 };
-#undef SSG_SHELL_NODE_KIND_ENUMERATORS
 
 struct AccessibilityNode {
     ShellNodeKind kind = ShellNodeKind::Pane;

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/detail/generated/semantic_wire_manifest.h>
-
 #include "ssg/PromptSurface.h"
 #include "ssg/UiTree.h"
 
@@ -28,11 +26,11 @@ private:
 };
 
 enum class StatusPriority : std::uint8_t {
-#define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
-    SSG_STATUS_PRIORITY_ENUMERATORS(SSG_ENUMERATOR)
-#undef SSG_ENUMERATOR
+    Error = 0,
+    Warning = 1,
+    Information = 2,
+    Progress = 3,
 };
-#undef SSG_STATUS_PRIORITY_ENUMERATORS
 
 struct UiAction {
     std::string id;
