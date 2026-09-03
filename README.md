@@ -11,13 +11,8 @@ On Arch Linux (or a derivative), one script builds an optimized binary and
 installs it to `/usr/local/bin/ssg`:
 
 ```sh
-scripts/install.sh                 # installs deps, builds Release, installs ssg
-scripts/install.sh --prefix ~/.local  # install somewhere on your PATH instead
-scripts/install.sh --build-only    # just build; run ./build-release/ssg .
+scripts/install.sh
 ```
-
-It installs the build tools via `pacman` and builds. Pass `--no-deps` if you
-manage the toolchain yourself.
 
 ## Run from source
 
@@ -28,8 +23,8 @@ cmake --preset dev && cmake --build build   # build the `ssg` binary
 ```
 
 You get a full-screen editor: a file tree on the left, tabs across the top, your
-document in the middle, and a status header/footer. It opens instantly and uses
-no CPU while idle.
+document in the middle, and a status header/footer. It opens instantly and should
+use no CPU while idle.
 
 ## Editing
 
@@ -81,25 +76,6 @@ middle-click a tab to close it. `Alt`+click adds or removes a cursor.
 Custom colors, keymaps, and chrome glyphs live in `init.lua`
 (`~/.config/ssg/init.lua`). A capability-limited Lua 5.4 host lets you script and
 rebind commands. See [`doc/config.md`](doc/config.md).
-
-## Use SSG as a library
-
-The editor is thin; the interesting part is that **all** of the editing and
-presentation logic lives in a reusable C++20 library. The terminal app is just
-one host over it: the core runs headlessly, owns the authoritative state, and
-emits a cell grid plus semantic commands, so you can embed a real editor —
-multiple cursors, undo, find/replace, Tree-sitter syntax, LSP (completion,
-diagnostics, language features), and symbol trees — without adopting a UI
-framework.
-
-```cmake
-add_subdirectory(path/to/ssg)
-target_link_libraries(my_app PRIVATE ssg)
-```
-
-`ssg::Document` is the smallest entry point; `ssg::EditorSession` is the
-batteries-included editor session. See
-[`development.md`](development.md) for the API surface, building, and testing.
 
 ## Requirements
 
