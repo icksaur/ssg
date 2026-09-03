@@ -22,9 +22,6 @@ public:
     [[nodiscard]] std::optional<SemanticCommand> capture(
         KeyStroke const& stroke, KeymapViewState const& keymap,
         std::string_view context);
-    [[nodiscard]] std::optional<SemanticCommand> capture(
-        SemanticHitTarget const& target, KeymapViewState const& keymap,
-        std::string_view context);
     void reset() noexcept;
 
 private:

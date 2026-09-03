@@ -181,27 +181,6 @@ TEST(historyConfigEquality) {
     ASSERT_TRUE(a != b);
 }
 
-// ---------------------------------------------------------------------------
-// IndentConfig
-
-TEST(indentConfigDefaults) {
-    ssg::IndentConfig cfg;
-    ASSERT_EQ(cfg.style, ssg::IndentStyle::Spaces);
-    ASSERT_EQ(cfg.width.value(), 4);
-    ASSERT_TRUE(cfg.autoDetect);
-}
-
-TEST(indentConfigCustomTabs) {
-    ssg::IndentConfig cfg{
-        .style       = ssg::IndentStyle::Tabs,
-        .width       = ssg::TabWidth{2},
-        .autoDetect = false,
-    };
-    ASSERT_EQ(cfg.style, ssg::IndentStyle::Tabs);
-    ASSERT_EQ(cfg.width.value(), 2);
-    ASSERT_FALSE(cfg.autoDetect);
-}
-
 TEST(indentStyleDistinctValues) {
     ASSERT_TRUE(ssg::IndentStyle::Spaces != ssg::IndentStyle::Tabs);
 }
@@ -253,8 +232,6 @@ SSG_TEST_SUITE(test_types) {
     RUN(historyConfigRoundTrip);
     RUN(historyConfigEquality);
 
-    RUN(indentConfigDefaults);
-    RUN(indentConfigCustomTabs);
     RUN(indentStyleDistinctValues);
 
     RUN(lineEndingDistinctValues);

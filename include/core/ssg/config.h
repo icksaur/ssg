@@ -69,12 +69,4 @@ struct HistoryConfig {
     }
 };
 
-struct IndentConfig {
-    IndentStyle style{IndentStyle::Spaces};
-    TabWidth width{4};
-    bool autoDetect{true};
-
-    bool operator==(IndentConfig const&) const noexcept = default;
-};
-
 }  // namespace ssg

@@ -12,6 +12,9 @@
 namespace ssg {
 namespace {
 
+enum class ClipboardCommand { Copy, Cut, Paste };
+enum class HistoryCommand { Undo, Redo };
+
 TextInputSettings textInputSettings(EditorSession::Impl const&) {
     return {IndentStyle::Spaces, 4, true, LineEnding::Lf};
 }

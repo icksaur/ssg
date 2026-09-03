@@ -532,9 +532,4 @@ SemanticCommand SemanticInputRouter::semanticInput(
     return {"text.insert", TextInputArguments{committed.utf8()}};
 }
 
-const SemanticCommand& SemanticInputRouter::activateHitTarget(
-    const SemanticHitTarget& target) const noexcept {
-    return target.command;
-}
-
 } // namespace ssg

@@ -59,18 +59,6 @@ struct TabViewState {
     friend bool operator==(const TabViewState&, const TabViewState&) = default;
 };
 
-enum class TabCommand : std::uint8_t {
-    Close,
-    CloseOthers,
-    CloseAll,
-    ReopenClosed,
-    Next,
-    Previous,
-    Activate,
-    MoveLeft,
-    MoveRight,
-};
-
 enum class TabError : std::uint8_t {
     None,
     InvalidArgument,

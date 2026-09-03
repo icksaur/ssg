@@ -60,14 +60,6 @@ TEST(terminalEventsResolveThroughPublishedInputModels) {
     ASSERT_TRUE(client.submit(*close).accepted());
     ASSERT_TRUE(client.snapshot().sections().tabs.tabs.empty());
 
-    ssg::SemanticHitTarget target{
-        9, ssg::HitTargetKind::Tab, "Reopen",
-        {"tab.reopen_closed", {}}};
-    auto hit = capture.capture(target, keymap, "*");
-    ASSERT_TRUE(hit.has_value());
-    ASSERT_EQ(hit->commandId, std::string{"tab.reopen_closed"});
-    ASSERT_TRUE(client.submit(*hit).accepted());
-    ASSERT_FALSE(client.snapshot().sections().tabs.tabs.empty());
 }
 
 TEST(realRuntimeSnapshotRendersDeterministicallyWithinTheme) {

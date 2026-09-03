@@ -55,13 +55,6 @@ std::optional<SemanticCommand> TerminalInputCapture::capture(
     return std::nullopt;
 }
 
-std::optional<SemanticCommand> TerminalInputCapture::capture(
-    SemanticHitTarget const& target, KeymapViewState const&,
-    std::string_view) {
-    reset();
-    return SemanticInputRouter{}.activateHitTarget(target);
-}
-
 void TerminalInputCapture::reset() noexcept { pending_.clear(); }
 
 TuiClient::TuiClient(EditorSession& runtime, InvocationPrincipal principal,

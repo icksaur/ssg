@@ -129,9 +129,8 @@ struct PromptCommandResult {
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
 
-// A geometry-free prompt control: the semantic PromptView's element. Grid
-// rendering combines it with the matching solved UI node. `command` is the
-// library command that
+// A geometry-free prompt control. Grid rendering combines it with the matching
+// solved UI node. `command` is the library command that
 // OPERATES the control (an input's
 // update-value command, a toggle's toggle command), so a client dispatches it
 // generically without knowing find-vs-replace ids; empty for a Count.
@@ -143,17 +142,6 @@ struct PromptControl {
     bool checked = false;
     std::string command;
     friend bool operator==(const PromptControl&, const PromptControl&) = default;
-};
-
-// The geometry-free semantic projection of the active footer-region prompt: its
-// kind, accessible label, ordered controls, and the index (into the prompt's
-// INPUTS specifically -- never a toggle or the count) of the active input.
-struct PromptView {
-    PromptKind kind = PromptKind::CommandArgument;
-    std::string accessibleLabel;
-    std::vector<PromptControl> controls;
-    std::size_t activeInput = 0;
-    friend bool operator==(const PromptView&, const PromptView&) = default;
 };
 
 class PromptSurface {
@@ -187,9 +175,8 @@ private:
 
 // The one geometry-free control resolver: the active prompt's ordered controls,
 // each with the request's seeded value/checked and its operating command, WITHOUT
-// any geometry. The semantic PromptView publishes these directly; computePromptLayout
-// attaches a Rect per control to produce the grid PromptViewState. One resolver, two
-// renderings -- the grid is these controls plus geometry, never a second resolution.
+// any geometry. Presentation attaches geometry to these controls rather than
+// resolving prompt behavior a second time.
 [[nodiscard]] std::vector<PromptControl> resolvePromptControls(
     const PromptRequest& request);
 

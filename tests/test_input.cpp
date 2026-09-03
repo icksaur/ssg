@@ -267,34 +267,6 @@ TEST(imeAcceptsOnlyCommittedUtf8Text) {
     ASSERT_FALSE(ssg::CommittedText::fromUtf8("").has_value());
 }
 
-TEST(hitTargetsRoundTripTypedSemanticArguments) {
-    ssg::SemanticCommand command{
-        "cursor.set_position",
-        ssg::SelectionCommandArguments{ssg::DocumentPosition{
-                                           ssg::ByteOffset{7},
-                                           ssg::LineIndex{2},
-                                           ssg::CellIndex{4}},
-                                       std::nullopt}};
-    const ssg::SemanticHitTarget target{
-        42, ssg::HitTargetKind::EditorCell, "document cell", command};
-    ASSERT_EQ(ssg::SemanticInputRouter{}.activateHitTarget(target), command);
-
-    const auto& arguments =
-        std::get<ssg::SelectionCommandArguments>(target.command.arguments);
-    ASSERT_TRUE(arguments.position.has_value());
-    if (arguments.position) {
-        ASSERT_EQ(arguments.position->byteOffset, ssg::ByteOffset{7});
-        ASSERT_EQ(arguments.position->line, ssg::LineIndex{2});
-        ASSERT_EQ(arguments.position->cell, ssg::CellIndex{4});
-    }
-
-    const ssg::SemanticCommand scroll{
-        "view.scroll_to_fraction", ssg::ScrollFractionArguments{3, 7}};
-    const ssg::SemanticHitTarget scrollbar{
-        43, ssg::HitTargetKind::Scrollbar, "scrollbar", scroll};
-    ASSERT_EQ(ssg::SemanticInputRouter{}.activateHitTarget(scrollbar), scroll);
-}
-
 TEST(applyKeymapBindAddsRebindsAndRejectsInvalidRequests) {
     const auto settingsSeq = *ssg::KeyCodec{}.parseSequence({"Alt+KeyS"});
     ssg::KeymapViewState base{"m", {{settingsSeq, "settings.open", "*"}}};
@@ -503,7 +475,6 @@ SSG_TEST_SUITE(test_input) {
     RUN(validateKeymapFlagsGlobalShadowRegardlessOfOrder);
     RUN(resolverAndHasGlobalBindingAgreeOnDuplicateGlobals);
     RUN(imeAcceptsOnlyCommittedUtf8Text);
-    RUN(hitTargetsRoundTripTypedSemanticArguments);
     RUN(applyKeymapBindAddsRebindsAndRejectsInvalidRequests);
     RUN(applyKeymapUnbindRemovesOrNoOpsAndRejectsBadSequence);
     RUN(backendHasNoPlatformInputCaptureDependency);

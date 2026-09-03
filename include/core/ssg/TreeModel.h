@@ -162,18 +162,6 @@ struct TreeProviderView {
     bool operator==(const TreeProviderView&) const = default;
 };
 
-// Grid projection of a tree provider's scroll window. `firstVisible` is the index into the provider's
-// `nodes` of the first on-screen node; `scrollbar` is its thumb geometry;
-// `visibleNodeIds` is the bounded viewport_row -> node id hit map for the visible
-// window only (empty when the panel is hidden). The semantic `nodes` carries the
-// full expanded list; a grid client windows it with this.
-struct TreeWindow {
-    std::uint32_t firstVisible = 0;
-    ScrollbarMetrics scrollbar{};
-    std::vector<TreeNodeId> visibleNodeIds;
-    bool operator==(const TreeWindow&) const = default;
-};
-
 struct TreeViewState {
     TreeRevision revision{0};
     std::vector<TreeProviderView> providers;

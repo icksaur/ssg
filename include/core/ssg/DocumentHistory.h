@@ -11,11 +11,6 @@
 
 namespace ssg {
 
-enum class HistoryCommand : std::uint8_t {
-    Undo,
-    Redo,
-};
-
 enum class HistoryEditKind : std::uint8_t {
     Typing,
     DeleteBackward,

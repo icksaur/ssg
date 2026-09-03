@@ -12,12 +12,6 @@
 
 namespace ssg {
 
-enum class ClipboardCommand : std::uint8_t {
-    Copy,
-    Cut,
-    Paste,
-};
-
 // A copy or cut's text, offered to whatever client can reach a real system
 // clipboard (the terminal writes it with OSC 52).
 //

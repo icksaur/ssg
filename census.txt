@@ -107,11 +107,7 @@ core/ssg/ClientInput.h	var	ssg::TreePointerInput::phase	InputPointerPhase
 core/ssg/ClientInput.h	var	ssg::ViewTransitionInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::ViewTransitionInput::transition	ViewTransition
 core/ssg/ClipboardRegister.h	class	ssg::ClipboardRegister
-core/ssg/ClipboardRegister.h	enum	ssg::ClipboardCommand
 core/ssg/ClipboardRegister.h	enum	ssg::ClipboardError
-core/ssg/ClipboardRegister.h	enumerator	ssg::ClipboardCommand::Copy
-core/ssg/ClipboardRegister.h	enumerator	ssg::ClipboardCommand::Cut
-core/ssg/ClipboardRegister.h	enumerator	ssg::ClipboardCommand::Paste
 core/ssg/ClipboardRegister.h	enumerator	ssg::ClipboardError::Diff
 core/ssg/ClipboardRegister.h	enumerator	ssg::ClipboardError::DocumentRejected
 core/ssg/ClipboardRegister.h	enumerator	ssg::ClipboardError::InvalidSelection
@@ -475,11 +471,8 @@ core/ssg/Document.h	var	ssg::TransactionResult::error	DocumentError
 core/ssg/Document.h	var	ssg::TransactionResult::message	std::string
 core/ssg/Document.h	var	ssg::TransactionResult::revision	Revision
 core/ssg/DocumentHistory.h	class	ssg::DocumentHistory
-core/ssg/DocumentHistory.h	enum	ssg::HistoryCommand
 core/ssg/DocumentHistory.h	enum	ssg::HistoryEditKind
 core/ssg/DocumentHistory.h	enum	ssg::HistoryError
-core/ssg/DocumentHistory.h	enumerator	ssg::HistoryCommand::Redo
-core/ssg/DocumentHistory.h	enumerator	ssg::HistoryCommand::Undo
 core/ssg/DocumentHistory.h	enumerator	ssg::HistoryEditKind::DeleteBackward
 core/ssg/DocumentHistory.h	enumerator	ssg::HistoryEditKind::DeleteForward
 core/ssg/DocumentHistory.h	enumerator	ssg::HistoryEditKind::Other
@@ -1227,16 +1220,9 @@ core/ssg/Keymap.h	class	ssg::CommittedText
 core/ssg/Keymap.h	class	ssg::KeyCodec
 core/ssg/Keymap.h	class	ssg::KeymapMatcher
 core/ssg/Keymap.h	class	ssg::SemanticInputRouter
-core/ssg/Keymap.h	enum	ssg::HitTargetKind
 core/ssg/Keymap.h	enum	ssg::KeymapErrorCode
 core/ssg/Keymap.h	enum	ssg::KeymapMatchKind
 core/ssg/Keymap.h	enum	ssg::TextRouting
-core/ssg/Keymap.h	enumerator	ssg::HitTargetKind::EditorCell
-core/ssg/Keymap.h	enumerator	ssg::HitTargetKind::PanelNode
-core/ssg/Keymap.h	enumerator	ssg::HitTargetKind::Scrollbar
-core/ssg/Keymap.h	enumerator	ssg::HitTargetKind::Splitter
-core/ssg/Keymap.h	enumerator	ssg::HitTargetKind::StatusAction
-core/ssg/Keymap.h	enumerator	ssg::HitTargetKind::Tab
 core/ssg/Keymap.h	enumerator	ssg::KeymapErrorCode::DuplicateBinding
 core/ssg/Keymap.h	enumerator	ssg::KeymapErrorCode::EmptyCommand
 core/ssg/Keymap.h	enumerator	ssg::KeymapErrorCode::EmptyContext
@@ -1278,8 +1264,6 @@ core/ssg/Keymap.h	func	ssg::ScrollFractionArguments::operator==	bool (const Scro
 core/ssg/Keymap.h	func	ssg::ScrollLinesArguments::operator==	bool (const ScrollLinesArguments &) const
 core/ssg/Keymap.h	func	ssg::ScrollPagesArguments::operator==	bool (const ScrollPagesArguments &) const
 core/ssg/Keymap.h	func	ssg::SemanticCommand::operator==	bool (const SemanticCommand &) const
-core/ssg/Keymap.h	func	ssg::SemanticHitTarget::operator==	bool (const SemanticHitTarget &) const
-core/ssg/Keymap.h	func	ssg::SemanticInputRouter::activateHitTarget	const SemanticCommand &(const SemanticHitTarget &) const noexcept
 core/ssg/Keymap.h	func	ssg::SemanticInputRouter::semanticInput	SemanticCommand (const CommittedText &) const
 core/ssg/Keymap.h	func	ssg::SemanticInputRouter::textRouting	TextRouting (std::string_view) const noexcept
 core/ssg/Keymap.h	func	ssg::applyKeymapBind	KeymapMutationResult (const KeymapViewState &, const KeymapBindArguments &) noexcept
@@ -1301,7 +1285,6 @@ core/ssg/Keymap.h	struct	ssg::ScrollFractionArguments
 core/ssg/Keymap.h	struct	ssg::ScrollLinesArguments
 core/ssg/Keymap.h	struct	ssg::ScrollPagesArguments
 core/ssg/Keymap.h	struct	ssg::SemanticCommand
-core/ssg/Keymap.h	struct	ssg::SemanticHitTarget
 core/ssg/Keymap.h	var	ssg::KeyBinding::commandId	std::string
 core/ssg/Keymap.h	var	ssg::KeyBinding::context	std::string
 core/ssg/Keymap.h	var	ssg::KeyBinding::sequence	KeySequence
@@ -1333,10 +1316,6 @@ core/ssg/Keymap.h	var	ssg::ScrollLinesArguments::rows	std::int64_t
 core/ssg/Keymap.h	var	ssg::ScrollPagesArguments::pages	std::int64_t
 core/ssg/Keymap.h	var	ssg::SemanticCommand::arguments	SemanticInputArguments
 core/ssg/Keymap.h	var	ssg::SemanticCommand::commandId	std::string
-core/ssg/Keymap.h	var	ssg::SemanticHitTarget::accessibleLabel	std::string
-core/ssg/Keymap.h	var	ssg::SemanticHitTarget::command	SemanticCommand
-core/ssg/Keymap.h	var	ssg::SemanticHitTarget::id	std::uint64_t
-core/ssg/Keymap.h	var	ssg::SemanticHitTarget::kind	HitTargetKind
 core/ssg/LayoutConstraints.h	class	ssg::Gap
 core/ssg/LayoutConstraints.h	class	ssg::Inset
 core/ssg/LayoutConstraints.h	class	ssg::Size
@@ -1859,7 +1838,6 @@ core/ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptRequest &, const
 core/ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptSubmission &, const PromptSubmission &)
 core/ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptToggle &, const PromptToggle &)
 core/ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptValueArguments &, const PromptValueArguments &)
-core/ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptView &, const PromptView &)
 core/ssg/PromptSurface.h	func	ssg::promptFocusRegion	PromptRegion (PromptKind) noexcept
 core/ssg/PromptSurface.h	func	ssg::resolvePromptControls	std::vector<PromptControl> (const PromptRequest &)
 core/ssg/PromptSurface.h	struct	ssg::PromptCommandResult
@@ -1872,7 +1850,6 @@ core/ssg/PromptSurface.h	struct	ssg::PromptRequest
 core/ssg/PromptSurface.h	struct	ssg::PromptSubmission
 core/ssg/PromptSurface.h	struct	ssg::PromptToggle
 core/ssg/PromptSurface.h	struct	ssg::PromptValueArguments
-core/ssg/PromptSurface.h	struct	ssg::PromptView
 core/ssg/PromptSurface.h	var	ssg::PromptCommandResult::error	std::optional<PromptError>
 core/ssg/PromptSurface.h	var	ssg::PromptCommandResult::submission	std::optional<PromptSubmission>
 core/ssg/PromptSurface.h	var	ssg::PromptControl::accessibleLabel	std::string
@@ -1906,10 +1883,6 @@ core/ssg/PromptSurface.h	var	ssg::PromptToggle::value	bool
 core/ssg/PromptSurface.h	var	ssg::PromptToggle::width	int
 core/ssg/PromptSurface.h	var	ssg::PromptValueArguments::index	std::size_t
 core/ssg/PromptSurface.h	var	ssg::PromptValueArguments::value	std::string
-core/ssg/PromptSurface.h	var	ssg::PromptView::accessibleLabel	std::string
-core/ssg/PromptSurface.h	var	ssg::PromptView::activeInput	std::size_t
-core/ssg/PromptSurface.h	var	ssg::PromptView::controls	std::vector<PromptControl>
-core/ssg/PromptSurface.h	var	ssg::PromptView::kind	PromptKind
 core/ssg/RecoveryManager.h	class	ssg::RecoveryFaultInjector
 core/ssg/RecoveryManager.h	class	ssg::RecoveryManager
 core/ssg/RecoveryManager.h	class	ssg::RecoveryRecordId
@@ -2279,7 +2252,6 @@ core/ssg/Selection.h	func	ssg::Selection::operator==	bool (const Selection &) co
 core/ssg/Selection.h	func	ssg::Selection::upper	const DocumentPosition &() const noexcept
 core/ssg/Selection.h	func	ssg::Selection::wordOrCoveredText	std::string (std::string_view) const
 core/ssg/Selection.h	func	ssg::SelectionNavigation::operator==	bool (const SelectionNavigation &) const noexcept
-core/ssg/Selection.h	func	ssg::SelectionNavigationDelta::operator==	bool (const SelectionNavigationDelta &) const noexcept
 core/ssg/Selection.h	func	ssg::SelectionNavigationResult::accepted	bool () const noexcept
 core/ssg/Selection.h	func	ssg::SelectionNavigator::apply	SelectionNavigationResult (std::string_view, const SelectionViewState &, SelectionCommand, ViewportDimensions, SelectionCommandArguments, std::span<const BracketPair>, int, bool, const DiffFileView *) const
 core/ssg/Selection.h	func	ssg::SelectionNavigator::resolvePosition	std::optional<DocumentPosition> (std::string_view, ByteOffset, int)
@@ -2287,16 +2259,13 @@ core/ssg/Selection.h	func	ssg::SelectionSet::SelectionSet	void (std::vector<Sele
 core/ssg/Selection.h	func	ssg::SelectionSet::items	const std::vector<Selection> &() const noexcept
 core/ssg/Selection.h	func	ssg::SelectionSet::operator==	bool (const SelectionSet &) const noexcept
 core/ssg/Selection.h	func	ssg::SelectionSet::primary	const Selection &() const noexcept
-core/ssg/Selection.h	func	ssg::SelectionSetDelta::operator==	bool (const SelectionSetDelta &) const noexcept
 core/ssg/Selection.h	func	ssg::SelectionViewDelta::operator==	bool (const SelectionViewDelta &) const noexcept
 core/ssg/Selection.h	func	ssg::SelectionViewState::operator==	bool (const SelectionViewState &) const noexcept
 core/ssg/Selection.h	struct	ssg::BracketPair
 core/ssg/Selection.h	struct	ssg::Selection
 core/ssg/Selection.h	struct	ssg::SelectionCommandArguments
 core/ssg/Selection.h	struct	ssg::SelectionNavigation
-core/ssg/Selection.h	struct	ssg::SelectionNavigationDelta
 core/ssg/Selection.h	struct	ssg::SelectionNavigationResult
-core/ssg/Selection.h	struct	ssg::SelectionSetDelta
 core/ssg/Selection.h	struct	ssg::SelectionViewDelta
 core/ssg/Selection.h	struct	ssg::SelectionViewState
 core/ssg/Selection.h	var	ssg::BracketPair::closing	std::string
@@ -2309,13 +2278,9 @@ core/ssg/Selection.h	var	ssg::SelectionCommandArguments::selections	std::vector<
 core/ssg/Selection.h	var	ssg::SelectionNavigation::desiredCell	std::optional<CellIndex>
 core/ssg/Selection.h	var	ssg::SelectionNavigation::firstVisualColumn	std::uint32_t
 core/ssg/Selection.h	var	ssg::SelectionNavigation::firstVisualRow	std::uint32_t
-core/ssg/Selection.h	var	ssg::SelectionNavigationDelta::changed	bool
-core/ssg/Selection.h	var	ssg::SelectionNavigationDelta::replacement	std::optional<SelectionNavigation>
 core/ssg/Selection.h	var	ssg::SelectionNavigationResult::delta	SelectionViewDelta
 core/ssg/Selection.h	var	ssg::SelectionNavigationResult::error	SelectionNavigationError
 core/ssg/Selection.h	var	ssg::SelectionNavigationResult::message	std::string
-core/ssg/Selection.h	var	ssg::SelectionSetDelta::changed	bool
-core/ssg/Selection.h	var	ssg::SelectionSetDelta::replacement	std::optional<SelectionSet>
 core/ssg/Selection.h	var	ssg::SelectionViewDelta::changed	bool
 core/ssg/Selection.h	var	ssg::SelectionViewDelta::replacement	std::optional<SelectionViewState>
 core/ssg/Selection.h	var	ssg::SelectionViewState::desiredCell	std::optional<CellIndex>
@@ -2761,18 +2726,8 @@ core/ssg/SyntaxModel.h	var	ssg::UnmatchedBracket::role	BracketRole
 core/ssg/TabManager.h	class	ssg::TabId
 core/ssg/TabManager.h	class	ssg::TabLifecycle
 core/ssg/TabManager.h	class	ssg::TabManager
-core/ssg/TabManager.h	enum	ssg::TabCommand
 core/ssg/TabManager.h	enum	ssg::TabError
 core/ssg/TabManager.h	enum	ssg::TabKind
-core/ssg/TabManager.h	enumerator	ssg::TabCommand::Activate
-core/ssg/TabManager.h	enumerator	ssg::TabCommand::Close
-core/ssg/TabManager.h	enumerator	ssg::TabCommand::CloseAll
-core/ssg/TabManager.h	enumerator	ssg::TabCommand::CloseOthers
-core/ssg/TabManager.h	enumerator	ssg::TabCommand::MoveLeft
-core/ssg/TabManager.h	enumerator	ssg::TabCommand::MoveRight
-core/ssg/TabManager.h	enumerator	ssg::TabCommand::Next
-core/ssg/TabManager.h	enumerator	ssg::TabCommand::Previous
-core/ssg/TabManager.h	enumerator	ssg::TabCommand::ReopenClosed
 core/ssg/TabManager.h	enumerator	ssg::TabError::DurabilityFailed
 core/ssg/TabManager.h	enumerator	ssg::TabError::InvalidArgument
 core/ssg/TabManager.h	enumerator	ssg::TabError::LifecycleFailed
@@ -2998,7 +2953,6 @@ core/ssg/Theme.h	func	ssg::ThemeSnapshot::color	SrgbColor (SyntaxScope) const
 core/ssg/Theme.h	func	ssg::ThemeSnapshot::withOverrides	ThemeSetResult (const ThemeSetArguments &) const noexcept
 core/ssg/Theme.h	func	ssg::defaultTheme	ThemeSnapshot () noexcept
 core/ssg/Theme.h	func	ssg::operator==	bool (const DiffTints &, const DiffTints &)
-core/ssg/Theme.h	func	ssg::operator==	bool (const IndexedColor &, const IndexedColor &)
 core/ssg/Theme.h	func	ssg::operator==	bool (const SrgbColor &, const SrgbColor &)
 core/ssg/Theme.h	func	ssg::operator==	bool (const ThemeSetArguments &, const ThemeSetArguments &)
 core/ssg/Theme.h	func	ssg::operator==	bool (const ThemeSetError &, const ThemeSetError &)
@@ -3008,7 +2962,6 @@ core/ssg/Theme.h	func	ssg::semanticRoleName	std::string_view (SemanticRole)
 core/ssg/Theme.h	func	ssg::syntaxScopeFromName	std::optional<SyntaxScope> (std::string_view)
 core/ssg/Theme.h	func	ssg::syntaxScopeName	std::string_view (SyntaxScope)
 core/ssg/Theme.h	struct	ssg::DiffTints
-core/ssg/Theme.h	struct	ssg::IndexedColor
 core/ssg/Theme.h	struct	ssg::SrgbColor
 core/ssg/Theme.h	struct	ssg::ThemeSetArguments
 core/ssg/Theme.h	struct	ssg::ThemeSetError
@@ -3020,8 +2973,6 @@ core/ssg/Theme.h	var	ssg::DiffTints::modifiedRow	SrgbColor
 core/ssg/Theme.h	var	ssg::DiffTints::modifiedWord	SrgbColor
 core/ssg/Theme.h	var	ssg::DiffTints::removedRow	SrgbColor
 core/ssg/Theme.h	var	ssg::DiffTints::removedWord	SrgbColor
-core/ssg/Theme.h	var	ssg::IndexedColor::color	SrgbColor
-core/ssg/Theme.h	var	ssg::IndexedColor::index	std::uint8_t
 core/ssg/Theme.h	var	ssg::SrgbColor::blue	std::uint8_t
 core/ssg/Theme.h	var	ssg::SrgbColor::green	std::uint8_t
 core/ssg/Theme.h	var	ssg::SrgbColor::red	std::uint8_t
@@ -3095,7 +3046,6 @@ core/ssg/TreeModel.h	func	ssg::TreeRevision::operator<=>	std::strong_ordering (c
 core/ssg/TreeModel.h	func	ssg::TreeRevision::value	std::uint64_t () const noexcept
 core/ssg/TreeModel.h	func	ssg::TreeSelectArguments::operator==	bool (const TreeSelectArguments &) const
 core/ssg/TreeModel.h	func	ssg::TreeViewState::operator==	bool (const TreeViewState &) const
-core/ssg/TreeModel.h	func	ssg::TreeWindow::operator==	bool (const TreeWindow &) const
 core/ssg/TreeModel.h	func	ssg::activeTreeProvider	const TreeProviderView *(const TreeViewState &) noexcept
 core/ssg/TreeModel.h	func	ssg::gitTreeAffordance	GitTreeAffordance (DiffFileStatus)
 core/ssg/TreeModel.h	func	ssg::isValidTreeViewState	bool (const TreeViewState &) noexcept
@@ -3113,7 +3063,6 @@ core/ssg/TreeModel.h	struct	ssg::TreeProviderBinding
 core/ssg/TreeModel.h	struct	ssg::TreeProviderView
 core/ssg/TreeModel.h	struct	ssg::TreeSelectArguments
 core/ssg/TreeModel.h	struct	ssg::TreeViewState
-core/ssg/TreeModel.h	struct	ssg::TreeWindow
 core/ssg/TreeModel.h	var	ssg::GitTreeAffordance::role	SemanticRole
 core/ssg/TreeModel.h	var	ssg::GitTreeAffordance::shortLabel	std::string
 core/ssg/TreeModel.h	var	ssg::GitTreeAffordance::status	DiffFileStatus
@@ -3157,9 +3106,6 @@ core/ssg/TreeModel.h	var	ssg::TreeSelectArguments::nodeId	TreeNodeId
 core/ssg/TreeModel.h	var	ssg::TreeViewState::activeBinding	std::optional<TreeProviderBinding>
 core/ssg/TreeModel.h	var	ssg::TreeViewState::providers	std::vector<TreeProviderView>
 core/ssg/TreeModel.h	var	ssg::TreeViewState::revision	TreeRevision
-core/ssg/TreeModel.h	var	ssg::TreeWindow::firstVisible	std::uint32_t
-core/ssg/TreeModel.h	var	ssg::TreeWindow::scrollbar	ScrollbarMetrics
-core/ssg/TreeModel.h	var	ssg::TreeWindow::visibleNodeIds	std::vector<TreeNodeId>
 core/ssg/TreeSitterGrammars.h	alias	ssg::SyntaxLanguageFactory
 core/ssg/TreeSitterGrammars.h	alias	ssg::SyntaxLanguageHandle
 core/ssg/TreeSitterGrammars.h	class	ssg::TreeSitterParserFactory
@@ -3684,17 +3630,12 @@ core/ssg/config.h	enumerator	ssg::LineEnding::Lf
 core/ssg/config.h	enumerator	ssg::LineEnding::Mixed
 core/ssg/config.h	func	ssg::HistoryConfig::defaults	HistoryConfig () noexcept
 core/ssg/config.h	func	ssg::HistoryConfig::operator==	bool (const HistoryConfig &) const noexcept
-core/ssg/config.h	func	ssg::IndentConfig::operator==	bool (const IndentConfig &) const noexcept
 core/ssg/config.h	func	ssg::TabWidth::TabWidth	void (int)
 core/ssg/config.h	func	ssg::TabWidth::operator==	bool (const TabWidth &) const noexcept
 core/ssg/config.h	func	ssg::TabWidth::value	int () const noexcept
 core/ssg/config.h	struct	ssg::HistoryConfig
-core/ssg/config.h	struct	ssg::IndentConfig
 core/ssg/config.h	var	ssg::HistoryConfig::byteBudget	uint64_t
 core/ssg/config.h	var	ssg::HistoryConfig::coalesceMs	uint32_t
-core/ssg/config.h	var	ssg::IndentConfig::autoDetect	bool
-core/ssg/config.h	var	ssg::IndentConfig::style	IndentStyle
-core/ssg/config.h	var	ssg::IndentConfig::width	TabWidth
 core/ssg/config.h	var	ssg::TabWidth::kMaxValue	const int
 core/ssg/config.h	var	ssg::TabWidth::kMinValue	const int
 core/ssg/focus.h	enum	ssg::FocusTarget

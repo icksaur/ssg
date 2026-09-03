@@ -66,22 +66,6 @@ struct SelectionNavigation {
     bool operator==(const SelectionNavigation&) const noexcept = default;
 };
 
-struct SelectionNavigationDelta {
-    bool changed = false;
-    std::optional<SelectionNavigation> replacement;
-
-    bool operator==(const SelectionNavigationDelta&) const noexcept = default;
-};
-
-// Semantic delta of the selection set (the carets/ranges), independent of any
-// grid scroll projection.
-struct SelectionSetDelta {
-    bool changed = false;
-    std::optional<SelectionSet> replacement;
-
-    bool operator==(const SelectionSetDelta&) const noexcept = default;
-};
-
 struct SelectionViewDelta {
     bool changed;
     std::optional<SelectionViewState> replacement;

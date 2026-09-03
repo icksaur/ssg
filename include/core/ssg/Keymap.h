@@ -227,31 +227,11 @@ struct SemanticCommand {
     bool operator==(const SemanticCommand& other) const;
 };
 
-enum class HitTargetKind : std::uint8_t {
-    EditorCell,
-    Scrollbar,
-    Tab,
-    Splitter,
-    PanelNode,
-    StatusAction,
-};
-
-struct SemanticHitTarget {
-    std::uint64_t id;
-    HitTargetKind kind;
-    std::string accessibleLabel;
-    SemanticCommand command;
-
-    bool operator==(const SemanticHitTarget& other) const = default;
-};
-
 class SemanticInputRouter {
 public:
     [[nodiscard]] TextRouting textRouting(std::string_view context) const noexcept;
     [[nodiscard]] SemanticCommand semanticInput(
         const CommittedText& committed) const;
-    [[nodiscard]] const SemanticCommand& activateHitTarget(
-        const SemanticHitTarget& target) const noexcept;
 };
 
 } // namespace ssg

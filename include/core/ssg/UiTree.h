@@ -174,7 +174,7 @@ inline constexpr std::string_view kFindResultsNodeId = "findresults";
 inline constexpr std::string_view kHeaderPromptInputNodeId = "input_line";
 // CONTRACT: Footer prompt axis, grouping, order, and sizing live only in this
 // request-derived container subtree. Clients lower these nodes directly and
-// never reconstruct prompt layout from PromptKind or PromptView.
+// never reconstruct prompt layout from PromptKind.
 inline constexpr std::string_view kFooterPromptNodeId = "footer.prompt";
 inline constexpr std::string_view kFooterPromptOptionsNodeId =
     "footer.prompt.options";

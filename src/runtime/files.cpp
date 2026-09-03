@@ -7,6 +7,18 @@
 namespace ssg {
 namespace {
 
+enum class TabCommand {
+    Close,
+    CloseOthers,
+    CloseAll,
+    ReopenClosed,
+    Next,
+    Previous,
+    Activate,
+    MoveLeft,
+    MoveRight,
+};
+
 std::optional<std::string> stringPayload(std::any const& payload) {
     if (auto const* value = payloadAs<std::string>(payload)) return *value;
     if (auto const* value = payloadAs<std::string_view>(payload)) return std::string{*value};

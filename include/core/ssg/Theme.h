@@ -29,13 +29,6 @@ struct SrgbColor {
     friend bool operator==(const SrgbColor&, const SrgbColor&) = default;
 };
 
-struct IndexedColor {
-    std::uint8_t index = 0;
-    SrgbColor color;
-
-    friend bool operator==(const IndexedColor&, const IndexedColor&) = default;
-};
-
 enum class SemanticRole : std::uint8_t {
 #define SSG_ENUMERATOR(symbol, ordinal) symbol = ordinal,
     SSG_SEMANTIC_ROLE_ENUMERATORS(SSG_ENUMERATOR)
