@@ -11,7 +11,6 @@
 #include <ssg/StatusQueue.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
-#include <ssg/UiPresence.h>
 
 namespace ssg {
 
@@ -57,9 +56,8 @@ public:
     [[nodiscard]] const std::optional<PickerActivation>&
     openPickerActivation() const noexcept;
     [[nodiscard]] std::uint64_t routingGeneration() const noexcept;
-    [[nodiscard]] const ValidatedSchema& validatedSchema() const noexcept;
+    [[nodiscard]] const UiSchema& schema() const noexcept;
     [[nodiscard]] std::vector<UiNodeId> focusPath() const;
-    [[nodiscard]] UiPresenceSection presenceSection(PresenceBasis basis) const;
     [[nodiscard]] PalettePresenceOverlay pickerPresenceOverlay() const;
 
 private:

@@ -57,26 +57,16 @@ std::optional<SemanticCommand> TerminalInputCapture::capture(
 
 void TerminalInputCapture::reset() noexcept { pending_.clear(); }
 
-TuiClient::TuiClient(EditorSession& runtime, InvocationPrincipal principal,
-                     ViewId viewId, ViewportDimensions dimensions)
+TuiClient::TuiClient(EditorSession& runtime, ViewId viewId,
+                     ViewportDimensions dimensions)
     : runtime_{&runtime},
-      principal_{std::move(principal)},
       viewId_{viewId},
       dimensions_{dimensions},
       presenter_{viewId} {
-    auto attached = runtime_->attach(principal_, viewId_);
-    if (!attached.accepted()) throw std::invalid_argument{attached.message};
-    try {
-        refresh();
-    } catch (...) {
-        (void)runtime_->detach(principal_.clientId());
-        throw;
-    }
+    refresh();
 }
 
-TuiClient::~TuiClient() {
-    if (runtime_) (void)runtime_->detach(principal_.clientId());
-}
+TuiClient::~TuiClient() = default;
 
 CommandResult TuiClient::submit(SemanticCommand const& command) {
     return submit(command.commandId, commandPayload(command.arguments));
@@ -84,7 +74,6 @@ CommandResult TuiClient::submit(SemanticCommand const& command) {
 
 CommandResult TuiClient::submit(std::string commandId, std::any payload) {
     auto result = runtime_->dispatch(
-        principal_.clientId(),
         {std::move(commandId), snapshot_->revision(), std::move(payload)});
     if (result.accepted()) refresh();
     return result;
@@ -92,8 +81,7 @@ CommandResult TuiClient::submit(std::string commandId, std::any payload) {
 
 void TuiClient::refresh() {
     auto next = presenter_.project(
-        *runtime_, principal_.clientId(),
-        GridPresentationRequest{dimensions_, PaletteReport{}});
+        *runtime_, GridPresentationRequest{dimensions_, PaletteReport{}});
     if (!next) {
         throw std::logic_error{"TUI runtime did not return its attached snapshot"};
     }

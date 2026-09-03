@@ -6,7 +6,6 @@
 #include <limits>
 #include <mutex>
 #include <thread>
-#include <unordered_map>
 #include <utility>
 
 namespace ssg {
@@ -37,12 +36,6 @@ private:
 }  // namespace
 namespace {
 
-struct ClientIdHash {
-    std::size_t operator()(ClientId id) const noexcept {
-        return std::hash<std::uint64_t>{}(id.value());
-    }
-};
-
 ExecutorResult rejected(CommandError error, Revision revision,
                         std::string message) {
     return {error, revision, std::move(message), std::nullopt};
@@ -64,7 +57,9 @@ struct CommandExecutor::Impl {
     CommandServices* services;
     Revision revision{1};
     SessionTopology topology;
-    std::unordered_map<ClientId, AttachedClient, ClientIdHash> clients;
+    // The runtime's one view (see CommandExecutor::currentView): fixed, not
+    // client-selected, because there is exactly one screen.
+    ViewId currentView{1};
 };
 
 CommandExecutor::CommandExecutor(std::shared_ptr<CommandCatalog> catalog,
@@ -81,24 +76,6 @@ std::shared_ptr<CommandCatalog> const& CommandExecutor::catalog() const {
 
 CommandExecutor::~CommandExecutor() = default;
 
-AttachResult CommandExecutor::attach(InvocationPrincipal principal,
-                                    ViewId viewId) {
-    std::lock_guard lock{impl_->mutex};
-    ClientId const clientId = principal.clientId();
-    auto [unused, inserted] = impl_->clients.emplace(
-        clientId, AttachedClient{std::move(principal), viewId});
-    if (!inserted) {
-        return {AttachError::DuplicateClient,
-                "client ID is already attached"};
-    }
-    return {AttachError::None, {}};
-}
-
-bool CommandExecutor::detach(ClientId clientId) {
-    std::lock_guard lock{impl_->mutex};
-    return impl_->clients.erase(clientId) != 0;
-}
-
 std::optional<Revision> CommandExecutor::activeDispatchRevision() const noexcept {
     if (impl_->dispatchingThread.load(std::memory_order_acquire) !=
         std::this_thread::get_id()) {
@@ -109,18 +86,11 @@ std::optional<Revision> CommandExecutor::activeDispatchRevision() const noexcept
     return Revision{impl_->dispatchRevision.load(std::memory_order_relaxed)};
 }
 
-ExecutorResult CommandExecutor::dispatch(ClientId clientId,
-                                         ClientCommand const& command) {
+ExecutorResult CommandExecutor::dispatch(ClientCommand const& command) {
     std::lock_guard lock{impl_->mutex};
     Revision const currentRevision = impl_->revision;
     DispatchMarker const marker{impl_->dispatchingThread,
                                 impl_->dispatchRevision, currentRevision};
-
-    auto const client = impl_->clients.find(clientId);
-    if (client == impl_->clients.end()) {
-        return rejected(CommandError::UnknownClient, currentRevision,
-                        "client ID is not attached");
-    }
 
     // Straight from the live catalog, so a command registered a moment ago is
     // dispatchable now.  A snapshot taken when the session was built would
@@ -136,14 +106,6 @@ ExecutorResult CommandExecutor::dispatch(ClientId clientId,
         return rejected(CommandError::UnknownCommand, currentRevision,
                         "command is not registered: " +
                             std::string{command.id.name()});
-    }
-
-    for (auto const& capability : command_->requiredCapabilities) {
-        if (!client->second.principal.hasCapability(capability)) {
-            return rejected(CommandError::CapabilityDenied, currentRevision,
-                            "principal lacks required capability: " +
-                                std::string{capability.value()});
-        }
     }
 
     bool const mutates = command_->effect == CommandEffect::Mutation;
@@ -162,8 +124,8 @@ ExecutorResult CommandExecutor::dispatch(ClientId clientId,
                         "session revision is exhausted");
     }
 
-    CommandContext context{currentRevision, client->second.principal,
-                           client->second.viewId, impl_->services};
+    CommandContext context{currentRevision, impl_->currentView,
+                           impl_->services};
     CommandHandlerResult handlerResult;
     try {
         handlerResult = command_->handler(context, command.payload);
@@ -201,7 +163,7 @@ ExecutorResult CommandExecutor::dispatch(ClientId clientId,
     }
     std::optional<ViewActionRequest> viewAction;
     if (handlerResult.viewAction) {
-        viewAction = ViewActionRequest{client->second.viewId, currentRevision,
+        viewAction = ViewActionRequest{impl_->currentView, currentRevision,
                                        std::move(*handlerResult.viewAction)};
     }
     return {CommandError::None, impl_->revision, {}, std::move(viewAction)};
@@ -230,14 +192,8 @@ SessionTopology CommandExecutor::topology() const {
     return impl_->topology;
 }
 
-std::optional<AttachedClient> CommandExecutor::attachedClient(
-    ClientId clientId) const {
-    std::lock_guard lock{impl_->mutex};
-    auto const found = impl_->clients.find(clientId);
-    if (found == impl_->clients.end()) {
-        return std::nullopt;
-    }
-    return found->second;
+ViewId CommandExecutor::currentView() const noexcept {
+    return impl_->currentView;
 }
 
 }  // namespace ssg

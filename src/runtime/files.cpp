@@ -81,7 +81,6 @@ std::optional<std::string> pathCommandPrecondition(
 }
 
 CommandHandlerResult bindFile(EditorSession::Impl& runtime,
-                               InvocationPrincipal const& principal,
                                FileCommand command,
                                std::any const& payload) {
     WorkspaceResult result;
@@ -153,7 +152,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
         case FileCommand::OpenDroppedContent: {
             auto const* dropped = payloadAs<DroppedContentArguments>(payload);
             if (dropped == nullptr) return failure("file.open_dropped_content requires dropped content payload");
-            result = runtime.workspace.openDroppedContent(principal, dropped->bytes, dropped->suggestedLabel);
+            result = runtime.workspace.openDroppedContent(dropped->bytes, dropped->suggestedLabel);
             return openDocumentResult(runtime, result);
         }
         case FileCommand::Save: {
@@ -249,8 +248,6 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
 }
 
 CommandHandlerResult bindTab(EditorSession::Impl& runtime,
-                              ViewId viewId,
-                              ClientId client,
                               TabCommand command,
                               std::any const& payload) {
     auto active = runtime.tabs.viewState().active;
@@ -290,7 +287,7 @@ CommandHandlerResult bindTab(EditorSession::Impl& runtime,
     if (runtime.tabs.viewState().active != activeTabBefore &&
         (command == TabCommand::Activate || command == TabCommand::Next ||
          command == TabCommand::Previous)) {
-        runtime.recordNavigation(client, viewId, NavigationClass::User);
+        runtime.recordNavigation(NavigationClass::User);
     }
     return success();
 }
@@ -471,7 +468,7 @@ void registerExternalModificationCommands(CommandCatalog& builder,
                 return failure("external diff is unavailable");
             }
             return runtime.openOrFocusLiveDiffTab(
-                diffFile->get(), NavigationClass::Programmatic, std::nullopt);
+                diffFile->get(), NavigationClass::Programmatic);
     };
     auto spec = [](std::string id, std::string summary) {
         return CommandSpecBuilder{std::move(id)}
@@ -601,11 +598,9 @@ void registerEncodingCommands(CommandCatalog& builder,
 
 // Opening, saving, renaming and deleting files.
 //
-// file.open_dropped_content is the one command in the editor that requires a
-// capability: content dropped by a local window manager is a different trust
-// question from a path the user typed, so a principal without
-// `local_file_drop` cannot invoke it.  It is also the only one not offered to
-// Lua.
+// file.open_dropped_content is the only file command not offered to Lua:
+// content dropped by a local window manager arrives outside any script's
+// reach.
 void registerFileCommands(CommandCatalog& builder,
                           EditorSession::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
@@ -623,11 +618,11 @@ void registerFileCommands(CommandCatalog& builder,
             spec(std::move(id), std::move(summary))
                 .lua()
                 .optionalInProcessHandler<std::string>(
-                    [&runtime, command](CommandContext& context,
+                    [&runtime, command](CommandContext&,
                                         std::optional<std::string> const& path) {
                         return runtime.runTransaction([&] {
                             return bindFile(
-                                runtime, context.principal(), command,
+                                runtime, command,
                                 path ? std::any{*path} : std::any{});
                         });
                     });
@@ -643,11 +638,11 @@ void registerFileCommands(CommandCatalog& builder,
     builder.add(spec("file.open_recent", "Open Recent")
                     .lua()
                     .optionalInProcessHandler<std::size_t>(
-                        [&runtime](CommandContext& context,
+                        [&runtime](CommandContext&,
                                    std::optional<std::size_t> const& index) {
                             return runtime.runTransaction([&] {
                                 return bindFile(
-                                    runtime, context.principal(),
+                                    runtime,
                                     FileCommand::OpenRecent,
                                     index ? std::any{*index} : std::any{});
                             });
@@ -664,12 +659,11 @@ void registerFileCommands(CommandCatalog& builder,
             FileCommand::NewDirectory);
 
     builder.add(spec("file.open_dropped_content", "Open Dropped Content")
-                    .capability("local_file_drop")
                     .handler<DroppedContentArguments>(
-                        [&runtime](CommandContext& context,
+                        [&runtime](CommandContext&,
                                    DroppedContentArguments const& arguments) {
                             return runtime.runTransaction([&] {
-                                return bindFile(runtime, context.principal(),
+                                return bindFile(runtime,
                                                 FileCommand::OpenDroppedContent,
                                                 std::any{arguments});
                             });
@@ -693,12 +687,10 @@ void registerTabCommands(CommandCatalog& builder,
                 .mutates()
                 .lua()
                 .optionalHandler<TabId>(
-                    [&runtime, command](CommandContext& context,
+                    [&runtime, command](CommandContext&,
                                         std::optional<TabId> const& tab) {
                         return runtime.runTransaction([&] {
-                            return bindTab(runtime, context.viewId(),
-                                           context.principal().clientId(),
-                                           command,
+                            return bindTab(runtime, command,
                                            tab ? std::any{*tab} : std::any{});
                         });
                     });

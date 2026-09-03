@@ -33,11 +33,7 @@ Fixture makeFixture(std::string_view text) {
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return {std::move(root), nullptr};
     auto runtime = std::move(created.session);
-    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                          ssg::ViewId{1});
-    (void)runtime->dispatch(
-        ssg::ClientId{1},
-        {"file.open", runtime->revision(), std::string{"overlay.cpp"}});
+    (void)runtime->dispatch({"file.open", runtime->revision(), std::string{"overlay.cpp"}});
     return {std::move(root), std::move(runtime)};
 }
 
@@ -98,8 +94,7 @@ ssg::GridPresentation snapshotWith(
     const ssg::GridPresentation& base,
     ssg::SessionSnapshotSections sections,
     ssg::GridProjection projection) {
-    return ssg::test::copyGridFrame(
-        base, std::move(sections), std::move(projection), base.palette());
+    return ssg::test::copyGridFrame(base, ssg::ViewId{1}, std::move(sections), std::move(projection), base.palette());
 }
 
 }
@@ -122,20 +117,16 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
                                     .workingContent = working}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.select_next", runtime.revision(), {}})
+                    .dispatch({"tree.select_next", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate", runtime.revision(), {}})
                     .accepted());
 
-    auto snapshot = ssg::test::projectGridFrame(
-        runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
+    auto snapshot = ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_TRUE(snapshot->semantic().sections().tabs.active.has_value());
@@ -173,8 +164,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_TRUE(fixture.runtime != nullptr);
     if (!fixture.runtime) return;
 
-    auto base = ssg::test::projectGridFrame(
-        *fixture.runtime, ssg::ClientId{1}, ssg::ViewId{1}, {40, 10});
+    auto base = ssg::test::projectGridFrame(*fixture.runtime, ssg::ViewId{1}, {40, 10});
     ASSERT_TRUE(base.has_value());
     if (!base) return;
 

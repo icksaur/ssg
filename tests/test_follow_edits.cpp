@@ -31,23 +31,6 @@ DiffFileView changedFile(std::string id, std::filesystem::path path,
     return view;
 }
 
-TEST(followClientsPublishFixedCompatibilityGeometry) {
-    DiffFileView file{DiffFileId{"phantom"}};
-    file.path = "phantom.txt";
-    file.currentContent = "zero\none\ntwo\nthree";
-    file.hunks.push_back({.baselineStart = 2,
-                          .targetStart = 2,
-                          .baselineLines = {"removed\n"},
-                          .targetLines = {}});
-
-    FollowEditsModel model;
-    ASSERT_TRUE(model.attachClient(ClientId{1}).accepted());
-    ASSERT_TRUE(model.acceptExternalChange(file, Revision{1}).accepted());
-    const auto client = model.viewState().clients.front();
-    ASSERT_EQ(client.dimensions, ViewportDimensions(80, 24));
-    ASSERT_EQ(client.offset, FollowScrollOffset{});
-}
-
 TEST(newestIntroducedHunkWinsWhenPriorBottomHunkRemains) {
     auto revisionA = changedFile("file", "file.txt", 0);
     revisionA.currentContent = "top\nsame\nmiddle\nsame\nbottom\n";
@@ -108,17 +91,13 @@ TEST(burstDoesNotRevealEarlierFileWhenLastFileHasNoNewHunk) {
 
 TEST(programmaticRevealDoesNotPauseButUserNavigationDoes) {
     FollowEditsModel model;
-    ASSERT_TRUE(model.attachClient(ClientId{1}).accepted());
     ASSERT_TRUE(model
                     .applyNavigation(
-                        {.client = ClientId{1},
-                         .classification = NavigationClass::Programmatic})
+                        {.classification = NavigationClass::Programmatic})
                     .accepted());
     ASSERT_EQ(model.viewState().mode, FollowMode::Following);
     ASSERT_TRUE(model
-                    .applyNavigation(
-                        {.client = ClientId{1},
-                         .classification = NavigationClass::User})
+                    .applyNavigation({.classification = NavigationClass::User})
                     .accepted());
     ASSERT_EQ(model.viewState().mode, FollowMode::Paused);
 }
@@ -169,15 +148,6 @@ std::string queueIds(const FollowEditsViewState& state) {
     return result;
 }
 
-std::string rowFor(const FollowEditsViewState& state, std::uint64_t client) {
-    for (const auto& view : state.clients) {
-        if (view.client == ClientId{client}) {
-            return std::to_string(view.offset.firstRow);
-        }
-    }
-    return "-";
-}
-
 TEST(independentTransitionTableCoversSharedFollowPolicy) {
     std::ifstream input{
         std::filesystem::path{SSG_FOLLOW_EDITS_FIXTURE_DIR} / "transitions.tsv"};
@@ -191,13 +161,9 @@ TEST(independentTransitionTableCoversSharedFollowPolicy) {
             continue;
         }
         const auto fields = split(line);
-        ASSERT_EQ(fields.size(), std::size_t{8});
+        ASSERT_EQ(fields.size(), std::size_t{6});
         const auto& operation = fields[0];
-        if (operation == "attach") {
-            ASSERT_TRUE(model.attachClient(
-                                 ClientId{std::stoull(fields[1])})
-                            .accepted());
-        } else if (operation == "change") {
+        if (operation == "change") {
             const auto separator = fields[1].find(':');
             const auto id = fields[1].substr(0, separator);
             const auto lineNumber =
@@ -217,9 +183,7 @@ TEST(independentTransitionTableCoversSharedFollowPolicy) {
                 classification = NavigationClass::NonNavigation;
             }
             ASSERT_TRUE(model
-                            .applyNavigation(
-                                {.client = ClientId{std::stoull(fields[1])},
-                                 .classification = classification})
+                            .applyNavigation({.classification = classification})
                             .accepted());
         } else if (operation == "resume") {
             ASSERT_TRUE(model
@@ -239,8 +203,6 @@ TEST(independentTransitionTableCoversSharedFollowPolicy) {
                   fields[3]);
         ASSERT_EQ(targetId(state.activeTarget), fields[4]);
         ASSERT_EQ(queueIds(state), fields[5]);
-        ASSERT_EQ(rowFor(state, 1), fields[6]);
-        ASSERT_EQ(rowFor(state, 2), fields[7]);
     }
 }
 
@@ -317,7 +279,6 @@ TEST(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets) {
     const auto after = model.viewState();
     ASSERT_EQ(after.mode, FollowMode::Following);
     ASSERT_EQ(after.activeTarget, before.activeTarget);
-    ASSERT_EQ(after.clients, before.clients);
     ASSERT_TRUE(after.queuedTargets.empty());
 }
 
@@ -352,7 +313,7 @@ TEST(resumePreservesNewestIntroducedHunkInsteadOfChoosingBottomHunk) {
     ASSERT_EQ(model.viewState().activeTarget->newestHunkLine, std::size_t{1});
 }
 
-TEST(staleChangesAndInvalidClientsAreFailureAtomic) {
+TEST(staleChangesAreFailureAtomic) {
     FollowEditsModel model;
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("a", "a", 1),
@@ -364,14 +325,6 @@ TEST(staleChangesAndInvalidClientsAreFailureAtomic) {
                                           Revision{2})
                   .error,
               FollowEditsError::StaleRevision);
-    ASSERT_EQ(model.viewState(), before);
-
-    ASSERT_EQ(model
-                  .applyNavigation(
-                      {.client = ClientId{99},
-                       .classification = NavigationClass::User})
-                  .error,
-              FollowEditsError::UnknownClient);
     ASSERT_EQ(model.viewState(), before);
 
     ASSERT_TRUE(model.pause().accepted());
@@ -409,7 +362,6 @@ TEST(configurationRejectsInvalidQueueCapacity) {
 
 SSG_TEST_SUITE(test_follow_edits) {
     RUN(independentTransitionTableCoversSharedFollowPolicy);
-    RUN(followClientsPublishFixedCompatibilityGeometry);
     RUN(newestIntroducedHunkWinsWhenPriorBottomHunkRemains);
     RUN(burstActivatesOnlyLastFileAndAdvancesOnce);
     RUN(burstDoesNotRevealEarlierFileWhenLastFileHasNoNewHunk);
@@ -419,7 +371,7 @@ SSG_TEST_SUITE(test_follow_edits) {
     RUN(queueIsBoundedAndSameFileReplacesInPlace);
     RUN(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets);
     RUN(resumePreservesNewestIntroducedHunkInsteadOfChoosingBottomHunk);
-    RUN(staleChangesAndInvalidClientsAreFailureAtomic);
+    RUN(staleChangesAreFailureAtomic);
     RUN(footerProjectionTracksPauseAndResume);
     RUN(configurationRejectsInvalidQueueCapacity);
     return failed == 0 ? 0 : 1;

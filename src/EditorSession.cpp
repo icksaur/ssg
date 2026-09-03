@@ -1541,8 +1541,7 @@ const TabState* EditorSession::Impl::activeTabState() const {
 }
 
 CommandHandlerResult EditorSession::Impl::openOrFocusLiveDiffTab(
-    const DiffFileView& file, NavigationClass classification,
-    std::optional<ClientId> userClient, std::optional<ViewId> userView) {
+    const DiffFileView& file, NavigationClass classification) {
     const auto target = diffOpenFile(file);
     const auto diffText = liveDiffDocumentText(file);
     std::optional<FileDocumentId> document;
@@ -1579,8 +1578,8 @@ CommandHandlerResult EditorSession::Impl::openOrFocusLiveDiffTab(
     if (!opened.accepted()) {
         return failure(tabMessage(opened));
     }
-    if (userClient && userView) {
-        recordNavigation(*userClient, *userView, classification);
+    if (classification == NavigationClass::User) {
+        recordNavigation(classification);
     }
     interaction.focusEditor();
     return success();
@@ -1661,8 +1660,7 @@ CommandHandlerResult EditorSession::Impl::openDraftDiff() {
 
     const auto file = diff.file(diffId);
     if (!file.has_value()) return failure("draft diff is unavailable");
-    return openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic,
-                                  std::nullopt);
+    return openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic);
 }
 
 DiffFileId EditorSession::Impl::externalDiffFileId(std::string_view savedPath) {
@@ -2202,8 +2200,7 @@ bool EditorSession::Impl::openOrRevealFollowTargetProgrammatic(
     if (!file.has_value()) {
         return false;
     }
-    if (!openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic,
-                                std::nullopt)
+    if (!openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic)
              .accepted) {
         return false;
     }
@@ -2932,62 +2929,40 @@ bool EditorSession::Impl::revealDiffTarget(
     return revealCurrentDiffTarget(target, classification);
 }
 
-void EditorSession::Impl::recordNavigation(
-    ClientId client, ViewId viewId, NavigationClass classification) {
-    (void)viewId;
-    (void)follow.applyNavigation(
-        {.client = client, .classification = classification});
+void EditorSession::Impl::recordNavigation(NavigationClass classification) {
+    (void)follow.applyNavigation({.classification = classification});
 }
 
-SessionTopology EditorSession::Impl::clientTopology(ClientId client) const {
+SessionTopology EditorSession::Impl::currentTopology() const {
     auto topology = session->topology();
-    const auto found = clientPaneTopologies.find(client);
-    if (found == clientPaneTopologies.end()) {
-        throw std::logic_error{"attached client has no pane topology"};
-    }
-    topology.panes = found->second;
+    topology.panes = paneTopology;
     return topology;
 }
 
-CommandHandlerResult EditorSession::Impl::splitPane(ClientId client,
-                                                    SplitAxis axis) {
-    const auto found = clientPaneTopologies.find(client);
-    if (found == clientPaneTopologies.end()) {
-        return failure("client has no pane topology");
-    }
-    (void)found->second.splitActive(axis);
+CommandHandlerResult EditorSession::Impl::splitPane(SplitAxis axis) {
+    (void)paneTopology.splitActive(axis);
     return success();
 }
 
-CommandHandlerResult EditorSession::Impl::closePane(ClientId client) {
-    const auto found = clientPaneTopologies.find(client);
-    if (found == clientPaneTopologies.end()) {
-        return failure("client has no pane topology");
-    }
-    if (!found->second.closeActive()) {
+CommandHandlerResult EditorSession::Impl::closePane() {
+    if (!paneTopology.closeActive()) {
         return failure("the only pane cannot be closed");
     }
     return success();
 }
 
 CommandHandlerResult EditorSession::Impl::cyclePane(
-    ClientId client, PaneCycleDirection direction) {
-    const auto panes = clientPaneTopologies.find(client);
-    const auto view = clientViews.find(client);
-    if (panes == clientPaneTopologies.end() || view == clientViews.end()) {
-        return failure("client has no pane topology");
-    }
-    panes->second.cycle(direction);
+    PaneCycleDirection direction) {
+    paneTopology.cycle(direction);
     if (follow.viewState().mode == FollowMode::Following) {
         (void)follow.pause();
     }
-    recordNavigation(client, view->second, NavigationClass::User);
+    recordNavigation(NavigationClass::User);
     return success();
 }
 
-bool EditorSession::Impl::focusPane(ClientId client, PaneId pane) {
-    const auto found = clientPaneTopologies.find(client);
-    return found != clientPaneTopologies.end() && found->second.focus(pane);
+bool EditorSession::Impl::focusPane(PaneId pane) {
+    return paneTopology.focus(pane);
 }
 
 EditorSession::EditorSession(std::unique_ptr<Impl> implementation) noexcept
@@ -3053,39 +3028,6 @@ EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
     } catch (std::exception const& exception) {
         return {nullptr, exception.what()};
     }
-}
-
-AttachResult EditorSession::attach(InvocationPrincipal principal, ViewId viewId) {
-    std::lock_guard operationLock{impl_->operationMutex};
-    auto clientId = principal.clientId();
-    auto result = impl_->session->attach(std::move(principal), viewId);
-    if (result.accepted()) {
-        auto& references = impl_->viewReferences[viewId];
-        ++references;
-        impl_->clientViews.emplace(clientId, viewId);
-        impl_->clientPaneTopologies.emplace(clientId, PaneTopology::initial());
-        (void)impl_->follow.attachClient(clientId);
-    }
-    return result;
-}
-
-bool EditorSession::detach(ClientId clientId) {
-    std::lock_guard operationLock{impl_->operationMutex};
-    auto attached = impl_->clientViews.find(clientId);
-    (void)impl_->follow.detachClient(clientId);
-    auto const detached = impl_->session->detach(clientId);
-    if (detached && attached != impl_->clientViews.end()) {
-        impl_->documentPointerGestures.erase(clientId);
-        impl_->clientPaneTopologies.erase(clientId);
-        auto const viewId = attached->second;
-        impl_->clientViews.erase(attached);
-        auto references = impl_->viewReferences.find(viewId);
-        if (references != impl_->viewReferences.end() &&
-            --references->second == 0) {
-            impl_->viewReferences.erase(references);
-        }
-    }
-    return detached;
 }
 
 PumpResult EditorSession::pump() {
@@ -3170,34 +3112,26 @@ bool EditorSession::dispatchInProgress() const noexcept {
     return impl_->session->activeDispatchRevision().has_value();
 }
 
-bool EditorSession::Impl::defer(std::optional<ClientId> as,
-                                ClientCommand command) {
+bool EditorSession::Impl::defer(ClientCommand command) {
     if (!session->activeDispatchRevision()) return false;
-    return deferredCommands.enqueue({as, std::move(command)});
+    return deferredCommands.enqueue({std::move(command)});
 }
 
-bool EditorSession::deferDispatch(ClientId clientId, ClientCommand command) {
-    return impl_->defer(clientId, std::move(command));
+bool EditorSession::deferDispatch(ClientCommand command) {
+    return impl_->defer(std::move(command));
 }
 
 namespace {
 
-CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
+CommandResult dispatchLocked(EditorSession::Impl* impl_,
                              ClientCommand const& command);
 
-ClientInputResult inputKeyLocked(EditorSession::Impl* impl_, ClientId clientId,
+ClientInputResult inputKeyLocked(EditorSession::Impl* impl_,
                                  ClientKeyInput const& input) {
-    if (!impl_->session->attachedClient(clientId)) {
-        return {ClientInputOutcome::Rejected, std::nullopt,
-                CommandResult{CommandError::UnknownClient,
-                              impl_->session->revision(),
-                              "client ID is not attached", {}}};
-    }
-
     auto dispatchInput = [&](CommandName command,
                              std::any payload = {}) -> ClientInputResult {
         auto result = dispatchLocked(
-            impl_, clientId,
+            impl_,
             {std::move(command), impl_->session->revision(),
              std::move(payload)});
         const auto activation = result.accepted()
@@ -3327,20 +3261,14 @@ ClientInputResult inputKeyLocked(EditorSession::Impl* impl_, ClientId clientId,
     return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
 }
 
-ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
+ClientInputResult inputLocked(EditorSession::Impl* impl_,
                               ClientInput const& input) {
     return std::visit(
         [&](auto const& semantic) -> ClientInputResult {
             using Input = std::decay_t<decltype(semantic)>;
             if constexpr (std::same_as<Input, ClientKeyInput>) {
-                return inputKeyLocked(impl_, clientId, semantic);
+                return inputKeyLocked(impl_, semantic);
             } else {
-                if (!impl_->session->attachedClient(clientId)) {
-                    return {ClientInputOutcome::Rejected, std::nullopt,
-                            CommandResult{CommandError::UnknownClient,
-                                          impl_->session->revision(),
-                                          "client ID is not attached", {}}};
-                }
                 const auto unhandled = [] {
                     return ClientInputResult{ClientInputOutcome::Unhandled,
                                              std::nullopt, std::nullopt};
@@ -3371,7 +3299,7 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                 auto dispatch = [&](CommandName command,
                                     std::any payload) -> ClientInputResult {
                     auto result = dispatchLocked(
-                        impl_, clientId,
+                        impl_,
                         {std::move(command), impl_->session->revision(),
                          std::move(payload)});
                     const auto activation =
@@ -3390,7 +3318,7 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                 if constexpr (std::same_as<Input, DocumentPointerInput>) {
                     if (semantic.phase == InputPointerPhase::Press ||
                         semantic.phase == InputPointerPhase::Cancel) {
-                        impl_->documentPointerGestures.erase(clientId);
+                        impl_->documentPointerGesture.reset();
                     }
                 }
                 if constexpr (!std::same_as<Input, PickerPointerInput>) {
@@ -3456,8 +3384,7 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                             } else if constexpr (std::same_as<
                                                      Transition,
                                                      PaneFocusTransition>) {
-                                if (!impl_->focusPane(clientId,
-                                                      transition.pane)) {
+                                if (!impl_->focusPane(transition.pane)) {
                                     return rejectTarget(
                                         "pane focus target is not in this "
                                         "attachment");
@@ -3468,18 +3395,14 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                                 if (focusChanged) {
                                     impl_->interaction.focusEditor();
                                 }
-                                impl_->recordNavigation(
-                                    clientId, impl_->clientViews.at(clientId),
-                                    NavigationClass::User);
+                                impl_->recordNavigation(NavigationClass::User);
                                 impl_->session->advanceRevision();
                                 return {ClientInputOutcome::Dispatched,
                                         std::nullopt,
                                         CommandResult{
                                             CommandError::None,
                                             impl_->session->revision(),
-                                            {},
-                                            {/*routingChanged=*/focusChanged,
-                                             /*geometryChanged=*/true}}};
+                                            {}}};
                             } else if constexpr (std::same_as<
                                                      Transition,
                                                      SelectionTransition>) {
@@ -3529,30 +3452,24 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                                     impl_->historyFor(*documentId)
                                         .breakCoalescing();
                                 }
-                                impl_->recordNavigation(
-                                    clientId, impl_->clientViews.at(clientId),
-                                    NavigationClass::User);
+                                impl_->recordNavigation(NavigationClass::User);
                                 impl_->session->advanceRevision();
                                 return {
                                     ClientInputOutcome::Dispatched,
                                     std::nullopt,
                                     CommandResult{CommandError::None,
                                                   impl_->session->revision(),
-                                                  {},
-                                                  {/*routingChanged=*/false,
-                                                   /*geometryChanged=*/false}}};
+                                                  {}}};
                             } else if constexpr (std::same_as<
                                                      Transition,
                                                      PointerSelectionTransition>) {
-                                if (impl_->documentPointerGestures.find(
-                                        clientId) ==
-                                    impl_->documentPointerGestures.end()) {
+                                if (!impl_->documentPointerGesture) {
                                     return rejectTarget(
                                         "pointer selection has no active "
                                         "gesture");
                                 }
                                 return inputLocked(
-                                    impl_, clientId,
+                                    impl_,
                                     ClientInput{DocumentPointerInput{
                                         semantic.basis, transition.position,
                                         false, false,
@@ -3577,7 +3494,7 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                                           impl_->session->revision(), {}, {}}};
                     };
                     if (semantic.phase == InputPointerPhase::Cancel) {
-                        impl_->documentPointerGestures.erase(clientId);
+                        impl_->documentPointerGesture.reset();
                         return handled();
                     }
                     const auto resolvePosition = [&]()
@@ -3625,13 +3542,12 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                                         std::move(baseline)});
                             }
                         }
-                        impl_->documentPointerGestures.insert_or_assign(
-                            clientId,
+                        impl_->documentPointerGesture =
                             EditorSession::Impl::DocumentPointerGesture{
                                 *documentId,
                                 impl_->activeDocument()->revision(),
                                 *position, *position, semantic.additive,
-                                baseline});
+                                baseline};
                         auto result =
                             semantic.additive
                                 ? dispatch(
@@ -3644,40 +3560,33 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                                       SelectionCommandArguments{*position,
                                                                 std::nullopt});
                         if (!result.command || !result.command->accepted()) {
-                            impl_->documentPointerGestures.erase(clientId);
+                            impl_->documentPointerGesture.reset();
                         }
                         return result;
                     }
-                    auto gesture =
-                        impl_->documentPointerGestures.find(clientId);
-                    if (gesture == impl_->documentPointerGestures.end()) {
+                    if (!impl_->documentPointerGesture) {
                         return unhandled();
                     }
+                    auto& gesture = *impl_->documentPointerGesture;
                     if (impl_->activeDocumentId() !=
-                        std::optional<FileDocumentId>{
-                            gesture->second.documentId}) {
-                        impl_->documentPointerGestures.erase(gesture);
+                        std::optional<FileDocumentId>{gesture.documentId}) {
+                        impl_->documentPointerGesture.reset();
                         return rejectTarget(
                             "document pointer gesture target changed");
                     }
                     if (impl_->activeDocument()->revision() !=
-                        gesture->second.documentRevision) {
-                        impl_->documentPointerGestures.erase(gesture);
+                        gesture.documentRevision) {
+                        impl_->documentPointerGesture.reset();
                         return rejectTarget(
                             "document changed during pointer gesture");
                     }
                     auto position = resolvePosition();
                     if (semantic.edge != DocumentPointerEdge::None) {
-                        const auto client =
-                            impl_->session->attachedClient(clientId);
-                        if (!client) {
-                            return rejectTarget(
-                                "document edge gesture client is detached");
-                        }
                         auto result = CommandResult{
                             CommandError::None, impl_->session->revision(), {}};
                         result.viewAction = ViewActionRequest{
-                            client->viewId, impl_->session->revision(),
+                            impl_->session->currentView(),
+                            impl_->session->revision(),
                             ContinuePointerEdge{semantic.edge}};
                         return {ClientInputOutcome::ViewOwned, std::nullopt,
                                 std::move(result)};
@@ -3689,10 +3598,10 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                     }
                     ClientInputResult result = handled();
                     if (position) {
-                        if (gesture->second.additive) {
-                            auto ranges = gesture->second.baseline;
+                        if (gesture.additive) {
+                            auto ranges = gesture.baseline;
                             ranges.push_back(Selection{
-                                gesture->second.anchor, *position});
+                                gesture.anchor, *position});
                             result = dispatch(
                                 "select.set_ranges",
                                 SelectionCommandArguments{
@@ -3703,16 +3612,16 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
                                 "select.set_range",
                                 SelectionCommandArguments{
                                     std::nullopt,
-                                    Selection{gesture->second.anchor,
+                                    Selection{gesture.anchor,
                                               *position}});
                         }
                         if (result.command && result.command->accepted() &&
                             position) {
-                            gesture->second.active = *position;
+                            gesture.active = *position;
                         }
                     }
                     if (semantic.phase == InputPointerPhase::Release) {
-                        impl_->documentPointerGestures.erase(clientId);
+                        impl_->documentPointerGesture.reset();
                     }
                     return result;
                 } else if constexpr (std::same_as<Input, TabPointerInput>) {
@@ -3766,50 +3675,14 @@ ClientInputResult inputLocked(EditorSession::Impl* impl_, ClientId clientId,
         input);
 }
 
-CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
+CommandResult dispatchLocked(EditorSession::Impl* impl_,
                              ClientCommand const& command) {
-    // The routing signature: every runtime-owned input a host reads to interpret
-    // the NEXT key. Compared before/after the whole dispatch (which drains nested
-    // and deferred commands), so the effects union every route without annotating
-    // any handler. Focus, prompt kind/value, and picker are subsumed by the
-    // interaction routing generation; keymap, catalog, and clipboard each carry
-    // their own authoritative counter.
-    const auto routingSignature = [&] {
-        return std::tuple{impl_->interaction.routingGeneration(),
-                          impl_->keymapGeneration,
-                          impl_->catalog->revision(),
-                          impl_->clipboard.writeGeneration()};
-    };
-    const auto routingBefore = routingSignature();
-    const auto revisionBefore = impl_->session->revision();
-    const auto withEffects = [&](ExecutorResult outcome) {
-        CommandResult result{outcome.error, outcome.revision,
-                             std::move(outcome.message), {},
-                             std::move(outcome.viewAction)};
-        // routingChanged is precise; geometryChanged is the conservative gate a
-        // pointer/wheel hit-test consumes. A routing change (prompt/focus/picker)
-        // also reshapes presentation geometry, and a command that fails after a
-        // partial mutation may move routing without advancing the session
-        // revision -- so geometry is the union of "revision advanced" and "routing
-        // changed", never a subset.
-        const bool routingChanged = routingSignature() != routingBefore;
-        result.effects.routingChanged = routingChanged;
-        result.effects.geometryChanged =
-            routingChanged || impl_->session->revision() != revisionBefore;
-        return result;
-    };
-    // Parameterised by client because a deferred command runs as the client
-    // that queued it, whose origin -- and so whether an edit counts as local --
-    // may differ from the client whose dispatch is draining the queue.
-    const auto dispatchAs = [&](ClientId as, const ClientCommand& dispatched) {
-        const auto attached = impl_->session->attachedClient(as);
-        const auto origin =
-            attached ? attached->principal.origin() : InvocationOrigin::System;
-        const auto shouldPauseForLocalEdit =
-            origin != InvocationOrigin::Lua &&
-            origin != InvocationOrigin::System;
+    // Every direct dispatch -- keystroke, palette, or script -- is local: there
+    // is one trusted caller, so a mutation always counts toward the local-edit
+    // follow pause.
+    const auto dispatchAs = [&](const ClientCommand& dispatched) {
         const auto revisionsBefore = documentRevisions(impl_->workspace);
-        auto result = impl_->session->dispatch(as, dispatched);
+        auto result = impl_->session->dispatch(dispatched);
         impl_->reconcileFindDocument();
         // The draft-conflict notice's presence lives in per-document runtime state,
         // outside the prompt/panel transitions, so reconcile it into the interaction
@@ -3820,7 +3693,7 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
         impl_->interaction.refreshExternalModificationPresence(
             impl_->externalModificationPresent());
         impl_->interaction.refreshStatusActions(impl_->status.actionNodes());
-        if (result.accepted() && shouldPauseForLocalEdit &&
+        if (result.accepted() &&
             existingDocumentMutated(revisionsBefore, impl_->workspace)) {
             (void)impl_->follow.notifyLocalEdit();
         }
@@ -3834,8 +3707,7 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
     //
     // Requests run once the session lock has released, in the order asked for,
     // each rebased on the revision the previous one left.
-    const auto dispatchAndDrain = [&](ClientId as,
-                                      const ClientCommand& dispatched) {
+    const auto dispatchAndDrain = [&](const ClientCommand& dispatched) {
         const auto* requested = dispatched.id.handle().valid()
                                     ? impl_->catalog->find(
                                           dispatched.id.handle())
@@ -3843,7 +3715,7 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
                                           dispatched.id.name());
         const bool routing =
             requested && requested->effect == CommandEffect::Routing;
-        auto outcome = dispatchAs(as, dispatched);
+        auto outcome = dispatchAs(dispatched);
         // A handler that FAILED does not get its requests performed: it may
         // have queued half a sequence before giving up, and running that half
         // is worse than running none of it.  Its success would also overwrite
@@ -3886,8 +3758,7 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
             }
             directRoutingTarget = false;
             deferred.command.baseRevision = impl_->session->revision();
-            auto const deferredResult = dispatchAs(
-                deferred.client.value_or(as), deferred.command);
+            auto const deferredResult = dispatchAs(deferred.command);
             // The first failure is reported, naming the command that failed,
             // and the rest are abandoned: continuing would run the remainder of
             // a sequence whose earlier step did not happen.
@@ -3911,11 +3782,7 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
         }
         return outcome;
     };
-    const auto dispatchWithFollowEditPause =
-        [&](const ClientCommand& dispatched) {
-            return dispatchAndDrain(clientId, dispatched);
-        };
-    auto result = dispatchWithFollowEditPause(command);
+    auto result = dispatchAndDrain(command);
     // The file picker's submit is file.open, which (unlike palette.execute) has
     // no prompt side effects of its own.  Closing it here rather than in the
     // client keeps close-on-success semantics identical for keyboard and
@@ -3925,13 +3792,13 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_, ClientId clientId,
         command.id == "file.open") {
         (void)impl_->interaction.cancelPrompt();
     }
-    return withEffects(std::move(result));
+    return {result.error, result.revision, std::move(result.message),
+            std::move(result.viewAction)};
 }
 
 }  // namespace
 
-ClientInputResult EditorSession::input(ClientId clientId,
-                                       ClientInput const& input) {
+ClientInputResult EditorSession::input(ClientInput const& input) {
     if (const auto nested = impl_->session->activeDispatchRevision()) {
         return {ClientInputOutcome::Rejected, std::nullopt,
                 CommandResult{CommandError::HandlerFailed, *nested,
@@ -3940,18 +3807,17 @@ ClientInputResult EditorSession::input(ClientId clientId,
                               {}}};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    return inputLocked(impl_.get(), clientId, input);
+    return inputLocked(impl_.get(), input);
 }
 
-CommandResult EditorSession::dispatch(ClientId clientId,
-                                      ClientCommand const& command) {
+CommandResult EditorSession::dispatch(ClientCommand const& command) {
     // A handler must be refused before taking the non-recursive aggregate lock.
     if (const auto nested = impl_->session->activeDispatchRevision()) {
         return {CommandError::HandlerFailed, *nested,
                 std::string{kNestedDispatchRefusal}};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    return dispatchLocked(impl_.get(), clientId, command);
+    return dispatchLocked(impl_.get(), command);
 }
 
 std::shared_ptr<CommandCatalog const> EditorSession::commandCatalog() const {
@@ -4020,23 +3886,19 @@ DiffIngressResult EditorSession::applyGitDiffScan(GitDiffScan scan) {
     return impl_->applyGitDiffScan(std::move(scan));
 }
 std::optional<PresentationCapture> EditorSession::capturePresentation(
-    ClientId clientId, std::optional<ViewId> expectedView,
+    std::optional<ViewId> expectedView,
     const PaletteReport& paletteReport) const {
     if (impl_->session->activeDispatchRevision()) {
         throw std::logic_error{"a view cannot be presented during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    auto client = impl_->session->attachedClient(clientId);
-    if (!client || (expectedView && client->viewId != *expectedView)) {
+    if (expectedView && impl_->session->currentView() != *expectedView) {
         return std::nullopt;
     }
     auto sections = impl_->sections(paletteReport);
     return PresentationCapture{
-        SessionSnapshot{
-            impl_->session->revision(), impl_->clientTopology(clientId),
-            {client->principal.clientId(), client->viewId,
-             client->principal.capabilities()},
-            std::move(sections)},
+        SessionSnapshot{impl_->session->revision(), impl_->currentTopology(),
+                       std::move(sections)},
         impl_->style};
 }
 
@@ -4047,8 +3909,7 @@ std::optional<ViewportProjectionResult> EditorSession::projectViewport(
         throw std::logic_error{"a view cannot be presented during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    auto client = impl_->session->attachedClient(request.clientId);
-    if (!client || client->viewId != request.viewId ||
+    if (impl_->session->currentView() != request.viewId ||
         impl_->session->revision() != request.semanticRevision) {
         return std::nullopt;
     }
@@ -4083,19 +3944,14 @@ std::optional<ViewportProjectionResult> EditorSession::projectViewport(
     return ViewportProjectionResult{std::move(viewport), navigation};
 }
 
-std::optional<SessionSnapshot> EditorSession::snapshot(ClientId clientId,
-                                                       PaletteReport paletteReport) const {
+std::optional<SessionSnapshot> EditorSession::snapshot(
+    PaletteReport paletteReport) const {
     if (impl_->session->activeDispatchRevision()) {
         throw std::logic_error{"a session cannot be snapshotted during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    auto client = impl_->session->attachedClient(clientId);
-    if (!client) return std::nullopt;
     auto sections = impl_->sections(paletteReport);
-    return SessionSnapshot{impl_->session->revision(),
-                           impl_->clientTopology(clientId),
-                           {client->principal.clientId(), client->viewId,
-                            client->principal.capabilities()},
+    return SessionSnapshot{impl_->session->revision(), impl_->currentTopology(),
                            std::move(sections)};
 }
 

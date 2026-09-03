@@ -20,18 +20,6 @@
 
 namespace ssg {
 
-struct ClientId {
-    explicit constexpr ClientId(std::uint64_t value = 0) noexcept
-        : value_{value} {}
-    [[nodiscard]] constexpr std::uint64_t value() const noexcept {
-        return value_;
-    }
-    constexpr auto operator<=>(ClientId const&) const noexcept = default;
-
-private:
-    std::uint64_t value_;
-};
-
 struct WorkspaceId {
     explicit constexpr WorkspaceId(std::uint64_t value = 0) noexcept
         : value_{value} {}
@@ -63,45 +51,6 @@ struct ViewActionRequest {
 
     friend bool operator==(const ViewActionRequest&,
                            const ViewActionRequest&) = default;
-};
-
-class CapabilityId {
-public:
-    explicit CapabilityId(std::string value);
-
-    [[nodiscard]] std::string_view value() const noexcept { return value_; }
-    auto operator<=>(CapabilityId const&) const = default;
-
-private:
-    std::string value_;
-};
-
-enum class InvocationOrigin : std::uint8_t {
-    InProcess,
-    Lua,
-    System,
-};
-
-class InvocationPrincipal {
-public:
-    InvocationPrincipal(ClientId clientId, InvocationOrigin origin,
-                        std::vector<CapabilityId> capabilities = {});
-    InvocationPrincipal(InvocationPrincipal const&) = default;
-    InvocationPrincipal(InvocationPrincipal&&) noexcept = default;
-    InvocationPrincipal& operator=(InvocationPrincipal const&) = delete;
-    InvocationPrincipal& operator=(InvocationPrincipal&&) = delete;
-
-    [[nodiscard]] ClientId clientId() const noexcept { return clientId_; }
-    [[nodiscard]] InvocationOrigin origin() const noexcept { return origin_; }
-    [[nodiscard]] std::vector<CapabilityId> const& capabilities() const noexcept {
-        return capabilities_;
-    }
-    [[nodiscard]] bool hasCapability(CapabilityId const& capability) const;
-
-private:
-    ClientId clientId_;
-    InvocationOrigin origin_;
-    std::vector<CapabilityId> capabilities_;
 };
 
 class CommandExecutor;
@@ -141,9 +90,6 @@ private:
 class CommandContext {
 public:
     [[nodiscard]] Revision revision() const noexcept { return revision_; }
-    [[nodiscard]] InvocationPrincipal const& principal() const noexcept {
-        return principal_;
-    }
     [[nodiscard]] ViewId viewId() const noexcept { return viewId_; }
     [[nodiscard]] CommandServices* services() const noexcept {
         return services_;
@@ -155,15 +101,10 @@ public:
 private:
     friend class CommandExecutor;
 
-    CommandContext(Revision revision, InvocationPrincipal const& principal,
-                   ViewId viewId, CommandServices* services)
-        : revision_{revision},
-          principal_{principal},
-          viewId_{viewId},
-          services_{services} {}
+    CommandContext(Revision revision, ViewId viewId, CommandServices* services)
+        : revision_{revision}, viewId_{viewId}, services_{services} {}
 
     Revision revision_;
-    InvocationPrincipal const& principal_;
     ViewId viewId_;
     CommandServices* services_;
     bool workspaceChanged_{false};
@@ -196,5 +137,51 @@ struct CommandHandlerResult {
 
 using CommandHandler =
     std::function<CommandHandlerResult(CommandContext&, std::any const&)>;
+
+struct ClientCommand {
+    // The command to invoke, named however the caller most cheaply can: a name
+    // at the protocol, Lua and palette boundaries, a handle on the keystroke
+    // path.  One field, so a dispatch cannot carry two different commands.
+    CommandName id;
+    Revision baseRevision;
+    std::any payload;
+};
+
+enum class CommandError : std::uint8_t {
+    None,
+    UnknownCommand,
+    StaleRevision,
+    HandlerFailed,
+    RevisionExhausted,
+};
+
+struct CommandResult {
+    CommandError error;
+    // Default-constructed to the null sentinel.  Without the initializer,
+    // `CommandResult{}` aggregate-initializes this member from `{}`, which
+    // reaches Revision's EXPLICIT constructor -- legal but warned about, and the
+    // warning is the honest one: an implicit conversion is being performed
+    // through a constructor written to forbid exactly that.
+    Revision revision{};
+    std::string message;
+    std::optional<ViewActionRequest> viewAction;
+
+    enum class Outcome : std::uint8_t {
+        Completed,
+        ViewActionRequired,
+        Rejected,
+    };
+
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == CommandError::None;
+    }
+    [[nodiscard]] bool completed() const noexcept {
+        return outcome() == Outcome::Completed;
+    }
+    [[nodiscard]] Outcome outcome() const noexcept {
+        if (error != CommandError::None) return Outcome::Rejected;
+        return viewAction ? Outcome::ViewActionRequired : Outcome::Completed;
+    }
+};
 
 }  // namespace ssg

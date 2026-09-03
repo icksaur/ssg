@@ -35,10 +35,8 @@ struct PalettePresenceOp {
                            const PalettePresenceOp&) = default;
 };
 
-// A client-local derived presence layer. Unlike MutationPatch, this does not
-// advance an authoritative basis and carries no prediction acknowledgment.
+// A client-local derived presence layer that narrows the candidate tree.
 struct PalettePresenceOverlay {
-    Generation generation{0};
     std::vector<PalettePresenceOp> ops;
 
     friend bool operator==(const PalettePresenceOverlay&,

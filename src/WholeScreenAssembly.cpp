@@ -34,7 +34,7 @@ inline constexpr std::string_view kFooterHintId = "footer.hint";
 // provider keyed by the hint id), not a literal in the structure -- so the keymap-
 // derived hint text changing never alters the schema structure or advances its
 // generation. Its click command is the stable hint command. When the label resolves
-// empty (the hint unbound), resolveUiState drops the leaf, as the grid drops it.
+// empty (the hint unbound), resolveUiTree drops the leaf, as the grid drops it.
 WidgetDescriptor hintField(std::string_view hintCommandId) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::Field;

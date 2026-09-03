@@ -2,7 +2,6 @@
 // validation belongs to UiInteractionState.
 
 #include "ssg/KeyboardFocus.h"
-#include "ssg/MutationPatch.h"
 #include "test_helpers.h"
 
 #include <stdexcept>
@@ -13,7 +12,6 @@ namespace {
 using ssg::BaseFocus;
 using ssg::FocusCapture;
 using ssg::KeyboardFocus;
-using ssg::PresenceConfig;
 using ssg::UiNodeId;
 
 FocusCapture prompt(std::string node) {
@@ -44,8 +42,8 @@ TEST(focusNeverReferencesAHiddenNodeAfterReconcile) {
     KeyboardFocus focus;
     focus.pushCapture(prompt("palette"));
 
-    PresenceConfig presence;  // palette absent (hidden)
-    focus.reconcile(presence);
+    ssg::UiSchema schema;  // root-only: "palette" does not exist (hidden)
+    focus.reconcile(schema);
     ASSERT_TRUE(!focus.hasCapture());
 }
 
@@ -55,21 +53,16 @@ TEST(reconcileDropsOnlyAbsentCaptures) {
     focus.pushCapture(FocusCapture{UiNodeId{"panelOverlay"}});
     focus.pushCapture(prompt("palette"));
 
-    // A schema with both nodes; presence hides only the top (palette).
-    ssg::UiSchema rawSchema;
-    rawSchema.root =
+    // A schema with both nodes; the top (palette) is hidden.
+    ssg::UiNode paletteNode{UiNodeId{"palette"}, ssg::Size::flex(),
+                            ssg::UiLeaf{}};
+    paletteNode.visible = false;
+    ssg::UiSchema schema;
+    schema.root =
         ssg::UiNode{UiNodeId{"panelOverlay"}, ssg::Size::flex(),
-                    ssg::UiContainer{ssg::Axis::Column,
-                                     {},
-                                     {},
-                                     {ssg::UiNode{UiNodeId{"palette"},
-                                                  ssg::Size::flex(),
-                                                  ssg::UiLeaf{}}}}};
-    auto vr = ssg::ValidatedSchema::validate(rawSchema);
-    const ssg::ValidatedSchema schema = vr.takeSchema();
-    const PresenceConfig presence =
-        PresenceConfig::initial(schema, {UiNodeId{"palette"}});
-    focus.reconcile(presence);
+                    ssg::UiContainer{ssg::Axis::Column, {}, {},
+                                     {std::move(paletteNode)}}};
+    focus.reconcile(schema);
 
     ASSERT_TRUE(focus.hasCapture());
     ASSERT_TRUE(focus.top()->node == UiNodeId{"panelOverlay"});

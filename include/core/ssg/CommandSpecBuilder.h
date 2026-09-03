@@ -87,10 +87,6 @@ public:
                   CommandRevisionPolicy::StateValidated);
         return *this;
     }
-    CommandSpecBuilder& capability(std::string capability) {
-        capabilities_.push_back(std::move(capability));
-        return *this;
-    }
     // Eligible for the versioned Lua API (I20).
     CommandSpecBuilder& lua() {
         luaApi_ = true;
@@ -251,7 +247,6 @@ private:
     std::string summary_;
     std::optional<CommandEffect> effect_;
     std::optional<CommandRevisionPolicy> revisionPolicy_;
-    std::vector<std::string> capabilities_;
     bool luaApi_ = false;
     bool initScript_ = false;
     CommandArgumentType argument_;

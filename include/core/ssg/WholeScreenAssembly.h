@@ -22,8 +22,8 @@
 // ride uiState (resolved per frame by id); the footer hint is likewise a provider-backed
 // Field whose label rides uiState. So a field's value, command, or provider PRESENCE
 // changing (a branch appearing/disappearing) is value-state, never a structure change,
-// and never advances the schema generation. The catalog is split into header/footer by
-// each entry's own region.
+// and never causes WholeScreenSchema to replace the schema. The catalog is split into
+// header/footer by each entry's own region.
 //
 #include <ssg/StatusFields.h>   // StatusFieldCatalogEntry
 #include <ssg/Style.h>          // StyleDimensions
@@ -42,7 +42,7 @@ namespace ssg {
 //   always places right after the header's left (status-fields) group, so tree order
 //   matches the visual order (a tree-order client renders it after the fields, not
 //   past the flex middle); it is presence-gated (visible only for a header-region
-//   prompt) rather than added or removed, so the schema stays generation-stable. This
+//   prompt) rather than added or removed, so the schema's structure stays stable. This
 //   is the only state-free TextInput the tree carries: footer prompt inputs are
 //   request-derived, provider-backed leaves.
 [[nodiscard]] UiComposition assembleWholeScreen(

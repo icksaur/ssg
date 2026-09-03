@@ -3,13 +3,13 @@
 #include <ssg/ClipboardRegister.h>
 #include <ssg/DiffModel.h>
 #include <ssg/DocumentHistory.h>
-#include <ssg/EditorClient.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/FindReplace.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/Keymap.h>
 #include <ssg/LspFeatureController.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/PaneTopology.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
 #include <ssg/Selection.h>
@@ -21,7 +21,7 @@
 #include <ssg/TextCodec.h>
 #include <ssg/Theme.h>
 #include <ssg/TreeModel.h>
-#include <ssg/UiFrame.h>
+#include <ssg/UiTree.h>
 #include <ssg/lsp_sync_client.h>
 
 #include <optional>
@@ -57,21 +57,13 @@ struct SessionSnapshotSections {
     LspFeatureViewState lspFeatures;
     ThemeSnapshot theme;
     PaletteViewState palette;
-    UiFrame uiFrame;
+    UiSchema uiTree;
     std::optional<NoticeView> noticeView;
     bool watcherAvailable = true;
 };
 
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,
                               SessionSnapshotSections const& right);
-
-struct ClientSnapshotState {
-    ClientId clientId;
-    ViewId viewId;
-    std::vector<CapabilityId> capabilities;
-
-    bool operator==(ClientSnapshotState const&) const = default;
-};
 
 // CONTRACT
 // SessionSnapshot: while one instance is alive, any number of threads may read
@@ -82,7 +74,6 @@ struct ClientSnapshotState {
 class SessionSnapshot {
 public:
     SessionSnapshot(Revision revision, SessionTopology topology,
-                    ClientSnapshotState client,
                     SessionSnapshotSections sections);
 
     SessionSnapshot(SessionSnapshot const&) = delete;
@@ -94,9 +85,6 @@ public:
     [[nodiscard]] SessionTopology const& topology() const noexcept {
         return topology_;
     }
-    [[nodiscard]] ClientSnapshotState const& client() const noexcept {
-        return client_;
-    }
     [[nodiscard]] SessionSnapshotSections const& sections() const noexcept {
         return sections_;
     }
@@ -105,7 +93,6 @@ public:
 private:
     Revision revision_;
     SessionTopology topology_;
-    ClientSnapshotState client_;
     SessionSnapshotSections sections_;
 };
 

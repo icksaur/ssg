@@ -36,7 +36,6 @@ struct CommandFacts {
     bool luaApi = false;
     bool initScript = false;
     bool mutates = true;
-    std::vector<ssg::CapabilityId> requiredCapabilities;
     // The real argument type, so a stand-in's wire codec matches the real one.
     std::optional<std::type_index> argument;
     // Whether that argument crosses the wire.  An in-process-only payload has
@@ -60,7 +59,6 @@ inline std::vector<CommandFacts> const& allCommandFacts() {
                     {command->id, command->owner, command->luaApi,
                      command->initScript,
                      command->effect == ssg::CommandEffect::Mutation,
-                     command->requiredCapabilities,
                      command->argument.type, command->argument.wire});
             }
         }

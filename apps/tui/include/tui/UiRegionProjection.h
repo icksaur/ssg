@@ -5,7 +5,6 @@
 
 #include <ssg/Geometry.h>
 #include <ssg/Style.h>
-#include <ssg/UiNodeState.h>  // UiStateSection
 #include <ssg/UiTree.h>      // UiRegion
 #include <ssg/UiWidget.h>    // WidgetProviderResolver
 
@@ -94,12 +93,11 @@ struct PromptInputProjection {
     const StatusViewState* statusView = nullptr,
     const PromptInputProjection* input = nullptr);
 
-// Uses the generation-matched semantic node state as the value source while
-// retaining grid-only display conversion at this presentation boundary.
+// Uses the tree's own resolved leaf state as the value source while retaining
+// grid-only display conversion at this presentation boundary.
 [[nodiscard]] UiRegionProjectionResult solveUiRegion(
     const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
-    const Style& style, Generation schemaGeneration,
-    const UiStateSection& state,
+    const Style& style,
     SolvedUiRegion& out, const StatusViewState* statusView = nullptr,
     const PromptInputProjection* input = nullptr);
 

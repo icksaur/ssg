@@ -41,34 +41,21 @@ TEST(pathCommandsOpenNonModalPathPrompts) {
     }
 }
 
-TEST(localDropRequiresHostCapabilityAndSanitizesLabel) {
+TEST(droppedContentSanitizesLabelAndNormalizesNewlines) {
     TemporaryDirectory temporary;
     auto recovery =
         ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const std::array<std::uint8_t, 5> bytes{{'h', 'i', '\r', '\n', '!'}};
-    const ssg::InvocationPrincipal local{
-        ssg::ClientId{1}, ssg::InvocationOrigin::InProcess,
-        {ssg::CapabilityId{"local_file_drop"}}};
-    const ssg::InvocationPrincipal remote{
-        ssg::ClientId{2}, ssg::InvocationOrigin::InProcess};
-    const ssg::InvocationPrincipal lua{
-        ssg::ClientId{3}, ssg::InvocationOrigin::Lua,
-        {ssg::CapabilityId{"local_file_drop"}}};
 
     const auto accepted =
-        workspace.openDroppedContent(local, bytes, "../../bad/name.txt");
+        workspace.openDroppedContent(bytes, "../../bad/name.txt");
     ASSERT_TRUE(accepted.accepted());
     const auto state = workspace.state(*accepted.document);
     ASSERT_EQ(state->key.kind(), ssg::JournalDocumentKeyKind::Untitled);
     ASSERT_EQ(state->displayLabel, std::string{"name.txt"});
     ASSERT_EQ(workspace.document(*accepted.document).snapshot().text,
               std::string{"hi\n!"});
-
-    ASSERT_EQ(workspace.openDroppedContent(remote, bytes, "x").error,
-              ssg::WorkspaceError::CapabilityDenied);
-    ASSERT_EQ(workspace.openDroppedContent(lua, bytes, "x").error,
-              ssg::WorkspaceError::CapabilityDenied);
     ASSERT_EQ(workspace.documents().size(), std::size_t{1});
 }
 
@@ -77,16 +64,13 @@ TEST(binaryAndInvalidTextDropsOpenReadOnlyWithoutPathAuthority) {
     auto recovery =
         ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
-    const ssg::InvocationPrincipal local{
-        ssg::ClientId{1}, ssg::InvocationOrigin::InProcess,
-        {ssg::CapabilityId{"local_file_drop"}}};
     const std::array<std::uint8_t, 3> binary{{'a', 0, 'b'}};
     const std::array<std::uint8_t, 2> invalid{{0xc3, 0x28}};
 
     const auto binaryResult =
-        workspace.openDroppedContent(local, binary, "/tmp/a.bin");
+        workspace.openDroppedContent(binary, "/tmp/a.bin");
     const auto invalidResult =
-        workspace.openDroppedContent(local, invalid, "bad.txt");
+        workspace.openDroppedContent(invalid, "bad.txt");
 
     ASSERT_TRUE(binaryResult.accepted());
     ASSERT_TRUE(invalidResult.accepted());
@@ -154,7 +138,7 @@ TEST(saveAllIgnoresUntitledDocuments) {
 
 SSG_TEST_SUITE(test_file_commands) {
     RUN(pathCommandsOpenNonModalPathPrompts);
-    RUN(localDropRequiresHostCapabilityAndSanitizesLabel);
+    RUN(droppedContentSanitizesLabelAndNormalizesNewlines);
     RUN(binaryAndInvalidTextDropsOpenReadOnlyWithoutPathAuthority);
     RUN(saveAllAttemptsEveryDocumentAndReportsFailures);
     RUN(saveAllIgnoresUntitledDocuments);

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <ssg/CommandInvocation.h>
 #include <ssg/PaneNavigation.h>
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace ssg {
@@ -41,6 +43,14 @@ private:
     PaneTopologyNode root_;
     PaneId active_;
     std::uint32_t nextId_;
+};
+
+struct SessionTopology {
+    std::optional<WorkspaceId> activeWorkspace;
+    std::optional<ViewId> activeView;
+    PaneTopology panes = PaneTopology::initial();
+
+    bool operator==(SessionTopology const&) const = default;
 };
 
 }  // namespace ssg

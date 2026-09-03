@@ -30,8 +30,8 @@ private:
 
 class TuiClient {
 public:
-    TuiClient(EditorSession& runtime, InvocationPrincipal principal,
-              ViewId viewId, ViewportDimensions dimensions);
+    TuiClient(EditorSession& runtime, ViewId viewId,
+              ViewportDimensions dimensions);
     ~TuiClient();
 
     TuiClient(TuiClient const&) = delete;
@@ -50,7 +50,6 @@ private:
     void refresh();
 
     EditorSession* runtime_;
-    InvocationPrincipal principal_;
     ViewId viewId_;
     ViewportDimensions dimensions_;
     GridPresenter presenter_;

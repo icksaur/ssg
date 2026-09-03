@@ -30,7 +30,6 @@ std::vector<std::pair<std::string, bool>> catalogWithLuaEligibility() {
 
 LuaCommandHostOptions options(std::vector<LuaCommand> commands = {}) {
     LuaCommandHostOptions result;
-    result.pluginId = ClientId{81};
     result.commands = std::move(commands);
     return result;
 }
@@ -42,13 +41,12 @@ TEST(requiredCatalogMinusExclusionsIsCallable) {
     std::size_t callableCount = 0;
     for (auto const& [id, lua] : catalog) {
         if (lua) {
-            commands.push_back({id, {}});
+            commands.push_back({id});
             ++callableCount;
         }
     }
     LuaCommandHost host{options(std::move(commands)),
         [&](LuaInvocation const& invocation) {
-            ASSERT_EQ(invocation.principal.origin(), InvocationOrigin::Lua);
             called.emplace(invocation.commandId);
             return CommandHandlerResult::success();
         }};
@@ -62,23 +60,6 @@ TEST(requiredCatalogMinusExclusionsIsCallable) {
     ASSERT_TRUE(callableCount < catalog.size());
 }
 
-TEST(capabilitiesAreImmutableAndCheckedBeforeDispatch) {
-    auto configured = options({{"safe", {}}, {"privileged", {CapabilityId{"fs"}}}});
-    configured.capabilities.emplace_back("network");
-    bool dispatched = false;
-    LuaCommandHost host{std::move(configured),
-        [&](LuaInvocation const& invocation) {
-            dispatched = true;
-            ASSERT_TRUE(invocation.principal.hasCapability(
-                CapabilityId{"network"}));
-            return CommandHandlerResult::success();
-        }};
-    auto denied = host.evaluate("ssg.command('privileged')");
-    ASSERT_EQ(denied.error, LuaError::CapabilityDenied);
-    ASSERT_FALSE(dispatched);
-    ASSERT_TRUE(host.evaluate("ssg.command('safe')").accepted());
-    ASSERT_TRUE(dispatched);
-}
 
 TEST(generationalHandlesRejectStaleAccessAfterReuse) {
     LuaCommandHost host{options(), [](LuaInvocation const&) {
@@ -113,7 +94,7 @@ TEST(instructionAndWallClockBudgetsIsolateCallbacks) {
 
 TEST(reentrantCallsRestoreTheEnclosingBudget) {
     LuaCommandHost* reentrant = nullptr;
-    auto configured = options({{"reenter", {}}});
+    auto configured = options({{"reenter"}});
     configured.instructionBudget = 2'000;
     configured.timeBudget = std::chrono::milliseconds{5};
     LuaCommandHost host{std::move(configured),
@@ -162,7 +143,7 @@ TEST(registrationIsAtomicAndDuplicateSafe) {
 }
 
 TEST(dispatchAndPluginFaultsAreIsolated) {
-    LuaCommandHost denied{options({{"edit", {}}}), [](LuaInvocation const&) {
+    LuaCommandHost denied{options({{"edit"}}), [](LuaInvocation const&) {
         return CommandHandlerResult::failure("atomic edit rejected");
     }};
     ASSERT_EQ(denied.evaluate("ssg.command('edit')").error,
@@ -181,7 +162,7 @@ TEST(dispatchAndPluginFaultsAreIsolated) {
 
 TEST(commandTableArgumentReachesTheDispatcherDecodedAsAStringMap) {
     std::optional<std::unordered_map<std::string, std::string>> received;
-    LuaCommandHost host{options({{"configure", {}}}),
+    LuaCommandHost host{options({{"configure"}}),
         [&](LuaInvocation const& invocation) {
             received = invocation.arguments;
             return CommandHandlerResult::success();
@@ -199,7 +180,7 @@ TEST(commandTableArgumentReachesTheDispatcherDecodedAsAStringMap) {
 TEST(commandWithoutSecondArgumentLeavesArgumentsEmpty) {
     std::optional<std::unordered_map<std::string, std::string>> received{
         std::unordered_map<std::string, std::string>{{"stale", "value"}}};
-    LuaCommandHost host{options({{"noop", {}}}),
+    LuaCommandHost host{options({{"noop"}}),
         [&](LuaInvocation const& invocation) {
             received = invocation.arguments;
             return CommandHandlerResult::success();
@@ -210,7 +191,7 @@ TEST(commandWithoutSecondArgumentLeavesArgumentsEmpty) {
 
 TEST(malformedCommandArgumentIsRejectedBeforeTheDispatcherIsCalled) {
     bool dispatched = false;
-    LuaCommandHost host{options({{"configure", {}}}),
+    LuaCommandHost host{options({{"configure"}}),
         [&](LuaInvocation const&) {
             dispatched = true;
             return CommandHandlerResult::success();
@@ -328,7 +309,6 @@ TEST(aGateMayNotReEnterTheHostItIsGating) {
 
 SSG_TEST_SUITE(test_lua) {
     RUN(requiredCatalogMinusExclusionsIsCallable);
-    RUN(capabilitiesAreImmutableAndCheckedBeforeDispatch);
     RUN(generationalHandlesRejectStaleAccessAfterReuse);
     RUN(instructionAndWallClockBudgetsIsolateCallbacks);
     RUN(reentrantCallsRestoreTheEnclosingBudget);

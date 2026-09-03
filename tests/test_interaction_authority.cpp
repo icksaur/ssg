@@ -1,10 +1,10 @@
-// Seam oracle for InteractionAuthority -- the single owner of schema generation, prompt,
+// Seam oracle for InteractionAuthority -- the single owner of the schema, prompt,
 // truth, interaction projection, and the tree revision source. Proves: apply() routes a
 // transition through one atomic prepare+install; a rejected transition mutates nothing;
 // ShowPanelProvider creates and stamps tree backing from the owned revision source; every
 // generic prompt lifecycle path (open/submit/cancel/update) keeps prompt and focus
 // consistent and reconciles a stale picker identity; the revision source is monotonic and
-// the sole minter; and a schema-generation change migrates interaction+truth atomically
+// the sole minter; and a structural schema change migrates interaction+truth atomically
 // while preserving valid panel and prompt truth.
 
 #include "ssg/InteractionAuthority.h"
@@ -48,11 +48,8 @@ TreeModel seededTree() {
 }
 
 bool present(const InteractionAuthority& a, std::string_view id) {
-    const auto presence = a.presenceSection(PresenceBasis{0});
-    return std::any_of(presence.nodes.begin(), presence.nodes.end(),
-                       [&](const UiPresenceRecord& node) {
-        return node.id == UiNodeId{std::string{id}} && node.present;
-    });
+    return isUiNodeVisible(a.schema(),
+                           UiNodeId{std::string{id}});
 }
 
 PromptRequest footerPrompt() {
@@ -206,35 +203,6 @@ TEST(valueEditKeepsPromptFocusAndUpdatesTheInput) {
               std::string{"src/main.cpp"});
 }
 
-TEST(footerPromptStructureAdvancesOnlyWhenItsShapeChanges) {
-    TreeModel tree = seededTree();
-    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    const auto initial = authority.validatedSchema().generation();
-    ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
-    const auto pathGeneration = authority.validatedSchema().generation();
-    ASSERT_NE(pathGeneration, initial);
-
-    ASSERT_TRUE(authority.updatePromptValue(0, "changed").accepted());
-    ASSERT_TRUE(authority.focusPromptControl("path").accepted());
-    ASSERT_EQ(authority.validatedSchema().generation(), pathGeneration);
-    ASSERT_TRUE(authority.cancelPrompt().accepted());
-    ASSERT_EQ(authority.validatedSchema().generation(), pathGeneration);
-
-    auto sameShape = footerPrompt();
-    sameShape.inputs[0].value = "different";
-    ASSERT_TRUE(authority.openPrompt(std::move(sameShape)).accepted());
-    ASSERT_EQ(authority.validatedSchema().generation(), pathGeneration);
-
-    PromptRequest replace{
-        PromptKind::Replace,
-        "Replace",
-        {{"find.query", "Find", ""}, {"replace.replacement", "Replace", ""}},
-        {{"find.case", "Case", false, 8}},
-        PromptMatchCount{"find.count", "Matches", "0"}};
-    ASSERT_TRUE(authority.openPrompt(std::move(replace)).accepted());
-    ASSERT_NE(authority.validatedSchema().generation(), pathGeneration);
-}
-
 TEST(promptFocusUsesControlIdentityAndRejectsNonInputs) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
@@ -341,7 +309,7 @@ TEST(updateCompositionMigratesPreservingPanelAndPromptTruth) {
     ASSERT_TRUE(present(authority, kPanelNodeId));
     ASSERT_TRUE(authority.openPicker().has_value());
 
-    // A structural change (wider panel) advances the generation and migrates.
+    // A structural change (wider panel) migrates the schema and rebuilds.
     StyleDimensions wider;
     wider.panelTargetWidth = StyleDimensions{}.panelTargetWidth + 10;
     ASSERT_TRUE(authority.updateComposition(assemble(wider)));
@@ -352,9 +320,6 @@ TEST(updateCompositionMigratesPreservingPanelAndPromptTruth) {
     ASSERT_TRUE(*authority.openPicker() == PickerKind::Command);
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
     ASSERT_TRUE(present(authority, kFindResultsNodeId));
-    // The presence basis is generation-scoped and reset on the migration rebuild.
-    ASSERT_EQ(authority.presenceSection(PresenceBasis{0}).basis.value(),
-              std::uint64_t{0});
 }
 
 TEST(updateCompositionWithoutStructuralChangeDoesNotAdvance) {
@@ -369,7 +334,7 @@ TEST(statusOverlaySurvivesPromptAndEquivalentRebuilds) {
     const UiNodeId actionId{"footer.status_action/7/3/72756e"};
     ASSERT_TRUE(authority.refreshStatusActions(
         {{actionId, "Run", "build.run"}}));
-    ASSERT_TRUE(uiSchemaNodeIds(authority.validatedSchema().schema())
+    ASSERT_TRUE(uiSchemaNodeIds(authority.schema())
                     .contains(actionId));
 
     ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
@@ -382,13 +347,13 @@ TEST(statusOverlaySurvivesPromptAndEquivalentRebuilds) {
 
     ASSERT_FALSE(
         authority.updateComposition(assemble(StyleDimensions{})));
-    ASSERT_TRUE(uiSchemaNodeIds(authority.validatedSchema().schema())
+    ASSERT_TRUE(uiSchemaNodeIds(authority.schema())
                     .contains(actionId));
     ASSERT_EQ(authority.statusActions()[0].id, actionId);
     ASSERT_TRUE(authority.prompt().active());
 
     ASSERT_FALSE(authority.updateComposition(assemble(StyleDimensions{})));
-    ASSERT_TRUE(uiSchemaNodeIds(authority.validatedSchema().schema())
+    ASSERT_TRUE(uiSchemaNodeIds(authority.schema())
                     .contains(actionId));
     ASSERT_EQ(authority.statusActions()[0].id, actionId);
     ASSERT_TRUE(authority.prompt().active());
@@ -563,7 +528,6 @@ SSG_TEST_SUITE(test_interaction_authority) {
     RUN(cancelPromptReleasesFocus);
     RUN(openPromptRejectsAPalettePromptSoOnlyAFinderMakesAPicker);
     RUN(valueEditKeepsPromptFocusAndUpdatesTheInput);
-    RUN(footerPromptStructureAdvancesOnlyWhenItsShapeChanges);
     RUN(promptFocusUsesControlIdentityAndRejectsNonInputs);
     RUN(allocateTreeRevisionIsMonotonic);
     RUN(allocateTreeRevisionRejectsExhaustion);

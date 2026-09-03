@@ -8,20 +8,6 @@ namespace ssg {
 
 namespace {
 
-auto findClient(std::vector<FollowClientView>& clients, ClientId client) {
-    return std::find_if(clients.begin(), clients.end(),
-                        [client](const FollowClientView& view) {
-                            return view.client == client;
-                        });
-}
-
-auto findClient(const std::vector<FollowClientView>& clients, ClientId client) {
-    return std::find_if(clients.begin(), clients.end(),
-                        [client](const FollowClientView& view) {
-                            return view.client == client;
-                        });
-}
-
 bool sameRange(std::size_t leftStart, std::size_t leftSize,
                std::size_t rightStart, std::size_t rightSize) {
     return leftStart == rightStart && leftSize == rightSize;
@@ -58,27 +44,6 @@ FollowEditsModel::FollowEditsModel(FollowEditsConfig config)
     if (config_.queueCapacity == 0) {
         throw std::invalid_argument{"follow queue capacity must be positive"};
     }
-}
-
-FollowEditsResult FollowEditsModel::attachClient(ClientId client) {
-    if (findClient(state_.clients, client) != state_.clients.end()) {
-        return {FollowEditsError::DuplicateClient};
-    }
-
-    state_.clients.push_back(
-        {client, ViewportDimensions{80, 24}, FollowScrollOffset{}});
-    advanceGeneration();
-    return {};
-}
-
-FollowEditsResult FollowEditsModel::detachClient(ClientId client) {
-    const auto found = findClient(state_.clients, client);
-    if (found == state_.clients.end()) {
-        return {FollowEditsError::UnknownClient};
-    }
-    state_.clients.erase(found);
-    advanceGeneration();
-    return {};
 }
 
 FollowEditsResult FollowEditsModel::acceptExternalChange(
@@ -128,11 +93,6 @@ FollowEditsResult FollowEditsModel::acceptExternalChanges(
 
 FollowEditsResult FollowEditsModel::applyNavigation(
     const FollowNavigation& navigation) {
-    const auto client = findClient(state_.clients, navigation.client);
-    if (client == state_.clients.end()) {
-        return {FollowEditsError::UnknownClient};
-    }
-
     if (navigation.classification == NavigationClass::User) {
         state_.mode = FollowMode::Paused;
     }

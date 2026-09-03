@@ -93,7 +93,7 @@ void PreparedTransition::installInto(WholeScreenTruth& truth,
 // PreparedTransition; a caller can only obtain one through prepareTransition.
 struct TransitionBuilder {
     static PreparedTransition make(WholeScreenTruth truth,
-                                   const ValidatedSchema& schema, PromptSurface prompt,
+                                   const UiSchema& schema, PromptSurface prompt,
                                    std::optional<TreeBackingPlan> tree) {
         // The prompt-focus region is derived from the result prompt, never stored in truth.
         const std::optional<PromptRegion> region = activePromptRegion(prompt);

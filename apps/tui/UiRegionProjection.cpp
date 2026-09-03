@@ -4,7 +4,7 @@
 #include <tui/StatusFieldGrid.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/Theme.h>  // semanticRoleFromName
-#include <ssg/UiStateResolver.h>
+#include <ssg/UiTree.h>  // resolveUiLeafState
 #include <tui/WidgetLayout.h>
 
 #include <optional>
@@ -475,29 +475,18 @@ UiRegionProjectionResult projectUiRegion(
 
 UiRegionProjectionResult solveUiRegion(
     const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
-    const Style& style, Generation schemaGeneration,
-    const UiStateSection& state,
+    const Style& style,
     SolvedUiRegion& out, const StatusViewState* statusView,
     const PromptInputProjection* input) {
-    if (state.generation != schemaGeneration) {
-        return {regionRoot.id.value() +
-                " UI state generation does not match schema"};
-    }
     struct ProviderState {
         std::string id;
         ResolvedProvider value;
     };
     std::vector<ProviderState> providers;
-    const auto stateFor = [&](const UiNodeId& id) -> const UiNodeState* {
-        const auto found = std::ranges::find(state.nodes, id, &UiNodeState::id);
-        return found == state.nodes.end() ? nullptr : &*found;
-    };
     const auto collect = [&](const auto& self, const UiNode& node) -> void {
-        if (!stateFor(node.id)) return;
         if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
-            const auto* nodeState = stateFor(node.id);
-            if (nodeState && nodeState->leaf) {
-                const auto& semantic = *nodeState->leaf;
+            if (node.resolved) {
+                const auto& semantic = *node.resolved;
                 if (leaf->widget.value &&
                     leaf->widget.value->isProvider) {
                     providers.push_back(
@@ -520,23 +509,6 @@ UiRegionProjectionResult solveUiRegion(
             for (const auto& child : container->children) self(self, child);
         }
     };
-    const auto validate = [&](const auto& self,
-                              const UiNode& node) -> std::optional<std::string> {
-        if (!stateFor(node.id)) {
-            return regionRoot.id.value() +
-                   " UI state is missing node " + node.id.value();
-        }
-        if (const auto* container =
-                std::get_if<UiContainer>(&node.content)) {
-            for (const auto& child : container->children) {
-                if (auto error = self(self, child)) return error;
-            }
-        }
-        return std::nullopt;
-    };
-    if (auto error = validate(validate, regionRoot)) {
-        return {*error};
-    }
     collect(collect, regionRoot);
     const WidgetProviderResolver resolver =
         [providers = std::move(providers)](

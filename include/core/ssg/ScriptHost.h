@@ -14,14 +14,6 @@ namespace ssg {
 
 class EditorSession;
 
-// The client every script-originated command is dispatched as, reserved for the
-// process's one ScriptHost.  Named here rather than buried in the
-// implementation because it is a contract with every other attaching client:
-// constructing a second ScriptHost, or attaching this id elsewhere, is refused
-// by the runtime, and ScriptHost's constructor reports that rather than
-// starting in a half-connected state.
-inline constexpr ClientId kScriptClientId{2};
-
 // The editor's Lua state, and everything that connects it to the editor.
 //
 // One ScriptHost lives for the process, so the Lua state outlives any single
@@ -43,15 +35,12 @@ public:
     using ViewActionSink =
         std::function<ViewActionResult(ViewActionRequest const&)>;
 
-    // Attaches the script client to `runtime`, which must outlive this host.
-    // Throws std::runtime_error if the runtime refuses the attachment.
     // Without a view-action sink, an immediate script request for a view-owned
     // command fails with `view_action_unavailable`.
     explicit ScriptHost(EditorSession& runtime);
-    // Attaches the script client to `viewId`. The host-owned sink applies a
-    // view action; ScriptHost submits its optional semantic transition once.
-    ScriptHost(EditorSession& runtime, ViewId viewId,
-               ViewActionSink viewActionSink);
+    // The host-owned sink applies a view action; ScriptHost submits its
+    // optional semantic transition once.
+    ScriptHost(EditorSession& runtime, ViewActionSink viewActionSink);
     ~ScriptHost();
 
     ScriptHost(ScriptHost const&) = delete;

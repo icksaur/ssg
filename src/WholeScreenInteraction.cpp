@@ -14,7 +14,7 @@ UiNodeId nodeId(std::string_view id) { return UiNodeId{std::string{id}}; }
 
 }  // namespace
 
-UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
+UiInteractionState buildWholeScreenInteraction(UiSchema schema,
                                                const WholeScreenTruth& truth,
                                                std::optional<PromptRegion> promptRegion) {
     std::vector<UiNodeId> hidden;
@@ -46,7 +46,7 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     // header container.
     const UiNodeId inputLine = nodeId(kHeaderPromptInputNodeId);
     const bool headerPrompt = promptRegion && *promptRegion == PromptRegion::Header;
-    const bool hasInputLine = schema.contains(inputLine);
+    const bool hasInputLine = findUiNode(schema, inputLine) != nullptr;
     if (headerPrompt && !hasInputLine) {
         throw std::logic_error("header prompt requires the input_line node");
     }
@@ -59,7 +59,7 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     const UiNodeId footerPrompt = nodeId(kFooterPromptNodeId);
     const bool footerPromptOpen =
         promptRegion && *promptRegion == PromptRegion::Footer;
-    const bool hasFooterPrompt = schema.contains(footerPrompt);
+    const bool hasFooterPrompt = findUiNode(schema, footerPrompt) != nullptr;
     if (footerPromptOpen && !hasFooterPrompt) {
         throw std::logic_error("footer prompt requires the footer.prompt node");
     }
@@ -73,7 +73,7 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     // the prompt, the notice captures no focus -- its actions are click/command
     // triggers routed like any other command.
     const UiNodeId notice = nodeId(kNoticeNodeId);
-    const bool hasNotice = schema.contains(notice);
+    const bool hasNotice = findUiNode(schema, notice) != nullptr;
     if (truth.noticePresent && !hasNotice) {
         throw std::logic_error("draft notice requires the notice node");
     }
@@ -85,7 +85,7 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
     // CAN capture focus -- but only through the explicit external.focus command
     // (truth.externalFocusHeld), never reactively.
     const UiNodeId externalMod = nodeId(kExternalModNodeId);
-    const bool hasExternalMod = schema.contains(externalMod);
+    const bool hasExternalMod = findUiNode(schema, externalMod) != nullptr;
     if (truth.externalModificationPresent && !hasExternalMod) {
         throw std::logic_error(
             "external modification section requires the externalmod node");
@@ -126,7 +126,7 @@ UiInteractionState buildWholeScreenInteraction(ValidatedSchema schema,
 }
 
 PalettePresenceOverlay derivePickerPresenceOverlay(
-    const ValidatedSchema& schema, const WholeScreenTruth& truth) {
+    const UiSchema& schema, const WholeScreenTruth& truth) {
     WholeScreenTruth closed = truth;
     closed.openPicker.reset();
     WholeScreenTruth open = closed;
@@ -138,10 +138,9 @@ PalettePresenceOverlay derivePickerPresenceOverlay(
         buildWholeScreenInteraction(schema, open, PromptRegion::Header);
 
     PalettePresenceOverlay overlay;
-    overlay.generation = schema.generation();
-    for (const UiNodeId& id : schema.nodeIds()) {
-        const bool before = closedState.presence().isPresent(id);
-        const bool after = openState.presence().isPresent(id);
+    for (const UiNodeId& id : uiSchemaNodeIds(schema)) {
+        const bool before = isUiNodeVisible(closedState.schema(), id);
+        const bool after = isUiNodeVisible(openState.schema(), id);
         if (before == after) continue;
         overlay.ops.push_back(
             {after ? PalettePresenceOpKind::Show

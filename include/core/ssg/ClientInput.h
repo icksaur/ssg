@@ -1,8 +1,9 @@
 #pragma once
 
-#include <ssg/EditorClient.h>
+#include <ssg/CommandInvocation.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/Keymap.h>
+#include <ssg/PaneNavigation.h>
 #include <ssg/Picker.h>
 #include <ssg/Selection.h>
 #include <ssg/TabManager.h>

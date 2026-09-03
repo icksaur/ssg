@@ -25,13 +25,12 @@ TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"code.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"x"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(), std::string{"code.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"text.insert", runtime.revision(), ssg::TextInputArguments{"x"}}).accepted());
 
-    auto completion = runtime.dispatch(ssg::ClientId{1}, {"completion.open", runtime.revision(), {}});
+    auto completion = runtime.dispatch({"completion.open", runtime.revision(), {}});
     ASSERT_FALSE(completion.accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1});
+    auto snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->sections().syntax.revision(), snapshot->sections().document.revision);
     ASSERT_FALSE(snapshot->sections().lspFeatures.status.empty());

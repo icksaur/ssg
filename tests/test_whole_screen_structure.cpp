@@ -44,9 +44,8 @@ TEST(fixedHeaderAndFooterAreSemanticUiNodes) {
          entry("branch", StatusFieldRegion::Header),
          entry("position", StatusFieldRegion::Footer)},
         "help.open", StyleDimensions{}, Style{}.inputLineSigil);
-    const UiSchema schema{Generation{1}, composition.root};
+    const UiSchema schema{composition.root};
     ASSERT_TRUE(validateUiSchema(schema).ok());
-    ASSERT_TRUE(validateWellKnownAreas(schema).ok());
 
     const auto* header = child(composition.root, kHeaderNodeId);
     const auto* footer = child(composition.root, kFooterNodeId);

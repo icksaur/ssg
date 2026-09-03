@@ -19,7 +19,7 @@ struct TreeProviderPresence {
 
 struct TransitionInputs {
     WholeScreenTruth truth;
-    ValidatedSchema schema;
+    UiSchema schema;
     PromptSurface prompt;
     std::vector<TreeProviderPresence> presentProviders;
     std::optional<TreeProviderBinding> activeProvider;

@@ -1,18 +1,10 @@
 #pragma once
 
-// Private owner of focus-affecting presence and keyboard-focus capture.
-// stack, together. This is the type the runtime uses so the two can never drift:
-// applying a patch updates presence and reconciles focus in ONE call (a hide and
-// its induced capture removal are atomic, never a two-step a caller could half
-// do), and a focus capture is admitted only onto a present node. KeyboardFocus
-// and PresenceConfig remain separately testable, but a caller drives them through
-// this owner rather than mutating either alone.
+// Private owner of node visibility and keyboard-focus capture for one schema.
 
 #include <ssg/KeyboardFocus.h>
-#include <ssg/MutationPatch.h>
 #include <ssg/UiTree.h>
 
-#include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -22,19 +14,14 @@ namespace ssg {
 
 class UiInteractionState {
 public:
-    // Own one schema and derive the initial presence from it, so presence, focus,
-    // and patches can never reference a different schema. `hidden` names nodes
-    // present-by-default-off; an id outside the schema is rejected.
-    explicit UiInteractionState(ValidatedSchema schema,
+    explicit UiInteractionState(UiSchema schema,
                                 std::vector<UiNodeId> hidden = {})
-        : schema_{std::move(schema)},
-          presence_{PresenceConfig::initial(schema_, hidden)} {}
-
-    [[nodiscard]] const ValidatedSchema& schema() const noexcept {
-        return schema_;
+        : schema_{std::move(schema)} {
+        for (const auto& id : hidden) setUiNodeVisible(schema_, id, false);
     }
-    [[nodiscard]] const PresenceConfig& presence() const noexcept {
-        return presence_;
+
+    [[nodiscard]] const UiSchema& schema() const noexcept {
+        return schema_;
     }
     [[nodiscard]] const KeyboardFocus& focus() const noexcept { return focus_; }
     [[nodiscard]] FocusTarget effectiveFocus() const {
@@ -44,11 +31,11 @@ public:
         return focusContext(baseNode(focus_.base()));
     }
     // CONTRACT: The path is ordered base-to-top, contains only nodes from this
-    // schema, and ends at a present node. The base may be temporarily hidden by
+    // schema, and ends at a visible node. The base may be temporarily hidden by
     // the transient surface that captured focus above it.
     [[nodiscard]] std::vector<UiNodeId> focusPath() const {
         UiNodeId base = baseNode(focus_.base());
-        if (!schema_.contains(base)) {
+        if (!findUiNode(schema_, base)) {
             throw std::logic_error(
                 "UiInteractionState: base focus host is outside the schema");
         }
@@ -56,15 +43,15 @@ public:
         path.reserve(focus_.captures().size() + 1);
         path.push_back(std::move(base));
         for (const FocusCapture& capture : focus_.captures()) {
-            if (!schema_.contains(capture.node) ||
-                !schema_.find(capture.node)->focusContext ||
-                !presence_.isPresent(capture.node)) {
+            const UiNode* node = findUiNode(schema_, capture.node);
+            if (!node || !node->focusContext ||
+                !isUiNodeVisible(schema_, capture.node)) {
                 throw std::logic_error(
                     "UiInteractionState: focus capture host is absent");
             }
             path.push_back(capture.node);
         }
-        if (!presence_.isPresent(path.back())) {
+        if (!isUiNodeVisible(schema_, path.back())) {
             throw std::logic_error(
                 "UiInteractionState: effective focus host is absent");
         }
@@ -83,15 +70,15 @@ public:
     }
 
     // Capture focus onto a transient surface. The node must be a node of this
-    // schema AND present, so focus can never be placed on an unknown or hidden
+    // schema AND visible, so focus can never be placed on an unknown or hidden
     // node; a second prompt-backed capture is rejected by KeyboardFocus.
     void captureFocus(FocusCapture capture) {
-        if (!schema_.contains(capture.node)) {
+        if (!findUiNode(schema_, capture.node)) {
             throw std::logic_error(
                 "UiInteractionState: capturing focus on a node outside the "
                 "schema");
         }
-        if (!presence_.isPresent(capture.node)) {
+        if (!isUiNodeVisible(schema_, capture.node)) {
             throw std::logic_error(
                 "UiInteractionState: capturing focus on an absent node");
         }
@@ -108,18 +95,6 @@ public:
     }
     void releaseFocus() noexcept { focus_.popCapture(); }
 
-    // Apply a patch atomically against the owned schema: update presence, then
-    // reconcile focus against the new presence so any capture the patch hid is
-    // popped in the SAME operation. Returns an error message on rejection, leaving
-    // state unchanged; nullopt on success.
-    [[nodiscard]] std::optional<std::string> apply(const MutationPatch& patch) {
-        PatchResult result = applyMutationPatch(schema_, presence_, patch);
-        if (!result.ok()) return result.error;
-        presence_ = std::move(*result.post);
-        focus_.reconcile(presence_);
-        return std::nullopt;
-    }
-
 private:
     [[nodiscard]] static UiNodeId baseNode(BaseFocus base) {
         return UiNodeId{std::string{base == BaseFocus::Editor
@@ -128,7 +103,7 @@ private:
     }
 
     [[nodiscard]] FocusTarget focusContext(const UiNodeId& id) const {
-        const UiNode* node = schema_.find(id);
+        const UiNode* node = findUiNode(schema_, id);
         if (!node || !node->focusContext) {
             throw std::logic_error(
                 "UiInteractionState: focus host has no declared context");
@@ -136,8 +111,7 @@ private:
         return *node->focusContext;
     }
 
-    ValidatedSchema schema_;
-    PresenceConfig presence_;
+    UiSchema schema_;
     KeyboardFocus focus_;
 };
 

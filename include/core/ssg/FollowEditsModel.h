@@ -3,7 +3,6 @@
 #include "ssg/CommandInvocation.h"
 #include "ssg/DiffModel.h"
 #include "ssg/PaneNavigation.h"
-#include "ssg/Viewport.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -25,13 +24,6 @@ enum class NavigationClass : std::uint8_t {
     NonNavigation,
 };
 
-struct FollowScrollOffset {
-    std::uint64_t firstRow = 0;
-    std::uint64_t firstColumn = 0;
-    friend bool operator==(const FollowScrollOffset&,
-                           const FollowScrollOffset&) = default;
-};
-
 struct FollowTarget {
     DiffFileId id;
     std::filesystem::path path;
@@ -41,21 +33,12 @@ struct FollowTarget {
     friend bool operator==(const FollowTarget&, const FollowTarget&) = default;
 };
 
-struct FollowClientView {
-    ClientId client;
-    ViewportDimensions dimensions;
-    FollowScrollOffset offset;
-    friend bool operator==(const FollowClientView&,
-                           const FollowClientView&) = default;
-};
-
 struct FollowEditsViewState {
     std::uint64_t generation = 0;
     FollowMode mode = FollowMode::Following;
     PaneId activePane;
     std::optional<FollowTarget> activeTarget;
     std::vector<FollowTarget> queuedTargets;
-    std::vector<FollowClientView> clients;
     friend bool operator==(const FollowEditsViewState&,
                            const FollowEditsViewState&) = default;
 };
@@ -76,8 +59,6 @@ struct FollowEditsConfig {
 enum class FollowEditsError : std::uint8_t {
     None,
     StaleRevision,
-    DuplicateClient,
-    UnknownClient,
 };
 
 struct FollowEditsResult {
@@ -88,7 +69,6 @@ struct FollowEditsResult {
 };
 
 struct FollowNavigation {
-    ClientId client;
     NavigationClass classification = NavigationClass::NonNavigation;
 };
 
@@ -102,8 +82,6 @@ class FollowEditsModel {
 public:
     explicit FollowEditsModel(FollowEditsConfig config = {});
 
-    [[nodiscard]] FollowEditsResult attachClient(ClientId client);
-    [[nodiscard]] FollowEditsResult detachClient(ClientId client);
     [[nodiscard]] FollowEditsResult acceptExternalChange(
         const DiffFileView& file, Revision sourceRevision);
     [[nodiscard]] FollowEditsResult acceptExternalChanges(

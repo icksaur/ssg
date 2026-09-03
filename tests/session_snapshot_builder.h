@@ -7,9 +7,9 @@
 //
 // The renderer is a pure function of a presentation, but a presentation used to be
 // obtainable only from a runtime.  So every presentation test created temp
-// directories, wrote files to disk, constructed the whole editor, attached a
-// client, and dispatched commands -- eight steps of setup to exercise one pure
-// function.  test_render.cpp alone did that 31 times.
+// directories, wrote files to disk, constructed the whole editor, and dispatched
+// commands -- seven steps of setup to exercise one pure function.
+// test_render.cpp alone did that 31 times.
 //
 // This builder assembles production components; it does not reimplement them.
 // The viewport projection comes from `Viewport::computeUnwrapped`, the shell
@@ -23,7 +23,6 @@
 #include <ssg/GraphemeLayout.h>
 #include <tui/GridPresenter.h>
 #include <ssg/InteractionAuthority.h>
-#include <ssg/UiStateResolver.h>
 #include <tui/Renderer.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/WholeScreenAssembly.h>
@@ -142,7 +141,7 @@ public:
         return *this;
     }
 
-    SessionSnapshotBuilder& schema(ValidatedSchema schema) {
+    SessionSnapshotBuilder& schema(UiSchema schema) {
         schema_ = std::move(schema);
         return *this;
     }
@@ -162,7 +161,7 @@ public:
         UiComposition composition;
         composition.root =
             schema_
-                ? schema_->schema().root
+                ? schema_->root
                 : assembleWholeScreen({}, "help.open", style_.dimensions,
                                       style_.inputLineSigil)
                       .root;
@@ -180,7 +179,7 @@ public:
         if (promptInput_) {
             (void)interaction.apply(OpenFinder{PickerKind::Command});
         }
-        const ValidatedSchema& schema = interaction.validatedSchema();
+        const UiSchema& schema = interaction.schema();
         ViewportDimensions const dimensions{
             static_cast<std::uint32_t>(columns_),
             static_cast<std::uint32_t>(rows_)};
@@ -206,7 +205,7 @@ public:
             DiffViewState{},
             ExternalModificationViewState{},
             FollowEditsViewState{0, FollowMode::Following, PaneId{0},
-                                  std::nullopt, {}, {}},
+                                  std::nullopt, {}},
             TreeViewState{},
             SyntaxViewState::plainText(revision_, LanguageId{"plain"}, text_, 4),
             LspSyncViewState{},
@@ -230,11 +229,9 @@ public:
                                     action->accessibleLabel,
                                     action->commandId};
         };
-        auto uiState = resolveUiState(schema, resolver);
-        uiState.focusPath = interaction.focusPath();
-        sections.uiFrame = UiFrame::require(
-            schema.schema(), std::move(uiState),
-            interaction.presenceSection(PresenceBasis{0}));
+        auto resolved = resolveUiTree(schema, resolver);
+        resolved.focusPath = interaction.focusPath();
+        sections.uiTree = requirePublishedUiTree(std::move(resolved));
         for (std::size_t index = 0; index < tabs_.size(); ++index) {
             TabState tab;
             tab.id = TabId{index + 1};
@@ -256,9 +253,8 @@ public:
             framePalette.ghost = promptInput_->ghost;
         }
 
-        ClientSnapshotState client{ClientId{1}, ViewId{1}, {}};
         auto semantic = SessionSnapshot{
-            revision_, SessionTopology{}, std::move(client), std::move(sections)};
+            revision_, SessionTopology{}, std::move(sections)};
         GridFrame frame{
             semantic,
             GridProjection{
@@ -304,7 +300,7 @@ private:
     std::vector<std::function<void(SessionSnapshotSections&)>> mutators_;
     Style style_{};
     PaletteReport palette_;
-    std::optional<ValidatedSchema> schema_;
+    std::optional<UiSchema> schema_;
     std::optional<PromptInput> promptInput_;
     bool noticePresent_ = false;
     bool externalModificationPresent_ = false;

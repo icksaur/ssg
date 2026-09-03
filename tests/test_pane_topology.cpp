@@ -32,19 +32,12 @@ SessionFixture sessionFixture(std::string_view name) {
     return {std::move(root), std::move(created.session)};
 }
 
-ssg::InvocationPrincipal principal(ssg::ClientId client) {
-    return {client, ssg::InvocationOrigin::InProcess};
-}
-
-TEST(initialTopologyIsPublishedPerAttachment) {
+TEST(initialTopologyIsPublished) {
     auto fixture = sessionFixture("initial");
     ASSERT_TRUE(fixture.session != nullptr);
     if (!fixture.session) return;
-    const ssg::ClientId client{1};
-    ASSERT_TRUE(
-        fixture.session->attach(principal(client), ssg::ViewId{1}).accepted());
 
-    auto snapshot = fixture.session->snapshot(client);
+    auto snapshot = fixture.session->snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     const auto& panes = snapshot->topology().panes;
@@ -59,17 +52,14 @@ TEST(paneCommandsMutatePublishedTopologyAndRevision) {
     ASSERT_TRUE(fixture.session != nullptr);
     if (!fixture.session) return;
     auto& session = *fixture.session;
-    const ssg::ClientId client{1};
-    ASSERT_TRUE(session.attach(principal(client), ssg::ViewId{1}).accepted());
 
     auto revision = session.revision();
-    auto split = session.dispatch(
-        client, {"pane.split_horizontal", revision, {}});
+    auto split = session.dispatch({"pane.split_horizontal", revision, {}});
     ASSERT_TRUE(split.completed());
     ASSERT_FALSE(split.viewAction.has_value());
     ASSERT_EQ(session.revision(), ssg::Revision{revision.value() + 1});
 
-    auto snapshot = session.snapshot(client);
+    auto snapshot = session.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     const auto& panes = snapshot->topology().panes;
@@ -82,19 +72,19 @@ TEST(paneCommandsMutatePublishedTopologyAndRevision) {
 
     revision = session.revision();
     auto next =
-        session.dispatch(client, {"pane.next", revision, {}});
+        session.dispatch({"pane.next", revision, {}});
     ASSERT_TRUE(next.completed());
     ASSERT_EQ(session.revision(), ssg::Revision{revision.value() + 1});
-    snapshot = session.snapshot(client);
+    snapshot = session.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->topology().panes.activePane(), ssg::PaneId{1});
     ASSERT_EQ(snapshot->sections().followEdits.mode, ssg::FollowMode::Paused);
 
     auto previous =
-        session.dispatch(client, {"pane.previous", session.revision(), {}});
+        session.dispatch({"pane.previous", session.revision(), {}});
     ASSERT_TRUE(previous.completed());
-    snapshot = session.snapshot(client);
+    snapshot = session.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->topology().panes.activePane(), ssg::PaneId{2});
@@ -105,22 +95,18 @@ TEST(closeUsesStableOrderAndRejectsTheOnlyPane) {
     ASSERT_TRUE(fixture.session != nullptr);
     if (!fixture.session) return;
     auto& session = *fixture.session;
-    const ssg::ClientId client{1};
-    ASSERT_TRUE(session.attach(principal(client), ssg::ViewId{1}).accepted());
     ASSERT_TRUE(session
-                    .dispatch(client,
-                              {"pane.split_vertical", session.revision(), {}})
+                    .dispatch({"pane.split_vertical", session.revision(), {}})
                     .completed());
 
-    auto focus = session.input(
-        client, ssg::ViewTransitionInput{
+    auto focus = session.input(ssg::ViewTransitionInput{
                     {session.revision()},
                     ssg::PaneFocusTransition{ssg::PaneId{1}}});
     ASSERT_EQ(focus.outcome, ssg::ClientInputOutcome::Dispatched);
     auto closed =
-        session.dispatch(client, {"pane.close", session.revision(), {}});
+        session.dispatch({"pane.close", session.revision(), {}});
     ASSERT_TRUE(closed.completed());
-    auto snapshot = session.snapshot(client);
+    auto snapshot = session.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->topology().panes.panes(),
@@ -129,11 +115,11 @@ TEST(closeUsesStableOrderAndRejectsTheOnlyPane) {
 
     const auto revision = session.revision();
     auto rejected =
-        session.dispatch(client, {"pane.close", revision, {}});
+        session.dispatch({"pane.close", revision, {}});
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.error, ssg::CommandError::HandlerFailed);
     ASSERT_EQ(session.revision(), revision);
-    snapshot = session.snapshot(client);
+    snapshot = session.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
         ASSERT_EQ(snapshot->topology().panes.panes(),
@@ -141,75 +127,43 @@ TEST(closeUsesStableOrderAndRejectsTheOnlyPane) {
     }
 }
 
-TEST(focusByIdentityValidatesTheCallingAttachment) {
+TEST(focusRejectsAnUnknownPaneIdentity) {
     auto fixture = sessionFixture("focus");
     ASSERT_TRUE(fixture.session != nullptr);
     if (!fixture.session) return;
     auto& session = *fixture.session;
-    const ssg::ClientId client{1};
-    ASSERT_TRUE(session.attach(principal(client), ssg::ViewId{1}).accepted());
     ASSERT_TRUE(session
-                    .dispatch(client,
-                              {"pane.split_horizontal", session.revision(), {}})
+                    .dispatch({"pane.split_horizontal", session.revision(), {}})
                     .completed());
 
     const auto revision = session.revision();
-    auto focused = session.input(
-        client,
-        ssg::ViewTransitionInput{
+    auto focused = session.input(ssg::ViewTransitionInput{
             {revision}, ssg::PaneFocusTransition{ssg::PaneId{1}}});
     ASSERT_EQ(focused.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_EQ(session.revision(), ssg::Revision{revision.value() + 1});
-    auto snapshot = session.snapshot(client);
+    auto snapshot = session.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->topology().panes.activePane(), ssg::PaneId{1});
 
     const auto focusRevision = session.revision();
-    auto rejected = session.input(
-        client,
-        ssg::ViewTransitionInput{
+    auto rejected = session.input(ssg::ViewTransitionInput{
             {focusRevision}, ssg::PaneFocusTransition{ssg::PaneId{999}}});
     ASSERT_EQ(rejected.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_EQ(session.revision(), focusRevision);
-    snapshot = session.snapshot(client);
+    snapshot = session.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
         ASSERT_EQ(snapshot->topology().panes.activePane(), ssg::PaneId{1});
     }
 }
 
-TEST(attachmentsHaveIsolatedPaneTopologies) {
-    auto fixture = sessionFixture("isolation");
-    ASSERT_TRUE(fixture.session != nullptr);
-    if (!fixture.session) return;
-    auto& session = *fixture.session;
-    const ssg::ClientId first{1};
-    const ssg::ClientId second{2};
-    ASSERT_TRUE(session.attach(principal(first), ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(session.attach(principal(second), ssg::ViewId{2}).accepted());
-    ASSERT_TRUE(session
-                    .dispatch(first,
-                              {"pane.split_horizontal", session.revision(), {}})
-                    .completed());
-
-    auto firstSnapshot = session.snapshot(first);
-    auto secondSnapshot = session.snapshot(second);
-    ASSERT_TRUE(firstSnapshot.has_value());
-    ASSERT_TRUE(secondSnapshot.has_value());
-    if (!firstSnapshot || !secondSnapshot) return;
-    ASSERT_EQ(firstSnapshot->topology().panes.panes().size(), std::size_t{2});
-    ASSERT_EQ(secondSnapshot->topology().panes.panes().size(), std::size_t{1});
-    ASSERT_EQ(firstSnapshot->revision(), secondSnapshot->revision());
-}
-
 }  // namespace
 
 SSG_TEST_SUITE(test_pane_topology) {
-    RUN(initialTopologyIsPublishedPerAttachment);
+    RUN(initialTopologyIsPublished);
     RUN(paneCommandsMutatePublishedTopologyAndRevision);
     RUN(closeUsesStableOrderAndRejectsTheOnlyPane);
-    RUN(focusByIdentityValidatesTheCallingAttachment);
-    RUN(attachmentsHaveIsolatedPaneTopologies);
+    RUN(focusRejectsAnUnknownPaneIdentity);
     return failed;
 }

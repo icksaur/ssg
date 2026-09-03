@@ -267,11 +267,6 @@ TEST(aCommandRegisteredAfterExecutorConstructionIsDispatchable) {
     auto catalog = std::make_shared<ssg::CommandCatalog>();
     catalog->add(minimal("early.command"));
     ssg::CommandExecutor executor{catalog};
-    ASSERT_TRUE(executor.attach(
-                    ssg::InvocationPrincipal{ssg::ClientId{1},
-                                             ssg::InvocationOrigin::InProcess},
-                    ssg::ViewId{1})
-                    .accepted());
 
     int lateCalls = 0;
     catalog->add(
@@ -284,8 +279,7 @@ TEST(aCommandRegisteredAfterExecutorConstructionIsDispatchable) {
                 return ssg::CommandHandlerResult::success();
             }));
 
-    auto const byName = executor.dispatch(
-        ssg::ClientId{1}, {"late.command", executor.revision(), {}});
+    auto const byName = executor.dispatch({"late.command", executor.revision(), {}});
     ASSERT_TRUE(byName.accepted());
     ASSERT_EQ(lateCalls, 1);
 
@@ -293,31 +287,9 @@ TEST(aCommandRegisteredAfterExecutorConstructionIsDispatchable) {
     // path's spelling.
     auto const handle = catalog->handleFor("late.command");
     ASSERT_TRUE(handle.valid());
-    auto const byHandle = executor.dispatch(
-        ssg::ClientId{1},
-        {ssg::CommandName{"late.command", handle}, executor.revision(), {}});
+    auto const byHandle = executor.dispatch({ssg::CommandName{"late.command", handle}, executor.revision(), {}});
     ASSERT_TRUE(byHandle.accepted());
     ASSERT_EQ(lateCalls, 2);
-}
-
-// A capability is checked where it is declared.  Dispatch consults the stored
-// CapabilityId directly and nothing on that path constructs one, so a malformed
-// declaration cannot surface as an exception thrown mid-command.
-TEST(anEmptyCapabilityIsRefusedAtRegistration) {
-    ssg::CommandCatalog catalog;
-    bool threw = false;
-    try {
-        catalog.add(minimal("bad.capability").capability(""));
-    } catch (std::runtime_error const&) {
-        threw = true;
-    }
-    ASSERT_TRUE(threw);
-    ASSERT_EQ(catalog.size(), std::size_t{0});
-
-    catalog.add(minimal("good.capability").capability("local_file_drop"));
-    auto const* entry = catalog.find("good.capability");
-    ASSERT_TRUE(entry != nullptr);
-    if (entry) ASSERT_EQ(entry->requiredCapabilities.size(), std::size_t{1});
 }
 
 TEST(registeringPastTheHandleSpaceIsRefused) {
@@ -401,7 +373,8 @@ TEST(aBatchWithOneBadSpecChangesNothing) {
 
     std::vector<ssg::CommandSpecBuilder> batch;
     batch.push_back(minimal("lua.fine"));
-    batch.push_back(minimal("lua.broken").capability(""));
+    // Missing owner/summary/effect/handler: an incomplete spec is the bad one.
+    batch.push_back(ssg::CommandSpecBuilder{"lua.broken"});
     bool threw = false;
     try {
         catalog.replaceGeneration(std::array{previous}, std::move(batch));
@@ -473,7 +446,6 @@ TEST(aSwapIsNeverObservedWithNeitherGenerationPresent) {
 
 SSG_TEST_SUITE(test_command_catalog) {
     RUN(aCommandRegisteredAfterExecutorConstructionIsDispatchable);
-    RUN(anEmptyCapabilityIsRefusedAtRegistration);
     RUN(registeringPastTheHandleSpaceIsRefused);
     RUN(aSwapExceedingTheHandleSpaceLeavesThePreviousGenerationWorking);
     RUN(addIssuesAHandleThatResolvesBackToItsCommand);

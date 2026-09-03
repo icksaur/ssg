@@ -49,7 +49,7 @@ struct InteractionAuthority::Impl {
           tree_{tree},
           nextTreeRevision_{requireSourceAheadOfProviders(firstTreeRevision, tree)},
           nextPickerActivation_{firstPickerActivation},
-          interaction_{buildWholeScreenInteraction(schema_.validated(), truth_,
+          interaction_{buildWholeScreenInteraction(schema_.schema(), truth_,
                                                   std::nullopt)} {
         if (!nextPickerActivation_.valid()) {
             throw std::invalid_argument(
@@ -96,7 +96,7 @@ void InteractionAuthority::Impl::adopt(WholeScreenTruth next, PromptSurface prom
     if (!activePalette) next.openPicker.reset();
 
     UiInteractionState projection = buildWholeScreenInteraction(
-        schema_.validated(), next, activePromptRegion(prompt));
+        schema_.schema(), next, activePromptRegion(prompt));
 
     prompt_ = std::move(prompt);
     truth_ = std::move(next);
@@ -118,7 +118,7 @@ bool InteractionAuthority::apply(const CommandTransition& transition) {
     }
     // Peek the revision source and prepare in one step: hiding prepare+install behind this
     // method means no allocation can occur between the peek and the consuming install.
-    TransitionInputs inputs{state.truth_, state.schema_.validated(), state.prompt_,
+    TransitionInputs inputs{state.truth_, state.schema_.schema(), state.prompt_,
                             state.presentProviders(), state.tree_.activeProviderBinding(),
                             TreeRevision{state.nextTreeRevision_}};
     std::optional<PreparedTransition> prepared = prepareTransition(transition, inputs);
@@ -157,7 +157,7 @@ PromptCommandResult InteractionAuthority::openPrompt(PromptRequest request) {
         WholeScreenTruth next = state.truth_;
         next.openPicker.reset();
         UiInteractionState projection = buildWholeScreenInteraction(
-            candidate.validated(), next, activePromptRegion(copy));
+            candidate.schema(), next, activePromptRegion(copy));
         state.schema_ = std::move(candidate);
         state.prompt_ = std::move(copy);
         state.truth_ = std::move(next);
@@ -306,7 +306,7 @@ bool InteractionAuthority::updateComposition(UiComposition assembly) {    // Pre
         return false;
     }
     UiInteractionState projection = buildWholeScreenInteraction(
-        candidate.validated(), state.truth_, activePromptRegion(state.prompt_));
+        candidate.schema(), state.truth_, activePromptRegion(state.prompt_));
     state.schema_ = std::move(candidate);
     state.baseComposition_ = std::move(assembly);
     state.interaction_ = std::move(projection);
@@ -326,7 +326,7 @@ bool InteractionAuthority::refreshStatusActions(
     std::optional<UiInteractionState> interaction;
     if (schemaChanged) {
         interaction = buildWholeScreenInteraction(
-            candidate.validated(), state.truth_, activePromptRegion(state.prompt_));
+            candidate.schema(), state.truth_, activePromptRegion(state.prompt_));
     }
     state.statusActions_ = std::move(actions);
     if (schemaChanged) {
@@ -362,7 +362,7 @@ std::uint64_t InteractionAuthority::routingGeneration() const noexcept {
     return impl_->routingGeneration_;
 }
 
-const ValidatedSchema& InteractionAuthority::validatedSchema() const noexcept {
+const UiSchema& InteractionAuthority::schema() const noexcept {
     return impl_->interaction_.schema();
 }
 
@@ -370,15 +370,8 @@ std::vector<UiNodeId> InteractionAuthority::focusPath() const {
     return impl_->interaction_.focusPath();
 }
 
-UiPresenceSection InteractionAuthority::presenceSection(PresenceBasis basis) const {
-    auto presence = buildPresenceSection(impl_->interaction_.schema(),
-                                         impl_->interaction_.presence());
-    presence.basis = basis;
-    return presence;
-}
-
 PalettePresenceOverlay InteractionAuthority::pickerPresenceOverlay() const {
-    return derivePickerPresenceOverlay(impl_->interaction_.schema(), impl_->truth_);
+    return derivePickerPresenceOverlay(impl_->schema_.schema(), impl_->truth_);
 }
 
 TreeRevision InteractionAuthority::allocateTreeRevision() {

@@ -1,21 +1,20 @@
 #pragma once
 
 // The UI-VM tree schema: the medium-agnostic superset structure the library
-// publishes once per generation. A schema is ONE root node whose tree spans the
-// screen. A node is either a CONTAINER (an axis, an inset, and children, laid out
-// by the medium-agnostic constraints in LayoutConstraints.h) or a LEAF (a
-// WidgetDescriptor). Every node carries a UiNodeId unique within the schema's
-// generation; patches, dynamic node state, triggers, and focus entries all address
-// nodes by this id, so uniqueness is a precondition the validator enforces before
-// any consumer walks the tree. Placement is a property of tree structure and
+// publishes. A schema is ONE root node whose tree spans the screen. A node is
+// either a CONTAINER (an axis, an inset, and children, laid out by the
+// medium-agnostic constraints in LayoutConstraints.h) or a LEAF (a
+// WidgetDescriptor). Every node carries a UiNodeId unique within the schema;
+// patches, dynamic node state, triggers, and focus entries all address nodes by
+// this id, so uniqueness is a precondition the validator enforces before any
+// consumer walks the tree. Placement is a property of tree structure and
 // well-known node ids, never an out-of-band region enum.
 //
-// The schema is immutable within a generation: a structural change is a full-tree
-// replacement stamped with a new Generation. Values the tree DISPLAYS (resolved
-// provider text, labels) and each node's present flag are NOT here -- they are
-// generation-scoped dynamic state (a later sub-step). The schema carries value
-// SOURCES (WidgetDescriptor's ValueSource), never resolved values, which is what
-// keeps it immutable within a generation.
+// A structural change is a full-tree replacement. Each node carries its own
+// direct `visible` flag and, once resolved for publication, its `resolved`
+// semantic leaf state -- there is no side record joined back to the tree by
+// UiNodeId. The schema itself carries the authoritative `focusPath` alongside
+// its root.
 
 #include <ssg/LayoutConstraints.h>   // Axis, Size, Inset
 #include <ssg/Theme.h>              // SemanticRole
@@ -34,22 +33,7 @@
 
 namespace ssg {
 
-// Stamps a schema. A structural change bumps this; a mutation or dynamic-state
-// delta names the generation it targets so a consumer on an old schema rejects
-// rather than applying to the wrong tree.
-struct Generation {
-    explicit constexpr Generation(std::uint64_t value = 0) noexcept
-        : value_{value} {}
-    [[nodiscard]] constexpr std::uint64_t value() const noexcept {
-        return value_;
-    }
-    constexpr auto operator<=>(Generation const&) const noexcept = default;
-
-private:
-    std::uint64_t value_;
-};
-
-// A node's identity, unique within a generation. A strong type over the authored
+// A node's identity, unique within a schema. A strong type over the authored
 // id string so a raw widget/layout id (which is not guaranteed unique) can never
 // be passed where a node identity is required.
 class UiNodeId {
@@ -119,6 +103,24 @@ struct UiNodeStyle {
     friend bool operator==(const UiNodeStyle&, const UiNodeStyle&) = default;
 };
 
+// The resolved semantic state of a leaf a client renders. `value` is the caption
+// or field text; `label` the accessible label; `command` the click target;
+// `checked` is present only for a checkbox; `role` is the effective SemanticRole
+// the library resolved (the widget's own role, or the region's default), so a
+// client colors the widget by a semantic role ordinal and never re-derives role
+// names. `active` is present only for a stateful TextInput; its absence keeps
+// client-local inputs entirely client-owned.
+struct UiLeafState {
+    std::string value;
+    std::string label;
+    std::optional<std::string> command;
+    std::optional<bool> checked;
+    SemanticRole role = SemanticRole::Text;
+    std::optional<bool> active;
+
+    friend bool operator==(const UiLeafState&, const UiLeafState&) = default;
+};
+
 // One node: an identity, a size within its parent, and either a container or a
 // leaf. The variant makes "a node is exactly one of container/leaf" a type fact,
 // not a pair of optionals that could both be set or both be empty.
@@ -133,6 +135,15 @@ struct UiNode {
     // Optional accessible group label for a container whose children alone do
     // not identify the control group to assistive technology.
     std::optional<std::string> accessibleLabel;
+    // This node's own direct visibility (NODE-VISIBILITY). A hidden container
+    // suppresses every descendant regardless of the descendant's own flag; see
+    // isUiNodeVisible for the ancestor-aware effective query. Set once by
+    // interaction projection, never baked ahead of time.
+    bool visible = true;
+    // A renderable leaf's resolved semantic state, baked in at snapshot
+    // publication (see resolveUiTree). Absent for a container, a spacer, a
+    // client-local TextInput, and an empty-resolved Label/Field.
+    std::optional<UiLeafState> resolved;
 
     [[nodiscard]] bool isContainer() const noexcept {
         return std::holds_alternative<UiContainer>(content);
@@ -142,6 +153,13 @@ struct UiNode {
     }
 
     friend bool operator==(const UiNode&, const UiNode&) = default;
+};
+
+struct UiNodeActivationArguments {
+    UiNodeId nodeId;
+
+    friend bool operator==(const UiNodeActivationArguments&,
+                           const UiNodeActivationArguments&) = default;
 };
 
 // The well-known node ids the whole-screen tree is built from. Placement is a
@@ -192,53 +210,19 @@ inline constexpr std::string_view kNoticeNodeId = "notice";
 // the notice and before the replaceable document/picker branches.
 inline constexpr std::string_view kExternalModNodeId = "externalmod";
 
-// The typed well-known areas: a closed set a native client may key off to hand a
-// subtree to its own toolkit. A raw id string is not a placement contract; this
-// typed identity, plus the structural validation validateUiSchema performs for it
-// (required node kind and ancestry), is.
-enum class WellKnownArea : std::uint8_t {
-    Root,
-    Header,
-    Body,
-    Panel,
-    Content,
-    Editor,
-    DocumentViewport,
-    FindResultsViewport,
-    Footer,
-    FooterPrompt,
-    Notice,
-    ExternalModification,
-};
-
-inline constexpr std::string_view wellKnownAreaId(WellKnownArea area) {
-    switch (area) {
-    case WellKnownArea::Root: return kRootNodeId;
-    case WellKnownArea::Header: return kHeaderNodeId;
-    case WellKnownArea::Body: return kBodyNodeId;
-    case WellKnownArea::Panel: return kPanelNodeId;
-    case WellKnownArea::Content: return kContentNodeId;
-    case WellKnownArea::Editor: return kEditorNodeId;
-    case WellKnownArea::DocumentViewport: return kDocumentViewportNodeId;
-    case WellKnownArea::FindResultsViewport: return kFindResultsViewportNodeId;
-    case WellKnownArea::Footer: return kFooterNodeId;
-    case WellKnownArea::FooterPrompt: return kFooterPromptNodeId;
-    case WellKnownArea::Notice: return kNoticeNodeId;
-    case WellKnownArea::ExternalModification: return kExternalModNodeId;
-    }
-    throw std::invalid_argument("wellKnownAreaId: unrecognized WellKnownArea");
-}
-
 // A well-formed empty root (id "root", an empty Column). A default-constructed
 // UiNode has an empty id, which fails validation, so
 // this is the default for UiSchema/UiComposition and the absent-UI schema.
 [[nodiscard]] UiNode emptyUiRoot();
 
-// A full schema for one generation: one root node whose tree spans the screen.
-// Placement comes from tree structure and well-known node ids, never a region enum.
+// A full schema: one root node whose tree spans the screen. Placement comes
+// from tree structure and well-known node ids, never a region enum.
 struct UiSchema {
-    Generation generation{0};
     UiNode root = emptyUiRoot();
+    // The authoritative base-to-top keyboard focus path. Empty until
+    // interaction projection sets it; a published tree requires it non-empty
+    // (see validatePublishedUiTree).
+    std::vector<UiNodeId> focusPath;
 
     friend bool operator==(const UiSchema&, const UiSchema&) = default;
 };
@@ -249,8 +233,9 @@ struct UiSchema {
 [[nodiscard]] std::optional<ResolvedUiNodeStyle> resolveUiNodeStyle(
     const UiSchema& schema, std::string_view nodeId);
 
-// A generationless root tree owned by the runtime. A generation belongs to one
-// published schema, so the runtime stamps it when publishing a composition.
+// A root tree owned by the runtime, before publication sets its focus path. A
+// UiComposition becomes a UiSchema when interaction projection assembles the
+// focus path alongside it.
 struct UiComposition {
     UiNode root = emptyUiRoot();
 
@@ -266,87 +251,61 @@ struct UiSchemaValidation {
 };
 
 // Validate a schema before any consumer walks it. Enforces: every node id is
-// non-empty and unique across the whole generation, and each leaf's per-kind shape
+// non-empty and unique across the whole schema, and each leaf's per-kind shape
 // (a View leaf names a valid surface and is Exact/Flex sized and carries no other
 // field; a non-View leaf carries no surface). Fails loud with a path-qualified
 // message. Pure.
 [[nodiscard]] UiSchemaValidation validateUiSchema(const UiSchema& schema);
 
-// Validate the whole-screen well-known-area contract: the schema root is the typed
-// "root" area and the complete canonical topology is present with its required
-// containers, View leaves, surfaces, parentage, and sibling order. Separate from
-// validateUiSchema because the generic validator serves any tree the presence/focus
-// machinery builds, while this contract binds a PUBLISHED whole-screen schema
-// (enforced at the wire boundary). Pure.
-[[nodiscard]] UiSchemaValidation validateWellKnownAreas(const UiSchema& schema);
-
 // The set of every node id in a schema. Meaningful only for a schema whose ids are
-// unique; used by ValidatedSchema.
+// unique.
 [[nodiscard]] std::set<UiNodeId> uiSchemaNodeIds(const UiSchema& schema);
 [[nodiscard]] const UiNode* findUiNode(const UiSchema& schema,
                                        const UiNodeId& id) noexcept;
 
-class ValidatedSchema;
+// A node's effective visibility (NODE-VISIBILITY): true iff the node exists and it
+// and every ancestor up to the root has its direct `visible` flag set. Replaces
+// joining a side presence record by UiNodeId; every consumer that gated on
+// presence -- activation, layout, hit testing, focus reconciliation -- routes
+// through this single ancestor-aware traversal.
+[[nodiscard]] bool isUiNodeVisible(const UiSchema& schema,
+                                   const UiNodeId& id) noexcept;
 
-struct ValidatedSchemaResult;
+// The keymap context of the published focus path's endpoint. The endpoint is
+// guaranteed to declare a focusContext by validatePublishedUiTree.
+[[nodiscard]] FocusTarget effectiveUiFocus(const UiSchema& schema) noexcept;
 
-// A schema that has passed validateUiSchema. The only construction path is
-// ValidatedSchema::validate, so a consumer that requires a ValidatedSchema (the
-// mutation interpreter, the interaction state) cannot be handed a schema with
-// duplicate or empty node ids -- the uniqueness the id-based rules depend on is a
-// type fact at that boundary, not a runtime hope. It also caches the schema's node
-// id set, so a capture or reference can be checked for schema membership.
-class ValidatedSchema {
-public:
-    [[nodiscard]] static ValidatedSchemaResult validate(UiSchema schema);
+// Resolve one widget's semantic leaf state (NODE-VALUES): a literal or
+// provider-backed value/label/command/checked/active, with `defaultRole` as the
+// widget's role absent an explicit override. Returns nullopt for a widget kind
+// that carries no leaf state, or an empty-resolved Label/Field/TextInput. A free
+// operation (not a UiNode method) because role defaults depend on the node's
+// whole-screen area and provider lookup is a publication concern.
+[[nodiscard]] std::optional<UiLeafState> resolveUiLeafState(
+    const WidgetDescriptor& widget,
+    const WidgetProviderResolver& resolveProvider,
+    SemanticRole defaultRole);
 
-    [[nodiscard]] const UiSchema& schema() const noexcept { return schema_; }
-    [[nodiscard]] Generation generation() const noexcept {
-        return schema_.generation;
-    }
-    [[nodiscard]] const std::set<UiNodeId>& nodeIds() const noexcept {
-        return nodeIds_;
-    }
-    [[nodiscard]] bool contains(const UiNodeId& id) const {
-        return nodeIds_.contains(id);
-    }
-    [[nodiscard]] const UiNode* find(const UiNodeId& id) const noexcept {
-        return findUiNode(schema_, id);
-    }
+// Validate a schema for publication: validateUiSchema and NODE-FOCUS (a
+// non-empty focus path naming declared focus hosts, starting at an editor or
+// panel host, and ending at an effectively visible node). Pure.
+[[nodiscard]] UiSchemaValidation validatePublishedUiTree(const UiSchema& schema);
 
-private:
-    explicit ValidatedSchema(UiSchema schema);
+// Require a published tree: validatePublishedUiTree, throwing
+// std::invalid_argument on failure. This is the publication-boundary gate,
+// without introducing a wrapper around the tree.
+[[nodiscard]] UiSchema requirePublishedUiTree(UiSchema schema);
 
-    UiSchema schema_;
-    std::set<UiNodeId> nodeIds_;
-};
+// Set exactly this node's direct visibility flag (NODE-VISIBILITY); does not
+// touch descendants, which read ancestor visibility through isUiNodeVisible at
+// query time. Throws std::invalid_argument if `id` is outside the schema.
+void setUiNodeVisible(UiSchema& schema, const UiNodeId& id, bool visible);
 
-// The outcome of validating a schema into a ValidatedSchema: exactly one of a
-// validated schema or the path-qualified error, encoded as a variant so "both or
-// neither" is unrepresentable. Defined after ValidatedSchema so the variant holds
-// a complete type.
-class ValidatedSchemaResult {
-public:
-    explicit ValidatedSchemaResult(ValidatedSchema schema)
-        : value_{std::move(schema)} {}
-    explicit ValidatedSchemaResult(std::string error)
-        : value_{std::move(error)} {}
-
-    [[nodiscard]] bool ok() const {
-        return std::holds_alternative<ValidatedSchema>(value_);
-    }
-    [[nodiscard]] const ValidatedSchema& schema() const {
-        return std::get<ValidatedSchema>(value_);
-    }
-    [[nodiscard]] ValidatedSchema takeSchema() {
-        return std::get<ValidatedSchema>(std::move(value_));
-    }
-    [[nodiscard]] const std::string& error() const {
-        return std::get<std::string>(value_);
-    }
-
-private:
-    std::variant<ValidatedSchema, std::string> value_;
-};
+// Resolve every leaf under a schema into a copy of that schema with `resolved`
+// baked onto each leaf node. `visible` is carried through unchanged; `focusPath`
+// is left empty for the caller to set once resolution and focus tracking are
+// joined at publication.
+[[nodiscard]] UiSchema resolveUiTree(const UiSchema& schema,
+                                    const WidgetProviderResolver& resolveProvider);
 
 }  // namespace ssg

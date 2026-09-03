@@ -1,5 +1,4 @@
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/UiStateResolver.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenAssembly.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

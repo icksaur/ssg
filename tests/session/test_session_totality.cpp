@@ -100,19 +100,15 @@ void runState(const UiState& state) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) { fs::remove_all(root); return; }
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
     if (state.openDocument) {
-        (void)runtime.dispatch(ssg::ClientId{1},
-                               {"file.open", runtime.revision(), std::string{"doc.txt"}});
+        (void)runtime.dispatch({"file.open", runtime.revision(), std::string{"doc.txt"}});
     }
     for (auto const& command : state.commands) {
-        (void)runtime.dispatch(ssg::ClientId{1}, {command, runtime.revision(), {}});
+        (void)runtime.dispatch({command, runtime.revision(), {}});
     }
 
     for (auto const dims : sweep()) {
-        auto frame = ssg::test::projectGridFrame(
-            runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
+        auto frame = ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, dims);
         ASSERT_TRUE(frame.has_value());
         if (!frame) continue;
         ASSERT_NO_THROW(ssg::Renderer{}.render(*frame));

@@ -65,9 +65,8 @@ std::string CommandEntry::displayLabel() const {
 CommandCatalog::CommandCatalog() = default;
 CommandCatalog::~CommandCatalog() = default;
 
-// A spec, checked and with its capabilities converted, ready to become an
-// entry.  Producing one cannot fail; everything that can reject a registration
-// has already happened.
+// A spec, checked and ready to become an entry.  Producing one cannot fail;
+// everything that can reject a registration has already happened.
 struct CommandCatalog::ValidatedSpec {
     std::string id;
     std::string owner;
@@ -75,7 +74,6 @@ struct CommandCatalog::ValidatedSpec {
     std::string summary;
     CommandEffect effect;
     CommandRevisionPolicy revisionPolicy;
-    std::vector<CapabilityId> requiredCapabilities;
     bool luaApi;
     bool initScript;
     CommandArgumentType argument;
@@ -115,23 +113,9 @@ CommandCatalog::ValidatedSpec CommandCatalog::validate(
                                  "\" is registered twice in one batch"};
     }
 
-    // Capabilities become CapabilityId here, so a malformed one is refused at
-    // registration -- where the author can see it -- rather than throwing from
-    // dispatch, which no caller expects to throw.
-    std::vector<CapabilityId> capabilities;
-    capabilities.reserve(spec.capabilities_.size());
-    for (auto& capability : spec.capabilities_) {
-        if (capability.empty()) {
-            throw std::runtime_error{"command \"" + spec.id_ +
-                                     "\" declares an empty capability"};
-        }
-        capabilities.emplace_back(std::move(capability));
-    }
-
     return ValidatedSpec{std::move(spec.id_),      std::move(spec.owner_),
                          std::move(spec.label_),   std::move(spec.summary_),
                          *spec.effect_,            *spec.revisionPolicy_,
-                         std::move(capabilities),
                          spec.luaApi_,             spec.initScript_,
                          spec.argument_,           std::move(spec.handler_)};
 }
@@ -141,7 +125,7 @@ CommandHandle CommandCatalog::appendValidated(ValidatedSpec spec) {
     entries_.push_back(CommandEntry{
         std::move(spec.id), std::move(spec.owner), std::move(spec.label),
         std::move(spec.summary), spec.effect, spec.revisionPolicy,
-        std::move(spec.requiredCapabilities), spec.luaApi, spec.initScript,
+        spec.luaApi, spec.initScript,
         spec.argument, std::move(spec.handler), false});
     byId_.emplace(entries_[index].id, index);
     ++revision_;

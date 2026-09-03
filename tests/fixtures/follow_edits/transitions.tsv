@@ -1,12 +1,10 @@
-# operation	arg1	arg2	expected_mode	expected_active	expected_queue	client1_row	client2_row
-attach	1	10	following	-	-	0	-
-attach	2	4	following	-	-	0	0
-change	a:20	1	following	a	a	0	0
-navigate_user	1	7	paused	a	a	0	0
-change	b:5	2	paused	a	a,b	0	0
-change	b:30	3	paused	a	a,b	0	0
-navigate_programmatic	2	8	paused	a	a,b	0	0
-resume	-	-	following	b	-	0	0
-navigate_programmatic	2	4	following	b	-	0	0
-navigate_non_navigation	1	3	following	b	-	0	0
-pause	-	-	paused	b	-	0	0
+# operation	arg1	arg2	expected_mode	expected_active	expected_queue
+change	a:20	1	following	a	a
+navigate_user	-	-	paused	a	a
+change	b:5	2	paused	a	a,b
+change	b:30	3	paused	a	a,b
+navigate_programmatic	-	-	paused	a	a,b
+resume	-	-	following	b	-
+navigate_programmatic	-	-	following	b	-
+navigate_non_navigation	-	-	following	b	-
+pause	-	-	paused	b	-

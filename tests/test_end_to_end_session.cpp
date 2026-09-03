@@ -33,10 +33,14 @@ CanonicalState canonical(Snapshot const& snapshot) {
     auto const* tab =
         sections.tabs.tabs.empty() ? nullptr : &sections.tabs.tabs.front();
     bool wordWrap = false;
-    for (auto const& node : sections.uiFrame.state().nodes) {
+    const auto walk = [&](const auto& self, const ssg::UiNode& node) -> void {
         wordWrap = wordWrap ||
-                   (node.leaf && node.leaf->label == "Word wrap on");
-    }
+                   (node.resolved && node.resolved->label == "Word wrap on");
+        if (const auto* container = std::get_if<ssg::UiContainer>(&node.content)) {
+            for (auto const& child : container->children) self(self, child);
+        }
+    };
+    walk(walk, sections.uiTree.root);
     return {snapshot.semantic().revision(),
             sections.document.text,
             tab ? tab->label : std::string{},
@@ -80,16 +84,10 @@ TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
     RuntimeFixture tuiFixture{"e2e_runtime_tui"};
     auto& direct = *directFixture.runtime;
     auto& tui = *tuiFixture.runtime;
-    ssg::InvocationPrincipal const directPrincipal{
-        ssg::ClientId{1}, ssg::InvocationOrigin::InProcess};
-    ssg::InvocationPrincipal const tuiPrincipal{
-        ssg::ClientId{2}, ssg::InvocationOrigin::InProcess};
-    ASSERT_TRUE(direct.attach(directPrincipal, ssg::ViewId{1}).accepted());
     ssg::tui::TuiClient client{
-        tui, tuiPrincipal, ssg::ViewId{2}, ssg::ViewportDimensions{80, 24}};
+        tui, ssg::ViewId{1}, ssg::ViewportDimensions{80, 24}};
 
-    auto directSnapshot = ssg::test::projectGridFrame(
-        direct, directPrincipal.clientId(), ssg::ViewId{1}, {80, 24});
+    auto directSnapshot = ssg::test::projectGridFrame(direct, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(directSnapshot.has_value());
     ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));
 
@@ -106,13 +104,11 @@ TEST(directAndTuiClientsMatchThroughRealRuntimeSnapshots) {
 
     for (auto& step : steps) {
         auto directResult = direct.dispatch(
-            directPrincipal.clientId(),
             {step.command, direct.revision(), step.payload});
         auto tuiResult = client.submit(step.command, step.payload);
         ASSERT_TRUE(directResult.accepted());
         ASSERT_TRUE(tuiResult.accepted());
-        directSnapshot = ssg::test::projectGridFrame(
-            direct, directPrincipal.clientId(), ssg::ViewId{1}, {80, 24});
+        directSnapshot = ssg::test::projectGridFrame(direct, ssg::ViewId{1}, {80, 24});
         ASSERT_TRUE(directSnapshot.has_value());
         ASSERT_EQ(canonical(*directSnapshot), canonical(client.snapshot()));
     }

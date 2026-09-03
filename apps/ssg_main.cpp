@@ -1,8 +1,8 @@
 // The `ssg` terminal editor entry point.  This file owns terminal I/O only:
 // raw mode, size queries, byte reads, frame writes, and clean restoration.  All
-// editor, workspace, and layout behavior is the ssg library's; the app attaches
-// an in-process client to an EditorSession, renders the library's snapshot, and
-// forwards input.
+// editor, workspace, and layout behavior is the ssg library's; the app drives
+// an EditorSession directly, renders the library's snapshot, and forwards
+// input.
 //
 // Milestone 1 scope: launch over a path argument, draw the shell grid, and quit
 // on Alt+Q.  Input translation through the library keymap and
@@ -234,9 +234,8 @@ constexpr int kAutosaveTickMs = 1000;
 // Minimum interval between rendered frames WHILE a pointer drag is held. A drag
 // (scrollbar thumb or text selection) makes the terminal emit motion events at a
 // rate far above a useful refresh rate; without a cap the loop renders a full
-// frame per event and pins a core. Coalescing collapses each read's events to
-// one, and this cap bounds how often a coalesced result is rendered, so input
-// accumulates for the rest of the window instead of driving another frame. ~60fps
+// frame per event and pins a core. This cap lets input accumulate for the rest of
+// the window instead of driving another frame. ~60fps
 // is smooth for a drag; the drag end position is always honoured because the last
 // event is processed on release.
 constexpr int kDragFrameIntervalMs = 16;
@@ -700,23 +699,16 @@ int main(int argc, char** argv) {
     int const gitDiffWakeFd = runtime.gitDiffWakeDescriptor();
     STARTUP_MARK("post_create");
 
-    ssg::ClientId client{1};
     const ssg::ViewId view{1};
-    if (!runtime.attach({client, ssg::InvocationOrigin::InProcess}, view)
-             .accepted()) {
-        std::fprintf(stderr, "ssg: failed to attach client\n");
-        return 1;
-    }
     ssg::GridPresenter gridPresenter{view};
-    STARTUP_MARK("post_attach");
+    STARTUP_MARK("post_presenter_init");
 
     // Lives for the rest of the process, so a function init.lua defines
     // remains callable long after the script that defined it has finished.
     ssg::ScriptHost scripts{
-        runtime, view,
+        runtime,
         [&](ssg::ViewActionRequest const& request) {
-            auto frame = gridPresenter.project(
-                runtime, client, {terminalSize(), {}});
+            auto frame = gridPresenter.project(runtime, {terminalSize(), {}});
             if (!frame) {
                 return ssg::ViewActionResult{
                     ssg::ViewActionStatus::Rejected, std::nullopt,
@@ -754,7 +746,7 @@ int main(int argc, char** argv) {
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
             auto const openResult = runtime.dispatch(
-                client, {"file.open", runtime.revision(), *target.file});
+                {"file.open", runtime.revision(), *target.file});
             startsWithAnEditableDocument = openResult.accepted();
             openedNamedFile = openResult.accepted();
             // panel.show_files (dispatched later, once the deferred tree
@@ -771,7 +763,7 @@ int main(int argc, char** argv) {
     // when the user is ready to keep it.
     if (!startsWithAnEditableDocument) {
         startsWithAnEditableDocument =
-            runtime.dispatch(client, {"file.new", runtime.revision(), {}})
+            runtime.dispatch({"file.new", runtime.revision(), {}})
                 .accepted();
     }
     STARTUP_MARK("post_open");
@@ -892,30 +884,12 @@ int main(int argc, char** argv) {
     ssg::app::SystemClipboardWriter clipboardWriter;
     std::vector<ssg::PaletteCandidate> candidates;
 
-    // Lever 3 per-drain snapshot coalescing. `refresh()` is expensive; instead
-    // of taking a fresh snapshot before every buffered event, the coalescer
-    // tracks whether the routing state (what a key/paste reads) or the geometry
-    // (what a pointer/wheel hit-tests) has been dirtied since the last snapshot,
-    // and the loop refreshes lazily only before an event that consumes a dirty
-    // axis. Every dispatch merges its authoritative DispatchEffects here;
-    // host-local picker mutations mark it dirty. It lives at function scope so
-    // the dispatch lambdas below can update it.
-    ssg::app::SnapshotCoalescer coalescer;
-    auto noteEffects = [&](ssg::DispatchEffects effects) {
-        coalescer.noteEffects(effects);
-    };
-    // A host-local picker mutation (query narrowing, selection move, window
-    // scroll) changes the PaletteReport that buildReport() feeds the next
-    // snapshot, so it dirties both axes exactly as a runtime dispatch would.
-    auto markPickerDirty = [&] { coalescer.markPickerDirty(); };
-
     // Re-center the client-owned palette window on the current selection
     // (keep-visible). Called ONLY when the selection changes (arrow navigation,
     // open, type, backspace); the per-frame build_report otherwise honors the
     // free offset so a wheel scroll persists. Mirrors
     // the tree's reveal_tree_selection.
     auto revealPaletteSelection = [&] {
-        markPickerDirty();
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
         if (picker.selected >= order.size()) {
             picker.selected = order.empty() ? 0 : order.size() - 1;
@@ -936,7 +910,6 @@ int main(int argc, char** argv) {
     // ScrollOffset the editor and tree use; only the ownership differs.
     auto scrollPalette = [&](std::int64_t delta) {
         if (!pickerOpen) return;
-        markPickerDirty();
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
         ssg::ScrollOffset offset{picker.firstVisible};
         offset.byLines(delta, static_cast<std::uint32_t>(order.size()),
@@ -949,7 +922,6 @@ int main(int argc, char** argv) {
     auto scrollPaletteToFraction = [&](std::uint32_t numerator,
                                        std::uint32_t denominator) {
         if (!pickerOpen) return;
-        markPickerDirty();
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
         ssg::ScrollOffset offset{picker.firstVisible};
         offset.toFraction(numerator, denominator,
@@ -963,9 +935,7 @@ int main(int argc, char** argv) {
         auto const& id = candidates[order[picker.selected]].id;
         if (pickerActivation) {
             auto result = runtime.input(
-                client,
                 ssg::PickerPointerInput{*pickerActivation, id});
-            if (result.command) noteEffects(result.command->effects);
         }
     };
     auto applyClientOwnedInput = [&](ssg::ClientOwnedInput const& input) {
@@ -1010,14 +980,12 @@ int main(int argc, char** argv) {
         }
         return report;
     };
-    // Take a fresh snapshot and adopt its authoritative client state. Called
-    // before every input event so coalesced input after a focus-changing command
-    // routes against the new focus rather than a stale one.
+    // Take a fresh snapshot and adopt its authoritative view state.
     auto refresh = [&]() -> std::optional<ssg::GridPresentation> {
         auto snapshot = gridPresenter.project(
-            runtime, client, {terminalSize(), buildReport()});
+            runtime, {terminalSize(), buildReport()});
         if (snapshot) {
-            focus = snapshot->sections().uiFrame.effectiveFocus();
+            focus = ssg::effectiveUiFocus(snapshot->sections().uiTree);
             pickerActivation = snapshot->sections().palette.activePicker;
             pickerMode = pickerActivation
                              ? pickerActivation->mode
@@ -1076,10 +1044,7 @@ int main(int argc, char** argv) {
     std::optional<ssg::GridPresentation> activeSnapshot;
     auto handleInputResult = [&](ssg::ClientInputResult result) {
         if (result.command) {
-            noteEffects(result.command->effects);
-            if (result.command->effects.geometryChanged) {
-                activeSnapshot.reset();
-            }
+            activeSnapshot.reset();
         }
         if (result.clientOwned) {
             applyClientOwnedInput(*result.clientOwned);
@@ -1094,19 +1059,17 @@ int main(int argc, char** argv) {
                                            *activeSnapshot);
         if (!applied.accepted()) return ssg::ClientInputOutcome::Rejected;
         if (applied.transition) {
-            auto transition = runtime.input(client, *applied.transition);
-            if (transition.command) noteEffects(transition.command->effects);
+            auto transition = runtime.input(*applied.transition);
             if (transition.outcome == ssg::ClientInputOutcome::Rejected) {
                 return transition.outcome;
             }
         }
-        noteEffects({false, true});
         activeSnapshot.reset();
         return result.outcome;
     };
     auto routeInput = [&](ssg::KeyStroke stroke, std::string text) {
         return handleInputResult(runtime.input(
-            client, ssg::ClientKeyInput{stroke, std::move(text)}));
+            ssg::ClientKeyInput{stroke, std::move(text)}));
     };
 
     // Top-level boundary (M9-X): an exception escaping the loop is not portably
@@ -1122,7 +1085,7 @@ int main(int argc, char** argv) {
             // floods motion events, and rendering a full frame per event pins a
             // core. When a drag is active and the previous frame was less than one
             // drag-frame interval ago, wait out the remainder so the queued motion
-            // events accumulate (and coalesce) into a single frame instead of many.
+            // events accumulate between rendered frames.
             if (draggingGutter.has_value() || dragging) {
                 const auto sinceFrame =
                     std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1136,9 +1099,6 @@ int main(int argc, char** argv) {
             lastFrameAt = std::chrono::steady_clock::now();
             activeSnapshot = refresh();
             auto& snapshot = activeSnapshot;
-            // The loop-top snapshot is fresh, so nothing is dirty until an event
-            // in this drain mutates state.
-            coalescer.noteRefreshed();
             if (snapshot) {
                 // The library renders every screen branch, including the declined-
                 // layout "too small" placeholder (M11-L); the app only encodes.
@@ -1168,7 +1128,7 @@ int main(int argc, char** argv) {
                     // defers registering that provider until exactly this point.
                     if (!openedNamedFile) {
                         if (auto const panelResult = runtime.dispatch(
-                                client, {"panel.show_files", runtime.revision(), {}});
+                                {"panel.show_files", runtime.revision(), {}});
                             !panelResult.accepted()) {
                             std::fprintf(stderr,
                                          "ssg: could not open Files sidebar: %s\n",
@@ -1188,8 +1148,8 @@ int main(int argc, char** argv) {
 
             // A read buffer large enough to pull a whole burst of terminal input
             // (a mouse-drag motion flood, or a paste) in one read, so the inner
-            // decode loop can coalesce a run of drag events into a single frame
-            // instead of rendering once per 64-byte chunk.
+            // decode loop can drop intermediate drag events from one read instead
+            // of rendering once per 64-byte chunk.
             char bytes[4096];
             // Edge auto-scroll (M8-S2): if a drag is held past the top/bottom of the
             // editor content, don't block indefinitely on input — wake on a timer to
@@ -1213,7 +1173,7 @@ int main(int argc, char** argv) {
                 }
                 if (!ready.input) {
                     (void)handleInputResult(runtime.input(
-                        client, ssg::DocumentPointerInput{
+                        ssg::DocumentPointerInput{
                                     {runtime.revision()}, std::nullopt, false,
                                     false, ssg::InputPointerButton::Primary,
                                     ssg::InputPointerPhase::Move,
@@ -1266,7 +1226,6 @@ int main(int argc, char** argv) {
             if (readBytes <= 0) break;
             buffer.append(bytes, static_cast<std::size_t>(readBytes));
 
-        bool firstEvent = true;
         while (!buffer.empty() && !quit) {
             std::size_t consumed = 0;
             auto decoded = ssg::app::decode_input(buffer, false, consumed);
@@ -1322,19 +1281,7 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // Per-drain snapshot coalescing (Lever 3): a fresh snapshot before
-            // this event is needed only when the event consumes an axis that an
-            // earlier event in this drain dirtied. A key/paste routes by the
-            // interaction routing state; a pointer/wheel hit-tests geometry;
-            // reply/none/incomplete consume neither. A pure keyboard burst that
-            // changes only geometry (cursor moves) therefore refreshes nothing.
-            // A refresh rebuilds the whole snapshot, clearing both axes.
-            const auto consumes = ssg::app::consumed_axes(decoded.status);
-            if (!firstEvent && coalescer.needsRefresh(consumes)) {
-                snapshot = refresh();
-                coalescer.noteRefreshed();
-            }
-            firstEvent = false;
+            snapshot = refresh();
 
             if (decoded.status == ssg::app::DecodeStatus::pointer) {
                 lastPointerColumn = decoded.pointer.column;
@@ -1418,8 +1365,6 @@ int main(int argc, char** argv) {
                     } else if (hit.region == ssg::HitRegion::HeaderField ||
                                hit.region == ssg::HitRegion::FooterField) {
                         if (hit.fieldId) {
-                            targets.ui_generation =
-                                snapshot->sections().uiFrame.version().generation;
                             targets.ui_node_id = ssg::UiNodeId{*hit.fieldId};
                         }
                     } else if (hit.region == ssg::HitRegion::NoticeAction) {
@@ -1481,11 +1426,10 @@ int main(int argc, char** argv) {
                               effectiveAlt, dragging, dragAnchor, targets);
                 if (plan.semantic_input) {
                     (void)handleInputResult(
-                        runtime.input(client, *plan.semantic_input));
+                        runtime.input(*plan.semantic_input));
                 }
                 if (plan.command) {
-                    noteEffects(
-                        runtime.dispatch(client, *plan.command).effects);
+                    (void)runtime.dispatch(*plan.command);
                 }
                 // A gutter gesture on a client-owned surface has no command to
                 // dispatch (the picker's offset must not round-trip), so the
@@ -1549,7 +1493,6 @@ int main(int argc, char** argv) {
                 switch (ssg::app::route_wheel(region)) {
                     case ssg::app::WheelTarget::editor:
                         (void)handleInputResult(runtime.input(
-                            client,
                             ssg::ScrollLinesInput{
                                 {runtime.revision()},
                                 {ssg::ScrollTarget::Document,
@@ -1557,7 +1500,6 @@ int main(int argc, char** argv) {
                         break;
                     case ssg::app::WheelTarget::tree:
                         (void)handleInputResult(runtime.input(
-                            client,
                             ssg::ScrollLinesInput{
                                 {runtime.revision()},
                                 {ssg::ScrollTarget::Tree,

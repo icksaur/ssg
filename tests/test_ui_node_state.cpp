@@ -9,8 +9,7 @@
 #include <tui/ShellViewState.h>
 
 #include "ssg/Style.h"
-#include "ssg/UiNodeState.h"
-#include "ssg/UiStateResolver.h"
+#include "ssg/UiTree.h"
 #include "ssg/WholeScreenAssembly.h"
 #include "test_helpers.h"
 
@@ -101,12 +100,6 @@ void collectLeaves(const UiNode& node,
         for (const auto& child : container->children) collectLeaves(child, out);
 }
 
-const UiNodeState* stateFor(const UiStateSection& section, const UiNodeId& id) {
-    for (const auto& node : section.nodes)
-        if (node.id == id) return &node;
-    return nullptr;
-}
-
 // The footer area subtree (the sole child of a footer-only composition's root),
 // which is the 3-group Row the chrome lowering consumes.
 const UiNode& footerArea(const UiSchema& schema) {
@@ -129,9 +122,9 @@ TEST(labelFieldStateMatchesTuiNodeOrDrop) {
     const auto comp = composeFooter(
         {literalField("f.lit", "hello"), providerField("f.prov", "path"),
          providerField("f.empty", "missing")});
-    const UiSchema schema{Generation{1}, comp.root};
+    const UiSchema schema{comp.root};
 
-    const auto section = resolveUiState(ValidatedSchema::validate(schema).takeSchema(), resolver);
+    const auto section = resolveUiTree(schema, resolver);
     std::vector<AccessibilityNode> nodes;
     const auto lowered = projectRegion(
         footerArea(schema), {0, 0, kWideWidth, 1}, ShellNodeKind::FooterField,
@@ -142,22 +135,22 @@ TEST(labelFieldStateMatchesTuiNodeOrDrop) {
     collectLeaves(footerArea(schema), leaves);
 
     for (const auto& [nodeId, widget] : leaves) {
-        const UiNodeState* state = stateFor(section, nodeId);
+        const UiNode* state = findUiNode(section, nodeId);
         ASSERT_TRUE(state != nullptr);
         if (!state) continue;
         const AccessibilityNode* tui = nodeFor(nodes, widget->id);
         if (tui == nullptr) {
             // The TUI dropped it (empty value/label): no semantic leaf either.
-            ASSERT_FALSE(state->leaf.has_value());
+            ASSERT_FALSE(state->resolved.has_value());
         } else {
-            ASSERT_TRUE(state->leaf.has_value());
-            if (!state->leaf) continue;
-            ASSERT_EQ(state->leaf->value, tui->content);
-            ASSERT_EQ(state->leaf->label, tui->label);
-            ASSERT_TRUE(state->leaf->command == tui->commandId);
-            ASSERT_FALSE(state->leaf->checked.has_value());
+            ASSERT_TRUE(state->resolved.has_value());
+            if (!state->resolved) continue;
+            ASSERT_EQ(state->resolved->value, tui->content);
+            ASSERT_EQ(state->resolved->label, tui->label);
+            ASSERT_TRUE(state->resolved->command == tui->commandId);
+            ASSERT_FALSE(state->resolved->checked.has_value());
             // No widget here declares a role, so each takes the region default.
-            ASSERT_TRUE(state->leaf->role == SemanticRole::Footer);
+            ASSERT_TRUE(state->resolved->role == SemanticRole::Footer);
         }
     }
 }
@@ -173,23 +166,23 @@ TEST(explicitRoleOverridesRegionDefault) {
     WidgetDescriptor bogus = literalField("f.bogus", "plain");
     bogus.role = "not_a_role";
     const auto comp = composeFooter({roled, bogus});
-    const UiSchema schema{Generation{1}, comp.root};
+    const UiSchema schema{comp.root};
     const auto section =
-        resolveUiState(ValidatedSchema::validate(schema).takeSchema(), empty);
+        resolveUiTree(schema, empty);
 
     std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
     collectLeaves(footerArea(schema), leaves);
     ASSERT_EQ(leaves.size(), std::size_t{2});
 
-    const UiNodeState* roledState = stateFor(section, leaves[0].first);
-    ASSERT_TRUE(roledState != nullptr && roledState->leaf.has_value());
-    if (roledState && roledState->leaf)
-        ASSERT_TRUE(roledState->leaf->role == SemanticRole::StatusWarning);
+    const UiNode* roledState = findUiNode(section, leaves[0].first);
+    ASSERT_TRUE(roledState != nullptr && roledState->resolved.has_value());
+    if (roledState && roledState->resolved)
+        ASSERT_TRUE(roledState->resolved->role == SemanticRole::StatusWarning);
 
-    const UiNodeState* bogusState = stateFor(section, leaves[1].first);
-    ASSERT_TRUE(bogusState != nullptr && bogusState->leaf.has_value());
-    if (bogusState && bogusState->leaf)
-        ASSERT_TRUE(bogusState->leaf->role == SemanticRole::Footer);
+    const UiNode* bogusState = findUiNode(section, leaves[1].first);
+    ASSERT_TRUE(bogusState != nullptr && bogusState->resolved.has_value());
+    if (bogusState && bogusState->resolved)
+        ASSERT_TRUE(bogusState->resolved->role == SemanticRole::Footer);
 }
 
 // Checkbox: never dropped, and its semantic fields match an expectation derived
@@ -213,8 +206,8 @@ TEST(checkboxStateMatchesIndependentExpectation) {
     provBox.checked = ValueSource{true, "", "wrapchk"};
 
     const auto comp = composeFooter({litBox, provBox});
-    const UiSchema schema{Generation{1}, comp.root};
-    const auto section = resolveUiState(ValidatedSchema::validate(schema).takeSchema(), resolver);
+    const UiSchema schema{comp.root};
+    const auto section = resolveUiTree(schema, resolver);
 
     std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
     collectLeaves(footerArea(schema), leaves);
@@ -222,24 +215,24 @@ TEST(checkboxStateMatchesIndependentExpectation) {
 
     // Literal caption: value+label are the caption, checked=true, command from the
     // descriptor.
-    const UiNodeState* lit = stateFor(section, leaves[0].first);
-    ASSERT_TRUE(lit != nullptr && lit->leaf.has_value());
-    if (lit && lit->leaf) {
-        ASSERT_EQ(lit->leaf->value, std::string{"case"});
-        ASSERT_EQ(lit->leaf->label, std::string{"case"});
-        ASSERT_TRUE(lit->leaf->checked.has_value() && *lit->leaf->checked);
-        ASSERT_TRUE(lit->leaf->command.has_value());
-        ASSERT_EQ(*lit->leaf->command, std::string{"find.toggle_case"});
+    const UiNode* lit = findUiNode(section, leaves[0].first);
+    ASSERT_TRUE(lit != nullptr && lit->resolved.has_value());
+    if (lit && lit->resolved) {
+        ASSERT_EQ(lit->resolved->value, std::string{"case"});
+        ASSERT_EQ(lit->resolved->label, std::string{"case"});
+        ASSERT_TRUE(lit->resolved->checked.has_value() && *lit->resolved->checked);
+        ASSERT_TRUE(lit->resolved->command.has_value());
+        ASSERT_EQ(*lit->resolved->command, std::string{"find.toggle_case"});
     }
     // Provider caption: value is the provider value, label the provider label,
     // checked=false from the checked provider, no command.
-    const UiNodeState* prov = stateFor(section, leaves[1].first);
-    ASSERT_TRUE(prov != nullptr && prov->leaf.has_value());
-    if (prov && prov->leaf) {
-        ASSERT_EQ(prov->leaf->value, std::string{"Wrap"});
-        ASSERT_EQ(prov->leaf->label, std::string{"Wrap mode"});
-        ASSERT_TRUE(prov->leaf->checked.has_value() && !*prov->leaf->checked);
-        ASSERT_FALSE(prov->leaf->command.has_value());
+    const UiNode* prov = findUiNode(section, leaves[1].first);
+    ASSERT_TRUE(prov != nullptr && prov->resolved.has_value());
+    if (prov && prov->resolved) {
+        ASSERT_EQ(prov->resolved->value, std::string{"Wrap"});
+        ASSERT_EQ(prov->resolved->label, std::string{"Wrap mode"});
+        ASSERT_TRUE(prov->resolved->checked.has_value() && !*prov->resolved->checked);
+        ASSERT_FALSE(prov->resolved->command.has_value());
     }
 }
 
@@ -251,25 +244,24 @@ TEST(spacerIsPresentWithNoLeafAndEveryNodeHasOneRecord) {
     spacer.width = 3;
     const auto comp =
         composeFooter({literalField("f", "x"), spacer});
-    const UiSchema schema{Generation{4}, comp.root};
+    const UiSchema schema{comp.root};
     const auto empty = [](std::string_view) -> std::optional<ResolvedProvider> {
         return std::nullopt;
     };
-    const auto section = resolveUiState(ValidatedSchema::validate(schema).takeSchema(), empty);
-
-    ASSERT_EQ(section.generation.value(), std::uint64_t{4});
+    const auto section = resolveUiTree(schema, empty);
 
     std::vector<std::pair<UiNodeId, const WidgetDescriptor*>> leaves;
     collectLeaves(footerArea(schema), leaves);
     for (const auto& [nodeId, widget] : leaves) {
-        const UiNodeState* state = stateFor(section, nodeId);
+        const UiNode* state = findUiNode(section, nodeId);
         ASSERT_TRUE(state != nullptr);
         if (state && widget->kind == WidgetKind::Spacer) {
-            ASSERT_FALSE(state->leaf.has_value());
+            ASSERT_FALSE(state->resolved.has_value());
         }
     }
-    // One record per node id in the schema (no duplicates, no omissions).
-    ASSERT_EQ(section.nodes.size(), uiSchemaNodeIds(schema).size());
+    // Resolution neither adds nor renames nodes: the resolved tree carries
+    // exactly the schema's own node ids.
+    ASSERT_TRUE(uiSchemaNodeIds(section) == uiSchemaNodeIds(schema));
 }
 
 TEST(footerTextInputIsStatefulWhileHeaderPickerInputRemainsLocal) {
@@ -285,7 +277,7 @@ TEST(footerTextInputIsStatefulWhileHeaderPickerInputRemainsLocal) {
             const auto composition = withFooterPrompt(
                 assembleWholeScreen({}, "help.open", StyleDimensions{}, "> "),
                 prompt);
-            const auto schema = UiSchema{Generation{3}, composition.root};
+            const auto schema = UiSchema{composition.root};
             const auto resolver = resolverFrom(
                 {{"find.query",
                   {"needle", "Find text",
@@ -294,22 +286,22 @@ TEST(footerTextInputIsStatefulWhileHeaderPickerInputRemainsLocal) {
                  {"find.toggle_case", {"false", "Case", std::nullopt}},
                  {"find.matches", {"1/3", "Matches", std::nullopt}}});
             const auto section =
-                resolveUiState(ValidatedSchema::validate(schema).takeSchema(), resolver);
+                resolveUiTree(schema, resolver);
 
             const auto* footerInput =
-                stateFor(section, UiNodeId{"footer.prompt.control.find.query"});
-            ASSERT_TRUE(footerInput != nullptr && footerInput->leaf.has_value());
-            if (footerInput && footerInput->leaf) {
-                ASSERT_EQ(footerInput->leaf->value, std::string{"needle"});
-                ASSERT_TRUE(footerInput->leaf->active.has_value() &&
-                            *footerInput->leaf->active);
-                ASSERT_FALSE(footerInput->leaf->checked.has_value());
+                findUiNode(section, UiNodeId{"footer.prompt.control.find.query"});
+            ASSERT_TRUE(footerInput != nullptr && footerInput->resolved.has_value());
+            if (footerInput && footerInput->resolved) {
+                ASSERT_EQ(footerInput->resolved->value, std::string{"needle"});
+                ASSERT_TRUE(footerInput->resolved->active.has_value() &&
+                            *footerInput->resolved->active);
+                ASSERT_FALSE(footerInput->resolved->checked.has_value());
             }
 
             const auto* headerInput =
-                stateFor(section, UiNodeId{std::string{kHeaderPromptInputNodeId}});
+                findUiNode(section, UiNodeId{std::string{kHeaderPromptInputNodeId}});
             ASSERT_TRUE(headerInput != nullptr);
-            if (headerInput) ASSERT_FALSE(headerInput->leaf.has_value());
+            if (headerInput) ASSERT_FALSE(headerInput->resolved.has_value());
 }
 
 }  // namespace

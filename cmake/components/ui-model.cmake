@@ -2,9 +2,6 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Widget.cpp
     ${SSG_SOURCE_DIR}/src/UiTree.cpp
     ${SSG_SOURCE_DIR}/src/ViewSurfaceBacking.cpp
-    ${SSG_SOURCE_DIR}/src/MutationPatch.cpp
-    ${SSG_SOURCE_DIR}/src/UiPresence.cpp
-    ${SSG_SOURCE_DIR}/src/UiFrame.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenSchema.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenInteraction.cpp
     ${SSG_SOURCE_DIR}/src/CommandTransition.cpp
@@ -34,18 +31,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/test_ui_node_state.cpp
         SYMBOL test_ui_node_state)
     ssg_test_link_libraries(test_ui_node_state PRIVATE ssg_tui_objects)
-
-    ssg_add_test_suite(
-        NAME test_ui_frame
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_ui_frame.cpp
-        SYMBOL test_ui_frame)
-    ssg_test_link_libraries(test_ui_frame PRIVATE ssg_core)
-
-    ssg_add_test_suite(
-        NAME test_mutation_patch
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_mutation_patch.cpp
-        SYMBOL test_mutation_patch)
-    ssg_test_link_libraries(test_mutation_patch PRIVATE ssg_core)
 
     ssg_add_test_suite(
         NAME test_keyboard_focus

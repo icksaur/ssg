@@ -17,22 +17,20 @@ bool operator==(SessionSnapshotSections const& left,
            left.followEdits == right.followEdits && left.tree == right.tree &&
            left.syntax == right.syntax && left.lspSync == right.lspSync &&
            left.lspFeatures == right.lspFeatures && left.theme == right.theme &&
-           left.palette == right.palette && left.uiFrame == right.uiFrame &&
+           left.palette == right.palette && left.uiTree == right.uiTree &&
            left.noticeView == right.noticeView &&
            left.watcherAvailable == right.watcherAvailable;
 }
 
 SessionSnapshot::SessionSnapshot(Revision revision, SessionTopology topology,
-                                 ClientSnapshotState client,
                                  SessionSnapshotSections sections)
     : revision_{revision},
       topology_{std::move(topology)},
-      client_{std::move(client)},
       sections_{std::move(sections)} {}
 
 bool SessionSnapshot::operator==(SessionSnapshot const& other) const {
     return revision_ == other.revision_ && topology_ == other.topology_ &&
-           client_ == other.client_ && sections_ == other.sections_;
+           sections_ == other.sections_;
 }
 
 }  // namespace ssg

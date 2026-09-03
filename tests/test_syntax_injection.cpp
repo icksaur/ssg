@@ -94,16 +94,11 @@ TEST(injectedParserDrivesHighlighting) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .attach({ClientId{1}, InvocationOrigin::InProcess},
-                            ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"main.cpp"}})
                     .accepted());
 
-    auto snapshot = runtime.snapshot(ClientId{1});
+    auto snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot.has_value()) return;
     ASSERT_TRUE(*calls > 0);
@@ -125,16 +120,11 @@ TEST(nullParserYieldsPlainText) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .attach({ClientId{1}, InvocationOrigin::InProcess},
-                            ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"main.cpp"}})
                     .accepted());
 
-    auto snapshot = runtime.snapshot(ClientId{1});
+    auto snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot.has_value()) return;
     ASSERT_FALSE(hasScope(snapshot->sections().syntax, SyntaxScope::Keyword));
@@ -157,16 +147,11 @@ TEST(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .attach({ClientId{1}, InvocationOrigin::InProcess},
-                            ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"main.cpp"}})
                     .accepted());
 
-    auto first = runtime.snapshot(ClientId{1});
+    auto first = runtime.snapshot();
     ASSERT_TRUE(first.has_value());
     if (!first.has_value()) return;
     ASSERT_TRUE(*calls > 0);
@@ -191,23 +176,18 @@ TEST(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .attach({ClientId{1}, InvocationOrigin::InProcess},
-                            ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"big.cpp"}})
                     .accepted());
 
-    auto first = runtime.snapshot(ClientId{1});
+    auto first = runtime.snapshot();
     ASSERT_TRUE(first.has_value());
     if (!first.has_value()) return;
     ASSERT_EQ(*calls, std::size_t{0});
     ASSERT_FALSE(hasScope(first->sections().syntax, SyntaxScope::Keyword));
 
     runtime.primeDeferred();
-    auto after = runtime.snapshot(ClientId{1});
+    auto after = runtime.snapshot();
     ASSERT_TRUE(after.has_value());
     if (!after.has_value()) return;
     ASSERT_TRUE(*calls > 0);
@@ -232,49 +212,39 @@ TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .attach({ClientId{1}, InvocationOrigin::InProcess},
-                            ViewId{1})
-                    .accepted());
 
     ASSERT_TRUE(runtime
-                    .dispatch(ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"fileA.cpp"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"fileB.cpp"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"fileA.cpp"}})
                     .accepted());
 
-    auto firstA = runtime.snapshot(ClientId{1});
+    auto firstA = runtime.snapshot();
     ASSERT_TRUE(firstA.has_value());
     if (!firstA.has_value()) return;
     ASSERT_FALSE(hasScope(firstA->sections().syntax, SyntaxScope::Keyword));
 
     ASSERT_TRUE(runtime
-                    .dispatch(ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"fileB.cpp"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ClientId{1},
-                              {"text.insert", runtime.revision(),
+                    .dispatch({"text.insert", runtime.revision(),
                                TextInputArguments{"z"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"fileA.cpp"}})
                     .accepted());
 
-    auto secondA = runtime.snapshot(ClientId{1});
+    auto secondA = runtime.snapshot();
     ASSERT_TRUE(secondA.has_value());
     if (!secondA.has_value()) return;
     ASSERT_FALSE(hasScope(secondA->sections().syntax, SyntaxScope::Keyword));
@@ -295,20 +265,14 @@ TEST(closingTabDestroysDocumentRuntimeState) {
         if (!created.accepted()) return;
         auto& runtime = *created.session;
         ASSERT_TRUE(runtime
-                        .attach({ClientId{1}, InvocationOrigin::InProcess},
-                                ViewId{1})
-                        .accepted());
-        ASSERT_TRUE(runtime
-                        .dispatch(ClientId{1},
-                                  {"file.open", runtime.revision(),
+                        .dispatch({"file.open", runtime.revision(),
                                    std::string{"main.cpp"}})
                         .accepted());
 
         ASSERT_TRUE(EditorSession::liveDocumentRuntimeStateCountForTests() >=
                     baseline + 1);
         ASSERT_TRUE(runtime
-                        .dispatch(ClientId{1},
-                                  {"tab.close", runtime.revision(), {}})
+                        .dispatch({"tab.close", runtime.revision(), {}})
                         .accepted());
         ASSERT_EQ(EditorSession::liveDocumentRuntimeStateCountForTests(), baseline);
     }

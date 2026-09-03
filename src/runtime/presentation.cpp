@@ -9,77 +9,41 @@
 namespace ssg {
 namespace {
 
-const UiNode* schemaNode(const UiNode& node, const UiNodeId& id) {
-    if (node.id == id) return &node;
-    const auto* container = std::get_if<UiContainer>(&node.content);
-    if (!container) return nullptr;
-    for (const auto& child : container->children) {
-        if (const auto* found = schemaNode(child, id)) return found;
-    }
-    return nullptr;
-}
-
-bool effectivelyPresent(const UiNode& node, const UiNodeId& id,
-                        const UiPresenceSection& presence,
-                        bool ancestorsPresent = true) {
-    const auto record = std::find_if(
-        presence.nodes.begin(), presence.nodes.end(),
-        [&](const UiPresenceRecord& item) { return item.id == node.id; });
-    if (record == presence.nodes.end()) return false;
-    const bool present = ancestorsPresent && record->present;
-    if (node.id == id) return present;
-    const auto* container = std::get_if<UiContainer>(&node.content);
-    if (!container) return false;
-    return std::any_of(
-        container->children.begin(), container->children.end(),
-        [&](const UiNode& child) {
-            return effectivelyPresent(child, id, presence, present);
-        });
-}
-
 CommandHandlerResult activateUiNode(
     EditorSession::Impl& runtime, CommandContext& context,
     const UiNodeActivationArguments& arguments) {
-    const UiFrame frame = runtime.sections().uiFrame;
-    if (frame.version().generation != arguments.generation) {
-        return failure("UI activation schema is stale");
-    }
-    const UiNode* node = schemaNode(frame.schema().root, arguments.nodeId);
-    if (!node ||
-        !effectivelyPresent(frame.schema().root, arguments.nodeId,
-                            frame.presence())) {
+    const UiSchema tree = runtime.sections().uiTree;
+    const UiNode* node = findUiNode(tree, arguments.nodeId);
+    if (!node || !isUiNodeVisible(tree, arguments.nodeId)) {
         return failure("UI activation target is not present");
     }
-    const auto state = std::find_if(
-        frame.state().nodes.begin(), frame.state().nodes.end(),
-        [&](const UiNodeState& item) { return item.id == arguments.nodeId; });
     const auto* leaf = std::get_if<UiLeaf>(&node->content);
-    if (state == frame.state().nodes.end() || !state->leaf || !leaf) {
+    if (!node->resolved || !leaf) {
         return failure("UI activation target is not actionable");
     }
 
     ClientCommand target;
     target.baseRevision = context.revision();
     if (leaf->widget.kind == WidgetKind::TextInput &&
-        state->leaf->active.has_value()) {
+        node->resolved->active.has_value()) {
         target.id = "prompt.focus_control";
         target.payload = PromptFocusArguments{leaf->widget.id};
     } else {
         if ((leaf->widget.kind != WidgetKind::Field &&
              leaf->widget.kind != WidgetKind::Checkbox) ||
-            !state->leaf->command || state->leaf->command->empty()) {
+            !node->resolved->command || node->resolved->command->empty()) {
             return failure("UI activation target is not actionable");
         }
         const CommandEntry* command =
-            runtime.catalog->find(*state->leaf->command);
+            runtime.catalog->find(*node->resolved->command);
         if (!command || command->argument.type ||
             command->effect == CommandEffect::Routing) {
             return failure(
                 "UI activation target is not a payloadless command");
         }
-        target.id = *state->leaf->command;
+        target.id = *node->resolved->command;
     }
-    if (!runtime.defer(std::nullopt, std::move(target))) {
+    if (!runtime.defer(std::move(target))) {
         return failure("UI activation target could not be queued");
     }
     return success();
@@ -193,7 +157,6 @@ CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
                                    " requires a non-empty value");
                 }
                 if (!runtime.defer(
-                        std::nullopt,
                         ClientCommand{submission->commandId, revision,
                                       submission->values.front()})) {
                     return failure("could not queue " + submission->commandId);
@@ -615,24 +578,22 @@ void registerShellLayoutCommands(CommandCatalog& builder,
                        .mutates()
                        .lua()
                        .handler([&runtime, kind = command.kind](
-                                    CommandContext& context) {
-                           const auto client =
-                               context.principal().clientId();
+                                    CommandContext&) {
                            switch (kind) {
                                case PaneMutationCommand::Kind::SplitHorizontal:
                                    return runtime.splitPane(
-                                       client, SplitAxis::Horizontal);
+                                       SplitAxis::Horizontal);
                                case PaneMutationCommand::Kind::SplitVertical:
                                    return runtime.splitPane(
-                                       client, SplitAxis::Vertical);
+                                       SplitAxis::Vertical);
                                case PaneMutationCommand::Kind::Close:
-                                   return runtime.closePane(client);
+                                   return runtime.closePane();
                                case PaneMutationCommand::Kind::Next:
                                    return runtime.cyclePane(
-                                       client, PaneCycleDirection::Next);
+                                       PaneCycleDirection::Next);
                                case PaneMutationCommand::Kind::Previous:
                                    return runtime.cyclePane(
-                                       client, PaneCycleDirection::Previous);
+                                       PaneCycleDirection::Previous);
                            }
                            return failure("unknown pane mutation");
                        }));

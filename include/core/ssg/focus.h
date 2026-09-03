@@ -7,7 +7,7 @@
 namespace ssg {
 
 // The keymap context declared by a UI focus host. Effective context is derived
-// from the authoritative UiFrame focus-stack endpoint.
+// from the authoritative UiSchema focus-path endpoint.
 enum class FocusTarget : std::uint8_t {
     Editor = 0,
     Panel = 1,

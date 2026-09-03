@@ -30,7 +30,6 @@ enum class LuaError : std::uint8_t {
     StaleHandle,
     DuplicateCommand,
     UnknownCommand,
-    CapabilityDenied,
     DispatchFailed,
 };
 
@@ -44,12 +43,10 @@ struct LuaResult {
 
 struct LuaCommand {
     std::string id;
-    std::vector<CapabilityId> requiredCapabilities;
 };
 
 struct LuaInvocation {
     std::string_view commandId;
-    InvocationPrincipal const& principal;
     // Present only when the Lua caller passed a SECOND table argument to
     // ssg.command(id, args) -- e.g. a future theme.define(colors) call
     // passing a table of hex color strings keyed by palette-slot name.
@@ -78,8 +75,6 @@ using LuaGenerationGate =
     std::function<LuaResult(std::vector<std::string> const& commandIds)>;
 
 struct LuaCommandHostOptions {
-    ClientId pluginId;
-    std::vector<CapabilityId> capabilities;
     std::vector<LuaCommand> commands;
     std::uint64_t instructionBudget{100'000};
     std::chrono::milliseconds timeBudget{50};

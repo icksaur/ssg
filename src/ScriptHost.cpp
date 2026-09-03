@@ -18,22 +18,13 @@ namespace ssg {
 
 namespace {
 
-// Capabilities granted to the script client, and to the commands it may call --
-// one list, so there is exactly one place to update when a future
-// capability-gated script command is added.  Keeping these as two
-// independently maintained lists would let one drift out of sync with the
-// other: passing one gate but silently denied at the other.  No command needs
-// one today, so this is empty -- never a
-// wildcard grant.
-std::vector<CapabilityId> scriptCapabilities() { return {}; }
-
 // The commands a script may call via ssg.command(id, args).  Asked of the
 // running catalog rather than listed here, because whether a command is
 // available at startup is a fact about the component that implements it.
 std::vector<LuaCommand> scriptCommandCatalog(CommandCatalog const& catalog) {
     std::vector<LuaCommand> result;
     for (auto const* command : catalog.commands()) {
-        if (command->initScript) result.push_back({command->id, {}});
+        if (command->initScript) result.push_back({command->id});
     }
     return result;
 }
@@ -80,7 +71,7 @@ struct ScriptHost::Impl {
         ClientCommand command{std::string{id}, runtime.revision(),
                               std::move(payload)};
         if (runtime.dispatchInProgress()) {
-            if (!runtime.deferDispatch(kScriptClientId, std::move(command))) {
+            if (!runtime.deferDispatch(std::move(command))) {
                 return CommandHandlerResult::failure(
                     "too many commands queued from one script command");
             }
@@ -88,7 +79,7 @@ struct ScriptHost::Impl {
             // cannot conclude from this.
             return CommandHandlerResult::success();
         }
-        auto result = runtime.dispatch(kScriptClientId, std::move(command));
+        auto result = runtime.dispatch(command);
         if (!result.accepted()) {
             return CommandHandlerResult::failure(result.message);
         }
@@ -109,8 +100,7 @@ struct ScriptHost::Impl {
                 "view action returned an invalid transition");
         }
         if (applied.transition) {
-            auto transition =
-                runtime.input(kScriptClientId, *applied.transition);
+            auto transition = runtime.input(*applied.transition);
             if (transition.outcome == ClientInputOutcome::Rejected) {
                 return CommandHandlerResult::failure(
                     transition.command &&
@@ -181,22 +171,10 @@ struct ScriptHost::Impl {
     }
 };
 
-ScriptHost::ScriptHost(EditorSession& runtime)
-    : ScriptHost(runtime, ViewId{0}, {}) {}
+ScriptHost::ScriptHost(EditorSession& runtime) : ScriptHost(runtime, {}) {}
 
-ScriptHost::ScriptHost(EditorSession& runtime, ViewId viewId,
-                      ViewActionSink viewActionSink) {
-    if (!runtime
-             .attach({kScriptClientId, InvocationOrigin::Lua,
-                      scriptCapabilities()},
-                     viewId)
-             .accepted()) {
-        throw std::runtime_error{"the runtime refused the script client"};
-    }
-
+ScriptHost::ScriptHost(EditorSession& runtime, ViewActionSink viewActionSink) {
     LuaCommandHostOptions options;
-    options.pluginId = kScriptClientId;
-    options.capabilities = scriptCapabilities();
     options.commands = scriptCommandCatalog(*runtime.commandCatalog());
     options.publishGate = [this](std::vector<std::string> const& ids) {
         return offerGeneration(ids);
@@ -205,9 +183,7 @@ ScriptHost::ScriptHost(EditorSession& runtime, ViewId viewId,
         runtime, std::move(options), std::move(viewActionSink));
 }
 
-ScriptHost::~ScriptHost() {
-    if (impl_) (void)impl_->runtime.detach(kScriptClientId);
-}
+ScriptHost::~ScriptHost() = default;
 
 LuaResult ScriptHost::evaluate(std::string_view script) {
     // keymap.bind/unbind's reset-then-reapply model: the script's current

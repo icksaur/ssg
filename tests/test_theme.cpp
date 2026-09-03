@@ -155,10 +155,7 @@ TEST(editorRuntimeStartsFromTheDefaultTheme) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) { std::filesystem::remove_all(root); return; }
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1})
-                    .accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1});
+    auto snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
         ASSERT_EQ(snapshot->sections().theme, ssg::defaultTheme());

@@ -185,7 +185,7 @@ struct EditorSession::Impl final : CommandServices,
     TreeModel tree;
     std::shared_ptr<SyntaxParser> syntaxParser;
     std::vector<StatusFieldCatalogEntry> statusFieldCatalog;
-    // The single interaction authority: owner of the whole-screen schema generation, the
+    // The single interaction authority: owner of the whole-screen schema, the
     // prompt surface, panel/focus/provider truth, the interaction projection, and the tree
     // revision source. The snapshot reads its projection; every focus, presence,
     // and prompt change flows through it. Declared after `tree` and
@@ -250,15 +250,6 @@ struct EditorSession::Impl final : CommandServices,
     // truly nested dispatch would advance the revision underneath a caller that
     // had already read it.
     struct DeferredCommand {
-        // Absent means "whichever client's dispatch this is", which is what a
-        // follow-up to the user's own action wants: palette.execute's target
-        // and prompt.submit's command are the user acting, and must carry the
-        // user's principal.
-        //
-        // Present names a different one.  A script's request runs as the SCRIPT
-        // client, so it is gated by the script's capabilities rather than
-        // inheriting those of whoever pressed the key.
-        std::optional<ClientId> client;
         ClientCommand command;
     };
 
@@ -317,7 +308,7 @@ struct EditorSession::Impl final : CommandServices,
     // (queueing outside one would strand the command until some later,
     // unrelated dispatch drained it) and enforces the bound.  Returns false if
     // either fails.
-    [[nodiscard]] bool defer(std::optional<ClientId> as, ClientCommand command);
+    [[nodiscard]] bool defer(ClientCommand command);
     // The open file picker's candidate set, built when the picker opens and
     // Published continuously and rebuilt with the workspace tree.
     std::vector<PaletteCandidate> fileCandidates;
@@ -329,9 +320,7 @@ struct EditorSession::Impl final : CommandServices,
     mutable CatalogRevision commandCandidateCatalogRevision = 0;
     mutable KeymapViewState commandCandidateKeymap;
     mutable bool commandCandidateCacheValid = false;
-    std::map<ViewId, std::size_t> viewReferences;
-    std::map<ClientId, ViewId> clientViews;
-    std::map<ClientId, PaneTopology> clientPaneTopologies;
+    PaneTopology paneTopology = PaneTopology::initial();
     struct DocumentPointerGesture {
         FileDocumentId documentId;
         Revision documentRevision;
@@ -340,7 +329,7 @@ struct EditorSession::Impl final : CommandServices,
         bool additive = false;
         std::vector<Selection> baseline;
     };
-    std::map<ClientId, DocumentPointerGesture> documentPointerGestures;
+    std::optional<DocumentPointerGesture> documentPointerGesture;
     bool wordWrap = false;
     bool lineNumbers = false;
     // The active document's immutable flattened text, shared by navigation and
@@ -521,9 +510,7 @@ struct EditorSession::Impl final : CommandServices,
     void registerExternalSaveExpectation(
         const std::filesystem::path& relativePath);
     [[nodiscard]] CommandHandlerResult openOrFocusLiveDiffTab(
-        const DiffFileView& file, NavigationClass classification,
-        std::optional<ClientId> userClient,
-        std::optional<ViewId> userView = std::nullopt);
+        const DiffFileView& file, NavigationClass classification);
     // Open (or re-focus) a read-only, in-memory tab of generated text content.
     // The reusable primitive behind the help page and any future
     // generated-content tab. Opens the text as a DocumentMode::ReadOnly virtual
@@ -561,15 +548,12 @@ struct EditorSession::Impl final : CommandServices,
         const FollowTarget& target, NavigationClass classification);
     [[nodiscard]] bool revealDiffTarget(
         const FollowTarget& target, NavigationClass classification);
-    void recordNavigation(ClientId client, ViewId viewId,
-                          NavigationClass classification);
-    [[nodiscard]] SessionTopology clientTopology(ClientId client) const;
-    [[nodiscard]] CommandHandlerResult splitPane(ClientId client,
-                                                 SplitAxis axis);
-    [[nodiscard]] CommandHandlerResult closePane(ClientId client);
-    [[nodiscard]] CommandHandlerResult cyclePane(
-        ClientId client, PaneCycleDirection direction);
-    [[nodiscard]] bool focusPane(ClientId client, PaneId pane);
+    void recordNavigation(NavigationClass classification);
+    [[nodiscard]] SessionTopology currentTopology() const;
+    [[nodiscard]] CommandHandlerResult splitPane(SplitAxis axis);
+    [[nodiscard]] CommandHandlerResult closePane();
+    [[nodiscard]] CommandHandlerResult cyclePane(PaneCycleDirection direction);
+    [[nodiscard]] bool focusPane(PaneId pane);
     [[nodiscard]] bool refreshTree();
     void refreshTreeForPublication(Revision drainEntryRevision);
     // Re-assemble the authority-owned whole-screen schema from the given UI inputs and

@@ -26,7 +26,6 @@
 #include <ssg/TextCodec.h>
 #include <ssg/TextInputCommands.h>
 #include <ssg/TreeModel.h>
-#include <ssg/UiNodeState.h>
 
 #include "all_command_ids.h"
 #include <array>

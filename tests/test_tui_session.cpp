@@ -34,10 +34,8 @@ struct RuntimeFixture {
 
 TEST(terminalEventsResolveThroughPublishedInputModels) {
     RuntimeFixture fixture;
-    ssg::InvocationPrincipal const principal{
-        ssg::ClientId{9}, ssg::InvocationOrigin::InProcess};
     ssg::tui::TuiClient client{
-        *fixture.runtime, principal, ssg::ViewId{9},
+        *fixture.runtime, ssg::ViewId{1},
         ssg::ViewportDimensions{80, 24}};
     ASSERT_TRUE(client.submit("file.new").accepted());
 
@@ -64,10 +62,8 @@ TEST(terminalEventsResolveThroughPublishedInputModels) {
 
 TEST(realRuntimeSnapshotRendersDeterministicallyWithinTheme) {
     RuntimeFixture fixture;
-    ssg::InvocationPrincipal const principal{
-        ssg::ClientId{3}, ssg::InvocationOrigin::InProcess};
     ssg::tui::TuiClient client{
-        *fixture.runtime, principal, ssg::ViewId{3},
+        *fixture.runtime, ssg::ViewId{1},
         ssg::ViewportDimensions{80, 24}};
     ASSERT_TRUE(client.submit("file.new").accepted());
     ASSERT_TRUE(client

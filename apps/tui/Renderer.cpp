@@ -1041,7 +1041,7 @@ void paintLineNumbers(CellGrid& grid, GridPresentation const& snapshot,
 }
 
 std::optional<GridPosition> paintPrompt(CellGrid& grid,
-                                         const UiFrame& frame,
+                                         const UiSchema& schema,
                                          SolvedGridTree const& layout,
                                          ThemeSnapshot const& theme,
                                          SemanticRole foregroundRole,
@@ -1050,7 +1050,7 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
     auto const promptFg = semanticIndex(theme, foregroundRole);
     auto const promptBg = semanticIndex(theme, backgroundRole);
     const UiNode* prompt = findUiNode(
-        frame.schema().root, kFooterPromptNodeId);
+        schema.root, kFooterPromptNodeId);
     if (!prompt) return std::nullopt;
     std::optional<GridPosition> caret;
     const auto paint = [&](auto&& self, const UiNode& node) -> void {
@@ -1060,26 +1060,24 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
         }
         const auto* schemaLeaf = std::get_if<UiLeaf>(&node.content);
         if (!schemaLeaf) return;
-        const auto state = std::find_if(
-            frame.state().nodes.begin(), frame.state().nodes.end(),
-            [&](const UiNodeState& item) { return item.id == node.id; });
-        if (state == frame.state().nodes.end() || !state->leaf) return;
+        if (!node.resolved) return;
+        const auto& leaf = *node.resolved;
         const auto* solved = layout.find(node.id);
         if (!solved) return;
         const Rect& rect = solved->rect;
         std::string text;
         switch (schemaLeaf->widget.kind) {
             case WidgetKind::TextInput:
-                text = textInputText(state->leaf->label,
+                text = textInputText(leaf.label,
                                     style.promptLabelSeparator,
-                                    state->leaf->value);
+                                    leaf.value);
                 break;
             case WidgetKind::Label:
-                text = state->leaf->value;
+                text = leaf.value;
                 break;
             case WidgetKind::Checkbox:
-                text = checkboxText(state->leaf->checked.value_or(false),
-                                    state->leaf->label,
+                text = checkboxText(leaf.checked.value_or(false),
+                                    leaf.label,
                                     style.toggle);
                 break;
             default:
@@ -1094,16 +1092,16 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
         paintText(grid, rect.x, rect.y, rect.right(),
                    text, promptFg, promptBg, SemanticRole::Prompt, style);
         if (schemaLeaf->widget.kind == WidgetKind::TextInput &&
-            state->leaf->active.value_or(false) && !caret) {
+            leaf.active.value_or(false) && !caret) {
             auto const labelWidth =
                 static_cast<int>(GraphemeLayout{}
                                      .computeRun(textInputText(
-                                         state->leaf->label,
+                                         leaf.label,
                                          style.promptLabelSeparator, {}))
                                      .totalCells);
             auto const valueWidth =
                 static_cast<int>(
-                    GraphemeLayout{}.computeRun(state->leaf->value).totalCells);
+                    GraphemeLayout{}.computeRun(leaf.value).totalCells);
             auto const cursorColumn =
                 std::min(rect.x + labelWidth + valueWidth, rect.right() - 1);
             caret = GridPosition{cursorColumn, rect.y};
@@ -1187,7 +1185,7 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
     auto const& theme = snapshot.sections().theme;
     auto const& style = snapshot.presentation().style;
     const FocusTarget effectiveFocus =
-        snapshot.sections().uiFrame.effectiveFocus();
+        effectiveUiFocus(snapshot.sections().uiTree);
     const auto* root =
         snapshot.layout().find(UiNodeId{std::string{kRootNodeId}});
     if (!root) {
@@ -1201,7 +1199,7 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
             theme, style);
     }
 
-    const auto& ui = snapshot.sections().uiFrame.schema();
+    const auto& ui = snapshot.sections().uiTree;
     const auto rootForeground =
         nodeForeground(ui, kRootNodeId, SemanticRole::Text);
     const auto rootBackground =
@@ -1360,7 +1358,7 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
                     nodeBackground(ui, kFooterPromptNodeId,
                                    SemanticRole::Canvas);
                 auto promptCaret =
-                    paintPrompt(grid, snapshot.sections().uiFrame,
+                    paintPrompt(grid, snapshot.sections().uiTree,
                                 snapshot.layout(), theme,
                                 promptForegroundRole, promptBackgroundRole,
                                 style);

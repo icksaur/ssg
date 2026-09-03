@@ -24,7 +24,7 @@
 
 template <typename Runtime>
 concept HasDimensionedSnapshot = requires(Runtime& runtime) {
-    runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    runtime.snapshot(ssg::ViewportDimensions{80, 24});
 };
 
 static_assert(!HasDimensionedSnapshot<ssg::EditorSession>);
@@ -63,8 +63,6 @@ std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
         {root / "workspace", root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.session);
-    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                          ssg::ViewId{1});
     return runtime;
 }
 
@@ -120,10 +118,9 @@ ssg::PaletteReport projectReport(
 // The published candidate list for an open palette, straight from the runtime.
 std::vector<ssg::PaletteCandidate> publishedCandidates(
     ssg::EditorSession& runtime) {
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"palette.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}})
                     .accepted());
-    auto snapshot = runtime.snapshot(ssg::ClientId{1});
+    auto snapshot = runtime.snapshot();
     if (!snapshot) return {};
     return snapshot->sections().palette.commandCandidates;
 }
@@ -204,8 +201,7 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     ASSERT_TRUE(!report.rows.empty());
     if (report.rows.empty()) return;
 
-    auto frame = ssg::test::projectGridFrame(
-        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24}, report);
+    auto frame = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, {80, 24}, report);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -237,12 +233,10 @@ TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
-                                  {"file.open", runtime->revision(),
+    ASSERT_TRUE(runtime->dispatch({"file.open", runtime->revision(),
                                    std::string{"alpha.txt"}})
                     .accepted());
-    auto frame = ssg::test::projectGridFrame(
-        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
+    auto frame = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -260,12 +254,10 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
-                                  {"file.open", runtime->revision(),
+    ASSERT_TRUE(runtime->dispatch({"file.open", runtime->revision(),
                                    std::string{"alpha.txt"}})
                     .accepted());
-    ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
-                                  {"palette.open", runtime->revision(), {}})
+    ASSERT_TRUE(runtime->dispatch({"palette.open", runtime->revision(), {}})
                     .accepted());
     // The client derived view (query/ghost/rows/selection) is reported as input;
     // the library builds the rendered projection.
@@ -275,8 +267,7 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     report.rows = {{"file.save", "Save File", ""},
                    {"file.save_as", "Save As", ""}};
     report.selected = std::uint32_t{0};
-    auto frame = ssg::test::projectGridFrame(
-        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24}, report);
+    auto frame = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, {80, 24}, report);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -294,12 +285,10 @@ TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
-                                  {"file.open", runtime->revision(),
+    ASSERT_TRUE(runtime->dispatch({"file.open", runtime->revision(),
                                    std::string{"alpha.txt"}})
                     .accepted());
-    auto frame = ssg::test::projectGridFrame(
-        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {24, 3});
+    auto frame = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, {24, 3});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -332,26 +321,21 @@ TEST(inMemorySnapshotsPublishTheUiVm) {
         {"prompt.cancel", {}},
     };
 
-    auto previous = ssg::test::projectGridFrame(
-        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
+    auto previous = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, dims);
     ASSERT_TRUE(previous.has_value());
     if (!previous) return;
 
     for (auto const& step : script) {
-        (void)runtime->dispatch(
-            ssg::ClientId{1}, {step.command, runtime->revision(), step.payload});
-        auto fresh = ssg::test::projectGridFrame(
-            *runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
+        (void)runtime->dispatch({step.command, runtime->revision(), step.payload});
+        auto fresh = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, dims);
         ASSERT_TRUE(fresh.has_value());
         if (!fresh) break;
 
-        auto const& frame = fresh->semantic().sections().uiFrame;
-        ASSERT_TRUE(!frame.schema().root.id.empty());
-        ASSERT_TRUE(!frame.presence().nodes.empty());
-        ASSERT_TRUE(!frame.state().nodes.empty());
+        auto const& tree = fresh->semantic().sections().uiTree;
+        ASSERT_TRUE(!tree.root.id.empty());
+        ASSERT_TRUE(!ssg::uiSchemaNodeIds(tree).empty());
 
-        previous = ssg::test::projectGridFrame(
-            *runtime, ssg::ClientId{1}, ssg::ViewId{1}, dims);
+        previous = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, dims);
         ASSERT_TRUE(previous.has_value());
         if (!previous) break;
     }

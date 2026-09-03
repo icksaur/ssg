@@ -63,7 +63,6 @@ enum class WorkspaceError : std::uint8_t {
     NotFound,
     AlreadyOpen,
     ReadOnly,
-    CapabilityDenied,
     DecodeFailed,
     IoFailed,
     RecoveryFailed,
@@ -200,7 +199,6 @@ public:
     [[nodiscard]] WorkspaceResult openFile(std::string_view path);
     [[nodiscard]] WorkspaceResult openRecent(std::size_t index);
     [[nodiscard]] WorkspaceResult openDroppedContent(
-        const InvocationPrincipal& principal,
         std::span<const std::uint8_t> bytes,
         std::string_view suggestedLabel);
 

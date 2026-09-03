@@ -19,8 +19,6 @@
 #include <ssg/Style.h>
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
-#include <ssg/UiNodeState.h>
-#include <ssg/UiPresence.h>
 #include <ssg/UiTree.h>
 
 #include <map>
@@ -269,11 +267,11 @@ struct SolveUiFrameResult {
     [[nodiscard]] bool accepted() const noexcept { return tree.has_value(); }
 };
 
-// Solves one corresponding schema/state/presence frame. Auto leaves require one
-// caller-measured intrinsic size; Auto containers derive theirs from children.
+// Solves one schema, whose nodes already carry their direct visibility and
+// resolved leaf state. Auto leaves require one caller-measured intrinsic size;
+// Auto containers derive theirs from children.
 [[nodiscard]] SolveUiFrameResult solveUiFrame(
-    const ValidatedSchema& schema, const UiStateSection& state,
-    const UiPresenceSection& presence,
+    const UiSchema& schema,
     const std::vector<GridIntrinsicSize>& intrinsicSizes, Rect bounds);
 
 }  // namespace ssg

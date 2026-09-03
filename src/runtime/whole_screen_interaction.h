@@ -5,7 +5,7 @@
 // caller mutates; they are recomputed from WholeScreenTruth -- the panel's presence,
 // whether the finder is open, and the base focus -- so the tree
 // the client lays out always reflects the authoritative subsystems, and a schema
-// generation change is handled by simply rebuilding from the same truth over the new
+// replacement is handled by simply rebuilding from the same truth over the new
 // schema (the migration contract: recompute presence from truth, reconcile captures,
 // reset the basis, and never strand base focus on an absent panel).
 
@@ -68,14 +68,14 @@ struct WholeScreenTruth {
 // cannot drift): when set, a single prompt-focus capture is anchored on the region's host
 // node -- header for a Palette prompt (command palette, file finder), footer otherwise --
 // so keystrokes route to that input line while findresults stays displayed content.
-// Rebuilding with the same inputs over a new schema generation IS the migration.
+// Rebuilding with the same inputs over a new schema IS the migration.
 [[nodiscard]] UiInteractionState buildWholeScreenInteraction(
-    ValidatedSchema schema, const WholeScreenTruth& truth,
+    UiSchema schema, const WholeScreenTruth& truth,
     std::optional<PromptRegion> promptRegion = std::nullopt);
 
 // Derive the local picker layer from the same closed/open projections used by
 // authoritative interaction, preserving every non-picker semantic input.
 [[nodiscard]] PalettePresenceOverlay derivePickerPresenceOverlay(
-    const ValidatedSchema& schema, const WholeScreenTruth& truth);
+    const UiSchema& schema, const WholeScreenTruth& truth);
 
 }  // namespace ssg

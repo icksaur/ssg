@@ -128,8 +128,6 @@ CommandHandlerResult bindText(EditorSession::Impl& runtime,
 }
 
 CommandHandlerResult bindSelection(EditorSession::Impl& runtime,
-                                    ViewId viewId,
-                                    ClientId client,
                                     SelectionCommand command,
                                     std::any const& payload) {
     SelectionCommandArguments arguments;
@@ -163,7 +161,7 @@ CommandHandlerResult bindSelection(EditorSession::Impl& runtime,
         command == SelectionCommand::SelectWordAtPosition) {
         runtime.interaction.focusEditor();
     }
-    runtime.recordNavigation(client, viewId, NavigationClass::User);
+    runtime.recordNavigation(NavigationClass::User);
     return success();
 }
 
@@ -823,14 +821,12 @@ void registerSelectionCommands(CommandCatalog& builder,
                 .lua()
                 .optionalHandler<SelectionCommandArguments>(
                     [&runtime, command](
-                        CommandContext& context,
+                        CommandContext&,
                         std::optional<SelectionCommandArguments> const&
                             arguments) {
                         return runtime.runTransaction([&] {
                             return bindSelection(
-                                runtime, context.viewId(),
-                                context.principal().clientId(),
-                                command,
+                                runtime, command,
                                 arguments ? std::any{*arguments} : std::any{});
                         });
                     }));

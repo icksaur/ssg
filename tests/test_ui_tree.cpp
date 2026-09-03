@@ -1,8 +1,8 @@
 // Oracle for the UI-VM tree schema validator (spec §Three layers: schema). The
 // validator is the precondition every later consumer relies on: node ids are
-// unique within a generation and region roles do not repeat. These tests are the
-// independently-knowable answers (which schema is well-formed) written against
-// the rules, not the implementation.
+// unique across the whole schema and region roles do not repeat. These tests are
+// the independently-knowable answers (which schema is well-formed) written
+// against the rules, not the implementation.
 
 #include "ssg/UiTree.h"
 #include "ssg/WholeScreenAssembly.h"
@@ -17,7 +17,6 @@
 namespace {
 
 using ssg::Axis;
-using ssg::Generation;
 using ssg::Size;
 using ssg::UiContainer;
 using ssg::UiLeaf;
@@ -60,7 +59,6 @@ UiNode viewLeaf(std::string id, ssg::ViewSurface surface, Size size) {
 
 TEST(wellFormedSchemaValidates) {
     UiSchema schema;
-    schema.generation = Generation{1};
     schema.root = container(
         "root", {container("header", {leaf("path"), leaf("branch")}),
                  container("footer", {leaf("hint")})});
@@ -225,61 +223,95 @@ TEST(statusActionsLeafWithAWidgetFieldIsRejected) {
     ASSERT_TRUE(!validateUiSchema(schema).ok());
 }
 
-// The whole-screen well-known-area contract (validated at the wire boundary): the
-// canonical whole-screen shape passes.
-TEST(wellKnownAreasAcceptTheCanonicalShape) {
-    UiSchema schema = canonicalWholeScreenSchema();
-    ASSERT_TRUE(ssg::validateWellKnownAreas(schema).ok());
+UiNode* mutableUiNode(UiNode& node, const UiNodeId& id) {
+    if (node.id == id) return &node;
+    if (auto* container = std::get_if<UiContainer>(&node.content)) {
+        for (auto& child : container->children) {
+            if (auto* found = mutableUiNode(child, id)) return found;
+        }
+    }
+    return nullptr;
 }
 
-// The root node must carry the "root" id.
-TEST(wellKnownAreasRejectAMisnamedRoot) {
-    UiSchema schema;
-    schema.root = container("body", {});
-    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+// A published schema: the canonical whole-screen shape with its focus path set
+// to the editor, as the runtime publishes it.
+UiSchema publishedWholeScreenSchema() {
+    UiSchema schema = canonicalWholeScreenSchema();
+    schema.focusPath =
+        std::vector<UiNodeId>{UiNodeId{std::string{ssg::kEditorNodeId}}};
+    return schema;
 }
 
-// A well-known area must be a container, not a bare leaf.
-TEST(wellKnownAreasRejectALeafHeader) {
-    UiSchema schema = canonicalWholeScreenSchema();
-    auto& root = std::get<UiContainer>(schema.root.content);
-    root.children[0] = leaf("header");
-    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+// NODE-FOCUS (spec): a non-empty focus path whose every node is a declared
+// focus host, starting at an editor or panel host, and ending at an
+// effectively visible node.
+TEST(publishedTreeAcceptsAValidFocusPath) {
+    ASSERT_TRUE(ssg::validatePublishedUiTree(publishedWholeScreenSchema()).ok());
 }
 
-// A well-known area must sit in its canonical position: header directly under root,
-// not buried in a sub-container.
-TEST(wellKnownAreasRejectAMisplacedHeader) {
-    UiSchema schema = canonicalWholeScreenSchema();
-    auto& root = std::get<UiContainer>(schema.root.content);
-    root.children[0] = std::move(root.children[1]);
-    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+TEST(publishedTreeRejectsAHiddenFocusEndpoint) {
+    auto schema = publishedWholeScreenSchema();
+    auto* editor =
+        mutableUiNode(schema.root, UiNodeId{std::string{ssg::kEditorNodeId}});
+    ASSERT_TRUE(editor != nullptr);
+    if (editor) editor->visible = false;
+    ASSERT_FALSE(ssg::validatePublishedUiTree(schema).ok());
 }
 
-TEST(wellKnownAreasRejectAMissingBody) {
-    UiSchema schema = canonicalWholeScreenSchema();
-    auto& root = std::get<UiContainer>(schema.root.content);
-    root.children.erase(root.children.begin() + 1);
-    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+// Hiding an ancestor of the endpoint makes the endpoint EFFECTIVELY invisible,
+// even though its own direct flag is untouched.
+TEST(publishedTreeRejectsAHiddenAncestorOfTheFocusEndpoint) {
+    auto schema = publishedWholeScreenSchema();
+    auto* content =
+        mutableUiNode(schema.root, UiNodeId{std::string{ssg::kContentNodeId}});
+    ASSERT_TRUE(content != nullptr);
+    if (content) content->visible = false;
+    ASSERT_FALSE(ssg::validatePublishedUiTree(schema).ok());
 }
 
-TEST(wellKnownAreasRejectAPanelViewWithTheWrongSurface) {
-    UiSchema schema = canonicalWholeScreenSchema();
-    auto& root = std::get<UiContainer>(schema.root.content);
-    auto& body = std::get<UiContainer>(root.children[1].content);
-    auto& panel = std::get<UiContainer>(body.children[0].content);
-    auto& tree = std::get<UiLeaf>(panel.children[0].content);
-    tree.widget.surface = static_cast<ssg::ViewSurface>(2);
-    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+// Only the endpoint must be effectively visible: a hidden BASE that a capture
+// still anchors past (the path extends beyond it) does not invalidate the tree.
+TEST(publishedTreeAcceptsAHiddenFocusBaseWhenTheEndpointStaysVisible) {
+    auto schema = publishedWholeScreenSchema();
+    schema.focusPath.push_back(
+        UiNodeId{std::string{ssg::kHeaderPromptInputNodeId}});
+    auto* editor =
+        mutableUiNode(schema.root, UiNodeId{std::string{ssg::kEditorNodeId}});
+    ASSERT_TRUE(editor != nullptr);
+    if (editor) editor->visible = false;
+    ASSERT_TRUE(ssg::validatePublishedUiTree(schema).ok());
 }
 
-TEST(wellKnownAreasRejectAnAdditionalPanelChild) {
-    UiSchema schema = canonicalWholeScreenSchema();
-    auto& root = std::get<UiContainer>(schema.root.content);
-    auto& body = std::get<UiContainer>(root.children[1].content);
-    auto& panel = std::get<UiContainer>(body.children[0].content);
-    panel.children.push_back(panel.children.front());
-    ASSERT_TRUE(!ssg::validateWellKnownAreas(schema).ok());
+TEST(publishedTreeRejectsAPathNodeWithoutADeclaredFocusHost) {
+    auto schema = publishedWholeScreenSchema();
+    auto* editor =
+        mutableUiNode(schema.root, UiNodeId{std::string{ssg::kEditorNodeId}});
+    ASSERT_TRUE(editor != nullptr);
+    if (editor) editor->focusContext.reset();
+    ASSERT_FALSE(ssg::validatePublishedUiTree(schema).ok());
+}
+
+TEST(publishedTreeRejectsANonFocusHostAsTheSolePathNode) {
+    auto schema = publishedWholeScreenSchema();
+    schema.focusPath =
+        std::vector<UiNodeId>{UiNodeId{std::string{ssg::kNoticeNodeId}}};
+    ASSERT_FALSE(ssg::validatePublishedUiTree(schema).ok());
+}
+
+TEST(publishedTreeRejectsAnUnknownFocusNode) {
+    auto schema = publishedWholeScreenSchema();
+    schema.focusPath = std::vector<UiNodeId>{UiNodeId{"missing"}};
+    ASSERT_FALSE(ssg::validatePublishedUiTree(schema).ok());
+}
+
+TEST(effectiveUiFocusDerivesContextFromTheEndpointHost) {
+    const auto editorSchema = publishedWholeScreenSchema();
+    ASSERT_TRUE(ssg::effectiveUiFocus(editorSchema) == ssg::FocusTarget::Editor);
+
+    auto promptSchema = publishedWholeScreenSchema();
+    promptSchema.focusPath.push_back(
+        UiNodeId{std::string{ssg::kHeaderPromptInputNodeId}});
+    ASSERT_TRUE(ssg::effectiveUiFocus(promptSchema) == ssg::FocusTarget::Prompt);
 }
 
 }  // namespace
@@ -299,12 +331,13 @@ SSG_TEST_SUITE(test_ui_tree) {
     RUN(surfaceOnNonViewLeafIsRejected);
     RUN(wellFormedStatusActionsLeafValidates);
     RUN(statusActionsLeafWithAWidgetFieldIsRejected);
-    RUN(wellKnownAreasAcceptTheCanonicalShape);
-    RUN(wellKnownAreasRejectAMisnamedRoot);
-    RUN(wellKnownAreasRejectALeafHeader);
-    RUN(wellKnownAreasRejectAMisplacedHeader);
-    RUN(wellKnownAreasRejectAMissingBody);
-    RUN(wellKnownAreasRejectAPanelViewWithTheWrongSurface);
-    RUN(wellKnownAreasRejectAnAdditionalPanelChild);
+    RUN(publishedTreeAcceptsAValidFocusPath);
+    RUN(publishedTreeRejectsAHiddenFocusEndpoint);
+    RUN(publishedTreeRejectsAHiddenAncestorOfTheFocusEndpoint);
+    RUN(publishedTreeAcceptsAHiddenFocusBaseWhenTheEndpointStaysVisible);
+    RUN(publishedTreeRejectsAPathNodeWithoutADeclaredFocusHost);
+    RUN(publishedTreeRejectsANonFocusHostAsTheSolePathNode);
+    RUN(publishedTreeRejectsAnUnknownFocusNode);
+    RUN(effectiveUiFocusDerivesContextFromTheEndpointHost);
     return failed == 0 ? 0 : 1;
 }

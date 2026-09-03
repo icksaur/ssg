@@ -872,14 +872,8 @@ WorkspaceResult Workspace::openRecent(std::size_t index) {
 }
 
 WorkspaceResult Workspace::openDroppedContent(
-    const InvocationPrincipal& principal,
     std::span<const std::uint8_t> bytes,
     std::string_view suggestedLabel) {
-    if (principal.origin() == InvocationOrigin::Lua ||
-        !principal.hasCapability(CapabilityId{"local_file_drop"})) {
-        return failure(WorkspaceError::CapabilityDenied,
-                       "local file drop capability is required");
-    }
     return impl_->addBytes(
         {bytes.begin(), bytes.end()},
         JournalDocumentKey::untitled(UntitledDocumentId::generate()),

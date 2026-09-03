@@ -46,23 +46,19 @@ std::unique_ptr<ssg::EditorSession> makeRuntime(const fs::path& root) {
     auto created = ssg::EditorSession::create(config);
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.session);
-    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                          ssg::ViewId{1});
     return runtime;
 }
 
 ssg::CommandResult run(ssg::EditorSession& runtime, std::string id,
                        std::any payload = {}) {
-    return runtime.dispatch(
-        ssg::ClientId{1},
-        {std::move(id), runtime.revision(), std::move(payload)});
+    return runtime.dispatch({std::move(id), runtime.revision(), std::move(payload)});
 }
 
 // The prompt as the client sees it. commandId is deliberately NOT here -- it is
 // runtime-internal attribution -- so these tests observe which command a prompt
 // belongs to through what submitting it DOES, which is the stronger oracle.
 bool pathPromptOpen(ssg::EditorSession& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1});
+    auto snapshot = runtime.snapshot();
     if (!snapshot) return false;
     return snapshot->sections().promptStatus.activeKind ==
            ssg::PromptKind::Path;

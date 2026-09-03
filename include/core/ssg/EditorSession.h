@@ -2,8 +2,8 @@
 
 #include <ssg/DiffModel.h>
 #include <ssg/ClientInput.h>
+#include <ssg/CommandInvocation.h>
 #include <ssg/CommandSpecBuilder.h>
-#include <ssg/EditorClient.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/GitDiffSource.h>
@@ -116,14 +116,9 @@ public:
     // dispatch includes handler requests, reconciliation, revision publication,
     // and public result construction. A handler must request a follow-up through
     // deferDispatch rather than re-entering a state operation.
-    [[nodiscard]] AttachResult attach(InvocationPrincipal principal,
-                                      ViewId viewId);
-    [[nodiscard]] bool detach(ClientId clientId);
     [[nodiscard]] PumpResult pump();
-    [[nodiscard]] CommandResult dispatch(ClientId clientId,
-                                         ClientCommand const& command);
-    [[nodiscard]] ClientInputResult input(ClientId clientId,
-                                          ClientInput const& input);
+    [[nodiscard]] CommandResult dispatch(ClientCommand const& command);
+    [[nodiscard]] ClientInputResult input(ClientInput const& input);
 
     // Asks for `command` to be dispatched once the dispatch in progress
     // finishes, and reports whether the request was taken.
@@ -137,7 +132,7 @@ public:
     // Returns false when called outside a dispatch (where the caller should
     // simply dispatch) or when the queue is full, which means a handler is
     // queueing without bound.
-    [[nodiscard]] bool deferDispatch(ClientId clientId, ClientCommand command);
+    [[nodiscard]] bool deferDispatch(ClientCommand command);
 
     // Whether a dispatch is in progress on this thread, and so whether
     // `deferDispatch` is the way to reach another command.
@@ -226,14 +221,14 @@ public:
     // CONTRACT: Snapshot publishes semantic state without computing grid
     // geometry, pumping worker results, or advancing the revision.
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
-        ClientId clientId, PaletteReport paletteReport = {}) const;
+        PaletteReport paletteReport = {}) const;
     // CONTRACT: These two operations intentionally release the session lock
     // between semantic capture and viewport projection. projectViewport rejects
-    // a changed client/view/revision basis without mutating the retained
+    // a changed view/revision basis without mutating the retained
     // projection state, so a presenter can retry without blocking commands while
     // it solves layout.
     [[nodiscard]] std::optional<PresentationCapture> capturePresentation(
-        ClientId clientId, std::optional<ViewId> expectedView,
+        std::optional<ViewId> expectedView,
         const PaletteReport& paletteReport = {}) const;
     [[nodiscard]] std::optional<ViewportProjectionResult> projectViewport(
         const ViewportProjectionRequest& request,

@@ -49,9 +49,7 @@ struct LuaCommandHost::Impl {
     Impl(LuaCommandHostOptions configuredOptions,
          LuaDispatcher configuredDispatcher)
         : options{std::move(configuredOptions)},
-          dispatcher{std::move(configuredDispatcher)},
-          principal{options.pluginId, InvocationOrigin::Lua,
-                    options.capabilities} {
+          dispatcher{std::move(configuredDispatcher)} {
         noteOptionalConstruction(OptionalSubsystem::Lua);
         if (!dispatcher) {
             throw std::invalid_argument{"Lua dispatcher must not be empty"};
@@ -202,25 +200,13 @@ struct LuaCommandHost::Impl {
                         host.pendingError = LuaError::UnknownCommand;
                         host.callbackMessage = "unknown Lua command: " + id;
                         raiseError = true;
-                    } else {
-                        for (auto const& capability :
-                             found->second.requiredCapabilities) {
-                            if (!host.principal.hasCapability(capability)) {
-                                host.pendingError = LuaError::CapabilityDenied;
-                                host.callbackMessage =
-                                    "Lua plugin lacks capability: " +
-                                    std::string{capability.value()};
-                                raiseError = true;
-                                break;
-                            }
-                        }
                     }
                 }
 
                 if (!raiseError) {
                     try {
                         auto result = host.dispatcher(
-                            LuaInvocation{id, host.principal, std::move(arguments)});
+                            LuaInvocation{id, std::move(arguments)});
                         if (!result.accepted) {
                             host.pendingError = LuaError::DispatchFailed;
                             host.callbackMessage =
@@ -421,7 +407,6 @@ struct LuaCommandHost::Impl {
 
     LuaCommandHostOptions options;
     LuaDispatcher dispatcher;
-    InvocationPrincipal principal;
     lua_State* state{};
     std::unordered_map<std::string, LuaCommand> catalog;
     std::unordered_map<std::string, int> pluginCommands;

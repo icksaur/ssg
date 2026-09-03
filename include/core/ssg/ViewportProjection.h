@@ -20,7 +20,6 @@ struct PresentationCapture {
 };
 
 struct ViewportProjectionRequest {
-    ClientId clientId;
     ViewId viewId;
     Revision semanticRevision;
     ViewportDimensions dimensions;

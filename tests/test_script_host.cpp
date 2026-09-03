@@ -34,13 +34,7 @@ fs::path uniqueRoot() {
 std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
     auto created =
         ssg::EditorSession::create({root, root / "scratch", root / "recovery"});
-    auto runtime = std::move(created.session);
-    if (runtime) {
-        (void)runtime->attach(
-            {ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-            ssg::ViewId{1});
-    }
-    return runtime;
+    return std::move(created.session);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +97,7 @@ TEST(viewActionsRequireAndUseAHostSuppliedSink) {
     int applications = 0;
     const auto before = runtime->revision();
     ssg::ScriptHost scripts{
-        *runtime, ssg::ViewId{1},
+        *runtime,
         [&](ssg::ViewActionRequest const& request) {
             ++applications;
             ASSERT_EQ(request.viewId, ssg::ViewId{1});
@@ -172,7 +166,7 @@ TEST(aCommandAScriptRegistersIsAnOrdinaryCatalogCommand) {
     if (entry) ASSERT_EQ(entry->owner, std::string{"lua"});
 
     auto const dispatched = runtime->dispatch(
-        ssg::ClientId{1}, {"user.count", runtime->revision(), {}});
+        {"user.count", runtime->revision(), {}});
     ASSERT_TRUE(dispatched.accepted());
     ASSERT_TRUE(scripts.evaluate("if calls ~= 1 then error('not called') end")
                     .accepted());
@@ -231,8 +225,7 @@ TEST(aFailedReloadKeepsThePreviousGenerationDispatchable) {
 
     ASSERT_TRUE(runtime->commandCatalog()->find("user.kept") != nullptr);
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"user.kept", runtime->revision(), {}})
+                    ->dispatch({"user.kept", runtime->revision(), {}})
                     .accepted());
     fs::remove_all(root);
 }
@@ -248,8 +241,7 @@ TEST(aRetiredScriptCommandIsNoLongerDispatchable) {
             .accepted());
     ASSERT_TRUE(scripts.evaluate("noop = true").accepted());
     ASSERT_TRUE(!runtime
-                     ->dispatch(ssg::ClientId{1},
-                                {"user.gone", runtime->revision(), {}})
+                     ->dispatch({"user.gone", runtime->revision(), {}})
                      .accepted());
     fs::remove_all(root);
 }
@@ -299,8 +291,7 @@ TEST(aRefusedGenerationLeavesThePreviousOneWhollyIntact) {
     // Still registered, and still backed by a live Lua function.
     ASSERT_TRUE(runtime->commandCatalog()->find("user.old") != nullptr);
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"user.old", runtime->revision(), {}})
+                    ->dispatch({"user.old", runtime->revision(), {}})
                     .accepted());
     auto const* builtIn = runtime->commandCatalog()->find("file.save");
     ASSERT_TRUE(builtIn != nullptr);
@@ -327,7 +318,7 @@ TEST(aScriptCommandCanCallCommandsAndBothArePerformedInOrder) {
                     .accepted());
 
     auto const dispatched = runtime->dispatch(
-        ssg::ClientId{1}, {"user.rebind", runtime->revision(), {}});
+        {"user.rebind", runtime->revision(), {}});
     if (!dispatched.accepted()) {
         std::cout << "  msg: " << dispatched.message << "\n";
     }
@@ -351,7 +342,7 @@ TEST(aFailureAmongQueuedCommandsIsReportedAndNamesTheCommand) {
                     .accepted());
 
     auto const dispatched = runtime->dispatch(
-        ssg::ClientId{1}, {"user.bad", runtime->revision(), {}});
+        {"user.bad", runtime->revision(), {}});
     ASSERT_TRUE(!dispatched.accepted());
     ASSERT_TRUE(dispatched.message.find("keymap.bind") != std::string::npos);
     fs::remove_all(root);
@@ -375,7 +366,7 @@ TEST(aScriptThatQueuesWithoutBoundIsRefusedRatherThanSpinning) {
                     .accepted());
 
     auto const dispatched = runtime->dispatch(
-        ssg::ClientId{1}, {"user.flood", runtime->revision(), {}});
+        {"user.flood", runtime->revision(), {}});
     ASSERT_TRUE(!dispatched.accepted());
     fs::remove_all(root);
 }
@@ -401,7 +392,7 @@ TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
     ssg::CommandResult offThread{};
     std::thread caller{[&] {
         offThread = runtime->dispatch(
-            ssg::ClientId{1}, {"user.owned", runtime->revision(), {}});
+            {"user.owned", runtime->revision(), {}});
     }};
     caller.join();
 
@@ -410,8 +401,7 @@ TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
 
     // The same command still works from the owning thread.
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"user.owned", runtime->revision(), {}})
+                    ->dispatch({"user.owned", runtime->revision(), {}})
                     .accepted());
 
     // Exactly one call reached the script, so the refused one was not merely
@@ -446,31 +436,14 @@ TEST(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor) {
                     .accepted());
 
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"palette.open", runtime->revision(), {}})
+                    ->dispatch({"palette.open", runtime->revision(), {}})
                     .accepted());
     auto const executed = runtime->dispatch(
-        ssg::ClientId{1},
         {"palette.execute", runtime->revision(),
          ssg::PaletteExecuteArguments{"user.viapalette"}});
 
     ASSERT_TRUE(!executed.accepted());
     ASSERT_TRUE(executed.message.find("keymap.bind") != std::string::npos);
-    fs::remove_all(root);
-}
-
-TEST(OnlyOneScriptHostMayAttachPerRuntime) {
-    // The script client id is reserved for the process's one ScriptHost. A
-    // second host over the same runtime is refused whole at construction, not
-    // left half-connected, and the first host keeps working.
-    auto root = uniqueRoot();
-    auto runtime = makeRuntime(root);
-    ASSERT_TRUE(runtime != nullptr);
-    ssg::ScriptHost scripts{*runtime};
-
-    ASSERT_THROWS(ssg::ScriptHost{*runtime}, std::runtime_error);
-
-    ASSERT_TRUE(scripts.evaluate("survived = 1").accepted());
     fs::remove_all(root);
 }
 
@@ -494,7 +467,6 @@ SSG_TEST_SUITE(test_script_host) {
     RUN(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor);
     RUN(aScriptThatQueuesWithoutBoundIsRefusedRatherThanSpinning);
     RUN(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised);
-    RUN(OnlyOneScriptHostMayAttachPerRuntime);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

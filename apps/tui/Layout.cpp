@@ -685,16 +685,12 @@ std::int64_t naturalCross(const LoweredUiNode& node, Axis axis) {
 }
 
 std::optional<LoweredUiNode> lowerUiNode(
-    const UiNode& node, Axis parentAxis, bool ancestorsPresent,
-    const std::map<UiNodeId, bool>& presence,
-    const std::map<UiNodeId, UiLeafState>& state,
+    const UiNode& node, Axis parentAxis, bool ancestorsVisible,
     const std::map<UiNodeId, GridSize>& intrinsic,
     ResolvedUiNodeStyle inherited,
     std::map<UiNodeId, UiNodeMetadata>& metadata, std::string& error) {
-    const auto present = presence.find(node.id);
-    if (!ancestorsPresent || present == presence.end() || !present->second) {
-        return std::nullopt;
-    }
+    const bool visible = ancestorsVisible && node.visible;
+    if (!visible) return std::nullopt;
 
     inherited = node.style.resolve(inherited);
 
@@ -704,9 +700,7 @@ std::optional<LoweredUiNode> lowerUiNode(
     nodeMetadata.style = inherited;
     if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
         nodeMetadata.widget = leaf->widget;
-        if (const auto found = state.find(node.id); found != state.end()) {
-            nodeMetadata.leafState = found->second;
-        }
+        nodeMetadata.leafState = node.resolved;
         if (node.size.kind() == SizeKind::Auto) {
             const auto measured = intrinsic.find(node.id);
             if (measured == intrinsic.end() || measured->second.columns < 0 ||
@@ -728,7 +722,7 @@ std::optional<LoweredUiNode> lowerUiNode(
         std::int64_t cross = 0;
         for (const auto& child : container.children) {
             auto lowered = lowerUiNode(
-                child, container.axis, true, presence, state, intrinsic,
+                child, container.axis, visible, intrinsic,
                 inherited, metadata, error);
             if (!error.empty()) return std::nullopt;
             if (!lowered) continue;
@@ -769,44 +763,8 @@ std::optional<LoweredUiNode> lowerUiNode(
 }  // namespace
 
 SolveUiFrameResult solveUiFrame(
-    const ValidatedSchema& schema, const UiStateSection& stateSection,
-    const UiPresenceSection& presenceSection,
+    const UiSchema& schema,
     const std::vector<GridIntrinsicSize>& intrinsicSizes, Rect bounds) {
-    if (stateSection.generation != schema.generation() ||
-        presenceSection.generation != schema.generation() ||
-        stateSection.nodes.size() != schema.nodeIds().size() ||
-        presenceSection.nodes.size() != schema.nodeIds().size()) {
-        return {std::nullopt,
-                "UI schema, state, and presence do not correspond"};
-    }
-
-    std::map<UiNodeId, UiLeafState> state;
-    std::set<UiNodeId> stateIds;
-    for (const auto& node : stateSection.nodes) {
-        if (!stateIds.insert(node.id).second) {
-            return {std::nullopt, "UI state contains duplicate node identities"};
-        }
-        if (node.leaf) state.emplace(node.id, *node.leaf);
-    }
-    std::map<UiNodeId, bool> presence;
-    for (const auto& record : presenceSection.nodes) {
-        if (!presence.emplace(record.id, record.present).second) {
-            return {std::nullopt,
-                    "UI presence contains duplicate node identities"};
-        }
-    }
-    if (stateIds != schema.nodeIds()) {
-        return {std::nullopt, "UI state does not correspond to schema"};
-    }
-    std::set<UiNodeId> presenceIds;
-    for (const auto& [id, present] : presence) {
-        (void)present;
-        presenceIds.insert(id);
-    }
-    if (presenceIds != schema.nodeIds()) {
-        return {std::nullopt, "UI presence does not correspond to schema"};
-    }
-
     std::map<UiNodeId, GridSize> intrinsic;
     for (const auto& size : intrinsicSizes) {
         if (!intrinsic.emplace(size.id, size.size).second) {
@@ -817,8 +775,8 @@ SolveUiFrameResult solveUiFrame(
 
     std::map<UiNodeId, UiNodeMetadata> metadata;
     std::string error;
-    auto lowered = lowerUiNode(schema.schema().root, Axis::Column, true,
-                               presence, state, intrinsic, {}, metadata, error);
+    auto lowered = lowerUiNode(schema.root, Axis::Column, true,
+                               intrinsic, {}, metadata, error);
     if (!error.empty()) return {std::nullopt, std::move(error)};
     if (!lowered) {
         return {std::nullopt, "UI root is absent"};

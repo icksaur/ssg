@@ -11,7 +11,6 @@ namespace ssg {
 namespace {
 
 CommandHandlerResult validatePublishedCommand(EditorSession::Impl& runtime,
-                                             CommandContext& context,
                                              std::string const& commandId) {
     auto const palette = runtime.paletteView();
     const auto* candidates = palette.candidatesFor(SearchMode::Command);
@@ -24,20 +23,10 @@ CommandHandlerResult validatePublishedCommand(EditorSession::Impl& runtime,
     if (!published) {
         return failure("command is not in the palette candidate set: " + commandId);
     }
-    auto const* declared = runtime.session->catalog()->find(commandId);
-    if (declared != nullptr) {
-        for (auto const& capability : declared->requiredCapabilities) {
-            if (!context.principal().hasCapability(capability)) {
-                return failure("principal lacks capability for palette command: " +
-                               commandId);
-            }
-        }
-    }
     return success();
 }
 
 CommandHandlerResult validatePaletteTarget(EditorSession::Impl& runtime,
-                                           CommandContext& context,
                                            std::string const& commandId) {
     bool const paletteOpen = runtime.interaction.prompt().active() &&
                               runtime.interaction.prompt().request() &&
@@ -51,7 +40,7 @@ CommandHandlerResult validatePaletteTarget(EditorSession::Impl& runtime,
     if (runtime.interaction.openPicker() != PickerKind::Command) {
         return failure("palette.execute requires the command palette to be open");
     }
-    return validatePublishedCommand(runtime, context, commandId);
+    return validatePublishedCommand(runtime, commandId);
 }
 
 CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext& context, std::string_view id, std::any const& payload) {
@@ -78,7 +67,6 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext&
         if (auto const* expected = payloadAs<PickerActivation>(payload)) {
             if (!runtime.deferredCommands.empty()) {
                 if (!runtime.defer(
-                        std::nullopt,
                         ClientCommand{"palette.close", context.revision(),
                                       *expected})) {
                     return failure("could not defer the picker close");
@@ -98,10 +86,9 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext&
     else if (id == "palette.execute") {
         auto const* arguments = payloadAs<PaletteExecuteArguments>(payload);
         if (arguments == nullptr) return failure("palette.execute requires a command id payload");
-        auto validation = validatePaletteTarget(runtime, context, arguments->commandId);
+        auto validation = validatePaletteTarget(runtime, arguments->commandId);
         if (!validation.accepted) return validation;
-        if (!runtime.defer(std::nullopt,
-                           ClientCommand{arguments->commandId, revision, {}})) {
+        if (!runtime.defer(ClientCommand{arguments->commandId, revision, {}})) {
             return failure("could not queue the selected command");
         }
         (void)runtime.interaction.apply(CloseFinder{});
@@ -175,7 +162,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext&
         // Placing and revealing the caret is owned by cursor.set_position; route
         // through it (deferred, since the session lock is non-reentrant) rather
         // than duplicating the reveal/focus/history contract here.
-        if (!runtime.defer(std::nullopt,
+        if (!runtime.defer(
                            ClientCommand{"cursor.set_position", revision,
                                          std::any{arguments}})) {
             return failure("could not queue cursor.set_position");
@@ -225,9 +212,8 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
                     return failure("detailed view is unavailable for deleted file");
                 }
             } else {
-                return runtime.openOrFocusLiveDiffTab(
-                    *file, NavigationClass::User,
-                    context.principal().clientId(), context.viewId());
+                return runtime.openOrFocusLiveDiffTab(*file,
+                                                       NavigationClass::User);
             }
         }
         if (selected->workspacePath) {
@@ -560,7 +546,7 @@ void registerSearchPaletteCommands(CommandCatalog& builder,
                                if (arguments.activation.mode ==
                                    SearchMode::Command) {
                                    auto validation = validatePublishedCommand(
-                                       runtime, context, arguments.candidateId);
+                                       runtime, arguments.candidateId);
                                    if (!validation.accepted) return validation;
                                    selected = ClientCommand{
                                        arguments.candidateId,
@@ -579,13 +565,11 @@ void registerSearchPaletteCommands(CommandCatalog& builder,
                                    return failure(
                                        "another picker submission is pending");
                                }
-                               if (!runtime.defer(std::nullopt,
-                                                  std::move(selected))) {
+                               if (!runtime.defer(std::move(selected))) {
                                    return failure(
                                        "could not queue the selected command");
                                }
                                if (!runtime.defer(
-                                       std::nullopt,
                                        ClientCommand{"palette.close",
                                                      context.revision(),
                                                      arguments.activation})) {

@@ -63,15 +63,12 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto runtime = std::move(created.session);
-    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                          ssg::ViewId{1});
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
+                    ->dispatch(
                                {"file.open", runtime->revision(),
                                 std::string{"a.txt"}})
                     .accepted());
-    auto realFrame = ssg::test::projectGridFrame(
-        *runtime, ssg::ClientId{1}, ssg::ViewId{1}, {80, 24});
+    auto realFrame = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, {80, 24});
     ASSERT_TRUE(realFrame.has_value());
     if (!realFrame) return;
 

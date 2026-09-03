@@ -9,13 +9,12 @@ namespace ssg::test {
 
 class GridTestView {
 public:
-    GridTestView(ClientId client, ViewId view, ViewportDimensions dimensions)
-        : client_{client}, dimensions_{dimensions}, presenter_{view} {}
+    GridTestView(ViewId view, ViewportDimensions dimensions)
+        : dimensions_{dimensions}, presenter_{view} {}
 
     [[nodiscard]] std::optional<GridPresentation> present(
         EditorSession& session, PaletteReport palette = {}) {
-        return presenter_.project(
-            session, client_, {dimensions_, std::move(palette)});
+        return presenter_.project(session, {dimensions_, std::move(palette)});
     }
 
     void resize(ViewportDimensions dimensions) noexcept {
@@ -24,7 +23,7 @@ public:
 
     [[nodiscard]] CommandResult dispatch(EditorSession& session,
                                          ClientCommand command) {
-        auto result = session.dispatch(client_, std::move(command));
+        auto result = session.dispatch(std::move(command));
         if (!result.viewAction) return result;
 
         auto frame = present(session);
@@ -36,7 +35,7 @@ public:
             throw std::runtime_error{applied.message};
         }
         if (applied.transition) {
-            auto transition = session.input(client_, *applied.transition);
+            auto transition = session.input(*applied.transition);
             if (transition.outcome == ClientInputOutcome::Rejected) {
                 throw std::runtime_error{
                     transition.command
@@ -49,7 +48,6 @@ public:
     }
 
 private:
-    ClientId client_;
     ViewportDimensions dimensions_;
     GridPresenter presenter_;
 };

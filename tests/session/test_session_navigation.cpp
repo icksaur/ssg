@@ -25,15 +25,7 @@ namespace {
 
 std::optional<ssg::GridPresentation> projectFrame(
     ssg::EditorSession& runtime, ssg::ViewportDimensions dimensions) {
-    return ssg::test::projectGridFrame(
-        runtime, ssg::ClientId{1}, ssg::ViewId{1}, dimensions);
-}
-
-std::optional<ssg::GridPresentation> projectFrame(
-    ssg::EditorSession& runtime, ssg::ClientId client,
-    ssg::ViewportDimensions dimensions) {
-    return ssg::test::projectGridFrame(
-        runtime, client, ssg::ViewId{1}, dimensions);
+    return ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, dimensions);
 }
 
 std::vector<std::string_view> keyboardRoutes(
@@ -162,7 +154,7 @@ std::optional<ssg::SearchMode> activePickerMode(
 
 ssg::PickerSubmitArguments pickerSubmit(
     ssg::EditorSession& runtime, ssg::SearchMode mode, std::string candidateId) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1});
+    auto snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     const auto activation =
         snapshot && snapshot->sections().palette.activePicker
@@ -182,7 +174,7 @@ std::string overDiffLineBudget(char value) {
 }
 
 ssg::FollowMode followMode(ssg::EditorSession& runtime) {
-    auto snapshot = runtime.snapshot(ssg::ClientId{1});
+    auto snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) {
         return ssg::FollowMode::Paused;
@@ -202,20 +194,7 @@ std::unique_ptr<ssg::EditorSession> followPauseRuntime(std::string text) {
     }
     auto runtime = std::move(created.session);
     ASSERT_TRUE(runtime
-                    ->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                             ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    ->attach({ssg::ClientId{2}, ssg::InvocationOrigin::Lua},
-                             ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    ->attach({ssg::ClientId{3}, ssg::InvocationOrigin::System},
-                             ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"file.open", runtime->revision(),
+                    ->dispatch({"file.open", runtime->revision(),
                                 std::string{"needle.txt"}})
                     .accepted());
     ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
@@ -228,10 +207,9 @@ TEST(searchTreeDiffAndFollowSectionsUseRuntimeState) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"search.workspace", runtime.revision(), std::string{"needle"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"follow_edits.pause", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"search.workspace", runtime.revision(), std::string{"needle"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"follow_edits.pause", runtime.revision(), {}}).accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_FALSE(snapshot->semantic().sections().search.results.empty());
@@ -255,11 +233,6 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1},
-                             ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
     ASSERT_TRUE(runtime
                     .applyExternalDiffBurst(
                         {{{.kind = ssg::NonGitDiffEventKind::Create,
@@ -292,8 +265,7 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
               ssg::DiffFileId{"c.txt"});
     ASSERT_EQ(snapshot->semantic().sections().followEdits.mode, ssg::FollowMode::Following);
 
-    ssg::test::GridTestView grid{
-        ssg::ClientId{1}, ssg::ViewId{1}, dimensions};
+    ssg::test::GridTestView grid{ssg::ViewId{1}, dimensions};
     ASSERT_TRUE(grid
                     .dispatch(runtime,
                               {"cursor.line_up", runtime.revision(), {}})
@@ -306,30 +278,21 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
     }
 }
 
-TEST(attachedClientsShareFollowPauseQueueAndResumeState) {
+TEST(followPauseQueuesMultipleChangesAndResumeAdoptsTheNewest) {
     auto runtime = followPauseRuntime("alpha\nbeta\n");
     if (!runtime) return;
-    ssg::test::GridTestView firstGrid{
-        ssg::ClientId{1}, ssg::ViewId{1}, {80, 20}};
-    ssg::test::GridTestView secondGrid{
-        ssg::ClientId{2}, ssg::ViewId{1}, {80, 20}};
+    ssg::test::GridTestView grid{ssg::ViewId{1}, {80, 20}};
 
-    ASSERT_TRUE(firstGrid
+    ASSERT_TRUE(grid
                     .dispatch(*runtime,
                               {"view.scroll_lines", runtime->revision(),
                                ssg::ScrollLinesArguments{3}})
                     .accepted());
-    ASSERT_TRUE(secondGrid
-                    .dispatch(*runtime,
-                              {"view.scroll_lines", runtime->revision(),
-                               ssg::ScrollLinesArguments{10}})
-                    .accepted());
 
-    auto paused = runtime->snapshot(ssg::ClientId{1});
+    auto paused = runtime->snapshot();
     ASSERT_TRUE(paused.has_value());
     if (!paused) return;
     ASSERT_EQ(paused->sections().followEdits.mode, ssg::FollowMode::Paused);
-    ASSERT_EQ(paused->sections().followEdits.clients.size(), std::size_t{3});
 
     auto const sourceRevision = runtime->revision().value();
     ASSERT_TRUE(runtime
@@ -348,7 +311,7 @@ TEST(attachedClientsShareFollowPauseQueueAndResumeState) {
                           ssg::Revision{sourceRevision + 2}}})
                     .accepted());
 
-    paused = runtime->snapshot(ssg::ClientId{2});
+    paused = runtime->snapshot();
     ASSERT_TRUE(paused.has_value());
     if (!paused) return;
     ASSERT_EQ(paused->sections().followEdits.mode, ssg::FollowMode::Paused);
@@ -356,22 +319,16 @@ TEST(attachedClientsShareFollowPauseQueueAndResumeState) {
               std::size_t{2});
 
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{2},
-                               {"follow_edits.resume", runtime->revision(), {}})
+                    ->dispatch({"follow_edits.resume", runtime->revision(), {}})
                     .accepted());
-    auto first = runtime->snapshot(ssg::ClientId{1});
-    auto second = runtime->snapshot(ssg::ClientId{2});
-    ASSERT_TRUE(first.has_value());
-    ASSERT_TRUE(second.has_value());
-    if (!first || !second) return;
-    ASSERT_EQ(first->sections().followEdits.mode, ssg::FollowMode::Following);
-    ASSERT_EQ(second->sections().followEdits.mode, ssg::FollowMode::Following);
-    ASSERT_TRUE(first->sections().followEdits.activeTarget.has_value());
-    if (!first->sections().followEdits.activeTarget) return;
-    ASSERT_EQ(first->sections().followEdits.activeTarget->id,
+    auto resumed = runtime->snapshot();
+    ASSERT_TRUE(resumed.has_value());
+    if (!resumed) return;
+    ASSERT_EQ(resumed->sections().followEdits.mode, ssg::FollowMode::Following);
+    ASSERT_TRUE(resumed->sections().followEdits.activeTarget.has_value());
+    if (!resumed->sections().followEdits.activeTarget) return;
+    ASSERT_EQ(resumed->sections().followEdits.activeTarget->id,
               ssg::DiffFileId{"watched-b"});
-    ASSERT_EQ(first->sections().followEdits.activeTarget,
-              second->sections().followEdits.activeTarget);
 }
 
 TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
@@ -384,10 +341,6 @@ TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
 
     ssg::GitDiffScan scan{
         .revision = ssg::Revision{10},
@@ -434,17 +387,11 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"needle.txt"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"follow_edits.pause", runtime.revision(), {}})
+                    .dispatch({"follow_edits.pause", runtime.revision(), {}})
                     .accepted());
 
     ASSERT_TRUE(runtime
@@ -459,8 +406,7 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
                                         std::string{"alpha NEEDLE omega"}}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"text.insert", runtime.revision(),
+                    .dispatch({"text.insert", runtime.revision(),
                                ssg::TextInputArguments{"!"}})
                     .accepted());
 
@@ -486,10 +432,6 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
 
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
@@ -621,10 +563,6 @@ TEST(gitStatusSurvivesDetailedDiffWorkLimit) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
 
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
@@ -643,8 +581,7 @@ TEST(gitStatusSurvivesDetailedDiffWorkLimit) {
                              }})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
                     .accepted());
 
     auto snapshot =
@@ -671,8 +608,7 @@ TEST(gitStatusSurvivesDetailedDiffWorkLimit) {
     ASSERT_TRUE(largeNode.has_value());
     if (!largeNode) return;
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.activate_node", runtime.revision(),
+                    .dispatch({"tree.activate_node", runtime.revision(),
                                ssg::TreeSelectArguments{*largeNode}})
                     .accepted());
     auto opened =
@@ -725,12 +661,7 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"coexist.txt"}})
                     .accepted());
 
@@ -744,16 +675,13 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
                                     .workingContent = std::string{"after\n"}}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.select_next", runtime.revision(), {}})
+                    .dispatch({"tree.select_next", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate", runtime.revision(), {}})
                     .accepted());
 
     auto first = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -774,8 +702,7 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
     if (!liveDiffId) return;
 
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate", runtime.revision(), {}})
                     .accepted());
     auto second =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -797,12 +724,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"coexist.txt"}})
                     .accepted());
     ASSERT_TRUE(runtime
@@ -815,16 +737,13 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
                                     .workingContent = std::string{"after\n"}}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.select_next", runtime.revision(), {}})
+                    .dispatch({"tree.select_next", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate", runtime.revision(), {}})
                     .accepted());
 
     auto first = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -844,13 +763,11 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     if (!documentTab || !liveDiffTab) return;
 
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tab.activate", runtime.revision(),
+                    .dispatch({"tab.activate", runtime.revision(),
                                *documentTab})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tab.close", runtime.revision(),
+                    .dispatch({"tab.close", runtime.revision(),
                                *documentTab})
                     .accepted());
     auto afterDocumentClose =
@@ -867,8 +784,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
               std::optional<std::string>{"coexist-id"});
 
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"coexist.txt"}})
                     .accepted());
     auto reopened =
@@ -881,13 +797,11 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
               std::size_t{1});
 
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tab.activate", runtime.revision(),
+                    .dispatch({"tab.activate", runtime.revision(),
                                *liveDiffTab})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tab.close", runtime.revision(),
+                    .dispatch({"tab.close", runtime.revision(),
                                *liveDiffTab})
                     .accepted());
     auto afterLiveDiffClose =
@@ -913,10 +827,6 @@ TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
     ASSERT_FALSE(std::filesystem::exists(root / "workspace" / "gone.txt"));
 
     ASSERT_TRUE(runtime
@@ -929,16 +839,13 @@ TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
                                     .workingContent = std::nullopt}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.select_next", runtime.revision(), {}})
+                    .dispatch({"tree.select_next", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate", runtime.revision(), {}})
                     .accepted());
 
     auto snapshot =
@@ -974,14 +881,9 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
 
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"follow_edits.pause", runtime.revision(), {}})
+                    .dispatch({"follow_edits.pause", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
@@ -1005,8 +907,7 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
               std::size_t{0});
 
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"follow_edits.resume", runtime.revision(), {}})
+                    .dispatch({"follow_edits.resume", runtime.revision(), {}})
                     .accepted());
     auto afterProgrammatic =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1019,16 +920,13 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
               std::size_t{1});
 
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.select_next", runtime.revision(), {}})
+                    .dispatch({"tree.select_next", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate", runtime.revision(), {}})
                     .accepted());
     auto afterUser =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1046,24 +944,17 @@ TEST(tabSwitchPausesFollowViaNavigationPath) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"needle.txt"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                std::string{"other.txt"}})
                     .accepted());
     ASSERT_EQ(followMode(runtime), ssg::FollowMode::Following);
 
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"tab.previous", runtime.revision(), {}})
+                    .dispatch({"tab.previous", runtime.revision(), {}})
                     .accepted());
     ASSERT_EQ(followMode(runtime), ssg::FollowMode::Paused);
 }
@@ -1077,13 +968,7 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
         if (!created.accepted()) return nullptr;
         auto runtime = std::move(created.session);
         ASSERT_TRUE(runtime
-                        ->attach({ssg::ClientId{1},
-                                  ssg::InvocationOrigin::InProcess},
-                                 ssg::ViewId{1})
-                        .accepted());
-        ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"file.open", runtime->revision(),
+                        ->dispatch({"file.open", runtime->revision(),
                                     std::string{"needle.txt"}})
                         .accepted());
         return runtime;
@@ -1103,12 +988,10 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
     if (!pauseResume || !togglePath) return;
 
     ASSERT_TRUE(pauseResume
-                    ->dispatch(ssg::ClientId{1},
-                               {"follow_edits.pause", pauseResume->revision(), {}})
+                    ->dispatch({"follow_edits.pause", pauseResume->revision(), {}})
                     .accepted());
     ASSERT_TRUE(togglePath
-                    ->dispatch(ssg::ClientId{1},
-                               {"follow_edits.toggle", togglePath->revision(), {}})
+                    ->dispatch({"follow_edits.toggle", togglePath->revision(), {}})
                     .accepted());
 
     const auto pausedWithPause = followState(*pauseResume);
@@ -1133,13 +1016,11 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
     ASSERT_EQ(pausedQueuedWithToggle, pausedQueuedWithPause);
 
     ASSERT_TRUE(pauseResume
-                    ->dispatch(ssg::ClientId{1},
-                               {"follow_edits.resume", pauseResume->revision(),
+                    ->dispatch({"follow_edits.resume", pauseResume->revision(),
                                 {}})
                     .accepted());
     ASSERT_TRUE(togglePath
-                    ->dispatch(ssg::ClientId{1},
-                               {"follow_edits.toggle", togglePath->revision(),
+                    ->dispatch({"follow_edits.toggle", togglePath->revision(),
                                 {}})
                     .accepted());
 
@@ -1157,8 +1038,7 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"text.insert", runtime->revision(),
+                        ->dispatch({"text.insert", runtime->revision(),
                                     ssg::TextInputArguments{"x"}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
@@ -1168,21 +1048,17 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"select.right", runtime->revision(), {}})
+                        ->dispatch({"select.right", runtime->revision(), {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"clipboard.cut", runtime->revision(), {}})
+                        ->dispatch({"clipboard.cut", runtime->revision(), {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"follow_edits.resume", runtime->revision(), {}})
+                        ->dispatch({"follow_edits.resume", runtime->revision(), {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"clipboard.paste", runtime->revision(), {}})
+                        ->dispatch({"clipboard.paste", runtime->revision(), {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1191,18 +1067,15 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"text.insert", runtime->revision(),
+                        ->dispatch({"text.insert", runtime->revision(),
                                     ssg::TextInputArguments{"x"}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"follow_edits.resume", runtime->revision(), {}})
+                        ->dispatch({"follow_edits.resume", runtime->revision(), {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"edit.undo", runtime->revision(), {}})
+                        ->dispatch({"edit.undo", runtime->revision(), {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1211,26 +1084,21 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"text.insert", runtime->revision(),
+                        ->dispatch({"text.insert", runtime->revision(),
                                     ssg::TextInputArguments{"x"}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"follow_edits.resume", runtime->revision(), {}})
+                        ->dispatch({"follow_edits.resume", runtime->revision(), {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"edit.undo", runtime->revision(), {}})
+                        ->dispatch({"edit.undo", runtime->revision(), {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"follow_edits.resume", runtime->revision(), {}})
+                        ->dispatch({"follow_edits.resume", runtime->revision(), {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"edit.redo", runtime->revision(), {}})
+                        ->dispatch({"edit.redo", runtime->revision(), {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1239,24 +1107,20 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"replace.open", runtime->revision(), {}})
+                        ->dispatch({"replace.open", runtime->revision(), {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"find.update_query", runtime->revision(),
+                        ->dispatch({"find.update_query", runtime->revision(),
                                     ssg::FindQueryArguments{"needle"}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"replace.update_replacement",
+                        ->dispatch({"replace.update_replacement",
                                     runtime->revision(),
                                     ssg::FindQueryArguments{"pin"}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"replace.current", runtime->revision(), {}})
+                        ->dispatch({"replace.current", runtime->revision(), {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1265,13 +1129,11 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"select.add_cursor_down",
+                        ->dispatch({"select.add_cursor_down",
                                     runtime->revision(), {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"text.insert", runtime->revision(),
+                        ->dispatch({"text.insert", runtime->revision(),
                                     ssg::TextInputArguments{"x"}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
@@ -1280,32 +1142,7 @@ TEST(followPauseOnEditTransitionTable) {
         auto runtime = followPauseRuntime("alpha needle omega\n");
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
-        ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{2},
-                                   {"text.insert", runtime->revision(),
-                                    ssg::TextInputArguments{"x"}})
-                        .accepted());
-        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
-    }
-    {
-        auto runtime = followPauseRuntime("alpha needle omega\n");
-        ASSERT_TRUE(runtime != nullptr);
-        if (!runtime) return;
-        // Recovery/replay-originated edits execute under a System principal.
-        ASSERT_TRUE(
-            runtime
-                ->dispatch(ssg::ClientId{3},
-                           {"text.insert", runtime->revision(),
-                            ssg::TextInputArguments{"x"}})
-                .accepted());
-        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
-    }
-    {
-        auto runtime = followPauseRuntime("alpha needle omega\n");
-        ASSERT_TRUE(runtime != nullptr);
-        if (!runtime) return;
-        ssg::test::GridTestView grid{
-            ssg::ClientId{1}, ssg::ViewId{1}, {80, 20}};
+        ssg::test::GridTestView grid{ssg::ViewId{1}, {80, 20}};
         ASSERT_TRUE(grid
                         .dispatch(*runtime,
                                   {"pane.next", runtime->revision(), {}})
@@ -1316,8 +1153,7 @@ TEST(followPauseOnEditTransitionTable) {
         auto runtime = followPauseRuntime("alpha needle omega\n");
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
-        ssg::test::GridTestView grid{
-            ssg::ClientId{1}, ssg::ViewId{1}, {80, 20}};
+        ssg::test::GridTestView grid{ssg::ViewId{1}, {80, 20}};
         ASSERT_TRUE(grid
                         .dispatch(*runtime,
                                   {"view.scroll_lines", runtime->revision(),
@@ -1330,8 +1166,7 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"cursor.right", runtime->revision(), {}})
+                        ->dispatch({"cursor.right", runtime->revision(), {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1343,21 +1178,20 @@ TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}}).accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->semantic().sections().uiFrame.effectiveFocus(),
+    ASSERT_EQ(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree),
               ssg::FocusTarget::Prompt);
     ASSERT_FALSE(snapshot->semantic().sections().palette.commandCandidates.empty());
 
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.close", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"palette.close", runtime.revision(), {}}).accepted());
     auto closed = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(closed.has_value());
     if (!closed) return;
-    ASSERT_EQ(closed->semantic().sections().uiFrame.effectiveFocus(),
+    ASSERT_EQ(ssg::effectiveUiFocus(closed->semantic().sections().uiTree),
               ssg::FocusTarget::Editor);
 }
 
@@ -1372,17 +1206,16 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto pickerStateAfter = [&](std::string const& closeCommand) {
-        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
+        ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}}).accepted());
         auto open = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(open.has_value());
         if (open) {
             ASSERT_EQ(activePickerMode(open->semantic().sections().palette),
                       std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
         }
-        (void)runtime.dispatch(ssg::ClientId{1}, {closeCommand, runtime.revision(), {}});
+        (void)runtime.dispatch({closeCommand, runtime.revision(), {}});
         auto shut = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(shut.has_value());
         if (shut) {
@@ -1395,10 +1228,8 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
 
     // A successful palette.execute cancels the prompt as part of executing; the
     // picker must not survive into the next open.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
-    (void)runtime.dispatch(
-        ssg::ClientId{1},
-        {"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"edit.undo"}});
+    ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}}).accepted());
+    (void)runtime.dispatch({"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"edit.undo"}});
     auto executed = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(executed.has_value());
     if (executed) {
@@ -1424,7 +1255,6 @@ TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto closed =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1433,7 +1263,7 @@ TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
     ASSERT_FALSE(closed->semantic().sections().palette.activePicker.has_value());
     ASSERT_FALSE(closed->semantic().sections().palette.fileCandidates.empty());
 
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file_finder.open", runtime.revision(), {}}).accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1448,15 +1278,11 @@ TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
 
     // Candidate ids are paths here; executing one as a command must be refused
     // even though a Palette prompt is genuinely open.
-    auto rejected = runtime.dispatch(
-        ssg::ClientId{1},
-        {"palette.execute", runtime.revision(),
+    auto rejected = runtime.dispatch({"palette.execute", runtime.revision(),
          ssg::PaletteExecuteArguments{"src/beta.cpp"}});
     ASSERT_FALSE(rejected.accepted());
     // Not even a real command id is executable through the file picker.
-    auto alsoRejected = runtime.dispatch(
-        ssg::ClientId{1},
-        {"palette.execute", runtime.revision(),
+    auto alsoRejected = runtime.dispatch({"palette.execute", runtime.revision(),
          ssg::PaletteExecuteArguments{"edit.undo"}});
     ASSERT_FALSE(alsoRejected.accepted());
     std::filesystem::remove_all(root);
@@ -1477,7 +1303,6 @@ TEST(togglingGitignoreRebuildsTheOpenFilePickerIndex) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto candidateIds = [&] {
         auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1491,13 +1316,13 @@ TEST(togglingGitignoreRebuildsTheOpenFilePickerIndex) {
         return paths;
     };
 
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file_finder.open", runtime.revision(), {}}).accepted());
     auto before = candidateIds();
     ASSERT_TRUE(before.contains("kept.txt"));
     ASSERT_FALSE(before.contains("build/hidden.o"));
 
     // No reopen in between: the SAME open picker must change.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.toggle_gitignore", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file_finder.toggle_gitignore", runtime.revision(), {}}).accepted());
     auto after = candidateIds();
     ASSERT_TRUE(after.contains("build/hidden.o"));
     std::filesystem::remove_all(root);
@@ -1518,11 +1343,6 @@ TEST(workerFilesystemRefreshPublishesChangedFileCandidates) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(
-        runtime
-            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                    ssg::ViewId{1})
-            .accepted());
     const auto before = runtime.revision();
     std::ofstream{root / "workspace" / "arrived.txt"} << "new\n";
 
@@ -1553,7 +1373,6 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto pickerIsOpen = [&] {
         auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1563,11 +1382,9 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     };
 
     // A rejected open leaves the picker up.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file_finder.open", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(pickerIsOpen());
-    auto missing = runtime.dispatch(
-        ssg::ClientId{1},
-        {"picker.submit", runtime.revision(),
+    auto missing = runtime.dispatch({"picker.submit", runtime.revision(),
          pickerSubmit(runtime, ssg::SearchMode::File, "gone.txt")});
     ASSERT_FALSE(missing.accepted());
     ASSERT_TRUE(pickerIsOpen());
@@ -1575,8 +1392,7 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     // A successful open dismisses it.
     ASSERT_TRUE(
         runtime
-            .dispatch(ssg::ClientId{1},
-                      {"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit", runtime.revision(),
                        pickerSubmit(runtime, ssg::SearchMode::File,
                                     "present.txt")})
             .accepted());
@@ -1597,30 +1413,23 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
 
     // A transport cannot submit against an inventory without first opening the
     // matching authoritative picker.
     ASSERT_FALSE(
         runtime
-            .dispatch(ssg::ClientId{1},
-                      {"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit", runtime.revision(),
                        ssg::PickerSubmitArguments{
                            {ssg::SearchMode::Command,
                             ssg::PickerActivationId{1}},
                            "panel.toggle"}})
             .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open", runtime.revision(), {}})
                     .accepted());
     ASSERT_TRUE(
         runtime
-            .dispatch(ssg::ClientId{1},
-                      {"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit", runtime.revision(),
                        pickerSubmit(runtime, ssg::SearchMode::Command,
                                     "panel.toggle")})
             .accepted());
@@ -1630,17 +1439,15 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
     if (!commandSubmitted) return;
     ASSERT_FALSE(commandSubmitted->semantic().sections().palette.activePicker.has_value());
     ASSERT_TRUE(
-        commandSubmitted->semantic().sections().uiFrame.effectiveFocus() ==
+        ssg::effectiveUiFocus(commandSubmitted->semantic().sections().uiTree) ==
         ssg::FocusTarget::Panel);
 
     ASSERT_TRUE(runtime
-            .dispatch(ssg::ClientId{1},
-                             {"file_finder.open", runtime.revision(), {}})
+            .dispatch({"file_finder.open", runtime.revision(), {}})
             .accepted());
     ASSERT_TRUE(
         runtime
-            .dispatch(ssg::ClientId{1},
-                      {"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit", runtime.revision(),
                        pickerSubmit(runtime, ssg::SearchMode::File,
                                     "present.txt")})
             .accepted());
@@ -1649,63 +1456,54 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
     ASSERT_TRUE(submitted.has_value());
     if (!submitted) return;
     ASSERT_FALSE(submitted->semantic().sections().palette.activePicker.has_value());
-    ASSERT_TRUE(submitted->semantic().sections().uiFrame.effectiveFocus() ==
+    ASSERT_TRUE(ssg::effectiveUiFocus(submitted->semantic().sections().uiTree) ==
                 ssg::FocusTarget::Panel);
 }
 
-TEST(commandPickerSubmissionUsesTheInProcessAuthority) {
-    for (auto const origin : {ssg::InvocationOrigin::InProcess}) {
-        auto root = uniqueRoot();
-        auto created = ssg::EditorSession::create(
-            {root / "workspace", root / "scratch", root / "recovery"});
-        ASSERT_TRUE(created.accepted());
-        if (!created.accepted()) return;
-        auto& runtime = *created.session;
-        ASSERT_TRUE(
-            runtime.attach({ssg::ClientId{1}, origin}, ssg::ViewId{1}).accepted());
+TEST(pickerSubmissionRequiresMatchingPickerMode) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorSession::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
 
-        ASSERT_TRUE(
-            runtime
-                .dispatch(ssg::ClientId{1},
-                          {"file_finder.open", runtime.revision(), {}})
-                .accepted());
-        ASSERT_FALSE(
-            runtime
-                .dispatch(ssg::ClientId{1},
-                          {"picker.submit", runtime.revision(),
-                           pickerSubmit(runtime, ssg::SearchMode::Command,
-                                        "panel.toggle")})
-                .accepted());
-        auto snapshot =
-            projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-        ASSERT_TRUE(snapshot.has_value());
-        if (!snapshot) return;
-        ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
-                    std::optional<ssg::SearchMode>{ssg::SearchMode::File});
+    ASSERT_TRUE(
+        runtime
+            .dispatch({"file_finder.open", runtime.revision(), {}})
+            .accepted());
+    ASSERT_FALSE(
+        runtime
+            .dispatch({"picker.submit", runtime.revision(),
+                       pickerSubmit(runtime, ssg::SearchMode::Command,
+                                    "panel.toggle")})
+            .accepted());
+    auto snapshot =
+        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
+                std::optional<ssg::SearchMode>{ssg::SearchMode::File});
 
-        ASSERT_TRUE(
-            runtime
-                .dispatch(ssg::ClientId{1},
-                          {"palette.close", runtime.revision(), {}})
-                .accepted());
-        ASSERT_TRUE(runtime
-                        .dispatch(ssg::ClientId{1},
-                                  {"palette.open", runtime.revision(), {}})
-                        .accepted());
-        ASSERT_TRUE(
-            runtime
-                .dispatch(ssg::ClientId{1},
-                          {"picker.submit", runtime.revision(),
-                           pickerSubmit(runtime, ssg::SearchMode::Command,
-                                        "panel.toggle")})
-                .accepted());
-        snapshot =
-            projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-        ASSERT_TRUE(snapshot.has_value());
-        if (!snapshot) return;
-        ASSERT_FALSE(snapshot->semantic().sections().palette.activePicker.has_value());
-        std::filesystem::remove_all(root);
-    }
+    ASSERT_TRUE(
+        runtime
+            .dispatch({"palette.close", runtime.revision(), {}})
+            .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch({"palette.open", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(
+        runtime
+            .dispatch({"picker.submit", runtime.revision(),
+                       pickerSubmit(runtime, ssg::SearchMode::Command,
+                                    "panel.toggle")})
+            .accepted());
+    snapshot =
+        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_FALSE(snapshot->semantic().sections().palette.activePicker.has_value());
+    std::filesystem::remove_all(root);
 }
 
 TEST(commandPickerActionThatOpensPromptDismissesPickerWithoutFailure) {
@@ -1715,19 +1513,11 @@ TEST(commandPickerActionThatOpensPromptDismissesPickerWithoutFailure) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(
-        runtime
-            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                    ssg::ViewId{1})
-            .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open", runtime.revision(), {}})
                     .accepted());
 
-    auto result = runtime.dispatch(
-        ssg::ClientId{1},
-        {"picker.submit", runtime.revision(),
+    auto result = runtime.dispatch({"picker.submit", runtime.revision(),
          pickerSubmit(runtime, ssg::SearchMode::Command, "goto.line")});
     ASSERT_TRUE(result.accepted());
     auto snapshot =
@@ -1757,14 +1547,8 @@ TEST(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision) {
     ASSERT_EQ(stateValidated, std::ptrdiff_t{1});
     ASSERT_TRUE(catalog->find("picker.submit")->revisionPolicy ==
                 ssg::CommandRevisionPolicy::StateValidated);
-    ASSERT_TRUE(
-        runtime
-            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                    ssg::ViewId{1})
-            .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open", runtime.revision(), {}})
                     .accepted());
     auto snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1775,19 +1559,16 @@ TEST(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision) {
 
     ASSERT_TRUE(
         runtime
-            .dispatch(ssg::ClientId{1},
-                      {"panel.toggle", runtime.revision(), {}})
+            .dispatch({"panel.toggle", runtime.revision(), {}})
             .accepted());
     ASSERT_TRUE(
         runtime
-            .dispatch(ssg::ClientId{1},
-                      {"picker.submit", staleSessionRevision,
+            .dispatch({"picker.submit", staleSessionRevision,
                        ssg::PickerSubmitArguments{first, "panel.toggle"}})
             .accepted());
 
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open", runtime.revision(), {}})
                     .accepted());
     snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -1797,8 +1578,7 @@ TEST(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision) {
     ASSERT_FALSE(second.id == first.id);
     ASSERT_FALSE(
         runtime
-            .dispatch(ssg::ClientId{1},
-                      {"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit", runtime.revision(),
                        ssg::PickerSubmitArguments{first, "panel.toggle"}})
             .accepted());
     snapshot =
@@ -1816,56 +1596,46 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    const ssg::ClientId client{1};
     const ssg::ViewportDimensions viewport{80, 24};
     ASSERT_TRUE(runtime
-                    .attach({client, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(client, {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                        std::string{"needle.txt"}})
                     .accepted());
-    auto document = projectFrame(runtime, client, viewport);
+    auto document = projectFrame(runtime, viewport);
     ASSERT_TRUE(document.has_value());
     if (!document || !document->semantic().sections().tabs.active) return;
     const auto documentTab = *document->semantic().sections().tabs.active;
 
     ASSERT_TRUE(
-        runtime.dispatch(client, {"file.new", runtime.revision(), {}}).accepted());
-    auto scratch = projectFrame(runtime, client, viewport);
+        runtime.dispatch({"file.new", runtime.revision(), {}}).accepted());
+    auto scratch = projectFrame(runtime, viewport);
     ASSERT_TRUE(scratch.has_value());
     if (!scratch || !scratch->semantic().sections().tabs.active) return;
     const auto scratchTab = *scratch->semantic().sections().tabs.active;
-    auto activate = runtime.input(
-        client, ssg::TabPointerInput{{scratch->semantic().revision()}, documentTab});
+    auto activate = runtime.input(ssg::TabPointerInput{{scratch->semantic().revision()}, documentTab});
     ASSERT_EQ(activate.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_TRUE(activate.command.has_value() && activate.command->accepted());
-    ASSERT_EQ(projectFrame(runtime, client, viewport)->semantic().sections().tabs.active,
+    ASSERT_EQ(projectFrame(runtime, viewport)->semantic().sections().tabs.active,
               std::optional<ssg::TabId>{documentTab});
 
-    auto beforeStale = projectFrame(runtime, client, viewport);
+    auto beforeStale = projectFrame(runtime, viewport);
     ASSERT_TRUE(beforeStale.has_value());
     if (!beforeStale) return;
-    auto stale = runtime.input(
-        client,
-        ssg::TabPointerInput{
+    auto stale = runtime.input(ssg::TabPointerInput{
             {ssg::Revision{beforeStale->semantic().revision().value() - 1}}, scratchTab});
     ASSERT_EQ(stale.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_TRUE(stale.command.has_value());
     ASSERT_EQ(stale.command->error, ssg::CommandError::StaleRevision);
-    ASSERT_EQ(projectFrame(runtime, client, viewport)->semantic().sections().tabs.active,
+    ASSERT_EQ(projectFrame(runtime, viewport)->semantic().sections().tabs.active,
               beforeStale->semantic().sections().tabs.active);
 
-    auto closeBasis = projectFrame(runtime, client, viewport);
+    auto closeBasis = projectFrame(runtime, viewport);
     ASSERT_TRUE(closeBasis.has_value());
     if (!closeBasis) return;
-    auto close = runtime.input(
-        client,
-        ssg::TabPointerInput{{closeBasis->semantic().revision()}, scratchTab,
+    auto close = runtime.input(ssg::TabPointerInput{{closeBasis->semantic().revision()}, scratchTab,
                              ssg::InputPointerButton::Auxiliary});
     ASSERT_TRUE(close.command.has_value() && close.command->accepted());
-    auto afterClose = projectFrame(runtime, client, viewport);
+    auto afterClose = projectFrame(runtime, viewport);
     ASSERT_TRUE(afterClose.has_value());
     ASSERT_TRUE(std::none_of(
         afterClose->semantic().sections().tabs.tabs.begin(),
@@ -1873,117 +1643,96 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
         [&](const ssg::TabState& tab) { return tab.id == scratchTab; }));
 
     ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open", runtime.revision(), {}})
                     .accepted());
-    auto palette = projectFrame(runtime, client, viewport);
+    auto palette = projectFrame(runtime, viewport);
     ASSERT_TRUE(palette.has_value());
     if (!palette || !palette->semantic().sections().palette.activePicker) return;
     const auto activation = *palette->semantic().sections().palette.activePicker;
-    auto submit = runtime.input(
-        client,
-        ssg::PickerPointerInput{activation, "panel.toggle"});
+    auto submit = runtime.input(ssg::PickerPointerInput{activation, "panel.toggle"});
     ASSERT_TRUE(submit.command.has_value() && submit.command->accepted());
-    auto afterSubmit = projectFrame(runtime, client, viewport);
+    auto afterSubmit = projectFrame(runtime, viewport);
     ASSERT_TRUE(afterSubmit.has_value());
     ASSERT_FALSE(afterSubmit->semantic().sections().palette.activePicker.has_value());
     ASSERT_TRUE(afterSubmit->panel().has_value());
 
-    const auto& actionNodes =
-        afterSubmit->semantic().sections().uiFrame.state().nodes;
-    auto const actionNode = std::find_if(
-        actionNodes.begin(), actionNodes.end(), [](auto const& node) {
-            return node.leaf && node.leaf->command &&
-                   !node.leaf->command->empty();
-        });
-    ASSERT_TRUE(actionNode != actionNodes.end());
-    if (actionNode == actionNodes.end()) return;
+    const ssg::UiNode* actionNode = nullptr;
+    const auto findActionNode = [&](const auto& self,
+                                     const ssg::UiNode& node) -> void {
+        if (actionNode) return;
+        if (node.resolved && node.resolved->command &&
+            !node.resolved->command->empty()) {
+            actionNode = &node;
+            return;
+        }
+        if (const auto* container =
+                std::get_if<ssg::UiContainer>(&node.content)) {
+            for (const auto& child : container->children) self(self, child);
+        }
+    };
+    findActionNode(findActionNode,
+                    afterSubmit->semantic().sections().uiTree.root);
+    ASSERT_TRUE(actionNode != nullptr);
+    if (!actionNode) return;
     const auto revisionBeforeInvalid = runtime.revision();
-    auto invalidUiAction = runtime.dispatch(
-        client,
-        {"ui.activate", revisionBeforeInvalid,
+    auto invalidUiAction = runtime.dispatch({"ui.activate", revisionBeforeInvalid,
          ssg::UiNodeActivationArguments{
-             afterSubmit->semantic().sections().uiFrame.version().generation,
              ssg::UiNodeId{"missing.action"}}});
     ASSERT_FALSE(invalidUiAction.accepted());
     ASSERT_EQ(runtime.revision(), revisionBeforeInvalid);
 
-    auto publishedAction = runtime.dispatch(
-        client,
-        {"ui.activate", runtime.revision(),
-         ssg::UiNodeActivationArguments{
-             afterSubmit->semantic().sections().uiFrame.version().generation,
-             actionNode->id}});
+    auto publishedAction = runtime.dispatch({"ui.activate", runtime.revision(),
+         ssg::UiNodeActivationArguments{actionNode->id}});
     ASSERT_TRUE(publishedAction.accepted());
 
     for (auto target : {ssg::ScrollTarget::Document,
                         ssg::ScrollTarget::Tree}) {
-        auto scroll = runtime.input(
-            client, ssg::ScrollLinesInput{
+        auto scroll = runtime.input(ssg::ScrollLinesInput{
                         {runtime.revision()}, {target, 1}});
         ASSERT_TRUE(scroll.command.has_value() && scroll.command->accepted());
-        auto fraction = runtime.input(
-            client, ssg::ScrollFractionInput{
+        auto fraction = runtime.input(ssg::ScrollFractionInput{
                         {runtime.revision()}, {target, 0, 1}});
         ASSERT_TRUE(fraction.command.has_value() &&
                     fraction.command->accepted());
     }
 
     const auto beforeInvalidScroll = runtime.revision();
-    auto invalidScroll = runtime.input(
-        client, ssg::ScrollFractionInput{
+    auto invalidScroll = runtime.input(ssg::ScrollFractionInput{
                     {beforeInvalidScroll},
                     {ssg::ScrollTarget::Document, 2, 1}});
     ASSERT_EQ(invalidScroll.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_EQ(runtime.revision(), beforeInvalidScroll);
 
     ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"replace.open", runtime.revision(), {}})
+                    .dispatch({"replace.open", runtime.revision(), {}})
                     .accepted());
-    auto replace = projectFrame(runtime, client, viewport);
+    auto replace = projectFrame(runtime, viewport);
     ASSERT_TRUE(replace.has_value());
     if (!replace) return;
     const auto replacementNode =
         ssg::footerPromptControlNodeId("replace.replacement");
-    auto focusReplacement = runtime.dispatch(
-        client,
-        {"ui.activate", replace->semantic().revision(),
-         ssg::UiNodeActivationArguments{
-             replace->semantic().sections().uiFrame.version().generation,
-             replacementNode}});
+    auto focusReplacement = runtime.dispatch({"ui.activate", replace->semantic().revision(),
+         ssg::UiNodeActivationArguments{replacementNode}});
     ASSERT_TRUE(focusReplacement.accepted());
-    auto focused = projectFrame(runtime, client, viewport);
+    auto focused = projectFrame(runtime, viewport);
     ASSERT_TRUE(focused.has_value());
     if (focused) {
-        const auto& nodes =
-            focused->semantic().sections().uiFrame.state().nodes;
-        const auto replacement = std::find_if(
-            nodes.begin(), nodes.end(), [&](const ssg::UiNodeState& node) {
-                return node.id == replacementNode;
-            });
-        ASSERT_TRUE(replacement != nodes.end());
-        if (replacement != nodes.end()) {
-            ASSERT_TRUE(replacement->leaf.has_value());
-            ASSERT_EQ(replacement->leaf->active, std::optional<bool>{true});
+        const auto* replacement = ssg::findUiNode(
+            focused->semantic().sections().uiTree, replacementNode);
+        ASSERT_TRUE(replacement != nullptr);
+        if (replacement) {
+            ASSERT_TRUE(replacement->resolved.has_value());
+            ASSERT_EQ(replacement->resolved->active, std::optional<bool>{true});
         }
-        const auto missing = runtime.dispatch(
-            client,
-            {"ui.activate", runtime.revision(),
+        const auto missing = runtime.dispatch({"ui.activate", runtime.revision(),
              ssg::UiNodeActivationArguments{
-                 focused->semantic().sections().uiFrame.version().generation,
                  ssg::UiNodeId{"missing.control"}}});
         ASSERT_FALSE(missing.accepted());
         ASSERT_TRUE(runtime
-                        .dispatch(client,
-                                  {"prompt.cancel", runtime.revision(), {}})
+                        .dispatch({"prompt.cancel", runtime.revision(), {}})
                         .accepted());
-        const auto hidden = runtime.dispatch(
-            client,
-            {"ui.activate", runtime.revision(),
-             ssg::UiNodeActivationArguments{
-                 focused->semantic().sections().uiFrame.version().generation,
-                 replacementNode}});
+        const auto hidden = runtime.dispatch({"ui.activate", runtime.revision(),
+             ssg::UiNodeActivationArguments{replacementNode}});
         ASSERT_FALSE(hidden.accepted());
     }
 }
@@ -1992,7 +1741,7 @@ TEST(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity) {
     auto runtime = followPauseRuntime("a\xC3\xA9z\n");
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    auto snapshot = runtime->snapshot(ssg::ClientId{1});
+    auto snapshot = runtime->snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot || !snapshot->sections().tabs.active) return;
     const auto basis = ssg::SemanticInputBasis{runtime->revision()};
@@ -2008,10 +1757,9 @@ TEST(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity) {
     const auto beforeRevision = runtime->revision();
     const auto expectRejected = [&](ssg::ViewTransitionInput input) {
         const auto result =
-            runtime->input(ssg::ClientId{1},
-                           ssg::ClientInput{std::move(input)});
+            runtime->input(ssg::ClientInput{std::move(input)});
         ASSERT_EQ(result.outcome, ssg::ClientInputOutcome::Rejected);
-        const auto after = runtime->snapshot(ssg::ClientId{1});
+        const auto after = runtime->snapshot();
         ASSERT_TRUE(after.has_value());
         if (after) {
             ASSERT_EQ(after->sections().selection, beforeSelection);
@@ -2045,9 +1793,9 @@ TEST(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity) {
     expectRejected(insideCodePoint);
 
     const auto accepted =
-        runtime->input(ssg::ClientId{1}, ssg::ClientInput{valid});
+        runtime->input(ssg::ClientInput{valid});
     ASSERT_EQ(accepted.outcome, ssg::ClientInputOutcome::Dispatched);
-    const auto after = runtime->snapshot(ssg::ClientId{1});
+    const auto after = runtime->snapshot();
     ASSERT_TRUE(after.has_value());
     if (after) {
         ASSERT_EQ(after->sections().selection.primary().anchor.byteOffset,
@@ -2055,11 +1803,6 @@ TEST(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity) {
         ASSERT_EQ(after->sections().selection.primary().active.byteOffset,
                   ssg::ByteOffset{3});
     }
-
-    ASSERT_TRUE(runtime->detach(ssg::ClientId{1}));
-    ASSERT_EQ(
-        runtime->input(ssg::ClientId{1}, ssg::ClientInput{valid}).outcome,
-        ssg::ClientInputOutcome::Rejected);
 }
 
 TEST(documentPointerInputOwnsSelectionGesturePolicy) {
@@ -2071,27 +1814,20 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    const ssg::ClientId client{1};
     ASSERT_TRUE(runtime
-                    .attach({client, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(client, {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                        std::string{"words.txt"}})
                     .accepted());
 
-    auto press = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto press = runtime.input(ssg::DocumentPointerInput{
                     {runtime.revision()}, ssg::ByteOffset{1}});
     ASSERT_TRUE(press.command.has_value() && press.command->accepted());
-    auto move = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto move = runtime.input(ssg::DocumentPointerInput{
                     {runtime.revision()}, ssg::ByteOffset{9}, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move});
     ASSERT_TRUE(move.command.has_value() && move.command->accepted());
-    auto snapshot = runtime.snapshot(client);
+    auto snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
@@ -2099,31 +1835,27 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
     ASSERT_EQ(snapshot->sections().selection.primary().active.byteOffset,
               ssg::ByteOffset{9});
 
-    auto release = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto release = runtime.input(ssg::DocumentPointerInput{
                     {runtime.revision()}, std::nullopt, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Release});
     ASSERT_EQ(release.outcome, ssg::ClientInputOutcome::Dispatched);
-    auto strayMove = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto strayMove = runtime.input(ssg::DocumentPointerInput{
                     {runtime.revision()}, ssg::ByteOffset{4}, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move});
     ASSERT_EQ(strayMove.outcome, ssg::ClientInputOutcome::Unhandled);
 
     ASSERT_TRUE(runtime
-                    .input(client, ssg::DocumentPointerInput{
+                    .input(ssg::DocumentPointerInput{
                                        {runtime.revision()},
                                        ssg::ByteOffset{3}})
                     .command->accepted());
-    auto stalePress = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto stalePress = runtime.input(ssg::DocumentPointerInput{
                     {ssg::Revision{runtime.revision().value() - 1}},
                     ssg::ByteOffset{4}});
     ASSERT_EQ(stalePress.outcome, ssg::ClientInputOutcome::Rejected);
-    auto moveAfterStalePress = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto moveAfterStalePress = runtime.input(ssg::DocumentPointerInput{
                     {runtime.revision()}, ssg::ByteOffset{5}, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move});
@@ -2131,19 +1863,17 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
               ssg::ClientInputOutcome::Unhandled);
 
     ASSERT_TRUE(runtime
-                    .input(client, ssg::DocumentPointerInput{
+                    .input(ssg::DocumentPointerInput{
                                        {runtime.revision()},
                                        ssg::ByteOffset{3}})
                     .command->accepted());
-    auto staleCancel = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto staleCancel = runtime.input(ssg::DocumentPointerInput{
                     {ssg::Revision{runtime.revision().value() - 1}},
                     std::nullopt, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Cancel});
     ASSERT_EQ(staleCancel.outcome, ssg::ClientInputOutcome::Rejected);
-    auto moveAfterStaleCancel = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto moveAfterStaleCancel = runtime.input(ssg::DocumentPointerInput{
                     {runtime.revision()}, ssg::ByteOffset{5}, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move});
@@ -2151,8 +1881,7 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
               ssg::ClientInputOutcome::Unhandled);
 
     ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"cursor.set_position", runtime.revision(),
+                    .dispatch({"cursor.set_position", runtime.revision(),
                                ssg::SelectionCommandArguments{
                                    ssg::SelectionNavigator::resolvePosition(
                                        runtime.activeDocumentText(),
@@ -2164,28 +1893,25 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
     ASSERT_TRUE(second.has_value());
     if (!second) return;
     ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"select.add_range", runtime.revision(),
+                    .dispatch({"select.add_range", runtime.revision(),
                                ssg::SelectionCommandArguments{
                                    std::nullopt,
                                    ssg::Selection{*second, *second}}})
                     .accepted());
-    auto toggle = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto toggle = runtime.input(ssg::DocumentPointerInput{
                     {runtime.revision()}, ssg::ByteOffset{2}, true});
     ASSERT_TRUE(toggle.command.has_value() && toggle.command->accepted());
-    snapshot = runtime.snapshot(client);
+    snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().selection.items().size(), std::size_t{1});
     ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
               ssg::ByteOffset{12});
 
-    auto word = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto word = runtime.input(ssg::DocumentPointerInput{
                     {runtime.revision()}, ssg::ByteOffset{7}, false, true});
     ASSERT_TRUE(word.command.has_value() && word.command->accepted());
-    snapshot = runtime.snapshot(client);
+    snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().selection.primary().lower().byteOffset,
@@ -2194,18 +1920,16 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
               ssg::ByteOffset{10});
 
     ASSERT_TRUE(runtime
-                    .input(client, ssg::DocumentPointerInput{
+                    .input(ssg::DocumentPointerInput{
                                        {runtime.revision()},
                                        ssg::ByteOffset{0}})
                     .command->accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"text.insert", runtime.revision(),
+                    .dispatch({"text.insert", runtime.revision(),
                                ssg::TextInputArguments{"X"}})
                     .accepted());
     const auto editedDocumentRevision = runtime.revision();
-    auto editedDocumentMove = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto editedDocumentMove = runtime.input(ssg::DocumentPointerInput{
                     {editedDocumentRevision}, ssg::ByteOffset{1}, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move});
@@ -2214,17 +1938,15 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
     ASSERT_EQ(runtime.revision(), editedDocumentRevision);
 
     ASSERT_TRUE(runtime
-                    .input(client, ssg::DocumentPointerInput{
+                    .input(ssg::DocumentPointerInput{
                                        {runtime.revision()},
                                        ssg::ByteOffset{0}})
                     .command->accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"file.new", runtime.revision(), {}})
+                    .dispatch({"file.new", runtime.revision(), {}})
                     .accepted());
     const auto changedDocumentRevision = runtime.revision();
-    auto changedDocumentMove = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto changedDocumentMove = runtime.input(ssg::DocumentPointerInput{
                     {changedDocumentRevision}, ssg::ByteOffset{0}, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move});
@@ -2243,31 +1965,24 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    const ssg::ClientId client{1};
     ssg::GridPresenter presenter{ssg::ViewId{1}};
     ASSERT_TRUE(runtime
-                    .attach({client, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(client, {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                        std::string{"lines.txt"}})
                     .accepted());
-    auto frame = presenter.project(runtime, client, {{20, 4}, {}});
+    auto frame = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    const auto noGesture = runtime.input(
-        client,
-        ssg::ViewTransitionInput{
+    const auto noGesture = runtime.input(ssg::ViewTransitionInput{
             {runtime.revision()},
             ssg::PointerSelectionTransition{ssg::ByteOffset{1}}});
     ASSERT_EQ(noGesture.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_TRUE(runtime
-                    .input(client, ssg::DocumentPointerInput{
+                    .input(ssg::DocumentPointerInput{
                                        {runtime.revision()},
                                        ssg::ByteOffset{1}})
                     .command->accepted());
-    frame = presenter.project(runtime, client, {{20, 4}, {}});
+    frame = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto invalidEdge = presenter.apply(
@@ -2278,8 +1993,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
 
     for (const auto expected :
          {ssg::ByteOffset{4}, ssg::ByteOffset{7}, ssg::ByteOffset{10}}) {
-        auto edge = runtime.input(
-            client, ssg::DocumentPointerInput{
+        auto edge = runtime.input(ssg::DocumentPointerInput{
                         {runtime.revision()}, std::nullopt, false, false,
                         ssg::InputPointerButton::Primary,
                         ssg::InputPointerPhase::Move,
@@ -2300,9 +2014,9 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
         ASSERT_FALSE(
             presenter.apply(*edge.command->viewAction, *frame).accepted());
         if (!applied.transition) return;
-        ASSERT_EQ(runtime.input(client, *applied.transition).outcome,
+        ASSERT_EQ(runtime.input(*applied.transition).outcome,
                   ssg::ClientInputOutcome::Dispatched);
-        auto snapshot = presenter.project(runtime, client, {{20, 4}, {}});
+        auto snapshot = presenter.project(runtime, {{20, 4}, {}});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
@@ -2311,8 +2025,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
                   expected);
         frame = std::move(snapshot);
     }
-    auto beforeEdge = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto beforeEdge = runtime.input(ssg::DocumentPointerInput{
                     {runtime.revision()}, std::nullopt, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move,
@@ -2326,9 +2039,9 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
         presenter.apply(*beforeEdge.command->viewAction, *frame);
     ASSERT_TRUE(beforeApplied.transition.has_value());
     if (!beforeApplied.transition) return;
-    ASSERT_EQ(runtime.input(client, *beforeApplied.transition).outcome,
+    ASSERT_EQ(runtime.input(*beforeApplied.transition).outcome,
               ssg::ClientInputOutcome::Dispatched);
-    auto snapshot = presenter.project(runtime, client, {{20, 4}, {}});
+    auto snapshot = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
         ASSERT_EQ(snapshot->sections().selection.primary().active.byteOffset,
@@ -2348,24 +2061,18 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    const ssg::ClientId client{1};
     ASSERT_TRUE(runtime
-                    .attach({client, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch(client, {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                        std::string{"lines.txt"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .input(client, ssg::DocumentPointerInput{
+                    .input(ssg::DocumentPointerInput{
                                        {runtime.revision()},
                                        ssg::ByteOffset{1}})
                     .command->accepted());
     ASSERT_EQ(
         runtime
-            .input(client,
-                   ssg::DocumentPointerInput{
+            .input(ssg::DocumentPointerInput{
                        {runtime.revision()}, std::nullopt, false, false,
                        ssg::InputPointerButton::Primary,
                        ssg::InputPointerPhase::Release})
@@ -2376,26 +2083,23 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
     ASSERT_TRUE(second.has_value());
     if (!second) return;
     ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"select.add_range", runtime.revision(),
+                    .dispatch({"select.add_range", runtime.revision(),
                                ssg::SelectionCommandArguments{
                                    std::nullopt,
                                    ssg::Selection{*second, *second}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .input(client,
-                           ssg::DocumentPointerInput{
+                    .input(ssg::DocumentPointerInput{
                                {runtime.revision()}, ssg::ByteOffset{10}, true})
                     .command->accepted());
 
     ssg::GridPresenter presenter{ssg::ViewId{1}};
-    auto frame = presenter.project(runtime, client, {{20, 4}, {}});
+    auto frame = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto baseline = frame->sections().selection.items();
     ASSERT_EQ(baseline.size(), std::size_t{3});
-    auto edge = runtime.input(
-        client, ssg::DocumentPointerInput{
+    auto edge = runtime.input(ssg::DocumentPointerInput{
                     {runtime.revision()}, std::nullopt, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move,
@@ -2405,9 +2109,9 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
     auto applied = presenter.apply(*edge.command->viewAction, *frame);
     ASSERT_TRUE(applied.transition.has_value());
     if (!applied.transition) return;
-    ASSERT_EQ(runtime.input(client, *applied.transition).outcome,
+    ASSERT_EQ(runtime.input(*applied.transition).outcome,
               ssg::ClientInputOutcome::Dispatched);
-    frame = presenter.project(runtime, client, {{20, 4}, {}});
+    frame = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto& selections = frame->sections().selection.items();
@@ -2425,12 +2129,7 @@ TEST(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    const ssg::ClientId client{1};
-    ASSERT_TRUE(runtime
-                    .attach({client, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
-    auto snapshot = runtime.snapshot(client);
+    auto snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
@@ -2450,10 +2149,9 @@ TEST(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath) {
     }
 
     ASSERT_TRUE(runtime
-                    .dispatch(client,
-                              {"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open", runtime.revision(), {}})
                     .accepted());
-    auto presented = projectFrame(runtime, client, {80, 24});
+    auto presented = projectFrame(runtime, {80, 24});
     ASSERT_TRUE(presented.has_value());
     if (!presented) return;
     std::map<std::string, std::string> paletteCandidates;
@@ -2501,137 +2199,125 @@ TEST(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath) {
             self(self, child);
         }
     };
-    inspectNode(inspectNode, snapshot->sections().uiFrame.schema().root);
+    inspectNode(inspectNode, snapshot->sections().uiTree.root);
     ASSERT_TRUE(publishedActions > 0);
 }
 
 TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
-    for (auto const origin : {ssg::InvocationOrigin::InProcess}) {
-        auto root = uniqueRoot();
-        auto created = ssg::EditorSession::create(
-            {root / "workspace", root / "scratch", root / "recovery"});
-        ASSERT_TRUE(created.accepted());
-        if (!created.accepted()) return;
-        auto& runtime = *created.session;
-        std::optional<ssg::PickerActivation> nestedActivation;
-        auto const failureCommand = runtime.registerCommand(
-            ssg::CommandSpecBuilder{"test.picker_failure"}
-                .owner("test")
-                .summary("Picker failure")
-                .mutates()
-                .handler([](ssg::CommandContext&) {
-                    return ssg::CommandHandlerResult::failure("expected failure");
-                }));
-        ASSERT_TRUE(failureCommand.valid());
-        auto const nestedFailure = runtime.registerCommand(
-            ssg::CommandSpecBuilder{"test.picker_nested_failure"}
-                .owner("test")
-                .summary("Picker nested failure")
-                .mutates()
-                .handler([](ssg::CommandContext&) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorSession::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+    std::optional<ssg::PickerActivation> nestedActivation;
+    auto const failureCommand = runtime.registerCommand(
+        ssg::CommandSpecBuilder{"test.picker_failure"}
+            .owner("test")
+            .summary("Picker failure")
+            .mutates()
+            .handler([](ssg::CommandContext&) {
+                return ssg::CommandHandlerResult::failure("expected failure");
+            }));
+    ASSERT_TRUE(failureCommand.valid());
+    auto const nestedFailure = runtime.registerCommand(
+        ssg::CommandSpecBuilder{"test.picker_nested_failure"}
+            .owner("test")
+            .summary("Picker nested failure")
+            .mutates()
+            .handler([](ssg::CommandContext&) {
+                return ssg::CommandHandlerResult::failure(
+                    "expected nested failure");
+            }));
+    ASSERT_TRUE(nestedFailure.valid());
+    auto const deferringCommand = runtime.registerCommand(
+        ssg::CommandSpecBuilder{"test.picker_defers_failure"}
+            .owner("test")
+            .summary("Picker defers failure")
+            .mutates()
+            .handler([&runtime](ssg::CommandContext& context) {
+                if (!runtime.deferDispatch({"test.picker_nested_failure", context.revision(),
+                         {}})) {
                     return ssg::CommandHandlerResult::failure(
-                        "expected nested failure");
-                }));
-        ASSERT_TRUE(nestedFailure.valid());
-        auto const deferringCommand = runtime.registerCommand(
-            ssg::CommandSpecBuilder{"test.picker_defers_failure"}
-                .owner("test")
-                .summary("Picker defers failure")
-                .mutates()
-                .handler([&runtime](ssg::CommandContext& context) {
-                    if (!runtime.deferDispatch(
-                            ssg::ClientId{1},
-                            {"test.picker_nested_failure", context.revision(),
-                             {}})) {
-                        return ssg::CommandHandlerResult::failure(
-                            "could not defer nested failure");
-                    }
-                    return ssg::CommandHandlerResult::success();
-                }));
-        ASSERT_TRUE(deferringCommand.valid());
-        auto const nestedSubmit = runtime.registerCommand(
-            ssg::CommandSpecBuilder{"test.picker_defers_submit"}
-                .owner("test")
-                .summary("Picker defers another submit")
-                .mutates()
-                .handler([&runtime, &nestedActivation](
-                             ssg::CommandContext& context) {
-                    if (!nestedActivation) {
-                        return ssg::CommandHandlerResult::failure(
-                            "picker activation was not captured");
-                    }
-                    if (!runtime.deferDispatch(
-                            ssg::ClientId{1},
-                            {"picker.submit", context.revision(),
-                             ssg::PickerSubmitArguments{
-                                 *nestedActivation, "panel.toggle"}})) {
-                        return ssg::CommandHandlerResult::failure(
-                            "could not defer nested picker submit");
-                    }
-                    return ssg::CommandHandlerResult::success();
-                }));
-        ASSERT_TRUE(nestedSubmit.valid());
-        ASSERT_TRUE(runtime
-                        .attach({ssg::ClientId{1}, origin}, ssg::ViewId{1})
-                        .accepted());
-        ASSERT_TRUE(runtime
-                        .dispatch(ssg::ClientId{1},
-                                  {"palette.open", runtime.revision(), {}})
-                        .accepted());
-        auto opened =
-            projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-        ASSERT_TRUE(opened.has_value());
-        if (!opened) return;
-        nestedActivation = opened->semantic().sections().palette.activePicker;
-        ASSERT_TRUE(nestedActivation.has_value());
-        ASSERT_FALSE(
-            runtime
-                .dispatch(ssg::ClientId{1},
-                          {"picker.submit", runtime.revision(),
-                           pickerSubmit(runtime, ssg::SearchMode::Command,
-                                        "test.picker_failure")})
-                .accepted());
-        auto snapshot =
-            projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-        ASSERT_TRUE(snapshot.has_value());
-        if (!snapshot) return;
-        ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
-                    std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
-        ASSERT_TRUE(snapshot->semantic().sections().uiFrame.effectiveFocus() ==
-                    ssg::FocusTarget::Prompt);
+                        "could not defer nested failure");
+                }
+                return ssg::CommandHandlerResult::success();
+            }));
+    ASSERT_TRUE(deferringCommand.valid());
+    auto const nestedSubmit = runtime.registerCommand(
+        ssg::CommandSpecBuilder{"test.picker_defers_submit"}
+            .owner("test")
+            .summary("Picker defers another submit")
+            .mutates()
+            .handler([&runtime, &nestedActivation](
+                         ssg::CommandContext& context) {
+                if (!nestedActivation) {
+                    return ssg::CommandHandlerResult::failure(
+                        "picker activation was not captured");
+                }
+                if (!runtime.deferDispatch({"picker.submit", context.revision(),
+                         ssg::PickerSubmitArguments{
+                             *nestedActivation, "panel.toggle"}})) {
+                    return ssg::CommandHandlerResult::failure(
+                        "could not defer nested picker submit");
+                }
+                return ssg::CommandHandlerResult::success();
+            }));
+    ASSERT_TRUE(nestedSubmit.valid());
+    ASSERT_TRUE(runtime
+                    .dispatch({"palette.open", runtime.revision(), {}})
+                    .accepted());
+    auto opened =
+        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(opened.has_value());
+    if (!opened) return;
+    nestedActivation = opened->semantic().sections().palette.activePicker;
+    ASSERT_TRUE(nestedActivation.has_value());
+    ASSERT_FALSE(
+        runtime
+            .dispatch({"picker.submit", runtime.revision(),
+                       pickerSubmit(runtime, ssg::SearchMode::Command,
+                                    "test.picker_failure")})
+            .accepted());
+    auto snapshot =
+        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
+                std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
+    ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree) ==
+                ssg::FocusTarget::Prompt);
 
-        ASSERT_FALSE(
-            runtime
-                .dispatch(ssg::ClientId{1},
-                          {"picker.submit", runtime.revision(),
-                           pickerSubmit(runtime, ssg::SearchMode::Command,
-                                        "test.picker_defers_submit")})
-                .accepted());
-        snapshot =
-            projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-        ASSERT_TRUE(snapshot.has_value());
-        if (!snapshot) return;
-        ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
-                    std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
-        ASSERT_TRUE(snapshot->semantic().sections().uiFrame.effectiveFocus() ==
-                    ssg::FocusTarget::Prompt);
+    ASSERT_FALSE(
+        runtime
+            .dispatch({"picker.submit", runtime.revision(),
+                       pickerSubmit(runtime, ssg::SearchMode::Command,
+                                    "test.picker_defers_submit")})
+            .accepted());
+    snapshot =
+        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
+                std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
+    ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree) ==
+                ssg::FocusTarget::Prompt);
 
-        ASSERT_FALSE(
-            runtime
-                .dispatch(ssg::ClientId{1},
-                          {"picker.submit", runtime.revision(),
-                           pickerSubmit(runtime, ssg::SearchMode::Command,
-                                        "test.picker_defers_failure")})
-                .accepted());
-        snapshot =
-            projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-        ASSERT_TRUE(snapshot.has_value());
-        if (!snapshot) return;
-        ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
-                    std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
-        ASSERT_TRUE(snapshot->semantic().sections().uiFrame.effectiveFocus() ==
-                    ssg::FocusTarget::Prompt);
-    }
+    ASSERT_FALSE(
+        runtime
+            .dispatch({"picker.submit", runtime.revision(),
+                       pickerSubmit(runtime, ssg::SearchMode::Command,
+                                    "test.picker_defers_failure")})
+            .accepted());
+    snapshot =
+        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
+                std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
+    ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree) ==
+                ssg::FocusTarget::Prompt);
+
 }
 
 TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
@@ -2642,23 +2328,15 @@ TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
         if (!created.accepted()) return;
         auto& runtime = *created.session;
         ASSERT_TRUE(runtime
-                        .attach({ssg::ClientId{1},
-                                 ssg::InvocationOrigin::InProcess},
-                                ssg::ViewId{1})
-                        .accepted());
-        ASSERT_TRUE(runtime
-                        .dispatch(ssg::ClientId{1},
-                                  {"file.open", runtime.revision(),
+                        .dispatch({"file.open", runtime.revision(),
                                    std::string{"needle.txt"}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        .dispatch(ssg::ClientId{1},
-                                  {"palette.open", runtime.revision(), {}})
+                        .dispatch({"palette.open", runtime.revision(), {}})
                         .accepted());
         ASSERT_TRUE(
             runtime
-                .dispatch(ssg::ClientId{1},
-                          {"picker.submit", runtime.revision(),
+                .dispatch({"picker.submit", runtime.revision(),
                            pickerSubmit(runtime, ssg::SearchMode::Command,
                                         "file_finder.open")})
                 .accepted());
@@ -2670,7 +2348,7 @@ TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
                     std::optional<ssg::SearchMode>{ssg::SearchMode::File});
         ASSERT_TRUE(snapshot->semantic().sections().promptStatus.activeKind ==
                     std::optional<ssg::PromptKind>{ssg::PromptKind::Palette});
-        ASSERT_TRUE(snapshot->semantic().sections().uiFrame.effectiveFocus() ==
+        ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree) ==
                     ssg::FocusTarget::Prompt);
 }
 
@@ -2681,14 +2359,8 @@ TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(
-        runtime
-            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                    ssg::ViewId{1})
-            .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open", runtime.revision(), {}})
                     .accepted());
     auto before =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -2698,8 +2370,7 @@ TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
 
     ASSERT_TRUE(
         runtime
-            .dispatch(ssg::ClientId{1},
-                      {"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit", runtime.revision(),
                        ssg::PickerSubmitArguments{first, "palette.open"}})
             .accepted());
     auto after =
@@ -2709,7 +2380,7 @@ TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
     ASSERT_TRUE(after->semantic().sections().palette.activePicker->mode ==
                 ssg::SearchMode::Command);
     ASSERT_FALSE(after->semantic().sections().palette.activePicker->id == first.id);
-    ASSERT_TRUE(after->semantic().sections().uiFrame.effectiveFocus() ==
+    ASSERT_TRUE(ssg::effectiveUiFocus(after->semantic().sections().uiTree) ==
                 ssg::FocusTarget::Prompt);
 }
 
@@ -2719,21 +2390,20 @@ TEST(paletteExecuteValidatesCandidateMembership) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"needle.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(), std::string{"needle.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}}).accepted());
 
     // A command outside the published candidate set is rejected before dispatch.
-    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1}, {"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"not.a.command"}}).accepted());
+    ASSERT_FALSE(runtime.dispatch({"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"not.a.command"}}).accepted());
     // Missing the id payload is rejected.
-    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1}, {"palette.execute", runtime.revision(), {}}).accepted());
+    ASSERT_FALSE(runtime.dispatch({"palette.execute", runtime.revision(), {}}).accepted());
     // A published command id validates, executes server-side, and closes the palette.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"file.save"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"file.save"}}).accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->semantic().sections().uiFrame.effectiveFocus(),
+    ASSERT_EQ(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree),
               ssg::FocusTarget::Editor);
 }
 
@@ -2743,8 +2413,7 @@ TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}}).accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -2796,14 +2465,13 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     // Show the panel; a 12-row terminal gives a panel content height of ~9.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle", runtime.revision(), {}}).accepted());
     // Select the workspace root and expand it so its 40 files become visible.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select_next", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.activate", runtime.revision(), {}}).accepted());
     const ssg::ViewportDimensions dims{80, 12};
-    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
+    ssg::test::GridTestView grid{ssg::ViewId{1}, dims};
 
     // Baseline: selection at the top (root), window pinned to the top with a live
     // thumb.
@@ -2826,7 +2494,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
 
     // Move the selection to the bottom: the window scrolls to keep it shown.
     for (int i = 0; i < 60; ++i) {
-        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
+        ASSERT_TRUE(runtime.dispatch({"tree.select_next", runtime.revision(), {}}).accepted());
     }
     std::uint32_t deepFirst = 0;
     {
@@ -2858,7 +2526,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
 
     // Move back up to the top: the window scrolls back to first_visible == 0.
     for (int i = 0; i < 40; ++i) {
-        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_previous", runtime.revision(), {}}).accepted());
+        ASSERT_TRUE(runtime.dispatch({"tree.select_previous", runtime.revision(), {}}).accepted());
     }
     {
         auto snap = grid.present(runtime);
@@ -2888,12 +2556,10 @@ TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle", runtime.revision(), {}}).accepted());
     // Expand the workspace root so its files become visible/selectable nodes.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select_next", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.activate", runtime.revision(), {}}).accepted());
 
     const ssg::ViewportDimensions dims{80, 24};
     auto snap = projectFrame(runtime, dims);
@@ -2905,8 +2571,7 @@ TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
     // Pick a node that is NOT already selected (the third visible node).
     auto const target = nodes[2].node.id;
 
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"tree.select", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"tree.select", runtime.revision(),
                                   ssg::TreeSelectArguments{target}}).accepted());
     auto after = projectFrame(runtime, dims);
     ASSERT_TRUE(after.has_value());
@@ -2915,11 +2580,9 @@ TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
     ASSERT_EQ(*after->semantic().sections().tree.providers.front().selected, target);
 
     // An id absent from the active provider is rejected; a missing payload too.
-    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
-                                  {"tree.select", runtime.revision(),
+    ASSERT_FALSE(runtime.dispatch({"tree.select", runtime.revision(),
                                    ssg::TreeSelectArguments{ssg::TreeNodeId{"nope"}}}).accepted());
-    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
-                                  {"tree.select", runtime.revision(), {}}).accepted());
+    ASSERT_FALSE(runtime.dispatch({"tree.select", runtime.revision(), {}}).accepted());
     // The selection is unchanged after the rejected attempts.
     auto again = projectFrame(runtime, dims);
     ASSERT_TRUE(again.has_value());
@@ -2941,19 +2604,17 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = projectFrame(runtime, dims);
-        return snap ? snap->semantic().sections().uiFrame.effectiveFocus()
+        return snap ? ssg::effectiveUiFocus(snap->semantic().sections().uiTree)
                     : ssg::FocusTarget::Editor;
     };
     // Showing the panel now focuses it (QOL); expand the root so a directory node
     // and a file node are both visible/selectable.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select_next", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.activate", runtime.revision(), {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     auto snap = projectFrame(runtime, dims);
@@ -2971,20 +2632,18 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
 
     // The file click pair [tree.select, tree.activate] ends on the editor (the
     // file opens, so tree.activate's focus_editor wins over tree.select's panel).
-    ASSERT_TRUE(runtime.dispatch(
-        ssg::ClientId{1},
-        {"tree.activate_node", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"tree.activate_node", runtime.revision(),
          ssg::TreeSelectArguments{*fileId}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // From editor focus, tree.select alone moves keyboard focus to the panel.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*fileId}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select", runtime.revision(), ssg::TreeSelectArguments{*fileId}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     // The directory click pair ends on the panel (tree.select focuses the panel,
     // tree.activate toggles the directory and leaves focus alone).
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*dirId}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select", runtime.revision(), ssg::TreeSelectArguments{*dirId}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.activate", runtime.revision(), {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     std::filesystem::remove_all(root);
 }
@@ -3005,29 +2664,19 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{2}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{2}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle", runtime.revision(), {}}).accepted());
     // Expand the root so the 40 files become a tree taller than a short panel.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select_next", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.activate", runtime.revision(), {}}).accepted());
     const ssg::ViewportDimensions dims{80, 12};
-    ssg::test::GridTestView firstGrid{
-        ssg::ClientId{1}, ssg::ViewId{1}, dims};
-    ssg::test::GridTestView secondGrid{
-        ssg::ClientId{2}, ssg::ViewId{2}, dims};
+    ssg::test::GridTestView firstGrid{ssg::ViewId{1}, dims};
 
     auto baseline = firstGrid.present(runtime);
-    auto otherView = secondGrid.present(runtime);
     ASSERT_TRUE(baseline.has_value());
-    ASSERT_TRUE(otherView.has_value());
-    if (!baseline || !otherView) return;
+    if (!baseline) return;
     auto const& p0 = baseline->sections().tree.providers.front();
     ASSERT_TRUE(baseline->panel().has_value());
-    ASSERT_TRUE(otherView->panel().has_value());
-    if (!baseline->panel() || !otherView->panel()) return;
+    if (!baseline->panel()) return;
     auto const& w0 = *baseline->panel();
     ASSERT_EQ(w0.firstVisible, std::uint32_t{0});
     ASSERT_TRUE(w0.scrollbar.maximumFirstRow > 0);
@@ -3044,12 +2693,6 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(scrolled->panel().has_value());
     if (!scrolled->panel()) return;
     ASSERT_EQ(scrolled->panel()->firstVisible, std::uint32_t{3});
-    otherView = secondGrid.present(runtime);
-    ASSERT_TRUE(otherView.has_value());
-    if (!otherView) return;
-    ASSERT_TRUE(otherView->panel().has_value());
-    if (!otherView->panel()) return;
-    ASSERT_EQ(otherView->panel()->firstVisible, std::uint32_t{0});
     ASSERT_EQ(p1.selected, selectedBefore);  // selection unchanged
 
     // Wheel up past the top clamps at 0.
@@ -3079,8 +2722,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
 
     for (int i = 0; i < 60; ++i) {
         ASSERT_TRUE(runtime
-                        .dispatch(ssg::ClientId{1},
-                                  {"tree.select_next", runtime.revision(), {}})
+                        .dispatch({"tree.select_next", runtime.revision(), {}})
                         .accepted());
     }
     auto selectedAtBottom = firstGrid.present(runtime);
@@ -3112,8 +2754,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
         }));
 
     // A missing payload is rejected.
-    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
-                                  {"tree.scroll", runtime.revision(), {}}).accepted());
+    ASSERT_FALSE(runtime.dispatch({"tree.scroll", runtime.revision(), {}}).accepted());
     std::filesystem::remove_all(root);
 }
 
@@ -3137,14 +2778,11 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"file.open", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(),
                                   std::string{"long.txt"}}).accepted());
 
     ssg::ViewportDimensions const dims{24, 6};
-    ssg::test::GridTestView grid{ssg::ClientId{1}, ssg::ViewId{1}, dims};
+    ssg::test::GridTestView grid{ssg::ViewId{1}, dims};
     // Prime the pane-size cache the reveal path reads.
     auto primed = grid.present(runtime);
     ASSERT_TRUE(primed.has_value());
@@ -3153,8 +2791,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
 
     // Move the caret to the end of the long line: it is past the pane width, so
     // the viewport scrolls horizontally to keep it visible.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"cursor.line_end", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"cursor.line_end", runtime.revision(), {}})
                     .accepted());
     auto scrolled = grid.present(runtime);
     ASSERT_TRUE(scrolled.has_value());
@@ -3166,8 +2803,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     ASSERT_TRUE(60u < offset + dims.columns);
 
     // Returning to the line start resets the horizontal offset to zero.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"cursor.line_start", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"cursor.line_start", runtime.revision(), {}})
                     .accepted());
     auto reset = grid.present(runtime);
     ASSERT_TRUE(reset.has_value());
@@ -3194,10 +2830,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"file.open", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(),
                                   std::string{"wide.txt"}}).accepted());
     ssg::ViewportDimensions const dims{80, 24};
 
@@ -3216,8 +2849,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
 
     // Word wrap ON: the 200-cell line wraps into ceil(200/80) = 3 visual rows, so
     // the total exceeds the OFF total and logical line 0 spans >1 row.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"view.toggle_word_wrap", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"view.toggle_word_wrap", runtime.revision(), {}})
                     .accepted());
     auto on = projectFrame(runtime, dims);
     ASSERT_TRUE(on.has_value());
@@ -3229,8 +2861,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     }
     ASSERT_EQ(onRowsForLine0, std::uint32_t{3});  // 200 cells / 80 -> 3 rows
     // Wrapped lines never scroll horizontally.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"cursor.line_end", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"cursor.line_end", runtime.revision(), {}})
                     .accepted());
     auto wrappedEnd = projectFrame(runtime, dims);
     ASSERT_TRUE(wrappedEnd.has_value());
@@ -3261,17 +2892,12 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"file.open", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(),
                                   std::string{"doc.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"view.toggle_word_wrap", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"view.toggle_word_wrap", runtime.revision(), {}})
                     .accepted());
     ssg::ViewportDimensions const dims{80, 24};
-    ssg::test::GridTestView grid{
-        ssg::ClientId{1}, ssg::ViewId{1}, dims};
+    ssg::test::GridTestView grid{ssg::ViewId{1}, dims};
     (void)grid.present(runtime);
 
     // Two identical wrap snapshots: the second re-shapes nothing from the
@@ -3285,79 +2911,12 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
 
     // An edit bumps the document revision, so the whole document is re-shaped:
     // the count jumps well past the cached-snapshot baseline.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"text.insert", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"text.insert", runtime.revision(),
                                   ssg::TextInputArguments{"z"}})
                     .accepted());
     ssg::GraphemeLayout::resetCellRunCalls();
     (void)grid.present(runtime);
     ASSERT_TRUE(ssg::GraphemeLayout::cellRunCalls() > base);
-    std::filesystem::remove_all(root);
-}
-
-
-// Lever 3 (dispatch effects). A dispatch reports, via its CommandResult, whether
-// it changed routing state (what a key/paste reads to route) and/or geometry
-// (what a pointer/wheel hit-tests). The host uses these to coalesce per-drain
-// snapshots. A cursor move or text edit changes geometry but not routing; opening
-// a prompt or rebinding a key changes routing; a rejected command changes
-// neither. This names the routing/geometry separation the coalescing relies on --
-// keying only on the session revision (geometry) would wrongly treat a
-// prompt-open as a non-routing change.
-TEST(dispatchEffectsSeparateRoutingFromGeometryAcrossRoutes) {
-    auto root = testRuntimePath("runtime_effects");
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root / "workspace");
-    std::filesystem::create_directories(root / "scratch");
-    std::filesystem::create_directories(root / "recovery");
-    std::string text;
-    for (int i = 0; i < 10; ++i) text += "line " + std::to_string(i) + "\n";
-    std::ofstream{root / "workspace" / "doc.txt"} << text;
-    auto created = ssg::EditorSession::create(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    const ssg::ClientId client{1};
-    ASSERT_TRUE(runtime.attach({client, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.dispatch(client, {"file.open", runtime.revision(),
-                                          std::string{"doc.txt"}}).accepted());
-
-    // Visual cursor movement is view-owned until its resolved selection returns.
-    auto down = runtime.dispatch(client, {"cursor.line_down", runtime.revision(), {}});
-    ASSERT_TRUE(down.accepted());
-    ASSERT_EQ(down.outcome(),
-              ssg::CommandResult::Outcome::ViewActionRequired);
-    ASSERT_FALSE(down.effects.geometryChanged);
-    ASSERT_FALSE(down.effects.routingChanged);
-
-    // Typing text: geometry, not routing.
-    auto ins = runtime.dispatch(client, {"text.insert", runtime.revision(),
-                                         ssg::TextInputArguments{"x"}});
-    ASSERT_TRUE(ins.accepted());
-    ASSERT_TRUE(ins.effects.geometryChanged);
-    ASSERT_FALSE(ins.effects.routingChanged);
-
-    // Opening the palette changes routing (how the next key is interpreted).
-    auto pal = runtime.dispatch(client, {"palette.open", runtime.revision(), {}});
-    ASSERT_TRUE(pal.accepted());
-    ASSERT_TRUE(pal.effects.routingChanged);
-    (void)runtime.dispatch(client, {"palette.close", runtime.revision(), {}});
-
-    // Rebinding a key changes routing even though the catalog revision does not
-    // move (binding an existing command registers nothing).
-    auto bind = runtime.dispatch(
-        client, {"keymap.bind", runtime.revision(),
-                 ssg::KeymapBindArguments{"Ctrl+KeyG", "goto.line", "editor"}});
-    ASSERT_TRUE(bind.accepted());
-    ASSERT_TRUE(bind.effects.routingChanged);
-
-    // A rejected command changes nothing.
-    auto bad = runtime.dispatch(client, {"no.such.command", runtime.revision(), {}});
-    ASSERT_FALSE(bad.accepted());
-    ASSERT_FALSE(bad.effects.routingChanged);
-    ASSERT_FALSE(bad.effects.geometryChanged);
     std::filesystem::remove_all(root);
 }
 
@@ -3385,15 +2944,11 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
     ssg::ViewportDimensions const dims{80, 24};
 
     auto navSegmentations = [&](std::string const& file) -> std::uint64_t {
-        ssg::test::GridTestView grid{
-            ssg::ClientId{1}, ssg::ViewId{1}, dims};
-        (void)runtime.dispatch(
-            ssg::ClientId{1}, {"file.open", runtime.revision(), file});
+        ssg::test::GridTestView grid{ssg::ViewId{1}, dims};
+        (void)runtime.dispatch({"file.open", runtime.revision(), file});
         (void)grid.present(runtime);
         ssg::GraphemeLayout::resetCellRunCalls();
         for (int i = 0; i < 4; ++i) {
@@ -3423,11 +2978,7 @@ std::unique_ptr<ssg::EditorSession> gotoLineRuntime() {
         {root / "workspace", root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.session);
-    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                          ssg::ViewId{1});
-    (void)runtime->dispatch(
-        ssg::ClientId{1},
-        {"file.open", runtime->revision(), std::string{"lines.txt"}});
+    (void)runtime->dispatch({"file.open", runtime->revision(), std::string{"lines.txt"}});
     return runtime;
 }
 
@@ -3443,43 +2994,36 @@ TEST(gotoLineClampsToTheOneBasedLineRange) {
     if (!runtime) return;
     // "3" is 1-based, so the caret lands on line index 2.
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"goto.line", runtime->revision(), std::string{"3"}})
+                    ->dispatch({"goto.line", runtime->revision(), std::string{"3"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 2U);
     // A number past the end clamps to the last line (index 4).
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"goto.line", runtime->revision(), std::string{"999"}})
+                    ->dispatch({"goto.line", runtime->revision(), std::string{"999"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 4U);
     // "1" is the first line.
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"goto.line", runtime->revision(), std::string{"1"}})
+                    ->dispatch({"goto.line", runtime->revision(), std::string{"1"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 0U);
     // Below the range clamps to the first line rather than failing: "0" and a
     // negative both go to line 1 (index 0). Move off line 0 between each so a
     // no-op could not masquerade as a successful clamp.
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"goto.line", runtime->revision(), std::string{"4"}})
+                    ->dispatch({"goto.line", runtime->revision(), std::string{"4"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 3U);
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"goto.line", runtime->revision(), std::string{"0"}})
+                    ->dispatch({"goto.line", runtime->revision(), std::string{"0"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 0U);
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"goto.line", runtime->revision(), std::string{"4"}})
+                    ->dispatch({"goto.line", runtime->revision(), std::string{"4"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 3U);
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"goto.line", runtime->revision(), std::string{"-7"}})
+                    ->dispatch({"goto.line", runtime->revision(), std::string{"-7"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 0U);
 }
@@ -3489,14 +3033,12 @@ TEST(gotoLineRejectsNonNumericInput) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"goto.line", runtime->revision(), std::string{"3"}})
+                    ->dispatch({"goto.line", runtime->revision(), std::string{"3"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 2U);
     for (const auto* bad : {"abc", "2x", "1.5", ""}) {
         ASSERT_FALSE(runtime
-                         ->dispatch(ssg::ClientId{1},
-                                    {"goto.line", runtime->revision(),
+                         ->dispatch({"goto.line", runtime->revision(),
                                      std::string{bad}})
                          .accepted());
     }
@@ -3509,23 +3051,20 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"goto.line", runtime->revision(), {}})
+                    ->dispatch({"goto.line", runtime->revision(), {}})
                     .accepted());
-    auto snapshot = runtime->snapshot(ssg::ClientId{1});
+    auto snapshot = runtime->snapshot();
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().promptStatus.activeKind,
               std::optional{ssg::PromptKind::CommandArgument});
     // The generic prompt round-trip re-dispatches goto.line with the typed value.
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"prompt.update_value", runtime->revision(),
+                    ->dispatch({"prompt.update_value", runtime->revision(),
                                 ssg::PromptValueArguments{0, "4"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"prompt.submit", runtime->revision(), {}})
+                    ->dispatch({"prompt.submit", runtime->revision(), {}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 3U);
 }
@@ -3535,7 +3074,7 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
 SSG_TEST_SUITE(test_session_navigation) {
     RUN(searchTreeDiffAndFollowSectionsUseRuntimeState);
     RUN(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow);
-    RUN(attachedClientsShareFollowPauseQueueAndResumeState);
+    RUN(followPauseQueuesMultipleChangesAndResumeAdoptsTheNewest);
     RUN(gitDiffScanUpdatesDiffAndRejectsStaleBatches);
     RUN(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision);
     RUN(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan);
@@ -3565,7 +3104,7 @@ SSG_TEST_SUITE(test_session_pickers) {
     RUN(workerFilesystemRefreshPublishesChangedFileCandidates);
     RUN(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure);
     RUN(pickerSubmissionRequiresAndClosesTheAuthoritativePicker);
-    RUN(commandPickerSubmissionUsesTheInProcessAuthority);
+    RUN(pickerSubmissionRequiresMatchingPickerMode);
     RUN(commandPickerActionThatOpensPromptDismissesPickerWithoutFailure);
     RUN(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
@@ -3595,7 +3134,6 @@ SSG_TEST_SUITE(test_session_layout) {
     RUN(wordWrapOffRevealsCaretHorizontally);
     RUN(wordWrapOnWrapsLongLinesOffClipsThem);
     RUN(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges);
-    RUN(dispatchEffectsSeparateRoutingFromGeometryAcrossRoutes);
     RUN(wordWrapOffNavigationIsViewportBounded);
     RUN(gotoLineClampsToTheOneBasedLineRange);
     RUN(gotoLineRejectsNonNumericInput);

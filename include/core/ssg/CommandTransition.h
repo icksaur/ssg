@@ -16,7 +16,7 @@
 #include <ssg/Picker.h>          // PickerKind, PickerCatalog
 #include <ssg/PromptSurface.h>   // PromptSurface
 #include <ssg/TreeModel.h>       // TreeProviderBinding, TreeProviderSnapshot, TreeRevision
-#include <ssg/UiTree.h>          // ValidatedSchema, UiSchema, node id constants
+#include <ssg/UiTree.h>          // UiSchema, node id constants
 
 namespace ssg {
 

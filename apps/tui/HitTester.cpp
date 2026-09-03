@@ -130,21 +130,13 @@ RegionHit promptHit(const GridPresentation& snapshot, const UiNode& node,
         return {};
     }
     const auto* leaf = std::get_if<UiLeaf>(&node.content);
-    if (!leaf) return {};
-    const auto state = std::find_if(
-        snapshot.sections().uiFrame.state().nodes.begin(),
-        snapshot.sections().uiFrame.state().nodes.end(),
-        [&](const UiNodeState& item) { return item.id == node.id; });
-    if (state == snapshot.sections().uiFrame.state().nodes.end() ||
-        !state->leaf) {
-        return {};
-    }
+    if (!leaf || !node.resolved) return {};
     const bool actionable =
         (leaf->widget.kind == WidgetKind::TextInput &&
-         state->leaf->active.has_value()) ||
+         node.resolved->active.has_value()) ||
         ((leaf->widget.kind == WidgetKind::Checkbox ||
           leaf->widget.kind == WidgetKind::Field) &&
-         state->leaf->command && !state->leaf->command->empty());
+         node.resolved->command && !node.resolved->command->empty());
     const auto* solved = snapshot.layout().find(node.id);
     if (!actionable || !solved ||
         !contains(solved->rect, column, row)) {
@@ -179,7 +171,7 @@ RegionHit HitTester::at(int column, int row) const {
         }
         if (contains(prompt->rect, column, row)) {
             const auto* promptSchema = nodeById(
-                snapshot.sections().uiFrame.schema().root,
+                snapshot.sections().uiTree.root,
                 kFooterPromptNodeId);
             return promptSchema
                        ? promptHit(snapshot, *promptSchema, column, row)

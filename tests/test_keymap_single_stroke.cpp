@@ -35,11 +35,7 @@ TEST(theAuthoritativeKeymapHasNoMultiStrokeBindingSoSingleStrokeResolutionIsComp
         ssg::EditorSession::create({root, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
-    auto const snapshot = runtime.snapshot(ssg::ClientId{1});
+    auto const snapshot = runtime.snapshot();
     ASSERT_TRUE(snapshot.has_value());
 
     for (auto const& binding : snapshot->sections().keymap.bindings) {

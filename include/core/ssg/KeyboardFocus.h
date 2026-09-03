@@ -9,14 +9,13 @@
 // context is FocusTarget without its transient Prompt member (Editor, Panel), and
 // transient surfaces live on a capture stack layered above it.
 //
-// Presence is coupled here: reconcile() removes every capture whose node is no
-// longer present, so focus can never reference a hidden node. Hiding a captured
-// surface (or an ancestor of one) pops it; the invariant is enforced against the
-// authoritative presence, not predicted per client.
+// Visibility is coupled here: reconcile() removes every capture whose node is no
+// longer effectively visible, so focus can never reference a hidden node. Hiding
+// a captured surface (or an ancestor of one) pops it; the invariant is enforced
+// against the authoritative tree, not predicted per client.
 
-#include <ssg/MutationPatch.h>  // PresenceConfig
-#include <ssg/UiTree.h>         // UiNodeId
-#include <ssg/focus.h>          // FocusTarget
+#include <ssg/UiTree.h>
+#include <ssg/focus.h>
 
 #include <cstdint>
 #include <stdexcept>
@@ -62,12 +61,12 @@ public:
         return captures_;
     }
 
-    // Remove every capture whose node is not present. After this, the effective
-    // focus references a present node (base surfaces are always present), so a
-    // hide can never strand focus on a hidden node.
-    void reconcile(const PresenceConfig& presence) {
+    // Remove every capture whose node is not effectively visible. After this, the
+    // effective focus references a visible node (base surfaces are always
+    // visible), so a hide can never strand focus on a hidden node.
+    void reconcile(const UiSchema& schema) {
         std::erase_if(captures_, [&](const FocusCapture& capture) {
-            return !presence.isPresent(capture.node);
+            return !isUiNodeVisible(schema, capture.node);
         });
     }
 

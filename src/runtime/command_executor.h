@@ -1,6 +1,7 @@
 #pragma once
 
-#include <ssg/EditorClient.h>
+#include <ssg/CommandInvocation.h>
+#include <ssg/PaneTopology.h>
 
 #include <memory>
 #include <string_view>
@@ -42,10 +43,6 @@ public:
     // command registered later is visible here with no propagation step.
     [[nodiscard]] std::shared_ptr<CommandCatalog> const& catalog() const;
 
-    [[nodiscard]] AttachResult attach(InvocationPrincipal principal,
-                                      ViewId viewId);
-    [[nodiscard]] bool detach(ClientId clientId);
-
     // The revision of the dispatch in progress on THIS thread, if there is
     // one.  A handler runs with the session locked, so anything it calls that
     // would take that lock has to ask this first rather than block on a lock
@@ -53,8 +50,7 @@ public:
     [[nodiscard]] std::optional<Revision> activeDispatchRevision()
         const noexcept;
 
-    [[nodiscard]] ExecutorResult dispatch(ClientId clientId,
-                                          ClientCommand const& command);
+    [[nodiscard]] ExecutorResult dispatch(ClientCommand const& command);
 
     [[nodiscard]] Revision revision() const;
     // CONTRACT
@@ -68,8 +64,10 @@ public:
     // Throws on overflow.
     Revision advanceRevision();
     [[nodiscard]] SessionTopology topology() const;
-    [[nodiscard]] std::optional<AttachedClient> attachedClient(
-        ClientId clientId) const;
+    // The runtime's one view: every command's CommandContext addresses it, and
+    // every view action targets it. Fixed for the life of the session -- there
+    // is one screen, so there is nothing to select it from.
+    [[nodiscard]] ViewId currentView() const noexcept;
 
 private:
     struct Impl;

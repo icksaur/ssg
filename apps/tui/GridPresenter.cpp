@@ -58,22 +58,20 @@ SolveUiFrameResult trySolveFrameLayout(
         return {SolvedGridTree{}, {}};
     }
 
-    auto validated =
-        ValidatedSchema::validate(semantic.sections().uiFrame.schema());
-    if (!validated.ok()) {
+    const UiSchema& schema = semantic.sections().uiTree;
+    const UiSchemaValidation validation = validateUiSchema(schema);
+    if (!validation.ok()) {
         return {std::nullopt,
-                "invalid UI schema: " + validated.error()};
+                "invalid UI schema: " + *validation.error};
     }
 
-    auto presence = semantic.sections().uiFrame.presence();
-
-    const auto& root = validated.schema().schema().root;
+    const auto& root = schema.root;
     auto intrinsicSizes =
         semanticIntrinsicSizes(root, semantic.sections());
     SolveUiFrameResult result;
     for (;;) {
         result = solveUiFrame(
-            validated.schema(), semantic.sections().uiFrame.state(), presence,
+            schema,
             intrinsicSizes, {0, 0, dimensions.columns, dimensions.rows});
         // WholeScreenAssembly's exhaustive replaceable content branches are
         // editor and find-results. Extend this check with that topology.
@@ -122,7 +120,7 @@ SolveUiFrameResult trySolveFrameLayout(
         UiNodeId{std::string{kHeaderPromptInputNodeId}},
     };
     const auto* promptSchema = findUiNode(
-        semantic.sections().uiFrame.schema().root, kFooterPromptNodeId);
+        semantic.sections().uiTree.root, kFooterPromptNodeId);
     if (semantic.sections().promptStatus.activeKind && promptSchema &&
         promptFocusRegion(*semantic.sections().promptStatus.activeKind) ==
             PromptRegion::Footer) {
@@ -228,11 +226,7 @@ GridFrame::GridFrame(GridProjection projection, SolvedGridTree layout,
 
 std::optional<std::string> GridFrame::solveUiRegions(
     SessionSnapshot const& semantic) {
-    const auto& schema = semantic.sections().uiFrame.schema();
-    const auto& state = semantic.sections().uiFrame.state();
-    if (schema.generation != state.generation) {
-        return "UI schema and state generations differ";
-    }
+    const auto& schema = semantic.sections().uiTree;
     const auto solve = [&](std::string_view id, SemanticRole role,
                            std::optional<SolvedUiRegion>& output,
                            const StatusViewState* status,
@@ -251,7 +245,7 @@ std::optional<std::string> GridFrame::solveUiRegions(
         SolvedUiRegion surface;
         const auto lowered =
             solveUiRegion(*subtree, solved->rect, role, projection_.style,
-                          schema.generation, state, surface, status, input);
+                          surface, status, input);
         if (!lowered.ok()) {
             return std::string{id} + " UI projection failed: " +
                    *lowered.error;
@@ -354,12 +348,12 @@ GridPresenter::GridPresenter(GridPresenter&&) noexcept = default;
 GridPresenter& GridPresenter::operator=(GridPresenter&&) noexcept = default;
 
 std::optional<GridPresentation> GridPresenter::project(
-    EditorSession& session, ClientId client, GridPresentationRequest request) {
+    EditorSession& session, GridPresentationRequest request) {
     auto& state = *state_;
     constexpr int kProjectionAttempts = 3;
     for (int attempt = 0; attempt < kProjectionAttempts; ++attempt) {
         auto captured = session.capturePresentation(
-            client, viewId_, request.palette);
+            viewId_, request.palette);
         if (!captured) return std::nullopt;
         if (state.adoptedRevision &&
             captured->semantic.revision() < *state.adoptedRevision) {
@@ -430,7 +424,7 @@ std::optional<GridPresentation> GridPresenter::project(
                 static_cast<std::uint32_t>(std::max(pane.width, 1));
         }
         auto viewport = session.projectViewport(
-            {client, viewId_, revision, request.dimensions, paneRows,
+            {viewId_, revision, request.dimensions, paneRows,
              paneColumns, proposedNavigation,
              documentChanged && !confirmedSelection},
             state.viewport);

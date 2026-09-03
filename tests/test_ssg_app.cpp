@@ -272,14 +272,9 @@ TEST(unicodeEndToEndGridAndEncoding) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"file.open", runtime.revision(), std::string{"u.txt"}})
+    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(), std::string{"u.txt"}})
                     .accepted());
-    auto gridFrame = ssg::test::projectGridFrame(
-        runtime, ssg::ClientId{1}, ssg::ViewId{1},
-        ssg::ViewportDimensions{80, 24});
+    auto gridFrame = ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(gridFrame.has_value());
     if (!gridFrame) return;
     auto grid = ssg::Renderer{}.render(*gridFrame);
@@ -320,12 +315,9 @@ TEST(unicodeEndToEndGridAndEncoding) {
     ASSERT_TRUE(before.has_value());
     ASSERT_TRUE(after.has_value());
     auto caretColumnAt = [&](std::optional<ssg::DocumentPosition> pos) -> int {
-        (void)runtime.dispatch(ssg::ClientId{1},
-                               {"cursor.set_position", runtime.revision(),
+        (void)runtime.dispatch({"cursor.set_position", runtime.revision(),
                                 ssg::SelectionCommandArguments{pos, std::nullopt}});
-        auto frame = ssg::test::projectGridFrame(
-            runtime, ssg::ClientId{1}, ssg::ViewId{1},
-            ssg::ViewportDimensions{80, 24});
+        auto frame = ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, ssg::ViewportDimensions{80, 24});
         if (!frame) return -1;
         auto g = ssg::Renderer{}.render(*frame);
         return g.caret ? g.caret->column : -1;
@@ -935,9 +927,7 @@ TEST(decodeKittyKeyMatchesEveryDefaultBinding) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
-    auto snap = runtime.snapshot(ssg::ClientId{1});
+    auto snap = runtime.snapshot();
     ASSERT_TRUE(snap.has_value());
     if (!snap.has_value()) return;
 
@@ -2151,7 +2141,6 @@ TEST(routePointerDragEmitsDocumentMove) {
 TEST(routePointerFieldHitEmitsUiActivationCommand) {
     ssg::app::PointerTargets targets;
     targets.observed_revision = ssg::Revision{8};
-    targets.ui_generation = ssg::Generation{3};
     targets.ui_node_id = ssg::UiNodeId{"header.files"};
     for (auto region :
          {ssg::HitRegion::HeaderField, ssg::HitRegion::FooterField}) {
@@ -2169,7 +2158,6 @@ TEST(routePointerFieldHitEmitsUiActivationCommand) {
                     &plan.command->payload);
             ASSERT_TRUE(arguments != nullptr);
             if (arguments) {
-                ASSERT_EQ(arguments->generation, ssg::Generation{3});
                 ASSERT_EQ(arguments->nodeId,
                           ssg::UiNodeId{"header.files"});
             }
@@ -2295,11 +2283,8 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1})
-                    .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(),
+                    .dispatch({"file.open", runtime.revision(),
                                                  std::string{"f.txt"}})
                     .accepted());
 
@@ -2311,24 +2296,20 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
 
     // Two carets: one at 2, one at 7.
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"cursor.set_position", runtime.revision(),
+                    .dispatch({"cursor.set_position", runtime.revision(),
                                ssg::SelectionCommandArguments{p2, std::nullopt}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch(ssg::ClientId{1},
-                              {"select.add_range", runtime.revision(),
+                    .dispatch({"select.add_range", runtime.revision(),
                                ssg::SelectionCommandArguments{
                                    std::nullopt, ssg::Selection{*p7, *p7}}})
                     .accepted());
 
-    auto result = runtime.input(
-        ssg::ClientId{1},
-        ssg::DocumentPointerInput{
+    auto result = runtime.input(ssg::DocumentPointerInput{
             {runtime.revision()}, p2->byteOffset, true});
     ASSERT_TRUE(result.command.has_value() && result.command->accepted());
 
-    auto afterSnap = runtime.snapshot(ssg::ClientId{1});
+    auto afterSnap = runtime.snapshot();
     ASSERT_TRUE(afterSnap.has_value());
     if (!afterSnap) return;
     auto const& survivors =
@@ -2925,159 +2906,6 @@ TEST(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52) {
     ASSERT_TRUE(gated.bytesFor(third, true).has_value());
 }
 
-// Host oracle: the SHARED
-// evaluateInitScript funnel (used by BOTH startup loadInitScript and reload
-// Lever 3: the per-drain snapshot-coalescing gate keys on which axis each input
-// kind consumes. This pins the mapping for EVERY DecodeStatus so a newly added
-// kind cannot silently default to "consumes nothing" and be mis-coalesced.
-TEST(consumedAxesClassifiesEveryDecodeStatusKind) {
-    using ssg::app::consumed_axes;
-    using ssg::app::DecodeStatus;
-    // Key/paste route by interaction state (routing), never hit-test geometry.
-    ASSERT_TRUE(consumed_axes(DecodeStatus::key).routing);
-    ASSERT_FALSE(consumed_axes(DecodeStatus::key).geometry);
-    ASSERT_TRUE(consumed_axes(DecodeStatus::paste).routing);
-    ASSERT_FALSE(consumed_axes(DecodeStatus::paste).geometry);
-    // Pointer/scroll hit-test published geometry, never route by interaction.
-    ASSERT_TRUE(consumed_axes(DecodeStatus::pointer).geometry);
-    ASSERT_FALSE(consumed_axes(DecodeStatus::pointer).routing);
-    ASSERT_TRUE(consumed_axes(DecodeStatus::scroll).geometry);
-    ASSERT_FALSE(consumed_axes(DecodeStatus::scroll).routing);
-    // The rest consume neither, so they never force a coalesced refresh.
-    for (auto status : {DecodeStatus::none, DecodeStatus::incomplete,
-                        DecodeStatus::reply}) {
-        ASSERT_FALSE(consumed_axes(status).routing);
-        ASSERT_FALSE(consumed_axes(status).geometry);
-    }
-}
-
-// Lever 3: the coalescer is the seam the drain uses to decide whether a buffered
-// event needs a fresh snapshot. This exercises the dirty accumulator over the
-// scenarios the spec calls out -- a cursor-key burst coalescing, a key after a
-// routing change forcing a refresh, a pointer after a geometry change forcing a
-// refresh, and a host-local picker mutation forcing a refresh.
-TEST(snapshotCoalescerRefreshesOnlyWhenTheConsumedAxisIsDirty) {
-    using ssg::app::consumed_axes;
-    using ssg::app::DecodeStatus;
-    using ssg::app::SnapshotCoalescer;
-    const auto key = consumed_axes(DecodeStatus::key);
-    const auto pointer = consumed_axes(DecodeStatus::pointer);
-
-    // A burst of cursor-move keys: each dirties geometry only (routing clean), so
-    // the next key -- which consumes routing -- never needs a refresh. Coalesced.
-    {
-        SnapshotCoalescer c;
-        for (int i = 0; i < 5; ++i) {
-            ASSERT_FALSE(c.needsRefresh(key));
-            c.noteEffects(ssg::DispatchEffects{/*routing=*/false, /*geometry=*/true});
-        }
-        // A pointer arriving after the burst consumes geometry, which IS dirty.
-        ASSERT_TRUE(c.needsRefresh(pointer));
-    }
-    // A key that changes routing (e.g. opens a prompt) forces the next key to
-    // refresh so it routes against the new state.
-    {
-        SnapshotCoalescer c;
-        c.noteEffects(ssg::DispatchEffects{/*routing=*/true, /*geometry=*/true});
-        ASSERT_TRUE(c.needsRefresh(key));
-        c.noteRefreshed();
-        ASSERT_FALSE(c.needsRefresh(key));
-    }
-    // A geometry change forces a following pointer/wheel to refresh before it
-    // hit-tests, but a following key (routing) does not.
-    {
-        SnapshotCoalescer c;
-        c.noteEffects(ssg::DispatchEffects{/*routing=*/false, /*geometry=*/true});
-        ASSERT_TRUE(c.needsRefresh(pointer));
-        ASSERT_FALSE(c.needsRefresh(key));
-    }
-    // A host-local picker mutation dirties both axes.
-    {
-        SnapshotCoalescer c;
-        c.markPickerDirty();
-        ASSERT_TRUE(c.needsRefresh(key));
-        ASSERT_TRUE(c.needsRefresh(pointer));
-    }
-}
-
-// Lever 3 integration: the coalescing seam wired to a REAL runtime. This drives
-// the same skeleton the main-loop drain does -- classify the event, refresh only
-// when the coalescer says the consumed axis is dirty, dispatch, feed the real
-// DispatchEffects back -- and pins the two behaviours a mis-wire would break: a
-// cursor-key burst coalesces yet the eventual snapshot reflects every move, and a
-// routing change (opening the palette) forces the next key to refresh against the
-// new state. A stale/late refresh or an omitted effect would fail the caret/prompt
-// assertions.
-TEST(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState) {
-    auto root = fs::temp_directory_path() / "ssg-coalesce-integration";
-    fs::remove_all(root);
-    fs::create_directories(root / "workspace");
-    fs::create_directories(root / "scratch");
-    fs::create_directories(root / "recovery");
-    std::string text;
-    for (int i = 0; i < 12; ++i) text += "line " + std::to_string(i) + "\n";
-    std::ofstream{root / "workspace" / "doc.txt"} << text;
-    auto created = ssg::EditorSession::create(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    const ssg::ClientId client{1};
-    ASSERT_TRUE(runtime.attach({client, ssg::InvocationOrigin::InProcess},
-                               ssg::ViewId{1}).accepted());
-    ASSERT_TRUE(runtime.dispatch(client, {"file.open", runtime.revision(),
-                                          std::string{"doc.txt"}}).accepted());
-    const ssg::ViewportDimensions dims{80, 24};
-
-    ssg::app::SnapshotCoalescer coalescer;
-    (void)runtime.snapshot(client);
-    coalescer.noteRefreshed();
-
-    // A burst of cursor-right keys. Each consumes routing; each dirties only
-    // geometry, so no refresh is needed BETWEEN them -- they coalesce.
-    const auto keyAxes = ssg::app::consumed_axes(ssg::app::DecodeStatus::key);
-    for (int i = 0; i < 5; ++i) {
-        ASSERT_FALSE(coalescer.needsRefresh(keyAxes));
-        coalescer.noteEffects(
-            runtime.dispatch(client, {"cursor.right", runtime.revision(), {}})
-                .effects);
-    }
-    // A pointer now consumes geometry, which the burst dirtied -> it must refresh,
-    // and the refreshed snapshot must reflect all five moves.
-    const auto pointerAxes =
-        ssg::app::consumed_axes(ssg::app::DecodeStatus::pointer);
-    ASSERT_TRUE(coalescer.needsRefresh(pointerAxes));
-    auto afterBurst = runtime.snapshot(client);
-    coalescer.noteRefreshed();
-    ASSERT_TRUE(afterBurst.has_value());
-    ASSERT_EQ(
-        afterBurst->sections()
-            .selection.primary()
-            .active.byteOffset.value(),
-        std::uint64_t{5});
-    // The routing seam a key would take is still the editor: a cursor burst never
-    // moved focus, so the coalesced (un-refreshed) keys correctly kept editor
-    // routing.
-    ASSERT_TRUE(afterBurst->sections().uiFrame.effectiveFocus() ==
-                ssg::FocusTarget::Editor);
-
-    // Opening the palette changes routing, so the NEXT key must refresh -- and the
-    // refreshed snapshot must route the next key to the prompt, not the editor.
-    // Deriving focus through the same frame seam refresh() uses is what pins
-    // that stale-focus wiring cannot pass.
-    coalescer.noteEffects(
-        runtime.dispatch(client, {"palette.open", runtime.revision(), {}}).effects);
-    ASSERT_TRUE(coalescer.needsRefresh(keyAxes));
-    auto afterOpen = runtime.snapshot(client);
-    coalescer.noteRefreshed();
-    ASSERT_TRUE(afterOpen.has_value());
-    ASSERT_TRUE(afterOpen->sections().promptStatus.activeKind ==
-                ssg::PromptKind::Palette);
-    ASSERT_TRUE(afterOpen->sections().uiFrame.effectiveFocus() ==
-                ssg::FocusTarget::Prompt);
-    fs::remove_all(root);
-}
-
 SSG_TEST_SUITE(test_ssg_app) {
     RUN(resolveLaunchNoArgumentOpensCwd);
     RUN(resolveLaunchDirectoryOpensThatDirectory);
@@ -3087,9 +2915,6 @@ SSG_TEST_SUITE(test_ssg_app) {
     RUN(everyEnteredModeIsLeftInReverseOrder);
     RUN(theCrashUndoLeavesEveryDeclaredModeInReverseOrder);
     RUN(kittyKeyboardModeRoundTripsThroughAGuard);
-    RUN(consumedAxesClassifiesEveryDecodeStatusKind);
-    RUN(snapshotCoalescerRefreshesOnlyWhenTheConsumedAxisIsDirty);
-    RUN(perDrainCoalescingRefreshesLazilyYetNeverSeesStaleState);
     RUN(aFrameWithNoCaretLeavesTheCursorVisible);
     RUN(unicodeEndToEndGridAndEncoding);
     RUN(classifySignalTagsMapsSignalNumbers);

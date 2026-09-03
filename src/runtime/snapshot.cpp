@@ -3,7 +3,6 @@
 #include <ssg/CommandCatalog.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/UiTree.h>
-#include <ssg/UiStateResolver.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -193,29 +192,20 @@ SessionSnapshotSections EditorSession::Impl::sections(
         }
     }
     auto treeSection = treeView();
-    const ValidatedSchema& validatedSchema = interaction.validatedSchema();
-    UiSchema uiSchema = validatedSchema.schema();
-    // Schema, resolved state, and presence all derive from the interaction
-    // authority's single ValidatedSchema, so they correspond node-for-node and
-    // share one generation.
-    if (!validateWellKnownAreas(uiSchema).ok()) {
-        throw std::logic_error(
-            "resolveUiState: composed schema violates the well-known-area contract");
-    }
-    UiStateSection uiState = [&] {
-        auto fields = uiStatusFields();
-        return resolveUiState(
-            validatedSchema, widgetResolverFor(std::move(fields.header),
-                                               std::move(fields.footer),
-                                               helpHintLabel(keymap),
-                                               interaction.statusActions(),
-                                               detail::resolveRuntimePromptControls(
-                                                   interaction.prompt(),
-                                                   findReplace.viewState())));
-    }();
-    uiState.focusPath = interaction.focusPath();
-    UiPresenceSection uiPresence =
-        interaction.presenceSection(PresenceBasis{session->revision().value()});
+    const UiSchema& schema = interaction.schema();
+    // Resolution reads the same single UiSchema the interaction authority owns,
+    // so the published tree's visibility and resolved values correspond
+    // node-for-node.
+    auto fields = uiStatusFields();
+    UiSchema uiTree = resolveUiTree(
+        schema, widgetResolverFor(std::move(fields.header),
+                                  std::move(fields.footer),
+                                  helpHintLabel(keymap),
+                                  interaction.statusActions(),
+                                  detail::resolveRuntimePromptControls(
+                                      interaction.prompt(),
+                                      findReplace.viewState())));
+    uiTree.focusPath = interaction.focusPath();
     return {documentView(),
             selection.selections,
             currentHistory,
@@ -236,8 +226,7 @@ SessionSnapshotSections EditorSession::Impl::sections(
             lspFeatures,
             theme,
             paletteView(),
-            UiFrame::require(std::move(uiSchema), std::move(uiState),
-                             std::move(uiPresence)),
+            requirePublishedUiTree(std::move(uiTree)),
             noticeView(),
             watcherAvailable.load(std::memory_order_relaxed)};
 }

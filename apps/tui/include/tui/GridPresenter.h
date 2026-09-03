@@ -161,8 +161,7 @@ public:
     GridPresenter& operator=(GridPresenter&&) noexcept;
 
     [[nodiscard]] std::optional<GridPresentation> project(
-        EditorSession& session, ClientId client,
-        GridPresentationRequest request);
+        EditorSession& session, GridPresentationRequest request);
     [[nodiscard]] ViewActionResult apply(
         ViewActionRequest const& request, GridPresentation const& presentation);
 
