@@ -62,28 +62,6 @@ namespace fs = std::filesystem;
 
 using ssg::app::evaluateInitScript;
 
-// Env-gated raw-input diagnostic: when SSG_LOG_INPUT names a file, every chunk
-// of bytes read from stdin is appended as space-separated two-digit hex. This is
-// how we discover exactly what a given terminal transmits for a key (e.g. what
-// Alt+Home actually sends) without guessing. Off unless the variable is set, and
-// it never affects decoding -- it only observes.
-void logRawInput(char const* bytes, std::size_t count) {
-    static char const* const path = std::getenv("SSG_LOG_INPUT");
-    if (path == nullptr || count == 0) return;
-    // seam-exempt: append-only keystroke-byte diagnostic, not file content access
-    std::FILE* file = std::fopen(path, "a");
-    if (file == nullptr) return;
-    static char const* const hex = "0123456789abcdef";
-    for (std::size_t i = 0; i < count; ++i) {
-        auto const byte = static_cast<unsigned char>(bytes[i]);
-        std::fputc(hex[byte >> 4], file);
-        std::fputc(hex[byte & 0x0f], file);
-        std::fputc(' ', file);
-    }
-    std::fputc('\n', file);
-    std::fclose(file);
-}
-
 // M10-1 startup instrumentation.  Records a CLOCK_MONOTONIC timestamp per cold-
 // start phase to the file named by the SSG_STARTUP_TRACE env var, so the startup
 // benchmark can attribute exec->first-frame time to phases.  The call sites are
@@ -1292,7 +1270,6 @@ int main(int argc, char** argv) {
             auto readBytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
             if (readBytes <= 0) break;
             buffer.append(bytes, static_cast<std::size_t>(readBytes));
-            logRawInput(bytes, static_cast<std::size_t>(readBytes));
 
         bool firstEvent = true;
         while (!buffer.empty() && !quit) {
