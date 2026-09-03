@@ -25,6 +25,7 @@
 #include <ssg/platform_files.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/TextInputCommands.h>
+#include <ssg/WordClassification.h>
 
 #include "init_script.h"
 
@@ -275,17 +276,12 @@ void popGrapheme(std::string& text) {
 }
 
 void popWord(std::string& text) {
-    const auto isWord = [](unsigned char value) {
-        return (value >= 'a' && value <= 'z') ||
-               (value >= 'A' && value <= 'Z') ||
-               (value >= '0' && value <= '9') || value == '_';
-    };
     while (!text.empty() &&
-           !isWord(static_cast<unsigned char>(text.back()))) {
+           !ssg::isWordByte(static_cast<unsigned char>(text.back()))) {
         text.pop_back();
     }
     while (!text.empty() &&
-           isWord(static_cast<unsigned char>(text.back()))) {
+           ssg::isWordByte(static_cast<unsigned char>(text.back()))) {
         text.pop_back();
     }
 }
@@ -729,7 +725,6 @@ int main(int argc, char** argv) {
             return gridPresenter.apply(request, *frame);
         }};
     auto const appliedInitScript = loadInitScript(scripts, runtime);
-    STARTUP_MARK("post_init_script");
 
     // Auto-reload: watches the SAME path just loaded
     // above, on a background thread, and wakes the main loop's select() to
