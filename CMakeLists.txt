@@ -83,7 +83,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src/GridPresenter.cpp
         ${SSG_SOURCE_DIR}/src/HitTester.cpp
         ${SSG_SOURCE_DIR}/src/Layout.cpp
-        ${SSG_SOURCE_DIR}/src/PromptLayout.cpp
         ${SSG_SOURCE_DIR}/src/Renderer.cpp
         ${SSG_SOURCE_DIR}/src/StatusFieldGrid.cpp
         ${SSG_SOURCE_DIR}/src/UiRegionProjection.cpp
@@ -917,13 +916,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/test_prompt_status.cpp
         SYMBOL ssg_prompt_status_tests)
     ssg_test_include_directories(ssg_prompt_status_tests PRIVATE
-        ${SSG_SOURCE_DIR}/src
         ${SSG_SOURCE_DIR}/tests
     )
-    ssg_test_compile_definitions(ssg_prompt_status_tests PRIVATE
-        SSG_SOURCE_DIR="${SSG_SOURCE_DIR}"
-    )
-    ssg_test_link_libraries(ssg_prompt_status_tests PRIVATE ssg_tui_objects)
+    ssg_test_link_libraries(ssg_prompt_status_tests PRIVATE ssg_core)
 
 endif()
 

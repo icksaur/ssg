@@ -18,12 +18,10 @@
 #include <ssg/LineLayoutCache.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/Picker.h>
-#include <ssg/PromptRouting.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
 #include <ssg/Settings.h>
 #include <ssg/StatusFields.h>
-#include <ssg/PromptStatusViewState.h>
 #include <ssg/StatusBar.h>
 #include <ssg/GitDiffWorker.h>
 #include <ssg/SyntaxModel.h>
@@ -123,6 +121,7 @@ void bindRuntimePresentation(CommandCatalog& catalog, EditorSession::Impl& runti
 void bindRuntimeNavigation(CommandCatalog& catalog, EditorSession::Impl& runtime);
 void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorSession::Impl& runtime);
 void bindRuntimeHelp(CommandCatalog& catalog, EditorSession::Impl& runtime);
+void registerAllCommands(CommandCatalog& catalog, EditorSession::Impl& runtime);
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
     EditorSession::Impl& runtime, FindReplaceCommand command,
     std::any const& payload);

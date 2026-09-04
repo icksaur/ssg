@@ -6,7 +6,7 @@
 #include <ssg/Picker.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/PromptSurface.h>
-#include <ssg/PromptStatusViewState.h>
+#include <ssg/PromptSurface.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
 #include <ssg/UiInteractionState.h>

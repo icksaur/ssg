@@ -2,7 +2,7 @@
 
 #include <ssg/GraphemeLayout.h>
 #include <ssg/StatusFields.h>
-#include <ssg/PromptStatusViewState.h>
+#include <ssg/StatusBar.h>
 #include <ssg/WidgetLayout.h>
 
 #include <optional>

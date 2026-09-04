@@ -1,4 +1,3 @@
-#include <ssg/PromptStatusViewState.h>
 #include <ssg/StatusBar.h>
 
 #include <algorithm>

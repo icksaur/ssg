@@ -667,4 +667,13 @@ void bindRuntimePresentation(CommandCatalog& catalog, EditorSession::Impl& runti
     registerAppearanceCommands(catalog, runtime);
 }
 
-} // namespace ssg
+void registerAllCommands(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+    bindRuntimeEditing(catalog, runtime);
+    bindRuntimeFiles(catalog, runtime);
+    bindRuntimePresentation(catalog, runtime);
+    bindRuntimeNavigation(catalog, runtime);
+    bindRuntimeLanguageServices(catalog, runtime);
+    bindRuntimeHelp(catalog, runtime);
+}
+
+}  // namespace ssg

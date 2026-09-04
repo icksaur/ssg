@@ -61,7 +61,7 @@ ClientInputResult inputKeyLocked(EditorSession::Impl& impl_,
     }
 
     auto routeTextEdit = [&](PromptTextEdit edit) -> ClientInputResult {
-        auto const route = PromptTextRouter{}.edit(routing, edit);
+        auto const route = routePromptTextEdit(routing, edit);
         if (route.kind == PromptTextRoute::Kind::Dispatch) {
             return dispatchInput(route.command, route.payload);
         }

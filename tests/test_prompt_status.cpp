@@ -1,52 +1,13 @@
 #include <ssg/PromptSurface.h>
-#include <ssg/PromptLayout.h>
-#include <ssg/PromptStatusViewState.h>
 #include <ssg/StatusBar.h>
-#include <ssg/ScreenLayout.h>
 #include "test_helpers.h"
 
-#include <algorithm>
-#include <filesystem>
-#include <fstream>
-#include <sstream>
 #include <string>
 #include <vector>
 
 namespace {
 
 using namespace ssg;
-
-std::string readFixture(const std::string& relative) {
-    std::ifstream input(std::filesystem::path(SSG_SOURCE_DIR) / relative);
-    std::ostringstream text;
-    text << input.rdbuf();
-    return text.str();
-}
-
-std::string rectText(const Rect& rect) {
-    return std::to_string(rect.x) + "," + std::to_string(rect.y) + "," +
-           std::to_string(rect.width) + "," + std::to_string(rect.height);
-}
-
-std::string kindText(PromptKind kind) {
-    switch (kind) {
-    case PromptKind::Path: return "path";
-    case PromptKind::Find: return "find";
-    case PromptKind::Replace: return "replace";
-    case PromptKind::Settings: return "settings";
-    case PromptKind::CommandArgument: return "command_argument";
-    }
-    return "";
-}
-
-std::string controlKindText(PromptControlKind kind) {
-    switch (kind) {
-    case PromptControlKind::Input: return "input";
-    case PromptControlKind::Toggle: return "toggle";
-    case PromptControlKind::Count: return "count";
-    }
-    return "";
-}
 
 PromptRequest request(PromptKind kind) {
     PromptRequest value;
@@ -66,93 +27,6 @@ PromptRequest request(PromptKind kind) {
         value.matchCount = PromptMatchCount{"matches", "Match count", "2/7"};
     }
     return value;
-}
-
-std::string geometryLine(PromptKind kind) {
-    PromptSurface surface;
-    const auto opened = surface.open(request(kind));
-    ASSERT_TRUE(opened.accepted());
-    const auto rows = promptRowCount(kind);
-    const auto layout =
-        computePromptLayout(surface, Rect{0, 4, 20, static_cast<int>(rows)});
-    ASSERT_TRUE(layout.accepted());
-
-    std::string line = kindText(kind) + "|" + rectText(layout.view->rect) + "|";
-    for (std::size_t i = 0; i < layout.view->controls.size(); ++i) {
-        const auto& control = layout.view->controls[i];
-        if (i != 0) {
-            line += ";";
-        }
-        line += controlKindText(control.kind) + ":" + control.id + ":" +
-                rectText(control.rect);
-    }
-    return line;
-}
-
-bool overlaps(Rect const& a, Rect const& b) {
-    return a.x < b.right() && b.x < a.right() && a.y < b.bottom() &&
-           b.y < a.bottom();
-}
-
-TEST(eachPromptKindComposesItsControlsWithinTheReservation) {
-    // The composition contract: which controls a prompt kind owns, and that
-    // they tile the reservation without overlapping or escaping it.  This
-    // replaced a byte-exact serialization of every rect, which failed on any
-    // dimension change without saying which rule had been broken.
-    struct Expectation {
-        PromptKind kind;
-        std::vector<std::string> controlIds;
-    };
-    const std::vector<Expectation> expectations{
-        {PromptKind::Path, {"path"}},
-        {PromptKind::Find, {"find", "case", "word", "matches"}},
-        {PromptKind::Replace,
-         {"find", "replace", "case", "word", "matches"}},
-    };
-
-    for (const auto& expectation : expectations) {
-        const Rect reservation{0, 4, 20,
-                               promptRowCount(expectation.kind)};
-        PromptSurface prompt;
-        ASSERT_TRUE(prompt.open(request(expectation.kind)).accepted());
-        const auto layout = computePromptLayout(prompt, reservation);
-        ASSERT_TRUE(layout.accepted());
-        if (!layout.accepted()) continue;
-
-        std::vector<std::string> actualIds;
-        for (const auto& control : layout.view->controls) {
-            actualIds.push_back(control.id);
-        }
-        ASSERT_EQ(actualIds, expectation.controlIds);
-
-        ASSERT_EQ(layout.view->rect, reservation);
-        for (std::size_t i = 0; i < layout.view->controls.size(); ++i) {
-            const auto& control = layout.view->controls[i];
-            ASSERT_TRUE(control.rect.width > 0 && control.rect.height > 0);
-            ASSERT_TRUE(control.rect.x >= reservation.x);
-            ASSERT_TRUE(control.rect.right() <= reservation.right());
-            ASSERT_TRUE(control.rect.y >= reservation.y);
-            ASSERT_TRUE(control.rect.bottom() <= reservation.bottom());
-            for (std::size_t j = i + 1; j < layout.view->controls.size(); ++j) {
-                ASSERT_FALSE(overlaps(control.rect, layout.view->controls[j].rect));
-            }
-        }
-    }
-}
-
-TEST(promptRowsAndInvalidReservationAreTyped) {
-    ASSERT_EQ(promptRowCount(PromptKind::Path), std::uint8_t{1});
-    ASSERT_EQ(promptRowCount(PromptKind::Find), std::uint8_t{2});
-    ASSERT_EQ(promptRowCount(PromptKind::Replace), std::uint8_t{3});
-    ASSERT_EQ(promptRowCount(PromptKind::Settings), std::uint8_t{1});
-    ASSERT_EQ(promptRowCount(PromptKind::CommandArgument), std::uint8_t{1});
-    ASSERT_EQ(promptRowCount(PromptKind::Palette), std::uint8_t{0});
-
-    PromptSurface surface;
-    ASSERT_TRUE(surface.open(request(PromptKind::Find)).accepted());
-    const auto bad = computePromptLayout(surface, Rect{0, 0, 20, 1});
-    ASSERT_FALSE(bad.accepted());
-    ASSERT_EQ(bad.error->code, PromptErrorCode::InvalidReservation);
 }
 
 TEST(promptSubmitAndCancelAreNonModal) {
@@ -206,53 +80,7 @@ TEST(promptFocusOnlyAddressesAnInputNeverAToggleOrCount) {
     ASSERT_EQ(surface.activeInput(), std::size_t{1});
 }
 
-TEST(gridPromptGeometryLowersThePublishedPromptTree) {
-    PromptSurface surface;
-    ASSERT_TRUE(surface.open(request(PromptKind::Find)).accepted());
-    UiNode tree = assembleFooterPrompt(surface);
-    auto& rows = std::get<UiContainer>(tree.content).children;
-    auto& options = std::get<UiContainer>(rows.back().content).children;
-    options.front().size = Size::exact(10);
-
-    const auto layout =
-        computePromptLayout(surface, tree, Rect{0, 0, 40, 2});
-    ASSERT_TRUE(layout.accepted());
-    if (!layout.view) return;
-    const auto control = std::find_if(
-        layout.view->controls.begin(), layout.view->controls.end(),
-        [](const PromptControlView& candidate) {
-            return candidate.id == "case";
-        });
-    ASSERT_TRUE(control != layout.view->controls.end());
-    if (control != layout.view->controls.end()) {
-        ASSERT_EQ(control->rect.width, 10);
-    }
-}
-
-TEST(theSemanticAndGridControlsComeFromTheOneResolver) {
-    // The grid PromptViewState must be the resolver's controls plus a Rect --
-    // never a second resolution. Prove it by resolving the semantic controls
-    // directly and matching each field against the grid layout's controls.
-    for (const auto kind :
-         {PromptKind::Find, PromptKind::Replace, PromptKind::Path}) {
-        const auto req = request(kind);
-        const auto semantic = resolvePromptControls(req);
-        PromptSurface surface;
-        ASSERT_TRUE(surface.open(req).accepted());
-        const auto layout = computePromptLayout(
-            surface, Rect{0, 4, 20, promptRowCount(kind)});
-        ASSERT_TRUE(layout.accepted());
-        ASSERT_EQ(semantic.size(), layout.view->controls.size());
-        for (std::size_t i = 0; i < semantic.size(); ++i) {
-            const auto& s = semantic[i];
-            const auto& g = layout.view->controls[i];
-            ASSERT_EQ(s.kind, g.kind);
-            ASSERT_EQ(s.id, g.id);
-            ASSERT_EQ(s.accessibleLabel, g.accessibleLabel);
-            ASSERT_EQ(s.value, g.value);
-            ASSERT_EQ(s.checked, g.checked);
-        }
-    }
+TEST(promptControlsCarryTheirOperatingCommands) {
     // The input control carries the command that operates it -- a client never
     // hardcodes a per-field id. With the production input ids, Find's input drives
     // find.update_query and Replace's replacement input drives
@@ -382,9 +210,6 @@ TEST(statusBarRejectsDuplicateActionIdentityBeforeMutation) {
 }
 
 TEST(footerTextAndAccessibilityMatchGolden) {
-    PromptSurface prompt;
-    ASSERT_TRUE(prompt.open(request(PromptKind::Find)).accepted());
-    const auto layout = computePromptLayout(prompt, Rect{0, 4, 20, 2});
     StatusBar bar;
     std::vector<UiAction> actions{
         {"retry", "Retry build", "build.retry"},
@@ -396,14 +221,6 @@ TEST(footerTextAndAccessibilityMatchGolden) {
     ASSERT_EQ(statusView.items[0].actions[0].id, std::string{"retry"});
     ASSERT_EQ(statusView.items[0].actions[1].label, std::string{"Open log"});
 
-    // The accessibility contract is that every surfaced element carries a
-    // non-empty label, not that the labels read exactly as they do today.
-    // Pinning the strings made every wording change a fixture edit while
-    // catching nothing a missing-label check does not.
-    ASSERT_FALSE(layout.view->accessibleLabel.empty());
-    for (const auto& control : layout.view->controls) {
-        ASSERT_FALSE(control.accessibleLabel.empty());
-    }
     ASSERT_FALSE(statusView.items[0].accessibleLabel.empty());
     for (const auto& action : statusView.items[0].actions) {
         ASSERT_FALSE(action.label.empty());
@@ -413,13 +230,10 @@ TEST(footerTextAndAccessibilityMatchGolden) {
 } // namespace
 
 SSG_TEST_SUITE(ssg_prompt_status_tests) {
-    RUN(eachPromptKindComposesItsControlsWithinTheReservation);
-    RUN(promptRowsAndInvalidReservationAreTyped);
     RUN(promptSubmitAndCancelAreNonModal);
     RUN(promptOpenResetsTheActiveInputPerKindAndOnTransition);
     RUN(promptFocusOnlyAddressesAnInputNeverAToggleOrCount);
-    RUN(gridPromptGeometryLowersThePublishedPromptTree);
-    RUN(theSemanticAndGridControlsComeFromTheOneResolver);
+    RUN(promptControlsCarryTheirOperatingCommands);
     RUN(statusPriorityAndNavigationTransitionTable);
     RUN(statusCapacityAdmissionAndEvictionTable);
     RUN(statusActionsProjectCanonicalOpaqueNodeIdentities);

@@ -1,10 +1,8 @@
-#include <ssg/PromptRouting.h>
+#include <ssg/PromptSurface.h>
 
 #include <ssg/FindReplace.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Keymap.h>
-#include <ssg/PromptSurface.h>
-#include <ssg/TextInputCommands.h>
 #include <ssg/TextInputCommands.h>
 
 namespace ssg {
@@ -73,13 +71,8 @@ PromptTextRoute dispatchActiveInput(ActivePrompt prompt, std::size_t activeInput
 
 }  // namespace
 
-PromptTextRoute PromptTextRouter::route(PromptRoutingState const& state,
-                                        std::string const& text) const {
-    return edit(state, PromptTextEdit{PromptTextEdit::Kind::Append, text});
-}
-
-PromptTextRoute PromptTextRouter::edit(PromptRoutingState const& state,
-                                       PromptTextEdit const& change) const {
+PromptTextRoute routePromptTextEdit(const PromptRoutingState& state,
+                                    const PromptTextEdit& change) {
     switch (SemanticInputRouter{}.textRouting(focusTargetName(state.focus))) {
     case TextRouting::Insert:
         // A DeleteGraphemeBack/DeleteWordBack in the editor is not this seam's

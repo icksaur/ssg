@@ -1,11 +1,4 @@
-// seam test — the prompt-text routing decision is an architectural rule: printable
-// text under a focus and an active prompt maps to exactly one library command, a
-// palette-query append, or nothing, and both the TUI app and the web host must
-// resolve it through this one seam so the two clients cannot drift into separate
-// input behavior.  These cases pin every branch the old app-side routeText held.
-
 #include <ssg/FindReplace.h>
-#include <ssg/PromptRouting.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/TextInputCommands.h>
 
@@ -28,7 +21,8 @@ PromptRoutingState atPrompt(ActivePrompt prompt, std::string value = {},
 }
 
 TEST(editorFocusRoutesPrintableTextToInsert) {
-    auto const route = PromptTextRouter{}.route(atEditor(), "x");
+    auto const route = routePromptTextEdit(
+        atEditor(), {PromptTextEdit::Kind::Append, "x"});
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
     ASSERT_TRUE(route.command == CommandName{"text.insert"});
     auto const* args = std::any_cast<TextInputArguments>(&route.payload);
@@ -37,15 +31,18 @@ TEST(editorFocusRoutesPrintableTextToInsert) {
 }
 
 TEST(paletteFocusAppendsToTheClientOwnedQueryOnly) {
-    auto const route = PromptTextRouter{}.route(atPrompt(ActivePrompt::Palette), "a");
+    auto const route = routePromptTextEdit(
+        atPrompt(ActivePrompt::Palette),
+        {PromptTextEdit::Kind::Append, "a"});
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::AppendPaletteQuery);
     ASSERT_EQ(route.appendText, std::string{"a"});
     ASSERT_TRUE(route.command.empty());
 }
 
 TEST(findPromptRoutesTheWholeNewQueryValue) {
-    auto const route =
-        PromptTextRouter{}.route(atPrompt(ActivePrompt::Find, "foo"), "d");
+    auto const route = routePromptTextEdit(
+        atPrompt(ActivePrompt::Find, "foo"),
+        {PromptTextEdit::Kind::Append, "d"});
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
     ASSERT_TRUE(route.command == CommandName{"find.update_query"});
     auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
@@ -54,8 +51,9 @@ TEST(findPromptRoutesTheWholeNewQueryValue) {
 }
 
 TEST(replacePromptRoutesTheWholeNewReplacementValue) {
-    auto const route = PromptTextRouter{}.route(
-        atPrompt(ActivePrompt::Replace, "ba", 1), "r");
+    auto const route = routePromptTextEdit(
+        atPrompt(ActivePrompt::Replace, "ba", 1),
+        {PromptTextEdit::Kind::Append, "r"});
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
     ASSERT_TRUE(route.command == CommandName{"replace.update_replacement"});
     auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
@@ -66,8 +64,9 @@ TEST(replacePromptRoutesTheWholeNewReplacementValue) {
 TEST(replaceQueryInputRoutesToFindUpdateQuery) {
     // Replace's query input (active index 0) edits the SAME query as Find, so it
     // must route to find.update_query, not replace.update_replacement.
-    auto const route =
-        PromptTextRouter{}.route(atPrompt(ActivePrompt::Replace, "fo", 0), "o");
+    auto const route = routePromptTextEdit(
+        atPrompt(ActivePrompt::Replace, "fo", 0),
+        {PromptTextEdit::Kind::Append, "o"});
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
     ASSERT_TRUE(route.command == CommandName{"find.update_query"});
     auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
@@ -78,7 +77,7 @@ TEST(replaceQueryInputRoutesToFindUpdateQuery) {
 TEST(promptEditDeletesOneGraphemeBackFromTheActiveInput) {
     PromptTextEdit back{PromptTextEdit::Kind::DeleteGraphemeBack, {}};
     auto const route =
-        PromptTextRouter{}.edit(atPrompt(ActivePrompt::Find, "café", 0), back);
+        routePromptTextEdit(atPrompt(ActivePrompt::Find, "café", 0), back);
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
     ASSERT_TRUE(route.command == CommandName{"find.update_query"});
     auto const* args = std::any_cast<FindQueryArguments>(&route.payload);
@@ -89,7 +88,7 @@ TEST(promptEditDeletesOneGraphemeBackFromTheActiveInput) {
 
 TEST(promptEditDeletesOneWordBackFromTheActiveReplacement) {
     PromptTextEdit back{PromptTextEdit::Kind::DeleteWordBack, {}};
-    auto const route = PromptTextRouter{}.edit(
+    auto const route = routePromptTextEdit(
         atPrompt(ActivePrompt::Replace, "one two ", 1), back);
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
     ASSERT_TRUE(route.command == CommandName{"replace.update_replacement"});
@@ -101,13 +100,14 @@ TEST(promptEditDeletesOneWordBackFromTheActiveReplacement) {
 TEST(paletteDeletionIsNotRoutedThroughTheSeam) {
     PromptTextEdit back{PromptTextEdit::Kind::DeleteGraphemeBack, {}};
     auto const route =
-        PromptTextRouter{}.edit(atPrompt(ActivePrompt::Palette, "ab"), back);
+        routePromptTextEdit(atPrompt(ActivePrompt::Palette, "ab"), back);
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Ignore);
 }
 
 TEST(textPromptRoutesTheWholeNewValueAtIndexZero) {
-    auto const route =
-        PromptTextRouter{}.route(atPrompt(ActivePrompt::TextPrompt, "na"), "me");
+    auto const route = routePromptTextEdit(
+        atPrompt(ActivePrompt::TextPrompt, "na"),
+        {PromptTextEdit::Kind::Append, "me"});
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
     ASSERT_TRUE(route.command == CommandName{"prompt.update_value"});
     auto const* args = std::any_cast<PromptValueArguments>(&route.payload);
@@ -118,8 +118,8 @@ TEST(textPromptRoutesTheWholeNewValueAtIndexZero) {
 
 TEST(genericTextPromptDeletionRoutesToPromptUpdateValueNotAHardcodedField) {
     PromptTextEdit back{PromptTextEdit::Kind::DeleteGraphemeBack, {}};
-    auto const route =
-        PromptTextRouter{}.edit(atPrompt(ActivePrompt::TextPrompt, "name", 0), back);
+    auto const route = routePromptTextEdit(
+        atPrompt(ActivePrompt::TextPrompt, "name", 0), back);
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Dispatch);
     ASSERT_TRUE(route.command == CommandName{"prompt.update_value"});
     auto const* args = std::any_cast<PromptValueArguments>(&route.payload);
@@ -129,13 +129,16 @@ TEST(genericTextPromptDeletionRoutesToPromptUpdateValueNotAHardcodedField) {
 }
 
 TEST(promptFocusWithNoActivePromptIgnoresText) {
-    auto const route = PromptTextRouter{}.route(atPrompt(ActivePrompt::None), "z");
+    auto const route = routePromptTextEdit(
+        atPrompt(ActivePrompt::None),
+        {PromptTextEdit::Kind::Append, "z"});
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Ignore);
 }
 
 TEST(panelFocusIgnoresPrintableText) {
     PromptRoutingState state{FocusTarget::Panel, ActivePrompt::None, {}};
-    auto const route = PromptTextRouter{}.route(state, "z");
+    auto const route =
+        routePromptTextEdit(state, {PromptTextEdit::Kind::Append, "z"});
     ASSERT_TRUE(route.kind == PromptTextRoute::Kind::Ignore);
 }
 

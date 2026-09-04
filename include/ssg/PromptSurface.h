@@ -1,5 +1,10 @@
 #pragma once
 
+#include <ssg/CommandHandle.h>
+#include <ssg/StatusBar.h>
+#include <ssg/focus.h>
+
+#include <any>
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -75,8 +80,7 @@ struct PromptRequest {
     // submit path switches on -- is what lets a new path-taking command be
     // added without touching submission at all.
     //
-    // Runtime-internal: PromptViewState is the protocol type, and it does not
-    // carry this. The client never needs to know which command a prompt serves.
+    // Runtime-internal: clients never need to know which command a prompt serves.
     std::string commandId;
     friend bool operator==(const PromptRequest&, const PromptRequest&) = default;
 };
@@ -110,7 +114,6 @@ struct PromptFocusArguments {
 
 enum class PromptErrorCode : std::uint8_t {
     InvalidRequest,
-    InvalidReservation,
     NoActivePrompt,
     UnknownInput,
 };
@@ -142,6 +145,51 @@ struct PromptControl {
     std::string command;
     friend bool operator==(const PromptControl&, const PromptControl&) = default;
 };
+
+struct PromptStatusViewState {
+    StatusViewState status;
+    std::optional<PromptKind> activeKind;
+    friend bool operator==(const PromptStatusViewState&,
+                           const PromptStatusViewState&) = default;
+};
+
+enum class ActivePrompt : std::uint8_t {
+    None,
+    Palette,
+    Find,
+    Replace,
+    TextPrompt,
+};
+
+struct PromptRoutingState {
+    FocusTarget focus = FocusTarget::Editor;
+    ActivePrompt prompt = ActivePrompt::None;
+    std::string currentValue;
+    std::size_t activeInput = 0;
+};
+
+struct PromptTextEdit {
+    enum class Kind : std::uint8_t {
+        Append,
+        DeleteGraphemeBack,
+        DeleteWordBack,
+    } kind = Kind::Append;
+    std::string text;
+};
+
+struct PromptTextRoute {
+    enum class Kind : std::uint8_t {
+        Dispatch,
+        AppendPaletteQuery,
+        Ignore,
+    } kind = Kind::Ignore;
+    CommandName command;
+    std::any payload;
+    std::string appendText;
+};
+
+[[nodiscard]] PromptTextRoute routePromptTextEdit(
+    const PromptRoutingState& state, const PromptTextEdit& edit);
 
 class PromptSurface {
 public:

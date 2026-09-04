@@ -2161,89 +2161,23 @@ ssg/Picker.h	var	ssg::PickerDescriptor::promptTitle	std::string_view
 ssg/Picker.h	var	ssg::PickerDescriptor::wireMode	SearchMode
 ssg/Picker.h	var	ssg::kAllPickerKinds	const std::array<PickerKind, 2>
 ssg/Picker.h	var	ssg::kPickerDescriptors	const std::array<PickerDescriptor, 2>
-ssg/PromptLayout.h	func	ssg::PromptLayoutResult::accepted	bool () const noexcept
-ssg/PromptLayout.h	func	ssg::computePromptLayout	PromptLayoutResult (const PromptSurface &, Rect)
-ssg/PromptLayout.h	func	ssg::computePromptLayout	PromptLayoutResult (const PromptSurface &, const UiNode &, Rect)
-ssg/PromptLayout.h	func	ssg::operator==	bool (const PromptControlView &, const PromptControlView &)
-ssg/PromptLayout.h	func	ssg::operator==	bool (const PromptViewState &, const PromptViewState &)
-ssg/PromptLayout.h	func	ssg::promptRowCount	std::uint8_t (PromptKind) noexcept
-ssg/PromptLayout.h	struct	ssg::PromptControlView
-ssg/PromptLayout.h	struct	ssg::PromptLayoutResult
-ssg/PromptLayout.h	struct	ssg::PromptViewState
-ssg/PromptLayout.h	var	ssg::PromptControlView::accessibleLabel	std::string
-ssg/PromptLayout.h	var	ssg::PromptControlView::checked	bool
-ssg/PromptLayout.h	var	ssg::PromptControlView::id	std::string
-ssg/PromptLayout.h	var	ssg::PromptControlView::kind	PromptControlKind
-ssg/PromptLayout.h	var	ssg::PromptControlView::rect	Rect
-ssg/PromptLayout.h	var	ssg::PromptControlView::value	std::string
-ssg/PromptLayout.h	var	ssg::PromptLayoutResult::error	std::optional<PromptError>
-ssg/PromptLayout.h	var	ssg::PromptLayoutResult::view	std::optional<PromptViewState>
-ssg/PromptLayout.h	var	ssg::PromptViewState::accessibleLabel	std::string
-ssg/PromptLayout.h	var	ssg::PromptViewState::activeInput	std::size_t
-ssg/PromptLayout.h	var	ssg::PromptViewState::controls	std::vector<PromptControlView>
-ssg/PromptLayout.h	var	ssg::PromptViewState::kind	PromptKind
-ssg/PromptLayout.h	var	ssg::PromptViewState::rect	Rect
-ssg/PromptRouting.h	class	ssg::PromptTextRouter
-ssg/PromptRouting.h	enum	ssg::ActivePrompt
-ssg/PromptRouting.h	enum	ssg::PromptTextEdit::Kind
-ssg/PromptRouting.h	enum	ssg::PromptTextRoute::Kind
-ssg/PromptRouting.h	enumerator	ssg::ActivePrompt::Find
-ssg/PromptRouting.h	enumerator	ssg::ActivePrompt::None
-ssg/PromptRouting.h	enumerator	ssg::ActivePrompt::Palette
-ssg/PromptRouting.h	enumerator	ssg::ActivePrompt::Replace
-ssg/PromptRouting.h	enumerator	ssg::ActivePrompt::TextPrompt
-ssg/PromptRouting.h	enumerator	ssg::PromptTextEdit::Kind::Append
-ssg/PromptRouting.h	enumerator	ssg::PromptTextEdit::Kind::DeleteGraphemeBack
-ssg/PromptRouting.h	enumerator	ssg::PromptTextEdit::Kind::DeleteWordBack
-ssg/PromptRouting.h	enumerator	ssg::PromptTextRoute::Kind::AppendPaletteQuery
-ssg/PromptRouting.h	enumerator	ssg::PromptTextRoute::Kind::Dispatch
-ssg/PromptRouting.h	enumerator	ssg::PromptTextRoute::Kind::Ignore
-ssg/PromptRouting.h	func	ssg::PromptTextRouter::edit	PromptTextRoute (const PromptRoutingState &, const PromptTextEdit &) const
-ssg/PromptRouting.h	func	ssg::PromptTextRouter::route	PromptTextRoute (const PromptRoutingState &, const std::string &) const
-ssg/PromptRouting.h	struct	ssg::PromptRoutingState
-ssg/PromptRouting.h	struct	ssg::PromptTextEdit
-ssg/PromptRouting.h	struct	ssg::PromptTextRoute
-ssg/PromptRouting.h	var	ssg::PromptRoutingState::activeInput	std::size_t
-ssg/PromptRouting.h	var	ssg::PromptRoutingState::currentValue	std::string
-ssg/PromptRouting.h	var	ssg::PromptRoutingState::focus	FocusTarget
-ssg/PromptRouting.h	var	ssg::PromptRoutingState::prompt	ActivePrompt
-ssg/PromptRouting.h	var	ssg::PromptTextEdit::kind	enum Kind
-ssg/PromptRouting.h	var	ssg::PromptTextEdit::text	std::string
-ssg/PromptRouting.h	var	ssg::PromptTextRoute::appendText	std::string
-ssg/PromptRouting.h	var	ssg::PromptTextRoute::command	CommandName
-ssg/PromptRouting.h	var	ssg::PromptTextRoute::kind	enum Kind
-ssg/PromptRouting.h	var	ssg::PromptTextRoute::payload	std::any
-ssg/PromptStatusViewState.h	func	ssg::operator==	bool (const PromptStatusViewState &, const PromptStatusViewState &)
-ssg/PromptStatusViewState.h	func	ssg::operator==	bool (const StatusActionNode &, const StatusActionNode &)
-ssg/PromptStatusViewState.h	func	ssg::operator==	bool (const StatusItemView &, const StatusItemView &)
-ssg/PromptStatusViewState.h	func	ssg::operator==	bool (const StatusViewState &, const StatusViewState &)
-ssg/PromptStatusViewState.h	func	ssg::projectStatusActionNodes	std::vector<StatusActionNode> (const StatusViewState &)
-ssg/PromptStatusViewState.h	struct	ssg::PromptStatusViewState
-ssg/PromptStatusViewState.h	struct	ssg::StatusActionNode
-ssg/PromptStatusViewState.h	struct	ssg::StatusItemView
-ssg/PromptStatusViewState.h	struct	ssg::StatusViewState
-ssg/PromptStatusViewState.h	var	ssg::PromptStatusViewState::activeKind	std::optional<PromptKind>
-ssg/PromptStatusViewState.h	var	ssg::PromptStatusViewState::status	StatusViewState
-ssg/PromptStatusViewState.h	var	ssg::StatusActionNode::accessibleLabel	std::string
-ssg/PromptStatusViewState.h	var	ssg::StatusActionNode::commandId	std::string
-ssg/PromptStatusViewState.h	var	ssg::StatusActionNode::id	UiNodeId
-ssg/PromptStatusViewState.h	var	ssg::StatusItemView::accessibleLabel	std::string
-ssg/PromptStatusViewState.h	var	ssg::StatusItemView::actions	std::vector<UiAction>
-ssg/PromptStatusViewState.h	var	ssg::StatusItemView::generation	std::uint64_t
-ssg/PromptStatusViewState.h	var	ssg::StatusItemView::id	StatusId
-ssg/PromptStatusViewState.h	var	ssg::StatusItemView::priority	StatusPriority
-ssg/PromptStatusViewState.h	var	ssg::StatusViewState::items	std::vector<StatusItemView>
-ssg/PromptStatusViewState.h	var	ssg::StatusViewState::selected	std::size_t
 ssg/PromptSurface.h	class	ssg::PromptSurface
+ssg/PromptSurface.h	enum	ssg::ActivePrompt
 ssg/PromptSurface.h	enum	ssg::PromptControlKind
 ssg/PromptSurface.h	enum	ssg::PromptErrorCode
 ssg/PromptSurface.h	enum	ssg::PromptKind
 ssg/PromptSurface.h	enum	ssg::PromptRegion
+ssg/PromptSurface.h	enum	ssg::PromptTextEdit::Kind
+ssg/PromptSurface.h	enum	ssg::PromptTextRoute::Kind
+ssg/PromptSurface.h	enumerator	ssg::ActivePrompt::Find
+ssg/PromptSurface.h	enumerator	ssg::ActivePrompt::None
+ssg/PromptSurface.h	enumerator	ssg::ActivePrompt::Palette
+ssg/PromptSurface.h	enumerator	ssg::ActivePrompt::Replace
+ssg/PromptSurface.h	enumerator	ssg::ActivePrompt::TextPrompt
 ssg/PromptSurface.h	enumerator	ssg::PromptControlKind::Count
 ssg/PromptSurface.h	enumerator	ssg::PromptControlKind::Input
 ssg/PromptSurface.h	enumerator	ssg::PromptControlKind::Toggle
 ssg/PromptSurface.h	enumerator	ssg::PromptErrorCode::InvalidRequest
-ssg/PromptSurface.h	enumerator	ssg::PromptErrorCode::InvalidReservation
 ssg/PromptSurface.h	enumerator	ssg::PromptErrorCode::NoActivePrompt
 ssg/PromptSurface.h	enumerator	ssg::PromptErrorCode::UnknownInput
 ssg/PromptSurface.h	enumerator	ssg::PromptKind::CommandArgument
@@ -2254,6 +2188,12 @@ ssg/PromptSurface.h	enumerator	ssg::PromptKind::Replace
 ssg/PromptSurface.h	enumerator	ssg::PromptKind::Settings
 ssg/PromptSurface.h	enumerator	ssg::PromptRegion::Footer
 ssg/PromptSurface.h	enumerator	ssg::PromptRegion::Header
+ssg/PromptSurface.h	enumerator	ssg::PromptTextEdit::Kind::Append
+ssg/PromptSurface.h	enumerator	ssg::PromptTextEdit::Kind::DeleteGraphemeBack
+ssg/PromptSurface.h	enumerator	ssg::PromptTextEdit::Kind::DeleteWordBack
+ssg/PromptSurface.h	enumerator	ssg::PromptTextRoute::Kind::AppendPaletteQuery
+ssg/PromptSurface.h	enumerator	ssg::PromptTextRoute::Kind::Dispatch
+ssg/PromptSurface.h	enumerator	ssg::PromptTextRoute::Kind::Ignore
 ssg/PromptSurface.h	func	ssg::PromptCommandResult::accepted	bool () const noexcept
 ssg/PromptSurface.h	func	ssg::PromptSurface::active	bool () const noexcept
 ssg/PromptSurface.h	func	ssg::PromptSurface::activeInput	std::size_t () const noexcept
@@ -2270,11 +2210,13 @@ ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptFocusArguments &, con
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptInput &, const PromptInput &)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptMatchCount &, const PromptMatchCount &) noexcept
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptRequest &, const PromptRequest &)
+ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptStatusViewState &, const PromptStatusViewState &)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptSubmission &, const PromptSubmission &)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptToggle &, const PromptToggle &)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptValueArguments &, const PromptValueArguments &)
 ssg/PromptSurface.h	func	ssg::promptFocusRegion	PromptRegion (PromptKind) noexcept
 ssg/PromptSurface.h	func	ssg::resolvePromptControls	std::vector<PromptControl> (const PromptRequest &)
+ssg/PromptSurface.h	func	ssg::routePromptTextEdit	PromptTextRoute (const PromptRoutingState &, const PromptTextEdit &)
 ssg/PromptSurface.h	struct	ssg::PromptCommandResult
 ssg/PromptSurface.h	struct	ssg::PromptControl
 ssg/PromptSurface.h	struct	ssg::PromptError
@@ -2282,7 +2224,11 @@ ssg/PromptSurface.h	struct	ssg::PromptFocusArguments
 ssg/PromptSurface.h	struct	ssg::PromptInput
 ssg/PromptSurface.h	struct	ssg::PromptMatchCount
 ssg/PromptSurface.h	struct	ssg::PromptRequest
+ssg/PromptSurface.h	struct	ssg::PromptRoutingState
+ssg/PromptSurface.h	struct	ssg::PromptStatusViewState
 ssg/PromptSurface.h	struct	ssg::PromptSubmission
+ssg/PromptSurface.h	struct	ssg::PromptTextEdit
+ssg/PromptSurface.h	struct	ssg::PromptTextRoute
 ssg/PromptSurface.h	struct	ssg::PromptToggle
 ssg/PromptSurface.h	struct	ssg::PromptValueArguments
 ssg/PromptSurface.h	var	ssg::PromptCommandResult::error	std::optional<PromptError>
@@ -2308,10 +2254,22 @@ ssg/PromptSurface.h	var	ssg::PromptRequest::inputs	std::vector<PromptInput>
 ssg/PromptSurface.h	var	ssg::PromptRequest::kind	PromptKind
 ssg/PromptSurface.h	var	ssg::PromptRequest::matchCount	std::optional<PromptMatchCount>
 ssg/PromptSurface.h	var	ssg::PromptRequest::toggles	std::vector<PromptToggle>
+ssg/PromptSurface.h	var	ssg::PromptRoutingState::activeInput	std::size_t
+ssg/PromptSurface.h	var	ssg::PromptRoutingState::currentValue	std::string
+ssg/PromptSurface.h	var	ssg::PromptRoutingState::focus	FocusTarget
+ssg/PromptSurface.h	var	ssg::PromptRoutingState::prompt	ActivePrompt
+ssg/PromptSurface.h	var	ssg::PromptStatusViewState::activeKind	std::optional<PromptKind>
+ssg/PromptSurface.h	var	ssg::PromptStatusViewState::status	StatusViewState
 ssg/PromptSurface.h	var	ssg::PromptSubmission::commandId	std::string
 ssg/PromptSurface.h	var	ssg::PromptSubmission::kind	PromptKind
 ssg/PromptSurface.h	var	ssg::PromptSubmission::toggles	std::vector<bool>
 ssg/PromptSurface.h	var	ssg::PromptSubmission::values	std::vector<std::string>
+ssg/PromptSurface.h	var	ssg::PromptTextEdit::kind	enum Kind
+ssg/PromptSurface.h	var	ssg::PromptTextEdit::text	std::string
+ssg/PromptSurface.h	var	ssg::PromptTextRoute::appendText	std::string
+ssg/PromptSurface.h	var	ssg::PromptTextRoute::command	CommandName
+ssg/PromptSurface.h	var	ssg::PromptTextRoute::kind	enum Kind
+ssg/PromptSurface.h	var	ssg::PromptTextRoute::payload	std::any
 ssg/PromptSurface.h	var	ssg::PromptToggle::accessibleLabel	std::string
 ssg/PromptSurface.h	var	ssg::PromptToggle::id	std::string
 ssg/PromptSurface.h	var	ssg::PromptToggle::value	bool
@@ -2484,36 +2442,34 @@ ssg/ScratchJournal.h	var	ssg::JournalRecoverySet::documents	std::vector<JournalD
 ssg/ScratchJournal.h	var	ssg::JournalReplayResult::discardedTail	bool
 ssg/ScratchJournal.h	var	ssg::JournalReplayResult::recovery	JournalRecoverySet
 ssg/ScratchJournal.h	var	ssg::JournalReplayResult::validBytes	std::size_t
-ssg/ScratchSession.h	class	ssg::ScratchRemnantClaim
-ssg/ScratchSession.h	class	ssg::ScratchSession
-ssg/ScratchSession.h	class	ssg::ScratchSessionId
-ssg/ScratchSession.h	func	ssg::ScratchRemnantClaim::ScratchRemnantClaim	void (ScratchRemnantClaim &&) noexcept
-ssg/ScratchSession.h	func	ssg::ScratchRemnantClaim::ScratchRemnantClaim	void (const ScratchRemnantClaim &)
-ssg/ScratchSession.h	func	ssg::ScratchRemnantClaim::id	const ScratchSessionId &() const noexcept
-ssg/ScratchSession.h	func	ssg::ScratchRemnantClaim::journalPath	std::filesystem::path () const
-ssg/ScratchSession.h	func	ssg::ScratchRemnantClaim::markRestored	void ()
-ssg/ScratchSession.h	func	ssg::ScratchRemnantClaim::operator=	ScratchRemnantClaim &(ScratchRemnantClaim &&) noexcept
-ssg/ScratchSession.h	func	ssg::ScratchRemnantClaim::operator=	ScratchRemnantClaim &(const ScratchRemnantClaim &)
-ssg/ScratchSession.h	func	ssg::ScratchRemnantClaim::path	const std::filesystem::path &() const noexcept
-ssg/ScratchSession.h	func	ssg::ScratchRemnantClaim::replay	JournalReplayResult () const
-ssg/ScratchSession.h	func	ssg::ScratchSession::ScratchSession	void (ScratchSession &&) noexcept
-ssg/ScratchSession.h	func	ssg::ScratchSession::ScratchSession	void (const ScratchSession &)
-ssg/ScratchSession.h	func	ssg::ScratchSession::claimNewestRestorable	std::optional<ScratchRemnantClaim> () const
-ssg/ScratchSession.h	func	ssg::ScratchSession::create	ScratchSession (const std::filesystem::path &, const std::filesystem::path &)
-ssg/ScratchSession.h	func	ssg::ScratchSession::id	const ScratchSessionId &() const noexcept
-ssg/ScratchSession.h	func	ssg::ScratchSession::journalPath	std::filesystem::path () const
-ssg/ScratchSession.h	func	ssg::ScratchSession::operator=	ScratchSession &(ScratchSession &&) noexcept
-ssg/ScratchSession.h	func	ssg::ScratchSession::operator=	ScratchSession &(const ScratchSession &)
-ssg/ScratchSession.h	func	ssg::ScratchSession::path	const std::filesystem::path &() const noexcept
-ssg/ScratchSession.h	func	ssg::ScratchSessionId::value	std::string_view () const noexcept
-ssg/ScratchSession.h	func	ssg::operator==	bool (const ScratchSessionId &, const ScratchSessionId &)
-ssg/ScratchSession.h	func	ssg::scratchWorkspaceKey	std::string (const std::filesystem::path &)
+ssg/ScratchStore.h	class	ssg::ScratchRemnantClaim
+ssg/ScratchStore.h	class	ssg::ScratchSession
+ssg/ScratchStore.h	class	ssg::ScratchSessionId
 ssg/ScratchStore.h	class	ssg::ScratchStorage
 ssg/ScratchStore.h	class	ssg::ScratchStore
 ssg/ScratchStore.h	enum	ssg::ScratchDurability
 ssg/ScratchStore.h	enumerator	ssg::ScratchDurability::Durable
 ssg/ScratchStore.h	enumerator	ssg::ScratchDurability::Failed
 ssg/ScratchStore.h	enumerator	ssg::ScratchDurability::Pending
+ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::ScratchRemnantClaim	void (ScratchRemnantClaim &&) noexcept
+ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::ScratchRemnantClaim	void (const ScratchRemnantClaim &)
+ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::id	const ScratchSessionId &() const noexcept
+ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::journalPath	std::filesystem::path () const
+ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::markRestored	void ()
+ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::operator=	ScratchRemnantClaim &(ScratchRemnantClaim &&) noexcept
+ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::operator=	ScratchRemnantClaim &(const ScratchRemnantClaim &)
+ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::path	const std::filesystem::path &() const noexcept
+ssg/ScratchStore.h	func	ssg::ScratchRemnantClaim::replay	JournalReplayResult () const
+ssg/ScratchStore.h	func	ssg::ScratchSession::ScratchSession	void (ScratchSession &&) noexcept
+ssg/ScratchStore.h	func	ssg::ScratchSession::ScratchSession	void (const ScratchSession &)
+ssg/ScratchStore.h	func	ssg::ScratchSession::claimNewestRestorable	std::optional<ScratchRemnantClaim> () const
+ssg/ScratchStore.h	func	ssg::ScratchSession::create	ScratchSession (const std::filesystem::path &, const std::filesystem::path &)
+ssg/ScratchStore.h	func	ssg::ScratchSession::id	const ScratchSessionId &() const noexcept
+ssg/ScratchStore.h	func	ssg::ScratchSession::journalPath	std::filesystem::path () const
+ssg/ScratchStore.h	func	ssg::ScratchSession::operator=	ScratchSession &(ScratchSession &&) noexcept
+ssg/ScratchStore.h	func	ssg::ScratchSession::operator=	ScratchSession &(const ScratchSession &)
+ssg/ScratchStore.h	func	ssg::ScratchSession::path	const std::filesystem::path &() const noexcept
+ssg/ScratchStore.h	func	ssg::ScratchSessionId::value	std::string_view () const noexcept
 ssg/ScratchStore.h	func	ssg::ScratchStorage::appendDocument	void (const std::filesystem::path &, const JournalDocument &)
 ssg/ScratchStore.h	func	ssg::ScratchStorage::appendRemove	void (const std::filesystem::path &, const JournalDocumentKey &)
 ssg/ScratchStore.h	func	ssg::ScratchStorage::replaceCheckpoint	void (const std::filesystem::path &, const JournalRecoverySet &)
@@ -2535,6 +2491,8 @@ ssg/ScratchStore.h	func	ssg::ScratchStore::sessionPath	std::filesystem::path () 
 ssg/ScratchStore.h	func	ssg::ScratchStore::shutdown	void ()
 ssg/ScratchStore.h	func	ssg::ScratchStore::updateDocument	void (JournalDocument)
 ssg/ScratchStore.h	func	ssg::ScratchStore::waitUntilDurable	bool (std::chrono::milliseconds) const
+ssg/ScratchStore.h	func	ssg::operator==	bool (const ScratchSessionId &, const ScratchSessionId &)
+ssg/ScratchStore.h	func	ssg::scratchWorkspaceKey	std::string (const std::filesystem::path &)
 ssg/ScratchStore.h	struct	ssg::ScratchDurabilityState
 ssg/ScratchStore.h	struct	ssg::ScratchQuotaResult
 ssg/ScratchStore.h	struct	ssg::ScratchStoreConfig
@@ -3065,13 +3023,21 @@ ssg/StatusBar.h	func	ssg::StatusBar::viewState	StatusViewState () const
 ssg/StatusBar.h	func	ssg::StatusId::StatusId	void (std::uint64_t) noexcept
 ssg/StatusBar.h	func	ssg::StatusId::operator<=>	std::strong_ordering (const StatusId &) const
 ssg/StatusBar.h	func	ssg::StatusId::value	std::uint64_t () const noexcept
+ssg/StatusBar.h	func	ssg::operator==	bool (const StatusActionNode &, const StatusActionNode &)
 ssg/StatusBar.h	func	ssg::operator==	bool (const StatusItem &, const StatusItem &)
+ssg/StatusBar.h	func	ssg::operator==	bool (const StatusItemView &, const StatusItemView &)
+ssg/StatusBar.h	func	ssg::operator==	bool (const StatusViewState &, const StatusViewState &)
 ssg/StatusBar.h	func	ssg::operator==	bool (const UiAction &, const UiAction &)
+ssg/StatusBar.h	func	ssg::projectStatusActionNodes	std::vector<StatusActionNode> (const StatusViewState &)
 ssg/StatusBar.h	struct	ssg::StatusActionNode
 ssg/StatusBar.h	struct	ssg::StatusEnqueueResult
 ssg/StatusBar.h	struct	ssg::StatusItem
+ssg/StatusBar.h	struct	ssg::StatusItemView
 ssg/StatusBar.h	struct	ssg::StatusViewState
 ssg/StatusBar.h	struct	ssg::UiAction
+ssg/StatusBar.h	var	ssg::StatusActionNode::accessibleLabel	std::string
+ssg/StatusBar.h	var	ssg::StatusActionNode::commandId	std::string
+ssg/StatusBar.h	var	ssg::StatusActionNode::id	UiNodeId
 ssg/StatusBar.h	var	ssg::StatusBar::kCapacity	const std::size_t
 ssg/StatusBar.h	var	ssg::StatusEnqueueResult::accepted	bool
 ssg/StatusBar.h	var	ssg::StatusEnqueueResult::evicted	std::optional<StatusId>
@@ -3080,6 +3046,13 @@ ssg/StatusBar.h	var	ssg::StatusItem::actions	std::vector<UiAction>
 ssg/StatusBar.h	var	ssg::StatusItem::id	StatusId
 ssg/StatusBar.h	var	ssg::StatusItem::priority	StatusPriority
 ssg/StatusBar.h	var	ssg::StatusItem::text	std::string
+ssg/StatusBar.h	var	ssg::StatusItemView::accessibleLabel	std::string
+ssg/StatusBar.h	var	ssg::StatusItemView::actions	std::vector<UiAction>
+ssg/StatusBar.h	var	ssg::StatusItemView::generation	std::uint64_t
+ssg/StatusBar.h	var	ssg::StatusItemView::id	StatusId
+ssg/StatusBar.h	var	ssg::StatusItemView::priority	StatusPriority
+ssg/StatusBar.h	var	ssg::StatusViewState::items	std::vector<StatusItemView>
+ssg/StatusBar.h	var	ssg::StatusViewState::selected	std::size_t
 ssg/StatusBar.h	var	ssg::UiAction::commandId	std::string
 ssg/StatusBar.h	var	ssg::UiAction::id	std::string
 ssg/StatusBar.h	var	ssg::UiAction::label	std::string

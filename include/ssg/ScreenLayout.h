@@ -2,7 +2,7 @@
 
 #include <ssg/UiTree.h>
 #include <ssg/PromptSurface.h>
-#include <ssg/PromptStatusViewState.h>
+#include <ssg/PromptSurface.h>
 #include <ssg/Style.h>
 
 #include <string_view>

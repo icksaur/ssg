@@ -5,7 +5,7 @@
 #include <ssg/HitTester.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/StatusFields.h>
-#include <ssg/PromptStatusViewState.h>
+#include <ssg/PromptSurface.h>
 #include <ssg/ScreenLayout.h>
 #include <ssg/Selection.h>
 #include <ssg/TreeModel.h>

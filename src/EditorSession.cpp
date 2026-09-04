@@ -2143,12 +2143,7 @@ EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
             return {nullptr,
                     "default keymap lacks a global settings.open escape hatch"};
         }
-        bindRuntimeEditing(*impl->catalog, *impl);
-        bindRuntimeFiles(*impl->catalog, *impl);
-        bindRuntimePresentation(*impl->catalog, *impl);
-        bindRuntimeNavigation(*impl->catalog, *impl);
-        bindRuntimeLanguageServices(*impl->catalog, *impl);
-        bindRuntimeHelp(*impl->catalog, *impl);
+        registerAllCommands(*impl->catalog, *impl);
         impl->session =
             std::make_unique<CommandExecutor>(impl->catalog);
         return {std::unique_ptr<EditorSession>{new EditorSession{std::move(impl)}}, {}};

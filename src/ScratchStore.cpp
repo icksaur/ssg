@@ -1,7 +1,6 @@
 #include <ssg/ScratchStore.h>
 
 #include <ssg/platform_files.h>
-#include <ssg/ScratchSession.h>
 
 #include <algorithm>
 #include <condition_variable>

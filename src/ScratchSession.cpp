@@ -1,4 +1,4 @@
-#include <ssg/ScratchSession.h>
+#include <ssg/ScratchStore.h>
 
 #include <algorithm>
 #include <array>
