@@ -1,13 +1,5 @@
-// The `ssg` terminal editor entry point.  This file owns terminal I/O only:
-// raw mode, size queries, byte reads, frame writes, and clean restoration.  All
-// editor, workspace, and layout behavior is the ssg library's; the app drives
-// an EditorSession directly, renders the library's snapshot, and forwards
-// input.
-//
-// Milestone 1 scope: launch over a path argument, draw the shell grid, and quit
-// on Alt+Q.  Input translation through the library keymap and
-// editing arrive in later milestones; quitting is an application lifecycle
-// concern owned here.
+#include <ssg/application.h>
+#include <ssg/fd_readiness.h>
 
 #include <ssg/pointer_routing.h>
 #include <ssg/ssg_terminal.h>
@@ -16,9 +8,6 @@
 #include <ssg/GraphemeLayout.h>
 #include <ssg/TreeSitterGrammars.h>
 #include <ssg/HitTester.h>
-#include <ssg/FindReplace.h>
-#include <ssg/Keymap.h>
-#include <ssg/LuaCommandHost.h>
 #include <ssg/ScriptHost.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Picker.h>
@@ -28,48 +17,31 @@
 
 #include <ssg/init_script.h>
 
-#include <sys/ioctl.h>
-#include <sys/select.h>
-#include <termios.h>
 #include <unistd.h>
 #include <fcntl.h>
 
-#include <cerrno>
 #include <csignal>
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
-#include <any>
-#include <cctype>
 #include <filesystem>
-#include <fstream>
-#include <mutex>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <utility>
 #include <vector>
 
-namespace {
+namespace ssg::app {
 
 namespace fs = std::filesystem;
 
-using ssg::app::evaluateInitScript;
-
-// M10-1 startup instrumentation.  Records a CLOCK_MONOTONIC timestamp per cold-
-// start phase to the file named by the SSG_STARTUP_TRACE env var, so the startup
-// benchmark can attribute exec->first-frame time to phases.  The call sites are
-// preprocessor-gated (STARTUP_MARK), so unless SSG_STARTUP_TRACE_ENABLED is
-// defined (the shipped `ssg` binary) there is no function, symbol, or call at
-// any optimization level.
 #ifdef SSG_STARTUP_TRACE_ENABLED
-void startup_mark_impl(char const* phase) {
+void recordStartupMark(char const* phase) {
     static char const* const path = std::getenv("SSG_STARTUP_TRACE");
     if (path == nullptr) return;
     timespec now{};
@@ -82,173 +54,18 @@ void startup_mark_impl(char const* phase) {
         std::fclose(file);
     }
 }
-#define STARTUP_MARK(phase) startup_mark_impl(phase)
 #else
-#define STARTUP_MARK(phase) ((void)0)
+void recordStartupMark(char const*) {}
 #endif
 
-void writeAll(std::string_view bytes) {
-    std::size_t offset = 0;
-    while (offset < bytes.size()) {
-        auto written =
-            ::write(STDOUT_FILENO, bytes.data() + offset, bytes.size() - offset);
-        if (written <= 0) break;
-        offset += static_cast<std::size_t>(written);
-    }
-}
-
-// Puts the terminal in raw mode on the alternate screen and restores the
-// original mode, cursor, and primary screen on destruction (RAII).  restore()
-// performs the same teardown eagerly and idempotently so a terminating-signal
-// path (M9-X) can restore the terminal before re-raising, without the
-// destructor undoing or repeating it.
-//
-// The escape-sequence half is delegated to TerminalModes: each mode names its
-// own exit, and the bytes that undo whatever is currently entered are kept as
-// data so a fatal-signal handler can write them without traversing anything
-//.  termios is not a mode in that
-// sense -- it is restored by value, and tcsetattr is not async-signal-safe --
-// so it stays here.
-class TerminalMode {
-public:
-    TerminalMode()
-        : modes_{[](std::string_view bytes) { writeAll(std::string{bytes}); }} {
-        if (tcgetattr(STDIN_FILENO, &original_) != 0) return;
-        termios raw = original_;
-        raw.c_lflag &= ~(ICANON | ECHO | ISIG | IEXTEN);
-        raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
-        raw.c_oflag &= ~(OPOST);
-        raw.c_cc[VMIN] = 1;
-        raw.c_cc[VTIME] = 0;
-        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) return;
-        active_ = true;
-        // Entry order is the curated order, and the guards leave in reverse:
-        // mouse reporting is disabled before the alternate screen is left, or
-        // reporting would stay on in the primary screen.
-        entered_.push_back(modes_.enter(ssg::app::kAlternateScreen));
-        entered_.push_back(modes_.enter(ssg::app::kCursorStyleBar));
-        entered_.push_back(modes_.enter(ssg::app::kMouseButtons));
-        entered_.push_back(modes_.enter(ssg::app::kMouseMotion));
-        entered_.push_back(modes_.enter(ssg::app::kMouseSgrCoordinates));
-        entered_.push_back(modes_.enter(ssg::app::kBracketedPaste));
-    }
-
-    ~TerminalMode() { restore(); }
-
-    // Restore the terminal to its pre-launch state.  Safe to call more than once
-    // (the destructor calls it again); only the first call does the work.
-    void restore() noexcept {
-        if (!active_) return;
-        active_ = false;
-        // Dropping the guards in reverse writes every leave sequence.  Nothing
-        // is written by hand here: the cursor is hidden and shown within each
-        // frame, so no cursor debt survives a frame for teardown to settle.
-        entered_.clear();
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
-    }
-
-    TerminalMode(TerminalMode const&) = delete;
-    TerminalMode& operator=(TerminalMode const&) = delete;
-
-    [[nodiscard]] bool active() const noexcept { return active_; }
-
-    // Enter the Kitty keyboard protocol once, when the terminal has answered the
-    // capability query.  Separate from the constructor's unconditional modes
-    // because the probe reply lands asynchronously, after construction; latched so
-    // a repeated capability check does not push flag 1 twice.  The Guard rides the
-    // same `entered_` teardown as every other mode, so restore()/the destructor
-    // pop it -- the pop is never written unless this push was.
-    void enableKeyboardProtocol() {
-        if (!active_ || keyboardProtocolEntered_) return;
-        entered_.push_back(modes_.enter(ssg::app::kKeyboardProtocol));
-        keyboardProtocolEntered_ = true;
-    }
-
-private:
-    ssg::app::TerminalModes modes_;
-    std::vector<ssg::app::TerminalModes::Guard> entered_;
-    termios original_{};
-    bool active_ = false;
-    bool keyboardProtocolEntered_ = false;
-};
-
-ssg::ViewportDimensions terminalSize() {
-    winsize size{};
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col > 0 &&
-        size.ws_row > 0) {
-        return {size.ws_col, size.ws_row};
-    }
-    return {80, 24};
-}
-
-// Which descriptors became ready within `timeout_ms` (negative blocks): the
-// keyboard, the signal self-pipe, or both.  Every wait in the loop watches the
-// signal pipe so a resize/terminate signal is observed promptly even mid-drag or
-// mid-Escape (M9-W); the callers drain and act on `signal`.
-struct FdReadiness {
-    bool input = false;      // STDIN has bytes.
-    bool signal = false;     // The signal self-pipe has pending tags.
-    bool gitDiff = false;    // The runtime git-diff wake descriptor is readable.
-    bool initScript = false; // The init-script reload wake descriptor is readable.
-};
-
-FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd,
-                          int initScriptFd = -1) {
-    fd_set set;
-    FD_ZERO(&set);
-    FD_SET(STDIN_FILENO, &set);
-    FD_SET(signalFd, &set);
-    int maxFd = std::max(STDIN_FILENO, signalFd);
-    if (gitDiffFd >= 0) {
-        FD_SET(gitDiffFd, &set);
-        maxFd = std::max(maxFd, gitDiffFd);
-    }
-    if (initScriptFd >= 0) {
-        FD_SET(initScriptFd, &set);
-        maxFd = std::max(maxFd, initScriptFd);
-    }
-    timeval timeout{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
-    int const ready =
-        ::select(maxFd + 1, &set, nullptr, nullptr,
-                 timeoutMs < 0 ? nullptr : &timeout);
-    if (ready <= 0) return {};
-    return {
-        FD_ISSET(STDIN_FILENO, &set) != 0, FD_ISSET(signalFd, &set) != 0,
-        gitDiffFd >= 0 ? FD_ISSET(gitDiffFd, &set) != 0 : false,
-        initScriptFd >= 0 ? FD_ISSET(initScriptFd, &set) != 0 : false};
-}
+namespace {
 
 constexpr int kEscapeTimeoutMs = 30;
-
-// While a drag is held at the editor edge, wake this often to auto-scroll one
-// line and re-extend the selection, even with no new pointer event (M8-S2).
 constexpr int kEdgeScrollIntervalMs = 40;
-
-// Idle wake cadence so the runtime's autosave debounce (default 10s, a library
-// setting) gets a periodic "a moment passed" tick even when the user is not
-// typing; the tick itself decides nothing, it only lets the library flush drafts
-// of open dirty documents that are due (single-file draft recovery, M15).
 constexpr int kAutosaveTickMs = 1000;
-
-// Minimum interval between rendered frames WHILE a pointer drag is held. A drag
-// (scrollbar thumb or text selection) makes the terminal emit motion events at a
-// rate far above a useful refresh rate; without a cap the loop renders a full
-// frame per event and pins a core. This cap lets input accumulate for the rest of
-// the window instead of driving another frame. ~60fps
-// is smooth for a drag; the drag end position is always honoured because the last
-// event is processed on release.
 constexpr int kDragFrameIntervalMs = 16;
-
-// M9-W signal-event wakeup: the write end of a non-blocking self-pipe.  Signal
-// handlers are the only writers and touch nothing else, so a raw fd in a
-// sig_atomic-safe int is the whole async-signal-safe surface.  -1 until the pipe
-// is created; a handler firing before then is a no-op.
 volatile std::sig_atomic_t gSignalPipeWrite = -1;
 
-// The sole action taken in async-signal context: write this signal's number as
-// one tag byte to the self-pipe so the event loop wakes and handles it in normal
-// context.  A full pipe (EAGAIN) already means "wake pending", so the result is
-// ignored; write() is async-signal-safe.
 extern "C" void signalTagHandler(int signo) {
     int const fd = gSignalPipeWrite;
     if (fd < 0) return;
@@ -257,8 +74,6 @@ extern "C" void signalTagHandler(int signo) {
     (void)written;
 }
 
-// Install the tag-writing handler for a signal, restarting interrupted syscalls
-// (the self-pipe select() is the reliable wake, independent of SA_RESTART).
 void installSignalTagHandler(int signo) {
     struct sigaction action{};
     action.sa_handler = signalTagHandler;
@@ -284,367 +99,24 @@ void popWord(std::string& text) {
     }
 }
 
-
-
-// True for empty or whitespace-only content -- treated as "nothing to
-// run", same as an absent file, so a zero-byte read observed mid-truncate
-// (or mid-save, before an editor writes real bytes) can never be queued
-// or evaluated as a false "successful reload of nothing" (evaluateInitScript
-// below must never be called with this).
-bool isBlank(std::string const& text) {
-    return std::all_of(text.begin(), text.end(), [](unsigned char byte) {
-        return std::isspace(byte) != 0;
-    });
-}
-
-// Resolves `init.lua`'s path for this OS. Returns nullopt (after printing a
-// diagnostic) only if the config root itself is unresolvable (e.g. HOME
-// unset) -- an unusual environment problem, distinct from the file simply
-// not existing there.
-std::optional<std::filesystem::path> resolveInitScriptPath() {
-    try {
-        return ssg::userConfigRoot("ssg") / "init.lua";
-    } catch (std::exception const& error) {
-        std::fprintf(stderr, "ssg: could not resolve config directory: %s\n",
-                    error.what());
-        return std::nullopt;
-    }
-}
-
-// Reads `scriptPath`'s full content if it currently exists AND is not
-// blank. Returns nullopt silently (NO diagnostic) if the file simply does
-// not exist, or exists but is empty/whitespace-only -- both are "nothing
-// to run", the normal no-config case, and also the steady state after a
-// mid-run delete (see InitScriptWatcher below). A genuine I/O error (a read
-// failure other than "does not exist") also yields nullopt, and is reported
-// only when `reportDiagnostics` is set.
-//
-// One read decides absent-vs-blank-vs-unreadable. The previous
-// exists()-then-open pair could call a file that appeared between the two
-// calls unreadable, and a file deleted between them a genuine I/O error.
-std::optional<std::string> readInitScriptIfPresent(
-    std::filesystem::path const& scriptPath, bool reportDiagnostics) {
-    auto result = ssg::readFile(scriptPath);
-    if (result.status == ssg::FileIoStatus::NotFound) return std::nullopt;
-    if (!result.ok()) {
-        if (reportDiagnostics) {
-            std::fprintf(stderr, "ssg: could not read %s: %s\n",
-                        scriptPath.string().c_str(), result.message.c_str());
-        }
-        return std::nullopt;
-    }
-    std::string text{reinterpret_cast<char const*>(result.bytes.data()),
-                     result.bytes.size()};
-    if (isBlank(text)) return std::nullopt;
-    return text;
-}
-
-// Loads and evaluates `init.lua` exactly once at startup, via
-// resolveInitScriptPath + readInitScriptIfPresent + evaluateInitScript.
-// Absent file, or any of the diagnostic-then-return-nullopt cases above:
-// silently continue starting with defaults (a broken config script must
-// never block opening the
-// editor). Returns the content actually applied (or nullopt), so the
-// caller can seed InitScriptWatcher's "last applied" baseline and avoid
-// redundantly re-evaluating the SAME unchanged content on its first poll.
-std::optional<std::string> loadInitScript(ssg::ScriptHost& scripts,
-                                          ssg::EditorSession& runtime) {
-    auto const scriptPath = resolveInitScriptPath();
-    if (!scriptPath) return std::nullopt;
-    auto script = readInitScriptIfPresent(*scriptPath, true);
-    if (!script) return std::nullopt;
-    evaluateInitScript(scripts, runtime, *scriptPath, *script);
-    return script;
-}
-// How often the background thread re-reads init.lua's content to check for
-// a change. Content, not mtime/
-// size, is compared -- a same-size rewrite within one filesystem timestamp
-// tick would otherwise evade a stat-only check, and the content must be
-// read anyway to queue it for evaluation.
-constexpr std::chrono::milliseconds kInitScriptPollInterval{500};
-
-// Watches init.lua for changes on a background thread and wakes the main
-// loop to re-evaluate it -- mirrors EditorSession's OWN git-diff-worker
-// shape (background poll thread + wake self-pipe + main-thread-only apply,
-// src/git_diff_worker.h's GitDiffWorker) as a SEPARATE, dedicated
-// mechanism (not sharing that worker's thread or pipe): init.lua lives
-// outside the workspace tree, where the library's
-// FilesystemWatcher (a workspace-rooted native recursive watcher) does not
-// apply. All Lua evaluation and runtime.dispatch() calls happen on the
-// MAIN thread inside drainAndEvaluate(), never on the background thread,
-// which only ever reads file bytes and compares strings.
-class InitScriptWatcher {
-public:
-    // `alreadyApplied` is whatever content `loadInitScript()` already
-    // evaluated at startup (or nullopt if none) -- seeding the "last
-    // applied" baseline with it so the watcher's FIRST poll never
-    // redundantly re-queues the SAME unchanged startup content as if it
-    // were a new edit.
-    InitScriptWatcher(std::filesystem::path scriptPath,
-                      std::optional<std::string> alreadyApplied)
-        : scriptPath_{std::move(scriptPath)},
-          lastApplied_{std::move(alreadyApplied).value_or(std::string{})} {
-        if (::pipe(wakePipe_) != 0) {
-            wakePipe_[0] = wakePipe_[1] = -1;
-            return;
-        }
-        for (int fd : wakePipe_) {
-            int const flags = ::fcntl(fd, F_GETFL, 0);
-            if (flags == -1 || ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
-                (void)::close(wakePipe_[0]);
-                (void)::close(wakePipe_[1]);
-                wakePipe_[0] = wakePipe_[1] = -1;
-                return;
-            }
-        }
-        thread_ = std::thread([this] { run(); });
-    }
-
-    ~InitScriptWatcher() {
-        if (thread_.joinable()) {
-            {
-                std::lock_guard lock{mutex_};
-                stop_ = true;
-            }
-            // Notify rather than rely on the poll interval elapsing, so
-            // shutdown is prompt instead of blocking for up to
-            // kInitScriptPollInterval.
-            wake_.notify_all();
-            thread_.join();
-        }
-        if (wakePipe_[0] != -1) (void)::close(wakePipe_[0]);
-        if (wakePipe_[1] != -1) (void)::close(wakePipe_[1]);
-    }
-
-    InitScriptWatcher(InitScriptWatcher const&) = delete;
-    InitScriptWatcher& operator=(InitScriptWatcher const&) = delete;
-
-    // -1 if the watcher failed to start (e.g. pipe()/fcntl() failure) --
-    // the main loop simply never selects on it, so auto-reload is silently
-    // unavailable rather than fatal (matching the "never block startup"
-    // invariant extended to the reload mechanism itself).
-    [[nodiscard]] int wakeDescriptor() const noexcept { return wakePipe_[0]; }
-
-    // Drains the wake pipe and, if a stable new script is queued,
-    // evaluates it on the CALLING (main) thread. Call this only after the
-    // main loop's select() reports wakeDescriptor() readable.
-    void drainAndEvaluate(ssg::ScriptHost& scripts, ssg::EditorSession& runtime) {
-        char buffer[64];
-        while (::read(wakePipe_[0], buffer, sizeof buffer) > 0) {
-        }
-        std::optional<std::string> pending;
-        {
-            std::lock_guard lock{mutex_};
-            pending = std::move(pendingScript_);
-            pendingScript_.reset();
-        }
-        if (pending) {
-            evaluateInitScript(scripts, runtime, scriptPath_, *pending);
-        }
-    }
-
-private:
-    void run() {
-        // `lastRead` is the previous poll's reading (to detect two
-        // consecutive identical reads = stable); `lastApplied_` (shared
-        // with the constructor's seed) is the content last actually
-        // queued for evaluation -- empty after a delete is observed, so a
-        // later recreation compares against an empty baseline and reloads
-        // exactly like any other change (recreate
-        // behaves like the file appearing for the first time).
-        std::optional<std::string> lastRead;
-        std::unique_lock lock{mutex_};
-        while (!stop_) {
-            lock.unlock();
-            auto current = readInitScriptIfPresentQuiet(scriptPath_);
-            lock.lock();
-            if (current && lastRead && *current == *lastRead &&
-                *current != lastApplied_) {
-                // Stable across two consecutive polls (this reading and
-                // the last) AND different from what was last applied --
-                // queue it and wake the main thread.
-                lastApplied_ = *current;
-                bool const wasEmpty = !pendingScript_.has_value();
-                pendingScript_ = *current;
-                if (wasEmpty) {
-                    char const tag = 'i';
-                    (void)::write(wakePipe_[1], &tag, 1);
-                }
-            } else if (!current) {
-                // Deleted, unreadable, or blank (readInitScriptIfPresentQuiet
-                // treats blank the same as absent -- see isBlank): clear the
-                // applied baseline so a later recreation is treated as
-                // fresh -- but take NO action on
-                // the runtime itself.
-                lastApplied_.clear();
-            }
-            lastRead = current;
-            wake_.wait_for(lock, kInitScriptPollInterval,
-                           [this] { return stop_; });
-        }
-    }
-
-    // Same shape as readInitScriptIfPresent, but never prints a diagnostic
-    // -- this runs continuously on a background thread, so a transient
-    // read failure (e.g. observed mid-rename) must not spam stderr; only
-    // the eventual evaluateInitScript() call (on a STABLE, successfully
-    // read script) can ever produce a diagnostic, exactly like startup.
-    // Blank content (see isBlank) is treated the same as absent, so a
-    // zero-byte read observed mid-truncate/mid-save can never be queued or
-    // evaluated as a false "successful reload of nothing". Diagnostics are
-    // suppressed here because a watcher fires on transient states a user did
-    // not ask about; startup uses the same reader with reporting on.
-    static std::optional<std::string> readInitScriptIfPresentQuiet(
-        std::filesystem::path const& scriptPath) {
-        return readInitScriptIfPresent(scriptPath, false);
-    }
-
-    std::filesystem::path scriptPath_;
-    int wakePipe_[2] = {-1, -1};
-    std::thread thread_;
-    std::mutex mutex_;
-    std::condition_variable wake_;
-    bool stop_ = false;
-    std::string lastApplied_;
-    std::optional<std::string> pendingScript_;
-};
-
 }  // namespace
 
-namespace {
-
-// `--capabilities`: ask the terminal what it can do and print the answers, then
-// exit.  This is the only way a user can see what SSG believes about their
-// terminal, which is what makes a wrong answer diagnosable and the SSG_TERM_*
-// overrides actionable.
-//
-// It deliberately does NOT enter the alternate screen -- the report has to stay
-// on the user's scrollback -- but it does need raw mode, or the replies would be
-// line-buffered and echoed into the report itself.
-int reportCapabilities() {
-    ssg::app::TerminalCapabilities capabilities{
-        [](std::string_view name) { return std::getenv(std::string{name}.c_str()); }};
-
-    termios original{};
-    bool raw = false;
-    if (tcgetattr(STDIN_FILENO, &original) == 0) {
-        termios probe = original;
-        probe.c_lflag &= ~(ICANON | ECHO);
-        probe.c_cc[VMIN] = 0;
-        probe.c_cc[VTIME] = 0;
-        raw = tcsetattr(STDIN_FILENO, TCSAFLUSH, &probe) == 0;
-    }
-    if (raw) {
-        writeAll(capabilities.beginProbe());
-        // Drain for the WHOLE window rather than stopping at the fence.  The
-        // editor can stop early -- it has a frame to draw -- but the diagnostic's
-        // job is to show what the terminal said, including anything that arrived
-        // too late to be believed.
-        auto const deadline = std::chrono::steady_clock::now() +
-                              ssg::app::TerminalCapabilities::kProbeWindow;
-        std::string buffer;
-        while (std::chrono::steady_clock::now() < deadline) {
-            if (!waitReadiness(10, -1, -1).input) continue;
-            char bytes[256];
-            auto const count = ::read(STDIN_FILENO, bytes, sizeof bytes);
-            if (count <= 0) continue;
-            buffer.append(bytes, static_cast<std::size_t>(count));
-            while (!buffer.empty()) {
-                std::size_t consumed = 0;
-                auto const decoded = ssg::app::decode_input(buffer, true, consumed);
-                if (decoded.status == ssg::app::DecodeStatus::incomplete ||
-                    consumed == 0) {
-                    break;
-                }
-                if (decoded.status == ssg::app::DecodeStatus::reply) {
-                    capabilities.observeReply(decoded.reply);
-                }
-                buffer.erase(0, consumed);
-            }
-        }
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
-    }
-
-    char const* const term = std::getenv("TERM");
-    std::printf("TERM=%s\n", term == nullptr ? "(unset)" : term);
-    std::printf("%-24s %s\n", "color_depth",
-                ssg::app::color_depth_name(capabilities.colorDepth()).data());
-    for (auto const capability : ssg::app::kAllCapabilities) {
-        std::printf("%-24s %s\n",
-                    std::string{ssg::app::capability_name(capability)}.c_str(),
-                    capabilities.has(capability) ? "yes" : "no");
-    }
-    if (!raw) {
-        std::printf(
-            "\nstdin is not a terminal, so nothing was asked: every queried\n"
-            "capability above reports its default.\n");
-    }
-
-    // What the terminal actually said.  A "no" above means one of three very
-    // different things, and only these lines distinguish them: silence, a reply
-    // in a shape SSG does not parse, or a reply that arrived after the DA1 fence
-    // closed the window.
-    auto const visible = [](std::string_view bytes) {
-        std::string shown;
-        for (unsigned char const byte : bytes) {
-            if (byte == 0x1b) {
-                shown += "<ESC>";
-            } else if (byte < 0x20 || byte == 0x7f) {
-                shown += '.';
-            } else {
-                shown += static_cast<char>(byte);
-            }
-        }
-        return shown;
-    };
-    auto const& log = capabilities.probeLog();
-    if (raw) {
-        std::printf("\nreplies (%zu):\n", log.believed.size());
-        for (auto const& reply : log.believed) {
-            std::printf("  %s\n", visible(reply).c_str());
-        }
-        if (log.believed.empty()) {
-            std::printf("  (none -- the terminal answered nothing at all)\n");
-        }
-        if (!log.ignored.empty()) {
-            std::printf(
-                "\nreplies that arrived AFTER the fence closed the window, and\n"
-                "were therefore not believed (%zu):\n",
-                log.ignored.size());
-            for (auto const& reply : log.ignored) {
-                std::printf("  %s\n", visible(reply).c_str());
-            }
-        }
-    }
-    std::printf(
-        "\nOverride any answer with SSG_TERM_<NAME>=on|off (for example\n"
-        "SSG_TERM_SYNCHRONIZED_OUTPUT=off), or the color depth with\n"
-        "SSG_COLOR_DEPTH.  An override always beats what the terminal reports.\n");
-    return 0;
-}
-
-}  // namespace
-
-int main(int argc, char** argv) {
-    STARTUP_MARK("main_entry");
-    // `--` ends option parsing, so a file genuinely named `--capabilities` stays
-    // openable (`ssg -- --capabilities`).  Without it the first flag this binary
-    // ever grew would have quietly made a filename unreachable.
+LaunchArguments parseArguments(int argc, char** argv) {
+    LaunchArguments arguments;
     int firstOperand = 1;
     if (argc > 1 && std::string_view{argv[1]} == "--") {
         firstOperand = 2;
     } else if (argc > 1 && std::string_view{argv[1]} == "--capabilities") {
-        return reportCapabilities();
+        arguments.capabilities = true;
+        return arguments;
     }
-    fs::path argument =
-        argc > firstOperand ? fs::path{argv[firstOperand]} : fs::path{};
-    auto target = ssg::app::resolve_launch(argument);
+    if (argc > firstOperand) arguments.argument = argv[firstOperand];
+    return arguments;
+}
 
-    // A STABLE per-user state root so drafts and their archive survive a restart
-    // (single-file draft recovery, M15) -- unlike the old per-PID temp dir, which
-    // vanished with the process. XDG_STATE_HOME (via userStateRoot) is the
-    // standard override; SSG_STATE_DIR is a direct absolute-path override for
-    // tests and packaging.
+Application::Application(LaunchArguments arguments) {
+    auto target = resolve_launch(arguments.argument);
+
     fs::path stateBase;
     if (const char* stateOverride = std::getenv("SSG_STATE_DIR");
         stateOverride != nullptr && *stateOverride != '\0' &&
@@ -656,25 +128,16 @@ int main(int argc, char** argv) {
     std::error_code code;
     fs::create_directories(stateBase / "scratch", code);
     fs::create_directories(stateBase / "archive", code);
-    // The state subtree holds unsaved and deleted user content, so keep it
-    // private regardless of the ambient umask; the ScratchStore hardens its own
-    // journal files, but the enclosing directories are ours to protect.
     for (const auto& dir : {stateBase, stateBase / "scratch", stateBase / "archive"}) {
         std::error_code permissionError;
         if (fs::is_directory(dir, permissionError)) {
             try {
                 ssg::setOwnerOnlyPermissions(dir);
             } catch (const std::exception&) {
-                // Best-effort: a filesystem that cannot express owner-only
-                // permissions must not stop the editor from launching.
             }
         }
     }
 
-    // Recovery records are in-session undo of destructive filesystem ops; they
-    // have no cross-restart requirement and MUST stay per-process, so a stable
-    // shared recovery root (with no inter-process budget/eviction coordination)
-    // cannot let concurrent instances race each other's records.
     auto recoveryBase =
         fs::temp_directory_path() / ("ssg-" + std::to_string(::getpid()));
     fs::create_directories(recoveryBase / "recovery", code);
@@ -684,97 +147,63 @@ int main(int argc, char** argv) {
     config.scratchRoot = stateBase / "scratch";
     config.recoveryRoot = recoveryBase / "recovery";
     config.archiveRoot = stateBase / "archive";
-    // M10 fast startup: defer the workspace tree scan and syntax highlighting off
-    // the first-frame path; prime_deferred() runs them once the first frame is
-    // drawn.
     config.deferEnrichment = true;
     config.syntaxParser = ssg::TreeSitterParserFactory::createDefault();
     auto created = ssg::EditorSession::create(config);
     if (!created.accepted()) {
         std::fprintf(stderr, "ssg: %s\n", created.message.c_str());
-        return 1;
+        return;
     }
-    auto& runtime = *created.session;
-    int const gitDiffWakeFd = runtime.gitDiffWakeDescriptor();
-    STARTUP_MARK("post_create");
+    runtime = std::move(created.session);
+    gitDiffWakeFd = runtime->gitDiffWakeDescriptor();
+    recordStartupMark("post_create");
 
-    ssg::GridPresenter gridPresenter{};
-    STARTUP_MARK("post_presenter_init");
-
-    // Lives for the rest of the process, so a function init.lua defines
-    // remains callable long after the script that defined it has finished.
-    ssg::ScriptHost scripts{
-        runtime,
-        [&](ssg::ViewAction const& request) {
-            auto frame = gridPresenter.project(runtime, {terminalSize(), {}});
-            if (!frame) {
-                return ssg::ViewActionResult{
-                    ssg::ViewActionStatus::Rejected, std::nullopt,
-                    "view action has no current grid frame"};
-            }
-            return gridPresenter.apply(request, *frame);
-        }};
-    auto const appliedInitScript = loadInitScript(scripts, runtime);
-
-    // Auto-reload: watches the SAME path just loaded
-    // above, on a background thread, and wakes the main loop's select() to
-    // re-evaluate it when it changes. Absent if the config root itself
-    // could not be resolved (already diagnosed by loadInitScript above).
-    // Seeded with whatever loadInitScript already applied, so the
-    // watcher's first poll never redundantly re-queues the SAME unchanged
-    // startup content as if it were a new edit.
-    std::optional<InitScriptWatcher> initScriptWatcher;
+    gridPresenter.emplace();
+    recordStartupMark("post_presenter_init");
+    scripts.emplace(*runtime, [this](ssg::ViewAction const& request) {
+        auto frame = gridPresenter->project(*runtime, {terminalSize(), {}});
+        if (!frame) {
+            return ssg::ViewActionResult{
+                ssg::ViewActionStatus::Rejected, std::nullopt,
+                "view action has no current grid frame"};
+        }
+        return gridPresenter->apply(request, *frame);
+    });
+    auto const appliedInitScript = loadInitScript(*scripts, *runtime);
     if (auto scriptPath = resolveInitScriptPath()) {
         initScriptWatcher.emplace(*scriptPath, appliedInitScript);
     }
 
-    // Set when startup leaves a document ready to type into -- either the file
-    // named on the command line, or the unnamed buffer opened below. Used after
-    // the deferred panel.show_files dispatch to re-assert editor focus, since
-    // that dispatch moves focus to the panel. The condition is "is there
-    // something to edit", NOT "was a file opened": a new buffer is just as
-    // editable, and treating it otherwise silently swallows everything typed.
-    bool startsWithAnEditableDocument = false;
-    // Distinct from the above: did a file get opened BY NAME?  The Files sidebar
-    // is opened at startup only when it was not -- someone who named a file came
-    // to edit that file, and a sidebar covering a third of the screen is in the
-    // way.  With no argument there is nothing to look at but an empty buffer, so
-    // the sidebar is the useful thing to show.
-    bool openedNamedFile = false;
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
-            auto const openResult = runtime.dispatch(
-                {"file.open", *target.file});
+            auto const openResult = runtime->dispatch({"file.open", *target.file});
             startsWithAnEditableDocument = openResult.accepted();
             openedNamedFile = openResult.accepted();
-            // panel.show_files (dispatched later, once the deferred tree
-            // scan below completes) moves focus to the panel as a side
-            // effect; when a file was explicitly named on the command
-            // line, the user wants to start editing it, so focus is
-            // re-asserted onto the editor AFTER that dispatch runs (see
-            // startsWithAnEditableDocument's use below), not here.
         }
     }
-    // Nothing to edit otherwise: no argument, an argument naming a file that
-    // does not exist, or an open that failed. Starting on an unnamed buffer
-    // means the editor is always typeable, and `file.save` prompts for a name
-    // when the user is ready to keep it.
     if (!startsWithAnEditableDocument) {
-        startsWithAnEditableDocument =
-            runtime.dispatch({"file.new", {}})
-                .accepted();
+        startsWithAnEditableDocument = runtime->dispatch({"file.new", {}}).accepted();
     }
-    STARTUP_MARK("post_open");
+    recordStartupMark("post_open");
 
-    TerminalMode mode;
-    if (!mode.active()) {
+    terminal.emplace();
+    if (!terminal->active()) {
         std::fprintf(stderr, "ssg: stdin/stdout is not an interactive terminal\n");
-        return 1;
+        return;
     }
+    ready = true;
+}
 
-    // M9-W: a non-blocking self-pipe the event loop selects on, woken by signal
-    // handlers that write one tag byte each.  Both ends are non-blocking so the
-    // handler never blocks and a drain never stalls.
+int Application::runEventLoop() {
+    if (!ready) return 1;
+    auto& runtime = *this->runtime;
+    auto& gridPresenter = *this->gridPresenter;
+    auto& scripts = *this->scripts;
+    auto& mode = *this->terminal;
+    auto& initScriptWatcher = this->initScriptWatcher;
+    int const gitDiffWakeFd = this->gitDiffWakeFd;
+    bool const startsWithAnEditableDocument = this->startsWithAnEditableDocument;
+    bool const openedNamedFile = this->openedNamedFile;
     int signalPipe[2] = {-1, -1};
     if (::pipe(signalPipe) != 0) {
         std::fprintf(stderr, "ssg: failed to create signal pipe\n");
@@ -789,25 +218,11 @@ int main(int argc, char** argv) {
     installSignalTagHandler(SIGTERM);
     installSignalTagHandler(SIGHUP);
 
-    // What the terminal can do, resolved in one place (INV-capability-single-
-    // source).  Color depth is answered from the environment immediately; the
-    // queried capabilities stay at their conservative defaults until their
-    // replies land, so nothing here blocks the first frame.
     ssg::app::TerminalCapabilities capabilities{
         [](std::string_view name) { return std::getenv(std::string{name}.c_str()); }};
     ssg::ColorDepth const colorDepth = capabilities.colorDepth();
-
-    // Ask the terminal what it can do.  The answers arrive on stdin, which the
-    // readiness loop below already watches, so nothing waits for them here and
-    // the first frame renders against the conservative defaults
-    // (INV-startup-unblocked).
     writeAll(capabilities.beginProbe());
 
-    // Drain and classify any pending signal tags.  Returns false to keep looping;
-    // a terminating signal does not return — it restores the terminal in normal
-    // context (tcsetattr is not async-signal-safe) and re-raises with the default
-    // disposition so the exit status reflects the signal (M9-X).  A resize needs
-    // no work here: the next snapshot at the loop top re-queries terminal_size().
     auto drainSignals = [&]() -> void {
         char scratch[64];
         std::string tags;
@@ -1106,7 +521,7 @@ int main(int argc, char** argv) {
                 if (!firstFrameMarked) {
                     // M10-1 stop mark: the first content frame (an actual rendered
                     // payload), not the earlier terminal-setup bytes.
-                    STARTUP_MARK("first_content_frame");
+                    recordStartupMark("first_content_frame");
                     firstFrameMarked = true;
                     writeAll(frame);
                     // M10-3/M10-4: the first frame is on screen; now run the
@@ -1537,3 +952,5 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+
+}  // namespace ssg::app

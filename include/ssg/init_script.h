@@ -1,7 +1,11 @@
 #pragma once
 
 #include <filesystem>
+#include <condition_variable>
+#include <mutex>
+#include <optional>
 #include <string>
+#include <thread>
 
 namespace ssg {
 class ScriptHost;
@@ -23,5 +27,36 @@ namespace ssg::app {
 void evaluateInitScript(ScriptHost& scripts, EditorSession& runtime,
                         std::filesystem::path const& scriptPath,
                         std::string const& script);
+
+[[nodiscard]] std::optional<std::filesystem::path> resolveInitScriptPath();
+[[nodiscard]] std::optional<std::string> loadInitScript(
+    ScriptHost& scripts, EditorSession& runtime);
+
+class InitScriptWatcher {
+public:
+    InitScriptWatcher(std::filesystem::path scriptPath,
+                      std::optional<std::string> alreadyApplied);
+    ~InitScriptWatcher();
+
+    InitScriptWatcher(InitScriptWatcher const&) = delete;
+    InitScriptWatcher& operator=(InitScriptWatcher const&) = delete;
+
+    [[nodiscard]] int wakeDescriptor() const noexcept;
+    void drainAndEvaluate(ScriptHost& scripts, EditorSession& runtime);
+
+private:
+    void run();
+    [[nodiscard]] static std::optional<std::string> readInitScriptIfPresentQuiet(
+        std::filesystem::path const& scriptPath);
+
+    std::filesystem::path scriptPath_;
+    int wakePipe_[2] = {-1, -1};
+    std::thread thread_;
+    std::mutex mutex_;
+    std::condition_variable wake_;
+    bool stop_ = false;
+    std::string lastApplied_;
+    std::optional<std::string> pendingScript_;
+};
 
 }  // namespace ssg::app

@@ -168,16 +168,16 @@ public:
     [[nodiscard]] DiffIngressResult applyGitDiffScan(GitDiffScan scan);
     // Resets the live keymap to defaultTerminalKeymap() -- the same
     // hand-reviewed keymap installed at EditorSession::create. Called by
-    // the host (src/ssg_main.cpp) immediately before every init.lua
+    // the host (src/application.cpp) immediately before every init.lua
     // evaluation (startup AND auto-reload), so keymap.bind/keymap.unbind
     // always start from a clean slate: init.lua's current content is the
     // WHOLE keymap customization, never additive across reloads. A dedicated
     // method rather
-    // than ssg_main.cpp reaching into Impl fields directly.
+    // than application.cpp reaching into Impl fields directly.
     void resetKeymapToDefault();
     // Moves keyboard focus to the editor (e.g. after tab.activate succeeds),
     // exposed as a dedicated method
-    // for the host (src/ssg_main.cpp) to call after opening a
+    // for the host (src/application.cpp) to call after opening a
     // command-line file argument at startup, so focus lands on the
     // editor rather than wherever panel.show_files left it. Not a
     // Lua/keymap/palette command -- an app/runtime seam only, like

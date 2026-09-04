@@ -157,7 +157,7 @@ TEST(optionalConstructionAuditIsWiredPositiveControl) {
     fs::remove_all(root);
 }
 
-// Pins the exact ordering src/ssg_main.cpp's startup sequence depends on
+// Pins the exact ordering src/application.cpp's startup sequence depends on
 // (regression coverage for the "ssg: could not open Files sidebar: files
 // tree provider is unavailable" bug): with deferred enrichment, the tree's
 // "filesystem" provider does not exist until primeDeferred() runs, so
@@ -186,7 +186,7 @@ TEST(panelShowFilesRequiresPrimeDeferredFirst) {
 // showPanelProvider side effect moves keyboard focus to the panel
 // unconditionally, so a startup sequence that opens a command-line file
 // argument (and focuses the editor) BEFORE dispatching panel.show_files
-// (matching src/ssg_main.cpp's ordering: file.open+focusEditor() pre-loop,
+// (matching src/application.cpp's ordering: file.open+focusEditor() pre-loop,
 // panel.show_files after primeDeferred() inside the loop) must re-assert
 // editor focus AFTER panel.show_files, or the file-argument launch silently
 // ends with focus on the panel instead of the editor.
@@ -197,7 +197,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    // Mirrors src/ssg_main.cpp's pre-loop file-argument open.
+    // Mirrors src/application.cpp's pre-loop file-argument open.
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}})
                     .accepted());
     runtime.focusEditor();
@@ -209,7 +209,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
                   ssg::FocusTarget::Editor);
     }
 
-    // Mirrors src/ssg_main.cpp's post-primeDeferred panel dispatch: this
+    // Mirrors src/application.cpp's post-primeDeferred panel dispatch: this
     // moves focus to the panel as a side effect, clobbering the above.
     runtime.primeDeferred();
     ASSERT_TRUE(runtime.dispatch({"panel.show_files",  {}})
@@ -222,7 +222,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
                   ssg::FocusTarget::Panel);
     }
 
-    // Mirrors src/ssg_main.cpp's fileOpenedAtStartup re-assert: calling
+    // Mirrors src/application.cpp's fileOpenedAtStartup re-assert: calling
     // focusEditor() again restores the correct final focus.
     runtime.focusEditor();
     auto restored =

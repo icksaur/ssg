@@ -113,7 +113,7 @@ void libraryAndApplicationCodeUseTheFileSeam() {
 
             const auto source = readSource(it->path());
             // Line-scoped so a single justified exception cannot silently
-            // license the whole file. A file-level exemption for ssg_main.cpp,
+            // license the whole file. A file-level exemption for application.cpp,
             // say, would let a future raw init.lua read slip back in.
             std::size_t line = 1;
             std::size_t start = 0;

@@ -3709,6 +3709,17 @@ ssg/WorkspaceFileIndex.h	var	ssg::WorkspaceFileIndexOptions::maximumFiles	std::s
 ssg/WorkspaceFileIndex.h	var	ssg::WorkspaceFileIndexOptions::respectGitignore	bool
 ssg/WorkspaceFileIndex.h	var	ssg::WorkspaceFileIndexResult::candidates	std::vector<PaletteCandidate>
 ssg/WorkspaceFileIndex.h	var	ssg::WorkspaceFileIndexResult::truncated	bool
+ssg/application.h	class	ssg::app::Application
+ssg/application.h	func	ssg::app::Application::Application	void (LaunchArguments)
+ssg/application.h	func	ssg::app::Application::Application	void (const Application &)
+ssg/application.h	func	ssg::app::Application::operator=	Application &(const Application &)
+ssg/application.h	func	ssg::app::Application::runEventLoop	int ()
+ssg/application.h	func	ssg::app::parseArguments	LaunchArguments (int, char **)
+ssg/application.h	func	ssg::app::recordStartupMark	void (const char *)
+ssg/application.h	struct	ssg::app::LaunchArguments
+ssg/application.h	var	ssg::app::LaunchArguments::argument	std::filesystem::path
+ssg/application.h	var	ssg::app::LaunchArguments::capabilities	bool
+ssg/capabilities_report.h	func	ssg::app::reportCapabilities	int ()
 ssg/color.h	class	ssg::ColorResolver
 ssg/color.h	enum	ssg::ColorDepth
 ssg/color.h	enumerator	ssg::ColorDepth::Ansi16
@@ -3948,6 +3959,12 @@ ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspace	Workspace
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspaceReplaceGeneration	std::uint64_t
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspaceReplacePreview	std::optional<WorkspaceReplacePreview>
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspaceSearchGeneration	std::uint64_t
+ssg/fd_readiness.h	func	ssg::app::waitReadiness	FdReadiness (int, int, int, int)
+ssg/fd_readiness.h	struct	ssg::app::FdReadiness
+ssg/fd_readiness.h	var	ssg::app::FdReadiness::gitDiff	bool
+ssg/fd_readiness.h	var	ssg::app::FdReadiness::initScript	bool
+ssg/fd_readiness.h	var	ssg::app::FdReadiness::input	bool
+ssg/fd_readiness.h	var	ssg::app::FdReadiness::signal	bool
 ssg/focus.h	enum	ssg::FocusTarget
 ssg/focus.h	enumerator	ssg::FocusTarget::Editor
 ssg/focus.h	enumerator	ssg::FocusTarget::ExternalModification
@@ -3971,7 +3988,15 @@ ssg/git_diff_worker.h	var	ssg::GitDiffWorkerDrain::watchEvents	std::deque<WatchE
 ssg/git_diff_worker.h	var	ssg::GitDiffWorkerDrain::watcherAvailabilityChanged	bool
 ssg/init_script.h	class	ssg::EditorSession
 ssg/init_script.h	class	ssg::ScriptHost
+ssg/init_script.h	class	ssg::app::InitScriptWatcher
+ssg/init_script.h	func	ssg::app::InitScriptWatcher::InitScriptWatcher	void (const InitScriptWatcher &)
+ssg/init_script.h	func	ssg::app::InitScriptWatcher::InitScriptWatcher	void (std::filesystem::path, std::optional<std::string>)
+ssg/init_script.h	func	ssg::app::InitScriptWatcher::drainAndEvaluate	void (ScriptHost &, EditorSession &)
+ssg/init_script.h	func	ssg::app::InitScriptWatcher::operator=	InitScriptWatcher &(const InitScriptWatcher &)
+ssg/init_script.h	func	ssg::app::InitScriptWatcher::wakeDescriptor	int () const noexcept
 ssg/init_script.h	func	ssg::app::evaluateInitScript	void (ScriptHost &, EditorSession &, const std::filesystem::path &, const std::string &)
+ssg/init_script.h	func	ssg::app::loadInitScript	std::optional<std::string> (ScriptHost &, EditorSession &)
+ssg/init_script.h	func	ssg::app::resolveInitScriptPath	std::optional<std::filesystem::path> ()
 ssg/interaction.h	class	ssg::InteractionState
 ssg/interaction.h	enum	ssg::CycleDirection
 ssg/interaction.h	enumerator	ssg::CycleDirection::Next
@@ -4303,6 +4328,7 @@ ssg/ssg_terminal.h	class	ssg::app::SystemClipboardWriter
 ssg/ssg_terminal.h	class	ssg::app::TerminalCapabilities
 ssg/ssg_terminal.h	class	ssg::app::TerminalModes
 ssg/ssg_terminal.h	class	ssg::app::TerminalModes::Guard
+ssg/ssg_terminal.h	class	ssg::app::TerminalSession
 ssg/ssg_terminal.h	enum	ssg::app::Capability
 ssg/ssg_terminal.h	enum	ssg::app::DecodeStatus
 ssg/ssg_terminal.h	enum	ssg::app::PointerButton
@@ -4343,6 +4369,12 @@ ssg/ssg_terminal.h	func	ssg::app::TerminalModes::TerminalModes	void (const Termi
 ssg/ssg_terminal.h	func	ssg::app::TerminalModes::depth	std::size_t () const noexcept
 ssg/ssg_terminal.h	func	ssg::app::TerminalModes::enter	Guard (TerminalMode)
 ssg/ssg_terminal.h	func	ssg::app::TerminalModes::operator=	TerminalModes &(const TerminalModes &)
+ssg/ssg_terminal.h	func	ssg::app::TerminalSession::TerminalSession	void ()
+ssg/ssg_terminal.h	func	ssg::app::TerminalSession::TerminalSession	void (const TerminalSession &)
+ssg/ssg_terminal.h	func	ssg::app::TerminalSession::active	bool () const noexcept
+ssg/ssg_terminal.h	func	ssg::app::TerminalSession::enableKeyboardProtocol	void ()
+ssg/ssg_terminal.h	func	ssg::app::TerminalSession::operator=	TerminalSession &(const TerminalSession &)
+ssg/ssg_terminal.h	func	ssg::app::TerminalSession::restore	void () noexcept
 ssg/ssg_terminal.h	func	ssg::app::all_modes_undo_sequence	std::string_view () noexcept
 ssg/ssg_terminal.h	func	ssg::app::application_quit_requested	bool (const KeyStroke &) noexcept
 ssg/ssg_terminal.h	func	ssg::app::capability_name	std::string_view (Capability)
@@ -4355,6 +4387,8 @@ ssg/ssg_terminal.h	func	ssg::app::encode_clipboard_write	std::string (std::strin
 ssg/ssg_terminal.h	func	ssg::app::encode_frame	std::string (const ssg::CellGrid &, ssg::ColorDepth, bool)
 ssg/ssg_terminal.h	func	ssg::app::operator==	bool (const PointerEvent &, const PointerEvent &)
 ssg/ssg_terminal.h	func	ssg::app::resolve_launch	LaunchTarget (const std::filesystem::path &)
+ssg/ssg_terminal.h	func	ssg::app::terminalSize	ssg::ViewportDimensions ()
+ssg/ssg_terminal.h	func	ssg::app::writeAll	void (std::string_view)
 ssg/ssg_terminal.h	struct	ssg::app::Decoded
 ssg/ssg_terminal.h	struct	ssg::app::LaunchTarget
 ssg/ssg_terminal.h	struct	ssg::app::PointerEvent

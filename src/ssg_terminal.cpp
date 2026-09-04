@@ -4,6 +4,8 @@
 #include <ssg/Theme.h>
 
 #include <csignal>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
 #include <atomic>
 #include <cstring>
@@ -22,6 +24,25 @@
 namespace ssg::app {
 
 namespace fs = std::filesystem;
+
+void writeAll(std::string_view bytes) {
+    std::size_t offset = 0;
+    while (offset < bytes.size()) {
+        auto written =
+            ::write(STDOUT_FILENO, bytes.data() + offset, bytes.size() - offset);
+        if (written <= 0) break;
+        offset += static_cast<std::size_t>(written);
+    }
+}
+
+ssg::ViewportDimensions terminalSize() {
+    winsize size{};
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col > 0 &&
+        size.ws_row > 0) {
+        return {size.ws_col, size.ws_row};
+    }
+    return {80, 24};
+}
 
 SignalEvents classify_signal_tags(std::string_view drained) {
     SignalEvents events;
@@ -84,6 +105,42 @@ TerminalModes::Guard& TerminalModes::Guard::operator=(Guard&& other) noexcept {
         other.owner_ = nullptr;
     }
     return *this;
+}
+
+TerminalSession::TerminalSession()
+    : modes_{[](std::string_view bytes) { writeAll(bytes); }} {
+    if (tcgetattr(STDIN_FILENO, &original_) != 0) return;
+    termios raw = original_;
+    raw.c_lflag &= ~(ICANON | ECHO | ISIG | IEXTEN);
+    raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+    raw.c_oflag &= ~(OPOST);
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) return;
+    active_ = true;
+    entered_.push_back(modes_.enter(kAlternateScreen));
+    entered_.push_back(modes_.enter(kCursorStyleBar));
+    entered_.push_back(modes_.enter(kMouseButtons));
+    entered_.push_back(modes_.enter(kMouseMotion));
+    entered_.push_back(modes_.enter(kMouseSgrCoordinates));
+    entered_.push_back(modes_.enter(kBracketedPaste));
+}
+
+TerminalSession::~TerminalSession() { restore(); }
+
+void TerminalSession::restore() noexcept {
+    if (!active_) return;
+    active_ = false;
+    entered_.clear();
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
+}
+
+bool TerminalSession::active() const noexcept { return active_; }
+
+void TerminalSession::enableKeyboardProtocol() {
+    if (!active_ || keyboardProtocolEntered_) return;
+    entered_.push_back(modes_.enter(kKeyboardProtocol));
+    keyboardProtocolEntered_ = true;
 }
 
 std::string lowercase(std::string_view value) {

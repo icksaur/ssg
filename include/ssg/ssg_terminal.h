@@ -1,11 +1,8 @@
 #pragma once
 
-// Pure, testable helpers for the `ssg` terminal application.  Terminal I/O
-// (raw mode, reads, writes, signals) lives in ssg_main.cpp; everything that can
-// be computed without touching the terminal lives here so it can be unit
-// tested.  All editor and layout behavior belongs to the ssg library; this
-// module only resolves launch arguments and formats an already-rendered cell
-// grid into terminal bytes.
+// Helpers for the `ssg` terminal application. TerminalSession owns raw mode and
+// terminal modes; the application module owns reads and signals. All editor and
+// layout behavior belongs to the ssg library.
 
 #include <ssg/color.h>
 #include <ssg/Renderer.h>
@@ -18,6 +15,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <termios.h>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -148,6 +146,30 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
+
+// Owns raw terminal mode and entered terminal modes for one editor session.
+class TerminalSession {
+public:
+    TerminalSession();
+    ~TerminalSession();
+
+    TerminalSession(TerminalSession const&) = delete;
+    TerminalSession& operator=(TerminalSession const&) = delete;
+
+    void restore() noexcept;
+    [[nodiscard]] bool active() const noexcept;
+    void enableKeyboardProtocol();
+
+private:
+    TerminalModes modes_;
+    std::vector<TerminalModes::Guard> entered_;
+    termios original_{};
+    bool active_ = false;
+    bool keyboardProtocolEntered_ = false;
+};
+
+void writeAll(std::string_view bytes);
+[[nodiscard]] ssg::ViewportDimensions terminalSize();
 
 namespace detail {
 

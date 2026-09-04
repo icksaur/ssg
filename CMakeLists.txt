@@ -1263,13 +1263,15 @@ endif()
 #
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(ssg_app
-        ${SSG_SOURCE_DIR}/src/ssg_main.cpp
+        ${SSG_SOURCE_DIR}/src/main.cpp
+        ${SSG_SOURCE_DIR}/src/application.cpp
+        ${SSG_SOURCE_DIR}/src/capabilities_report.cpp
+        ${SSG_SOURCE_DIR}/src/fd_readiness.cpp
         ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
         ${SSG_SOURCE_DIR}/src/init_script.cpp
     )
     set_target_properties(ssg_app PROPERTIES OUTPUT_NAME ssg)
-    target_include_directories(ssg_app PRIVATE ${SSG_SOURCE_DIR}/apps)
     target_link_libraries(ssg_app PRIVATE ssg_tui_objects)
 
     ssg_add_test_suite(
@@ -1279,9 +1281,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         SOURCES
             ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
             ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
-            ${SSG_SOURCE_DIR}/src/init_script.cpp)
+            ${SSG_SOURCE_DIR}/src/init_script.cpp
+            ${SSG_SOURCE_DIR}/src/fd_readiness.cpp
+            ${SSG_SOURCE_DIR}/src/capabilities_report.cpp)
     ssg_test_include_directories(test_ssg_app PRIVATE
-        ${SSG_SOURCE_DIR}/apps
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_compile_definitions(test_ssg_app PRIVATE
