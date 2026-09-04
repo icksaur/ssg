@@ -18,7 +18,6 @@ if(SSG_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
         set(CMAKE_CXX_COMPILER_LAUNCHER "${SSG_CCACHE_PROGRAM}")
     endif()
 endif()
-
 option(SSG_ASSERTIONS "Keep C and C++ assertions enabled" OFF)
 if(SSG_ASSERTIONS)
     if(MSVC)
@@ -42,9 +41,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 add_library(ssg_platform STATIC)
-add_library(ssg_core STATIC
-    src/ssg.cpp
-)
+add_library(ssg_core STATIC)
 
 target_include_directories(ssg_platform PUBLIC "${SSG_SOURCE_DIR}/include")
 target_include_directories(ssg_core PUBLIC "${SSG_SOURCE_DIR}/include")
@@ -1731,12 +1728,4 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     ssg_test_link_libraries(test_workspace_file_index PRIVATE ssg_core)
 
-endif()
-
-
-if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    ssg_add_test_suite(
-        NAME ssg_tests
-        ENTRY tests/test_ssg.cpp
-        SYMBOL test_ssg)
 endif()

@@ -4315,7 +4315,6 @@ ssg/pointer_routing.h	var	ssg::app::PointerTargets::ui_node_id	std::optional<ssg
 ssg/pointer_routing.h	var	ssg::app::ScrollableRegionDescriptor::content	ssg::HitRegion
 ssg/pointer_routing.h	var	ssg::app::ScrollableRegionDescriptor::scrollbar	ssg::HitRegion
 ssg/pointer_routing.h	var	ssg::app::ScrollableRegionDescriptor::target	WheelTarget
-ssg/ssg.h	var	ssg::kLibraryName	const std::string_view
 ssg/ssg_terminal.h	alias	ssg::app::TerminalCapabilities::Clock
 ssg/ssg_terminal.h	alias	ssg::app::TerminalCapabilities::EnvironmentLookup
 ssg/ssg_terminal.h	alias	ssg::app::TerminalModes::Writer
