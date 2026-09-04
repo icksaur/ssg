@@ -274,8 +274,8 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/help.cpp
     ${SSG_SOURCE_DIR}/src/language_services.cpp
     ${SSG_SOURCE_DIR}/src/navigation.cpp
-    ${SSG_SOURCE_DIR}/src/presentation.cpp
-    ${SSG_SOURCE_DIR}/src/presentation_projection.cpp
+    ${SSG_SOURCE_DIR}/src/ViewCommands.cpp
+    ${SSG_SOURCE_DIR}/src/EditorSessionViews.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
