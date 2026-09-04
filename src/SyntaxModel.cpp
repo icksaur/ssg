@@ -1,6 +1,6 @@
 #include <ssg/SyntaxModel.h>
 
-#include <ssg/startup_audit.h>
+#include <ssg/OptionalSubsystemAudit.h>
 
 #include <algorithm>
 #include <array>
@@ -600,7 +600,7 @@ SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
           std::uint64_t{0}, LanguageId::plainText(), {}, config.tabWidth)) {
     // A real Tree-sitter grammar is only present when a parser is injected; the
     // plain-text fallback (parser == nullptr) constructs no grammar, so it is not
-    // counted by the startup audit.
+    // counted by the optional-subsystem audit.
     if (parser_ != nullptr) {
         noteOptionalConstruction(OptionalSubsystem::TreeSitterGrammar);
     }

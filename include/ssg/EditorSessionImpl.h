@@ -512,8 +512,7 @@ struct EditorSession::Impl final {
     // Walks the workspace into `fileCandidates`, honoring the gitignore setting.
     void rebuildFileCandidates();
     void refreshSyntax(std::vector<SyntaxEdit> edits = {});
-    // M10 fast startup deferral.  While
-    // `deferring_enrichment` is set (the pre-first-frame window when created with
+    // While `deferring_enrichment` is set (the pre-first-frame window when created with
     // defer_enrichment=true), refresh_tree and refresh_syntax record that work is
     // pending instead of running the O(workspace)/O(document) scan, so the first
     // frame is not blocked by it.  prime_deferred() clears the flag and runs any

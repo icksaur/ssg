@@ -1,6 +1,6 @@
 #include <ssg/FilesystemWatcher.h>
 
-#include <ssg/startup_audit.h>
+#include <ssg/OptionalSubsystemAudit.h>
 
 #include <cerrno>
 #include <chrono>

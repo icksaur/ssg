@@ -1,5 +1,5 @@
 #include <ssg/LuaCommandHost.h>
-#include <ssg/startup_audit.h>
+#include <ssg/OptionalSubsystemAudit.h>
 
 extern "C" {
 #include <lauxlib.h>

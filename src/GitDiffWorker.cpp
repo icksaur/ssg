@@ -60,10 +60,9 @@ GitDiffWorker::GitDiffWorker(const std::filesystem::path& root, bool enableGit,
         const bool gitUsable =
             enableGit && repository_ && repository_->isUsable();
         // Optimistic: the worker thread constructs the watcher off the
-        // first-frame path, so startup never pays for the recursive watch setup
-        // (invariant I12). The thread clears this if construction fails
-        // (Decision 1/13's degradation). False when watching is disabled -- no
-        // watcher, so unavailable.
+        // first-frame path, so startup never pays for the recursive watch setup.
+        // The thread clears this if construction fails. False when watching is
+        // disabled -- no watcher, so unavailable.
         watcherAvailable_.store(enableWatcher, std::memory_order_relaxed);
         int wakePipe[2] = {-1, -1};
         if (::pipe(wakePipe) == 0 && setNonBlocking(wakePipe[0]) &&

@@ -552,14 +552,12 @@ int Application::runEventLoop() {
                 std::string frame = ssg::app::encode_frame(
                     grid, colorDepth, !draggingGutter.has_value());
                 if (!firstFrameMarked) {
-                    // M10-1 stop mark: the first content frame (an actual rendered
-                    // payload), not the earlier terminal-setup bytes.
+                    // Mark the first rendered payload, not terminal-setup bytes.
                     recordStartupMark("first_content_frame");
                     firstFrameMarked = true;
                     writeAll(frame);
-                    // M10-3/M10-4: the first frame is on screen; now run the
-                    // enrichment (tree scan, syntax) deferred off the startup
-                    // path.  It publishes on the next snapshot at the loop top.
+                    // Run deferred enrichment after the first frame is visible.
+                    // It publishes on the next snapshot at the loop top.
                     runtime.primeDeferred();
                     // Open the Files sidebar only when startup did NOT open a
                     // named file: with nothing but an empty buffer the sidebar is
@@ -570,8 +568,8 @@ int Application::runEventLoop() {
                     // only sequenced AFTER primeDeferred() rather than before it:
                     // dispatching it earlier (pre-loop, before the deferred tree
                     // scan has run) would fail with "files tree provider is
-                    // unavailable" every startup, since the M10 fast-startup path
-                    // defers registering that provider until exactly this point.
+                    // unavailable" because the fast-startup path defers
+                    // registering that provider until exactly this point.
                     if (!openedNamedFile) {
                         if (auto const panelResult = runtime.dispatch(
                                 {"panel.show_files", {}});

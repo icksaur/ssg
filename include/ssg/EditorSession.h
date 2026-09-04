@@ -49,7 +49,7 @@ struct EditorSessionConfig {
     // Where deleted files are kept. Defaults beside scratch and recovery under
     // the workspace's `.ssg/`.
     std::filesystem::path archiveRoot;
-    // M10 fast startup: when true, deferrable enrichment (workspace tree scan,
+    // When true, deferrable enrichment (workspace tree scan,
     // syntax highlighting) is NOT run during construction or the initial
     // file.open; it runs when the client calls prime_deferred() after drawing its
     // first frame.  Default false preserves the eager, fully-populated behavior
@@ -183,7 +183,7 @@ public:
     // Lua/keymap/palette command -- an app/runtime seam only, like
     // resetKeymapToDefault() above.
     void focusEditor();
-    // M10 fast startup: run the enrichment work that was deferred when the
+    // Run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
     // syntax highlighting). Idempotent and a no-op when nothing was deferred; the client
     // calls it once after drawing its first frame.
@@ -197,7 +197,7 @@ public:
     // app thread only, like the other runtime seams here.
     std::size_t flushDueAutosaveDrafts();
     std::size_t flushAllAutosaveDrafts();
-    // M10 startup instrumentation: how many times the O(document) syntax
+    // How many times the O(document) syntax
     // highlight pass and the O(workspace) tree scan have actually run.  Exposed
     // so the startup oracle can assert deferred enrichment does not run before
     // prime_deferred().

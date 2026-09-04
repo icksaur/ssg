@@ -2000,6 +2000,19 @@ ssg/LuaCommandHost.h	var	ssg::LuaInvocation::arguments	std::optional<std::unorde
 ssg/LuaCommandHost.h	var	ssg::LuaInvocation::commandId	std::string_view
 ssg/LuaCommandHost.h	var	ssg::LuaResult::error	LuaError
 ssg/LuaCommandHost.h	var	ssg::LuaResult::message	std::string
+ssg/OptionalSubsystemAudit.h	enum	ssg::OptionalSubsystem
+ssg/OptionalSubsystemAudit.h	enumerator	ssg::OptionalSubsystem::Count
+ssg/OptionalSubsystemAudit.h	enumerator	ssg::OptionalSubsystem::FilesystemWatcher
+ssg/OptionalSubsystemAudit.h	enumerator	ssg::OptionalSubsystem::Lsp
+ssg/OptionalSubsystemAudit.h	enumerator	ssg::OptionalSubsystem::Lua
+ssg/OptionalSubsystemAudit.h	enumerator	ssg::OptionalSubsystem::TreeSitterGrammar
+ssg/OptionalSubsystemAudit.h	func	ssg::noteOptionalConstruction	void (OptionalSubsystem) noexcept
+ssg/OptionalSubsystemAudit.h	func	ssg::optionalConstructionCount	std::uint64_t (OptionalSubsystem) noexcept
+ssg/OptionalSubsystemAudit.h	func	ssg::optionalConstructionTotal	std::uint64_t () noexcept
+ssg/OptionalSubsystemAudit.h	func	ssg::optionalSubsystemName	std::string_view (OptionalSubsystem) noexcept
+ssg/OptionalSubsystemAudit.h	func	ssg::resetOptionalConstructionAudit	void () noexcept
+ssg/OptionalSubsystemAudit.h	var	ssg::kAllOptionalSubsystems	const array<remove_cv_t<ssg::OptionalSubsystem>, 4UL>
+ssg/OptionalSubsystemAudit.h	var	ssg::kOptionalSubsystemCount	const std::size_t
 ssg/PaletteSearcher.h	class	ssg::PaletteSearcher
 ssg/PaletteSearcher.h	enum	ssg::PalettePresenceOpKind
 ssg/PaletteSearcher.h	enumerator	ssg::PalettePresenceOpKind::Hide
@@ -4435,19 +4448,6 @@ ssg/ssg_terminal.h	var	ssg::app::kMaxSequenceBytes	const std::size_t
 ssg/ssg_terminal.h	var	ssg::app::kMouseButtons	const TerminalMode
 ssg/ssg_terminal.h	var	ssg::app::kMouseMotion	const TerminalMode
 ssg/ssg_terminal.h	var	ssg::app::kMouseSgrCoordinates	const TerminalMode
-ssg/startup_audit.h	enum	ssg::OptionalSubsystem
-ssg/startup_audit.h	enumerator	ssg::OptionalSubsystem::Count
-ssg/startup_audit.h	enumerator	ssg::OptionalSubsystem::FilesystemWatcher
-ssg/startup_audit.h	enumerator	ssg::OptionalSubsystem::Lsp
-ssg/startup_audit.h	enumerator	ssg::OptionalSubsystem::Lua
-ssg/startup_audit.h	enumerator	ssg::OptionalSubsystem::TreeSitterGrammar
-ssg/startup_audit.h	func	ssg::noteOptionalConstruction	void (OptionalSubsystem) noexcept
-ssg/startup_audit.h	func	ssg::optionalConstructionCount	std::uint64_t (OptionalSubsystem) noexcept
-ssg/startup_audit.h	func	ssg::optionalConstructionTotal	std::uint64_t () noexcept
-ssg/startup_audit.h	func	ssg::optionalSubsystemName	std::string_view (OptionalSubsystem) noexcept
-ssg/startup_audit.h	func	ssg::resetOptionalConstructionAudit	void () noexcept
-ssg/startup_audit.h	var	ssg::kAllOptionalSubsystems	const array<remove_cv_t<ssg::OptionalSubsystem>, 4UL>
-ssg/startup_audit.h	var	ssg::kOptionalSubsystemCount	const std::size_t
 ssg/types.h	enum	ssg::DocumentMode
 ssg/types.h	enumerator	ssg::DocumentMode::Diff
 ssg/types.h	enumerator	ssg::DocumentMode::Edit

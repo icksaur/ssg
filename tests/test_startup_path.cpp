@@ -2,7 +2,7 @@
 #include "grid_test_frame.h"
 
 #include <ssg/EditorSession.h>
-#include <ssg/startup_audit.h>
+#include <ssg/OptionalSubsystemAudit.h>
 #include <ssg/FilesystemWatcher.h>
 
 #include <filesystem>
@@ -10,8 +10,6 @@
 #include <cstdint>
 #include <string>
 
-// M10 fast-startup structural oracle.
-//
 // Deferred enrichment (syntax highlighting, workspace tree scan) must NOT run on
 // the first-frame path when the runtime is created with defer_enrichment=true;
 // prime_deferred() runs it, and it must actually arrive.  Default (eager)
@@ -104,9 +102,7 @@ TEST(eagerConstructionRunsEnrichmentImmediately) {
 }
 
 TEST(firstFrameConstructsNoOptionalSubsystem) {
-    // M10-2: producing the first frame must construct
-    // no optional subsystem (Lua, LSP, a real Tree-sitter grammar, a filesystem
-    // watcher, HTTP) — project invariant I12.
+    // Producing the first frame must construct no optional subsystem.
     ssg::resetOptionalConstructionAudit();
     auto root = makeWorkspace("no_optional");
     // The git-diff worker owns the workspace filesystem watcher, which Phase 5a
@@ -126,7 +122,7 @@ TEST(firstFrameConstructsNoOptionalSubsystem) {
     (void)ssg::test::projectGridFrame(runtime);
 
     // Exhaustive over the enumerated subsystems (a missing enum entry fails the
-    // static_assert in startup_audit.h, so the list cannot silently omit one).
+    // static_assert in OptionalSubsystemAudit.h, so the list cannot silently omit one).
     for (auto subsystem : ssg::kAllOptionalSubsystems) {
         ASSERT_EQ(ssg::optionalConstructionCount(subsystem), std::uint64_t{0});
     }
@@ -237,7 +233,7 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
 }
 
 SSG_TEST_SUITE(test_startup_path) {
-    // M10-2 static-init probe: nothing optional may construct before main (no
+    // Nothing optional may construct before main (no
     // self-registering globals); the ledger must be empty at process entry.
     if (ssg::optionalConstructionTotal() != 0) {
         std::cerr << "  FAIL: an optional subsystem constructed before main "
