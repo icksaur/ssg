@@ -1,5 +1,5 @@
 #include <ssg/Selection.h>
-#include <ssg/WordClassification.h>
+#include <ssg/TextInputCommands.h>
 
 #include <algorithm>
 #include <cctype>

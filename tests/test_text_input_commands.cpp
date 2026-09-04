@@ -1,5 +1,5 @@
 #include <ssg/TextInputCommands.h>
-#include <ssg/HistoryEditClassification.h>
+#include <ssg/DocumentHistory.h>
 
 #include "test_helpers.h"
 

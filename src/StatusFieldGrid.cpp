@@ -1,4 +1,4 @@
-#include <ssg/StatusFieldGrid.h>
+#include <ssg/StatusFields.h>
 
 namespace ssg {
 

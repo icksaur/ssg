@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/Style.h>
+
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -49,5 +51,9 @@ struct StatusFieldProjection {
 // is empty (EMPTY-DROP).
 [[nodiscard]] StatusFieldProjection projectStatusFields(
     StatusFieldContext const& context);
+
+[[nodiscard]] std::string statusFieldGridDisplay(
+    std::string_view providerId, std::string_view semanticValue,
+    const Style& style);
 
 } // namespace ssg

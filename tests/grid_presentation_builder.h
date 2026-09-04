@@ -3,7 +3,7 @@
 #include <ssg/GraphemeLayout.h>
 #include <ssg/StatusFields.h>
 #include <ssg/StatusQueue.h>
-#include <ssg/WholeScreenAssembly.h>
+#include <ssg/whole_screen_schema.h>
 #include <ssg/GridPresenter.h>
 
 #include <ssg/interaction.h>

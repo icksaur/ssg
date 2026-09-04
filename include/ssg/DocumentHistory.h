@@ -3,6 +3,7 @@
 #include <ssg/config.h>
 #include <ssg/Document.h>
 #include <ssg/Selection.h>
+#include <ssg/TextInputCommands.h>
 
 #include <cstdint>
 #include <memory>
@@ -17,6 +18,22 @@ enum class HistoryEditKind : std::uint8_t {
     DeleteForward,
     Other,
 };
+
+[[nodiscard]] inline HistoryEditKind historyEditKind(
+    TextInputCommand command) noexcept {
+    switch (command) {
+        case TextInputCommand::Insert:
+        case TextInputCommand::Newline:
+            return HistoryEditKind::Typing;
+        case TextInputCommand::DeleteBackward:
+        case TextInputCommand::DeleteWordBackward:
+            return HistoryEditKind::DeleteBackward;
+        case TextInputCommand::DeleteForward:
+        case TextInputCommand::DeleteWordForward:
+            return HistoryEditKind::DeleteForward;
+    }
+    return HistoryEditKind::Other;
+}
 
 enum class HistoryError : std::uint8_t {
     None,

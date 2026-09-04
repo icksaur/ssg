@@ -12,7 +12,7 @@
 #include <ssg/StatusQueue.h>
 #include <ssg/Style.h>
 #include <ssg/UiTree.h>
-#include <ssg/WholeScreenAssembly.h>
+#include <ssg/whole_screen_schema.h>
 #include "test_helpers.h"
 
 #include <ssg/ui_tree_population.h>

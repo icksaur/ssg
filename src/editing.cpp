@@ -1,6 +1,5 @@
 #include <ssg/editor_session_internal.h>
 
-#include <ssg/HistoryEditClassification.h>
 
 #include <algorithm>
 #include <cctype>

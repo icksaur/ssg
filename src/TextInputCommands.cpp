@@ -1,7 +1,6 @@
 #include <ssg/TextInputCommands.h>
 
 #include <ssg/GraphemeLayout.h>
-#include <ssg/WordClassification.h>
 
 #include <algorithm>
 #include <cstddef>

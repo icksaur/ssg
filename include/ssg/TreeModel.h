@@ -13,6 +13,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <system_error>
 
 namespace ssg {
 
@@ -103,6 +104,17 @@ struct TreeNode {
     bool expandable = false;
     bool operator==(const TreeNode&) const = default;
 };
+
+namespace detail {
+
+[[nodiscard]] bool filesystemTreeEntryDisappeared(
+    const std::error_code& error) noexcept;
+
+[[nodiscard]] std::optional<TreeNode> inspectFilesystemTreeEntry(
+    const TreeProviderId& providerId, const std::filesystem::path& root,
+    const std::filesystem::directory_entry& entry);
+
+}  // namespace detail
 
 class TreeProviderSnapshot {
 public:

@@ -1,5 +1,5 @@
 #include <ssg/Layout.h>
-#include <ssg/WholeScreenAssembly.h>
+#include <ssg/whole_screen_schema.h>
 #include "test_helpers.h"
 
 #include <algorithm>

@@ -1,7 +1,7 @@
 #include <ssg/UiRegionProjection.h>
 
 #include <ssg/GraphemeLayout.h>
-#include <ssg/StatusFieldGrid.h>
+#include <ssg/StatusFields.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/WidgetLayout.h>
 

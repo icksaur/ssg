@@ -5,7 +5,7 @@
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Style.h>
-#include <ssg/WholeScreenAssembly.h>
+#include <ssg/whole_screen_schema.h>
 #include <ssg/platform_files.h>
 
 #include <algorithm>

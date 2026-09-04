@@ -10,6 +10,12 @@
 
 namespace ssg {
 
+[[nodiscard]] inline bool isWordByte(unsigned char byte) noexcept {
+    return byte >= 0x80 || (byte >= 'a' && byte <= 'z') ||
+           (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') ||
+           byte == '_';
+}
+
 enum class TextInputCommand : std::uint8_t {
     Insert,
     Newline,

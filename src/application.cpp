@@ -13,7 +13,6 @@
 #include <ssg/Picker.h>
 #include <ssg/platform_files.h>
 #include <ssg/TextInputCommands.h>
-#include <ssg/WordClassification.h>
 
 #include <ssg/init_script.h>
 

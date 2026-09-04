@@ -443,6 +443,7 @@ ssg/DocumentHistory.h	func	ssg::DocumentHistory::undo	HistoryResult (Document &)
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::viewState	HistoryViewState () const noexcept
 ssg/DocumentHistory.h	func	ssg::HistoryResult::accepted	bool () const noexcept
 ssg/DocumentHistory.h	func	ssg::HistoryViewState::operator==	bool (const HistoryViewState &) const noexcept
+ssg/DocumentHistory.h	func	ssg::historyEditKind	HistoryEditKind (TextInputCommand) noexcept
 ssg/DocumentHistory.h	struct	ssg::HistoryResult
 ssg/DocumentHistory.h	struct	ssg::HistoryViewState
 ssg/DocumentHistory.h	var	ssg::HistoryResult::documentError	DocumentError
@@ -1070,7 +1071,6 @@ ssg/GridPresenter.h	var	ssg::GridPresentation::viewport	ViewportViewState
 ssg/GridPresenter.h	var	ssg::GridPresentation::wordWrap	bool
 ssg/GridPresenter.h	var	ssg::GridPresentationRequest::dimensions	ViewportDimensions
 ssg/GridPresenter.h	var	ssg::GridPresentationRequest::palette	PaletteReport
-ssg/HistoryEditClassification.h	func	ssg::historyEditKind	HistoryEditKind (TextInputCommand) noexcept
 ssg/HitTester.h	class	ssg::HitTester
 ssg/HitTester.h	enum	ssg::HitRegion
 ssg/HitTester.h	enumerator	ssg::HitRegion::Editor
@@ -2523,8 +2523,8 @@ ssg/ShellViewState.h	var	ssg::ShellViewState::tabHits	std::vector<TabHit>
 ssg/ShellViewState.h	var	ssg::ShellViewState::viewport	GridSize
 ssg/ShellViewState.h	var	ssg::TabHit::index	std::uint32_t
 ssg/ShellViewState.h	var	ssg::TabHit::rect	Rect
-ssg/StatusFieldGrid.h	func	ssg::statusFieldGridDisplay	std::string (std::string_view, std::string_view, const Style &)
 ssg/StatusFields.h	func	ssg::projectStatusFields	StatusFieldProjection (const StatusFieldContext &)
+ssg/StatusFields.h	func	ssg::statusFieldGridDisplay	std::string (std::string_view, std::string_view, const Style &)
 ssg/StatusFields.h	struct	ssg::StatusField
 ssg/StatusFields.h	struct	ssg::StatusFieldContext
 ssg/StatusFields.h	struct	ssg::StatusFieldProjection
@@ -2995,6 +2995,7 @@ ssg/TextInputCommands.h	func	ssg::TextInputArguments::operator==	bool (const Tex
 ssg/TextInputCommands.h	func	ssg::TextInputInterpreter::apply	TextInputResult (const DocumentSnapshot &, const SelectionSet &, TextInputSettings, TextInputCommand, TextInputArguments) const
 ssg/TextInputCommands.h	func	ssg::TextInputResult::accepted	bool () const noexcept
 ssg/TextInputCommands.h	func	ssg::TextInputSettings::operator==	bool (const TextInputSettings &) const noexcept
+ssg/TextInputCommands.h	func	ssg::isWordByte	bool (unsigned char) noexcept
 ssg/TextInputCommands.h	struct	ssg::TextInputArguments
 ssg/TextInputCommands.h	struct	ssg::TextInputResult
 ssg/TextInputCommands.h	struct	ssg::TextInputSettings
@@ -3524,10 +3525,6 @@ ssg/Viewport.h	var	ssg::VisualRow::logicalLine	uint32_t
 ssg/Viewport.h	var	ssg::VisualRow::spanCount	uint32_t
 ssg/Viewport.h	var	ssg::VisualRow::startCell	CellIndex
 ssg/Viewport.h	var	ssg::VisualRow::visibleCells	uint32_t
-ssg/WholeScreenAssembly.h	func	ssg::assembleFooterPrompt	UiNode (const PromptSurface &)
-ssg/WholeScreenAssembly.h	func	ssg::assembleWholeScreen	UiComposition (std::string_view, const StyleDimensions &, std::string_view)
-ssg/WholeScreenAssembly.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
-ssg/WholeScreenAssembly.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)
 ssg/Widget.h	enum	ssg::Overflow
 ssg/Widget.h	enum	ssg::ViewSurface
 ssg/Widget.h	enum	ssg::WidgetKind
@@ -3612,7 +3609,6 @@ ssg/WidgetLayout.h	var	ssg::StackPlacement::size	int
 ssg/WidgetLayout.h	var	ssg::StackPlacement::text	std::string
 ssg/WidgetLayout.h	var	ssg::TextInputLayout::text	std::string
 ssg/WidgetLayout.h	var	ssg::TextInputLayout::width	int
-ssg/WordClassification.h	func	ssg::isWordByte	bool (unsigned char) noexcept
 ssg/Workspace.h	class	ssg::FileDocumentId
 ssg/Workspace.h	class	ssg::Workspace
 ssg/Workspace.h	class	ssg::WorkspaceReplacementId
@@ -3719,7 +3715,6 @@ ssg/application.h	func	ssg::app::recordStartupMark	void (const char *)
 ssg/application.h	struct	ssg::app::LaunchArguments
 ssg/application.h	var	ssg::app::LaunchArguments::argument	std::filesystem::path
 ssg/application.h	var	ssg::app::LaunchArguments::capabilities	bool
-ssg/capabilities_report.h	func	ssg::app::reportCapabilities	int ()
 ssg/color.h	class	ssg::ColorResolver
 ssg/color.h	enum	ssg::ColorDepth
 ssg/color.h	enumerator	ssg::ColorDepth::Ansi16
@@ -4386,6 +4381,7 @@ ssg/ssg_terminal.h	func	ssg::app::encode_ansi_frame	std::string (const ssg::Cell
 ssg/ssg_terminal.h	func	ssg::app::encode_clipboard_write	std::string (std::string_view)
 ssg/ssg_terminal.h	func	ssg::app::encode_frame	std::string (const ssg::CellGrid &, ssg::ColorDepth, bool)
 ssg/ssg_terminal.h	func	ssg::app::operator==	bool (const PointerEvent &, const PointerEvent &)
+ssg/ssg_terminal.h	func	ssg::app::reportCapabilities	int ()
 ssg/ssg_terminal.h	func	ssg::app::resolve_launch	LaunchTarget (const std::filesystem::path &)
 ssg/ssg_terminal.h	func	ssg::app::terminalSize	ssg::ViewportDimensions ()
 ssg/ssg_terminal.h	func	ssg::app::writeAll	void (std::string_view)
@@ -4494,3 +4490,7 @@ ssg/whole_screen_schema.h	class	ssg::WholeScreenSchema
 ssg/whole_screen_schema.h	func	ssg::WholeScreenSchema::WholeScreenSchema	void (UiComposition)
 ssg/whole_screen_schema.h	func	ssg::WholeScreenSchema::schema	const UiSchema &() const noexcept
 ssg/whole_screen_schema.h	func	ssg::WholeScreenSchema::update	bool (UiComposition)
+ssg/whole_screen_schema.h	func	ssg::assembleFooterPrompt	UiNode (const PromptSurface &)
+ssg/whole_screen_schema.h	func	ssg::assembleWholeScreen	UiComposition (std::string_view, const StyleDimensions &, std::string_view)
+ssg/whole_screen_schema.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
+ssg/whole_screen_schema.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)

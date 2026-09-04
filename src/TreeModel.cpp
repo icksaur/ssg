@@ -1,6 +1,5 @@
 #include <ssg/TreeModel.h>
 
-#include <ssg/tree_model_detail.h>
 
 #include <algorithm>
 #include <functional>

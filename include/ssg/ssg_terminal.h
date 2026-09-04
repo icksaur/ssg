@@ -170,6 +170,7 @@ private:
 
 void writeAll(std::string_view bytes);
 [[nodiscard]] ssg::ViewportDimensions terminalSize();
+int reportCapabilities();
 
 namespace detail {
 

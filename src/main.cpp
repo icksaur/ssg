@@ -1,5 +1,5 @@
 #include <ssg/application.h>
-#include <ssg/capabilities_report.h>
+#include <ssg/ssg_terminal.h>
 
 #include <utility>
 

@@ -1,5 +1,3 @@
-#include <ssg/capabilities_report.h>
-
 #include <ssg/fd_readiness.h>
 #include <ssg/ssg_terminal.h>
 

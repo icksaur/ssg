@@ -9,6 +9,12 @@
 // per-frame value churn.
 
 #include <ssg/UiTree.h>  // UiComposition, UiSchema
+#include <ssg/PromptSurface.h>
+#include <ssg/StatusQueue.h>
+#include <ssg/Style.h>
+
+#include <string_view>
+#include <vector>
 
 namespace ssg {
 
@@ -31,5 +37,15 @@ public:
 private:
     UiSchema schema_;
 };
+
+[[nodiscard]] UiComposition assembleWholeScreen(
+    std::string_view hintCommandId, const StyleDimensions& dimensions,
+    std::string_view promptSigil);
+
+[[nodiscard]] UiComposition withFooterPrompt(UiComposition base,
+                                             const PromptSurface& prompt);
+[[nodiscard]] UiComposition withStatusActions(
+    UiComposition base, const std::vector<StatusActionNode>& actions);
+[[nodiscard]] UiNode assembleFooterPrompt(const PromptSurface& prompt);
 
 }  // namespace ssg

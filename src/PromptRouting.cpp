@@ -5,7 +5,7 @@
 #include <ssg/Keymap.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/TextInputCommands.h>
-#include <ssg/WordClassification.h>
+#include <ssg/TextInputCommands.h>
 
 namespace ssg {
 

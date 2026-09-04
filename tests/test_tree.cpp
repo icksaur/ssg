@@ -1,7 +1,7 @@
 #include <ssg/TreeModel.h>
 #include "test_helpers.h"
 
-#include <ssg/tree_model_detail.h>
+#include <ssg/TreeModel.h>
 
 #include <algorithm>
 #include <filesystem>
