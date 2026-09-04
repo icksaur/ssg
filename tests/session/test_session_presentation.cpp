@@ -6,6 +6,7 @@
 #include <ssg/EditorSession.h>
 #include <ssg/GridPresenter.h>
 #include <ssg/Keymap.h>
+#include <ssg/UiTree.h>
 
 #include <algorithm>
 #include <concepts>
@@ -34,11 +35,65 @@ ssg::EditorSessionConfig configFor(const std::filesystem::path& root) {
     return {root / "workspace", root / "scratch", root / "recovery"};
 }
 
+const ssg::UiNode* nodeById(const ssg::UiNode& node, std::string_view id) {
+    if (node.id.value() == id) return &node;
+    if (const auto* container = std::get_if<ssg::UiContainer>(&node.content)) {
+        for (const auto& child : container->children) {
+            if (const auto* found = nodeById(child, id)) return found;
+        }
+    }
+    return nullptr;
+}
+
 TEST(constructionRejectsInvalidCwd) {
     auto root = uniqueRoot("invalid_cwd");
     auto result = ssg::EditorSession::create(configFor(root / "missing"));
     ASSERT_FALSE(result.accepted());
     ASSERT_FALSE(result.message.empty());
+}
+
+TEST(sessionProjectionResolvesStatusFieldsAndHint) {
+    auto root = uniqueRoot("ui_tree_values");
+    auto created = ssg::EditorSession::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.session;
+
+    const auto assertProjection = [&](const ssg::GridPresentation& frame) {
+        const auto* path = nodeById(
+            frame.uiTree.root, ssg::kHeaderPathFieldNodeId);
+        ASSERT_TRUE(path != nullptr && path->resolved.has_value());
+        if (path && path->resolved) {
+            ASSERT_TRUE(path->resolved->command ==
+                        std::optional<std::string>{"panel.show_files"});
+            ASSERT_TRUE(path->resolved->role == ssg::SemanticRole::Header);
+        }
+        const auto* hint = nodeById(frame.uiTree.root, ssg::kFooterHintNodeId);
+        ASSERT_TRUE(hint != nullptr && hint->resolved.has_value());
+        if (hint && hint->resolved) {
+            ASSERT_TRUE(hint->resolved->command ==
+                        std::optional<std::string>{"help.open"});
+            ASSERT_TRUE(hint->resolved->role == ssg::SemanticRole::Footer);
+        }
+    };
+
+    auto frame = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(frame.has_value());
+    if (frame) assertProjection(*frame);
+
+    ASSERT_TRUE(runtime.dispatch({"settings.export_workspace", {}}).accepted());
+    frame = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(frame.has_value());
+    if (frame) {
+        assertProjection(*frame);
+        const auto* status =
+            nodeById(frame->uiTree.root, ssg::kFooterStatusFieldNodeId);
+        ASSERT_TRUE(status != nullptr && status->resolved.has_value());
+        if (status && status->resolved) {
+            ASSERT_TRUE(status->resolved->role == ssg::SemanticRole::Footer);
+        }
+    }
+    std::filesystem::remove_all(root);
 }
 
 // commandCaseTableExactlyMatchesP0Catalog is deleted.  It proved the test
@@ -863,6 +918,7 @@ TEST(visualMovementUsesActivePaneAcrossSerializedInput) {
 
 SSG_TEST_SUITE(test_session_presentation) {
     RUN(constructionRejectsInvalidCwd);
+    RUN(sessionProjectionResolvesStatusFieldsAndHint);
     RUN(runtimeSourcesDoNotIncludeFixtureModel);
     RUN(defaultTerminalKeymapIsValid);
     RUN(defaultTerminalKeymapBindingsAreSingleStroke);

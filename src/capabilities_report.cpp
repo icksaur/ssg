@@ -1,7 +1,7 @@
-#include <ssg/fd_readiness.h>
 #include <ssg/ssg_terminal.h>
 
 #include <termios.h>
+#include <sys/select.h>
 #include <unistd.h>
 
 #include <chrono>
@@ -11,6 +11,19 @@
 #include <string_view>
 
 namespace ssg::app {
+
+namespace {
+
+bool waitForInput(int timeoutMs) {
+    fd_set set;
+    FD_ZERO(&set);
+    FD_SET(STDIN_FILENO, &set);
+    timeval timeout{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
+    return ::select(STDIN_FILENO + 1, &set, nullptr, nullptr, &timeout) > 0 &&
+           FD_ISSET(STDIN_FILENO, &set) != 0;
+}
+
+}  // namespace
 
 int reportCapabilities() {
     TerminalCapabilities capabilities{
@@ -31,7 +44,7 @@ int reportCapabilities() {
                               TerminalCapabilities::kProbeWindow;
         std::string buffer;
         while (std::chrono::steady_clock::now() < deadline) {
-            if (!waitReadiness(10, -1, -1).input) continue;
+            if (!waitForInput(10)) continue;
             char bytes[256];
             auto const count = ::read(STDIN_FILENO, bytes, sizeof bytes);
             if (count <= 0) continue;

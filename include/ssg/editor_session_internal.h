@@ -137,6 +137,11 @@ struct EditorSession::Impl final {
          bool enableFilesystemWatcher = true);
     ~Impl();
 
+    struct ResolvedPromptControls {
+        std::vector<PromptControl> controls;
+        std::size_t activeInput = 0;
+    };
+
     std::filesystem::path root;
     std::filesystem::path scratchRoot;
     std::filesystem::path recoveryRoot;
@@ -371,6 +376,8 @@ struct EditorSession::Impl final {
     // (typing over N selections leaves N carets, Sublime-style).
     void clampSelectionsToActiveDocument();
     [[nodiscard]] UiSchema projectedUiTree() const;
+    [[nodiscard]] std::optional<ResolvedPromptControls>
+    resolvedPromptControls() const;
     [[nodiscard]] PromptStatusViewState promptStatusView() const;
     // The geometry-free semantic projection of the active footer-region prompt,
     // or nullopt unless a footer-region prompt is open.

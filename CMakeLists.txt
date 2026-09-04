@@ -276,7 +276,6 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/navigation.cpp
     ${SSG_SOURCE_DIR}/src/presentation.cpp
     ${SSG_SOURCE_DIR}/src/presentation_projection.cpp
-    ${SSG_SOURCE_DIR}/src/ui_tree_population.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
@@ -1263,7 +1262,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src/main.cpp
         ${SSG_SOURCE_DIR}/src/application.cpp
         ${SSG_SOURCE_DIR}/src/capabilities_report.cpp
-        ${SSG_SOURCE_DIR}/src/fd_readiness.cpp
         ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
         ${SSG_SOURCE_DIR}/src/init_script.cpp
@@ -1279,7 +1277,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
             ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
             ${SSG_SOURCE_DIR}/src/init_script.cpp
-            ${SSG_SOURCE_DIR}/src/fd_readiness.cpp
             ${SSG_SOURCE_DIR}/src/capabilities_report.cpp)
     ssg_test_include_directories(test_ssg_app PRIVATE
         ${SSG_SOURCE_DIR}/tests
@@ -1589,7 +1586,6 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Widget.cpp
     ${SSG_SOURCE_DIR}/src/UiTree.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenSchema.cpp
-    ${SSG_SOURCE_DIR}/src/WholeScreenInteraction.cpp
     ${SSG_SOURCE_DIR}/src/interaction.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

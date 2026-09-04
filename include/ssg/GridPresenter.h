@@ -11,10 +11,6 @@
 
 namespace ssg {
 
-namespace detail {
-struct GridProjectionState;
-}
-
 struct GridPresentationRequest {
     ViewportDimensions dimensions;
     PaletteReport palette;
@@ -67,10 +63,12 @@ public:
         ViewAction const& request, GridPresentation const& presentation);
 
 private:
+    struct State;
+
     [[nodiscard]] std::optional<GridPresentation> project(
         EditorSession::Impl& runtime, GridPresentationRequest request);
 
-    std::unique_ptr<detail::GridProjectionState> state_;
+    std::unique_ptr<State> state_;
 };
 
 }  // namespace ssg

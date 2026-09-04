@@ -1,7 +1,6 @@
 #include <ssg/GridPresenter.h>
 
 #include <ssg/editor_session_internal.h>
-#include <ssg/grid_projection_state.h>
 
 #include <algorithm>
 #include <set>
@@ -9,6 +8,31 @@
 #include <type_traits>
 
 namespace ssg {
+
+struct GridPresenter::State {
+    Viewport viewport;
+    LineLayoutCache lineCache;
+    SelectionNavigation navigation;
+    std::uint32_t treeFirstVisible = 0;
+    std::uint64_t generation = 0;
+    std::optional<std::uint64_t> documentRevision;
+    std::optional<std::uint64_t> findGeneration;
+    std::optional<TabId> activeTab;
+    std::optional<SelectionSet> selections;
+    std::optional<TreeNodeId> treeSelection;
+    bool panelVisible = false;
+    std::optional<std::uint64_t> wrappedDocumentRevision;
+    std::optional<TabId> wrappedTab;
+    std::vector<CellRun> wrappedCellRuns;
+    struct PendingSelection {
+        TabId activeTab;
+        std::uint64_t documentRevision;
+        SelectionSet expected;
+        SelectionNavigation navigation;
+    };
+    std::optional<PendingSelection> pendingSelection;
+};
+
 namespace {
 
 const UiNode* findUiNode(const UiNode& node, std::string_view id) {
@@ -193,7 +217,7 @@ bool solveUiRegions(
 }  // namespace
 
 GridPresenter::GridPresenter()
-    : state_{std::make_unique<detail::GridProjectionState>()} {}
+    : state_{std::make_unique<State>()} {}
 GridPresenter::~GridPresenter() = default;
 GridPresenter::GridPresenter(GridPresenter&&) noexcept = default;
 GridPresenter& GridPresenter::operator=(GridPresenter&&) noexcept = default;
@@ -497,7 +521,7 @@ ViewActionResult GridPresenter::apply(ViewAction const& request,
         }
         if (resolvedSelections != frame.selections) {
             state.pendingSelection =
-                detail::GridProjectionState::PendingSelection{
+                State::PendingSelection{
                     *frame.tabs.active,
                     frame.documentRevision,
                     std::move(resolvedSelections),

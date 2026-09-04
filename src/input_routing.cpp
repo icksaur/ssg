@@ -1,5 +1,4 @@
 #include <ssg/editor_session_internal.h>
-#include <ssg/prompt_resolution.h>
 
 #include <array>
 
@@ -33,8 +32,7 @@ ClientInputResult inputKeyLocked(EditorSession::Impl& impl_,
     auto const promptStatus = impl_.promptStatusView();
     if (promptStatus.activeKind == PromptKind::Palette) {
         routing.prompt = ActivePrompt::Palette;
-    } else if (auto const view = detail::resolveRuntimePromptControls(
-                   impl_.interaction.prompt(), impl_.findReplace.viewState())) {
+    } else if (auto const view = impl_.resolvedPromptControls()) {
         const auto kind = impl_.interaction.prompt().request()->kind;
         switch (kind) {
         case PromptKind::Find:

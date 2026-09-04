@@ -10,7 +10,6 @@
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
 #include <ssg/interaction_state.h>
-#include <ssg/whole_screen_interaction.h>
 #include <ssg/whole_screen_schema.h>
 
 namespace ssg {
@@ -64,9 +63,12 @@ public:
 private:
     [[nodiscard]] UiComposition assembled(const UiComposition& base,
                                           const PromptSurface& prompt) const;
-    void adopt(WholeScreenTruth next, PromptSurface prompt);
-    bool activatePanelProvider(TreeProviderBinding binding,
-                               WholeScreenTruth next);
+    [[nodiscard]] UiInteractionState project(
+        const UiSchema& schema, const PromptSurface& prompt) const;
+    void adopt(PromptSurface prompt);
+    bool activatePanelProvider(TreeProviderBinding binding, bool panelPresent,
+                               BaseFocus baseFocus,
+                               BaseFocus panelReturnFocus);
 
     UiComposition baseComposition_;
     std::vector<StatusActionNode> statusActions_;
@@ -77,7 +79,14 @@ private:
     std::optional<PickerActivation> openPickerActivation_;
     std::uint64_t routingGeneration_ = 0;
     PromptSurface prompt_;
-    WholeScreenTruth truth_;
+    bool panelPresent_ = false;
+    bool distractionFree_ = false;
+    std::optional<PickerKind> openPicker_;
+    BaseFocus baseFocus_ = BaseFocus::Editor;
+    BaseFocus panelReturnFocus_ = BaseFocus::Editor;
+    bool noticePresent_ = false;
+    bool externalModificationPresent_ = false;
+    bool externalFocusHeld_ = false;
     UiInteractionState interaction_;
 };
 

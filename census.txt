@@ -3845,6 +3845,7 @@ ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::reopenTab	TabLifecy
 ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::resetSelectionForActiveDocument	void ()
 ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::resolveExternalDocument	std::optional<FileDocumentId> (const DiffFileId &) const
 ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::resolveOpenSavedDocumentByPath	std::optional<FileDocumentId> (const std::filesystem::path &) const
+ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::resolvedPromptControls	std::optional<ResolvedPromptControls> () const
 ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::revealCurrentDiffTarget	bool (const FollowTarget &, NavigationClass)
 ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::revealDiffTarget	bool (const FollowTarget &, NavigationClass)
 ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::savedPathFromExternalDiffId	std::optional<std::string> (const DiffFileId &)
@@ -3874,6 +3875,7 @@ ssg/editor_session_internal.h	struct	ssg::DocumentRuntimeState
 ssg/editor_session_internal.h	struct	ssg::EditorSession::Impl
 ssg/editor_session_internal.h	struct	ssg::EditorSession::Impl::DeferredCommand
 ssg/editor_session_internal.h	struct	ssg::EditorSession::Impl::DocumentPointerGesture
+ssg/editor_session_internal.h	struct	ssg::EditorSession::Impl::ResolvedPromptControls
 ssg/editor_session_internal.h	var	ssg::DocumentRuntimeState::autosaveOversizeReported	bool
 ssg/editor_session_internal.h	var	ssg::DocumentRuntimeState::history	DocumentHistory
 ssg/editor_session_internal.h	var	ssg::DocumentRuntimeState::reopen	DraftReopenOutcome
@@ -3886,6 +3888,8 @@ ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DocumentPointerGestu
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::baseline	std::vector<Selection>
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::documentId	FileDocumentId
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::documentRevision	std::uint64_t
+ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::ResolvedPromptControls::activeInput	std::size_t
+ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::ResolvedPromptControls::controls	std::vector<PromptControl>
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::activeTextCache	std::string
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::activeTextDocument	std::optional<FileDocumentId>
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::activeTextRevision	std::optional<std::uint64_t>
@@ -3954,12 +3958,6 @@ ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspace	Workspace
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspaceReplaceGeneration	std::uint64_t
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspaceReplacePreview	std::optional<WorkspaceReplacePreview>
 ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspaceSearchGeneration	std::uint64_t
-ssg/fd_readiness.h	func	ssg::app::waitReadiness	FdReadiness (int, int, int, int)
-ssg/fd_readiness.h	struct	ssg::app::FdReadiness
-ssg/fd_readiness.h	var	ssg::app::FdReadiness::gitDiff	bool
-ssg/fd_readiness.h	var	ssg::app::FdReadiness::initScript	bool
-ssg/fd_readiness.h	var	ssg::app::FdReadiness::input	bool
-ssg/fd_readiness.h	var	ssg::app::FdReadiness::signal	bool
 ssg/focus.h	enum	ssg::FocusTarget
 ssg/focus.h	enumerator	ssg::FocusTarget::Editor
 ssg/focus.h	enumerator	ssg::FocusTarget::ExternalModification
@@ -4473,18 +4471,6 @@ ssg/types.h	struct	ssg::LineIndex
 ssg/types.h	var	ssg::DocumentPosition::byteOffset	ByteOffset
 ssg/types.h	var	ssg::DocumentPosition::cell	CellIndex
 ssg/types.h	var	ssg::DocumentPosition::line	LineIndex
-ssg/whole_screen_interaction.h	func	ssg::buildWholeScreenInteraction	UiInteractionState (UiSchema, const WholeScreenTruth &, std::optional<PromptRegion>)
-ssg/whole_screen_interaction.h	func	ssg::derivePickerPresenceOverlay	PalettePresenceOverlay (const UiSchema &, const WholeScreenTruth &)
-ssg/whole_screen_interaction.h	func	ssg::operator==	bool (const WholeScreenTruth &, const WholeScreenTruth &)
-ssg/whole_screen_interaction.h	struct	ssg::WholeScreenTruth
-ssg/whole_screen_interaction.h	var	ssg::WholeScreenTruth::baseFocus	BaseFocus
-ssg/whole_screen_interaction.h	var	ssg::WholeScreenTruth::distractionFree	bool
-ssg/whole_screen_interaction.h	var	ssg::WholeScreenTruth::externalFocusHeld	bool
-ssg/whole_screen_interaction.h	var	ssg::WholeScreenTruth::externalModificationPresent	bool
-ssg/whole_screen_interaction.h	var	ssg::WholeScreenTruth::noticePresent	bool
-ssg/whole_screen_interaction.h	var	ssg::WholeScreenTruth::openPicker	std::optional<PickerKind>
-ssg/whole_screen_interaction.h	var	ssg::WholeScreenTruth::panelPresent	bool
-ssg/whole_screen_interaction.h	var	ssg::WholeScreenTruth::panelReturnFocus	BaseFocus
 ssg/whole_screen_schema.h	class	ssg::WholeScreenSchema
 ssg/whole_screen_schema.h	func	ssg::WholeScreenSchema::WholeScreenSchema	void (UiComposition)
 ssg/whole_screen_schema.h	func	ssg::WholeScreenSchema::schema	const UiSchema &() const noexcept

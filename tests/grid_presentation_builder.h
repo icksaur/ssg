@@ -3,11 +3,11 @@
 #include <ssg/GraphemeLayout.h>
 #include <ssg/StatusFields.h>
 #include <ssg/StatusQueue.h>
+#include <ssg/Theme.h>
 #include <ssg/whole_screen_schema.h>
 #include <ssg/GridPresenter.h>
 
 #include <ssg/interaction.h>
-#include <ssg/ui_tree_population.h>
 
 #include <algorithm>
 #include <functional>
@@ -138,10 +138,8 @@ public:
         if (promptInput_) (void)interaction.openFinder(PickerKind::Command);
 
         UiSchema uiTree = interaction.schema();
-        detail::populateUiTree(
-            uiTree, detail::UiTreeValues{statusFields_, helpHintLabel_,
-                                         projectStatusActionNodes(status_),
-                                         std::nullopt});
+        populateFixtureUiTree(uiTree, statusFields_, helpHintLabel_,
+                              projectStatusActionNodes(status_));
         uiTree.focusPath = interaction.focusPath();
         uiTree = requirePublishedUiTree(std::move(uiTree));
 
@@ -308,6 +306,94 @@ public:
     }
 
 private:
+    [[nodiscard]] static UiNode* mutableNode(UiNode& node,
+                                             const UiNodeId& id) {
+        if (node.id == id) return &node;
+        if (auto* container = std::get_if<UiContainer>(&node.content)) {
+            for (auto& child : container->children) {
+                if (auto* found = mutableNode(child, id)) return found;
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] static SemanticRole roleOr(
+        const std::optional<std::string>& authored, SemanticRole fallback) {
+        if (authored) {
+            if (const auto parsed = semanticRoleFromName(*authored)) {
+                return *parsed;
+            }
+        }
+        return fallback;
+    }
+
+    static void populateFixtureUiTree(
+        UiSchema& schema, const StatusFieldProjection& status,
+        const std::string& helpHintLabel,
+        const std::vector<StatusActionNode>& statusActions) {
+        const auto populateField = [&](std::string_view nodeId,
+                                       const std::vector<StatusField>& fields,
+                                       std::string_view fieldId,
+                                       SemanticRole fallback) {
+            auto* node = mutableNode(schema.root, UiNodeId{std::string{nodeId}});
+            if (!node) return;
+            const auto found = std::ranges::find(
+                fields, fieldId, &StatusField::id);
+            if (found == fields.end() || found->value.empty() ||
+                found->accessibleLabel.empty()) {
+                node->resolved.reset();
+                return;
+            }
+            const auto* leaf = std::get_if<UiLeaf>(&node->content);
+            if (!leaf) return;
+            node->resolved = UiLeafState{
+                found->value, found->accessibleLabel, found->commandId,
+                std::nullopt, roleOr(leaf->widget.role, fallback)};
+        };
+        populateField(kHeaderPathFieldNodeId, status.header, kPathStatusFieldId,
+                      SemanticRole::Header);
+        populateField(kHeaderBranchFieldNodeId, status.header, kBranchStatusFieldId,
+                      SemanticRole::Header);
+        populateField(kFooterStatusFieldNodeId, status.footer, kStatusValueFieldId,
+                      SemanticRole::Footer);
+        populateField(kFooterFollowFieldNodeId, status.footer, kFollowStatusFieldId,
+                      SemanticRole::Footer);
+
+        if (auto* hint = mutableNode(
+                schema.root, UiNodeId{std::string{kFooterHintNodeId}})) {
+            if (helpHintLabel.empty()) {
+                hint->resolved.reset();
+            } else if (const auto* leaf = std::get_if<UiLeaf>(&hint->content)) {
+                hint->resolved = UiLeafState{
+                    helpHintLabel, helpHintLabel, leaf->widget.command,
+                    std::nullopt,
+                    roleOr(leaf->widget.role, SemanticRole::Footer)};
+            }
+        }
+
+        if (auto* actions = mutableNode(
+                schema.root, UiNodeId{std::string{kFooterStatusActionsNodeId}})) {
+            if (auto* container = std::get_if<UiContainer>(&actions->content)) {
+                for (auto& child : container->children) {
+                    const auto found = std::ranges::find(
+                        statusActions, child.id, &StatusActionNode::id);
+                    if (found == statusActions.end() ||
+                        found->accessibleLabel.empty()) {
+                        child.resolved.reset();
+                        continue;
+                    }
+                    const auto* leaf = std::get_if<UiLeaf>(&child.content);
+                    if (!leaf) continue;
+                    child.resolved = UiLeafState{
+                        found->accessibleLabel, found->accessibleLabel,
+                        std::optional<std::string>{found->commandId},
+                        std::nullopt,
+                        roleOr(leaf->widget.role, SemanticRole::StatusInfo)};
+                }
+            }
+        }
+    }
+
     struct PromptInput {
         std::string query;
         std::string ghost;

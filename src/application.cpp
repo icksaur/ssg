@@ -1,5 +1,4 @@
 #include <ssg/application.h>
-#include <ssg/fd_readiness.h>
 
 #include <ssg/pointer_routing.h>
 #include <ssg/ssg_terminal.h>
@@ -18,6 +17,7 @@
 
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/select.h>
 
 #include <csignal>
 #include <chrono>
@@ -64,6 +64,40 @@ constexpr int kEdgeScrollIntervalMs = 40;
 constexpr int kAutosaveTickMs = 1000;
 constexpr int kDragFrameIntervalMs = 16;
 volatile std::sig_atomic_t gSignalPipeWrite = -1;
+
+struct FdReadiness {
+    bool input = false;
+    bool signal = false;
+    bool gitDiff = false;
+    bool initScript = false;
+};
+
+FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd,
+                          int initScriptFd = -1) {
+    fd_set set;
+    FD_ZERO(&set);
+    FD_SET(STDIN_FILENO, &set);
+    if (signalFd >= 0) FD_SET(signalFd, &set);
+    int maxFd = std::max(STDIN_FILENO, signalFd);
+    if (gitDiffFd >= 0) {
+        FD_SET(gitDiffFd, &set);
+        maxFd = std::max(maxFd, gitDiffFd);
+    }
+    if (initScriptFd >= 0) {
+        FD_SET(initScriptFd, &set);
+        maxFd = std::max(maxFd, initScriptFd);
+    }
+    timeval timeout{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
+    int const ready =
+        ::select(maxFd + 1, &set, nullptr, nullptr,
+                 timeoutMs < 0 ? nullptr : &timeout);
+    if (ready <= 0) return {};
+    return {
+        FD_ISSET(STDIN_FILENO, &set) != 0,
+        signalFd >= 0 ? FD_ISSET(signalFd, &set) != 0 : false,
+        gitDiffFd >= 0 ? FD_ISSET(gitDiffFd, &set) != 0 : false,
+        initScriptFd >= 0 ? FD_ISSET(initScriptFd, &set) != 0 : false};
+}
 
 extern "C" void signalTagHandler(int signo) {
     int const fd = gSignalPipeWrite;
