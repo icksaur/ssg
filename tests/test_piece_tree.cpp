@@ -1,4 +1,4 @@
-#include "PieceTree.h"
+#include <ssg/PieceTree.h>
 #include "test_helpers.h"
 
 #include <algorithm>

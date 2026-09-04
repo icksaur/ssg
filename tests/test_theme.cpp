@@ -1,6 +1,6 @@
-#include "ssg/EditorSession.h"
+#include <ssg/EditorSession.h>
 #include "grid_test_frame.h"
-#include "ssg/Theme.h"
+#include <ssg/Theme.h>
 #include "test_helpers.h"
 
 #include <array>
@@ -202,11 +202,11 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
             continue;
         }
         if (!entry->is_regular_file(kindError) || kindError) continue;
-        if (relative == "include/core/ssg/Theme.h" ||
+        if (relative == "include/ssg/Theme.h" ||
             // Terminal color-depth adaptation (M9-C): these define the xterm-256
             // and ANSI-16 TERMINAL palettes -- hardware swatches a reduced-depth
             // terminal can display -- not editor theme colors.
-            relative == "include/core/ssg/color.h" ||
+            relative == "include/ssg/color.h" ||
             relative == "src/color.cpp" ||
             relative == "tests/test_color.cpp" ||
             relative == "tests/test_theme.cpp" ||

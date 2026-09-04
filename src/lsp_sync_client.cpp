@@ -1,5 +1,5 @@
 #include <ssg/lsp_sync_client.h>
-#include "startup_audit.h"
+#include <ssg/startup_audit.h>
 
 #include <algorithm>
 #include <charconv>

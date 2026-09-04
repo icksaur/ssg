@@ -1,4 +1,4 @@
-#include "ssg/ScratchJournal.h"
+#include <ssg/ScratchJournal.h>
 #include "test_helpers.h"
 
 #include <algorithm>

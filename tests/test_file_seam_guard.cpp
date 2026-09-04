@@ -32,8 +32,8 @@ struct Exemption {
 
 constexpr Exemption kExemptions[] = {
     // The seam's own implementations ARE the filesystem access.
-    {"src/platform/linux_files.cpp", "implements the seam"},
-    {"src/platform/windows_files.cpp", "implements the seam"},
+    {"src/linux_files.cpp", "implements the seam"},
+    {"src/windows_files.cpp", "implements the seam"},
     // Tests read and write files out-of-band on purpose: a test that used the
     // seam to check the seam would be its own oracle.
     {"tests/", "test fixtures read out-of-band by design"},
@@ -168,17 +168,17 @@ struct PlatformHeaderOwner {
 };
 
 constexpr PlatformHeaderOwner kPlatformHeaderOwners[] = {
-    {"<windows.h>", "src/platform/windows_files.cpp",
+    {"<windows.h>", "src/windows_files.cpp",
      "implements Windows file services"},
-    {"<windows.h>", "src/platform/windows_watcher.cpp",
+    {"<windows.h>", "src/windows_watcher.cpp",
      "implements the Windows filesystem watcher"},
-    {"<windows.h>", "src/platform/windows_git_metadata_watcher.cpp",
+    {"<windows.h>", "src/windows_git_metadata_watcher.cpp",
      "implements the Windows Git metadata watcher"},
-    {"<sys/inotify.h>", "src/platform/linux_watcher.cpp",
+    {"<sys/inotify.h>", "src/linux_watcher.cpp",
      "implements the Linux filesystem watcher"},
-    {"<sys/inotify.h>", "src/platform/linux_git_metadata_watcher.cpp",
+    {"<sys/inotify.h>", "src/linux_git_metadata_watcher.cpp",
      "implements the Linux Git metadata watcher"},
-    {"<git2.h>", "src/platform/git_repository.cpp",
+    {"<git2.h>", "src/git_repository.cpp",
      "implements the core-owned Git repository adapter"},
     {"<lua.h>", "src/LuaCommandHost.cpp",
      "implements the Lua adapter"},

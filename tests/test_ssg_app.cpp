@@ -1,15 +1,15 @@
-#include "pointer_routing.h"
-#include "ssg_terminal.h"
+#include <ssg/pointer_routing.h>
+#include <ssg/ssg_terminal.h>
 
 #include <ssg/EditorSession.h>
 #include <ssg/focus.h>
-#include <tui/HitTester.h>
+#include <ssg/HitTester.h>
 #include <ssg/PromptSurface.h>
-#include <tui/Renderer.h>
+#include <ssg/Renderer.h>
 #include <ssg/ScriptHost.h>
 #include <ssg/Selection.h>
 
-#include "init_script.h"
+#include <ssg/init_script.h>
 
 #include "test_helpers.h"
 #include "grid_test_frame.h"
@@ -529,7 +529,7 @@ TEST(theCrashUndoLeavesEveryDeclaredModeInReverseOrder) {
     // declared, entered, and left out of the crash undo. Counted from the
     // header, so this does not just re-read the list it is checking.
     std::ifstream header{std::string{SSG_TEST_SOURCE_DIR} +
-                         "/apps/ssg_terminal.h"};
+                         "/include/ssg/ssg_terminal.h"};
     std::string const source{std::istreambuf_iterator<char>{header},
                              std::istreambuf_iterator<char>{}};
     ASSERT_FALSE(source.empty());
@@ -1367,7 +1367,7 @@ TEST(aReplySplitAcrossReadsIsStillConsumedWhole) {
 // The DCS/OSC/APC/PM/SOS string introducers (ESC P/]/X/^/_) are byte-identical
 // to the Alt+<key> chords the meta-prefix coalescing produces, so a stray such
 // reply would be mistaken for a keystroke.  That is safe only while SSG asks no
-// DCS/OSC question, so pin the real invariant: nothing under apps/ emits a
+// DCS/OSC question, so pin the real invariant: nothing under src/ emits a
 // sequence that could solicit such a reply.  Adding one must fail here.
 TEST(noDcsOrOscQueryMaySolicitAnUnparsedReply) {
     // The introducers now coalesce to Alt strokes (keyboard input); only the
@@ -1385,7 +1385,7 @@ TEST(noDcsOrOscQueryMaySolicitAnUnparsedReply) {
     // back, or the answer lands in the user's document.
     std::vector<std::string> emitters;
     for (auto const& entry : std::filesystem::directory_iterator{
-             std::filesystem::path{SSG_TEST_SOURCE_DIR} / "apps"}) {
+             std::filesystem::path{SSG_TEST_SOURCE_DIR} / "src"}) {
         if (!entry.is_regular_file()) continue;
         auto const extension = entry.path().extension().string();
         if (extension != ".cpp" && extension != ".h") continue;
@@ -2743,7 +2743,7 @@ TEST(routePointerFilePickerPressUsesTheGenericPickerSubmit) {
     hit.region = ssg::HitRegion::Palette;
     hit.itemIndex = 2;
     ssg::app::PointerTargets targets;
-    targets.picker_candidate_id = std::string{"src/runtime/snapshot.cpp"};
+    targets.picker_candidate_id = std::string{"src/snapshot.cpp"};
     targets.picker_activation = ssg::PickerActivation{
         ssg::SearchMode::File, ssg::PickerActivationId{6}};
 
@@ -2757,7 +2757,7 @@ TEST(routePointerFilePickerPressUsesTheGenericPickerSubmit) {
     if (input) {
         ASSERT_TRUE(input->activation == *targets.picker_activation);
         ASSERT_EQ(input->candidateId,
-                  std::string{"src/runtime/snapshot.cpp"});
+                  std::string{"src/snapshot.cpp"});
     }
     ASSERT_FALSE(plan.begins_drag);
 }

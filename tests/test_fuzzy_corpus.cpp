@@ -8,7 +8,7 @@
 // contract. The fixture is shared so the two clients cannot drift onto different
 // corpora.
 
-#include "ssg/PaletteSearcher.h"
+#include <ssg/PaletteSearcher.h>
 
 #include "test_helpers.h"
 

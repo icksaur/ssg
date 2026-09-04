@@ -1,4 +1,4 @@
-#include "ssg/FilesystemWatcher.h"
+#include <ssg/FilesystemWatcher.h>
 
 #include <algorithm>
 #include <deque>

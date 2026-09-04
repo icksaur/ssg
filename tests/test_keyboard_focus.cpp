@@ -1,7 +1,7 @@
 // Seam test for the node-only keyboard-focus stack. Schema-owned context
 // validation belongs to UiInteractionState.
 
-#include "ssg/KeyboardFocus.h"
+#include <ssg/KeyboardFocus.h>
 #include "test_helpers.h"
 
 #include <stdexcept>

@@ -6,7 +6,7 @@
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/TextInputCommands.h>
-#include <tui/HitTester.h>
+#include <ssg/HitTester.h>
 
 #include <filesystem>
 #include <fstream>

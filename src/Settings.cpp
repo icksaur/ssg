@@ -1,6 +1,6 @@
-#include "ssg/Settings.h"
+#include <ssg/Settings.h>
 
-#include "ssg/platform_files.h"
+#include <ssg/platform_files.h>
 
 #include <charconv>
 #include <fstream>

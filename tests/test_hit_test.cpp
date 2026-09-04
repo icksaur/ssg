@@ -1,4 +1,4 @@
-#include <tui/HitTester.h>
+#include <ssg/HitTester.h>
 
 #include <ssg/EditorSession.h>
 #include <ssg/Selection.h>

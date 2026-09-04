@@ -1,4 +1,4 @@
-#include "ssg/Widget.h"
+#include <ssg/Widget.h>
 #include "test_helpers.h"
 
 #include <cstdint>

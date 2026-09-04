@@ -1,7 +1,7 @@
-#include <tui/UiRegionProjection.h>
-#include <tui/ShellViewState.h>
-#include "ssg/UiTree.h"
-#include "ssg/Widget.h"
+#include <ssg/UiRegionProjection.h>
+#include <ssg/ShellViewState.h>
+#include <ssg/UiTree.h>
+#include <ssg/Widget.h>
 #include "test_helpers.h"
 
 #include <optional>

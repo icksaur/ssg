@@ -1,8 +1,8 @@
 #include <ssg/Document.h>
 
-#include "PieceTree.h"
+#include <ssg/PieceTree.h>
 
-#include "open_metrics.h"
+#include <ssg/open_metrics.h>
 #include <ssg/TextCodec.h>
 
 #include <algorithm>

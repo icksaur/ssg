@@ -1,5 +1,5 @@
-#include "runtime/editor_session_internal.h"
-#include "runtime/prompt_resolution.h"
+#include <ssg/editor_session_internal.h>
+#include <ssg/prompt_resolution.h>
 #include <ssg/CommandCatalog.h>
 #include <ssg/DraftReopenClassifier.h>
 #include <ssg/FilesystemWatcher.h>

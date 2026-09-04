@@ -1,6 +1,6 @@
-#include "ssg/EditorSession.h"
+#include <ssg/EditorSession.h>
 #include "grid_test_frame.h"
-#include "ssg/SyntaxModel.h"
+#include <ssg/SyntaxModel.h>
 #include "test_helpers.h"
 
 #include <filesystem>

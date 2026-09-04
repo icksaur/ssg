@@ -1,6 +1,6 @@
-#include "ssg/SyntaxModel.h"
+#include <ssg/SyntaxModel.h>
 
-#include "startup_audit.h"
+#include <ssg/startup_audit.h>
 
 #include <algorithm>
 #include <array>

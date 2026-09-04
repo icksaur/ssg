@@ -1,4 +1,4 @@
-#include "ssg/ExternalModificationFlow.h"
+#include <ssg/ExternalModificationFlow.h>
 
 #include <algorithm>
 #include <array>

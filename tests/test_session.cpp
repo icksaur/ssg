@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 
 #include <ssg/CommandCatalog.h>
-#include "../src/runtime/command_executor.h"
+#include <ssg/command_executor.h>
 
 #include <algorithm>
 #include <any>

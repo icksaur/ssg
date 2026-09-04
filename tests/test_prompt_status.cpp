@@ -1,7 +1,7 @@
-#include "ssg/PromptSurface.h"
-#include <tui/PromptLayout.h>
-#include "status_queue.h"
-#include "ssg/WholeScreenAssembly.h"
+#include <ssg/PromptSurface.h>
+#include <ssg/PromptLayout.h>
+#include <ssg/status_queue.h>
+#include <ssg/WholeScreenAssembly.h>
 #include "test_helpers.h"
 
 #include <algorithm>

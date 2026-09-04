@@ -1,5 +1,5 @@
-#include "ssg/FilesystemWatcher.h"
-#include "ssg/GitMetadataWatcher.h"
+#include <ssg/FilesystemWatcher.h>
+#include <ssg/GitMetadataWatcher.h>
 #include "test_helpers.h"
 
 #include <chrono>

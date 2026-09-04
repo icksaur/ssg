@@ -4,7 +4,7 @@
 #include "../test_helpers.h"
 
 #include <ssg/EditorSession.h>
-#include <tui/GridPresenter.h>
+#include <ssg/GridPresenter.h>
 #include <ssg/Keymap.h>
 
 #include <algorithm>
@@ -54,7 +54,7 @@ TEST(runtimeSourcesDoNotIncludeFixtureModel) {
         if (!entry.is_regular_file()) continue;
         if (entry.path().extension() != ".cpp" && entry.path().extension() != ".h") continue;
         const auto relative = std::filesystem::relative(entry.path(), root).generic_string();
-        if (relative.rfind("src/runtime/", 0) != 0 && relative != "src/EditorSession.cpp") continue;
+        if (relative.rfind("src/", 0) != 0 && relative != "src/EditorSession.cpp") continue;
         std::ifstream input{entry.path()};
         const std::string text{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
         found = found || text.find("FixtureModel") != std::string::npos;

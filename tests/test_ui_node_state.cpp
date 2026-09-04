@@ -1,21 +1,21 @@
 // Direct-value oracles for the UI-VM leaf vocabulary. Two independent layers:
-// (1) the TUI grid lowering (apps/tui/UiRegionProjection) consumes each leaf's
+// (1) the TUI grid lowering (src/UiRegionProjection) consumes each leaf's
 // already-resolved UiNode::resolved directly, with no resolver to reconstruct;
 // (2) the private snapshot-publication step (detail::populateUiTree) writes
 // UiNode::resolved from typed runtime values by fixed UiNodeId lookup.
 
-#include <tui/UiRegionProjection.h>
-#include <tui/ShellViewState.h>
+#include <ssg/UiRegionProjection.h>
+#include <ssg/ShellViewState.h>
 
-#include "ssg/PromptSurface.h"
-#include "ssg/StatusFields.h"
-#include "ssg/StatusQueue.h"
-#include "ssg/Style.h"
-#include "ssg/UiTree.h"
-#include "ssg/WholeScreenAssembly.h"
+#include <ssg/PromptSurface.h>
+#include <ssg/StatusFields.h>
+#include <ssg/StatusQueue.h>
+#include <ssg/Style.h>
+#include <ssg/UiTree.h>
+#include <ssg/WholeScreenAssembly.h>
 #include "test_helpers.h"
 
-#include "../src/runtime/ui_tree_population.h"
+#include <ssg/ui_tree_population.h>
 
 #include <optional>
 #include <stdexcept>

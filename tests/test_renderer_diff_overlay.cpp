@@ -1,5 +1,5 @@
 #include <ssg/EditorSession.h>
-#include <tui/Renderer.h>
+#include <ssg/Renderer.h>
 
 #include "test_helpers.h"
 #include "grid_test_frame.h"

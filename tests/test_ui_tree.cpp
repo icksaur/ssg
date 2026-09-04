@@ -4,8 +4,8 @@
 // the independently-knowable answers (which schema is well-formed) written
 // against the rules, not the implementation.
 
-#include "ssg/UiTree.h"
-#include "ssg/WholeScreenAssembly.h"
+#include <ssg/UiTree.h>
+#include <ssg/WholeScreenAssembly.h>
 #include "test_helpers.h"
 
 #include <string>

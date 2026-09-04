@@ -2,7 +2,7 @@
 #include "grid_test_frame.h"
 #include "tui_fixture.h"
 
-#include <tui/Renderer.h>
+#include <ssg/Renderer.h>
 
 #include <filesystem>
 #include <stdexcept>

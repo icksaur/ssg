@@ -1,4 +1,4 @@
-#include "TreeSitterParser.h"
+#include <ssg/TreeSitterParser.h>
 #include "test_helpers.h"
 
 #include <ssg/Theme.h>

@@ -1,4 +1,4 @@
-#include "ssg/platform_files.h"
+#include <ssg/platform_files.h>
 #include "test_helpers.h"
 
 #include <array>

@@ -4,10 +4,10 @@
 #include <ssg/StatusFields.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/WholeScreenAssembly.h>
-#include <tui/GridPresenter.h>
+#include <ssg/GridPresenter.h>
 
-#include "../src/runtime/interaction.h"
-#include "../src/runtime/ui_tree_population.h"
+#include <ssg/interaction.h>
+#include <ssg/ui_tree_population.h>
 
 #include <algorithm>
 #include <functional>

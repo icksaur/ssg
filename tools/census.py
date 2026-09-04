@@ -39,8 +39,7 @@ import clang.cindex as ci
 
 # The public surface is whatever lives under this directory. A project either
 # includes its own headers flat (<Math.h>) or under a namespace directory
-# (<ssg/UiTree.h>) or per-layer (include/core/ssg/...), so every one of those
-# levels becomes an include path -- see include_args.
+# (<ssg/UiTree.h>), so both levels become include paths -- see include_args.
 INCLUDE_ROOT = "include"
 
 # Declarations clang reports that are not part of the readable public surface.

@@ -6,11 +6,11 @@
 // the sole minter; and a structural schema change migrates interaction+truth atomically
 // while preserving valid panel and prompt truth.
 
-#include "../src/runtime/interaction.h"
+#include <ssg/interaction.h>
 
-#include "ssg/Style.h"
-#include "ssg/UiTree.h"
-#include "ssg/WholeScreenAssembly.h"
+#include <ssg/Style.h>
+#include <ssg/UiTree.h>
+#include <ssg/WholeScreenAssembly.h>
 #include "test_helpers.h"
 
 #include <algorithm>

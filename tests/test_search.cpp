@@ -21,14 +21,14 @@ WorkspaceSnapshot fixtureWorkspace(std::uint64_t revision) {
         .revision = revision,
         .files = {
         {.path = "README.md", .text = "project\n"},
-        {.path = "include/core/ssg/search.h",
+        {.path = "include/ssg/search.h",
          .text = "struct SearchResult {};\n"},
         {.path = "src/search.cpp",
          .text = "search ranking\nworker\ncancel token\n"},
         {.path = "src/session.cpp", .text = "session state\n"},
         },
         .symbols = {
-        {.path = "include/core/ssg/search.h",
+        {.path = "include/ssg/search.h",
          .name = "SearchResult",
          .line = 1,
          .column = 8},

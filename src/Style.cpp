@@ -1,4 +1,4 @@
-#include "ssg/Style.h"
+#include <ssg/Style.h>
 
 #include <algorithm>
 #include <charconv>
@@ -6,7 +6,7 @@
 #include <functional>
 #include <optional>
 
-#include "ssg/GraphemeLayout.h"
+#include <ssg/GraphemeLayout.h>
 
 namespace ssg {
 namespace {

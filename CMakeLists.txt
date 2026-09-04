@@ -46,8 +46,8 @@ add_library(ssg_core STATIC
     src/ssg.cpp
 )
 
-target_include_directories(ssg_platform PUBLIC "${SSG_SOURCE_DIR}/include/platform")
-target_include_directories(ssg_core PUBLIC "${SSG_SOURCE_DIR}/include/core")
+target_include_directories(ssg_platform PUBLIC "${SSG_SOURCE_DIR}/include")
+target_include_directories(ssg_core PUBLIC "${SSG_SOURCE_DIR}/include")
 target_link_libraries(ssg_core PUBLIC ssg_platform)
 
 add_library(ssg INTERFACE)
@@ -83,17 +83,17 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     # Compile app-private presentation once for the TUI and its focused tests
     # without creating an embeddable library component.
     add_library(ssg_tui_objects OBJECT
-        ${SSG_SOURCE_DIR}/apps/tui/GridPresenter.cpp
-        ${SSG_SOURCE_DIR}/apps/tui/HitTester.cpp
-        ${SSG_SOURCE_DIR}/apps/tui/Layout.cpp
-        ${SSG_SOURCE_DIR}/apps/tui/PromptLayout.cpp
-        ${SSG_SOURCE_DIR}/apps/tui/Renderer.cpp
-        ${SSG_SOURCE_DIR}/apps/tui/StatusFieldGrid.cpp
-        ${SSG_SOURCE_DIR}/apps/tui/UiRegionProjection.cpp
-        ${SSG_SOURCE_DIR}/apps/tui/WidgetLayout.cpp
+        ${SSG_SOURCE_DIR}/src/GridPresenter.cpp
+        ${SSG_SOURCE_DIR}/src/HitTester.cpp
+        ${SSG_SOURCE_DIR}/src/Layout.cpp
+        ${SSG_SOURCE_DIR}/src/PromptLayout.cpp
+        ${SSG_SOURCE_DIR}/src/Renderer.cpp
+        ${SSG_SOURCE_DIR}/src/StatusFieldGrid.cpp
+        ${SSG_SOURCE_DIR}/src/UiRegionProjection.cpp
+        ${SSG_SOURCE_DIR}/src/WidgetLayout.cpp
     )
     target_include_directories(ssg_tui_objects PUBLIC
-        "${SSG_SOURCE_DIR}/apps/tui/include")
+        "${SSG_SOURCE_DIR}/include")
     target_link_libraries(ssg_tui_objects PUBLIC ssg_core)
     ssg_configure_component(ssg_tui_objects)
 endif()
@@ -270,16 +270,16 @@ endif()
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/EditorSession.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/editing.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/input_routing.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/files.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/git_diff_worker.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/help.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/language_services.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/navigation.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/presentation.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/presentation_projection.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/ui_tree_population.cpp
+    ${SSG_SOURCE_DIR}/src/editing.cpp
+    ${SSG_SOURCE_DIR}/src/input_routing.cpp
+    ${SSG_SOURCE_DIR}/src/files.cpp
+    ${SSG_SOURCE_DIR}/src/git_diff_worker.cpp
+    ${SSG_SOURCE_DIR}/src/help.cpp
+    ${SSG_SOURCE_DIR}/src/language_services.cpp
+    ${SSG_SOURCE_DIR}/src/navigation.cpp
+    ${SSG_SOURCE_DIR}/src/presentation.cpp
+    ${SSG_SOURCE_DIR}/src/presentation_projection.cpp
+    ${SSG_SOURCE_DIR}/src/ui_tree_population.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
@@ -450,9 +450,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/test_end_to_end_session.cpp
         SYMBOL test_end_to_end
         SOURCES
-            ${SSG_SOURCE_DIR}/examples/tui/tui_fixture.cpp)
+            ${SSG_SOURCE_DIR}/tests/tui_fixture.cpp)
     ssg_test_include_directories(test_end_to_end PRIVATE
-        ${SSG_SOURCE_DIR}/examples/tui
+        ${SSG_SOURCE_DIR}/tests
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_compile_definitions(test_end_to_end PRIVATE
@@ -533,13 +533,13 @@ target_sources(ssg_platform PRIVATE
 
 if(WIN32)
     target_sources(ssg_platform PRIVATE
-        ${SSG_SOURCE_DIR}/src/platform/windows_watcher.cpp
-        ${SSG_SOURCE_DIR}/src/platform/windows_git_metadata_watcher.cpp
+        ${SSG_SOURCE_DIR}/src/windows_watcher.cpp
+        ${SSG_SOURCE_DIR}/src/windows_git_metadata_watcher.cpp
     )
 else()
     target_sources(ssg_platform PRIVATE
-        ${SSG_SOURCE_DIR}/src/platform/linux_watcher.cpp
-        ${SSG_SOURCE_DIR}/src/platform/linux_git_metadata_watcher.cpp
+        ${SSG_SOURCE_DIR}/src/linux_watcher.cpp
+        ${SSG_SOURCE_DIR}/src/linux_git_metadata_watcher.cpp
     )
 endif()
 
@@ -602,7 +602,7 @@ endif()
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/GitDiffSource.cpp
-    ${SSG_SOURCE_DIR}/src/platform/git_repository.cpp
+    ${SSG_SOURCE_DIR}/src/git_repository.cpp
 )
 
 if(EXISTS "${SSG_SOURCE_DIR}/vendor/libgit2/CMakeLists.txt")
@@ -867,12 +867,12 @@ target_sources(ssg_platform PRIVATE
 
 if(WIN32)
     target_sources(ssg_platform PRIVATE
-        ${SSG_SOURCE_DIR}/src/platform/windows_files.cpp
+        ${SSG_SOURCE_DIR}/src/windows_files.cpp
     )
     target_link_libraries(ssg_platform PRIVATE advapi32)
 else()
     target_sources(ssg_platform PRIVATE
-        ${SSG_SOURCE_DIR}/src/platform/linux_files.cpp
+        ${SSG_SOURCE_DIR}/src/linux_files.cpp
     )
 endif()
 
@@ -1177,7 +1177,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/runtime/command_executor.cpp
+    ${SSG_SOURCE_DIR}/src/command_executor.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -1196,8 +1196,8 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Settings.cpp
 )
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/platform/linux_settings.cpp
-    ${SSG_SOURCE_DIR}/src/platform/windows_settings.cpp
+    ${SSG_SOURCE_DIR}/src/linux_settings.cpp
+    ${SSG_SOURCE_DIR}/src/windows_settings.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -1263,10 +1263,10 @@ endif()
 #
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(ssg_app
-        ${SSG_SOURCE_DIR}/apps/ssg_main.cpp
-        ${SSG_SOURCE_DIR}/apps/ssg_terminal.cpp
-        ${SSG_SOURCE_DIR}/apps/pointer_routing.cpp
-        ${SSG_SOURCE_DIR}/apps/init_script.cpp
+        ${SSG_SOURCE_DIR}/src/ssg_main.cpp
+        ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
+        ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
+        ${SSG_SOURCE_DIR}/src/init_script.cpp
     )
     set_target_properties(ssg_app PROPERTIES OUTPUT_NAME ssg)
     target_include_directories(ssg_app PRIVATE ${SSG_SOURCE_DIR}/apps)
@@ -1277,9 +1277,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/test_ssg_app.cpp
         SYMBOL test_ssg_app
         SOURCES
-            ${SSG_SOURCE_DIR}/apps/ssg_terminal.cpp
-            ${SSG_SOURCE_DIR}/apps/pointer_routing.cpp
-            ${SSG_SOURCE_DIR}/apps/init_script.cpp)
+            ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
+            ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
+            ${SSG_SOURCE_DIR}/src/init_script.cpp)
     ssg_test_include_directories(test_ssg_app PRIVATE
         ${SSG_SOURCE_DIR}/apps
         ${SSG_SOURCE_DIR}/tests
@@ -1561,9 +1561,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ENTRY ${SSG_SOURCE_DIR}/tests/test_tui_session.cpp
         SYMBOL test_tui_fixture
         SOURCES
-            ${SSG_SOURCE_DIR}/examples/tui/tui_fixture.cpp)
+            ${SSG_SOURCE_DIR}/tests/tui_fixture.cpp)
     ssg_test_include_directories(test_tui_fixture PRIVATE
-        ${SSG_SOURCE_DIR}/examples/tui
+        ${SSG_SOURCE_DIR}/tests
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_link_libraries(test_tui_fixture PRIVATE ssg_tui_objects)
@@ -1590,7 +1590,7 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/UiTree.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenSchema.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenInteraction.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/interaction.cpp
+    ${SSG_SOURCE_DIR}/src/interaction.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(

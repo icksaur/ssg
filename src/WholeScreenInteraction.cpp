@@ -1,4 +1,4 @@
-#include "runtime/whole_screen_interaction.h"
+#include <ssg/whole_screen_interaction.h>
 
 #include <ssg/UiTree.h>  // node id constants
 

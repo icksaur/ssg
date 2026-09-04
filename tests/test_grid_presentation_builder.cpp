@@ -14,7 +14,7 @@
 #include "test_helpers.h"
 
 #include <ssg/EditorSession.h>
-#include <tui/Renderer.h>
+#include <ssg/Renderer.h>
 
 #include <filesystem>
 #include <fstream>

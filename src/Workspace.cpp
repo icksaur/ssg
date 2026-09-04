@@ -1,6 +1,6 @@
 #include <ssg/Workspace.h>
 
-#include "open_metrics.h"
+#include <ssg/open_metrics.h>
 #include <ssg/SharedBytes.h>
 
 #include <algorithm>

@@ -11,7 +11,7 @@
 #include "../grid_test_frame.h"
 
 #include <ssg/EditorSession.h>
-#include <tui/Renderer.h>
+#include <ssg/Renderer.h>
 
 #include <cstdlib>
 #include <filesystem>

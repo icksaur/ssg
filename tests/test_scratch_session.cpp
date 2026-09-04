@@ -1,5 +1,5 @@
-#include "ssg/ScratchJournal.h"
-#include "ssg/ScratchSession.h"
+#include <ssg/ScratchJournal.h>
+#include <ssg/ScratchSession.h>
 #include "test_helpers.h"
 
 #include <chrono>
@@ -16,7 +16,7 @@
 #include <windows.h>
 #else
 #include <csignal>
-#include <sys/types.h>
+#include <ssg/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif

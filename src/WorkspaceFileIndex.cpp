@@ -1,4 +1,4 @@
-#include "WorkspaceFileIndex.h"
+#include <ssg/WorkspaceFileIndex.h>
 
 #include <algorithm>
 #include <string>

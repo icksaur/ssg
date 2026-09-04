@@ -1,6 +1,6 @@
 #include <ssg/EditorSession.h>
 #include <ssg/Keymap.h>
-#include <tui/Renderer.h>
+#include <ssg/Renderer.h>
 
 #include "test_helpers.h"
 #include "grid_test_frame.h"
@@ -96,7 +96,7 @@ bool screenContains(ssg::CellGrid const& grid, std::string_view needle) {
 
 // M11-4: the client's PaletteReport is a pure, bounded derived view built ONLY by
 // the library seam `derive_palette_report` from the server-published candidates
-// plus the local query/selection/window.  The app (apps/ssg_main.cpp build_report)
+// plus the local query/selection/window.  The app (src/ssg_main.cpp build_report)
 // uses this exact seam, so exercising it here proves the client cannot invent
 // product data or substitute a private ranker — the projection is library code.
 ssg::PaletteReport projectReport(

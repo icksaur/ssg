@@ -63,7 +63,7 @@ The user-facing capability set, stated as engineering deliverables:
   status header/footer, and fully themeable per-role and per-syntax-scope colors.
 - Tree-sitter syntax state, LSP synchronization/diagnostics/language features
   and atomic workspace edits, plus a capability-limited Lua 5.4 command host.
-- A reference TUI adapter (`examples/tui/`) and focused presentation fixtures.
+- A reference TUI adapter (`tests/`) and focused presentation fixtures.
 
 ## Data and configuration
 

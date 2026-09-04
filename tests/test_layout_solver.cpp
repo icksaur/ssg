@@ -1,5 +1,5 @@
-#include <tui/Layout.h>
-#include "ssg/WholeScreenAssembly.h"
+#include <ssg/Layout.h>
+#include <ssg/WholeScreenAssembly.h>
 #include "test_helpers.h"
 
 #include <algorithm>

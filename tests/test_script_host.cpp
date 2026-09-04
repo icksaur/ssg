@@ -2,7 +2,7 @@
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/EditorSession.h>
-#include <tui/GridPresenter.h>
+#include <ssg/GridPresenter.h>
 
 #include "test_helpers.h"
 

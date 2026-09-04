@@ -22,7 +22,7 @@ std::string readFile(const char* path) {
 }
 
 // Every command granted to init.lua (surfaces.initScript in the command
-// catalog, which apps/ssg_main.cpp's initScriptCommandCatalog builds from)
+// catalog, which src/ssg_main.cpp's initScriptCommandCatalog builds from)
 // must appear backticked in doc/config.md, so a newly Lua-exposed command
 // can't ship without a user-facing mention. One-directional (unlike
 // test_required_commands.cpp's bidirectional feature-doc check): doc/

@@ -1,4 +1,4 @@
-#include "ssg/GitDiffSource.h"
+#include <ssg/GitDiffSource.h>
 #include "test_helpers.h"
 
 #include <array>

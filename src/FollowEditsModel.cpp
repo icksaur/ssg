@@ -1,4 +1,4 @@
-#include "ssg/FollowEditsModel.h"
+#include <ssg/FollowEditsModel.h>
 
 #include <algorithm>
 #include <stdexcept>

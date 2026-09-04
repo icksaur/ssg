@@ -388,7 +388,7 @@ TEST(everyGlyphFieldIsValidatedAndEveryDefaultIsValid) {
     // Every std::string field declared in Style.h must be one of those keys, so
     // a newly added glyph cannot quietly skip validation by never being listed.
     std::ifstream header{std::string{SSG_TEST_SOURCE_DIR} +
-                         "/include/core/ssg/Style.h"};
+                         "/include/ssg/Style.h"};
     std::string const source{std::istreambuf_iterator<char>{header},
                              std::istreambuf_iterator<char>{}};
     ASSERT_FALSE(source.empty());

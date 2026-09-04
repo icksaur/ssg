@@ -1,4 +1,4 @@
-#include "runtime/whole_screen_schema.h"
+#include <ssg/whole_screen_schema.h>
 
 #include <stdexcept>
 #include <utility>
