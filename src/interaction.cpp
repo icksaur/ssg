@@ -1,5 +1,5 @@
 #include <ssg/interaction.h>
-#include <ssg/WholeScreenSchema.h>
+#include <ssg/ScreenLayout.h>
 
 #include <algorithm>
 #include <array>
@@ -56,7 +56,7 @@ std::optional<PromptRegion> activePromptRegion(const PromptSurface& prompt) {
     return promptFocusRegion(prompt.request()->kind);
 }
 
-struct WholeScreenProjection {
+struct ScreenProjection {
     bool panelPresent = false;
     bool distractionFree = false;
     std::optional<PickerKind> openPicker;
@@ -68,8 +68,8 @@ struct WholeScreenProjection {
 
 UiNodeId nodeId(std::string_view id) { return UiNodeId{std::string{id}}; }
 
-UiInteractionState buildWholeScreenInteraction(
-    UiSchema schema, const WholeScreenProjection& truth,
+UiInteractionState buildInteraction(
+    UiSchema schema, const ScreenProjection& truth,
     std::optional<PromptRegion> promptRegion) {
     std::vector<UiNodeId> hidden;
     if (!truth.panelPresent) hidden.push_back(nodeId(kPanelNodeId));
@@ -141,13 +141,13 @@ UiInteractionState buildWholeScreenInteraction(
 }
 
 PalettePresenceOverlay derivePickerPresenceOverlay(
-    const UiSchema& schema, WholeScreenProjection truth) {
+    const UiSchema& schema, ScreenProjection truth) {
     truth.openPicker.reset();
     const auto closedState =
-        buildWholeScreenInteraction(schema, truth, std::nullopt);
+        buildInteraction(schema, truth, std::nullopt);
     truth.openPicker = PickerKind::Command;
     const auto openState =
-        buildWholeScreenInteraction(schema, truth, PromptRegion::Header);
+        buildInteraction(schema, truth, PromptRegion::Header);
 
     PalettePresenceOverlay overlay;
     for (const UiNodeId& id : uiSchemaNodeIds(schema)) {
@@ -174,17 +174,33 @@ std::uint64_t requireSourceAheadOfProviders(std::uint64_t source, const TreeMode
     return source;
 }
 
+UiSchema validatedSchema(UiComposition composition) {
+    UiSchema schema{std::move(composition.root)};
+    const UiSchemaValidation result = validateUiSchema(schema);
+    if (!result.ok()) {
+        throw std::logic_error("screen layout failed validation: " +
+                               *result.error);
+    }
+    return schema;
+}
+
+bool updateSchema(UiSchema& schema, UiComposition composition) {
+    if (composition.root == schema.root) return false;
+    schema = validatedSchema(std::move(composition));
+    return true;
+}
+
 }  // namespace
 
 InteractionState::InteractionState(UiComposition initialAssembly, TreeModel& tree,
                                   std::uint64_t firstTreeRevision,
                                   PickerActivationId firstPickerActivation)
     : baseComposition_{std::move(initialAssembly)},
-      schema_{baseComposition_},
+      schema_{validatedSchema(baseComposition_)},
       tree_{tree},
       nextTreeRevision_{requireSourceAheadOfProviders(firstTreeRevision, tree)},
       nextPickerActivation_{firstPickerActivation},
-      interaction_{buildWholeScreenInteraction(schema_.schema(), {}, std::nullopt)} {
+      interaction_{buildInteraction(schema_, {}, std::nullopt)} {
     if (!nextPickerActivation_.valid()) {
         throw std::invalid_argument(
            "interaction picker activation source must be valid");
@@ -200,7 +216,7 @@ UiComposition InteractionState::assembled(
 
 UiInteractionState InteractionState::project(
     const UiSchema& schema, const PromptSurface& prompt) const {
-    return buildWholeScreenInteraction(
+    return buildInteraction(
         schema,
         {panelPresent_, distractionFree_, openPicker_, baseFocus_,
          noticePresent_, externalModificationPresent_, externalFocusHeld_},
@@ -212,7 +228,7 @@ void InteractionState::adopt(PromptSurface prompt) {
         prompt.active() && prompt.request()->kind == PromptKind::Palette;
     if (!activePalette) openPicker_.reset();
 
-    UiInteractionState projection = project(schema_.schema(), prompt);
+    UiInteractionState projection = project(schema_, prompt);
 
     prompt_ = std::move(prompt);
     if (!openPicker_) openPickerActivation_.reset();
@@ -242,8 +258,8 @@ bool InteractionState::activatePanelProvider(
             binding.id, binding.kind, TreeRevision{nextTreeRevision_}, {}};
     }
 
-    UiInteractionState projection = buildWholeScreenInteraction(
-        schema_.schema(),
+    UiInteractionState projection = buildInteraction(
+        schema_,
         {panelPresent, distractionFree_, openPicker_, baseFocus, noticePresent_,
          externalModificationPresent_, externalFocusHeld_},
         activePromptRegion(prompt_));
@@ -341,10 +357,10 @@ PromptCommandResult InteractionState::openPrompt(PromptRequest request) {
     PromptSurface copy = state.prompt_;
     PromptCommandResult result = copy.open(std::move(request));
     if (result.accepted()) {
-        WholeScreenSchema candidate = state.schema_;
-        candidate.update(state.assembled(state.baseComposition_, copy));
+        UiSchema candidate = state.schema_;
+        updateSchema(candidate, state.assembled(state.baseComposition_, copy));
         state.openPicker_.reset();
-        UiInteractionState projection = state.project(candidate.schema(), copy);
+        UiInteractionState projection = state.project(candidate, copy);
         state.schema_ = std::move(candidate);
         state.prompt_ = std::move(copy);
         state.openPickerActivation_.reset();
@@ -472,13 +488,13 @@ bool InteractionState::releaseExternalFocus() {
 
 bool InteractionState::updateComposition(UiComposition assembly) {
     auto& state = *this;
-    WholeScreenSchema candidate = state.schema_;
+    UiSchema candidate = state.schema_;
     UiComposition projected = state.assembled(assembly, state.prompt_);
-    if (!candidate.update(std::move(projected))) {
+    if (!updateSchema(candidate, std::move(projected))) {
         state.baseComposition_ = std::move(assembly);
         return false;
     }
-    UiInteractionState projection = state.project(candidate.schema(), state.prompt_);
+    UiInteractionState projection = state.project(candidate, state.prompt_);
     state.schema_ = std::move(candidate);
     state.baseComposition_ = std::move(assembly);
     state.interaction_ = std::move(projection);
@@ -489,15 +505,15 @@ bool InteractionState::refreshStatusActions(
     std::vector<StatusActionNode> actions) {
     auto& state = *this;
     if (actions == state.statusActions_) return false;
-    WholeScreenSchema candidate = state.schema_;
+    UiSchema candidate = state.schema_;
     UiComposition projected = withStatusActions(state.baseComposition_, actions);
     if (state.prompt_.active()) {
         projected = withFooterPrompt(std::move(projected), state.prompt_);
     }
-    const bool schemaChanged = candidate.update(std::move(projected));
+    const bool schemaChanged = updateSchema(candidate, std::move(projected));
     std::optional<UiInteractionState> interaction;
     if (schemaChanged) {
-        interaction = state.project(candidate.schema(), state.prompt_);
+        interaction = state.project(candidate, state.prompt_);
     }
     state.statusActions_ = std::move(actions);
     if (schemaChanged) {
@@ -543,7 +559,7 @@ std::vector<UiNodeId> InteractionState::focusPath() const {
 
 PalettePresenceOverlay InteractionState::pickerPresenceOverlay() const {
     return derivePickerPresenceOverlay(
-        schema_.schema(),
+        schema_,
         {panelPresent_, distractionFree_, openPicker_, baseFocus_,
          noticePresent_, externalModificationPresent_, externalFocusHeld_});
 }

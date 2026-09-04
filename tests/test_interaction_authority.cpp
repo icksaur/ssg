@@ -10,7 +10,7 @@
 
 #include <ssg/Style.h>
 #include <ssg/UiTree.h>
-#include <ssg/WholeScreenSchema.h>
+#include <ssg/ScreenLayout.h>
 #include "test_helpers.h"
 
 #include <algorithm>
@@ -25,7 +25,7 @@ using namespace ssg;
 using InteractionAuthority = InteractionState;
 
 UiComposition assemble(const StyleDimensions& dims) {
-    return assembleWholeScreen("help.open", dims, Style{}.inputLineSigil);
+    return assembleScreen("help.open", dims, Style{}.inputLineSigil);
 }
 
 // A TreeModel seeded with the always-present filesystem provider (empty nodes suffice).

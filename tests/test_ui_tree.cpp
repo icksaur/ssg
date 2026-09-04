@@ -5,7 +5,7 @@
 // against the rules, not the implementation.
 
 #include <ssg/UiTree.h>
-#include <ssg/WholeScreenSchema.h>
+#include <ssg/ScreenLayout.h>
 #include "test_helpers.h"
 
 #include <string>
@@ -27,11 +27,11 @@ using ssg::validateUiSchema;
 using ssg::WidgetDescriptor;
 using ssg::WidgetKind;
 
-UiSchema canonicalWholeScreenSchema() {
+UiSchema canonicalScreenSchema() {
     ssg::StyleDimensions dimensions;
     UiSchema schema;
     schema.root =
-        ssg::assembleWholeScreen("help.open", dimensions,
+        ssg::assembleScreen("help.open", dimensions,
                                  ssg::Style{}.inputLineSigil)
             .root;
     return schema;
@@ -233,10 +233,10 @@ UiNode* mutableUiNode(UiNode& node, const UiNodeId& id) {
     return nullptr;
 }
 
-// A published schema: the canonical whole-screen shape with its focus path set
+// A published schema: the canonical screen shape with its focus path set
 // to the editor, as the runtime publishes it.
-UiSchema publishedWholeScreenSchema() {
-    UiSchema schema = canonicalWholeScreenSchema();
+UiSchema publishedScreenSchema() {
+    UiSchema schema = canonicalScreenSchema();
     schema.focusPath =
         std::vector<UiNodeId>{UiNodeId{std::string{ssg::kEditorNodeId}}};
     return schema;
@@ -246,11 +246,11 @@ UiSchema publishedWholeScreenSchema() {
 // focus host, starting at an editor or panel host, and ending at an
 // effectively visible node.
 TEST(publishedTreeAcceptsAValidFocusPath) {
-    ASSERT_TRUE(ssg::validatePublishedUiTree(publishedWholeScreenSchema()).ok());
+    ASSERT_TRUE(ssg::validatePublishedUiTree(publishedScreenSchema()).ok());
 }
 
 TEST(publishedTreeRejectsAHiddenFocusEndpoint) {
-    auto schema = publishedWholeScreenSchema();
+    auto schema = publishedScreenSchema();
     auto* editor =
         mutableUiNode(schema.root, UiNodeId{std::string{ssg::kEditorNodeId}});
     ASSERT_TRUE(editor != nullptr);
@@ -261,7 +261,7 @@ TEST(publishedTreeRejectsAHiddenFocusEndpoint) {
 // Hiding an ancestor of the endpoint makes the endpoint EFFECTIVELY invisible,
 // even though its own direct flag is untouched.
 TEST(publishedTreeRejectsAHiddenAncestorOfTheFocusEndpoint) {
-    auto schema = publishedWholeScreenSchema();
+    auto schema = publishedScreenSchema();
     auto* content =
         mutableUiNode(schema.root, UiNodeId{std::string{ssg::kContentNodeId}});
     ASSERT_TRUE(content != nullptr);
@@ -272,7 +272,7 @@ TEST(publishedTreeRejectsAHiddenAncestorOfTheFocusEndpoint) {
 // Only the endpoint must be effectively visible: a hidden BASE that a capture
 // still anchors past (the path extends beyond it) does not invalidate the tree.
 TEST(publishedTreeAcceptsAHiddenFocusBaseWhenTheEndpointStaysVisible) {
-    auto schema = publishedWholeScreenSchema();
+    auto schema = publishedScreenSchema();
     schema.focusPath.push_back(
         UiNodeId{std::string{ssg::kHeaderPromptInputNodeId}});
     auto* editor =
@@ -283,7 +283,7 @@ TEST(publishedTreeAcceptsAHiddenFocusBaseWhenTheEndpointStaysVisible) {
 }
 
 TEST(publishedTreeRejectsAPathNodeWithoutADeclaredFocusHost) {
-    auto schema = publishedWholeScreenSchema();
+    auto schema = publishedScreenSchema();
     auto* editor =
         mutableUiNode(schema.root, UiNodeId{std::string{ssg::kEditorNodeId}});
     ASSERT_TRUE(editor != nullptr);
@@ -292,23 +292,23 @@ TEST(publishedTreeRejectsAPathNodeWithoutADeclaredFocusHost) {
 }
 
 TEST(publishedTreeRejectsANonFocusHostAsTheSolePathNode) {
-    auto schema = publishedWholeScreenSchema();
+    auto schema = publishedScreenSchema();
     schema.focusPath =
         std::vector<UiNodeId>{UiNodeId{std::string{ssg::kNoticeNodeId}}};
     ASSERT_FALSE(ssg::validatePublishedUiTree(schema).ok());
 }
 
 TEST(publishedTreeRejectsAnUnknownFocusNode) {
-    auto schema = publishedWholeScreenSchema();
+    auto schema = publishedScreenSchema();
     schema.focusPath = std::vector<UiNodeId>{UiNodeId{"missing"}};
     ASSERT_FALSE(ssg::validatePublishedUiTree(schema).ok());
 }
 
 TEST(effectiveUiFocusDerivesContextFromTheEndpointHost) {
-    const auto editorSchema = publishedWholeScreenSchema();
+    const auto editorSchema = publishedScreenSchema();
     ASSERT_TRUE(ssg::effectiveUiFocus(editorSchema) == ssg::FocusTarget::Editor);
 
-    auto promptSchema = publishedWholeScreenSchema();
+    auto promptSchema = publishedScreenSchema();
     promptSchema.focusPath.push_back(
         UiNodeId{std::string{ssg::kHeaderPromptInputNodeId}});
     ASSERT_TRUE(ssg::effectiveUiFocus(promptSchema) == ssg::FocusTarget::Prompt);

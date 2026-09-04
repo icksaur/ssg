@@ -909,7 +909,7 @@ endif()
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/PromptSurface.cpp
-    ${SSG_SOURCE_DIR}/src/StatusQueue.cpp
+    ${SSG_SOURCE_DIR}/src/StatusBar.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
@@ -1086,7 +1086,6 @@ endif()
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Search.cpp
     ${SSG_SOURCE_DIR}/src/PaletteSearcher.cpp
-    ${SSG_SOURCE_DIR}/src/PaletteSubmit.cpp
     ${SSG_SOURCE_DIR}/src/Picker.cpp
 )
 
@@ -1111,15 +1110,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
     ssg_test_link_libraries(test_palette PRIVATE ssg_core)
-
-    ssg_add_test_suite(
-        NAME test_palette_submit
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_palette_submit.cpp
-        SYMBOL test_palette_submit)
-    ssg_test_include_directories(test_palette_submit PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
-    ssg_test_link_libraries(test_palette_submit PRIVATE ssg_core)
 
     ssg_add_test_suite(
         NAME test_palette_host_ranking
@@ -1585,7 +1575,6 @@ endif()
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Widget.cpp
     ${SSG_SOURCE_DIR}/src/UiTree.cpp
-    ${SSG_SOURCE_DIR}/src/WholeScreenSchema.cpp
     ${SSG_SOURCE_DIR}/src/interaction.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -1634,14 +1623,14 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/WholeScreenAssembly.cpp
+    ${SSG_SOURCE_DIR}/src/ScreenLayout.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
-        NAME test_whole_screen_structure
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_whole_screen_structure.cpp
-        SYMBOL test_whole_screen_structure)
-    ssg_test_link_libraries(test_whole_screen_structure PRIVATE ssg_core)
+        NAME test_screen_layout
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_screen_layout.cpp
+        SYMBOL test_screen_layout)
+    ssg_test_link_libraries(test_screen_layout PRIVATE ssg_core)
 
 endif()
 

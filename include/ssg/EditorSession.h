@@ -14,7 +14,7 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/Selection.h>
 #include <ssg/Style.h>
-#include <ssg/StatusQueue.h>
+#include <ssg/StatusBar.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/TabManager.h>
 #include <ssg/Theme.h>

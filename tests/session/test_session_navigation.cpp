@@ -7,7 +7,6 @@
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Keymap.h>
 #include <ssg/PromptSurface.h>
-#include <ssg/StatusQueue.h>
 #include <ssg/TextInputCommands.h>
 
 #include <algorithm>

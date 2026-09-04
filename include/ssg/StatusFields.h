@@ -18,7 +18,7 @@ struct StatusField {
 };
 
 // The fixed header/footer status-field identities: a closed, in-process
-// product vocabulary (FIXED-STATUS), not an extension point. `WholeScreenAssembly`
+// product vocabulary (FIXED-STATUS), not an extension point. `ScreenLayout`
 // builds the structural leaf for each id; `projectStatusFields` computes its
 // value beside it, below, so the two never name a field differently.
 inline constexpr std::string_view kPathStatusFieldId = "path";

@@ -1,7 +1,7 @@
-// Byte-identical TUI rendered-grid parity guard for the whole-screen publish (5b).
+// Byte-identical TUI rendered-grid parity guard for the screen publish (5b).
 //
 // The terminal renders the server-described grid (CellGrid), NOT the medium-agnostic
-// uiSchema. Publishing the authority's whole-screen schema + real presence (a
+// uiSchema. Publishing the authority's screen schema + real presence (a
 // web-facing change) must leave that grid byte-for-byte unchanged. This golden captures the
 // rendered grid across representative interaction states; if the publish alters TUI output,
 // canonical() diverges and this fails. Regenerate (only after an intended TUI change) with
@@ -110,7 +110,7 @@ TEST(tuiRenderedGridMatchesTheCommittedGoldenAcrossInteractionStates) {
     }
     if (actual != expected) {
         std::cerr << "  TUI grid parity golden mismatch: the rendered terminal grid "
-                     "changed (the whole-screen publish must not alter TUI output)\n";
+                     "changed (the screen publish must not alter TUI output)\n";
         ++failed;
     } else {
         ++passed;

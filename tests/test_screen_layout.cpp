@@ -1,4 +1,4 @@
-#include <ssg/WholeScreenSchema.h>
+#include <ssg/ScreenLayout.h>
 
 #include <ssg/StatusFields.h>
 #include <ssg/Style.h>
@@ -34,7 +34,7 @@ const UiNode* find(const UiNode& root, std::string_view id) {
 }
 
 TEST(fixedHeaderAndFooterAreSemanticUiNodes) {
-    const auto composition = assembleWholeScreen(
+    const auto composition = assembleScreen(
         "help.open", StyleDimensions{}, Style{}.inputLineSigil);
     const UiSchema schema{composition.root};
     ASSERT_TRUE(validateUiSchema(schema).ok());
@@ -118,7 +118,7 @@ TEST(fixedHeaderAndFooterAreSemanticUiNodes) {
 }
 
 TEST(viewportsRemainSemanticTreeProperties) {
-    const auto composition = assembleWholeScreen(
+    const auto composition = assembleScreen(
         "help.open", StyleDimensions{}, Style{}.inputLineSigil);
     const auto* body = child(composition.root, kBodyNodeId);
     const auto* panel = body ? child(*body, kPanelNodeId) : nullptr;
@@ -155,7 +155,7 @@ TEST(viewportsRemainSemanticTreeProperties) {
 
 }  // namespace
 
-SSG_TEST_SUITE(test_whole_screen_structure) {
+SSG_TEST_SUITE(test_screen_layout) {
     RUN(fixedHeaderAndFooterAreSemanticUiNodes);
     RUN(viewportsRemainSemanticTreeProperties);
     return failed == 0 ? 0 : 1;

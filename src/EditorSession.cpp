@@ -4,7 +4,7 @@
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Style.h>
-#include <ssg/WholeScreenSchema.h>
+#include <ssg/ScreenLayout.h>
 #include <ssg/platform_files.h>
 
 #include <algorithm>
@@ -389,7 +389,7 @@ EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
       tabs{},
       external{recovery, diff},
       syntaxParser{std::move(parser)},
-      interaction{assembleWholeScreen("help.open", StyleDimensions{},
+      interaction{assembleScreen("help.open", StyleDimensions{},
                                       Style{}.inputLineSigil),
                   tree, 1},
       search{SearchCommands{
@@ -1601,7 +1601,7 @@ void EditorSession::Impl::rebuildInteractionSchema(
     const StyleDimensions& dimensions,
     std::string_view promptSigil) {
     (void)interaction.updateComposition(
-        assembleWholeScreen("help.open", dimensions, promptSigil));
+        assembleScreen("help.open", dimensions, promptSigil));
 }
 
 bool EditorSession::Impl::openPickerPrompt(PickerKind kind) {

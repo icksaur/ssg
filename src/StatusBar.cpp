@@ -1,4 +1,5 @@
-#include <ssg/StatusQueue.h>
+#include <ssg/PromptStatusViewState.h>
+#include <ssg/StatusBar.h>
 
 #include <algorithm>
 #include <array>
@@ -40,7 +41,7 @@ std::string actionNodeId(StatusId statusId, std::uint64_t generation,
 
 } // namespace
 
-StatusEnqueueResult StatusQueue::enqueue(StatusItem item) {
+StatusEnqueueResult StatusBar::enqueue(StatusItem item) {
     if (!validItem(item)) {
         return {};
     }
@@ -81,20 +82,20 @@ StatusEnqueueResult StatusQueue::enqueue(StatusItem item) {
     return {true, generation, evicted};
 }
 
-void StatusQueue::next() noexcept {
+void StatusBar::next() noexcept {
     if (!entries_.empty()) {
         selected_ = (selected_ + 1) % entries_.size();
     }
 }
 
-void StatusQueue::previous() noexcept {
+void StatusBar::previous() noexcept {
     if (!entries_.empty()) {
         selected_ =
             selected_ == 0 ? entries_.size() - 1 : selected_ - 1;
     }
 }
 
-void StatusQueue::dismiss() noexcept {
+void StatusBar::dismiss() noexcept {
     if (entries_.empty()) {
         return;
     }
@@ -106,7 +107,7 @@ void StatusQueue::dismiss() noexcept {
     }
 }
 
-StatusViewState StatusQueue::viewState() const {
+StatusViewState StatusBar::viewState() const {
     StatusViewState view;
     view.selected = selected_;
     view.items.reserve(entries_.size());
@@ -118,24 +119,15 @@ StatusViewState StatusQueue::viewState() const {
     return view;
 }
 
-StatusFooterProjection StatusQueue::footerProjection() const {
-    StatusFooterProjection projection;
-    if (entries_.empty()) {
-        return projection;
-    }
+std::string StatusBar::footerText() const {
+    if (entries_.empty()) return {};
 
     const auto& selected = entries_[selected_];
-    projection.value =
-        selected.item.text + " " + std::to_string(selected_ + 1) + "/" +
-        std::to_string(entries_.size());
-    projection.actions.reserve(selected.item.actions.size());
-    for (const auto& action : selected.item.actions) {
-        projection.actions.push_back(action);
-    }
-    return projection;
+    return selected.item.text + " " + std::to_string(selected_ + 1) + "/" +
+           std::to_string(entries_.size());
 }
 
-std::vector<StatusActionNode> StatusQueue::actionNodes() const {
+std::vector<StatusActionNode> StatusBar::actionNodes() const {
     return projectStatusActionNodes(viewState());
 }
 

@@ -1,5 +1,5 @@
 #include <ssg/Layout.h>
-#include <ssg/WholeScreenSchema.h>
+#include <ssg/ScreenLayout.h>
 #include "test_helpers.h"
 
 #include <algorithm>
@@ -591,9 +591,9 @@ TEST(uiFrameRejectsUnrepresentableIntrinsicExtent) {
     ASSERT_FALSE(solved.error.empty());
 }
 
-TEST(generatedWholeScreenSolvesEveryPresentNodeExactlyOnce) {
+TEST(generatedScreenSolvesEveryPresentNodeExactlyOnce) {
     UiSchema schema{
-        assembleWholeScreen("help.open", StyleDimensions{}, "> ")
+        assembleScreen("help.open", StyleDimensions{}, "> ")
             .root};
     auto validation = validateUiSchema(schema);
     ASSERT_TRUE(validation.ok());
@@ -692,7 +692,7 @@ SSG_TEST_SUITE(test_layout_solver) {
     RUN(uiFrameCarriesResolvedStateStyleAndScrollOwnership);
     RUN(uiFrameResolvesAutoLeavesFromIntrinsicSizes);
     RUN(uiFrameRejectsUnrepresentableIntrinsicExtent);
-    RUN(generatedWholeScreenSolvesEveryPresentNodeExactlyOnce);
+    RUN(generatedScreenSolvesEveryPresentNodeExactlyOnce);
     RUN(constraintsRejectNegativeGeometryAtConstruction);
     RUN(solveGridTreeRejectsAutoSizeDistinctly);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';

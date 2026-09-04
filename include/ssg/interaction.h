@@ -6,11 +6,10 @@
 #include <ssg/Picker.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/PromptSurface.h>
-#include <ssg/StatusQueue.h>
+#include <ssg/PromptStatusViewState.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
 #include <ssg/UiInteractionState.h>
-#include <ssg/WholeScreenSchema.h>
 
 namespace ssg {
 
@@ -72,7 +71,7 @@ private:
 
     UiComposition baseComposition_;
     std::vector<StatusActionNode> statusActions_;
-    WholeScreenSchema schema_;
+    UiSchema schema_;
     TreeModel& tree_;
     std::uint64_t nextTreeRevision_;
     PickerActivationId nextPickerActivation_;

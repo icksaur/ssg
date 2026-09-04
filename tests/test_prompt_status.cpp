@@ -1,7 +1,8 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/PromptLayout.h>
-#include <ssg/StatusQueue.h>
-#include <ssg/WholeScreenSchema.h>
+#include <ssg/PromptStatusViewState.h>
+#include <ssg/StatusBar.h>
+#include <ssg/ScreenLayout.h>
 #include "test_helpers.h"
 
 #include <algorithm>
@@ -294,60 +295,60 @@ std::vector<std::uint64_t> ids(const StatusViewState& view) {
 }
 
 TEST(statusPriorityAndNavigationTransitionTable) {
-    StatusQueue queue;
-    ASSERT_TRUE(queue.enqueue(status(1, StatusPriority::Information, "one")).accepted);
-    ASSERT_TRUE(queue.enqueue(status(2, StatusPriority::Warning, "two")).accepted);
-    ASSERT_TRUE(queue.enqueue(status(3, StatusPriority::Error, "three")).accepted);
-    ASSERT_TRUE(queue.enqueue(status(4, StatusPriority::Warning, "four")).accepted);
+    StatusBar bar;
+    ASSERT_TRUE(bar.enqueue(status(1, StatusPriority::Information, "one")).accepted);
+    ASSERT_TRUE(bar.enqueue(status(2, StatusPriority::Warning, "two")).accepted);
+    ASSERT_TRUE(bar.enqueue(status(3, StatusPriority::Error, "three")).accepted);
+    ASSERT_TRUE(bar.enqueue(status(4, StatusPriority::Warning, "four")).accepted);
 
-    ASSERT_EQ(ids(queue.viewState()),
+    ASSERT_EQ(ids(bar.viewState()),
               (std::vector<std::uint64_t>{3, 2, 4, 1}));
-    auto view = queue.viewState();
+    auto view = bar.viewState();
     ASSERT_EQ(view.selected, std::size_t{0});
-    queue.next();
-    view = queue.viewState();
+    bar.next();
+    view = bar.viewState();
     ASSERT_EQ(view.selected, std::size_t{1});
-    queue.previous();
-    view = queue.viewState();
+    bar.previous();
+    view = bar.viewState();
     ASSERT_EQ(view.selected, std::size_t{0});
-    queue.previous();
-    view = queue.viewState();
+    bar.previous();
+    view = bar.viewState();
     ASSERT_EQ(view.selected, std::size_t{3});
-    queue.dismiss();
-    ASSERT_EQ(ids(queue.viewState()),
+    bar.dismiss();
+    ASSERT_EQ(ids(bar.viewState()),
               (std::vector<std::uint64_t>{3, 2, 4}));
-    view = queue.viewState();
+    view = bar.viewState();
     ASSERT_EQ(view.selected, std::size_t{2});
 }
 
 TEST(statusCapacityAdmissionAndEvictionTable) {
-    StatusQueue queue;
-    for (std::uint64_t id = 1; id <= StatusQueue::kCapacity; ++id) {
-        ASSERT_TRUE(queue.enqueue(
+    StatusBar bar;
+    for (std::uint64_t id = 1; id <= StatusBar::kCapacity; ++id) {
+        ASSERT_TRUE(bar.enqueue(
             status(id, StatusPriority::Information, std::to_string(id))).accepted);
     }
     const auto rejected =
-        queue.enqueue(status(17, StatusPriority::Progress, "rejected"));
+        bar.enqueue(status(17, StatusPriority::Progress, "rejected"));
     ASSERT_FALSE(rejected.accepted);
-    auto view = queue.viewState();
-    ASSERT_EQ(view.items.size(), StatusQueue::kCapacity);
+    auto view = bar.viewState();
+    ASSERT_EQ(view.items.size(), StatusBar::kCapacity);
 
     const auto admitted =
-        queue.enqueue(status(18, StatusPriority::Error, "admitted"));
+        bar.enqueue(status(18, StatusPriority::Error, "admitted"));
     ASSERT_TRUE(admitted.accepted);
     ASSERT_EQ(admitted.evicted, std::optional<StatusId>{StatusId{1}});
-    view = queue.viewState();
+    view = bar.viewState();
     ASSERT_EQ(view.items.front().id, StatusId{18});
 }
 
 TEST(statusActionsProjectCanonicalOpaqueNodeIdentities) {
-    StatusQueue queue;
-    const auto enqueued = queue.enqueue(status(
+    StatusBar bar;
+    const auto enqueued = bar.enqueue(status(
         7, StatusPriority::Error, "Build failed",
         {UiAction{"retry", "Retry build", "build.retry"},
          UiAction{"r\xC3\xA9try", "Retry localized", "build.localized"}}));
     ASSERT_TRUE(enqueued.accepted);
-    const auto nodes = queue.actionNodes();
+    const auto nodes = bar.actionNodes();
     ASSERT_EQ(nodes.size(), std::size_t{2});
     ASSERT_EQ(nodes[0].id,
               UiNodeId{"footer.status_action/7/" +
@@ -360,40 +361,40 @@ TEST(statusActionsProjectCanonicalOpaqueNodeIdentities) {
                        std::to_string(enqueued.generation) +
                        "/72c3a9747279"});
 
-    StatusViewState differentStatus = queue.viewState();
+    StatusViewState differentStatus = bar.viewState();
     differentStatus.items[0].id = StatusId{8};
     ASSERT_NE(projectStatusActionNodes(differentStatus)[0].id, nodes[0].id);
-    StatusViewState differentGeneration = queue.viewState();
+    StatusViewState differentGeneration = bar.viewState();
     ++differentGeneration.items[0].generation;
     ASSERT_NE(projectStatusActionNodes(differentGeneration)[0].id,
               nodes[0].id);
 }
 
-TEST(statusQueueRejectsDuplicateActionIdentityBeforeMutation) {
-    StatusQueue queue;
-    const auto rejected = queue.enqueue(status(
+TEST(statusBarRejectsDuplicateActionIdentityBeforeMutation) {
+    StatusBar bar;
+    const auto rejected = bar.enqueue(status(
         7, StatusPriority::Error, "Build failed",
         {UiAction{"retry", "Retry build", "build.retry"},
          UiAction{"retry", "Retry elsewhere", "build.other"}}));
     ASSERT_FALSE(rejected.accepted);
-    ASSERT_TRUE(queue.viewState().items.empty());
-    ASSERT_TRUE(queue.actionNodes().empty());
+    ASSERT_TRUE(bar.viewState().items.empty());
+    ASSERT_TRUE(bar.actionNodes().empty());
 }
 
-TEST(footerProjectionAndAccessibilityMatchGolden) {
+TEST(footerTextAndAccessibilityMatchGolden) {
     PromptSurface prompt;
     ASSERT_TRUE(prompt.open(request(PromptKind::Find)).accepted());
     const auto layout = computePromptLayout(prompt, Rect{0, 4, 20, 2});
-    StatusQueue queue;
+    StatusBar bar;
     std::vector<UiAction> actions{
         {"retry", "Retry build", "build.retry"},
         {"log", "Open log", "log.open"}};
-    ASSERT_TRUE(queue.enqueue(
+    ASSERT_TRUE(bar.enqueue(
         status(9, StatusPriority::Error, "Build failed", actions)).accepted);
-    const auto footer = queue.footerProjection();
-    ASSERT_EQ(footer.value, std::string{"Build failed 1/1"});
-    ASSERT_EQ(footer.actions[0].id, std::string{"retry"});
-    ASSERT_EQ(footer.actions[1].label, std::string{"Open log"});
+    ASSERT_EQ(bar.footerText(), std::string{"Build failed 1/1"});
+    const auto statusView = bar.viewState();
+    ASSERT_EQ(statusView.items[0].actions[0].id, std::string{"retry"});
+    ASSERT_EQ(statusView.items[0].actions[1].label, std::string{"Open log"});
 
     // The accessibility contract is that every surfaced element carries a
     // non-empty label, not that the labels read exactly as they do today.
@@ -403,9 +404,8 @@ TEST(footerProjectionAndAccessibilityMatchGolden) {
     for (const auto& control : layout.view->controls) {
         ASSERT_FALSE(control.accessibleLabel.empty());
     }
-    const auto statusView = queue.viewState();
     ASSERT_FALSE(statusView.items[0].accessibleLabel.empty());
-    for (const auto& action : footer.actions) {
+    for (const auto& action : statusView.items[0].actions) {
         ASSERT_FALSE(action.label.empty());
     }
 }
@@ -423,7 +423,7 @@ SSG_TEST_SUITE(ssg_prompt_status_tests) {
     RUN(statusPriorityAndNavigationTransitionTable);
     RUN(statusCapacityAdmissionAndEvictionTable);
     RUN(statusActionsProjectCanonicalOpaqueNodeIdentities);
-    RUN(statusQueueRejectsDuplicateActionIdentityBeforeMutation);
-    RUN(footerProjectionAndAccessibilityMatchGolden);
+    RUN(statusBarRejectsDuplicateActionIdentityBeforeMutation);
+    RUN(footerTextAndAccessibilityMatchGolden);
     return failed == 0 ? 0 : 1;
 }

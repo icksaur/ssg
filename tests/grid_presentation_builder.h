@@ -2,9 +2,9 @@
 
 #include <ssg/GraphemeLayout.h>
 #include <ssg/StatusFields.h>
-#include <ssg/StatusQueue.h>
+#include <ssg/PromptStatusViewState.h>
 #include <ssg/Theme.h>
-#include <ssg/WholeScreenSchema.h>
+#include <ssg/ScreenLayout.h>
 #include <ssg/GridPresenter.h>
 
 #include <ssg/interaction.h>
@@ -119,7 +119,7 @@ public:
         UiComposition composition;
         composition.root =
             schema_ ? schema_->root
-                    : assembleWholeScreen("help.open", style_.dimensions,
+                    : assembleScreen("help.open", style_.dimensions,
                                           style_.inputLineSigil)
                           .root;
         TreeModel treeModel;

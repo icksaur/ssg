@@ -164,16 +164,16 @@ struct UiNodeActivationArguments {
                            const UiNodeActivationArguments&) = default;
 };
 
-// The well-known node ids the whole-screen tree is built from. Placement is a
+// The well-known node ids the screen tree is built from. Placement is a
 // property of tree structure + these ids, not an out-of-band region enum: a client
 // finds a well-known area by id. Header/footer are semantic UI subtrees; the root is
 // their column parent.
 inline constexpr std::string_view kRootNodeId = "root";
 inline constexpr std::string_view kHeaderNodeId = "header";
 inline constexpr std::string_view kFooterNodeId = "footer";
-// The whole-screen body and its two columns, and the view-leaf surfaces they
+// The screen body and its two columns, and the view-leaf surfaces they
 // hold. Placement is these ids plus tree structure; a client keys off an id. These
-// name nodes the whole-screen assembly builds.
+// name nodes the screen layout builds.
 inline constexpr std::string_view kBodyNodeId = "body";
 inline constexpr std::string_view kPanelNodeId = "panel";
 inline constexpr std::string_view kContentNodeId = "content";
@@ -205,7 +205,7 @@ inline constexpr std::string_view kFooterPromptOptionsNodeId =
 }
 // The fixed header/footer status-field leaf nodes, in their stable collapse
 // order (StatusFields.h names the same fields' semantic ids). These are the
-// single identities shared by whole-screen assembly and snapshot-publication
+// single identities shared by screen layout and snapshot-publication
 // population -- neither derives the other's node id mechanically.
 inline constexpr std::string_view kHeaderPathFieldNodeId = "header.left.0";
 inline constexpr std::string_view kHeaderBranchFieldNodeId = "header.left.1";

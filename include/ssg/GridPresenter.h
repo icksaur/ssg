@@ -3,6 +3,7 @@
 #include <ssg/EditorSession.h>
 #include <ssg/ViewActionResult.h>
 #include <ssg/Layout.h>
+#include <ssg/PromptStatusViewState.h>
 #include <ssg/UiRegionProjection.h>
 
 #include <cstdint>

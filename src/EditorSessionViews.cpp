@@ -273,7 +273,7 @@ EditorSession::Impl::resolvedPromptControls() const {
 
 PromptStatusViewState EditorSession::Impl::promptStatusView() const {
     // Semantic prompt state: which prompt is open (authoritative, present even for
-    // a header-hosted prompt with no footer view) and the status queue. No
+    // a header-hosted prompt with no footer view) and the status bar. No
     // dimensions are needed to resolve this semantic state.
     PromptStatusViewState view;
     if (interaction.prompt().request()) view.activeKind = interaction.prompt().request()->kind;
@@ -308,13 +308,13 @@ bool EditorSession::Impl::noticePresent() const {
 }
 
 StatusFieldProjection EditorSession::Impl::uiStatusFields() const {
-    auto statusProjection = status.footerProjection();
+    auto statusText = status.footerText();
     auto followProjection = follow.footerProjection();
     auto fields = projectStatusFields(
         {.workspaceRoot = root,
          .homeDirectory = homeDirectory,
          .currentBranch = currentGitBranch,
-         .statusValue = statusProjection.value,
+         .statusValue = statusText,
          .followMode = followProjection.mode,
          .cwdPrefix = {}});
     bindStatusFieldCommands(fields.header, followProjection);

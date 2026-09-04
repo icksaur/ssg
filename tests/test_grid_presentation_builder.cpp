@@ -86,7 +86,7 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
 
     // Every document line appears in both, at the same relative order.  Chrome
     // legitimately differs (the real runtime knows a workspace path and a tab
-    // name), so the comparison is over document content, not the whole screen.
+    // name), so the comparison is over document content, not the entire screen.
     for (std::string const& line : {"alpha beta", "second line", "third"}) {
         bool inReal = false;
         bool inBuilt = false;

@@ -783,7 +783,7 @@ ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::search	SearchController
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::selection	SelectionViewState
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::session	std::unique_ptr<CommandExecutor>
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::settings	SettingsModel
-ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::status	StatusQueue
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::status	StatusBar
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::style	Style
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::syntaxParser	std::shared_ptr<SyntaxParser>
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::syntaxRunCount	std::uint64_t
@@ -2063,10 +2063,6 @@ ssg/PaletteSearcher.h	var	ssg::kMaxCandidateBytes	const std::int64_t
 ssg/PaletteSearcher.h	var	ssg::kMaxExactDoubleInteger	const std::int64_t
 ssg/PaletteSearcher.h	var	ssg::kMaxMatcherParameterMagnitude	const std::int64_t
 ssg/PaletteSearcher.h	var	ssg::kMaxWeightsPerScoredByte	const std::int64_t
-ssg/PaletteSubmit.h	func	ssg::paletteSubmitCommand	std::optional<PaletteSubmitCommand> (PickerActivation, std::string)
-ssg/PaletteSubmit.h	struct	ssg::PaletteSubmitCommand
-ssg/PaletteSubmit.h	var	ssg::PaletteSubmitCommand::command	CommandName
-ssg/PaletteSubmit.h	var	ssg::PaletteSubmitCommand::payload	std::any
 ssg/PaneNavigation.h	class	ssg::PaneId
 ssg/PaneNavigation.h	enum	ssg::PaneCycleDirection
 ssg/PaneNavigation.h	enum	ssg::PaneDirection
@@ -2179,6 +2175,27 @@ ssg/PromptRouting.h	var	ssg::PromptTextRoute::appendText	std::string
 ssg/PromptRouting.h	var	ssg::PromptTextRoute::command	CommandName
 ssg/PromptRouting.h	var	ssg::PromptTextRoute::kind	enum Kind
 ssg/PromptRouting.h	var	ssg::PromptTextRoute::payload	std::any
+ssg/PromptStatusViewState.h	func	ssg::operator==	bool (const PromptStatusViewState &, const PromptStatusViewState &)
+ssg/PromptStatusViewState.h	func	ssg::operator==	bool (const StatusActionNode &, const StatusActionNode &)
+ssg/PromptStatusViewState.h	func	ssg::operator==	bool (const StatusItemView &, const StatusItemView &)
+ssg/PromptStatusViewState.h	func	ssg::operator==	bool (const StatusViewState &, const StatusViewState &)
+ssg/PromptStatusViewState.h	func	ssg::projectStatusActionNodes	std::vector<StatusActionNode> (const StatusViewState &)
+ssg/PromptStatusViewState.h	struct	ssg::PromptStatusViewState
+ssg/PromptStatusViewState.h	struct	ssg::StatusActionNode
+ssg/PromptStatusViewState.h	struct	ssg::StatusItemView
+ssg/PromptStatusViewState.h	struct	ssg::StatusViewState
+ssg/PromptStatusViewState.h	var	ssg::PromptStatusViewState::activeKind	std::optional<PromptKind>
+ssg/PromptStatusViewState.h	var	ssg::PromptStatusViewState::status	StatusViewState
+ssg/PromptStatusViewState.h	var	ssg::StatusActionNode::accessibleLabel	std::string
+ssg/PromptStatusViewState.h	var	ssg::StatusActionNode::commandId	std::string
+ssg/PromptStatusViewState.h	var	ssg::StatusActionNode::id	UiNodeId
+ssg/PromptStatusViewState.h	var	ssg::StatusItemView::accessibleLabel	std::string
+ssg/PromptStatusViewState.h	var	ssg::StatusItemView::actions	std::vector<UiAction>
+ssg/PromptStatusViewState.h	var	ssg::StatusItemView::generation	std::uint64_t
+ssg/PromptStatusViewState.h	var	ssg::StatusItemView::id	StatusId
+ssg/PromptStatusViewState.h	var	ssg::StatusItemView::priority	StatusPriority
+ssg/PromptStatusViewState.h	var	ssg::StatusViewState::items	std::vector<StatusItemView>
+ssg/PromptStatusViewState.h	var	ssg::StatusViewState::selected	std::size_t
 ssg/PromptSurface.h	class	ssg::PromptSurface
 ssg/PromptSurface.h	enum	ssg::PromptControlKind
 ssg/PromptSurface.h	enum	ssg::PromptErrorCode
@@ -2495,6 +2512,10 @@ ssg/ScratchStore.h	var	ssg::ScratchStoreConfig::compactionThresholdBytes	std::ui
 ssg/ScratchStore.h	var	ssg::ScratchStoreConfig::durabilityTarget	std::chrono::milliseconds
 ssg/ScratchStore.h	var	ssg::ScratchStoreConfig::maximumAge	std::chrono::seconds
 ssg/ScratchStore.h	var	ssg::ScratchStoreConfig::maximumBytes	std::uintmax_t
+ssg/ScreenLayout.h	func	ssg::assembleFooterPrompt	UiNode (const PromptSurface &)
+ssg/ScreenLayout.h	func	ssg::assembleScreen	UiComposition (std::string_view, const StyleDimensions &, std::string_view)
+ssg/ScreenLayout.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
+ssg/ScreenLayout.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)
 ssg/ScriptHost.h	alias	ssg::ScriptHost::ViewActionSink
 ssg/ScriptHost.h	class	ssg::EditorSession
 ssg/ScriptHost.h	class	ssg::ScriptHost
@@ -2909,6 +2930,41 @@ ssg/ShellViewState.h	var	ssg::ShellViewState::tabHits	std::vector<TabHit>
 ssg/ShellViewState.h	var	ssg::ShellViewState::viewport	GridSize
 ssg/ShellViewState.h	var	ssg::TabHit::index	std::uint32_t
 ssg/ShellViewState.h	var	ssg::TabHit::rect	Rect
+ssg/StatusBar.h	class	ssg::StatusBar
+ssg/StatusBar.h	class	ssg::StatusId
+ssg/StatusBar.h	enum	ssg::StatusPriority
+ssg/StatusBar.h	enumerator	ssg::StatusPriority::Error
+ssg/StatusBar.h	enumerator	ssg::StatusPriority::Information
+ssg/StatusBar.h	enumerator	ssg::StatusPriority::Progress
+ssg/StatusBar.h	enumerator	ssg::StatusPriority::Warning
+ssg/StatusBar.h	func	ssg::StatusBar::actionNodes	std::vector<StatusActionNode> () const
+ssg/StatusBar.h	func	ssg::StatusBar::dismiss	void () noexcept
+ssg/StatusBar.h	func	ssg::StatusBar::enqueue	StatusEnqueueResult (StatusItem)
+ssg/StatusBar.h	func	ssg::StatusBar::footerText	std::string () const
+ssg/StatusBar.h	func	ssg::StatusBar::next	void () noexcept
+ssg/StatusBar.h	func	ssg::StatusBar::previous	void () noexcept
+ssg/StatusBar.h	func	ssg::StatusBar::viewState	StatusViewState () const
+ssg/StatusBar.h	func	ssg::StatusId::StatusId	void (std::uint64_t) noexcept
+ssg/StatusBar.h	func	ssg::StatusId::operator<=>	std::strong_ordering (const StatusId &) const
+ssg/StatusBar.h	func	ssg::StatusId::value	std::uint64_t () const noexcept
+ssg/StatusBar.h	func	ssg::operator==	bool (const StatusItem &, const StatusItem &)
+ssg/StatusBar.h	func	ssg::operator==	bool (const UiAction &, const UiAction &)
+ssg/StatusBar.h	struct	ssg::StatusActionNode
+ssg/StatusBar.h	struct	ssg::StatusEnqueueResult
+ssg/StatusBar.h	struct	ssg::StatusItem
+ssg/StatusBar.h	struct	ssg::StatusViewState
+ssg/StatusBar.h	struct	ssg::UiAction
+ssg/StatusBar.h	var	ssg::StatusBar::kCapacity	const std::size_t
+ssg/StatusBar.h	var	ssg::StatusEnqueueResult::accepted	bool
+ssg/StatusBar.h	var	ssg::StatusEnqueueResult::evicted	std::optional<StatusId>
+ssg/StatusBar.h	var	ssg::StatusEnqueueResult::generation	std::uint64_t
+ssg/StatusBar.h	var	ssg::StatusItem::actions	std::vector<UiAction>
+ssg/StatusBar.h	var	ssg::StatusItem::id	StatusId
+ssg/StatusBar.h	var	ssg::StatusItem::priority	StatusPriority
+ssg/StatusBar.h	var	ssg::StatusItem::text	std::string
+ssg/StatusBar.h	var	ssg::UiAction::commandId	std::string
+ssg/StatusBar.h	var	ssg::UiAction::id	std::string
+ssg/StatusBar.h	var	ssg::UiAction::label	std::string
 ssg/StatusFields.h	func	ssg::projectStatusFields	StatusFieldProjection (const StatusFieldContext &)
 ssg/StatusFields.h	func	ssg::statusFieldGridDisplay	std::string (std::string_view, std::string_view, const Style &)
 ssg/StatusFields.h	struct	ssg::StatusField
@@ -2930,64 +2986,6 @@ ssg/StatusFields.h	var	ssg::kBranchStatusFieldId	const std::string_view
 ssg/StatusFields.h	var	ssg::kFollowStatusFieldId	const std::string_view
 ssg/StatusFields.h	var	ssg::kPathStatusFieldId	const std::string_view
 ssg/StatusFields.h	var	ssg::kStatusValueFieldId	const std::string_view
-ssg/StatusQueue.h	class	ssg::StatusId
-ssg/StatusQueue.h	class	ssg::StatusQueue
-ssg/StatusQueue.h	enum	ssg::StatusPriority
-ssg/StatusQueue.h	enumerator	ssg::StatusPriority::Error
-ssg/StatusQueue.h	enumerator	ssg::StatusPriority::Information
-ssg/StatusQueue.h	enumerator	ssg::StatusPriority::Progress
-ssg/StatusQueue.h	enumerator	ssg::StatusPriority::Warning
-ssg/StatusQueue.h	func	ssg::StatusId::StatusId	void (std::uint64_t) noexcept
-ssg/StatusQueue.h	func	ssg::StatusId::operator<=>	std::strong_ordering (const StatusId &) const
-ssg/StatusQueue.h	func	ssg::StatusId::value	std::uint64_t () const noexcept
-ssg/StatusQueue.h	func	ssg::StatusQueue::actionNodes	std::vector<StatusActionNode> () const
-ssg/StatusQueue.h	func	ssg::StatusQueue::dismiss	void () noexcept
-ssg/StatusQueue.h	func	ssg::StatusQueue::enqueue	StatusEnqueueResult (StatusItem)
-ssg/StatusQueue.h	func	ssg::StatusQueue::footerProjection	StatusFooterProjection () const
-ssg/StatusQueue.h	func	ssg::StatusQueue::next	void () noexcept
-ssg/StatusQueue.h	func	ssg::StatusQueue::previous	void () noexcept
-ssg/StatusQueue.h	func	ssg::StatusQueue::viewState	StatusViewState () const
-ssg/StatusQueue.h	func	ssg::operator==	bool (const PromptStatusViewState &, const PromptStatusViewState &)
-ssg/StatusQueue.h	func	ssg::operator==	bool (const StatusActionNode &, const StatusActionNode &)
-ssg/StatusQueue.h	func	ssg::operator==	bool (const StatusFooterProjection &, const StatusFooterProjection &)
-ssg/StatusQueue.h	func	ssg::operator==	bool (const StatusItem &, const StatusItem &)
-ssg/StatusQueue.h	func	ssg::operator==	bool (const StatusItemView &, const StatusItemView &)
-ssg/StatusQueue.h	func	ssg::operator==	bool (const StatusViewState &, const StatusViewState &)
-ssg/StatusQueue.h	func	ssg::operator==	bool (const UiAction &, const UiAction &)
-ssg/StatusQueue.h	func	ssg::projectStatusActionNodes	std::vector<StatusActionNode> (const StatusViewState &)
-ssg/StatusQueue.h	struct	ssg::PromptStatusViewState
-ssg/StatusQueue.h	struct	ssg::StatusActionNode
-ssg/StatusQueue.h	struct	ssg::StatusEnqueueResult
-ssg/StatusQueue.h	struct	ssg::StatusFooterProjection
-ssg/StatusQueue.h	struct	ssg::StatusItem
-ssg/StatusQueue.h	struct	ssg::StatusItemView
-ssg/StatusQueue.h	struct	ssg::StatusViewState
-ssg/StatusQueue.h	struct	ssg::UiAction
-ssg/StatusQueue.h	var	ssg::PromptStatusViewState::activeKind	std::optional<PromptKind>
-ssg/StatusQueue.h	var	ssg::PromptStatusViewState::status	StatusViewState
-ssg/StatusQueue.h	var	ssg::StatusActionNode::accessibleLabel	std::string
-ssg/StatusQueue.h	var	ssg::StatusActionNode::commandId	std::string
-ssg/StatusQueue.h	var	ssg::StatusActionNode::id	UiNodeId
-ssg/StatusQueue.h	var	ssg::StatusEnqueueResult::accepted	bool
-ssg/StatusQueue.h	var	ssg::StatusEnqueueResult::evicted	std::optional<StatusId>
-ssg/StatusQueue.h	var	ssg::StatusEnqueueResult::generation	std::uint64_t
-ssg/StatusQueue.h	var	ssg::StatusFooterProjection::actions	std::vector<UiAction>
-ssg/StatusQueue.h	var	ssg::StatusFooterProjection::value	std::string
-ssg/StatusQueue.h	var	ssg::StatusItem::actions	std::vector<UiAction>
-ssg/StatusQueue.h	var	ssg::StatusItem::id	StatusId
-ssg/StatusQueue.h	var	ssg::StatusItem::priority	StatusPriority
-ssg/StatusQueue.h	var	ssg::StatusItem::text	std::string
-ssg/StatusQueue.h	var	ssg::StatusItemView::accessibleLabel	std::string
-ssg/StatusQueue.h	var	ssg::StatusItemView::actions	std::vector<UiAction>
-ssg/StatusQueue.h	var	ssg::StatusItemView::generation	std::uint64_t
-ssg/StatusQueue.h	var	ssg::StatusItemView::id	StatusId
-ssg/StatusQueue.h	var	ssg::StatusItemView::priority	StatusPriority
-ssg/StatusQueue.h	var	ssg::StatusQueue::kCapacity	const std::size_t
-ssg/StatusQueue.h	var	ssg::StatusViewState::items	std::vector<StatusItemView>
-ssg/StatusQueue.h	var	ssg::StatusViewState::selected	std::size_t
-ssg/StatusQueue.h	var	ssg::UiAction::commandId	std::string
-ssg/StatusQueue.h	var	ssg::UiAction::id	std::string
-ssg/StatusQueue.h	var	ssg::UiAction::label	std::string
 ssg/Style.h	class	ssg::Style
 ssg/Style.h	enum	ssg::ScrollbarCellKind
 ssg/Style.h	enumerator	ssg::ScrollbarCellKind::Gutter
@@ -3937,14 +3935,6 @@ ssg/Viewport.h	var	ssg::VisualRow::logicalLine	uint32_t
 ssg/Viewport.h	var	ssg::VisualRow::spanCount	uint32_t
 ssg/Viewport.h	var	ssg::VisualRow::startCell	CellIndex
 ssg/Viewport.h	var	ssg::VisualRow::visibleCells	uint32_t
-ssg/WholeScreenSchema.h	class	ssg::WholeScreenSchema
-ssg/WholeScreenSchema.h	func	ssg::WholeScreenSchema::WholeScreenSchema	void (UiComposition)
-ssg/WholeScreenSchema.h	func	ssg::WholeScreenSchema::schema	const UiSchema &() const noexcept
-ssg/WholeScreenSchema.h	func	ssg::WholeScreenSchema::update	bool (UiComposition)
-ssg/WholeScreenSchema.h	func	ssg::assembleFooterPrompt	UiNode (const PromptSurface &)
-ssg/WholeScreenSchema.h	func	ssg::assembleWholeScreen	UiComposition (std::string_view, const StyleDimensions &, std::string_view)
-ssg/WholeScreenSchema.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
-ssg/WholeScreenSchema.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)
 ssg/Widget.h	enum	ssg::Overflow
 ssg/Widget.h	enum	ssg::ViewSurface
 ssg/Widget.h	enum	ssg::WidgetKind

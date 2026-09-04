@@ -23,7 +23,8 @@
 #include <ssg/Search.h>
 #include <ssg/Settings.h>
 #include <ssg/StatusFields.h>
-#include <ssg/StatusQueue.h>
+#include <ssg/PromptStatusViewState.h>
+#include <ssg/StatusBar.h>
 #include <ssg/GitDiffWorker.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/TabManager.h>
@@ -169,7 +170,7 @@ struct EditorSession::Impl final {
     // document identity or revision drifts from this, the controller is stale and
     // must be dismissed (see reconcile_find_document).
     std::optional<FileDocumentId> findDocumentId;
-    StatusQueue status;
+    StatusBar status;
     TabManager tabs;
     DiffModel diff;
     ExternalModificationFlow external;
@@ -178,7 +179,7 @@ struct EditorSession::Impl final {
     std::optional<std::string> currentGitBranch;
     TreeModel tree;
     std::shared_ptr<SyntaxParser> syntaxParser;
-    // The single interaction authority: owner of the whole-screen schema, the
+    // The single interaction authority: owner of the screen schema, the
     // prompt surface, panel/focus/provider truth, the interaction projection, and the tree
     // revision source. Presentation reads its projection; every focus, presence,
     // and prompt change flows through it. Declared after `tree` so it is
@@ -500,7 +501,7 @@ struct EditorSession::Impl final {
     [[nodiscard]] bool focusPane(PaneId pane);
     [[nodiscard]] bool refreshTree();
     void refreshTreeForPublication();
-    // Re-assemble the authority-owned whole-screen schema from the given UI inputs and
+    // Re-assemble the authority-owned screen schema from the given UI inputs and
     // migrate the interaction over it. Takes the inputs as parameters (not members) so a
     // caller can build and migrate before adopting the new style.
     void rebuildInteractionSchema(const StyleDimensions& dimensions,

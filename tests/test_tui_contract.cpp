@@ -15,9 +15,8 @@
 
 #include <unistd.h>
 
-#if __has_include(<ssg/InteractionState.h>) || \
-    __has_include(<ssg/WholeScreenInteraction.h>)
-#error "whole-screen interaction intermediates must remain private"
+#if __has_include(<ssg/InteractionState.h>)
+#error "interaction intermediates must remain private"
 #endif
 
 // Milestone 11 — The semantic library API drives the TUI contract.

@@ -1,4 +1,4 @@
-#include <ssg/WholeScreenSchema.h>
+#include <ssg/ScreenLayout.h>
 
 #include <ssg/StatusFields.h>  // kPathStatusFieldId, ...
 #include <ssg/Widget.h>  // ViewSurface, Overflow
@@ -171,7 +171,7 @@ void insertPromptInput(UiNode& header, std::string_view promptSigil) {
 
 }  // namespace
 
-UiComposition assembleWholeScreen(
+UiComposition assembleScreen(
     std::string_view hintCommandId,
     const StyleDimensions& dimensions,
     std::string_view promptSigil) {
@@ -279,7 +279,7 @@ UiComposition withFooterPrompt(UiComposition base,
     }
     if (!promptNode) {
         throw std::logic_error(
-            "whole-screen composition has no footer.prompt container");
+            "screen layout has no footer.prompt container");
     }
 
     if (!std::holds_alternative<UiContainer>(promptNode->content)) {
@@ -292,7 +292,7 @@ UiComposition withFooterPrompt(UiComposition base,
 UiComposition withStatusActions(
     UiComposition base, const std::vector<StatusActionNode>& actions) {
     UiNode* actionContainer = nullptr;
-    // The fixed whole-screen footer owns the sole status-action anchor.
+    // The fixed screen footer owns the sole status-action anchor.
     if (auto* root = std::get_if<UiContainer>(&base.root.content)) {
         for (auto& area : root->children) {
             if (area.id.value() != kFooterNodeId) continue;

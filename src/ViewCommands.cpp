@@ -485,7 +485,7 @@ void registerSettingsCommands(CommandCatalog& catalog,
     }
 }
 
-// The prompt line and the status queue.  Only prompt.update_value carries
+// The prompt line and the status bar.  Only prompt.update_value carries
 // anything: the text typed so far.
 void registerPromptStatusCommands(CommandCatalog& catalog,
                                   EditorSession::Impl& runtime) {
