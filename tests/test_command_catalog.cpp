@@ -1,6 +1,6 @@
 #include <ssg/CommandCatalog.h>
 
-#include <ssg/command_executor.h>
+#include <ssg/CommandExecutor.h>
 
 #include "test_helpers.h"
 

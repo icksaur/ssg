@@ -1,5 +1,5 @@
 #include <ssg/interaction.h>
-#include <ssg/whole_screen_schema.h>
+#include <ssg/WholeScreenSchema.h>
 
 #include <algorithm>
 #include <array>

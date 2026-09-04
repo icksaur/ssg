@@ -270,7 +270,7 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/editing.cpp
     ${SSG_SOURCE_DIR}/src/input_routing.cpp
     ${SSG_SOURCE_DIR}/src/files.cpp
-    ${SSG_SOURCE_DIR}/src/git_diff_worker.cpp
+    ${SSG_SOURCE_DIR}/src/GitDiffWorker.cpp
     ${SSG_SOURCE_DIR}/src/help.cpp
     ${SSG_SOURCE_DIR}/src/language_services.cpp
     ${SSG_SOURCE_DIR}/src/navigation.cpp
@@ -529,13 +529,13 @@ target_sources(ssg_platform PRIVATE
 
 if(WIN32)
     target_sources(ssg_platform PRIVATE
-        ${SSG_SOURCE_DIR}/src/windows_watcher.cpp
-        ${SSG_SOURCE_DIR}/src/windows_git_metadata_watcher.cpp
+        ${SSG_SOURCE_DIR}/src/WindowsFilesystemWatcher.cpp
+        ${SSG_SOURCE_DIR}/src/WindowsGitMetadataWatcher.cpp
     )
 else()
     target_sources(ssg_platform PRIVATE
-        ${SSG_SOURCE_DIR}/src/linux_watcher.cpp
-        ${SSG_SOURCE_DIR}/src/linux_git_metadata_watcher.cpp
+        ${SSG_SOURCE_DIR}/src/LinuxFilesystemWatcher.cpp
+        ${SSG_SOURCE_DIR}/src/LinuxGitMetadataWatcher.cpp
     )
 endif()
 
@@ -598,7 +598,7 @@ endif()
 
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/GitDiffSource.cpp
-    ${SSG_SOURCE_DIR}/src/git_repository.cpp
+    ${SSG_SOURCE_DIR}/src/GitRepository.cpp
 )
 
 if(EXISTS "${SSG_SOURCE_DIR}/vendor/libgit2/CMakeLists.txt")
@@ -752,7 +752,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/lsp_sync_client.cpp
+    ${SSG_SOURCE_DIR}/src/LspSyncClient.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -1173,7 +1173,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/command_executor.cpp
+    ${SSG_SOURCE_DIR}/src/CommandExecutor.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -1264,7 +1264,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/src/capabilities_report.cpp
         ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
-        ${SSG_SOURCE_DIR}/src/init_script.cpp
+        ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
     )
     set_target_properties(ssg_app PROPERTIES OUTPUT_NAME ssg)
     target_link_libraries(ssg_app PRIVATE ssg_tui_objects)
@@ -1276,7 +1276,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         SOURCES
             ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
             ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
-            ${SSG_SOURCE_DIR}/src/init_script.cpp
+            ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
             ${SSG_SOURCE_DIR}/src/capabilities_report.cpp)
     ssg_test_include_directories(test_ssg_app PRIVATE
         ${SSG_SOURCE_DIR}/tests

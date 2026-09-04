@@ -1,4 +1,4 @@
-#include <ssg/lsp_sync_client.h>
+#include <ssg/LspSyncClient.h>
 
 #include "fake_lsp_server.h"
 #include "test_helpers.h"

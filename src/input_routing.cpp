@@ -1,4 +1,4 @@
-#include <ssg/editor_session_internal.h>
+#include <ssg/EditorSessionImpl.h>
 
 #include <array>
 

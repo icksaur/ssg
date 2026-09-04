@@ -21,7 +21,7 @@
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
 #include <ssg/Viewport.h>
-#include <ssg/lsp_sync_client.h>
+#include <ssg/LspSyncClient.h>
 
 #include <cstdint>
 #include <filesystem>

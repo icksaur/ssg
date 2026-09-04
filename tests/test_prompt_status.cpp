@@ -1,7 +1,7 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/PromptLayout.h>
-#include <ssg/status_queue.h>
-#include <ssg/whole_screen_schema.h>
+#include <ssg/StatusQueue.h>
+#include <ssg/WholeScreenSchema.h>
 #include "test_helpers.h"
 
 #include <algorithm>

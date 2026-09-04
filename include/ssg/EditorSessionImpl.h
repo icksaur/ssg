@@ -23,8 +23,8 @@
 #include <ssg/Search.h>
 #include <ssg/Settings.h>
 #include <ssg/StatusFields.h>
-#include <ssg/status_queue.h>
-#include <ssg/git_diff_worker.h>
+#include <ssg/StatusQueue.h>
+#include <ssg/GitDiffWorker.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
@@ -46,7 +46,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <ssg/command_executor.h>
+#include <ssg/CommandExecutor.h>
 
 namespace ssg {
 // Casts a command payload to the expected type, or null when it holds something
@@ -541,7 +541,7 @@ struct EditorSession::Impl final {
     std::uint64_t syntaxRunCount = 0;
     // The git-diff/filesystem-watcher background worker: git repository scans,
     // watcher construction, and their pending-event queues all live behind this
-    // narrow owned member (see git_diff_worker.h). A no-op when both git and
+    // narrow owned member (see GitDiffWorker.h). A no-op when both git and
     // watching are disabled.
     GitDiffWorker gitDiffWorker;
     // Runtime-owned save correlation. The save primitive records the intended

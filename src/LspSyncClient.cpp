@@ -1,4 +1,4 @@
-#include <ssg/lsp_sync_client.h>
+#include <ssg/LspSyncClient.h>
 #include <ssg/startup_audit.h>
 
 #include <algorithm>

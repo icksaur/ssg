@@ -9,7 +9,7 @@
 #include <ssg/ScriptHost.h>
 #include <ssg/Selection.h>
 
-#include <ssg/init_script.h>
+#include <ssg/InitScriptWatcher.h>
 
 #include "test_helpers.h"
 #include "grid_test_frame.h"

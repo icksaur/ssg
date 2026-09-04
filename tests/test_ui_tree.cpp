@@ -5,7 +5,7 @@
 // against the rules, not the implementation.
 
 #include <ssg/UiTree.h>
-#include <ssg/whole_screen_schema.h>
+#include <ssg/WholeScreenSchema.h>
 #include "test_helpers.h"
 
 #include <string>

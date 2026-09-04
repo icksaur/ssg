@@ -218,6 +218,23 @@ ssg/CommandCatalog.h	var	ssg::CommandSpec::label	std::string
 ssg/CommandCatalog.h	var	ssg::CommandSpec::luaApi	bool
 ssg/CommandCatalog.h	var	ssg::CommandSpec::owner	std::string
 ssg/CommandCatalog.h	var	ssg::CommandSpec::summary	std::string
+ssg/CommandExecutor.h	class	ssg::CommandCatalog
+ssg/CommandExecutor.h	class	ssg::CommandExecutor
+ssg/CommandExecutor.h	func	ssg::CommandExecutor::CommandExecutor	void (CommandExecutor &&)
+ssg/CommandExecutor.h	func	ssg::CommandExecutor::CommandExecutor	void (const CommandExecutor &)
+ssg/CommandExecutor.h	func	ssg::CommandExecutor::CommandExecutor	void (std::shared_ptr<CommandCatalog>)
+ssg/CommandExecutor.h	func	ssg::CommandExecutor::catalog	const std::shared_ptr<CommandCatalog> &() const
+ssg/CommandExecutor.h	func	ssg::CommandExecutor::dispatch	ExecutorResult (const ClientCommand &)
+ssg/CommandExecutor.h	func	ssg::CommandExecutor::dispatchInProgress	bool () const noexcept
+ssg/CommandExecutor.h	func	ssg::CommandExecutor::operator=	CommandExecutor &(CommandExecutor &&)
+ssg/CommandExecutor.h	func	ssg::CommandExecutor::operator=	CommandExecutor &(const CommandExecutor &)
+ssg/CommandExecutor.h	func	ssg::CommandExecutor::topology	SessionTopology () const
+ssg/CommandExecutor.h	func	ssg::ExecutorResult::accepted	bool () const noexcept
+ssg/CommandExecutor.h	struct	ssg::ExecutorResult
+ssg/CommandExecutor.h	var	ssg::ExecutorResult::error	CommandError
+ssg/CommandExecutor.h	var	ssg::ExecutorResult::message	std::string
+ssg/CommandExecutor.h	var	ssg::ExecutorResult::viewAction	std::optional<ViewAction>
+ssg/CommandExecutor.h	var	ssg::kNestedDispatchRefusal	const std::string_view
 ssg/CommandHandle.h	class	ssg::CommandHandle
 ssg/CommandHandle.h	class	ssg::CommandName
 ssg/CommandHandle.h	func	ssg::CommandHandle::CommandHandle	void () noexcept
@@ -585,6 +602,200 @@ ssg/EditorSession.h	var	ssg::ExternalDiffRevision::revision	std::uint64_t
 ssg/EditorSession.h	var	ssg::NoticeView::actions	std::vector<UiAction>
 ssg/EditorSession.h	var	ssg::NoticeView::text	std::string
 ssg/EditorSession.h	var	ssg::PumpResult::advanced	bool
+ssg/EditorSessionImpl.h	class	ssg::EditorSession::Impl::DeferredCommandQueue
+ssg/EditorSessionImpl.h	enum	ssg::DraftReopenOutcome
+ssg/EditorSessionImpl.h	enumerator	ssg::DraftReopenOutcome::Conflict
+ssg/EditorSessionImpl.h	enumerator	ssg::DraftReopenOutcome::None
+ssg/EditorSessionImpl.h	enumerator	ssg::DraftReopenOutcome::Restored
+ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (DocumentRuntimeState &&) noexcept
+ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (HistoryConfig, std::shared_ptr<SyntaxParser>)
+ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (const DocumentRuntimeState &)
+ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::liveInstances	std::uint64_t () noexcept
+ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::operator=	DocumentRuntimeState &(DocumentRuntimeState &&)
+ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::operator=	DocumentRuntimeState &(const DocumentRuntimeState &)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::DeferredCommandQueue::clear	void () noexcept
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::DeferredCommandQueue::contains	bool (std::string_view) const noexcept
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::DeferredCommandQueue::empty	bool () const noexcept
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::DeferredCommandQueue::size	std::size_t () const noexcept
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::DeferredCommandQueue::takeFront	DeferredCommand ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::Impl	void (std::filesystem::path, std::filesystem::path, std::filesystem::path, std::filesystem::path, bool, std::shared_ptr<SyntaxParser>, bool, bool)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::activateDocument	CommandHandlerResult (FileDocumentId)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::activeDiffFile	std::optional<DiffFileView> () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::activeDocument	Document *()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::activeDocument	const Document *() const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::activeDocumentId	std::optional<FileDocumentId> () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::activeSyntaxView	SyntaxViewState () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::activeTabIsLiveDiff	bool () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::activeTabState	const TabState *() const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::activeText	const std::string &() const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::activeWorkspaceState	std::optional<WorkspaceDocumentState> () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::applyExternalDiffBurst	DiffIngressResult (std::vector<ExternalDiffRevision>)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::applyGitDiffScan	DiffIngressResult (GitDiffScan)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::applyWorkspaceReplace	WorkspaceApplyResult (const WorkspaceReplacePreview &)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::archiveDiscardedDraft	bool (std::string_view, std::string_view)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::clampSelectionToActiveDocument	void ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::clampSelectionsToActiveDocument	void ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::closePane	CommandHandlerResult ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::closeTab	TabLifecycleResult (const TabState &, std::chrono::milliseconds, std::span<const TabId>)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::commitExternalDismissal	bool (FileDocumentId, bool, const std::optional<std::string> &)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::cyclePane	CommandHandlerResult (PaneCycleDirection)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::defer	bool (ClientCommand)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::discardDocumentRuntimeState	void (FileDocumentId)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::discardDraft	CommandHandlerResult ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::dismissDraftNotice	CommandHandlerResult ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::dispatchLocked	CommandResult (const ClientCommand &)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::draftNotice	std::optional<NoticeView> () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::drainGitDiffWorker	bool ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::enqueueStatus	void (StatusPriority, std::string)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::ensureDocumentRuntimeState	void (FileDocumentId)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::externalDiffFileId	DiffFileId (std::string_view)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::externalModificationPresent	bool () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::flushAllAutosaveDrafts	std::size_t ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::flushDueAutosaveDrafts	std::size_t ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::focusPane	bool (PaneId)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::gitDiffWakeDescriptor	int () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::historyFor	DocumentHistory &(FileDocumentId)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::noticePresent	bool () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::noticeView	std::optional<NoticeView> () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::openDraftDiff	CommandHandlerResult ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::openOrFocusLiveDiffTab	CommandHandlerResult (const DiffFileView &, NavigationClass)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::openOrRevealFollowTargetProgrammatic	bool (const FollowTarget &)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::openPickerPrompt	bool (PickerKind)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::openReadOnlyTab	CommandHandlerResult (TabKind, std::string, std::string, std::string, LanguageId)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::paletteView	PaletteViewState () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::persistAutosaveDraft	std::size_t (FileDocumentId)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::primeDeferred	void ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::projectedUiTree	UiSchema () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::promptStatusView	PromptStatusViewState () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::rebuildFileCandidates	void ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::rebuildInteractionSchema	void (const StyleDimensions &, std::string_view)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::reconcileAllOpenDocumentsAgainstDisk	void ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::reconcileDraftOnOpen	void (FileDocumentId)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::reconcileExternalWatchEvents	void (std::vector<WatchEvent>, bool)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::reconcileFindDocument	void ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::recordNavigation	void (NavigationClass)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::refreshLiveDiffDocuments	void (const DiffViewState &)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::refreshSyntax	void (std::vector<SyntaxEdit>)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::refreshTree	bool ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::refreshTreeForPublication	void ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::registerExternalSaveExpectation	void (const std::filesystem::path &)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::reopenTab	TabLifecycleResult (const TabState &, const RecoveryRecordId &)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::resetSelectionForActiveDocument	void ()
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::resolveExternalDocument	std::optional<FileDocumentId> (const DiffFileId &) const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::resolveOpenSavedDocumentByPath	std::optional<FileDocumentId> (const std::filesystem::path &) const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::resolvedPromptControls	std::optional<ResolvedPromptControls> () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::revealCurrentDiffTarget	bool (const FollowTarget &, NavigationClass)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::revealDiffTarget	bool (const FollowTarget &, NavigationClass)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::savedPathFromExternalDiffId	std::optional<std::string> (const DiffFileId &)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::snapshot	WorkspaceSnapshot (std::uint64_t) const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::splitPane	CommandHandlerResult (SplitAxis)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::syntaxFor	SyntaxModel &(FileDocumentId)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::treeView	TreeViewState () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::uiStatusFields	StatusFieldProjection () const
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::updateTabsFor	CommandHandlerResult (FileDocumentId)
+ssg/EditorSessionImpl.h	func	ssg::bindRuntimeEditing	void (CommandCatalog &, EditorSession::Impl &)
+ssg/EditorSessionImpl.h	func	ssg::bindRuntimeFiles	void (CommandCatalog &, EditorSession::Impl &)
+ssg/EditorSessionImpl.h	func	ssg::bindRuntimeHelp	void (CommandCatalog &, EditorSession::Impl &)
+ssg/EditorSessionImpl.h	func	ssg::bindRuntimeLanguageServices	void (CommandCatalog &, EditorSession::Impl &)
+ssg/EditorSessionImpl.h	func	ssg::bindRuntimeNavigation	void (CommandCatalog &, EditorSession::Impl &)
+ssg/EditorSessionImpl.h	func	ssg::bindRuntimePresentation	void (CommandCatalog &, EditorSession::Impl &)
+ssg/EditorSessionImpl.h	func	ssg::boolSetting	bool (const SettingsModel &, SettingKey, bool)
+ssg/EditorSessionImpl.h	func	ssg::executeFindReplaceCommand	CommandHandlerResult (EditorSession::Impl &, FindReplaceCommand, const std::any &)
+ssg/EditorSessionImpl.h	func	ssg::failure	CommandHandlerResult (std::string)
+ssg/EditorSessionImpl.h	func	ssg::inputLocked	ClientInputResult (EditorSession::Impl &, const ClientInput &)
+ssg/EditorSessionImpl.h	func	ssg::payloadAs	const T *(const std::any &)
+ssg/EditorSessionImpl.h	func	ssg::success	CommandHandlerResult ()
+ssg/EditorSessionImpl.h	func	ssg::tabMessage	std::string (const TabResult &)
+ssg/EditorSessionImpl.h	func	ssg::uint32Setting	std::uint32_t (const SettingsModel &, SettingKey, std::uint32_t)
+ssg/EditorSessionImpl.h	func	ssg::workspaceMessage	std::string (const WorkspaceResult &)
+ssg/EditorSessionImpl.h	func	ssg::wrongPayload	std::string (std::string_view)
+ssg/EditorSessionImpl.h	struct	ssg::DocumentRuntimeState
+ssg/EditorSessionImpl.h	struct	ssg::EditorSession::Impl
+ssg/EditorSessionImpl.h	struct	ssg::EditorSession::Impl::DeferredCommand
+ssg/EditorSessionImpl.h	struct	ssg::EditorSession::Impl::DocumentPointerGesture
+ssg/EditorSessionImpl.h	struct	ssg::EditorSession::Impl::ResolvedPromptControls
+ssg/EditorSessionImpl.h	var	ssg::DocumentRuntimeState::autosaveOversizeReported	bool
+ssg/EditorSessionImpl.h	var	ssg::DocumentRuntimeState::history	DocumentHistory
+ssg/EditorSessionImpl.h	var	ssg::DocumentRuntimeState::reopen	DraftReopenOutcome
+ssg/EditorSessionImpl.h	var	ssg::DocumentRuntimeState::syntax	SyntaxModel
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::DeferredCommand::command	ClientCommand
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::DeferredCommandQueue::kMaximum	const std::size_t
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::active	DocumentPosition
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::additive	bool
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::anchor	DocumentPosition
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::baseline	std::vector<Selection>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::documentId	FileDocumentId
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::documentRevision	std::uint64_t
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::ResolvedPromptControls::activeInput	std::size_t
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::ResolvedPromptControls::controls	std::vector<PromptControl>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::activeTextCache	std::string
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::activeTextDocument	std::optional<FileDocumentId>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::activeTextRevision	std::optional<std::uint64_t>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::archiveRoot	std::filesystem::path
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::autosave	DraftAutosaveScheduler
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::autosaveDraftByteCap	std::uintmax_t
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::catalog	std::shared_ptr<CommandCatalog>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::clipboard	ClipboardRegister
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::commandCandidateCache	std::vector<PaletteCandidate>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::commandCandidateCacheValid	bool
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::commandCandidateCatalogRevision	CatalogRevision
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::commandCandidateKeymap	KeymapViewState
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::currentGitBranch	std::optional<std::string>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::deferredCommands	DeferredCommandQueue
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::deferringEnrichment	bool
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::diff	DiffModel
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::documentLanguageOverrides	std::unordered_map<std::uint64_t, LanguageId>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::documentPointerGesture	std::optional<DocumentPointerGesture>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::documentRuntimeStates	std::map<std::uint64_t, DocumentRuntimeState>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::external	ExternalModificationFlow
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::externalSaveMutex	std::mutex
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::fileCandidates	std::vector<PaletteCandidate>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::findDocumentId	std::optional<FileDocumentId>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::findReplace	FindReplaceController
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::follow	FollowEditsModel
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::gitDiffWorker	GitDiffWorker
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::homeDirectory	std::string
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::inputCatalogRevision	std::optional<CatalogRevision>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::inputKeymap	std::unique_ptr<CompiledKeymap>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::inputKeymapGeneration	std::optional<std::uint64_t>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::interaction	InteractionState
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::keymap	KeymapViewState
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::keymapGeneration	std::uint64_t
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::lastGitScanRevision	std::uint64_t
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::lineNumbers	bool
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::liveDiffDocuments	std::unordered_map<std::string, FileDocumentId>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::lspFeatures	LspFeatureViewState
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::lspSync	LspSyncViewState
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::navigation	NavigationHistory
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::nextStatusId	std::uint64_t
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::operationMutex	std::mutex
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::paneTopology	PaneTopology
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::pendingSaveExpectations	std::deque<SaveExpectation>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::pendingSyntaxRefresh	bool
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::pendingTreeRefresh	bool
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::readOnlyTabDocuments	std::unordered_map<std::string, FileDocumentId>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::recovery	RecoveryManager
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::recoveryRoot	std::filesystem::path
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::root	std::filesystem::path
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::scratch	ScratchStore
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::scratchRoot	std::filesystem::path
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::search	SearchController
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::selection	SelectionViewState
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::session	std::unique_ptr<CommandExecutor>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::settings	SettingsModel
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::status	StatusQueue
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::style	Style
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::syntaxParser	std::shared_ptr<SyntaxParser>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::syntaxRunCount	std::uint64_t
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::tabs	TabManager
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::theme	ThemeSnapshot
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::tree	TreeModel
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::treeScanCount	std::uint64_t
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::wordWrap	bool
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::workspace	Workspace
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::workspaceReplaceGeneration	std::uint64_t
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::workspaceReplacePreview	std::optional<WorkspaceReplacePreview>
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::workspaceSearchGeneration	std::uint64_t
 ssg/ExternalModificationFlow.h	alias	ssg::ExternalKeepBufferCommit
 ssg/ExternalModificationFlow.h	alias	ssg::ExternalReloadCommit
 ssg/ExternalModificationFlow.h	class	ssg::ExternalModificationFlow
@@ -1009,6 +1220,20 @@ ssg/GitDiffSource.h	var	ssg::GitWorkingTreeScan::complete	bool
 ssg/GitDiffSource.h	var	ssg::GitWorkingTreeScan::files	std::vector<GitDiffFile>
 ssg/GitDiffSource.h	var	ssg::GitWorkingTreeScan::requestedPaths	std::vector<std::filesystem::path>
 ssg/GitDiffSource.h	var	ssg::GitWorkingTreeScan::revision	std::uint64_t
+ssg/GitDiffWorker.h	class	ssg::GitDiffWorker
+ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::GitDiffWorker	void (const GitDiffWorker &)
+ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::GitDiffWorker	void (const std::filesystem::path &, bool, bool)
+ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::drain	GitDiffWorkerDrain ()
+ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::fullRefreshCount	std::uint64_t () const noexcept
+ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::operator=	GitDiffWorker &(const GitDiffWorker &)
+ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::registerSavedPath	void (SaveExpectation)
+ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::setAvailabilityForTest	void (bool)
+ssg/GitDiffWorker.h	func	ssg::GitDiffWorker::wakeDescriptor	int () const noexcept
+ssg/GitDiffWorker.h	struct	ssg::GitDiffWorkerDrain
+ssg/GitDiffWorker.h	var	ssg::GitDiffWorkerDrain::fullReconcile	bool
+ssg/GitDiffWorker.h	var	ssg::GitDiffWorkerDrain::scans	std::deque<GitDiffScan>
+ssg/GitDiffWorker.h	var	ssg::GitDiffWorkerDrain::watchEvents	std::deque<WatchEvent>
+ssg/GitDiffWorker.h	var	ssg::GitDiffWorkerDrain::watcherAvailabilityChanged	bool
 ssg/GitMetadataWatcher.h	class	ssg::GitMetadataWatcher
 ssg/GitMetadataWatcher.h	func	ssg::GitMetadataWatcher::healthy	bool () const noexcept
 ssg/GitMetadataWatcher.h	func	ssg::GitMetadataWatcher::poll	bool (std::chrono::milliseconds)
@@ -1107,6 +1332,17 @@ ssg/HitTester.h	var	ssg::RegionHit::region	HitRegion
 ssg/HitTester.h	var	ssg::RegionHit::scrollDenominator	std::uint32_t
 ssg/HitTester.h	var	ssg::RegionHit::scrollNumerator	std::uint32_t
 ssg/HitTester.h	var	ssg::RegionHit::tabIndex	std::uint32_t
+ssg/InitScriptWatcher.h	class	ssg::EditorSession
+ssg/InitScriptWatcher.h	class	ssg::ScriptHost
+ssg/InitScriptWatcher.h	class	ssg::app::InitScriptWatcher
+ssg/InitScriptWatcher.h	func	ssg::app::InitScriptWatcher::InitScriptWatcher	void (const InitScriptWatcher &)
+ssg/InitScriptWatcher.h	func	ssg::app::InitScriptWatcher::InitScriptWatcher	void (std::filesystem::path, std::optional<std::string>)
+ssg/InitScriptWatcher.h	func	ssg::app::InitScriptWatcher::drainAndEvaluate	void (ScriptHost &, EditorSession &)
+ssg/InitScriptWatcher.h	func	ssg::app::InitScriptWatcher::operator=	InitScriptWatcher &(const InitScriptWatcher &)
+ssg/InitScriptWatcher.h	func	ssg::app::InitScriptWatcher::wakeDescriptor	int () const noexcept
+ssg/InitScriptWatcher.h	func	ssg::app::evaluateInitScript	void (ScriptHost &, EditorSession &, const std::filesystem::path &, const std::string &)
+ssg/InitScriptWatcher.h	func	ssg::app::loadInitScript	std::optional<std::string> (ScriptHost &, EditorSession &)
+ssg/InitScriptWatcher.h	func	ssg::app::resolveInitScriptPath	std::optional<std::filesystem::path> ()
 ssg/KeyCode.h	enum	ssg::KeyCode
 ssg/KeyCode.h	enumerator	ssg::KeyCode::ArrowDown
 ssg/KeyCode.h	enumerator	ssg::KeyCode::ArrowLeft
@@ -1571,6 +1807,156 @@ ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::revealPrimaryCaret	b
 ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::selectedIndex	std::optional<std::size_t>
 ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::targets	std::vector<LspNavigationTarget>
 ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::userNavigation	bool
+ssg/LspSyncClient.h	class	ssg::LspByteStream
+ssg/LspSyncClient.h	class	ssg::LspFrameDecoder
+ssg/LspSyncClient.h	class	ssg::LspSyncClient
+ssg/LspSyncClient.h	enum	ssg::LspCompletedResponseStatus
+ssg/LspSyncClient.h	enum	ssg::LspDiagnosticSeverity
+ssg/LspSyncClient.h	enum	ssg::LspFrameError
+ssg/LspSyncClient.h	enum	ssg::LspIoStatus
+ssg/LspSyncClient.h	enum	ssg::LspLifecycleState
+ssg/LspSyncClient.h	enum	ssg::LspPositionError
+ssg/LspSyncClient.h	enum	ssg::LspSyncError
+ssg/LspSyncClient.h	enumerator	ssg::LspCompletedResponseStatus::Cancelled
+ssg/LspSyncClient.h	enumerator	ssg::LspCompletedResponseStatus::Result
+ssg/LspSyncClient.h	enumerator	ssg::LspCompletedResponseStatus::ServerError
+ssg/LspSyncClient.h	enumerator	ssg::LspDiagnosticSeverity::Error
+ssg/LspSyncClient.h	enumerator	ssg::LspDiagnosticSeverity::Hint
+ssg/LspSyncClient.h	enumerator	ssg::LspDiagnosticSeverity::Information
+ssg/LspSyncClient.h	enumerator	ssg::LspDiagnosticSeverity::Warning
+ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::DecoderFailed
+ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::DuplicateContentLength
+ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::HeaderTooLarge
+ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::InvalidContentLength
+ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::MessageTooLarge
+ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::MissingContentLength
+ssg/LspSyncClient.h	enumerator	ssg::LspFrameError::None
+ssg/LspSyncClient.h	enumerator	ssg::LspIoStatus::Closed
+ssg/LspSyncClient.h	enumerator	ssg::LspIoStatus::Error
+ssg/LspSyncClient.h	enumerator	ssg::LspIoStatus::Ok
+ssg/LspSyncClient.h	enumerator	ssg::LspIoStatus::Timeout
+ssg/LspSyncClient.h	enumerator	ssg::LspLifecycleState::Failed
+ssg/LspSyncClient.h	enumerator	ssg::LspLifecycleState::Initializing
+ssg/LspSyncClient.h	enumerator	ssg::LspLifecycleState::Ready
+ssg/LspSyncClient.h	enumerator	ssg::LspLifecycleState::ShuttingDown
+ssg/LspSyncClient.h	enumerator	ssg::LspLifecycleState::Stopped
+ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::CharacterOutOfRange
+ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::InvalidUtf8
+ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::InvalidUtf8Boundary
+ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::LineOutOfRange
+ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::None
+ssg/LspSyncClient.h	enumerator	ssg::LspPositionError::SplitSurrogate
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::DiagnosticLimitExceeded
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::InvalidArgument
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::InvalidState
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::MalformedMessage
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::None
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::RequestLimitExceeded
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::ServerError
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::StaleDiagnostics
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::StaleDocument
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::StreamClosed
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::StreamError
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::Timeout
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::UnknownDocument
+ssg/LspSyncClient.h	enumerator	ssg::LspSyncError::UnknownRequest
+ssg/LspSyncClient.h	func	ssg::LspByteOffsetResult::accepted	bool () const noexcept
+ssg/LspSyncClient.h	func	ssg::LspByteStream::read	LspIoResult (std::string &, std::size_t, std::chrono::milliseconds)
+ssg/LspSyncClient.h	func	ssg::LspByteStream::write	LspIoResult (std::string_view, std::chrono::milliseconds)
+ssg/LspSyncClient.h	func	ssg::LspFrameDecoder::LspFrameDecoder	void (LspFrameConfig)
+ssg/LspSyncClient.h	func	ssg::LspFrameDecoder::feed	LspFrameResult (std::string_view)
+ssg/LspSyncClient.h	func	ssg::LspFrameResult::accepted	bool () const noexcept
+ssg/LspSyncClient.h	func	ssg::LspIoResult::accepted	bool () const noexcept
+ssg/LspSyncClient.h	func	ssg::LspPositionResult::accepted	bool () const noexcept
+ssg/LspSyncClient.h	func	ssg::LspRequestResult::accepted	bool () const noexcept
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::LspSyncClient	void (LspByteStream &, LspSyncConfig, std::chrono::milliseconds)
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::LspSyncClient	void (LspSyncClient &&) noexcept
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::LspSyncClient	void (const LspSyncClient &)
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::cancel	LspSyncResult (std::uint64_t)
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::changeDocument	LspSyncResult (std::string_view, std::uint64_t, std::string)
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::closeDocument	LspSyncResult (std::string_view)
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::documentSnapshot	std::optional<LspDocumentSnapshot> (std::string_view) const
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::documentVersion	std::optional<std::int64_t> (std::string_view) const
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::initialize	LspSyncResult (std::string)
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::openDocument	LspSyncResult (std::string, std::string, std::uint64_t, std::string)
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::operator=	LspSyncClient &(LspSyncClient &&) noexcept
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::operator=	LspSyncClient &(const LspSyncClient &)
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::poll	LspSyncResult ()
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::request	LspRequestResult (std::string, std::string)
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::shutdown	LspSyncResult ()
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::state	LspLifecycleState () const noexcept
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::takeCompletedResponses	std::vector<LspCompletedResponse> ()
+ssg/LspSyncClient.h	func	ssg::LspSyncClient::viewState	const LspSyncViewState &() const noexcept
+ssg/LspSyncClient.h	func	ssg::LspSyncResult::accepted	bool () const noexcept
+ssg/LspSyncClient.h	func	ssg::byteOffsetToLspPosition	LspPositionResult (std::string_view, ByteOffset)
+ssg/LspSyncClient.h	func	ssg::encodeLspFrame	std::string (std::string_view)
+ssg/LspSyncClient.h	func	ssg::lspPositionToByteOffset	LspByteOffsetResult (std::string_view, LspPosition)
+ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspCompletedResponse &, const LspCompletedResponse &)
+ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspDiagnostic &, const LspDiagnostic &)
+ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspDocumentDiagnostics &, const LspDocumentDiagnostics &)
+ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspDocumentSnapshot &, const LspDocumentSnapshot &)
+ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspPosition &, const LspPosition &)
+ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspRange &, const LspRange &)
+ssg/LspSyncClient.h	func	ssg::operator==	bool (const LspSyncViewState &, const LspSyncViewState &)
+ssg/LspSyncClient.h	struct	ssg::LspByteOffsetResult
+ssg/LspSyncClient.h	struct	ssg::LspCompletedResponse
+ssg/LspSyncClient.h	struct	ssg::LspDiagnostic
+ssg/LspSyncClient.h	struct	ssg::LspDocumentDiagnostics
+ssg/LspSyncClient.h	struct	ssg::LspDocumentSnapshot
+ssg/LspSyncClient.h	struct	ssg::LspFrameConfig
+ssg/LspSyncClient.h	struct	ssg::LspFrameResult
+ssg/LspSyncClient.h	struct	ssg::LspIoResult
+ssg/LspSyncClient.h	struct	ssg::LspPosition
+ssg/LspSyncClient.h	struct	ssg::LspPositionResult
+ssg/LspSyncClient.h	struct	ssg::LspRange
+ssg/LspSyncClient.h	struct	ssg::LspRequestResult
+ssg/LspSyncClient.h	struct	ssg::LspSyncConfig
+ssg/LspSyncClient.h	struct	ssg::LspSyncResult
+ssg/LspSyncClient.h	struct	ssg::LspSyncViewState
+ssg/LspSyncClient.h	var	ssg::LspByteOffsetResult::error	LspPositionError
+ssg/LspSyncClient.h	var	ssg::LspByteOffsetResult::offset	ByteOffset
+ssg/LspSyncClient.h	var	ssg::LspCompletedResponse::id	std::uint64_t
+ssg/LspSyncClient.h	var	ssg::LspCompletedResponse::message	std::string
+ssg/LspSyncClient.h	var	ssg::LspCompletedResponse::payloadJson	std::string
+ssg/LspSyncClient.h	var	ssg::LspCompletedResponse::status	LspCompletedResponseStatus
+ssg/LspSyncClient.h	var	ssg::LspDiagnostic::code	std::string
+ssg/LspSyncClient.h	var	ssg::LspDiagnostic::message	std::string
+ssg/LspSyncClient.h	var	ssg::LspDiagnostic::range	LspRange
+ssg/LspSyncClient.h	var	ssg::LspDiagnostic::severity	std::optional<LspDiagnosticSeverity>
+ssg/LspSyncClient.h	var	ssg::LspDocumentDiagnostics::diagnostics	std::vector<LspDiagnostic>
+ssg/LspSyncClient.h	var	ssg::LspDocumentDiagnostics::revision	std::uint64_t
+ssg/LspSyncClient.h	var	ssg::LspDocumentDiagnostics::uri	std::string
+ssg/LspSyncClient.h	var	ssg::LspDocumentSnapshot::revision	std::uint64_t
+ssg/LspSyncClient.h	var	ssg::LspDocumentSnapshot::text	std::string
+ssg/LspSyncClient.h	var	ssg::LspDocumentSnapshot::uri	std::string
+ssg/LspSyncClient.h	var	ssg::LspDocumentSnapshot::version	std::int64_t
+ssg/LspSyncClient.h	var	ssg::LspFrameConfig::maximumHeaderBytes	std::size_t
+ssg/LspSyncClient.h	var	ssg::LspFrameConfig::maximumMessageBytes	std::size_t
+ssg/LspSyncClient.h	var	ssg::LspFrameResult::error	LspFrameError
+ssg/LspSyncClient.h	var	ssg::LspFrameResult::message	std::string
+ssg/LspSyncClient.h	var	ssg::LspFrameResult::messages	std::vector<std::string>
+ssg/LspSyncClient.h	var	ssg::LspIoResult::message	std::string
+ssg/LspSyncClient.h	var	ssg::LspIoResult::status	LspIoStatus
+ssg/LspSyncClient.h	var	ssg::LspPosition::character	std::uint64_t
+ssg/LspSyncClient.h	var	ssg::LspPosition::line	std::uint64_t
+ssg/LspSyncClient.h	var	ssg::LspPositionResult::error	LspPositionError
+ssg/LspSyncClient.h	var	ssg::LspPositionResult::position	LspPosition
+ssg/LspSyncClient.h	var	ssg::LspRange::end	LspPosition
+ssg/LspSyncClient.h	var	ssg::LspRange::start	LspPosition
+ssg/LspSyncClient.h	var	ssg::LspRequestResult::error	LspSyncError
+ssg/LspSyncClient.h	var	ssg::LspRequestResult::id	std::uint64_t
+ssg/LspSyncClient.h	var	ssg::LspRequestResult::message	std::string
+ssg/LspSyncClient.h	var	ssg::LspSyncConfig::framing	LspFrameConfig
+ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumDiagnosticMessageBytes	std::size_t
+ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumDiagnosticsPerDocument	std::size_t
+ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumDocuments	std::size_t
+ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumJsonDepth	std::size_t
+ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumPendingRequests	std::size_t
+ssg/LspSyncClient.h	var	ssg::LspSyncConfig::maximumReadBytes	std::size_t
+ssg/LspSyncClient.h	var	ssg::LspSyncResult::error	LspSyncError
+ssg/LspSyncClient.h	var	ssg::LspSyncResult::message	std::string
+ssg/LspSyncClient.h	var	ssg::LspSyncViewState::documents	std::vector<LspDocumentDiagnostics>
+ssg/LspSyncClient.h	var	ssg::LspSyncViewState::revision	std::uint64_t
 ssg/LuaCommandHost.h	alias	ssg::LuaDispatcher
 ssg/LuaCommandHost.h	alias	ssg::LuaGenerationGate
 ssg/LuaCommandHost.h	class	ssg::LuaCommandHost
@@ -2545,6 +2931,7 @@ ssg/StatusFields.h	var	ssg::kFollowStatusFieldId	const std::string_view
 ssg/StatusFields.h	var	ssg::kPathStatusFieldId	const std::string_view
 ssg/StatusFields.h	var	ssg::kStatusValueFieldId	const std::string_view
 ssg/StatusQueue.h	class	ssg::StatusId
+ssg/StatusQueue.h	class	ssg::StatusQueue
 ssg/StatusQueue.h	enum	ssg::StatusPriority
 ssg/StatusQueue.h	enumerator	ssg::StatusPriority::Error
 ssg/StatusQueue.h	enumerator	ssg::StatusPriority::Information
@@ -2553,8 +2940,16 @@ ssg/StatusQueue.h	enumerator	ssg::StatusPriority::Warning
 ssg/StatusQueue.h	func	ssg::StatusId::StatusId	void (std::uint64_t) noexcept
 ssg/StatusQueue.h	func	ssg::StatusId::operator<=>	std::strong_ordering (const StatusId &) const
 ssg/StatusQueue.h	func	ssg::StatusId::value	std::uint64_t () const noexcept
+ssg/StatusQueue.h	func	ssg::StatusQueue::actionNodes	std::vector<StatusActionNode> () const
+ssg/StatusQueue.h	func	ssg::StatusQueue::dismiss	void () noexcept
+ssg/StatusQueue.h	func	ssg::StatusQueue::enqueue	StatusEnqueueResult (StatusItem)
+ssg/StatusQueue.h	func	ssg::StatusQueue::footerProjection	StatusFooterProjection () const
+ssg/StatusQueue.h	func	ssg::StatusQueue::next	void () noexcept
+ssg/StatusQueue.h	func	ssg::StatusQueue::previous	void () noexcept
+ssg/StatusQueue.h	func	ssg::StatusQueue::viewState	StatusViewState () const
 ssg/StatusQueue.h	func	ssg::operator==	bool (const PromptStatusViewState &, const PromptStatusViewState &)
 ssg/StatusQueue.h	func	ssg::operator==	bool (const StatusActionNode &, const StatusActionNode &)
+ssg/StatusQueue.h	func	ssg::operator==	bool (const StatusFooterProjection &, const StatusFooterProjection &)
 ssg/StatusQueue.h	func	ssg::operator==	bool (const StatusItem &, const StatusItem &)
 ssg/StatusQueue.h	func	ssg::operator==	bool (const StatusItemView &, const StatusItemView &)
 ssg/StatusQueue.h	func	ssg::operator==	bool (const StatusViewState &, const StatusViewState &)
@@ -2562,6 +2957,8 @@ ssg/StatusQueue.h	func	ssg::operator==	bool (const UiAction &, const UiAction &)
 ssg/StatusQueue.h	func	ssg::projectStatusActionNodes	std::vector<StatusActionNode> (const StatusViewState &)
 ssg/StatusQueue.h	struct	ssg::PromptStatusViewState
 ssg/StatusQueue.h	struct	ssg::StatusActionNode
+ssg/StatusQueue.h	struct	ssg::StatusEnqueueResult
+ssg/StatusQueue.h	struct	ssg::StatusFooterProjection
 ssg/StatusQueue.h	struct	ssg::StatusItem
 ssg/StatusQueue.h	struct	ssg::StatusItemView
 ssg/StatusQueue.h	struct	ssg::StatusViewState
@@ -2571,6 +2968,11 @@ ssg/StatusQueue.h	var	ssg::PromptStatusViewState::status	StatusViewState
 ssg/StatusQueue.h	var	ssg::StatusActionNode::accessibleLabel	std::string
 ssg/StatusQueue.h	var	ssg::StatusActionNode::commandId	std::string
 ssg/StatusQueue.h	var	ssg::StatusActionNode::id	UiNodeId
+ssg/StatusQueue.h	var	ssg::StatusEnqueueResult::accepted	bool
+ssg/StatusQueue.h	var	ssg::StatusEnqueueResult::evicted	std::optional<StatusId>
+ssg/StatusQueue.h	var	ssg::StatusEnqueueResult::generation	std::uint64_t
+ssg/StatusQueue.h	var	ssg::StatusFooterProjection::actions	std::vector<UiAction>
+ssg/StatusQueue.h	var	ssg::StatusFooterProjection::value	std::string
 ssg/StatusQueue.h	var	ssg::StatusItem::actions	std::vector<UiAction>
 ssg/StatusQueue.h	var	ssg::StatusItem::id	StatusId
 ssg/StatusQueue.h	var	ssg::StatusItem::priority	StatusPriority
@@ -2580,6 +2982,7 @@ ssg/StatusQueue.h	var	ssg::StatusItemView::actions	std::vector<UiAction>
 ssg/StatusQueue.h	var	ssg::StatusItemView::generation	std::uint64_t
 ssg/StatusQueue.h	var	ssg::StatusItemView::id	StatusId
 ssg/StatusQueue.h	var	ssg::StatusItemView::priority	StatusPriority
+ssg/StatusQueue.h	var	ssg::StatusQueue::kCapacity	const std::size_t
 ssg/StatusQueue.h	var	ssg::StatusViewState::items	std::vector<StatusItemView>
 ssg/StatusQueue.h	var	ssg::StatusViewState::selected	std::size_t
 ssg/StatusQueue.h	var	ssg::UiAction::commandId	std::string
@@ -3232,6 +3635,15 @@ ssg/TreeSitterParser.h	func	ssg::TreeSitterParser::TreeSitterParser	void (std::v
 ssg/TreeSitterParser.h	func	ssg::TreeSitterParser::hasGrammar	bool (const LanguageId &) const
 ssg/TreeSitterParser.h	func	ssg::TreeSitterParser::parse	SyntaxParseOutput (const SyntaxParseRequest &)
 ssg/TreeSitterParser.h	struct	ssg::TreeSitterParser::QueryCache
+ssg/UiInteractionState.h	class	ssg::UiInteractionState
+ssg/UiInteractionState.h	func	ssg::UiInteractionState::UiInteractionState	void (UiSchema, std::vector<UiNodeId>)
+ssg/UiInteractionState.h	func	ssg::UiInteractionState::captureFocus	void (FocusCapture)
+ssg/UiInteractionState.h	func	ssg::UiInteractionState::effectiveFocus	FocusTarget () const
+ssg/UiInteractionState.h	func	ssg::UiInteractionState::focus	const KeyboardFocus &() const noexcept
+ssg/UiInteractionState.h	func	ssg::UiInteractionState::focusPath	std::vector<UiNodeId> () const
+ssg/UiInteractionState.h	func	ssg::UiInteractionState::releaseFocus	void () noexcept
+ssg/UiInteractionState.h	func	ssg::UiInteractionState::schema	const UiSchema &() const noexcept
+ssg/UiInteractionState.h	func	ssg::UiInteractionState::setBaseFocus	void (BaseFocus)
 ssg/UiRegionProjection.h	func	ssg::UiRegionProjectionResult::ok	bool () const
 ssg/UiRegionProjection.h	func	ssg::operator==	bool (const SolvedUiInput &, const SolvedUiInput &) noexcept(false)
 ssg/UiRegionProjection.h	func	ssg::operator==	bool (const SolvedUiItem &, const SolvedUiItem &)
@@ -3525,6 +3937,14 @@ ssg/Viewport.h	var	ssg::VisualRow::logicalLine	uint32_t
 ssg/Viewport.h	var	ssg::VisualRow::spanCount	uint32_t
 ssg/Viewport.h	var	ssg::VisualRow::startCell	CellIndex
 ssg/Viewport.h	var	ssg::VisualRow::visibleCells	uint32_t
+ssg/WholeScreenSchema.h	class	ssg::WholeScreenSchema
+ssg/WholeScreenSchema.h	func	ssg::WholeScreenSchema::WholeScreenSchema	void (UiComposition)
+ssg/WholeScreenSchema.h	func	ssg::WholeScreenSchema::schema	const UiSchema &() const noexcept
+ssg/WholeScreenSchema.h	func	ssg::WholeScreenSchema::update	bool (UiComposition)
+ssg/WholeScreenSchema.h	func	ssg::assembleFooterPrompt	UiNode (const PromptSurface &)
+ssg/WholeScreenSchema.h	func	ssg::assembleWholeScreen	UiComposition (std::string_view, const StyleDimensions &, std::string_view)
+ssg/WholeScreenSchema.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
+ssg/WholeScreenSchema.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)
 ssg/Widget.h	enum	ssg::Overflow
 ssg/Widget.h	enum	ssg::ViewSurface
 ssg/Widget.h	enum	ssg::WidgetKind
@@ -3728,23 +4148,6 @@ ssg/color.h	struct	ssg::ResolvedColor
 ssg/color.h	var	ssg::ResolvedColor::encoding	ColorDepth
 ssg/color.h	var	ssg::ResolvedColor::index	std::uint8_t
 ssg/color.h	var	ssg::ResolvedColor::rgb	SrgbColor
-ssg/command_executor.h	class	ssg::CommandCatalog
-ssg/command_executor.h	class	ssg::CommandExecutor
-ssg/command_executor.h	func	ssg::CommandExecutor::CommandExecutor	void (CommandExecutor &&)
-ssg/command_executor.h	func	ssg::CommandExecutor::CommandExecutor	void (const CommandExecutor &)
-ssg/command_executor.h	func	ssg::CommandExecutor::CommandExecutor	void (std::shared_ptr<CommandCatalog>)
-ssg/command_executor.h	func	ssg::CommandExecutor::catalog	const std::shared_ptr<CommandCatalog> &() const
-ssg/command_executor.h	func	ssg::CommandExecutor::dispatch	ExecutorResult (const ClientCommand &)
-ssg/command_executor.h	func	ssg::CommandExecutor::dispatchInProgress	bool () const noexcept
-ssg/command_executor.h	func	ssg::CommandExecutor::operator=	CommandExecutor &(CommandExecutor &&)
-ssg/command_executor.h	func	ssg::CommandExecutor::operator=	CommandExecutor &(const CommandExecutor &)
-ssg/command_executor.h	func	ssg::CommandExecutor::topology	SessionTopology () const
-ssg/command_executor.h	func	ssg::ExecutorResult::accepted	bool () const noexcept
-ssg/command_executor.h	struct	ssg::ExecutorResult
-ssg/command_executor.h	var	ssg::ExecutorResult::error	CommandError
-ssg/command_executor.h	var	ssg::ExecutorResult::message	std::string
-ssg/command_executor.h	var	ssg::ExecutorResult::viewAction	std::optional<ViewAction>
-ssg/command_executor.h	var	ssg::kNestedDispatchRefusal	const std::string_view
 ssg/config.h	class	ssg::TabWidth
 ssg/config.h	enum	ssg::IndentStyle
 ssg/config.h	enum	ssg::LineEnding
@@ -3764,200 +4167,6 @@ ssg/config.h	var	ssg::HistoryConfig::byteBudget	uint64_t
 ssg/config.h	var	ssg::HistoryConfig::coalesceMs	uint32_t
 ssg/config.h	var	ssg::TabWidth::kMaxValue	const int
 ssg/config.h	var	ssg::TabWidth::kMinValue	const int
-ssg/editor_session_internal.h	class	ssg::EditorSession::Impl::DeferredCommandQueue
-ssg/editor_session_internal.h	enum	ssg::DraftReopenOutcome
-ssg/editor_session_internal.h	enumerator	ssg::DraftReopenOutcome::Conflict
-ssg/editor_session_internal.h	enumerator	ssg::DraftReopenOutcome::None
-ssg/editor_session_internal.h	enumerator	ssg::DraftReopenOutcome::Restored
-ssg/editor_session_internal.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (DocumentRuntimeState &&) noexcept
-ssg/editor_session_internal.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (HistoryConfig, std::shared_ptr<SyntaxParser>)
-ssg/editor_session_internal.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (const DocumentRuntimeState &)
-ssg/editor_session_internal.h	func	ssg::DocumentRuntimeState::liveInstances	std::uint64_t () noexcept
-ssg/editor_session_internal.h	func	ssg::DocumentRuntimeState::operator=	DocumentRuntimeState &(DocumentRuntimeState &&)
-ssg/editor_session_internal.h	func	ssg::DocumentRuntimeState::operator=	DocumentRuntimeState &(const DocumentRuntimeState &)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::DeferredCommandQueue::clear	void () noexcept
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::DeferredCommandQueue::contains	bool (std::string_view) const noexcept
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::DeferredCommandQueue::empty	bool () const noexcept
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::DeferredCommandQueue::size	std::size_t () const noexcept
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::DeferredCommandQueue::takeFront	DeferredCommand ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::Impl	void (std::filesystem::path, std::filesystem::path, std::filesystem::path, std::filesystem::path, bool, std::shared_ptr<SyntaxParser>, bool, bool)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::activateDocument	CommandHandlerResult (FileDocumentId)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::activeDiffFile	std::optional<DiffFileView> () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::activeDocument	Document *()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::activeDocument	const Document *() const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::activeDocumentId	std::optional<FileDocumentId> () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::activeSyntaxView	SyntaxViewState () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::activeTabIsLiveDiff	bool () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::activeTabState	const TabState *() const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::activeText	const std::string &() const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::activeWorkspaceState	std::optional<WorkspaceDocumentState> () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::applyExternalDiffBurst	DiffIngressResult (std::vector<ExternalDiffRevision>)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::applyGitDiffScan	DiffIngressResult (GitDiffScan)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::applyWorkspaceReplace	WorkspaceApplyResult (const WorkspaceReplacePreview &)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::archiveDiscardedDraft	bool (std::string_view, std::string_view)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::clampSelectionToActiveDocument	void ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::clampSelectionsToActiveDocument	void ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::closePane	CommandHandlerResult ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::closeTab	TabLifecycleResult (const TabState &, std::chrono::milliseconds, std::span<const TabId>)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::commitExternalDismissal	bool (FileDocumentId, bool, const std::optional<std::string> &)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::cyclePane	CommandHandlerResult (PaneCycleDirection)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::defer	bool (ClientCommand)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::discardDocumentRuntimeState	void (FileDocumentId)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::discardDraft	CommandHandlerResult ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::dismissDraftNotice	CommandHandlerResult ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::dispatchLocked	CommandResult (const ClientCommand &)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::draftNotice	std::optional<NoticeView> () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::drainGitDiffWorker	bool ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::enqueueStatus	void (StatusPriority, std::string)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::ensureDocumentRuntimeState	void (FileDocumentId)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::externalDiffFileId	DiffFileId (std::string_view)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::externalModificationPresent	bool () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::flushAllAutosaveDrafts	std::size_t ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::flushDueAutosaveDrafts	std::size_t ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::focusPane	bool (PaneId)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::gitDiffWakeDescriptor	int () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::historyFor	DocumentHistory &(FileDocumentId)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::noticePresent	bool () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::noticeView	std::optional<NoticeView> () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::openDraftDiff	CommandHandlerResult ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::openOrFocusLiveDiffTab	CommandHandlerResult (const DiffFileView &, NavigationClass)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::openOrRevealFollowTargetProgrammatic	bool (const FollowTarget &)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::openPickerPrompt	bool (PickerKind)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::openReadOnlyTab	CommandHandlerResult (TabKind, std::string, std::string, std::string, LanguageId)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::paletteView	PaletteViewState () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::persistAutosaveDraft	std::size_t (FileDocumentId)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::primeDeferred	void ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::projectedUiTree	UiSchema () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::promptStatusView	PromptStatusViewState () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::rebuildFileCandidates	void ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::rebuildInteractionSchema	void (const StyleDimensions &, std::string_view)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::reconcileAllOpenDocumentsAgainstDisk	void ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::reconcileDraftOnOpen	void (FileDocumentId)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::reconcileExternalWatchEvents	void (std::vector<WatchEvent>, bool)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::reconcileFindDocument	void ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::recordNavigation	void (NavigationClass)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::refreshLiveDiffDocuments	void (const DiffViewState &)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::refreshSyntax	void (std::vector<SyntaxEdit>)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::refreshTree	bool ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::refreshTreeForPublication	void ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::registerExternalSaveExpectation	void (const std::filesystem::path &)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::reopenTab	TabLifecycleResult (const TabState &, const RecoveryRecordId &)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::resetSelectionForActiveDocument	void ()
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::resolveExternalDocument	std::optional<FileDocumentId> (const DiffFileId &) const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::resolveOpenSavedDocumentByPath	std::optional<FileDocumentId> (const std::filesystem::path &) const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::resolvedPromptControls	std::optional<ResolvedPromptControls> () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::revealCurrentDiffTarget	bool (const FollowTarget &, NavigationClass)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::revealDiffTarget	bool (const FollowTarget &, NavigationClass)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::savedPathFromExternalDiffId	std::optional<std::string> (const DiffFileId &)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::snapshot	WorkspaceSnapshot (std::uint64_t) const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::splitPane	CommandHandlerResult (SplitAxis)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::syntaxFor	SyntaxModel &(FileDocumentId)
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::treeView	TreeViewState () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::uiStatusFields	StatusFieldProjection () const
-ssg/editor_session_internal.h	func	ssg::EditorSession::Impl::updateTabsFor	CommandHandlerResult (FileDocumentId)
-ssg/editor_session_internal.h	func	ssg::bindRuntimeEditing	void (CommandCatalog &, EditorSession::Impl &)
-ssg/editor_session_internal.h	func	ssg::bindRuntimeFiles	void (CommandCatalog &, EditorSession::Impl &)
-ssg/editor_session_internal.h	func	ssg::bindRuntimeHelp	void (CommandCatalog &, EditorSession::Impl &)
-ssg/editor_session_internal.h	func	ssg::bindRuntimeLanguageServices	void (CommandCatalog &, EditorSession::Impl &)
-ssg/editor_session_internal.h	func	ssg::bindRuntimeNavigation	void (CommandCatalog &, EditorSession::Impl &)
-ssg/editor_session_internal.h	func	ssg::bindRuntimePresentation	void (CommandCatalog &, EditorSession::Impl &)
-ssg/editor_session_internal.h	func	ssg::boolSetting	bool (const SettingsModel &, SettingKey, bool)
-ssg/editor_session_internal.h	func	ssg::executeFindReplaceCommand	CommandHandlerResult (EditorSession::Impl &, FindReplaceCommand, const std::any &)
-ssg/editor_session_internal.h	func	ssg::failure	CommandHandlerResult (std::string)
-ssg/editor_session_internal.h	func	ssg::inputLocked	ClientInputResult (EditorSession::Impl &, const ClientInput &)
-ssg/editor_session_internal.h	func	ssg::payloadAs	const T *(const std::any &)
-ssg/editor_session_internal.h	func	ssg::success	CommandHandlerResult ()
-ssg/editor_session_internal.h	func	ssg::tabMessage	std::string (const TabResult &)
-ssg/editor_session_internal.h	func	ssg::uint32Setting	std::uint32_t (const SettingsModel &, SettingKey, std::uint32_t)
-ssg/editor_session_internal.h	func	ssg::workspaceMessage	std::string (const WorkspaceResult &)
-ssg/editor_session_internal.h	func	ssg::wrongPayload	std::string (std::string_view)
-ssg/editor_session_internal.h	struct	ssg::DocumentRuntimeState
-ssg/editor_session_internal.h	struct	ssg::EditorSession::Impl
-ssg/editor_session_internal.h	struct	ssg::EditorSession::Impl::DeferredCommand
-ssg/editor_session_internal.h	struct	ssg::EditorSession::Impl::DocumentPointerGesture
-ssg/editor_session_internal.h	struct	ssg::EditorSession::Impl::ResolvedPromptControls
-ssg/editor_session_internal.h	var	ssg::DocumentRuntimeState::autosaveOversizeReported	bool
-ssg/editor_session_internal.h	var	ssg::DocumentRuntimeState::history	DocumentHistory
-ssg/editor_session_internal.h	var	ssg::DocumentRuntimeState::reopen	DraftReopenOutcome
-ssg/editor_session_internal.h	var	ssg::DocumentRuntimeState::syntax	SyntaxModel
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DeferredCommand::command	ClientCommand
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DeferredCommandQueue::kMaximum	const std::size_t
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::active	DocumentPosition
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::additive	bool
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::anchor	DocumentPosition
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::baseline	std::vector<Selection>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::documentId	FileDocumentId
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::DocumentPointerGesture::documentRevision	std::uint64_t
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::ResolvedPromptControls::activeInput	std::size_t
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::ResolvedPromptControls::controls	std::vector<PromptControl>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::activeTextCache	std::string
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::activeTextDocument	std::optional<FileDocumentId>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::activeTextRevision	std::optional<std::uint64_t>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::archiveRoot	std::filesystem::path
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::autosave	DraftAutosaveScheduler
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::autosaveDraftByteCap	std::uintmax_t
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::catalog	std::shared_ptr<CommandCatalog>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::clipboard	ClipboardRegister
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::commandCandidateCache	std::vector<PaletteCandidate>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::commandCandidateCacheValid	bool
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::commandCandidateCatalogRevision	CatalogRevision
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::commandCandidateKeymap	KeymapViewState
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::currentGitBranch	std::optional<std::string>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::deferredCommands	DeferredCommandQueue
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::deferringEnrichment	bool
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::diff	DiffModel
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::documentLanguageOverrides	std::unordered_map<std::uint64_t, LanguageId>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::documentPointerGesture	std::optional<DocumentPointerGesture>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::documentRuntimeStates	std::map<std::uint64_t, DocumentRuntimeState>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::external	ExternalModificationFlow
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::externalSaveMutex	std::mutex
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::fileCandidates	std::vector<PaletteCandidate>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::findDocumentId	std::optional<FileDocumentId>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::findReplace	FindReplaceController
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::follow	FollowEditsModel
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::gitDiffWorker	GitDiffWorker
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::homeDirectory	std::string
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::inputCatalogRevision	std::optional<CatalogRevision>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::inputKeymap	std::unique_ptr<CompiledKeymap>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::inputKeymapGeneration	std::optional<std::uint64_t>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::interaction	InteractionState
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::keymap	KeymapViewState
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::keymapGeneration	std::uint64_t
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::lastGitScanRevision	std::uint64_t
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::lineNumbers	bool
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::liveDiffDocuments	std::unordered_map<std::string, FileDocumentId>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::lspFeatures	LspFeatureViewState
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::lspSync	LspSyncViewState
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::navigation	NavigationHistory
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::nextStatusId	std::uint64_t
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::operationMutex	std::mutex
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::paneTopology	PaneTopology
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::pendingSaveExpectations	std::deque<SaveExpectation>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::pendingSyntaxRefresh	bool
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::pendingTreeRefresh	bool
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::readOnlyTabDocuments	std::unordered_map<std::string, FileDocumentId>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::recovery	RecoveryManager
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::recoveryRoot	std::filesystem::path
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::root	std::filesystem::path
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::scratch	ScratchStore
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::scratchRoot	std::filesystem::path
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::search	SearchController
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::selection	SelectionViewState
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::session	std::unique_ptr<CommandExecutor>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::settings	SettingsModel
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::status	StatusQueue
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::style	Style
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::syntaxParser	std::shared_ptr<SyntaxParser>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::syntaxRunCount	std::uint64_t
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::tabs	TabManager
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::theme	ThemeSnapshot
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::tree	TreeModel
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::treeScanCount	std::uint64_t
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::wordWrap	bool
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspace	Workspace
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspaceReplaceGeneration	std::uint64_t
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspaceReplacePreview	std::optional<WorkspaceReplacePreview>
-ssg/editor_session_internal.h	var	ssg::EditorSession::Impl::workspaceSearchGeneration	std::uint64_t
 ssg/focus.h	enum	ssg::FocusTarget
 ssg/focus.h	enumerator	ssg::FocusTarget::Editor
 ssg/focus.h	enumerator	ssg::FocusTarget::ExternalModification
@@ -3965,31 +4174,6 @@ ssg/focus.h	enumerator	ssg::FocusTarget::Panel
 ssg/focus.h	enumerator	ssg::FocusTarget::Prompt
 ssg/focus.h	func	ssg::focusTargetName	std::string_view (FocusTarget) noexcept
 ssg/focus.h	func	ssg::keymapContexts	std::array<std::string_view, 5> () noexcept
-ssg/git_diff_worker.h	class	ssg::GitDiffWorker
-ssg/git_diff_worker.h	func	ssg::GitDiffWorker::GitDiffWorker	void (const GitDiffWorker &)
-ssg/git_diff_worker.h	func	ssg::GitDiffWorker::GitDiffWorker	void (const std::filesystem::path &, bool, bool)
-ssg/git_diff_worker.h	func	ssg::GitDiffWorker::drain	GitDiffWorkerDrain ()
-ssg/git_diff_worker.h	func	ssg::GitDiffWorker::fullRefreshCount	std::uint64_t () const noexcept
-ssg/git_diff_worker.h	func	ssg::GitDiffWorker::operator=	GitDiffWorker &(const GitDiffWorker &)
-ssg/git_diff_worker.h	func	ssg::GitDiffWorker::registerSavedPath	void (SaveExpectation)
-ssg/git_diff_worker.h	func	ssg::GitDiffWorker::setAvailabilityForTest	void (bool)
-ssg/git_diff_worker.h	func	ssg::GitDiffWorker::wakeDescriptor	int () const noexcept
-ssg/git_diff_worker.h	struct	ssg::GitDiffWorkerDrain
-ssg/git_diff_worker.h	var	ssg::GitDiffWorkerDrain::fullReconcile	bool
-ssg/git_diff_worker.h	var	ssg::GitDiffWorkerDrain::scans	std::deque<GitDiffScan>
-ssg/git_diff_worker.h	var	ssg::GitDiffWorkerDrain::watchEvents	std::deque<WatchEvent>
-ssg/git_diff_worker.h	var	ssg::GitDiffWorkerDrain::watcherAvailabilityChanged	bool
-ssg/init_script.h	class	ssg::EditorSession
-ssg/init_script.h	class	ssg::ScriptHost
-ssg/init_script.h	class	ssg::app::InitScriptWatcher
-ssg/init_script.h	func	ssg::app::InitScriptWatcher::InitScriptWatcher	void (const InitScriptWatcher &)
-ssg/init_script.h	func	ssg::app::InitScriptWatcher::InitScriptWatcher	void (std::filesystem::path, std::optional<std::string>)
-ssg/init_script.h	func	ssg::app::InitScriptWatcher::drainAndEvaluate	void (ScriptHost &, EditorSession &)
-ssg/init_script.h	func	ssg::app::InitScriptWatcher::operator=	InitScriptWatcher &(const InitScriptWatcher &)
-ssg/init_script.h	func	ssg::app::InitScriptWatcher::wakeDescriptor	int () const noexcept
-ssg/init_script.h	func	ssg::app::evaluateInitScript	void (ScriptHost &, EditorSession &, const std::filesystem::path &, const std::string &)
-ssg/init_script.h	func	ssg::app::loadInitScript	std::optional<std::string> (ScriptHost &, EditorSession &)
-ssg/init_script.h	func	ssg::app::resolveInitScriptPath	std::optional<std::filesystem::path> ()
 ssg/interaction.h	class	ssg::InteractionState
 ssg/interaction.h	enum	ssg::CycleDirection
 ssg/interaction.h	enumerator	ssg::CycleDirection::Next
@@ -4025,165 +4209,6 @@ ssg/interaction.h	func	ssg::InteractionState::toggleDistractionFree	void ()
 ssg/interaction.h	func	ssg::InteractionState::togglePanel	bool ()
 ssg/interaction.h	func	ssg::InteractionState::updateComposition	bool (UiComposition)
 ssg/interaction.h	func	ssg::InteractionState::updatePromptValue	PromptCommandResult (std::size_t, std::string)
-ssg/interaction_state.h	class	ssg::UiInteractionState
-ssg/interaction_state.h	func	ssg::UiInteractionState::UiInteractionState	void (UiSchema, std::vector<UiNodeId>)
-ssg/interaction_state.h	func	ssg::UiInteractionState::captureFocus	void (FocusCapture)
-ssg/interaction_state.h	func	ssg::UiInteractionState::effectiveFocus	FocusTarget () const
-ssg/interaction_state.h	func	ssg::UiInteractionState::focus	const KeyboardFocus &() const noexcept
-ssg/interaction_state.h	func	ssg::UiInteractionState::focusPath	std::vector<UiNodeId> () const
-ssg/interaction_state.h	func	ssg::UiInteractionState::releaseFocus	void () noexcept
-ssg/interaction_state.h	func	ssg::UiInteractionState::schema	const UiSchema &() const noexcept
-ssg/interaction_state.h	func	ssg::UiInteractionState::setBaseFocus	void (BaseFocus)
-ssg/lsp_sync_client.h	class	ssg::LspByteStream
-ssg/lsp_sync_client.h	class	ssg::LspFrameDecoder
-ssg/lsp_sync_client.h	class	ssg::LspSyncClient
-ssg/lsp_sync_client.h	enum	ssg::LspCompletedResponseStatus
-ssg/lsp_sync_client.h	enum	ssg::LspDiagnosticSeverity
-ssg/lsp_sync_client.h	enum	ssg::LspFrameError
-ssg/lsp_sync_client.h	enum	ssg::LspIoStatus
-ssg/lsp_sync_client.h	enum	ssg::LspLifecycleState
-ssg/lsp_sync_client.h	enum	ssg::LspPositionError
-ssg/lsp_sync_client.h	enum	ssg::LspSyncError
-ssg/lsp_sync_client.h	enumerator	ssg::LspCompletedResponseStatus::Cancelled
-ssg/lsp_sync_client.h	enumerator	ssg::LspCompletedResponseStatus::Result
-ssg/lsp_sync_client.h	enumerator	ssg::LspCompletedResponseStatus::ServerError
-ssg/lsp_sync_client.h	enumerator	ssg::LspDiagnosticSeverity::Error
-ssg/lsp_sync_client.h	enumerator	ssg::LspDiagnosticSeverity::Hint
-ssg/lsp_sync_client.h	enumerator	ssg::LspDiagnosticSeverity::Information
-ssg/lsp_sync_client.h	enumerator	ssg::LspDiagnosticSeverity::Warning
-ssg/lsp_sync_client.h	enumerator	ssg::LspFrameError::DecoderFailed
-ssg/lsp_sync_client.h	enumerator	ssg::LspFrameError::DuplicateContentLength
-ssg/lsp_sync_client.h	enumerator	ssg::LspFrameError::HeaderTooLarge
-ssg/lsp_sync_client.h	enumerator	ssg::LspFrameError::InvalidContentLength
-ssg/lsp_sync_client.h	enumerator	ssg::LspFrameError::MessageTooLarge
-ssg/lsp_sync_client.h	enumerator	ssg::LspFrameError::MissingContentLength
-ssg/lsp_sync_client.h	enumerator	ssg::LspFrameError::None
-ssg/lsp_sync_client.h	enumerator	ssg::LspIoStatus::Closed
-ssg/lsp_sync_client.h	enumerator	ssg::LspIoStatus::Error
-ssg/lsp_sync_client.h	enumerator	ssg::LspIoStatus::Ok
-ssg/lsp_sync_client.h	enumerator	ssg::LspIoStatus::Timeout
-ssg/lsp_sync_client.h	enumerator	ssg::LspLifecycleState::Failed
-ssg/lsp_sync_client.h	enumerator	ssg::LspLifecycleState::Initializing
-ssg/lsp_sync_client.h	enumerator	ssg::LspLifecycleState::Ready
-ssg/lsp_sync_client.h	enumerator	ssg::LspLifecycleState::ShuttingDown
-ssg/lsp_sync_client.h	enumerator	ssg::LspLifecycleState::Stopped
-ssg/lsp_sync_client.h	enumerator	ssg::LspPositionError::CharacterOutOfRange
-ssg/lsp_sync_client.h	enumerator	ssg::LspPositionError::InvalidUtf8
-ssg/lsp_sync_client.h	enumerator	ssg::LspPositionError::InvalidUtf8Boundary
-ssg/lsp_sync_client.h	enumerator	ssg::LspPositionError::LineOutOfRange
-ssg/lsp_sync_client.h	enumerator	ssg::LspPositionError::None
-ssg/lsp_sync_client.h	enumerator	ssg::LspPositionError::SplitSurrogate
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::DiagnosticLimitExceeded
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::InvalidArgument
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::InvalidState
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::MalformedMessage
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::None
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::RequestLimitExceeded
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::ServerError
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::StaleDiagnostics
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::StaleDocument
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::StreamClosed
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::StreamError
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::Timeout
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::UnknownDocument
-ssg/lsp_sync_client.h	enumerator	ssg::LspSyncError::UnknownRequest
-ssg/lsp_sync_client.h	func	ssg::LspByteOffsetResult::accepted	bool () const noexcept
-ssg/lsp_sync_client.h	func	ssg::LspByteStream::read	LspIoResult (std::string &, std::size_t, std::chrono::milliseconds)
-ssg/lsp_sync_client.h	func	ssg::LspByteStream::write	LspIoResult (std::string_view, std::chrono::milliseconds)
-ssg/lsp_sync_client.h	func	ssg::LspFrameDecoder::LspFrameDecoder	void (LspFrameConfig)
-ssg/lsp_sync_client.h	func	ssg::LspFrameDecoder::feed	LspFrameResult (std::string_view)
-ssg/lsp_sync_client.h	func	ssg::LspFrameResult::accepted	bool () const noexcept
-ssg/lsp_sync_client.h	func	ssg::LspIoResult::accepted	bool () const noexcept
-ssg/lsp_sync_client.h	func	ssg::LspPositionResult::accepted	bool () const noexcept
-ssg/lsp_sync_client.h	func	ssg::LspRequestResult::accepted	bool () const noexcept
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::LspSyncClient	void (LspByteStream &, LspSyncConfig, std::chrono::milliseconds)
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::LspSyncClient	void (LspSyncClient &&) noexcept
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::LspSyncClient	void (const LspSyncClient &)
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::cancel	LspSyncResult (std::uint64_t)
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::changeDocument	LspSyncResult (std::string_view, std::uint64_t, std::string)
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::closeDocument	LspSyncResult (std::string_view)
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::documentSnapshot	std::optional<LspDocumentSnapshot> (std::string_view) const
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::documentVersion	std::optional<std::int64_t> (std::string_view) const
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::initialize	LspSyncResult (std::string)
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::openDocument	LspSyncResult (std::string, std::string, std::uint64_t, std::string)
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::operator=	LspSyncClient &(LspSyncClient &&) noexcept
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::operator=	LspSyncClient &(const LspSyncClient &)
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::poll	LspSyncResult ()
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::request	LspRequestResult (std::string, std::string)
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::shutdown	LspSyncResult ()
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::state	LspLifecycleState () const noexcept
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::takeCompletedResponses	std::vector<LspCompletedResponse> ()
-ssg/lsp_sync_client.h	func	ssg::LspSyncClient::viewState	const LspSyncViewState &() const noexcept
-ssg/lsp_sync_client.h	func	ssg::LspSyncResult::accepted	bool () const noexcept
-ssg/lsp_sync_client.h	func	ssg::byteOffsetToLspPosition	LspPositionResult (std::string_view, ByteOffset)
-ssg/lsp_sync_client.h	func	ssg::encodeLspFrame	std::string (std::string_view)
-ssg/lsp_sync_client.h	func	ssg::lspPositionToByteOffset	LspByteOffsetResult (std::string_view, LspPosition)
-ssg/lsp_sync_client.h	func	ssg::operator==	bool (const LspCompletedResponse &, const LspCompletedResponse &)
-ssg/lsp_sync_client.h	func	ssg::operator==	bool (const LspDiagnostic &, const LspDiagnostic &)
-ssg/lsp_sync_client.h	func	ssg::operator==	bool (const LspDocumentDiagnostics &, const LspDocumentDiagnostics &)
-ssg/lsp_sync_client.h	func	ssg::operator==	bool (const LspDocumentSnapshot &, const LspDocumentSnapshot &)
-ssg/lsp_sync_client.h	func	ssg::operator==	bool (const LspPosition &, const LspPosition &)
-ssg/lsp_sync_client.h	func	ssg::operator==	bool (const LspRange &, const LspRange &)
-ssg/lsp_sync_client.h	func	ssg::operator==	bool (const LspSyncViewState &, const LspSyncViewState &)
-ssg/lsp_sync_client.h	struct	ssg::LspByteOffsetResult
-ssg/lsp_sync_client.h	struct	ssg::LspCompletedResponse
-ssg/lsp_sync_client.h	struct	ssg::LspDiagnostic
-ssg/lsp_sync_client.h	struct	ssg::LspDocumentDiagnostics
-ssg/lsp_sync_client.h	struct	ssg::LspDocumentSnapshot
-ssg/lsp_sync_client.h	struct	ssg::LspFrameConfig
-ssg/lsp_sync_client.h	struct	ssg::LspFrameResult
-ssg/lsp_sync_client.h	struct	ssg::LspIoResult
-ssg/lsp_sync_client.h	struct	ssg::LspPosition
-ssg/lsp_sync_client.h	struct	ssg::LspPositionResult
-ssg/lsp_sync_client.h	struct	ssg::LspRange
-ssg/lsp_sync_client.h	struct	ssg::LspRequestResult
-ssg/lsp_sync_client.h	struct	ssg::LspSyncConfig
-ssg/lsp_sync_client.h	struct	ssg::LspSyncResult
-ssg/lsp_sync_client.h	struct	ssg::LspSyncViewState
-ssg/lsp_sync_client.h	var	ssg::LspByteOffsetResult::error	LspPositionError
-ssg/lsp_sync_client.h	var	ssg::LspByteOffsetResult::offset	ByteOffset
-ssg/lsp_sync_client.h	var	ssg::LspCompletedResponse::id	std::uint64_t
-ssg/lsp_sync_client.h	var	ssg::LspCompletedResponse::message	std::string
-ssg/lsp_sync_client.h	var	ssg::LspCompletedResponse::payloadJson	std::string
-ssg/lsp_sync_client.h	var	ssg::LspCompletedResponse::status	LspCompletedResponseStatus
-ssg/lsp_sync_client.h	var	ssg::LspDiagnostic::code	std::string
-ssg/lsp_sync_client.h	var	ssg::LspDiagnostic::message	std::string
-ssg/lsp_sync_client.h	var	ssg::LspDiagnostic::range	LspRange
-ssg/lsp_sync_client.h	var	ssg::LspDiagnostic::severity	std::optional<LspDiagnosticSeverity>
-ssg/lsp_sync_client.h	var	ssg::LspDocumentDiagnostics::diagnostics	std::vector<LspDiagnostic>
-ssg/lsp_sync_client.h	var	ssg::LspDocumentDiagnostics::revision	std::uint64_t
-ssg/lsp_sync_client.h	var	ssg::LspDocumentDiagnostics::uri	std::string
-ssg/lsp_sync_client.h	var	ssg::LspDocumentSnapshot::revision	std::uint64_t
-ssg/lsp_sync_client.h	var	ssg::LspDocumentSnapshot::text	std::string
-ssg/lsp_sync_client.h	var	ssg::LspDocumentSnapshot::uri	std::string
-ssg/lsp_sync_client.h	var	ssg::LspDocumentSnapshot::version	std::int64_t
-ssg/lsp_sync_client.h	var	ssg::LspFrameConfig::maximumHeaderBytes	std::size_t
-ssg/lsp_sync_client.h	var	ssg::LspFrameConfig::maximumMessageBytes	std::size_t
-ssg/lsp_sync_client.h	var	ssg::LspFrameResult::error	LspFrameError
-ssg/lsp_sync_client.h	var	ssg::LspFrameResult::message	std::string
-ssg/lsp_sync_client.h	var	ssg::LspFrameResult::messages	std::vector<std::string>
-ssg/lsp_sync_client.h	var	ssg::LspIoResult::message	std::string
-ssg/lsp_sync_client.h	var	ssg::LspIoResult::status	LspIoStatus
-ssg/lsp_sync_client.h	var	ssg::LspPosition::character	std::uint64_t
-ssg/lsp_sync_client.h	var	ssg::LspPosition::line	std::uint64_t
-ssg/lsp_sync_client.h	var	ssg::LspPositionResult::error	LspPositionError
-ssg/lsp_sync_client.h	var	ssg::LspPositionResult::position	LspPosition
-ssg/lsp_sync_client.h	var	ssg::LspRange::end	LspPosition
-ssg/lsp_sync_client.h	var	ssg::LspRange::start	LspPosition
-ssg/lsp_sync_client.h	var	ssg::LspRequestResult::error	LspSyncError
-ssg/lsp_sync_client.h	var	ssg::LspRequestResult::id	std::uint64_t
-ssg/lsp_sync_client.h	var	ssg::LspRequestResult::message	std::string
-ssg/lsp_sync_client.h	var	ssg::LspSyncConfig::framing	LspFrameConfig
-ssg/lsp_sync_client.h	var	ssg::LspSyncConfig::maximumDiagnosticMessageBytes	std::size_t
-ssg/lsp_sync_client.h	var	ssg::LspSyncConfig::maximumDiagnosticsPerDocument	std::size_t
-ssg/lsp_sync_client.h	var	ssg::LspSyncConfig::maximumDocuments	std::size_t
-ssg/lsp_sync_client.h	var	ssg::LspSyncConfig::maximumJsonDepth	std::size_t
-ssg/lsp_sync_client.h	var	ssg::LspSyncConfig::maximumPendingRequests	std::size_t
-ssg/lsp_sync_client.h	var	ssg::LspSyncConfig::maximumReadBytes	std::size_t
-ssg/lsp_sync_client.h	var	ssg::LspSyncResult::error	LspSyncError
-ssg/lsp_sync_client.h	var	ssg::LspSyncResult::message	std::string
-ssg/lsp_sync_client.h	var	ssg::LspSyncViewState::documents	std::vector<LspDocumentDiagnostics>
-ssg/lsp_sync_client.h	var	ssg::LspSyncViewState::revision	std::uint64_t
 ssg/open_metrics.h	class	ssg::OpenPhaseTimer
 ssg/open_metrics.h	enum	ssg::OpenPhase
 ssg/open_metrics.h	enumerator	ssg::OpenPhase::Count
@@ -4433,23 +4458,6 @@ ssg/startup_audit.h	func	ssg::optionalSubsystemName	std::string_view (OptionalSu
 ssg/startup_audit.h	func	ssg::resetOptionalConstructionAudit	void () noexcept
 ssg/startup_audit.h	var	ssg::kAllOptionalSubsystems	const array<remove_cv_t<ssg::OptionalSubsystem>, 4UL>
 ssg/startup_audit.h	var	ssg::kOptionalSubsystemCount	const std::size_t
-ssg/status_queue.h	class	ssg::StatusQueue
-ssg/status_queue.h	func	ssg::StatusQueue::actionNodes	std::vector<StatusActionNode> () const
-ssg/status_queue.h	func	ssg::StatusQueue::dismiss	void () noexcept
-ssg/status_queue.h	func	ssg::StatusQueue::enqueue	StatusEnqueueResult (StatusItem)
-ssg/status_queue.h	func	ssg::StatusQueue::footerProjection	StatusFooterProjection () const
-ssg/status_queue.h	func	ssg::StatusQueue::next	void () noexcept
-ssg/status_queue.h	func	ssg::StatusQueue::previous	void () noexcept
-ssg/status_queue.h	func	ssg::StatusQueue::viewState	StatusViewState () const
-ssg/status_queue.h	func	ssg::operator==	bool (const StatusFooterProjection &, const StatusFooterProjection &)
-ssg/status_queue.h	struct	ssg::StatusEnqueueResult
-ssg/status_queue.h	struct	ssg::StatusFooterProjection
-ssg/status_queue.h	var	ssg::StatusEnqueueResult::accepted	bool
-ssg/status_queue.h	var	ssg::StatusEnqueueResult::evicted	std::optional<StatusId>
-ssg/status_queue.h	var	ssg::StatusEnqueueResult::generation	std::uint64_t
-ssg/status_queue.h	var	ssg::StatusFooterProjection::actions	std::vector<UiAction>
-ssg/status_queue.h	var	ssg::StatusFooterProjection::value	std::string
-ssg/status_queue.h	var	ssg::StatusQueue::kCapacity	const std::size_t
 ssg/types.h	enum	ssg::DocumentMode
 ssg/types.h	enumerator	ssg::DocumentMode::Diff
 ssg/types.h	enumerator	ssg::DocumentMode::Edit
@@ -4471,11 +4479,3 @@ ssg/types.h	struct	ssg::LineIndex
 ssg/types.h	var	ssg::DocumentPosition::byteOffset	ByteOffset
 ssg/types.h	var	ssg::DocumentPosition::cell	CellIndex
 ssg/types.h	var	ssg::DocumentPosition::line	LineIndex
-ssg/whole_screen_schema.h	class	ssg::WholeScreenSchema
-ssg/whole_screen_schema.h	func	ssg::WholeScreenSchema::WholeScreenSchema	void (UiComposition)
-ssg/whole_screen_schema.h	func	ssg::WholeScreenSchema::schema	const UiSchema &() const noexcept
-ssg/whole_screen_schema.h	func	ssg::WholeScreenSchema::update	bool (UiComposition)
-ssg/whole_screen_schema.h	func	ssg::assembleFooterPrompt	UiNode (const PromptSurface &)
-ssg/whole_screen_schema.h	func	ssg::assembleWholeScreen	UiComposition (std::string_view, const StyleDimensions &, std::string_view)
-ssg/whole_screen_schema.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
-ssg/whole_screen_schema.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)

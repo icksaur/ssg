@@ -16,8 +16,7 @@
 #include <unistd.h>
 
 #if __has_include(<ssg/InteractionState.h>) || \
-    __has_include(<ssg/WholeScreenInteraction.h>) || \
-    __has_include(<ssg/WholeScreenSchema.h>)
+    __has_include(<ssg/WholeScreenInteraction.h>)
 #error "whole-screen interaction intermediates must remain private"
 #endif
 

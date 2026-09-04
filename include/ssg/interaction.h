@@ -9,8 +9,8 @@
 #include <ssg/StatusQueue.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
-#include <ssg/interaction_state.h>
-#include <ssg/whole_screen_schema.h>
+#include <ssg/UiInteractionState.h>
+#include <ssg/WholeScreenSchema.h>
 
 namespace ssg {
 

@@ -1,4 +1,4 @@
-#include <ssg/whole_screen_schema.h>
+#include <ssg/WholeScreenSchema.h>
 
 #include <ssg/StatusFields.h>
 #include <ssg/Style.h>

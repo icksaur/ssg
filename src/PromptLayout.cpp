@@ -1,7 +1,7 @@
 #include <ssg/PromptLayout.h>
 
 #include <ssg/Layout.h>
-#include <ssg/whole_screen_schema.h>
+#include <ssg/WholeScreenSchema.h>
 
 #include <utility>
 #include <variant>

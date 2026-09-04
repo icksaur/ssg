@@ -1,4 +1,4 @@
-#include <ssg/whole_screen_schema.h>
+#include <ssg/WholeScreenSchema.h>
 
 #include <ssg/StatusFields.h>  // kPathStatusFieldId, ...
 #include <ssg/Widget.h>  // ViewSurface, Overflow

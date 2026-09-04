@@ -1,4 +1,4 @@
-#include <ssg/git_diff_worker.h>
+#include <ssg/GitDiffWorker.h>
 
 #include <ssg/platform_files.h>
 

@@ -1,10 +1,10 @@
-#include <ssg/editor_session_internal.h>
+#include <ssg/EditorSessionImpl.h>
 #include <ssg/CommandCatalog.h>
 #include <ssg/DraftReopenClassifier.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Style.h>
-#include <ssg/whole_screen_schema.h>
+#include <ssg/WholeScreenSchema.h>
 #include <ssg/platform_files.h>
 
 #include <algorithm>

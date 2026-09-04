@@ -13,7 +13,7 @@
 #include <ssg/platform_files.h>
 #include <ssg/TextInputCommands.h>
 
-#include <ssg/init_script.h>
+#include <ssg/InitScriptWatcher.h>
 
 #include <unistd.h>
 #include <fcntl.h>

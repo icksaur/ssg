@@ -1,4 +1,4 @@
-#include <ssg/init_script.h>
+#include <ssg/InitScriptWatcher.h>
 
 #include <ssg/EditorSession.h>
 #include <ssg/ScriptHost.h>

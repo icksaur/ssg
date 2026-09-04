@@ -3,7 +3,7 @@
 #include <ssg/EditorSession.h>
 #include <ssg/GridPresenter.h>
 #include <ssg/ScriptHost.h>
-#include <ssg/init_script.h>
+#include <ssg/InitScriptWatcher.h>
 #include <ssg/ssg_terminal.h>
 
 #include <filesystem>
