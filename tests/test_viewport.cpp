@@ -2,7 +2,7 @@
 #include <ssg/DiffModel.h>
 #include <ssg/LineLayoutCache.h>
 #include <ssg/Selection.h>
-#include <ssg/Viewport.h>
+#include <ssg/Scroll.h>
 
 #include "test_helpers.h"
 

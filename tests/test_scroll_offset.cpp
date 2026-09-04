@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/Viewport.h>
+#include <ssg/Scroll.h>
 
 #include <vector>
 

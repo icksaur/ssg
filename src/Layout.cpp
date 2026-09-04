@@ -1,7 +1,7 @@
 #include <ssg/Layout.h>
 
 #include <ssg/GraphemeLayout.h>
-#include <ssg/Viewport.h>
+#include <ssg/Scroll.h>
 #include <ssg/EditorSession.h>
 
 #include <algorithm>

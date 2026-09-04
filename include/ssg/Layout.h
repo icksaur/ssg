@@ -16,6 +16,7 @@
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/PaneTopology.h>
+#include <ssg/Scrollbar.h>
 #include <ssg/Style.h>
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>

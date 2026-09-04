@@ -1,8 +1,9 @@
 #pragma once
 
-#include <ssg/DiffModel.h>
+#include <ssg/DiffRows.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/LineLayoutCache.h>
+#include <ssg/Scrollbar.h>
 #include <ssg/types.h>
 
 #include <cstdint>
@@ -10,7 +11,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <variant>
 #include <vector>
 
 namespace ssg {
@@ -43,63 +43,6 @@ struct VisualRow {
     bool operator==(const VisualRow&) const noexcept = default;
 };
 
-struct RealRow {
-    uint32_t bufferLine;
-    uint32_t bufferVisualRow;
-    uint32_t startByteOffset = 0;
-    uint32_t endByteOffset = 0;
-    uint32_t startCell = 0;
-    uint32_t endCell = 0;
-    // Present only for an UNWRAPPED Modified line rendered as ONE merged
-    // inline row (git --word-diff style: baseline-removed and target-added
-    // words shown inline on one row) instead of the usual phantom-row-above
-    // plus target-row-below split. Empty for every other row, including a
-    // Modified line under word wrap (ghost spans are unwrapped-only; a
-    // wrapped Modified line always keeps the two-row split). Viewport is the
-    // sole computer of this data (from DiffLineChange::inlineWordSegments);
-    // Renderer paints it verbatim.
-    std::vector<InlineWordSegment> mergedSegments;
-
-    bool operator==(const RealRow&) const noexcept = default;
-};
-
-struct PhantomRow {
-    uint32_t baselineLine;
-    std::string text;
-    uint32_t followingByteOffset;
-    // Byte ranges within `text` that were the specific words removed by a
-    // Modified pair's edit (empty for a phantom row from a pure Removed
-    // line, where the whole line is gone and there is nothing more specific
-    // to mark). Lets the renderer apply a stronger RemovedWord tint over
-    // just those ranges, mirroring how a real row's AddedWord/ModifiedWord
-    // marks work -- the phantom row stays tint-only (no syntax fg, per this
-    // project's REMOVED-ROW SYNTAX decision), but still gets word-level
-    // diff marks, which are an orthogonal concept to syntax coloring.
-    std::vector<DiffWordRange> removedWordRanges;
-
-    bool operator==(const PhantomRow&) const noexcept = default;
-};
-
-using ProjectedRow = std::variant<RealRow, PhantomRow>;
-
-class RowProjection {
-public:
-    explicit RowProjection(std::vector<ProjectedRow> rows);
-
-    [[nodiscard]] std::span<const ProjectedRow> rows() const noexcept;
-    [[nodiscard]] const ProjectedRow& row(uint32_t visualRow) const;
-    [[nodiscard]] uint32_t totalRows() const noexcept;
-    [[nodiscard]] uint32_t visualRowForReal(uint32_t bufferVisualRow) const;
-    [[nodiscard]] uint32_t visualRowForBufferLine(uint32_t bufferLine) const;
-    [[nodiscard]] uint32_t visualRowForPosition(
-        const DocumentPosition& position) const;
-    [[nodiscard]] uint32_t movedRealRow(uint32_t visualRow,
-                                        int64_t visualDistance) const;
-
-private:
-    std::vector<ProjectedRow> rows_;
-};
-
 struct CellHitTarget {
     uint32_t viewportRow;
     uint32_t viewportColumn;
@@ -110,39 +53,6 @@ struct CellHitTarget {
 
     bool operator==(const CellHitTarget&) const noexcept = default;
 };
-
-struct ScrollbarMetrics {
-    uint32_t totalRows;
-    uint32_t viewportRows;
-    uint32_t firstRow;
-    uint32_t maximumFirstRow;
-    uint32_t thumbStart;
-    uint32_t thumbSize;
-
-    bool operator==(const ScrollbarMetrics&) const noexcept = default;
-};
-
-// The scrollbar's two conversions, as one matched pair so they cannot use
-// different rounding (the source of the "thumb skips rows / top unreliable"
-// bug).  `scrollScaleRounded` is round-half-up
-// integer scaling; both directions go through it, so they invert exactly:
-// `scrollThumbStart(scrollFirstRow(t)) == t` for every gutter row `t` (proven
-// exhaustively).  `travel = viewportRows - thumbSize` is the range of the thumb's
-// top row; `maximumFirstRow = totalRows - viewportRows`.
-//
-// `scrollScaleRounded` is plain `round(value * numerator / denominator)` with NO
-// clamping -- the range clamp (to travel / maximumFirstRow) belongs to the two
-// wrappers below, which know the scrollbar regime.  Use those, not this, for
-// scrollbar math.
-[[nodiscard]] uint32_t scrollScaleRounded(uint32_t value, uint32_t numerator,
-                                          uint32_t denominator) noexcept;
-// firstRow -> thumb top row (render direction).
-[[nodiscard]] uint32_t scrollThumbStart(uint32_t firstRow,
-                                        uint32_t maximumFirstRow,
-                                        uint32_t travel) noexcept;
-// thumb top row -> firstRow (drag-inverse direction).
-[[nodiscard]] uint32_t scrollFirstRow(uint32_t thumbTop, uint32_t travel,
-                                      uint32_t maximumFirstRow) noexcept;
 
 // A resolved scroll view for a simple list region: the clamped first visible
 // item, how many items are visible, and the scrollbar geometry.  This is the

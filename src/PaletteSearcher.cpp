@@ -1,4 +1,5 @@
 #include <ssg/PaletteSearcher.h>
+#include <ssg/Scroll.h>
 #include <ssg/Picker.h>
 
 #include <algorithm>

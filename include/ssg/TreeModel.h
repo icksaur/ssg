@@ -2,7 +2,6 @@
 
 #include <ssg/DiffModel.h>
 #include <ssg/Theme.h>
-#include <ssg/Viewport.h>
 
 #include <cstddef>
 #include <cstdint>

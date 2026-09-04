@@ -7,7 +7,7 @@
 #include <ssg/PaneNavigation.h>
 #include <ssg/Style.h>
 #include <ssg/Theme.h>
-#include <ssg/Viewport.h>
+#include <ssg/Scrollbar.h>
 
 #include <array>
 #include <cstddef>

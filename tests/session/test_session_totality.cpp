@@ -4,7 +4,7 @@
 #include <ssg/EditorSession.h>
 #include <ssg/Renderer.h>
 #include <ssg/ShellViewState.h>
-#include <ssg/Viewport.h>
+#include <ssg/Scroll.h>
 
 #include <filesystem>
 #include <fstream>

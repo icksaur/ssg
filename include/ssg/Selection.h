@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ssg/types.h>
-#include <ssg/Viewport.h>
+#include <ssg/Scroll.h>
 
 #include <array>
 #include <cstdint>

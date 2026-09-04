@@ -1,4 +1,6 @@
 #include <ssg/Renderer.h>
+#include <ssg/DiffRows.h>
+#include <ssg/Scrollbar.h>
 
 #include <ssg/GraphemeLayout.h>
 #include <ssg/SyntaxModel.h>
