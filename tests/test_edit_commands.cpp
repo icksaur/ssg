@@ -277,7 +277,7 @@ TEST(unchangedTransformsAreExplicitNoops) {
         ASSERT_TRUE(result.accepted());
         ASSERT_FALSE(result.transaction.has_value());
         ASSERT_EQ(apply(document, result), test.text);
-        ASSERT_EQ(document.revision(), ssg::Revision{1});
+        ASSERT_EQ(document.revision(), std::uint64_t{1});
     }
 }
 

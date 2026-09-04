@@ -1,11 +1,8 @@
 #include "runtime/editor_session_internal.h"
 #include "runtime/prompt_resolution.h"
-#include "viewport_projection_state.h"
-
 #include <ssg/CommandCatalog.h>
 #include <ssg/DraftReopenClassifier.h>
 #include <ssg/FilesystemWatcher.h>
-#include <ssg/GitMetadataWatcher.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Style.h>
 #include <ssg/WholeScreenAssembly.h>
@@ -15,20 +12,13 @@
 #include <array>
 #include <span>
 #include <chrono>
-#include <cerrno>
-#include <condition_variable>
 #include <cstdlib>
 #include <deque>
 #include <fstream>
 #include <limits>
 #include <iterator>
 #include <stdexcept>
-#include <thread>
 #include <unordered_map>
-#include <system_error>
-
-#include <fcntl.h>
-#include <unistd.h>
 
 namespace ssg {
 namespace {
@@ -37,23 +27,6 @@ namespace {
 // comfortably within startup budget, while multi-MB input can exceed it and is
 // deferred until primeDeferred().
 constexpr std::size_t kEagerSyntaxMaxBytes = 2 * 1024 * 1024;
-constexpr auto kGitDiffPollInterval = std::chrono::milliseconds{250};
-constexpr auto kGitMetadataWatchPollInterval = std::chrono::milliseconds{100};
-constexpr auto kGitDiffRetryDelay = std::chrono::milliseconds{1000};
-// Event mode refreshes instantly on watch events; this long-interval full-refresh
-// backstop bounds the staleness of anything the watcher cannot observe -- external
-// git operations, a linked worktree's metadata outside the tree, dropped events on
-// a network filesystem -- without re-scanning at the Poll cadence. Much larger than
-// kGitDiffPollInterval so idle CPU is a small fraction of Poll's.
-constexpr auto kGitDiffEventRecoveryInterval = std::chrono::minutes{1};
-
-bool setNonBlocking(int descriptor) {
-    const int flags = ::fcntl(descriptor, F_GETFL, 0);
-    if (flags == -1) {
-        return false;
-    }
-    return ::fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) == 0;
-}
 
 std::vector<GitTreeRecord> gitTreeRecordsFromScan(
     const std::vector<GitDiffFile>& files) {
@@ -116,6 +89,8 @@ std::string liveDiffDocumentText(const DiffFileView& file) {
 // with no payload); exhaustive reachability is the palette's job.  Every binding
 // is a single stroke: global (*) actions are Alt chords, navigation differs per
 // focus, and Escape is a plain cancel.
+} // namespace
+
 KeymapViewState defaultTerminalKeymap() {
     auto seq = [](std::initializer_list<std::string_view> strokes) {
         auto parsed = KeyCodec{}.parseSequence(strokes);
@@ -255,6 +230,8 @@ KeymapViewState defaultTerminalKeymap() {
     return keymap;
 }
 
+namespace {
+
 DocumentPosition zeroPosition() {
     return {ByteOffset{0}, LineIndex{0}, CellIndex{0}};
 }
@@ -316,9 +293,9 @@ std::size_t lineStartOffset(std::string_view text, std::size_t line) {
     return offset;
 }
 
-std::unordered_map<std::uint64_t, Revision> documentRevisions(
+std::unordered_map<std::uint64_t, std::uint64_t> documentRevisions(
     const Workspace& workspace) {
-    std::unordered_map<std::uint64_t, Revision> revisions;
+    std::unordered_map<std::uint64_t, std::uint64_t> revisions;
     for (auto const id : workspace.documents()) {
         revisions.emplace(id.value(), workspace.document(id).revision());
     }
@@ -326,7 +303,7 @@ std::unordered_map<std::uint64_t, Revision> documentRevisions(
 }
 
 bool existingDocumentMutated(
-    const std::unordered_map<std::uint64_t, Revision>& before,
+    const std::unordered_map<std::uint64_t, std::uint64_t>& before,
     const Workspace& workspace) {
     for (auto const id : workspace.documents()) {
         const auto found = before.find(id.value());
@@ -401,49 +378,6 @@ std::optional<std::filesystem::path> workspaceChangePath(
 
 } // namespace
 
-struct GitDiffRefreshWorkerState {
-    explicit GitDiffRefreshWorkerState(const std::filesystem::path& rootPath)
-        : repository{makePlatformGitRepository(rootPath)},
-          source{sourceModel} {}
-
-    std::unique_ptr<GitRepository> repository;
-    DiffModel sourceModel;
-    GitDiffSource source;
-    std::unique_ptr<FilesystemWatcher> watcher;
-    std::unique_ptr<GitMetadataWatcher> metadataWatcher;
-    std::vector<std::filesystem::path> metadataDirectories;
-    GitDiffMode mode = GitDiffMode::Poll;
-    bool watcherAvailable = false;
-    // Test hook: shortens the Event-mode backstop so its full refresh is
-    // deterministically triggerable in a unit test. Unset uses kGitDiffBackstopInterval.
-    std::optional<std::chrono::steady_clock::duration> backstopIntervalOverride;
-
-    std::mutex mutex;
-    std::condition_variable wake;
-    bool stop = false;
-    bool retryPending = false;
-    std::chrono::steady_clock::time_point nextRetry =
-        std::chrono::steady_clock::time_point::max();
-    std::deque<GitDiffScan> pendingScans;
-    // Normalized external-modification events queued in order for the runtime-thread
-    // reconcile, beside pendingScans and woken by the same wake byte. The worker
-    // never touches the flow itself; it only hands these across the thread boundary.
-    std::deque<WatchEvent> pendingWatchEvents;
-    // Set when the watcher reports an Overflow (event loss). The runtime-thread
-    // drain consumes it and re-scans every open document against disk, because the
-    // individual change events were dropped. The worker only signals; it never
-    // touches the flow.
-    bool pendingExternalFullReconcile = false;
-    // Save expectations handed from the save primitive to the worker thread, applied
-    // to the watcher on the worker thread so registration never races poll().
-    std::deque<SaveExpectation> pendingSaveRegistrations;
-    std::thread thread;
-    std::atomic<std::uint64_t> fullRefreshCount{0};
-
-    int wakeReadFd = -1;
-    int wakeWriteFd = -1;
-};
-
 CommandHandlerResult success() { return CommandHandlerResult::success(); }
 CommandHandlerResult failure(std::string message) {
     return CommandHandlerResult::failure(std::move(message));
@@ -467,8 +401,6 @@ EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
                           std::filesystem::path archiveRoot,
                           bool deferEnrichment,
                           std::shared_ptr<SyntaxParser> parser,
-                          std::vector<StatusFieldProviderBinding>
-                              statusFieldProviderOverrides,
                           bool enableGitDiffWorker,
                           bool enableFilesystemWatcher)
     : root{std::move(canonicalCwd)},
@@ -480,589 +412,66 @@ EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
       selection{initialSelection()},
       clipboard{4},
-      tabs{*this},
+      tabs{},
       external{recovery, diff},
       syntaxParser{std::move(parser)},
-      statusFieldCatalog{p0StatusFieldCatalog()},
-      interaction{assembleWholeScreen(statusFieldCatalog, "help.open",
-                                     StyleDimensions{}, Style{}.inputLineSigil),
+      interaction{assembleWholeScreen("help.open", StyleDimensions{},
+                                      Style{}.inputLineSigil),
                   tree, 1},
       search{*this, *this},
       theme{defaultTheme()},
-      deferringEnrichment{deferEnrichment} {
-    for (auto& provider : defaultStatusFieldProviders()) {
-        statusFieldProviders.insert_or_assign(provider.id,
-                                              std::move(provider.provider));
-    }
-    for (auto& provider : statusFieldProviderOverrides) {
-        statusFieldProviders.insert_or_assign(provider.id,
-                                              std::move(provider.provider));
-    }
+      deferringEnrichment{deferEnrichment},
+      gitDiffWorker{root, enableGitDiffWorker, enableFilesystemWatcher} {
     homeDirectory = resolveHomeDirectory();
     workspace.setSaveObserver([this](const std::filesystem::path& relativePath) {
         registerExternalSaveExpectation(relativePath);
     });
     (void)refreshTree();
     refreshSyntax();
-    startGitDiffWorker(enableGitDiffWorker, enableFilesystemWatcher);
-    lastPublishedWatcherAvailable =
-        watcherAvailable.load(std::memory_order_relaxed);
 }
 
-EditorSession::Impl::~Impl() { stopGitDiffWorker(); }
+EditorSession::Impl::~Impl() = default;
 
-void EditorSession::Impl::startGitDiffWorker(bool enableGit, bool enableWatcher) {
-    if (!enableGit && !enableWatcher) {
-        return;
-    }
-    auto state = std::make_unique<GitDiffRefreshWorkerState>(root);
-    // The unset-default mode follows watcher availability (Event when watching is
-    // enabled, Poll otherwise); an explicit env override still wins. The worker
-    // thread downgrades Event->Poll if the watcher then fails to construct.
-    state->mode = resolveGitDiffMode(std::getenv("SSG_GIT_DIFF_MODE"),
-                                     enableWatcher);
-    // Test seam (consistent with SSG_GIT_DIFF_MODE): a short backstop makes the
-    // Event-mode full-refresh backstop deterministically triggerable. Not a product
-    // knob; the production value lives in kGitDiffBackstopInterval.
-    if (const char* ms = std::getenv("SSG_GIT_DIFF_BACKSTOP_MS");
-        ms != nullptr && *ms != '\0') {
-        char* end = nullptr;
-        const long value = std::strtol(ms, &end, 10);
-        if (end != ms && value > 0) {
-            state->backstopIntervalOverride = std::chrono::milliseconds{value};
-        }
-    }
-    const bool gitUsable =
-        enableGit && state->repository && state->repository->isUsable();
-    // Optimistic: the worker thread constructs the watcher off the first-frame
-    // path, so startup never pays for the recursive watch setup (invariant I12).
-    // The thread clears this if construction fails (Decision 1/13's degradation).
-    // False when watching is disabled -- no watcher, so unavailable.
-    watcherAvailable.store(enableWatcher, std::memory_order_relaxed);
-    int wakePipe[2] = {-1, -1};
-    if (::pipe(wakePipe) != 0 || !setNonBlocking(wakePipe[0]) ||
-        !setNonBlocking(wakePipe[1])) {
-        if (wakePipe[0] != -1) {
-            (void)::close(wakePipe[0]);
-        }
-        if (wakePipe[1] != -1) {
-            (void)::close(wakePipe[1]);
-        }
-        watcherAvailable.store(false, std::memory_order_relaxed);
-        return;
-    }
-    state->wakeReadFd = wakePipe[0];
-    state->wakeWriteFd = wakePipe[1];
-    const auto watcherRoot = root;
-
-    state->thread = std::thread([worker = state.get(), gitUsable, enableWatcher,
-                                 watcherRoot, this]() {
-        // The watcher is a workspace service, not a git feature: construct it on the
-        // worker thread (off the first-frame path) whenever the platform can and
-        // watching is enabled, so external modification is observed in a non-git
-        // workspace and in poll-for-git setups alike (Decision 1). Git's Event mode
-        // is impossible without it.
-        if (enableWatcher) {
-            try {
-                worker->watcher = makePlatformFilesystemWatcher(watcherRoot);
-            } catch (const std::runtime_error&) {
-                worker->watcher = nullptr;
-            }
-        }
-        if (!worker->watcher) {
-            watcherAvailable.store(false, std::memory_order_relaxed);
-            if (worker->mode == GitDiffMode::Event) {
-                worker->mode = GitDiffMode::Poll;
-            }
-            // The optimistic `true` was already seeded before this thread ran, so
-            // an initial construction failure is a real availability edge: write
-            // the wake byte so the runtime-thread drain publishes the false and
-            // advances the revision, exactly like the mid-session watcher-death
-            // edge (Decision 13). Without this a client that saw the optimistic
-            // `true` would never learn watching is off.
-            const char byte = 'g';
-            (void)::write(worker->wakeWriteFd, &byte, 1);
-        }
-        if (gitUsable && worker->watcher) {
-            try {
-                worker->metadataDirectories =
-                    worker->repository->metadataDirectories();
-                worker->metadataWatcher = makePlatformGitMetadataWatcher(
-                    worker->metadataDirectories);
-            } catch (const std::exception&) {
-                worker->mode = GitDiffMode::Poll;
-            }
-        }
-        worker->watcherAvailable = worker->watcher != nullptr;
-        // Nothing to serve: no usable git repository to scan and no watcher to
-        // observe. External modification is simply not observed.
-        if (!gitUsable && !worker->watcher) {
-            return;
-        }
-        const auto shouldStop = [&]() {
-            std::lock_guard lock(worker->mutex);
-            return worker->stop;
-        };
-        const auto maybeRefreshAll = [&]() -> std::optional<GitDiffRefreshResult> {
-            if (shouldStop()) {
-                return std::nullopt;
-            }
-            try {
-                ++worker->fullRefreshCount;
-                auto refreshed = worker->source.refresh(*worker->repository);
-                const auto directories = worker->repository->metadataDirectories();
-                if (worker->metadataWatcher &&
-                    (directories != worker->metadataDirectories ||
-                     !worker->metadataWatcher->healthy())) {
-                    worker->metadataWatcher->replaceDirectories(directories);
-                    worker->metadataDirectories = directories;
-                }
-                if (shouldStop()) {
-                    return std::nullopt;
-                }
-                return refreshed;
-            } catch (const std::system_error&) {
-                return GitDiffRefreshResult{
-                    .applied = false, .requestedRescan = true, .accepted = false};
-            } catch (const std::exception&) {
-                return GitDiffRefreshResult{
-                    .applied = false, .requestedRescan = true, .accepted = false};
-            }
-        };
-        const auto maybeRefreshPaths =
-            [&](const std::vector<std::filesystem::path>& paths)
-            -> std::optional<GitDiffRefreshResult> {
-            if (shouldStop()) {
-                return std::nullopt;
-            }
-            try {
-                auto refreshed = worker->source.refreshPaths(*worker->repository, paths);
-                if (shouldStop()) {
-                    return std::nullopt;
-                }
-                return refreshed;
-            } catch (const std::system_error&) {
-                return GitDiffRefreshResult{
-                    .applied = false, .requestedRescan = true, .accepted = false};
-            } catch (const std::exception&) {
-                return GitDiffRefreshResult{
-                    .applied = false, .requestedRescan = true, .accepted = false};
-            }
-        };
-        const auto scheduleRetry = [&]() {
-            std::lock_guard lock(worker->mutex);
-            worker->retryPending = true;
-            worker->nextRetry = std::chrono::steady_clock::now() + kGitDiffRetryDelay;
-        };
-        const auto clearRetry = [&]() {
-            std::lock_guard lock(worker->mutex);
-            worker->retryPending = false;
-            worker->nextRetry = std::chrono::steady_clock::time_point::max();
-        };
-        const auto queueLatestScan = [&]() {
-            auto scan = worker->source.latestAppliedScan();
-            if (!scan) {
-                return;
-            }
-            bool signal = false;
-            {
-                std::lock_guard lock(worker->mutex);
-                signal = worker->pendingScans.empty();
-                worker->pendingScans.push_back(std::move(*scan));
-            }
-            if (signal) {
-                const char byte = 'g';
-                (void)::write(worker->wakeWriteFd, &byte, 1);
-            }
-        };
-        // The branch is published independently of the diff so an incomplete
-        // repository scan never hides the branch indicator.
-        const auto queueBranchScan = [&]() {
-            auto scan = worker->source.takeBranchOnlyScanIfChanged();
-            if (!scan) {
-                return;
-            }
-            bool signal = false;
-            {
-                std::lock_guard lock(worker->mutex);
-                signal = worker->pendingScans.empty();
-                worker->pendingScans.push_back(std::move(*scan));
-            }
-            if (signal) {
-                const char byte = 'g';
-                (void)::write(worker->wakeWriteFd, &byte, 1);
-            }
-        };
-
-        std::function<void(const GitDiffRefreshResult&, bool)> handleResult;
-        handleResult = [&](const GitDiffRefreshResult& refreshed, bool fullRefresh) {
-            queueBranchScan();
-            if (refreshed.applied) {
-                queueLatestScan();
-                clearRetry();
-            }
-            // Retry (or fall back a path scan to a full refresh) ONLY when the source
-            // asked for a rescan -- a transient failure (incomplete scan, index.lock).
-            if (refreshed.shouldRetry()) {
-                if (!fullRefresh) {
-                    auto full = maybeRefreshAll();
-                    if (!full) {
-                        return;
-                    }
-                    handleResult(*full, true);
-                    return;
-                }
-                scheduleRetry();
-            }
-        };
-
-        const auto applyPendingSaveRegistrations = [&]() {
-            std::deque<SaveExpectation> registrations;
-            {
-                std::lock_guard lock(worker->mutex);
-                registrations.swap(worker->pendingSaveRegistrations);
-            }
-            // Drain unconditionally so registrations never accumulate; apply only
-            // when a watcher exists (accessed on this, the owning, thread).
-            if (!worker->watcher) {
-                return;
-            }
-            for (auto& expectation : registrations) {
-                worker->watcher->registerSave(std::move(expectation));
-            }
-        };
-        // Hand normalized external events to the runtime-thread reconcile, coalescing
-        // the wake byte with the git-scan queue so the host drains both at once.
-        const auto queueWatchEvents = [&](const std::vector<WatchEvent>& events) {
-            bool signal = false;
-            {
-                std::lock_guard lock(worker->mutex);
-                signal = worker->pendingWatchEvents.empty() &&
-                         worker->pendingScans.empty();
-                for (const auto& event : events) {
-                    worker->pendingWatchEvents.push_back(event);
-                }
-            }
-            if (signal) {
-                const char byte = 'g';
-                (void)::write(worker->wakeWriteFd, &byte, 1);
-            }
-        };
-
-        if (gitUsable) {
-            if (auto first = maybeRefreshAll()) {
-                handleResult(*first, true);
-            } else {
-                return;
-            }
-        }
-        auto nextPoll = std::chrono::steady_clock::now() + kGitDiffPollInterval;
-        // Event mode has no periodic full refresh, so a long-interval backstop
-        // bounds the staleness of anything the watcher cannot observe (Decision:
-        // external git ops, worktree metadata outside the tree, dropped events).
-        auto nextBackstop =
-            std::chrono::steady_clock::now() + kGitDiffEventRecoveryInterval;
-        // A test hook can shorten the backstop so it is deterministically triggerable.
-        const auto backstopInterval = worker->backstopIntervalOverride
-                                          ? *worker->backstopIntervalOverride
-                                          : kGitDiffEventRecoveryInterval;
-        nextBackstop = std::chrono::steady_clock::now() + backstopInterval;
-        while (!shouldStop()) {
-            applyPendingSaveRegistrations();
-            const auto now = std::chrono::steady_clock::now();
-            auto wakeAt = now + kGitMetadataWatchPollInterval;
-            {
-                std::lock_guard lock(worker->mutex);
-                if (gitUsable && worker->mode == GitDiffMode::Poll) {
-                    wakeAt = std::min(wakeAt, nextPoll);
-                }
-                if (gitUsable && worker->mode == GitDiffMode::Event) {
-                    wakeAt = std::min(wakeAt, nextBackstop);
-                }
-                if (gitUsable && worker->retryPending) {
-                    wakeAt = std::min(wakeAt, worker->nextRetry);
-                }
-            }
-            const auto timeout =
-                std::chrono::duration_cast<std::chrono::milliseconds>(
-                    wakeAt > now ? wakeAt - now : std::chrono::milliseconds{0});
-
-            if (worker->watcher) {
-                std::vector<WatchEvent> events;
-                try {
-                    events = worker->watcher->poll(timeout);
-                } catch (const std::runtime_error&) {
-                    // The watcher died mid-session; drop it and fall back to git
-                    // polling. External modification is no longer observed, so the
-                    // durable capability flips to unavailable and a wake byte makes
-                    // the runtime-thread drain observe the transition (Decision 13).
-                    worker->watcher.reset();
-                    worker->metadataWatcher.reset();
-                    watcherAvailable.store(false, std::memory_order_relaxed);
-                    worker->mode = GitDiffMode::Poll;
-                    {
-                        const char byte = 'g';
-                        (void)::write(worker->wakeWriteFd, &byte, 1);
-                    }
-                    if (gitUsable) {
-                        auto full = maybeRefreshAll();
-                        if (!full) {
-                            break;
-                        }
-                        handleResult(*full, true);
-                    }
-                    continue;
-                }
-                bool overflowed = false;
-                for (const auto& event : events) {
-                    if (event.kind == WatchEventKind::Overflow) {
-                        overflowed = true;
-                        break;
-                    }
-                }
-                std::vector<WatchEvent> workspaceEvents;
-                if (!overflowed && !events.empty()) {
-                    workspaceEvents.reserve(events.size());
-                    bool metadataDirty = false;
-                    for (auto& event : events) {
-                        if (!event.path.empty() &&
-                            *event.path.begin() == ".git") {
-                            metadataDirty = true;
-                        } else {
-                            workspaceEvents.push_back(std::move(event));
-                        }
-                    }
-                    if (!workspaceEvents.empty()) {
-                        queueWatchEvents(workspaceEvents);
-                    }
-                    if (metadataDirty && gitUsable) {
-                        auto full = maybeRefreshAll();
-                        if (!full) break;
-                        handleResult(*full, true);
-                    }
-                }
-                if (overflowed) {
-                    // The watcher lost events: the external flow must resynchronize
-                    // every open document against disk, not just refresh git. Signal
-                    // the runtime-thread drain (which owns the flow) to do the full
-                    // re-scan; the worker never touches the flow itself.
-                    bool signal = false;
-                    {
-                        std::lock_guard lock(worker->mutex);
-                        signal = worker->pendingScans.empty() &&
-                                 worker->pendingWatchEvents.empty() &&
-                                 !worker->pendingExternalFullReconcile;
-                        worker->pendingExternalFullReconcile = true;
-                    }
-                    if (signal) {
-                        const char byte = 'g';
-                        (void)::write(worker->wakeWriteFd, &byte, 1);
-                    }
-                }
-                if (gitUsable && worker->mode == GitDiffMode::Event) {
-                    if (overflowed) {
-                        auto full = maybeRefreshAll();
-                        if (!full) {
-                            break;
-                        }
-                        handleResult(*full, true);
-                    } else if (!workspaceEvents.empty()) {
-                        std::vector<std::filesystem::path> paths;
-                        paths.reserve(workspaceEvents.size() * 2);
-                        for (const auto& event : workspaceEvents) {
-                            paths.push_back(event.path);
-                            if (event.previousPath) {
-                                paths.push_back(*event.previousPath);
-                            }
-                        }
-                        std::sort(paths.begin(), paths.end());
-                        paths.erase(std::unique(paths.begin(), paths.end()),
-                                    paths.end());
-                        auto pathRefresh = maybeRefreshPaths(paths);
-                        if (!pathRefresh) {
-                            break;
-                        }
-                        handleResult(*pathRefresh, false);
-                    }
-                }
-            } else {
-                std::unique_lock lock(worker->mutex);
-                if (worker->wake.wait_until(lock, wakeAt,
-                                            [&]() { return worker->stop; })) {
-                    break;
-                }
-                lock.unlock();
-            }
-
-            const auto afterWait = std::chrono::steady_clock::now();
-            if (gitUsable) {
-                if (worker->mode == GitDiffMode::Event &&
-                    worker->metadataWatcher) {
-                    try {
-                        if (worker->metadataWatcher->poll(
-                                std::chrono::milliseconds{0})) {
-                            auto full = maybeRefreshAll();
-                            if (!full) break;
-                            handleResult(*full, true);
-                        }
-                    } catch (const std::exception&) {
-                        worker->metadataWatcher.reset();
-                        worker->mode = GitDiffMode::Poll;
-                    }
-                }
-                bool retryDue = false;
-                {
-                    std::lock_guard lock(worker->mutex);
-                    retryDue =
-                        worker->retryPending && afterWait >= worker->nextRetry;
-                }
-                if (retryDue) {
-                    auto full = maybeRefreshAll();
-                    if (!full) {
-                        break;
-                    }
-                    handleResult(*full, true);
-                }
-                if (worker->mode == GitDiffMode::Poll && afterWait >= nextPoll) {
-                    auto full = maybeRefreshAll();
-                    if (!full) {
-                        break;
-                    }
-                    handleResult(*full, true);
-                    nextPoll = afterWait + kGitDiffPollInterval;
-                }
-                if (worker->mode == GitDiffMode::Event &&
-                    afterWait >= nextBackstop) {
-                    auto full = maybeRefreshAll();
-                    if (!full) {
-                        break;
-                    }
-                    handleResult(*full, true);
-                    nextBackstop = afterWait + backstopInterval;
-                }
-            }
-        }
-    });
-    gitDiffWorker = std::move(state);
-}
-
-void EditorSession::Impl::stopGitDiffWorker() {
-    if (!gitDiffWorker) {
-        return;
-    }
-    {
-        std::lock_guard lock(gitDiffWorker->mutex);
-        gitDiffWorker->stop = true;
-    }
-    gitDiffWorker->wake.notify_all();
-    if (gitDiffWorker->thread.joinable()) {
-        gitDiffWorker->thread.join();
-    }
-    if (gitDiffWorker->wakeReadFd != -1) {
-        (void)::close(gitDiffWorker->wakeReadFd);
-        gitDiffWorker->wakeReadFd = -1;
-    }
-    if (gitDiffWorker->wakeWriteFd != -1) {
-        (void)::close(gitDiffWorker->wakeWriteFd);
-        gitDiffWorker->wakeWriteFd = -1;
-    }
-    gitDiffWorker.reset();
-}
-
-bool EditorSession::Impl::drainGitDiffScans() {
-    const auto drainEntryRevision = session->revision();
-    auto const availabilityBefore = lastPublishedWatcherAvailable;
-    drainWatcherAvailability();
-    bool accepted = availabilityBefore != lastPublishedWatcherAvailable;
-    if (!gitDiffWorker) {
-        return accepted;
-    }
-    char scratch[64];
-    while (true) {
-        const auto count = ::read(gitDiffWorker->wakeReadFd, scratch, sizeof scratch);
-        if (count <= 0) {
-            if (count == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-                break;
-            }
-            break;
-        }
-    }
-    std::deque<GitDiffScan> scans;
-    std::deque<WatchEvent> events;
-    bool fullReconcile = false;
-    {
-        std::lock_guard lock(gitDiffWorker->mutex);
-        scans.swap(gitDiffWorker->pendingScans);
-        events.swap(gitDiffWorker->pendingWatchEvents);
-        fullReconcile = gitDiffWorker->pendingExternalFullReconcile;
-        gitDiffWorker->pendingExternalFullReconcile = false;
-    }
-    accepted = accepted || !scans.empty() || !events.empty() || fullReconcile;
-    for (auto& scan : scans) {
+bool EditorSession::Impl::drainGitDiffWorker() {
+    auto batch = gitDiffWorker.drain();
+    bool accepted = batch.watcherAvailabilityChanged || !batch.scans.empty() ||
+                    !batch.watchEvents.empty() || batch.fullReconcile;
+    for (auto& scan : batch.scans) {
         (void)applyGitDiffScan(std::move(scan));
     }
     // Git scans first, then the external reconcile once over the whole queue, so a
     // burst of git scans never starves external ingress and both draw revisions
     // from the one shared DiffModel in order (Decision 10).
-    if (!events.empty()) {
-        reconcileExternalWatchEvents(
-            std::vector<WatchEvent>{events.begin(), events.end()});
+    if (!batch.watchEvents.empty()) {
+        reconcileExternalWatchEvents(std::vector<WatchEvent>{
+            batch.watchEvents.begin(), batch.watchEvents.end()});
         const bool inventoryChanged = std::any_of(
-            events.begin(), events.end(), [](const WatchEvent& event) {
+            batch.watchEvents.begin(), batch.watchEvents.end(),
+            [](const WatchEvent& event) {
                 return event.kind != WatchEventKind::Modify ||
                        event.path.filename() == ".gitignore";
             });
         if (inventoryChanged) {
-            refreshTreeForPublication(drainEntryRevision);
+            refreshTreeForPublication();
         }
     }
     // After ordinary ingress, recover any events the watcher dropped on overflow by
     // re-scanning every open document against disk (a full external resync).
-    if (fullReconcile) {
+    if (batch.fullReconcile) {
         reconcileAllOpenDocumentsAgainstDisk();
-        refreshTreeForPublication(drainEntryRevision);
+        refreshTreeForPublication();
     }
     return accepted;
 }
 
-void EditorSession::Impl::drainWatcherAvailability() {
-    const bool current = watcherAvailable.load(std::memory_order_relaxed);
-    if (current == lastPublishedWatcherAvailable) {
-        return;
-    }
-    lastPublishedWatcherAvailable = current;
-    // The atomic already feeds sections(); advancing the revision is what makes a
-    // delta client re-observe the flipped capability (Decision 13).
-    if (session) {
-        session->advanceRevision();
-    }
-}
-
 int EditorSession::Impl::gitDiffWakeDescriptor() const {
-    return gitDiffWorker ? gitDiffWorker->wakeReadFd : -1;
+    return gitDiffWorker.wakeDescriptor();
 }
 
-CommandHandlerResult EditorSession::Impl::runTransaction(
-    std::function<CommandHandlerResult()> operation) {
-    return operation();
-}
 
-std::any& EditorSession::Impl::featureStateValue(std::type_index) {
-    throw std::logic_error{"EditorSession exposes feature state through snapshots"};
-}
-
-void EditorSession::Impl::publishStatusValue(std::type_index, std::any statusValue) {
-    if (auto const* item = std::any_cast<StatusItem>(&statusValue)) {
-        if (status.enqueue(*item).accepted) {
-            interaction.refreshStatusActions(status.actionNodes());
-        }
-    }
-}
-
-void EditorSession::Impl::publishDeltaValue(std::type_index, std::any) {}
-
-TabLifecycleResult EditorSession::Impl::close(
-    const TabState& tab, std::chrono::milliseconds durabilityTimeout) {
+TabLifecycleResult EditorSession::Impl::closeTab(
+    const TabState& tab, std::chrono::milliseconds durabilityTimeout,
+    std::span<const TabId> alreadyClosed) {
     if (!tab.document) {
         if (tab.kind == TabKind::ReadOnlyOutput) {
             // A read-only output tab (help, generated content) is ephemeral and
@@ -1089,6 +498,9 @@ TabLifecycleResult EditorSession::Impl::close(
                     tabs.viewState().tabs.begin(), tabs.viewState().tabs.end(),
                     [&](const TabState& candidate) {
                         return candidate.id != tab.id &&
+                               std::find(alreadyClosed.begin(),
+                                         alreadyClosed.end(),
+                                         candidate.id) == alreadyClosed.end() &&
                                candidate.document == document;
                     });
                 if (!stillReferenced) {
@@ -1129,16 +541,21 @@ TabLifecycleResult EditorSession::Impl::close(
         }
         return {};
     }
+    const auto isAlreadyClosed = [&](TabId id) {
+        return std::find(alreadyClosed.begin(), alreadyClosed.end(), id) !=
+               alreadyClosed.end();
+    };
     const bool sharedByDocumentTab = std::any_of(
         tabs.viewState().tabs.begin(), tabs.viewState().tabs.end(),
         [&](const TabState& candidate) {
-            return candidate.id != tab.id &&
+            return candidate.id != tab.id && !isAlreadyClosed(candidate.id) &&
                    candidate.document == tab.document;
         });
     const bool sharedByLiveDiffTab = std::any_of(
         tabs.viewState().tabs.begin(), tabs.viewState().tabs.end(),
         [&](const TabState& candidate) {
-            if (candidate.id == tab.id || candidate.kind != TabKind::LiveDiff) {
+            if (candidate.id == tab.id || candidate.kind != TabKind::LiveDiff ||
+                isAlreadyClosed(candidate.id)) {
                 return false;
             }
             const auto mapped = liveDiffDocuments.find(candidate.contentIdentity);
@@ -1173,7 +590,7 @@ TabLifecycleResult EditorSession::Impl::close(
             scratch.waitUntilDurable(durabilityTimeout)};
 }
 
-TabLifecycleResult EditorSession::Impl::reopen(
+TabLifecycleResult EditorSession::Impl::reopenTab(
     const TabState& tab, const RecoveryRecordId& compensation) {
     std::optional<JournalDocument> restoredDocument;
     auto restored = recovery.restoreDocument(compensation, restoredDocument);
@@ -1230,7 +647,7 @@ TabLifecycleResult EditorSession::Impl::reopen(
             reopenedState->key, true};
 }
 
-WorkspaceSnapshot EditorSession::Impl::snapshot(Revision revision) const {
+WorkspaceSnapshot EditorSession::Impl::snapshot(std::uint64_t revision) const {
     WorkspaceSnapshot result;
     result.revision = revision;
     for (auto const id : workspace.documents()) {
@@ -1328,7 +745,7 @@ WorkspaceApplyResult EditorSession::Impl::apply(
         paths.push_back(std::move(*path));
         normalizedPaths.push_back(std::move(normalized));
     }
-    WorkspaceRecoveryRecord record{preview.sourceRevision, Revision{preview.sourceRevision.value() + 1}, preview.changes};
+    WorkspaceRecoveryRecord record{preview.sourceRevision, std::uint64_t{preview.sourceRevision + 1}, preview.changes};
     if (!recoverySink.store(record)) {
         return {FindReplaceError::RecoveryRejected, preview.sourceRevision, "workspace replacement recovery rejected"};
     }
@@ -1393,7 +810,7 @@ std::optional<LspDocumentSnapshot> EditorSession::Impl::snapshot(std::string_vie
 }
 
 LspWorkspaceDocumentWriteResult EditorSession::Impl::apply(
-    std::string uri, Revision expectedRevision, std::string text) {
+    std::string uri, std::uint64_t expectedRevision, std::string text) {
     for (auto const id : workspace.documents()) {
         auto state = workspace.state(id);
         if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
@@ -1407,7 +824,7 @@ LspWorkspaceDocumentWriteResult EditorSession::Impl::apply(
         if (!result.accepted()) return {document.revision(), LspWorkspaceDocumentError::WriteFailed, result.message};
         return {result.revision, LspWorkspaceDocumentError::None, {}};
     }
-    return {Revision{0}, LspWorkspaceDocumentError::UnknownDocument, "document URI is not open"};
+    return {std::uint64_t{0}, LspWorkspaceDocumentError::UnknownDocument, "document URI is not open"};
 }
 
 LspWorkspaceFileResult EditorSession::Impl::snapshot(std::string_view uri, LspWorkspaceFileNode& node) const {
@@ -1650,7 +1067,7 @@ CommandHandlerResult EditorSession::Impl::openDraftDiff() {
     // the current revision is always fresh. Create both seeds and updates the
     // entry (an existing non-git entry is updated in place), so re-running
     // draft.diff on the same file refreshes its tab.
-    const Revision revision{diff.viewState().revision.value() + 1};
+    const std::uint64_t revision{diff.viewState().revision + 1};
     const auto applied = diff.applyNonGitEvent(
         NonGitDiffEvent{NonGitDiffEventKind::Create, diffId,
                         std::filesystem::path{state->key.savedPath()},
@@ -1725,15 +1142,7 @@ void EditorSession::Impl::registerExternalSaveExpectation(
     // at source (Decision 9); handed to the worker thread, which owns the watcher,
     // so the main thread never touches it. Bounded so a save the worker never drains
     // cannot grow without limit.
-    if (gitDiffWorker) {
-        std::lock_guard lock(gitDiffWorker->mutex);
-        auto& queue = gitDiffWorker->pendingSaveRegistrations;
-        queue.push_back(std::move(expectation));
-        constexpr std::size_t kMaxSaveRegistrations = 256;
-        while (queue.size() > kMaxSaveRegistrations) {
-            queue.pop_front();
-        }
-    }
+    gitDiffWorker.registerSavedPath(std::move(expectation));
 }
 
 void EditorSession::Impl::reconcileExternalWatchEvents(
@@ -1860,11 +1269,11 @@ void EditorSession::Impl::reconcileExternalWatchEvents(
         // revision, like the event's, is allocated from the shared DiffModel.
         bool seededHere = false;
         if (!diff.file(id).has_value()) {
-            const Revision seedRevision{diff.viewState().revision.value() + 1};
+            const std::uint64_t seedRevision{diff.viewState().revision + 1};
             (void)diff.seedNonGit({{id, event.path, baseline}}, seedRevision);
             seededHere = true;
         }
-        const Revision diffRevision{diff.viewState().revision.value() + 1};
+        const std::uint64_t diffRevision{diff.viewState().revision + 1};
 
         std::optional<JournalDocument> journal{JournalDocument{
             state->key, document->mode(), state->dirty, document->snapshot().text}};
@@ -1933,7 +1342,7 @@ void EditorSession::Impl::reconcileExternalWatchEvents(
             // so a failed rename-adoption -- or any rejected event -- never orphans a
             // diff entry keyed to a path no pending action owns.
             if (seededHere && diff.file(id).has_value()) {
-                const Revision removalRevision{diff.viewState().revision.value() +
+                const std::uint64_t removalRevision{diff.viewState().revision +
                                                1};
                 (void)diff.removeFile(id, removalRevision);
             }
@@ -1946,7 +1355,7 @@ void EditorSession::Impl::reconcileExternalWatchEvents(
             const DiffFileId previousId =
                 externalDiffFileId(event.previousPath->generic_string());
             if (previousId != id && diff.file(previousId).has_value()) {
-                const Revision removalRevision{diff.viewState().revision.value() +
+                const std::uint64_t removalRevision{diff.viewState().revision +
                                                1};
                 (void)diff.removeFile(previousId, removalRevision);
             }
@@ -1955,16 +1364,6 @@ void EditorSession::Impl::reconcileExternalWatchEvents(
         if (committed) {
             (void)updateTabsFor(*documentId);
         }
-    }
-    // The session revision must advance whenever the drain moved the published
-    // state a delta client observes -- not only when the flow's own view changed.
-    // A rejected event that seeded then rolled back a diff entry leaves the shared
-    // DiffModel revision net-advanced with the flow's view unchanged; the diff
-    // section a client sees is keyed to that revision, so the session revision must
-    // track it or a delta client could miss or mis-order the change.
-    if (session && (external.viewState().revision != flowRevisionBefore ||
-                    diff.viewState().revision != diffRevisionBefore)) {
-        session->advanceRevision();
     }
     // External state changes here in the watcher drain, not only on a command
     // dispatch (Decision 4): reconcile the section's presence into the interaction
@@ -2272,7 +1671,7 @@ SyntaxViewState EditorSession::Impl::activeSyntaxView() const {
     }
     const auto* document = activeDocument();
     const auto text = document ? document->snapshot().text : std::string{};
-    const auto revision = document ? document->revision() : Revision{0};
+    const auto revision = document ? document->revision() : std::uint64_t{0};
     return SyntaxViewState::plainText(revision, LanguageId::plainText(), text, 4);
 }
 
@@ -2283,7 +1682,13 @@ std::optional<WorkspaceDocumentState> EditorSession::Impl::activeWorkspaceState(
 
 std::optional<DiffFileView> EditorSession::Impl::activeDiffFile() const {
     const auto diffState = diff.viewState();
-    const auto file = diffState.fileForDocument(documentView());
+    std::optional<std::string> identity;
+    if (const auto* tab = activeTabState();
+        tab && tab->kind == TabKind::LiveDiff &&
+        !tab->contentIdentity.empty()) {
+        identity = tab->contentIdentity;
+    }
+    const auto file = diffState.fileForIdentity(identity);
     return file ? std::optional<DiffFileView>{file->get()} : std::nullopt;
 }
 
@@ -2299,30 +1704,6 @@ std::string const& EditorSession::Impl::activeText() const {
         activeTextRevision = revision;
     }
     return activeTextCache;
-}
-
-int EditorSession::Impl::lineNumberGutterWidth(
-    ViewportProjectionState::Impl& presentation) const {
-    if (!lineNumbers) return 0;
-    auto const* document = activeDocument();
-    if (document == nullptr) return 0;
-    auto const revision = document->revision();
-    auto const documentId = activeDocumentId();
-    if (!presentation.lineCountRevision ||
-        *presentation.lineCountRevision != revision ||
-        presentation.lineCountDocument != documentId) {
-        auto const text = document->snapshot().text;
-        std::uint32_t lines = 1;
-        for (char c : text) {
-            if (c == '\n') ++lines;
-        }
-        presentation.lineCountCache = lines;
-        presentation.lineCountRevision = revision;
-        presentation.lineCountDocument = documentId;
-    }
-    return static_cast<int>(
-               std::to_string(presentation.lineCountCache).size()) +
-           1;
 }
 
 void EditorSession::Impl::resetSelectionForActiveDocument() {
@@ -2368,75 +1749,6 @@ void EditorSession::Impl::clampSelectionsToActiveDocument() {
     selection.selections = SelectionSet{std::move(clamped)};
 }
 
-const std::vector<CellRun>& EditorSession::Impl::activeCellRuns(
-    ViewportProjectionState::Impl& presentation) const {
-    auto const* document = activeDocument();
-    auto const documentId = activeDocumentId();
-    auto const revision = document ? document->revision() : Revision{0};
-    if (presentation.cellRunsRevision &&
-        *presentation.cellRunsRevision == revision &&
-        presentation.cellRunsDocument == documentId) {
-        return presentation.cellRunsCache;
-    }
-    std::string const text = document ? document->snapshot().text : std::string{};
-    std::vector<CellRun> runs;
-    std::size_t start = 0;
-    while (start <= text.size()) {
-        auto end = text.find('\n', start);
-        auto line = text.substr(start, end == std::string::npos ? end : end - start);
-        runs.push_back(GraphemeLayout{}.computeRun(line, 4));
-        if (end == std::string::npos) break;
-        start = end + 1;
-    }
-    if (runs.empty()) runs.push_back(GraphemeLayout{}.computeRun("", 4));
-    presentation.cellRunsCache = std::move(runs);
-    presentation.cellRunsRevision = revision;
-    presentation.cellRunsDocument = documentId;
-    return presentation.cellRunsCache;
-}
-
-ViewportViewState EditorSession::Impl::computeEditorViewport(
-    ViewportProjectionState::Impl& presentation,
-    ViewportDimensions dimensions,
-    std::uint32_t paneContentRows,
-    std::uint32_t paneContentColumns,
-    std::uint32_t firstRow,
-    std::uint32_t firstColumn) const {
-    const auto diffFile = activeDiffFile();
-    // Scroll against the region the editor actually PAINTS, not the terminal's
-    // full surface.  The shell spends rows on the header, the tab bar, the
-    // footer and any reserved prompt, and columns on the sidebar; a viewport
-    // sized to the whole terminal overshoots by exactly that much.  Vertically
-    // its maximum scroll offset leaves the last few lines permanently
-    // unreachable and it reports no scrollbar for a document that is in fact
-    // clipped; horizontally it breaks wrapped lines past the right edge of the
-    // pane, so the tail is painted nowhere. The retained pane content size is
-    // computed -- the same numbers page-up/page-down already scroll by.
-    //
-    // Clamped to the client surface because a terminal too small to lay out at
-    // all leaves that cache holding the last good layout's value, which would
-    // otherwise size the viewport larger than the screen.
-    ViewportDimensions const content{
-        std::max<std::uint32_t>(
-            1, std::min<std::uint32_t>(paneContentColumns, dimensions.columns)),
-        std::max<std::uint32_t>(
-            1, std::min<std::uint32_t>(paneContentRows, dimensions.rows))};
-    auto const view =
-        wordWrap
-            ? Viewport{}.compute(activeCellRuns(presentation), content,
-                                 firstRow,
-                                 diffFile ? &*diffFile : nullptr, dimensions)
-            // Word wrap off (default): one logical line is one visual row; only
-            // the visible lines are segmented, so this is O(visible rows), not
-            // O(document).
-            : Viewport{}.computeUnwrapped(activeText(), content, firstRow,
-                                          firstColumn, 4,
-                                          diffFile ? &*diffFile : nullptr,
-                                          dimensions,
-                                          &presentation.viewportLineCache);
-    return view;
-}
-
 bool EditorSession::Impl::refreshTree() {
     if (deferringEnrichment) {
         pendingTreeRefresh = true;
@@ -2449,24 +1761,19 @@ bool EditorSession::Impl::refreshTree() {
     return true;
 }
 
-void EditorSession::Impl::refreshTreeForPublication(
-    Revision drainEntryRevision) {
-    if (refreshTree() && session &&
-        session->revision() == drainEntryRevision) {
-        session->advanceRevision();
-    }
+void EditorSession::Impl::refreshTreeForPublication() {
+    (void)refreshTree();
 }
 
 void EditorSession::Impl::rebuildInteractionSchema(
     const StyleDimensions& dimensions,
     std::string_view promptSigil) {
     (void)interaction.updateComposition(
-        assembleWholeScreen(statusFieldCatalog, "help.open", dimensions,
-                            promptSigil));
+        assembleWholeScreen("help.open", dimensions, promptSigil));
 }
 
 bool EditorSession::Impl::openPickerPrompt(PickerKind kind) {
-    return interaction.apply(OpenFinder{kind});
+    return interaction.openFinder(kind);
 }
 
 // The index opens its OWN repository handle rather than sharing the git-diff
@@ -2509,7 +1816,7 @@ void EditorSession::Impl::refreshSyntax(std::vector<SyntaxEdit> edits) {
     auto& model = syntaxFor(*id);
     auto const* document = activeDocument();
     auto text = document ? document->snapshot().text : std::string{};
-    auto revision = document ? document->revision() : Revision{0};
+    auto revision = document ? document->revision() : std::uint64_t{0};
     auto language = LanguageId::plainText();
     if (auto const override = documentLanguageOverrides.find(id->value());
         override != documentLanguageOverrides.end()) {
@@ -2537,8 +1844,7 @@ void EditorSession::Impl::primeDeferred() {
     if (!deferringEnrichment) return;
     deferringEnrichment = false;
     // Run whichever scans were requested while deferring, now that the first
-    // frame is drawn.  Order: tree then syntax (independent; both publish through
-    // the normal snapshot channel on the next snapshot).
+    // frame is drawn. Order: tree then syntax.
     bool ran = false;
     if (pendingTreeRefresh) {
         pendingTreeRefresh = false;
@@ -2550,9 +1856,7 @@ void EditorSession::Impl::primeDeferred() {
         refreshSyntax();
         ran = true;
     }
-    // Advance the session revision so attached clients observe the primed
-    // enrichment when comparing snapshots.
-    if (ran && session) session->advanceRevision();
+    (void)ran;
 }
 
 void EditorSession::Impl::enqueueStatus(StatusPriority priority, std::string text) {
@@ -2750,19 +2054,14 @@ DiffIngressResult EditorSession::Impl::applyExternalDiffBurst(
         next.activeTarget != previousTarget) {
         (void)openOrRevealFollowTargetProgrammatic(*next.activeTarget);
     }
-    if (session) {
-        session->advanceRevision();
-    }
     return {};
 }
 
 DiffIngressResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
-    if (scan.revision.value() == 0) {
+    if (scan.revision == 0) {
         auto const previousBranch = currentGitBranch;
         currentGitBranch = scan.currentBranch;
-        if (currentGitBranch != previousBranch && session) {
-            session->advanceRevision();
-        }
+        (void)previousBranch;
         return {};
     }
     if (scan.revision <= lastGitScanRevision) {
@@ -2777,10 +2076,10 @@ DiffIngressResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
     bool mutated = false;
     std::vector<DiffFileId> statusOnlyIds;
 
-    Revision nextRevision = Revision{stagedDiff.viewState().revision.value() + 1};
+    std::uint64_t nextRevision = std::uint64_t{stagedDiff.viewState().revision + 1};
     const auto nextMutationRevision = [&nextRevision]() {
         auto current = nextRevision;
-        nextRevision = Revision{nextRevision.value() + 1};
+        nextRevision = std::uint64_t{nextRevision + 1};
         return current;
     };
     const auto removeDetailedFile =
@@ -2880,7 +2179,13 @@ DiffIngressResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
                 }
             }
             if (liveTab) {
-                (void)tabs.close(*liveTab, std::chrono::milliseconds{100});
+                const auto found = std::find_if(
+                    tabs.viewState().tabs.begin(), tabs.viewState().tabs.end(),
+                    [&](const TabState& tab) { return tab.id == *liveTab; });
+                if (found != tabs.viewState().tabs.end()) {
+                    auto outcome = closeTab(*found, std::chrono::milliseconds{100});
+                    (void)tabs.close(*liveTab, std::move(outcome));
+                }
             }
         }
         refreshLiveDiffDocuments(diff.viewState());
@@ -2894,9 +2199,6 @@ DiffIngressResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
         TreeProviderId{"git"}, interaction.allocateTreeRevision(),
         std::move(gitRecords)));
     lastGitScanRevision = scan.revision;
-    if (session) {
-        session->advanceRevision();
-    }
     return {};
 }
 
@@ -2931,12 +2233,6 @@ bool EditorSession::Impl::revealDiffTarget(
 
 void EditorSession::Impl::recordNavigation(NavigationClass classification) {
     (void)follow.applyNavigation({.classification = classification});
-}
-
-SessionTopology EditorSession::Impl::currentTopology() const {
-    auto topology = session->topology();
-    topology.panes = paneTopology;
-    return topology;
 }
 
 CommandHandlerResult EditorSession::Impl::splitPane(SplitAxis axis) {
@@ -3001,7 +2297,6 @@ EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
                                            config.archiveRoot,
                                            config.deferEnrichment,
                                            std::move(config.syntaxParser),
-                                           std::move(config.statusFieldProviders),
                                            config.enableGitDiffWorker,
                                            config.enableFilesystemWatcher);
         // Housekeeping at workspace open rather than on a timer, so it is
@@ -3023,7 +2318,7 @@ EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
         bindRuntimeLanguageServices(*impl->catalog, *impl);
         bindRuntimeHelp(*impl->catalog, *impl);
         impl->session =
-            std::make_unique<CommandExecutor>(impl->catalog, impl.get());
+            std::make_unique<CommandExecutor>(impl->catalog);
         return {std::unique_ptr<EditorSession>{new EditorSession{std::move(impl)}}, {}};
     } catch (std::exception const& exception) {
         return {nullptr, exception.what()};
@@ -3031,14 +2326,11 @@ EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
 }
 
 PumpResult EditorSession::pump() {
-    if (impl_->session->activeDispatchRevision()) {
+    if (impl_->session->dispatchInProgress()) {
         throw std::logic_error{"worker results cannot be pumped during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    auto const before = impl_->session->revision();
-    (void)impl_->drainGitDiffScans();
-    auto const after = impl_->session->revision();
-    return {after != before, after};
+    return {impl_->drainGitDiffWorker()};
 }
 
 void EditorSession::primeDeferred() {
@@ -3098,22 +2390,20 @@ bool EditorSession::diffModelHasFileForTest(const DiffFileId& id) const {
 
 void EditorSession::reportWatcherAvailabilityForTest(bool available) {
     std::lock_guard operationLock{impl_->operationMutex};
-    impl_->watcherAvailable.store(available, std::memory_order_relaxed);
-    impl_->drainWatcherAvailability();
+    impl_->gitDiffWorker.setAvailabilityForTest(available);
 }
 
 void EditorSession::refreshFilesystemForTest() {
     std::lock_guard operationLock{impl_->operationMutex};
-    const auto before = impl_->session->revision();
-    impl_->refreshTreeForPublication(before);
+    impl_->refreshTreeForPublication();
 }
 
 bool EditorSession::dispatchInProgress() const noexcept {
-    return impl_->session->activeDispatchRevision().has_value();
+    return impl_->session->dispatchInProgress();
 }
 
 bool EditorSession::Impl::defer(ClientCommand command) {
-    if (!session->activeDispatchRevision()) return false;
+    if (!session->dispatchInProgress()) return false;
     return deferredCommands.enqueue({std::move(command)});
 }
 
@@ -3121,581 +2411,26 @@ bool EditorSession::deferDispatch(ClientCommand command) {
     return impl_->defer(std::move(command));
 }
 
-namespace {
-
-CommandResult dispatchLocked(EditorSession::Impl* impl_,
-                             ClientCommand const& command);
-
-ClientInputResult inputKeyLocked(EditorSession::Impl* impl_,
-                                 ClientKeyInput const& input) {
-    auto dispatchInput = [&](CommandName command,
-                             std::any payload = {}) -> ClientInputResult {
-        auto result = dispatchLocked(
-            impl_,
-            {std::move(command), impl_->session->revision(),
-             std::move(payload)});
-        const auto activation = result.accepted()
-                                    ? impl_->interaction.openPickerActivation()
-                                    : std::nullopt;
-        const auto outcome =
-            !result.accepted()
-                ? ClientInputOutcome::Rejected
-                : result.viewAction
-                      ? ClientInputOutcome::ViewOwned
-                      : ClientInputOutcome::Dispatched;
-        return {outcome, std::nullopt, std::move(result), activation};
-    };
-    auto clientOwned = [](ClientOwnedInputKind kind,
-                          std::string text = {}) -> ClientInputResult {
-        return {ClientInputOutcome::ClientOwned,
-                ClientOwnedInput{kind, std::move(text)}, std::nullopt};
-    };
-
-    PromptRoutingState routing;
-    routing.focus = impl_->interaction.effectiveFocus();
-    auto const promptStatus = impl_->promptStatusView();
-    if (promptStatus.activeKind == PromptKind::Palette) {
-        routing.prompt = ActivePrompt::Palette;
-    } else if (auto const view = detail::resolveRuntimePromptControls(
-                   impl_->interaction.prompt(), impl_->findReplace.viewState())) {
-        const auto kind = impl_->interaction.prompt().request()->kind;
-        switch (kind) {
-        case PromptKind::Find:
-            routing.prompt = ActivePrompt::Find;
-            break;
-        case PromptKind::Replace:
-            routing.prompt = ActivePrompt::Replace;
-            break;
-        case PromptKind::Path:
-        case PromptKind::Settings:
-        case PromptKind::CommandArgument:
-            routing.prompt = ActivePrompt::TextPrompt;
-            break;
-        case PromptKind::Palette:
-            break;
-        }
-        routing.activeInput = view->activeInput;
-        std::size_t inputIndex = 0;
-        for (auto const& control : view->controls) {
-            if (control.kind != PromptControlKind::Input) continue;
-            if (inputIndex++ == view->activeInput) {
-                routing.currentValue = control.value;
-                break;
-            }
-        }
-    }
-
-    auto routeTextEdit = [&](PromptTextEdit edit) -> ClientInputResult {
-        auto const route = PromptTextRouter{}.edit(routing, edit);
-        if (route.kind == PromptTextRoute::Kind::Dispatch) {
-            return dispatchInput(route.command, route.payload);
-        }
-        if (routing.prompt == ActivePrompt::Palette) {
-            switch (edit.kind) {
-            case PromptTextEdit::Kind::Append:
-                return clientOwned(ClientOwnedInputKind::AppendText,
-                                   route.appendText);
-            case PromptTextEdit::Kind::DeleteGraphemeBack:
-                return clientOwned(
-                    ClientOwnedInputKind::DeleteGraphemeBackward);
-            case PromptTextEdit::Kind::DeleteWordBack:
-                return clientOwned(ClientOwnedInputKind::DeleteWordBackward);
-            }
-        }
-        return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
-    };
-
-    auto const catalogRevision = impl_->catalog->revision();
-    if (!impl_->inputKeymap ||
-        impl_->inputKeymapGeneration != impl_->keymapGeneration ||
-        impl_->inputCatalogRevision != catalogRevision) {
-        impl_->inputKeymap =
-            std::make_unique<CompiledKeymap>(impl_->keymap, *impl_->catalog);
-        impl_->inputKeymapGeneration = impl_->keymapGeneration;
-        impl_->inputCatalogRevision = catalogRevision;
-    }
-
-    if (input.stroke.code != KeyCode::None) {
-        auto const resolved = impl_->inputKeymap->resolve(
-            std::array{CompiledKeymap::compile(input.stroke)}, routing.focus);
-        if (resolved.kind == KeymapMatchKind::Resolved) {
-            auto const& command = resolved.command;
-            if (routing.prompt == ActivePrompt::Palette) {
-                if (command == "prompt.submit") {
-                    return clientOwned(ClientOwnedInputKind::Submit);
-                }
-                if (command == "prompt.next" || command == "palette.next") {
-                    return clientOwned(ClientOwnedInputKind::SelectNext);
-                }
-                if (command == "prompt.previous" ||
-                    command == "palette.previous") {
-                    return clientOwned(ClientOwnedInputKind::SelectPrevious);
-                }
-                if (command == "prompt.cancel") {
-                    return dispatchInput("palette.close");
-                }
-            }
-            if (routing.focus == FocusTarget::Prompt &&
-                command == "clipboard.paste") {
-                auto const text = impl_->clipboard.viewState().plainText;
-                if (text.empty()) {
-                    return {ClientInputOutcome::Unhandled, std::nullopt,
-                            std::nullopt};
-                }
-                return routeTextEdit(
-                    {PromptTextEdit::Kind::Append, std::move(text)});
-            }
-            return dispatchInput(command);
-        }
-        if (input.stroke.code == KeyCode::Backspace) {
-            return routeTextEdit(
-                {input.stroke.alt ? PromptTextEdit::Kind::DeleteWordBack
-                                  : PromptTextEdit::Kind::DeleteGraphemeBack,
-                 {}});
-        }
-    }
-    if (!input.committedText.empty()) {
-        return routeTextEdit(
-            {PromptTextEdit::Kind::Append, input.committedText});
-    }
-    return {ClientInputOutcome::Unhandled, std::nullopt, std::nullopt};
-}
-
-ClientInputResult inputLocked(EditorSession::Impl* impl_,
-                              ClientInput const& input) {
-    return std::visit(
-        [&](auto const& semantic) -> ClientInputResult {
-            using Input = std::decay_t<decltype(semantic)>;
-            if constexpr (std::same_as<Input, ClientKeyInput>) {
-                return inputKeyLocked(impl_, semantic);
-            } else {
-                const auto unhandled = [] {
-                    return ClientInputResult{ClientInputOutcome::Unhandled,
-                                             std::nullopt, std::nullopt};
-                };
-                const auto rejectTarget = [&](std::string message) {
-                    return ClientInputResult{
-                        ClientInputOutcome::Rejected, std::nullopt,
-                        CommandResult{CommandError::HandlerFailed,
-                                      impl_->session->revision(),
-                                      std::move(message), {}}};
-                };
-                if constexpr (!std::same_as<Input, DocumentPointerInput> &&
-                              !std::same_as<Input, ScrollLinesInput> &&
-                              !std::same_as<Input, ScrollFractionInput> &&
-                              !std::same_as<Input, ViewTransitionInput>) {
-                    if (semantic.phase != InputPointerPhase::Press) {
-                        return unhandled();
-                    }
-                }
-                if constexpr (!std::same_as<Input, ScrollLinesInput> &&
-                              !std::same_as<Input, ScrollFractionInput> &&
-                              !std::same_as<Input, ViewTransitionInput>) {
-                    if (semantic.button != InputPointerButton::Primary &&
-                        !std::same_as<Input, TabPointerInput>) {
-                        return unhandled();
-                    }
-                }
-                auto dispatch = [&](CommandName command,
-                                    std::any payload) -> ClientInputResult {
-                    auto result = dispatchLocked(
-                        impl_,
-                        {std::move(command), impl_->session->revision(),
-                         std::move(payload)});
-                    const auto activation =
-                        result.accepted()
-                            ? impl_->interaction.openPickerActivation()
-                            : std::nullopt;
-                    const auto outcome =
-                        !result.accepted()
-                            ? ClientInputOutcome::Rejected
-                            : result.viewAction
-                                  ? ClientInputOutcome::ViewOwned
-                                  : ClientInputOutcome::Dispatched;
-                    return {outcome, std::nullopt, std::move(result),
-                            activation};
-                };
-                if constexpr (std::same_as<Input, DocumentPointerInput>) {
-                    if (semantic.phase == InputPointerPhase::Press ||
-                        semantic.phase == InputPointerPhase::Cancel) {
-                        impl_->documentPointerGesture.reset();
-                    }
-                }
-                if constexpr (!std::same_as<Input, PickerPointerInput>) {
-                    if (semantic.basis.observedRevision !=
-                        impl_->session->revision()) {
-                        return {
-                            ClientInputOutcome::Rejected, std::nullopt,
-                            CommandResult{CommandError::StaleRevision,
-                                          impl_->session->revision(),
-                                          "semantic input basis is stale", {}}};
-                    }
-                }
-                if constexpr (std::same_as<Input, ScrollLinesInput>) {
-                    if (semantic.action.rows == 0) {
-                        return rejectTarget(
-                            "line-scroll input must move at least one row");
-                    }
-                    switch (semantic.action.target) {
-                        case ScrollTarget::Document:
-                            return dispatch(
-                                "view.scroll_lines",
-                                ScrollLinesArguments{semantic.action.rows});
-                        case ScrollTarget::Tree:
-                            return dispatch(
-                                "tree.scroll",
-                                ScrollLinesArguments{semantic.action.rows});
-                    }
-                    return rejectTarget("line-scroll target is invalid");
-                } else if constexpr (std::same_as<Input,
-                                                  ScrollFractionInput>) {
-                    if (semantic.action.denominator == 0 ||
-                        semantic.action.numerator >
-                            semantic.action.denominator) {
-                        return rejectTarget(
-                            "fraction-scroll input is invalid");
-                    }
-                    const auto fraction = ScrollFractionArguments{
-                        semantic.action.numerator,
-                        semantic.action.denominator};
-                    switch (semantic.action.target) {
-                        case ScrollTarget::Document:
-                            return dispatch("view.scroll_to_fraction",
-                                            fraction);
-                        case ScrollTarget::Tree:
-                            return dispatch("tree.scroll_to_fraction",
-                                            fraction);
-                    }
-                    return rejectTarget("fraction-scroll target is invalid");
-                } else if constexpr (std::same_as<Input,
-                                                  ViewTransitionInput>) {
-                    return std::visit(
-                        [&](const auto& transition) -> ClientInputResult {
-                            using Transition =
-                                std::decay_t<decltype(transition)>;
-                            if constexpr (std::same_as<Transition,
-                                                       PauseFollowTransition>) {
-                                if (impl_->follow.viewState().mode ==
-                                    FollowMode::Paused) {
-                                    return unhandled();
-                                }
-                                return dispatch("follow_edits.pause",
-                                                std::any{});
-                            } else if constexpr (std::same_as<
-                                                     Transition,
-                                                     PaneFocusTransition>) {
-                                if (!impl_->focusPane(transition.pane)) {
-                                    return rejectTarget(
-                                        "pane focus target is not in this "
-                                        "attachment");
-                                }
-                                const bool focusChanged =
-                                    impl_->interaction.effectiveFocus() !=
-                                    FocusTarget::Editor;
-                                if (focusChanged) {
-                                    impl_->interaction.focusEditor();
-                                }
-                                impl_->recordNavigation(NavigationClass::User);
-                                impl_->session->advanceRevision();
-                                return {ClientInputOutcome::Dispatched,
-                                        std::nullopt,
-                                        CommandResult{
-                                            CommandError::None,
-                                            impl_->session->revision(),
-                                            {}}};
-                            } else if constexpr (std::same_as<
-                                                     Transition,
-                                                     SelectionTransition>) {
-                                const auto* tab = impl_->activeTabState();
-                                const auto* document = impl_->activeDocument();
-                                if (tab == nullptr ||
-                                    tab->id != transition.activeTab) {
-                                    return rejectTarget(
-                                        "resolved selection active tab is "
-                                        "stale");
-                                }
-                                if (document == nullptr ||
-                                    impl_->documentView().revision !=
-                                        transition.documentRevision) {
-                                    return rejectTarget(
-                                        "resolved selection document is "
-                                        "stale");
-                                }
-                                if (transition.selections.empty()) {
-                                    return rejectTarget(
-                                        "resolved selection must not be "
-                                        "empty");
-                                }
-                                std::vector<Selection> selections;
-                                selections.reserve(
-                                    transition.selections.size());
-                                const auto& text = impl_->activeText();
-                                for (const auto& range :
-                                     transition.selections) {
-                                    auto anchor =
-                                        SelectionNavigator::resolvePosition(
-                                            text, range.anchor);
-                                    auto active =
-                                        SelectionNavigator::resolvePosition(
-                                            text, range.active);
-                                    if (!anchor || !active) {
-                                        return rejectTarget(
-                                            "resolved selection range is "
-                                            "invalid");
-                                    }
-                                    selections.push_back({*anchor, *active});
-                                }
-                                impl_->selection.selections =
-                                    SelectionSet{std::move(selections)};
-                                if (const auto documentId =
-                                        impl_->activeDocumentId()) {
-                                    impl_->historyFor(*documentId)
-                                        .breakCoalescing();
-                                }
-                                impl_->recordNavigation(NavigationClass::User);
-                                impl_->session->advanceRevision();
-                                return {
-                                    ClientInputOutcome::Dispatched,
-                                    std::nullopt,
-                                    CommandResult{CommandError::None,
-                                                  impl_->session->revision(),
-                                                  {}}};
-                            } else if constexpr (std::same_as<
-                                                     Transition,
-                                                     PointerSelectionTransition>) {
-                                if (!impl_->documentPointerGesture) {
-                                    return rejectTarget(
-                                        "pointer selection has no active "
-                                        "gesture");
-                                }
-                                return inputLocked(
-                                    impl_,
-                                    ClientInput{DocumentPointerInput{
-                                        semantic.basis, transition.position,
-                                        false, false,
-                                        InputPointerButton::Primary,
-                                        InputPointerPhase::Move,
-                                        DocumentPointerEdge::None}});
-                            } else {
-                                static_assert(
-                                    std::same_as<
-                                        Transition,
-                                        PointerSelectionTransition>,
-                                    "unhandled view transition");
-                            }
-                        },
-                        semantic.transition);
-                } else if constexpr (std::same_as<Input,
-                                                  DocumentPointerInput>) {
-                    const auto handled = [&] {
-                        return ClientInputResult{
-                            ClientInputOutcome::Dispatched, std::nullopt,
-                            CommandResult{CommandError::None,
-                                          impl_->session->revision(), {}, {}}};
-                    };
-                    if (semantic.phase == InputPointerPhase::Cancel) {
-                        impl_->documentPointerGesture.reset();
-                        return handled();
-                    }
-                    const auto resolvePosition = [&]()
-                        -> std::optional<DocumentPosition> {
-                        if (!semantic.position) return std::nullopt;
-                        return SelectionNavigator::resolvePosition(
-                            impl_->activeText(), *semantic.position);
-                    };
-                    if (semantic.phase == InputPointerPhase::Press) {
-                        auto position = resolvePosition();
-                        auto documentId = impl_->activeDocumentId();
-                        if (!position || !documentId) {
-                            return rejectTarget(
-                                "document pointer target is not actionable");
-                        }
-                        if (semantic.selectWord) {
-                            return dispatch(
-                                "select.word_at_position",
-                                SelectionCommandArguments{*position,
-                                                          std::nullopt});
-                        }
-                        auto const& items = impl_->selection.selections.items();
-                        std::vector<Selection> baseline{
-                            items.begin(), items.end()};
-                        if (semantic.additive && baseline.size() > 1) {
-                            auto const hit = std::find_if(
-                                baseline.begin(), baseline.end(),
-                                [&](Selection const& selection) {
-                                    auto const offset =
-                                        position->byteOffset.value();
-                                    auto const lower =
-                                        selection.lower().byteOffset.value();
-                                    auto const upper =
-                                        selection.upper().byteOffset.value();
-                                    return lower == upper ? offset == lower
-                                                          : lower <= offset &&
-                                                                offset < upper;
-                                });
-                            if (hit != baseline.end()) {
-                                baseline.erase(hit);
-                                return dispatch(
-                                    "select.set_ranges",
-                                    SelectionCommandArguments{
-                                        std::nullopt, std::nullopt,
-                                        std::move(baseline)});
-                            }
-                        }
-                        impl_->documentPointerGesture =
-                            EditorSession::Impl::DocumentPointerGesture{
-                                *documentId,
-                                impl_->activeDocument()->revision(),
-                                *position, *position, semantic.additive,
-                                baseline};
-                        auto result =
-                            semantic.additive
-                                ? dispatch(
-                                      "select.add_range",
-                                      SelectionCommandArguments{
-                                          std::nullopt,
-                                          Selection{*position, *position}})
-                                : dispatch(
-                                      "cursor.set_position",
-                                      SelectionCommandArguments{*position,
-                                                                std::nullopt});
-                        if (!result.command || !result.command->accepted()) {
-                            impl_->documentPointerGesture.reset();
-                        }
-                        return result;
-                    }
-                    if (!impl_->documentPointerGesture) {
-                        return unhandled();
-                    }
-                    auto& gesture = *impl_->documentPointerGesture;
-                    if (impl_->activeDocumentId() !=
-                        std::optional<FileDocumentId>{gesture.documentId}) {
-                        impl_->documentPointerGesture.reset();
-                        return rejectTarget(
-                            "document pointer gesture target changed");
-                    }
-                    if (impl_->activeDocument()->revision() !=
-                        gesture.documentRevision) {
-                        impl_->documentPointerGesture.reset();
-                        return rejectTarget(
-                            "document changed during pointer gesture");
-                    }
-                    auto position = resolvePosition();
-                    if (semantic.edge != DocumentPointerEdge::None) {
-                        auto result = CommandResult{
-                            CommandError::None, impl_->session->revision(), {}};
-                        result.viewAction = ViewActionRequest{
-                            impl_->session->currentView(),
-                            impl_->session->revision(),
-                            ContinuePointerEdge{semantic.edge}};
-                        return {ClientInputOutcome::ViewOwned, std::nullopt,
-                                std::move(result)};
-                    }
-                    if (!position &&
-                        semantic.phase == InputPointerPhase::Move) {
-                        return rejectTarget(
-                            "document pointer target is not actionable");
-                    }
-                    ClientInputResult result = handled();
-                    if (position) {
-                        if (gesture.additive) {
-                            auto ranges = gesture.baseline;
-                            ranges.push_back(Selection{
-                                gesture.anchor, *position});
-                            result = dispatch(
-                                "select.set_ranges",
-                                SelectionCommandArguments{
-                                    std::nullopt, std::nullopt,
-                                    std::move(ranges)});
-                        } else {
-                            result = dispatch(
-                                "select.set_range",
-                                SelectionCommandArguments{
-                                    std::nullopt,
-                                    Selection{gesture.anchor,
-                                              *position}});
-                        }
-                        if (result.command && result.command->accepted() &&
-                            position) {
-                            gesture.active = *position;
-                        }
-                    }
-                    if (semantic.phase == InputPointerPhase::Release) {
-                        impl_->documentPointerGesture.reset();
-                    }
-                    return result;
-                } else if constexpr (std::same_as<Input, TabPointerInput>) {
-                    if (semantic.button == InputPointerButton::Primary) {
-                        return dispatch("tab.activate", semantic.tabId);
-                    }
-                    if (semantic.button == InputPointerButton::Auxiliary) {
-                        return dispatch("tab.close", semantic.tabId);
-                    }
-                    return unhandled();
-                } else if constexpr (std::same_as<Input, TreePointerInput>) {
-                    if (semantic.button != InputPointerButton::Primary) {
-                        return unhandled();
-                    }
-                    return dispatch("tree.activate_node",
-                                    TreeSelectArguments{semantic.nodeId});
-                } else if constexpr (std::same_as<Input,
-                                                  PickerPointerInput>) {
-                    if (semantic.button != InputPointerButton::Primary) {
-                        return unhandled();
-                    }
-                    return dispatch(
-                        "picker.submit",
-                        PickerSubmitArguments{semantic.activation,
-                                              semantic.candidateId});
-                } else if constexpr (std::same_as<
-                                         Input, ExternalActionPointerInput>) {
-                    if (semantic.button != InputPointerButton::Primary) {
-                        return unhandled();
-                    }
-                    return dispatch("external.invoke_action",
-                                    semantic.invocation);
-                } else if constexpr (std::same_as<
-                                         Input, NoticeActionPointerInput>) {
-                    if (semantic.button != InputPointerButton::Primary) {
-                        return unhandled();
-                    }
-                    const auto notice = impl_->noticeView();
-                    if (!notice) {
-                        return rejectTarget("notice action target is not present");
-                    }
-                    for (auto const& action : notice->actions) {
-                        if (action.id == semantic.actionId) {
-                            return dispatch(action.commandId, std::any{});
-                        }
-                    }
-                    return rejectTarget("notice action target is not actionable");
-                }
-            }
-        },
-        input);
-}
-
-CommandResult dispatchLocked(EditorSession::Impl* impl_,
-                             ClientCommand const& command) {
+CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) {
     // Every direct dispatch -- keystroke, palette, or script -- is local: there
     // is one trusted caller, so a mutation always counts toward the local-edit
     // follow pause.
     const auto dispatchAs = [&](const ClientCommand& dispatched) {
-        const auto revisionsBefore = documentRevisions(impl_->workspace);
-        auto result = impl_->session->dispatch(dispatched);
-        impl_->reconcileFindDocument();
+        const auto revisionsBefore = documentRevisions(workspace);
+        auto result = session->dispatch(dispatched);
+        reconcileFindDocument();
         // The draft-conflict notice's presence lives in per-document runtime state,
         // outside the prompt/panel transitions, so reconcile it into the interaction
         // authority here where every state change (open, reopen, tab switch, discard,
         // dismiss) has settled -- the notice region then shows/hides in the presence
         // section this dispatch publishes.
-        impl_->interaction.refreshNoticePresence(impl_->noticePresent());
-        impl_->interaction.refreshExternalModificationPresence(
-            impl_->externalModificationPresent());
-        impl_->interaction.refreshStatusActions(impl_->status.actionNodes());
+        interaction.refreshNoticePresence(noticePresent());
+        interaction.refreshExternalModificationPresence(
+            externalModificationPresent());
+        interaction.refreshStatusActions(status.actionNodes());
         if (result.accepted() &&
-            existingDocumentMutated(revisionsBefore, impl_->workspace)) {
-            (void)impl_->follow.notifyLocalEdit();
+            existingDocumentMutated(revisionsBefore, workspace)) {
+            (void)follow.notifyLocalEdit();
         }
         return result;
     };
@@ -3705,14 +2440,11 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_,
     // queued: the palette and prompt paths below return early, and a command
     // run through either of them may queue just as any other can.
     //
-    // Requests run once the session lock has released, in the order asked for,
-    // each rebased on the revision the previous one left.
+    // Requests run once the session lock has released, in the order asked for.
     const auto dispatchAndDrain = [&](const ClientCommand& dispatched) {
         const auto* requested = dispatched.id.handle().valid()
-                                    ? impl_->catalog->find(
-                                          dispatched.id.handle())
-                                    : impl_->catalog->find(
-                                          dispatched.id.name());
+                                    ? catalog->find(dispatched.id.handle())
+                                    : catalog->find(dispatched.id.name());
         const bool routing =
             requested && requested->effect == CommandEffect::Routing;
         auto outcome = dispatchAs(dispatched);
@@ -3721,59 +2453,58 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_,
         // is worse than running none of it.  Its success would also overwrite
         // the failure being reported.
         if (!outcome.accepted()) {
-            impl_->deferredCommands.clear();
+            deferredCommands.clear();
             return outcome;
         }
-        if (routing && impl_->deferredCommands.size() != 1) {
-            impl_->deferredCommands.clear();
+        if (routing && deferredCommands.size() != 1) {
+            deferredCommands.clear();
             return ExecutorResult{
-                CommandError::HandlerFailed, outcome.revision,
+                CommandError::HandlerFailed,
                 "a routing command must queue exactly one target",
                 std::nullopt};
         }
-        if (outcome.viewAction && !impl_->deferredCommands.empty()) {
-            impl_->deferredCommands.clear();
+        if (outcome.viewAction && !deferredCommands.empty()) {
+            deferredCommands.clear();
             return ExecutorResult{
-                CommandError::HandlerFailed, outcome.revision,
+                CommandError::HandlerFailed,
                 "a view-action command cannot defer another command",
                 std::nullopt};
         }
         bool directRoutingTarget = routing;
-        while (!impl_->deferredCommands.empty()) {
-            auto deferred = impl_->deferredCommands.takeFront();
+        while (!deferredCommands.empty()) {
+            auto deferred = deferredCommands.takeFront();
             if (directRoutingTarget) {
                 const auto* target = deferred.command.id.handle().valid()
-                                         ? impl_->catalog->find(
+                                         ? catalog->find(
                                                deferred.command.id.handle())
-                                         : impl_->catalog->find(
+                                         : catalog->find(
                                                deferred.command.id.name());
                 if (target && target->effect == CommandEffect::Routing) {
-                    impl_->deferredCommands.clear();
+                    deferredCommands.clear();
                     return ExecutorResult{
-                        CommandError::HandlerFailed, outcome.revision,
+                        CommandError::HandlerFailed,
                         "a routing command cannot target another routing "
                         "command",
                         std::nullopt};
                 }
             }
             directRoutingTarget = false;
-            deferred.command.baseRevision = impl_->session->revision();
             auto const deferredResult = dispatchAs(deferred.command);
             // The first failure is reported, naming the command that failed,
             // and the rest are abandoned: continuing would run the remainder of
             // a sequence whose earlier step did not happen.
             if (!deferredResult.accepted()) {
-                impl_->deferredCommands.clear();
+                deferredCommands.clear();
                 return ExecutorResult{
-                    deferredResult.error, deferredResult.revision,
+                    deferredResult.error,
                     std::string{deferred.command.id.name()} + ": " +
                         deferredResult.message, std::nullopt};
             }
             if (deferredResult.viewAction &&
-                !impl_->deferredCommands.empty()) {
-                impl_->deferredCommands.clear();
+                !deferredCommands.empty()) {
+                deferredCommands.clear();
                 return ExecutorResult{
-                    CommandError::HandlerFailed, deferredResult.revision,
+                    CommandError::HandlerFailed,
                     "a deferred view-action command cannot precede another "
                     "command",
                     std::nullopt};
@@ -3788,91 +2519,61 @@ CommandResult dispatchLocked(EditorSession::Impl* impl_,
     // client keeps close-on-success semantics identical for keyboard and
     // pointer submits: a rejected open -- the file was removed between the walk
     // and the submit -- leaves the picker open with its query intact.
-    if (result.accepted() && impl_->interaction.openPicker() == PickerKind::File &&
+    if (result.accepted() && interaction.openPicker() == PickerKind::File &&
         command.id == "file.open") {
-        (void)impl_->interaction.cancelPrompt();
+        (void)interaction.cancelPrompt();
     }
-    return {result.error, result.revision, std::move(result.message),
+    return {result.error, std::move(result.message),
             std::move(result.viewAction)};
 }
 
-}  // namespace
-
 ClientInputResult EditorSession::input(ClientInput const& input) {
-    if (const auto nested = impl_->session->activeDispatchRevision()) {
+    if (impl_->session->dispatchInProgress()) {
         return {ClientInputOutcome::Rejected, std::nullopt,
-                CommandResult{CommandError::HandlerFailed, *nested,
-                              std::string{
-                                  kNestedDispatchRefusal},
+                CommandResult{CommandError::HandlerFailed,
+                              std::string{kNestedDispatchRefusal},
                               {}}};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    return inputLocked(impl_.get(), input);
+    return inputLocked(*impl_, input);
 }
 
 CommandResult EditorSession::dispatch(ClientCommand const& command) {
     // A handler must be refused before taking the non-recursive aggregate lock.
-    if (const auto nested = impl_->session->activeDispatchRevision()) {
-        return {CommandError::HandlerFailed, *nested,
+    if (impl_->session->dispatchInProgress()) {
+        return {CommandError::HandlerFailed,
                 std::string{kNestedDispatchRefusal}};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    return dispatchLocked(impl_.get(), command);
+    return impl_->dispatchLocked(command);
 }
 
 std::shared_ptr<CommandCatalog const> EditorSession::commandCatalog() const {
     return impl_->catalog;
 }
 
-CommandHandle EditorSession::registerCommand(CommandSpecBuilder command) {
+CommandHandle EditorSession::registerCommand(CommandSpec command) {
     if (dispatchInProgress()) {
         throw std::logic_error{"commands cannot be registered during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    if (impl_->session->revision().value() ==
-        std::numeric_limits<std::uint64_t>::max()) {
-        throw std::overflow_error{"session revision exhausted"};
-    }
-    auto const handle = impl_->catalog->add(std::move(command));
-    impl_->session->advanceRevision();
-    return handle;
+    return impl_->catalog->add(std::move(command));
 }
 
 std::vector<CommandHandle> EditorSession::replaceCommandGeneration(
     std::span<CommandHandle const> retire,
-    std::vector<CommandSpecBuilder> commands) {
+    std::vector<CommandSpec> commands) {
     if (dispatchInProgress()) {
         throw std::logic_error{
             "command generations cannot be replaced during dispatch"};
     }
     std::lock_guard operationLock{impl_->operationMutex};
-    if (impl_->session->revision().value() ==
-        std::numeric_limits<std::uint64_t>::max()) {
-        throw std::overflow_error{"session revision exhausted"};
-    }
-    auto const catalogRevision = impl_->catalog->revision();
-    auto handles = impl_->catalog->replaceGeneration(
-        retire, std::move(commands));
-    if (impl_->catalog->revision() != catalogRevision) {
-        impl_->session->advanceRevision();
-    }
-    return handles;
-}
-
-Revision EditorSession::revision() const {
-    if (const auto active = impl_->session->activeDispatchRevision()) {
-        return *active;
-    }
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->session->revision();
+    return impl_->catalog->replaceGeneration(retire, std::move(commands));
 }
 
 std::uint64_t EditorSession::gitFullRefreshCountForTest() const {
     std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->gitDiffWorker
-               ? impl_->gitDiffWorker->fullRefreshCount.load(
-                     std::memory_order_relaxed)
-               : 0;
+    return impl_->gitDiffWorker.fullRefreshCount();
 }
 
 std::filesystem::path const& EditorSession::workspaceRoot() const noexcept { return impl_->root; }
@@ -3885,76 +2586,6 @@ DiffIngressResult EditorSession::applyGitDiffScan(GitDiffScan scan) {
     std::lock_guard operationLock{impl_->operationMutex};
     return impl_->applyGitDiffScan(std::move(scan));
 }
-std::optional<PresentationCapture> EditorSession::capturePresentation(
-    std::optional<ViewId> expectedView,
-    const PaletteReport& paletteReport) const {
-    if (impl_->session->activeDispatchRevision()) {
-        throw std::logic_error{"a view cannot be presented during dispatch"};
-    }
-    std::lock_guard operationLock{impl_->operationMutex};
-    if (expectedView && impl_->session->currentView() != *expectedView) {
-        return std::nullopt;
-    }
-    auto sections = impl_->sections(paletteReport);
-    return PresentationCapture{
-        SessionSnapshot{impl_->session->revision(), impl_->currentTopology(),
-                       std::move(sections)},
-        impl_->style};
-}
-
-std::optional<ViewportProjectionResult> EditorSession::projectViewport(
-    const ViewportProjectionRequest& request,
-    ViewportProjectionState& presentation) const {
-    if (impl_->session->activeDispatchRevision()) {
-        throw std::logic_error{"a view cannot be presented during dispatch"};
-    }
-    std::lock_guard operationLock{impl_->operationMutex};
-    if (impl_->session->currentView() != request.viewId ||
-        impl_->session->revision() != request.semanticRevision) {
-        return std::nullopt;
-    }
-
-    auto navigation = request.proposedNavigation;
-    if (request.revealPrimarySelection) {
-        const ViewportDimensions revealViewport{
-            std::max(request.paneContentColumns, std::uint32_t{1}),
-            std::max(request.paneContentRows, std::uint32_t{1})};
-        auto selectionView = SelectionViewState{
-            impl_->selection.selections,
-            request.proposedNavigation.firstVisualRow,
-            request.proposedNavigation.firstVisualColumn,
-            request.proposedNavigation.desiredCell};
-        const auto diff = impl_->activeDiffFile();
-        auto revealed = SelectionNavigator{}.apply(
-            impl_->activeText(), selectionView,
-            SelectionCommand::ViewRevealCaret, revealViewport, {}, {}, 4,
-            impl_->wordWrap, diff ? &*diff : nullptr);
-        if (revealed.accepted() && revealed.delta.replacement) {
-            navigation = {
-                revealed.delta.replacement->firstVisualRow,
-                revealed.delta.replacement->firstVisualColumn,
-                revealed.delta.replacement->desiredCell};
-        }
-    }
-    auto viewport = impl_->computeEditorViewport(
-        *presentation.impl_, request.dimensions,
-        std::max(request.paneContentRows, std::uint32_t{1}),
-        std::max(request.paneContentColumns, std::uint32_t{1}),
-        navigation.firstVisualRow, navigation.firstVisualColumn);
-    return ViewportProjectionResult{std::move(viewport), navigation};
-}
-
-std::optional<SessionSnapshot> EditorSession::snapshot(
-    PaletteReport paletteReport) const {
-    if (impl_->session->activeDispatchRevision()) {
-        throw std::logic_error{"a session cannot be snapshotted during dispatch"};
-    }
-    std::lock_guard operationLock{impl_->operationMutex};
-    auto sections = impl_->sections(paletteReport);
-    return SessionSnapshot{impl_->session->revision(), impl_->currentTopology(),
-                           std::move(sections)};
-}
-
 int EditorSession::gitDiffWakeDescriptor() const {
     return impl_->gitDiffWakeDescriptor();
 }

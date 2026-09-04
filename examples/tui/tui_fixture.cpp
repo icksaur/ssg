@@ -57,12 +57,11 @@ std::optional<SemanticCommand> TerminalInputCapture::capture(
 
 void TerminalInputCapture::reset() noexcept { pending_.clear(); }
 
-TuiClient::TuiClient(EditorSession& runtime, ViewId viewId,
+TuiClient::TuiClient(EditorSession& runtime,
                      ViewportDimensions dimensions)
     : runtime_{&runtime},
-      viewId_{viewId},
       dimensions_{dimensions},
-      presenter_{viewId} {
+      presenter_{} {
     refresh();
 }
 
@@ -73,8 +72,8 @@ CommandResult TuiClient::submit(SemanticCommand const& command) {
 }
 
 CommandResult TuiClient::submit(std::string commandId, std::any payload) {
-    auto result = runtime_->dispatch(
-        {std::move(commandId), snapshot_->revision(), std::move(payload)});
+    auto result =
+        runtime_->dispatch({std::move(commandId), std::move(payload)});
     if (result.accepted()) refresh();
     return result;
 }

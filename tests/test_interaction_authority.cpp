@@ -1,15 +1,13 @@
-// Seam oracle for InteractionAuthority -- the single owner of the schema, prompt,
-// truth, interaction projection, and the tree revision source. Proves: apply() routes a
-// transition through one atomic prepare+install; a rejected transition mutates nothing;
-// ShowPanelProvider creates and stamps tree backing from the owned revision source; every
+// Seam oracle for InteractionState -- the single owner of the schema, prompt,
+// truth, interaction projection, and the tree revision source. Proves: rejected operations
+// mutate nothing; showing a panel provider creates and stamps tree backing; every
 // generic prompt lifecycle path (open/submit/cancel/update) keeps prompt and focus
 // consistent and reconciles a stale picker identity; the revision source is monotonic and
 // the sole minter; and a structural schema change migrates interaction+truth atomically
 // while preserving valid panel and prompt truth.
 
-#include "ssg/InteractionAuthority.h"
+#include "../src/runtime/interaction.h"
 
-#include "ssg/StatusFields.h"
 #include "ssg/Style.h"
 #include "ssg/UiTree.h"
 #include "ssg/WholeScreenAssembly.h"
@@ -24,18 +22,10 @@
 namespace {
 
 using namespace ssg;
-
-StatusFieldCatalogEntry entry(std::string id, StatusFieldRegion region) {
-    StatusFieldCatalogEntry e;
-    e.id = std::move(id);
-    e.region = region;
-    return e;
-}
+using InteractionAuthority = InteractionState;
 
 UiComposition assemble(const StyleDimensions& dims) {
-    return assembleWholeScreen({entry("path", StatusFieldRegion::Header),
-                                entry("mode", StatusFieldRegion::Footer)},
-                               "help.open", dims, Style{}.inputLineSigil);
+    return assembleWholeScreen("help.open", dims, Style{}.inputLineSigil);
 }
 
 // A TreeModel seeded with the always-present filesystem provider (empty nodes suffice).
@@ -47,7 +37,7 @@ TreeModel seededTree() {
     return tree;
 }
 
-bool present(const InteractionAuthority& a, std::string_view id) {
+bool present(const InteractionState& a, std::string_view id) {
     return isUiNodeVisible(a.schema(),
                            UiNodeId{std::string{id}});
 }
@@ -71,19 +61,17 @@ std::optional<TreeRevision> revisionOf(const TreeModel& tree, std::string_view i
 
 TEST(initiallyNoPanelNoPromptTabViewShown) {
     TreeModel tree = seededTree();
-    InteractionAuthority authority{assemble(StyleDimensions{}), tree};
+    InteractionState authority{assemble(StyleDimensions{}), tree};
     ASSERT_FALSE(present(authority, kPanelNodeId));
     ASSERT_FALSE(authority.openPicker().has_value());
     ASSERT_TRUE(present(authority, kEditorNodeId));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
 }
 
-// --- apply(): transition chokepoint -------------------------------------------------
-
-TEST(applyOpenFinderRoutesThroughOneAtomicInstall) {
+TEST(openFinderUpdatesPromptPresenceAndFocus) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
+    ASSERT_TRUE(authority.openFinder(PickerKind::File));
     ASSERT_TRUE(authority.openPicker().has_value());
     ASSERT_TRUE(*authority.openPicker() == PickerKind::File);
     ASSERT_TRUE(authority.prompt().active());
@@ -95,14 +83,14 @@ TEST(applyOpenFinderRoutesThroughOneAtomicInstall) {
 TEST(eachSuccessfulFinderOpenMintsANewActivation) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
+    ASSERT_TRUE(authority.openFinder(PickerKind::File));
     const auto first = authority.openPickerActivation();
     ASSERT_TRUE(first.has_value());
     if (!first) return;
     ASSERT_TRUE(first->id.valid());
     ASSERT_TRUE(first->mode == SearchMode::File);
 
-    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::File}));
+    ASSERT_TRUE(authority.openFinder(PickerKind::File));
     const auto second = authority.openPickerActivation();
     ASSERT_TRUE(second.has_value());
     if (!second) return;
@@ -115,33 +103,30 @@ TEST(exhaustedPickerActivationSourceRejectsOpenAtomically) {
     InteractionAuthority authority{
         assemble(StyleDimensions{}), tree, 1,
         PickerActivationId{std::numeric_limits<std::uint64_t>::max()}};
-    ASSERT_FALSE(authority.apply(OpenFinder{PickerKind::Command}));
+    ASSERT_FALSE(authority.openFinder(PickerKind::Command));
     ASSERT_FALSE(present(authority, kPanelNodeId));
     ASSERT_FALSE(authority.openPickerActivation().has_value());
     ASSERT_FALSE(authority.prompt().active());
 }
 
-TEST(applyShowProviderCreatesTreeBackingFromTheOwnedSource) {
+TEST(showProviderCreatesTreeBackingFromTheOwnedSource) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree, 5};
     ASSERT_FALSE(revisionOf(tree, "git").has_value());
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Git)}));
+    ASSERT_TRUE(authority.showPanelProvider(TreeProviderKind::Git));
     ASSERT_TRUE(present(authority, kPanelNodeId));
-    ASSERT_TRUE(tree.activeProviderBinding() ==
-                builtInPanelTreeProvider(TreeProviderKind::Git));
+    ASSERT_EQ(tree.activeProviderBinding()->kind, TreeProviderKind::Git);
     // The git provider was created and stamped from the authority's revision source (5).
     const auto gitRevision = revisionOf(tree, "git");
     ASSERT_TRUE(gitRevision.has_value());
     ASSERT_EQ(gitRevision->value(), std::uint64_t{5});
 }
 
-TEST(applyRejectionMutatesNothing) {
-    TreeModel empty;  // no filesystem provider -> ShowPanelProvider{FileTree} rejects
+TEST(rejectedShowProviderMutatesNothing) {
+    TreeModel empty;
     InteractionAuthority authority{assemble(StyleDimensions{}), empty};
     const FocusTarget focusBefore = authority.effectiveFocus();
-    ASSERT_FALSE(authority.apply(ShowPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
+    ASSERT_FALSE(authority.showPanelProvider(TreeProviderKind::Filesystem));
     ASSERT_FALSE(present(authority, kPanelNodeId));
     ASSERT_TRUE(authority.effectiveFocus() == focusBefore);
     ASSERT_FALSE(authority.prompt().active());
@@ -163,7 +148,7 @@ TEST(genericOpenPromptFocusesFooterWithoutAPicker) {
 TEST(genericPromptOverAPickerClearsTheStalePickerIdentity) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::Command}));
+    ASSERT_TRUE(authority.openFinder(PickerKind::Command));
     ASSERT_TRUE(authority.openPicker().has_value());
     // Opening a generic (non-Palette) prompt replaces the picker prompt; its identity,
     // which is not derivable from the prompt, is reconciled away by the owner.
@@ -219,7 +204,7 @@ TEST(promptFocusUsesControlIdentityAndRejectsNonInputs) {
     ASSERT_FALSE(authority.focusPromptControl("missing").accepted());
 }
 
-// --- Revision source ----------------------------------------------------------------
+// --- std::uint64_t source ----------------------------------------------------------------
 
 TEST(allocateTreeRevisionIsMonotonic) {
     TreeModel tree = seededTree();
@@ -237,54 +222,25 @@ TEST(allocateTreeRevisionRejectsExhaustion) {
     ASSERT_THROWS(authority.allocateTreeRevision(), std::logic_error);
 }
 
-TEST(panelProviderCycleUsesOnlyTheBuiltInCatalog) {
-    const auto providers = builtInPanelTreeProviders();
-    ASSERT_TRUE(!providers.empty());
-    for (const auto& provider : providers) {
-        const auto next =
-            cyclePanelTreeProvider(provider, CycleDirection::Next);
-        const auto previous =
-            cyclePanelTreeProvider(provider, CycleDirection::Previous);
-        ASSERT_TRUE(std::ranges::find(providers, next) != providers.end());
-        ASSERT_TRUE(std::ranges::find(providers, previous) != providers.end());
-    }
-    const TreeProviderBinding invalid{TreeProviderId{"invalid"},
-                                      TreeProviderKind::Filesystem};
-    ASSERT_THROWS(cyclePanelTreeProvider(invalid, CycleDirection::Next),
-                  std::logic_error);
-}
-
-TEST(switchPanelProviderPreservesPanelTruthAndRejectsInvalidRequests) {
+TEST(switchPanelProviderPreservesPanelTruth) {
     TreeModel hiddenTree = seededTree();
     InteractionAuthority hidden{assemble(StyleDimensions{}), hiddenTree};
-    ASSERT_TRUE(hidden.apply(SwitchPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Git)}));
+    ASSERT_TRUE(hidden.switchPanelProvider(CycleDirection::Next));
     ASSERT_FALSE(present(hidden, kPanelNodeId));
     ASSERT_EQ(hidden.effectiveFocus(), FocusTarget::Editor);
 
     TreeModel shownTree = seededTree();
     InteractionAuthority shown{assemble(StyleDimensions{}), shownTree};
-    ASSERT_TRUE(shown.apply(ShowPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
-    ASSERT_TRUE(shown.apply(SwitchPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Symbols)}));
+    ASSERT_TRUE(shown.showPanelProvider(TreeProviderKind::Filesystem));
+    ASSERT_TRUE(shown.switchPanelProvider(CycleDirection::Previous));
     ASSERT_TRUE(present(shown, kPanelNodeId));
     ASSERT_EQ(shown.effectiveFocus(), FocusTarget::Panel);
-    ASSERT_TRUE(shown.apply(SwitchPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
+    ASSERT_TRUE(shown.switchPanelProvider(CycleDirection::Next));
     ASSERT_TRUE(present(shown, kPanelNodeId));
 
     TreeModel emptyTree;
     InteractionAuthority empty{assemble(StyleDimensions{}), emptyTree};
-    ASSERT_FALSE(empty.apply(SwitchPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
-
-    const TreeProviderBinding unknown{TreeProviderId{"other"},
-                                      TreeProviderKind::Git};
-    ASSERT_FALSE(shown.apply(ShowPanelProvider{unknown}));
-    const TreeProviderBinding wrongKind{TreeProviderId{"git"},
-                                        TreeProviderKind::Symbols};
-    ASSERT_FALSE(shown.apply(ShowPanelProvider{wrongKind}));
+    ASSERT_FALSE(empty.switchPanelProvider(CycleDirection::Next));
     ASSERT_TRUE(present(shown, kPanelNodeId));
 }
 
@@ -303,9 +259,8 @@ TEST(constructionRejectsARevisionSourceBehindAProvider) {
 TEST(updateCompositionMigratesPreservingPanelAndPromptTruth) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
-    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::Command}));
+    ASSERT_TRUE(authority.showPanelProvider(TreeProviderKind::Filesystem));
+    ASSERT_TRUE(authority.openFinder(PickerKind::Command));
     ASSERT_TRUE(present(authority, kPanelNodeId));
     ASSERT_TRUE(authority.openPicker().has_value());
 
@@ -365,27 +320,25 @@ TEST(statusOverlaySurvivesPromptAndEquivalentRebuilds) {
 TEST(promptOverPanelClosesBackToPanelFocus) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
+    ASSERT_TRUE(authority.showPanelProvider(TreeProviderKind::Filesystem));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Panel);
-    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::Command}));
+    ASSERT_TRUE(authority.openFinder(PickerKind::Command));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
-    ASSERT_TRUE(authority.apply(CloseFinder{}));
+    ASSERT_TRUE(authority.closeFinder());
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Panel);
 }
 
 TEST(panelHideWhilePromptCapturedRestoresBaseUnderThePrompt) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
-    ASSERT_TRUE(authority.apply(OpenFinder{PickerKind::Command}));
+    ASSERT_TRUE(authority.showPanelProvider(TreeProviderKind::Filesystem));
+    ASSERT_TRUE(authority.openFinder(PickerKind::Command));
     // Hide the panel while the prompt is captured: the prompt still routes focus, but the
     // base focus underneath is restored to the panel-return focus (Editor).
-    ASSERT_TRUE(authority.apply(TogglePanel{}));
+    ASSERT_TRUE(authority.togglePanel());
     ASSERT_FALSE(present(authority, kPanelNodeId));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Prompt);
-    ASSERT_TRUE(authority.apply(CloseFinder{}));
+    ASSERT_TRUE(authority.closeFinder());
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
 }
 
@@ -393,19 +346,16 @@ TEST(providerCyclingWhileHiddenAndEditorFocusedPreservesBoth) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
     // Panel hidden, editor-focused: switching provider changes only the selection.
-    ASSERT_TRUE(authority.apply(SwitchPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Git)}));
+    ASSERT_TRUE(authority.switchPanelProvider(CycleDirection::Next));
     ASSERT_FALSE(present(authority, kPanelNodeId));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
-    ASSERT_TRUE(tree.activeProviderBinding() ==
-                builtInPanelTreeProvider(TreeProviderKind::Git));
+    ASSERT_EQ(tree.activeProviderBinding()->kind, TreeProviderKind::Git);
 }
 
 TEST(editorFocusWithThePanelVisibleKeepsThePanelPresent) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
+    ASSERT_TRUE(authority.showPanelProvider(TreeProviderKind::Filesystem));
     authority.focusEditor();
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
     ASSERT_TRUE(present(authority, kPanelNodeId));  // focus moved, panel stayed
@@ -418,8 +368,7 @@ TEST(focusPanelRequiresThePanelThenFocusEditorReturns) {
     ASSERT_FALSE(authority.focusPanel());
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
 
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
+    ASSERT_TRUE(authority.showPanelProvider(TreeProviderKind::Filesystem));
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Panel);
     authority.focusEditor();
     ASSERT_TRUE(authority.effectiveFocus() == FocusTarget::Editor);
@@ -430,8 +379,7 @@ TEST(focusPanelRequiresThePanelThenFocusEditorReturns) {
 TEST(focusChangeUnderAnOpenPromptSurfacesWhenThePromptCloses) {
     TreeModel tree = seededTree();
     InteractionAuthority authority{assemble(StyleDimensions{}), tree};
-    ASSERT_TRUE(authority.apply(ShowPanelProvider{
-        builtInPanelTreeProvider(TreeProviderKind::Filesystem)}));
+    ASSERT_TRUE(authority.showPanelProvider(TreeProviderKind::Filesystem));
     ASSERT_TRUE(authority.openPrompt(footerPrompt()).accepted());
     // The prompt capture routes effective focus regardless of the base change.
     authority.focusEditor();
@@ -518,11 +466,11 @@ TEST(theExternalCaptureAndAPromptCoexistWithLifoActiveContext) {
 
 SSG_TEST_SUITE(test_interaction_authority) {
     RUN(initiallyNoPanelNoPromptTabViewShown);
-    RUN(applyOpenFinderRoutesThroughOneAtomicInstall);
+    RUN(openFinderUpdatesPromptPresenceAndFocus);
     RUN(eachSuccessfulFinderOpenMintsANewActivation);
     RUN(exhaustedPickerActivationSourceRejectsOpenAtomically);
-    RUN(applyShowProviderCreatesTreeBackingFromTheOwnedSource);
-    RUN(applyRejectionMutatesNothing);
+    RUN(showProviderCreatesTreeBackingFromTheOwnedSource);
+    RUN(rejectedShowProviderMutatesNothing);
     RUN(genericOpenPromptFocusesFooterWithoutAPicker);
     RUN(genericPromptOverAPickerClearsTheStalePickerIdentity);
     RUN(cancelPromptReleasesFocus);
@@ -531,8 +479,7 @@ SSG_TEST_SUITE(test_interaction_authority) {
     RUN(promptFocusUsesControlIdentityAndRejectsNonInputs);
     RUN(allocateTreeRevisionIsMonotonic);
     RUN(allocateTreeRevisionRejectsExhaustion);
-    RUN(panelProviderCycleUsesOnlyTheBuiltInCatalog);
-    RUN(switchPanelProviderPreservesPanelTruthAndRejectsInvalidRequests);
+    RUN(switchPanelProviderPreservesPanelTruth);
     RUN(constructionRejectsARevisionSourceBehindAProvider);
     RUN(updateCompositionMigratesPreservingPanelAndPromptTruth);
     RUN(updateCompositionWithoutStructuralChangeDoesNotAdvance);

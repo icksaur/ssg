@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/CommandInvocation.h>
+#include <ssg/CommandCatalog.h>
 #include <ssg/PaneNavigation.h>
 
 #include <cstdint>
@@ -47,7 +47,6 @@ private:
 
 struct SessionTopology {
     std::optional<WorkspaceId> activeWorkspace;
-    std::optional<ViewId> activeView;
     PaneTopology panes = PaneTopology::initial();
 
     bool operator==(SessionTopology const&) const = default;

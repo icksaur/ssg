@@ -1,7 +1,6 @@
 #include "editor_session_internal.h"
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/CommandSpecBuilder.h>
 #include <ssg/Keymap.h>
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
@@ -178,22 +177,21 @@ std::string buildHelpDocument(EditorSession::Impl const& runtime) {
     return document;
 }
 
-void bindRuntimeHelp(CommandCatalog& builder,
+void bindRuntimeHelp(CommandCatalog& catalog,
                      EditorSession::Impl& runtime) {
-    builder.add(
-        CommandSpecBuilder{"help.open"}
-            .owner("help-system")
-            .summary("Open Help")
-            .label("Open Help")
-            .mutates()
-            .lua()
-            .handler([&runtime](CommandContext&) {
-                return runtime.runTransaction([&] {
-                    return runtime.openReadOnlyTab(
-                        TabKind::ReadOnlyOutput, "help:main", "help",
-                        buildHelpDocument(runtime), ssg::LanguageId{"markdown"});
-                });
-            }));
+    catalog.add(CommandSpec{
+        .id = "help.open",
+        .owner = "help-system",
+        .label = "Open Help",
+        .summary = "Open Help",
+        .effect = CommandEffect::Mutation,
+        .luaApi = true,
+        .binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+            return runtime.openReadOnlyTab(
+                TabKind::ReadOnlyOutput, "help:main", "help",
+                buildHelpDocument(runtime), ssg::LanguageId{"markdown"});
+        }),
+    });
 }
 
 } // namespace ssg

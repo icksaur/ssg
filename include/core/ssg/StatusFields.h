@@ -1,11 +1,9 @@
 #pragma once
 
-#include <cstdint>
 #include <filesystem>
-#include <functional>
 #include <optional>
 #include <string>
-#include <unordered_map>
+#include <string_view>
 #include <vector>
 
 namespace ssg {
@@ -14,20 +12,19 @@ struct StatusField {
     std::string id;
     std::string accessibleLabel;
     std::string value;
-    std::uint8_t collapseRank = 0;
     std::optional<std::string> commandId;
 };
 
-enum class StatusFieldRegion : std::uint8_t { Header, Footer };
+// The fixed header/footer status-field identities: a closed, in-process
+// product vocabulary (FIXED-STATUS), not an extension point. `WholeScreenAssembly`
+// builds the structural leaf for each id; `projectStatusFields` computes its
+// value beside it, below, so the two never name a field differently.
+inline constexpr std::string_view kPathStatusFieldId = "path";
+inline constexpr std::string_view kBranchStatusFieldId = "branch";
+inline constexpr std::string_view kStatusValueFieldId = "status";
+inline constexpr std::string_view kFollowStatusFieldId = "follow";
 
-struct StatusFieldCatalogEntry {
-    std::string id;
-    std::string accessibleLabel;
-    StatusFieldRegion region = StatusFieldRegion::Footer;
-    std::uint8_t collapseRank = 0;
-};
-
-struct StatusFieldProviderContext {
+struct StatusFieldContext {
     std::filesystem::path workspaceRoot;
     // The user's home directory, if known. The header path field abbreviates a
     // leading home directory to "~" so a home-rooted workspace path stays short
@@ -42,25 +39,15 @@ struct StatusFieldProviderContext {
     std::string cwdPrefix;
 };
 
-using StatusFieldProvider =
-    std::function<std::optional<std::string>(StatusFieldProviderContext const&)>;
-
-struct StatusFieldProviderBinding {
-    std::string id;
-    StatusFieldProvider provider;
-};
-
 struct StatusFieldProjection {
     std::vector<StatusField> header;
     std::vector<StatusField> footer;
 };
 
-[[nodiscard]] std::vector<StatusFieldCatalogEntry> p0StatusFieldCatalog();
-[[nodiscard]] std::vector<StatusFieldProviderBinding>
-defaultStatusFieldProviders();
+// Compute the fixed header/footer status fields directly from `context`. Each
+// field is dropped (absent from its region's vector) when its computed value
+// is empty (EMPTY-DROP).
 [[nodiscard]] StatusFieldProjection projectStatusFields(
-    const std::vector<StatusFieldCatalogEntry>& catalog,
-    const std::unordered_map<std::string, StatusFieldProvider>& providers,
-    StatusFieldProviderContext const& context);
+    StatusFieldContext const& context);
 
 } // namespace ssg

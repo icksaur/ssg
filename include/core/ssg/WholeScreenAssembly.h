@@ -1,7 +1,6 @@
 #pragma once
 
-// The whole-screen tree assembly: from the built-in status-field catalog, build
-// the canonical whole-screen UiComposition.
+// The whole-screen tree assembly: build the canonical whole-screen UiComposition.
 //
 //   root
 //   ├─ header            (built-in status fields and picker input)
@@ -16,16 +15,15 @@
 // about geometry policy or presence is decided here (geometry EXTENTS come from the
 // caller's StyleDimensions, the single configurable source the grid path also uses).
 //
-// The tree is STRUCTURALLY STABLE: it is built from the stable status-field CATALOG (accepted as
-// StatusFieldCatalogEntry, so a dynamic projected subset is not even representable), a
-// built-in field carries only its id and collapse rank, and its value/label/command all
-// ride uiState (resolved per frame by id); the footer hint is likewise a provider-backed
-// Field whose label rides uiState. So a field's value, command, or provider PRESENCE
-// changing (a branch appearing/disappearing) is value-state, never a structure change,
-// and never causes WholeScreenSchema to replace the schema. The catalog is split into
-// header/footer by each entry's own region.
+// The tree is STRUCTURALLY STABLE (FIXED-STATUS): the header/footer status-field
+// leaves, the footer hint, and the footer status-action anchor are a fixed,
+// built-in product vocabulary, never a caller-supplied catalog. Each built-in
+// field carries only its id and collapse rank; its value/label/command are
+// written directly into UiNode::resolved at snapshot publication, so a field's
+// value, command, or presence changing (a branch appearing/disappearing) is
+// value-state, never a structure change, and never causes WholeScreenSchema to
+// replace the schema.
 //
-#include <ssg/StatusFields.h>   // StatusFieldCatalogEntry
 #include <ssg/Style.h>          // StyleDimensions
 #include <ssg/PromptSurface.h>  // PromptRequest
 #include <ssg/StatusQueue.h>
@@ -44,9 +42,8 @@ namespace ssg {
 //   past the flex middle); it is presence-gated (visible only for a header-region
 //   prompt) rather than added or removed, so the schema's structure stays stable. This
 //   is the only state-free TextInput the tree carries: footer prompt inputs are
-//   request-derived, provider-backed leaves.
+//   request-derived leaves populated directly in each snapshot.
 [[nodiscard]] UiComposition assembleWholeScreen(
-    const std::vector<StatusFieldCatalogEntry>& catalog,
     std::string_view hintCommandId,
     const StyleDimensions& dimensions,
     std::string_view promptSigil);

@@ -495,7 +495,7 @@ FindResult literalMatches(const ScalarText& text, const ScalarText& query,
 }
 
 FindReplaceOperationResult operationFailure(FindReplaceError error,
-                                             Revision revision,
+                                             std::uint64_t revision,
                                              std::string message) {
     return {error, revision, std::move(message)};
 }
@@ -803,7 +803,7 @@ const FindReplaceViewState& FindReplaceController::viewState() const noexcept {
 }
 
 WorkspacePreviewResult WorkspaceReplacer::preview(
-    const FindReplaceWorkspace& workspace, Revision sourceRevision,
+    const FindReplaceWorkspace& workspace, std::uint64_t sourceRevision,
     const FindRequest& request, std::string replacement) const {
     if (request.options.selectionOnly) {
         return {FindReplaceError::InvalidSelection, std::nullopt,

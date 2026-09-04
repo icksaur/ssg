@@ -159,7 +159,7 @@ enum class SyntaxParseStatus : std::uint8_t {
 };
 
 struct SyntaxParseOutput {
-    Revision revision{0};
+    std::uint64_t revision{0};
     SyntaxParseStatus status = SyntaxParseStatus::Failed;
     SyntaxParseHandle parse;
     std::vector<SyntaxSpan> spans;
@@ -172,7 +172,7 @@ class SyntaxModel;
 
 class SyntaxParseRequest {
 public:
-    [[nodiscard]] Revision revision() const noexcept { return revision_; }
+    [[nodiscard]] std::uint64_t revision() const noexcept { return revision_; }
     [[nodiscard]] const LanguageId& language() const noexcept {
         return language_;
     }
@@ -189,11 +189,11 @@ public:
 private:
     friend class SyntaxModel;
 
-    SyntaxParseRequest(Revision revision, LanguageId language, std::string text,
+    SyntaxParseRequest(std::uint64_t revision, LanguageId language, std::string text,
                        SyntaxParseHandle priorParse,
                        std::vector<SyntaxEdit> edits);
 
-    Revision revision_;
+    std::uint64_t revision_;
     LanguageId language_;
     std::string text_;
     SyntaxParseHandle priorParse_;
@@ -216,7 +216,7 @@ struct SyntaxConfig {
 
 class SyntaxViewState {
 public:
-    SyntaxViewState(Revision revision, LanguageId language,
+    SyntaxViewState(std::uint64_t revision, LanguageId language,
                     std::uint64_t textBytes, std::vector<SyntaxSpan> spans,
                     std::vector<SyntaxBracketPair> bracketPairs,
                     std::vector<UnmatchedBracket> unmatchedBrackets,
@@ -228,13 +228,13 @@ public:
     // indentation the caret and wrap logic always need.  The view a document
     // shows before (or without) a parse.
     [[nodiscard]] static SyntaxViewState plainText(
-        Revision revision, LanguageId language, std::string_view text,
+        std::uint64_t revision, LanguageId language, std::string_view text,
         std::uint32_t tabWidth);
 
     // The view derived from a parser's output: spans/brackets/comments as parsed,
     // falling back to plainText when the output did not parse.
     [[nodiscard]] static SyntaxViewState fromParse(
-        Revision revision, LanguageId language, std::string_view text,
+        std::uint64_t revision, LanguageId language, std::string_view text,
         const SyntaxParseOutput& output, const SyntaxConfig& config);
 
     // The offset of the bracket matching the one at `offset`, or nullopt when
@@ -245,7 +245,7 @@ public:
     // The syntax scope covering `offset` (PlainText when none does).
     [[nodiscard]] SyntaxScope scopeAt(ByteOffset offset) const;
 
-    [[nodiscard]] Revision revision() const noexcept { return revision_; }
+    [[nodiscard]] std::uint64_t revision() const noexcept { return revision_; }
     [[nodiscard]] const LanguageId& language() const noexcept {
         return language_;
     }
@@ -279,7 +279,7 @@ public:
                            const SyntaxViewState&) = default;
 
 private:
-    Revision revision_;
+    std::uint64_t revision_;
     LanguageId language_;
     std::uint64_t textBytes_;
     std::vector<SyntaxSpan> spans_;
@@ -356,11 +356,11 @@ public:
     // three-call API below remains for the off-thread seam, where run() executes
     // on a worker while the model is used on the main thread.
     [[nodiscard]] SyntaxParseResult parse(
-        Revision revision, LanguageId language, std::string text,
+        std::uint64_t revision, LanguageId language, std::string text,
         std::vector<SyntaxEdit> edits = {});
 
     [[nodiscard]] SyntaxParseRequestResult request(
-        Revision revision, LanguageId language, std::string text,
+        std::uint64_t revision, LanguageId language, std::string text,
         std::vector<SyntaxEdit> edits = {});
     [[nodiscard]] SyntaxParseOutput run(
         const SyntaxParseRequest& request) const;

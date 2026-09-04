@@ -1,6 +1,5 @@
 #include <ssg/EditorSession.h>
 #include <tui/Renderer.h>
-#include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"
 #include "grid_test_frame.h"
@@ -33,7 +32,7 @@ Fixture makeFixture(std::string_view text) {
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return {std::move(root), nullptr};
     auto runtime = std::move(created.session);
-    (void)runtime->dispatch({"file.open", runtime->revision(), std::string{"overlay.cpp"}});
+    (void)runtime->dispatch({"file.open",  std::string{"overlay.cpp"}});
     return {std::move(root), std::move(runtime)};
 }
 
@@ -92,9 +91,9 @@ ssg::DiffFileView overlayDiff(std::string_view currentContent) {
 
 ssg::GridPresentation snapshotWith(
     const ssg::GridPresentation& base,
-    ssg::SessionSnapshotSections sections,
-    ssg::GridProjection projection) {
-    return ssg::test::copyGridFrame(base, ssg::ViewId{1}, std::move(sections), std::move(projection), base.palette());
+    ssg::GridPresentation sections,
+    ssg::GridPresentation projection) {
+    return ssg::test::copyGridFrame(base, std::move(sections), std::move(projection), base.palette);
 }
 
 }
@@ -109,7 +108,7 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
 
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
-                        {.revision = ssg::Revision{1},
+                        {.revision = std::uint64_t{1},
                          .baselineIdentity = "head-1:index-1",
                          .files = {{.id = ssg::DiffFileId{"overlay-id"},
                                     .path = "overlay.cpp",
@@ -117,43 +116,43 @@ TEST(rendererPaintsDiffTintForRuntimeOpenedLiveDiffTab) {
                                     .workingContent = working}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.select_next", runtime.revision(), {}})
+                    .dispatch({"tree.select_next",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate",  {}})
                     .accepted());
 
-    auto snapshot = ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, {80, 24});
+    auto snapshot = ssg::test::projectGridFrame(runtime, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_TRUE(snapshot->semantic().sections().tabs.active.has_value());
+    ASSERT_TRUE(snapshot->tabs.active.has_value());
     const auto active = std::find_if(
-        snapshot->semantic().sections().tabs.tabs.begin(),
-        snapshot->semantic().sections().tabs.tabs.end(),
+        snapshot->tabs.tabs.begin(),
+        snapshot->tabs.tabs.end(),
         [&](const ssg::TabState& tab) {
-            return snapshot->semantic().sections().tabs.active &&
-                   tab.id == *snapshot->semantic().sections().tabs.active;
+            return snapshot->tabs.active &&
+                   tab.id == *snapshot->tabs.active;
         });
-    ASSERT_TRUE(active != snapshot->semantic().sections().tabs.tabs.end());
-    if (active != snapshot->semantic().sections().tabs.tabs.end()) {
+    ASSERT_TRUE(active != snapshot->tabs.tabs.end());
+    if (active != snapshot->tabs.tabs.end()) {
         ASSERT_EQ(active->kind, ssg::TabKind::LiveDiff);
     }
-    ASSERT_EQ(snapshot->semantic().sections().document.diffFileIdentity,
+    ASSERT_EQ(snapshot->diffFileIdentity,
               std::optional<std::string>{"overlay-id"});
-    ASSERT_TRUE(snapshot->document().has_value());
-    if (!snapshot->document()) return;
+    ASSERT_TRUE(snapshot->document.has_value());
+    if (!snapshot->document) return;
     const auto grid = ssg::Renderer{}.render(*snapshot);
-    const auto paneContent = snapshot->document()->content;
+    const auto paneContent = snapshot->document->content;
     ASSERT_TRUE(hasDiffTintInPane(grid, paneContent));
 
-    auto sections = snapshot->semantic().sections();
-    sections.document.revision =
-        ssg::Revision{sections.document.revision.value() + 1};
+    auto sections = *snapshot;
+    sections.documentRevision =
+        std::uint64_t{sections.documentRevision + 1};
     auto mismatched = snapshotWith(
-        *snapshot, std::move(sections), snapshot->presentation());
+        *snapshot, std::move(sections), *snapshot);
     const auto mismatchGrid = ssg::Renderer{}.render(mismatched);
     ASSERT_TRUE(hasDiffTintInPane(mismatchGrid, paneContent));
 }
@@ -164,18 +163,18 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_TRUE(fixture.runtime != nullptr);
     if (!fixture.runtime) return;
 
-    auto base = ssg::test::projectGridFrame(*fixture.runtime, ssg::ViewId{1}, {40, 10});
+    auto base = ssg::test::projectGridFrame(*fixture.runtime, {40, 10});
     ASSERT_TRUE(base.has_value());
     if (!base) return;
 
-    auto sections = base->semantic().sections();
-    auto presentation = base->presentation();
+    auto sections = *base;
+    auto presentation = *base;
     auto diffFile = overlayDiff(text);
-    sections.document.diffFileIdentity = diffFile.id.value();
+    sections.diffFileIdentity = diffFile.id.value();
     sections.diff =
-        ssg::DiffViewState{sections.document.revision, {diffFile}};
+        ssg::DiffViewState{sections.documentRevision, {diffFile}};
     sections.syntax = ssg::SyntaxViewState{
-        sections.document.revision,
+        sections.documentRevision,
         ssg::LanguageId::plainText(),
         text.size(),
         {{ssg::ByteOffset{0}, ssg::ByteOffset{5}, ssg::SyntaxScope::Keyword},
@@ -188,9 +187,9 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     };
     presentation.viewport = ssg::Viewport{}.computeUnwrapped(
         text, presentation.viewport.dimensions, 0, 0, 4, &diffFile);
-    ASSERT_TRUE(base->document().has_value());
-    if (!base->document()) return;
-    const auto content = base->document()->content;
+    ASSERT_TRUE(base->document.has_value());
+    if (!base->document) return;
+    const auto content = base->document->content;
     auto overlay =
         snapshotWith(*base, std::move(sections), std::move(presentation));
     const auto grid = ssg::Renderer{}.render(overlay);
@@ -238,8 +237,8 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_EQ(grid.at(content.right() - 1, removedRow).tint,
               ssg::DiffTint::RemovedRow);
 
-    auto scrolledSections = overlay.semantic().sections();
-    auto scrolledPresentation = overlay.presentation();
+    auto scrolledSections = overlay;
+    auto scrolledPresentation = overlay;
     scrolledPresentation.viewport = ssg::Viewport{}.computeUnwrapped(
         text, scrolledPresentation.viewport.dimensions, 0, 8, 4, &diffFile);
     auto scrolled = snapshotWith(
@@ -255,16 +254,16 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
                   ssg::DiffTint::RemovedRow);
     }
 
-    auto precedenceSections = overlay.semantic().sections();
+    auto precedenceSections = overlay;
     const auto start = ssg::DocumentPosition{
         ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
     const auto end = ssg::DocumentPosition{
         ssg::ByteOffset{19}, ssg::LineIndex{0}, ssg::CellIndex{19}};
-    precedenceSections.selection =
+    precedenceSections.selections =
         ssg::SelectionSet{{ssg::Selection{start, end}}};
     precedenceSections.findReplace.open = true;
     precedenceSections.findReplace.sourceRevision =
-        precedenceSections.document.revision;
+        precedenceSections.documentRevision;
     precedenceSections.findReplace.matches = {
         {ssg::ByteOffset{6}, ssg::ByteOffset{12}},
         {ssg::ByteOffset{13}, ssg::ByteOffset{19}},
@@ -272,7 +271,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     };
     precedenceSections.findReplace.activeMatch = std::size_t{0};
     auto precedence = snapshotWith(
-        overlay, std::move(precedenceSections), overlay.presentation());
+        overlay, std::move(precedenceSections), overlay);
     const auto precedenceGrid =
         ssg::Renderer{}.render(precedence);
     ASSERT_EQ(precedenceGrid.at(addedColumn, addedRow).role,
@@ -288,16 +287,16 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_EQ(precedenceGrid.at(modifiedColumn + 14, modifiedRow).tint,
               ssg::DiffTint::None);
 
-    auto wordSelectionSections = overlay.semantic().sections();
+    auto wordSelectionSections = overlay;
     const auto wordStart = ssg::DocumentPosition{
         ssg::ByteOffset{34}, ssg::LineIndex{1}, ssg::CellIndex{14}};
     const auto wordEnd = ssg::DocumentPosition{
         ssg::ByteOffset{36}, ssg::LineIndex{1}, ssg::CellIndex{16}};
-    wordSelectionSections.selection =
+    wordSelectionSections.selections =
         ssg::SelectionSet{{ssg::Selection{wordStart, wordEnd}}};
     auto wordSelection =
         snapshotWith(overlay, std::move(wordSelectionSections),
-                     overlay.presentation());
+                     overlay);
     const auto wordSelectionGrid =
         ssg::Renderer{}.render(wordSelection);
     ASSERT_EQ(wordSelectionGrid.at(modifiedColumn + 14, modifiedRow).role,
@@ -305,10 +304,10 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_EQ(wordSelectionGrid.at(modifiedColumn + 14, modifiedRow).tint,
               ssg::DiffTint::None);
 
-    auto noDiffSections = overlay.semantic().sections();
-    auto noDiffPresentation = overlay.presentation();
+    auto noDiffSections = overlay;
+    auto noDiffPresentation = overlay;
     noDiffSections.diff = {};
-    noDiffSections.document.diffFileIdentity.reset();
+    noDiffSections.diffFileIdentity.reset();
     noDiffPresentation.viewport = ssg::Viewport{}.computeUnwrapped(
         text, noDiffPresentation.viewport.dimensions, 0, 0, 4);
     auto noDiff = snapshotWith(
@@ -326,10 +325,10 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
                   grid.at(addedColumn, addedRow).foreground);
     }
 
-    auto unidentifiedSections = noDiff.semantic().sections();
-    unidentifiedSections.diff = overlay.semantic().sections().diff;
+    auto unidentifiedSections = noDiff;
+    unidentifiedSections.diff = overlay.diff;
     auto unidentified = snapshotWith(
-        noDiff, std::move(unidentifiedSections), noDiff.presentation());
+        noDiff, std::move(unidentifiedSections), noDiff);
     ASSERT_EQ(ssg::Renderer{}
                  .render(unidentified)
                  .canonical(),

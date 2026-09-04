@@ -54,7 +54,7 @@ TEST(newestIntroducedHunkWinsWhenPriorBottomHunkRemains) {
     FollowEditsModel model;
     ASSERT_TRUE(model
                     .acceptExternalChanges(
-                        {{revisionB, revisionA.hunks, Revision{2}}})
+                        {{revisionB, revisionA.hunks, std::uint64_t{2}}})
                     .accepted());
     ASSERT_TRUE(model.viewState().activeTarget.has_value());
     ASSERT_EQ(model.viewState().activeTarget->newestHunkLine, std::size_t{2});
@@ -65,9 +65,9 @@ TEST(burstActivatesOnlyLastFileAndAdvancesOnce) {
     const auto before = model.viewState().generation;
     ASSERT_TRUE(model
                     .acceptExternalChanges(
-                        {{changedFile("a", "a.txt", 2), {}, Revision{1}},
-                         {changedFile("b", "b.txt", 5), {}, Revision{2}},
-                         {changedFile("c", "c.txt", 8), {}, Revision{3}}})
+                        {{changedFile("a", "a.txt", 2), {}, std::uint64_t{1}},
+                         {changedFile("b", "b.txt", 5), {}, std::uint64_t{2}},
+                         {changedFile("c", "c.txt", 8), {}, std::uint64_t{3}}})
                     .accepted());
     const auto state = model.viewState();
     ASSERT_TRUE(state.activeTarget.has_value());
@@ -80,8 +80,8 @@ TEST(burstDoesNotRevealEarlierFileWhenLastFileHasNoNewHunk) {
     auto unchanged = changedFile("b", "b.txt", 5);
     ASSERT_TRUE(model
                     .acceptExternalChanges(
-                        {{changedFile("a", "a.txt", 2), {}, Revision{1}},
-                         {unchanged, unchanged.hunks, Revision{2}}})
+                        {{changedFile("a", "a.txt", 2), {}, std::uint64_t{1}},
+                         {unchanged, unchanged.hunks, std::uint64_t{2}}})
                     .accepted());
     const auto state = model.viewState();
     ASSERT_FALSE(state.activeTarget.has_value());
@@ -118,7 +118,7 @@ TEST(localEditPausesOnlyWhenFollowing) {
 
 DiffViewState currentDiff(std::initializer_list<DiffFileView> files,
                            std::uint64_t revision) {
-    return {Revision{revision}, files};
+    return {std::uint64_t{revision}, files};
 }
 
 std::vector<std::string> split(std::string_view line) {
@@ -171,7 +171,7 @@ TEST(independentTransitionTableCoversSharedFollowPolicy) {
             ASSERT_TRUE(model
                             .acceptExternalChange(
                                 changedFile(id, id + ".txt", lineNumber),
-                                Revision{std::stoull(fields[2])})
+                                std::uint64_t{std::stoull(fields[2])})
                             .accepted());
         } else if (operation == "navigate_user" ||
                    operation == "navigate_programmatic" ||
@@ -210,7 +210,7 @@ TEST(dirtyConflictUsesDiskDiffTargetWithoutBufferPolicy) {
     FollowEditsModel model;
     ASSERT_TRUE(model
                     .acceptExternalChange(
-                        changedFile("dirty", "dirty.txt", 6), Revision{1})
+                        changedFile("dirty", "dirty.txt", 6), std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(targetId(model.viewState().activeTarget), "dirty");
 }
@@ -221,15 +221,15 @@ TEST(queueIsBoundedAndSameFileReplacesInPlace) {
     ASSERT_TRUE(model.pause().accepted());
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("a", "a", 1),
-                                            Revision{1})
+                                            std::uint64_t{1})
                     .accepted());
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("b", "b", 2),
-                                            Revision{2})
+                                            std::uint64_t{2})
                     .accepted());
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("a", "renamed-a", 9),
-                                            Revision{3})
+                                            std::uint64_t{3})
                     .accepted());
 
     const auto state = model.viewState();
@@ -239,7 +239,7 @@ TEST(queueIsBoundedAndSameFileReplacesInPlace) {
 
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("c", "c", 4),
-                                            Revision{4})
+                                            std::uint64_t{4})
                     .accepted());
     ASSERT_EQ(queueIds(model.viewState()), "a,c");
 }
@@ -249,15 +249,15 @@ TEST(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets) {
     ASSERT_TRUE(model.pause().accepted());
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("rename", "old", 1),
-                                            Revision{1})
+                                            std::uint64_t{1})
                     .accepted());
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("revert", "revert", 2),
-                                            Revision{2})
+                                            std::uint64_t{2})
                     .accepted());
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("delete", "gone", 3),
-                                            Revision{3})
+                                            std::uint64_t{3})
                     .accepted());
 
     auto renamed = changedFile("rename", "new", 7);
@@ -272,7 +272,7 @@ TEST(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets) {
     ASSERT_TRUE(model.pause().accepted());
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("missing", "x", 1),
-                                            Revision{4})
+                                            std::uint64_t{4})
                     .accepted());
     const auto before = model.viewState();
     ASSERT_TRUE(model.resume(currentDiff({}, 5)).accepted());
@@ -306,7 +306,7 @@ TEST(resumePreservesNewestIntroducedHunkInsteadOfChoosingBottomHunk) {
     ASSERT_TRUE(model.pause().accepted());
     ASSERT_TRUE(model
                     .acceptExternalChanges(
-                        {{current, prior.hunks, Revision{1}}})
+                        {{current, prior.hunks, std::uint64_t{1}}})
                     .accepted());
     ASSERT_TRUE(model.resume(currentDiff({current}, 2)).accepted());
     ASSERT_TRUE(model.viewState().activeTarget.has_value());
@@ -317,12 +317,12 @@ TEST(staleChangesAreFailureAtomic) {
     FollowEditsModel model;
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("a", "a", 1),
-                                            Revision{2})
+                                            std::uint64_t{2})
                     .accepted());
     const auto before = model.viewState();
     ASSERT_EQ(model
                   .acceptExternalChange(changedFile("b", "b", 2),
-                                          Revision{2})
+                                          std::uint64_t{2})
                   .error,
               FollowEditsError::StaleRevision);
     ASSERT_EQ(model.viewState(), before);

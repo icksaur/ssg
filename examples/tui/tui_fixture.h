@@ -30,8 +30,7 @@ private:
 
 class TuiClient {
 public:
-    TuiClient(EditorSession& runtime, ViewId viewId,
-              ViewportDimensions dimensions);
+    TuiClient(EditorSession& runtime, ViewportDimensions dimensions);
     ~TuiClient();
 
     TuiClient(TuiClient const&) = delete;
@@ -50,7 +49,6 @@ private:
     void refresh();
 
     EditorSession* runtime_;
-    ViewId viewId_;
     ViewportDimensions dimensions_;
     GridPresenter presenter_;
     std::optional<GridPresentation> snapshot_;

@@ -33,7 +33,7 @@ class EditorSession;
 class ScriptHost {
 public:
     using ViewActionSink =
-        std::function<ViewActionResult(ViewActionRequest const&)>;
+        std::function<ViewActionResult(ViewAction const&)>;
 
     // Without a view-action sink, an immediate script request for a view-owned
     // command fails with `view_action_unavailable`.

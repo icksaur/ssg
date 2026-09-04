@@ -103,7 +103,7 @@ struct FindReplaceViewState {
     std::uint64_t generation = 0;
     bool open = false;
     bool replaceMode = false;
-    Revision sourceRevision{0};
+    std::uint64_t sourceRevision{0};
     std::string query;
     std::string replacement;
     FindOptions options;
@@ -116,7 +116,7 @@ struct FindReplaceViewState {
 
 struct FindReplaceOperationResult {
     FindReplaceError error = FindReplaceError::None;
-    Revision revision{0};
+    std::uint64_t revision{0};
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
         return error == FindReplaceError::None;
@@ -169,7 +169,7 @@ struct WorkspaceFileReplacement {
 };
 
 struct WorkspaceReplacePreview {
-    Revision sourceRevision{0};
+    std::uint64_t sourceRevision{0};
     std::string query;
     std::string replacement;
     FindOptions options;
@@ -185,8 +185,8 @@ struct WorkspaceReplaceArguments {
 };
 
 struct WorkspaceRecoveryRecord {
-    Revision sourceRevision{0};
-    Revision appliedRevision{0};
+    std::uint64_t sourceRevision{0};
+    std::uint64_t appliedRevision{0};
     std::vector<WorkspaceFileReplacement> changes;
     bool operator==(const WorkspaceRecoveryRecord&) const = default;
 };
@@ -199,7 +199,7 @@ public:
 
 struct WorkspaceApplyResult {
     FindReplaceError error = FindReplaceError::None;
-    Revision revision{0};
+    std::uint64_t revision{0};
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
         return error == FindReplaceError::None;
@@ -210,7 +210,7 @@ class FindReplaceWorkspace {
 public:
     virtual ~FindReplaceWorkspace() = default;
     [[nodiscard]] virtual WorkspaceSnapshot snapshot(
-        Revision revision) const = 0;
+        std::uint64_t revision) const = 0;
     [[nodiscard]] virtual WorkspaceApplyResult apply(
         const WorkspaceReplacePreview& preview,
         WorkspaceRecoverySink& recoverySink) = 0;
@@ -230,7 +230,7 @@ struct WorkspacePreviewResult {
 class WorkspaceReplacer {
 public:
     [[nodiscard]] WorkspacePreviewResult preview(
-        const FindReplaceWorkspace& workspace, Revision sourceRevision,
+        const FindReplaceWorkspace& workspace, std::uint64_t sourceRevision,
         const FindRequest& request, std::string replacement) const;
     [[nodiscard]] WorkspaceApplyResult apply(
         FindReplaceWorkspace& workspace,

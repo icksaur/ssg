@@ -1,8 +1,6 @@
 #include <ssg/Selection.h>
 #include <ssg/WordClassification.h>
 
-#include "selection_commands.h"
-
 #include <algorithm>
 #include <cctype>
 #include <cstddef>

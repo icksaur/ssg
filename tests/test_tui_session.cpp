@@ -1,4 +1,5 @@
 #include "test_helpers.h"
+#include "grid_test_frame.h"
 #include "tui_fixture.h"
 
 #include <tui/Renderer.h>
@@ -32,38 +33,26 @@ struct RuntimeFixture {
     std::unique_ptr<ssg::EditorSession> runtime;
 };
 
-TEST(terminalEventsResolveThroughPublishedInputModels) {
+TEST(terminalEventsResolveThroughRuntimeInput) {
     RuntimeFixture fixture;
-    ssg::tui::TuiClient client{
-        *fixture.runtime, ssg::ViewId{1},
-        ssg::ViewportDimensions{80, 24}};
-    ASSERT_TRUE(client.submit("file.new").accepted());
+    ASSERT_TRUE(fixture.runtime->dispatch({"file.new", {}}).accepted());
 
-    auto const keymap = client.snapshot().sections().keymap;
-    ssg::tui::TerminalInputCapture capture;
-    auto text = ssg::CommittedText::fromUtf8("hello");
-    ASSERT_TRUE(text.has_value());
-    auto textCommand = capture.capture(*text, keymap, "editor");
-    ASSERT_TRUE(textCommand.has_value());
-    ASSERT_EQ(textCommand->commandId, std::string{"text.insert"});
-    ASSERT_TRUE(client.submit(*textCommand).accepted());
-    ASSERT_EQ(client.snapshot().sections().document.text,
-              std::string{"hello"});
+    auto text = fixture.runtime->input(
+        ssg::ClientKeyInput{{}, "hello"});
+    ASSERT_EQ(text.outcome, ssg::ClientInputOutcome::Dispatched);
+    ASSERT_EQ(fixture.runtime->activeDocumentText(), std::string{"hello"});
 
-    auto close = capture.capture(
-        ssg::KeyStroke{ssg::KeyCode::KeyW, false, true, false, false},
-        keymap, "*");
-    ASSERT_TRUE(close.has_value());
-    ASSERT_EQ(close->commandId, std::string{"tab.close"});
-    ASSERT_TRUE(client.submit(*close).accepted());
-    ASSERT_TRUE(client.snapshot().sections().tabs.tabs.empty());
-
+    auto close = fixture.runtime->input(ssg::ClientKeyInput{
+        ssg::KeyStroke{ssg::KeyCode::KeyW, false, true, false, false}, {}});
+    ASSERT_EQ(close.outcome, ssg::ClientInputOutcome::Dispatched);
+    auto presentation = ssg::test::projectGridFrame(*fixture.runtime);
+    ASSERT_TRUE(presentation && presentation->tabs.tabs.empty());
 }
 
 TEST(realRuntimeSnapshotRendersDeterministicallyWithinTheme) {
     RuntimeFixture fixture;
     ssg::tui::TuiClient client{
-        *fixture.runtime, ssg::ViewId{1},
+        *fixture.runtime,
         ssg::ViewportDimensions{80, 24}};
     ASSERT_TRUE(client.submit("file.new").accepted());
     ASSERT_TRUE(client
@@ -84,7 +73,7 @@ TEST(realRuntimeSnapshotRendersDeterministicallyWithinTheme) {
 }  // namespace
 
 SSG_TEST_SUITE(test_tui_fixture) {
-    RUN(terminalEventsResolveThroughPublishedInputModels);
+    RUN(terminalEventsResolveThroughRuntimeInput);
     RUN(realRuntimeSnapshotRendersDeterministicallyWithinTheme);
     return failed == 0 ? 0 : 1;
 }

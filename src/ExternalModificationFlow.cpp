@@ -81,7 +81,7 @@ public:
         : recovery_{recovery}, diff_{diff} {}
 
     ExternalModificationResult processEvent(
-        ExternalEventInput input, Revision diffRevision,
+        ExternalEventInput input, std::uint64_t diffRevision,
         std::optional<JournalDocument>& document,
         std::function<bool()> commitClean = {},
         std::function<bool()> commitConflictRename = {},
@@ -362,10 +362,10 @@ private:
     }
 
     void advanceRevision() {
-        if (revision_.value() == std::numeric_limits<std::uint64_t>::max()) {
+        if (revision_ == std::numeric_limits<std::uint64_t>::max()) {
             throw std::overflow_error("external modification revision exhausted");
         }
-        revision_ = Revision{revision_.value() + 1};
+        revision_ = std::uint64_t{revision_ + 1};
     }
 
     // Keep the selection valid against the current file list: cleared when empty,
@@ -405,7 +405,7 @@ private:
     RecoveryManager& recovery_;
     DiffModel& diff_;
     std::uint64_t lastWatcherSequence_ = 0;
-    Revision revision_{0};
+    std::uint64_t revision_{0};
     std::vector<PendingChange> pending_;
     std::optional<DiffFileId> selected_;
 };
@@ -421,7 +421,7 @@ ExternalModificationFlow& ExternalModificationFlow::operator=(
     ExternalModificationFlow&&) noexcept = default;
 
 ExternalModificationResult ExternalModificationFlow::processEvent(
-    ExternalEventInput input, Revision diffRevision,
+    ExternalEventInput input, std::uint64_t diffRevision,
     std::optional<JournalDocument>& document,
     std::function<bool()> commitClean,
     std::function<bool()> commitConflictRename) {
@@ -432,7 +432,7 @@ ExternalModificationResult ExternalModificationFlow::processEvent(
 }
 
 ExternalModificationResult ExternalModificationFlow::processResyncEvent(
-    ExternalEventInput input, Revision diffRevision,
+    ExternalEventInput input, std::uint64_t diffRevision,
     std::optional<JournalDocument>& document,
     std::function<bool()> commitClean,
     std::function<bool()> commitConflictRename) {

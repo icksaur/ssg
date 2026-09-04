@@ -1,8 +1,7 @@
 #pragma once
 
 #include <ssg/ClipboardRegister.h>
-#include <ssg/CommandTransition.h>
-#include <ssg/InteractionAuthority.h>
+#include "interaction.h"
 #include <ssg/DiffModel.h>
 #include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
@@ -26,6 +25,7 @@
 #include <ssg/Settings.h>
 #include <ssg/StatusFields.h>
 #include "../status_queue.h"
+#include "git_diff_worker.h"
 #include <ssg/SyntaxModel.h>
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
@@ -41,9 +41,9 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
-#include <typeindex>
 #include <unordered_map>
 #include <vector>
 
@@ -73,8 +73,6 @@ inline std::uint32_t uint32Setting(SettingsModel const& settings, SettingKey key
     if (auto const* typed = std::get_if<std::uint32_t>(&value)) return *typed;
     return fallback;
 }
-
-struct GitDiffRefreshWorkerState;
 
 // The reopen outcome of a document's recovered draft (single-file draft
 // recovery, M15). Mirrors EditorSession::DraftReopenNotice; lives per-document
@@ -126,12 +124,10 @@ void bindRuntimeNavigation(CommandCatalog& catalog, EditorSession::Impl& runtime
 void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorSession::Impl& runtime);
 void bindRuntimeHelp(CommandCatalog& catalog, EditorSession::Impl& runtime);
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
-    EditorSession::Impl& runtime, ViewId viewId, Revision revision,
-    FindReplaceCommand command, std::any const& payload);
+    EditorSession::Impl& runtime, FindReplaceCommand command,
+    std::any const& payload);
 
-struct EditorSession::Impl final : CommandServices,
-                                   TabLifecycle,
-                                   SearchWorkspaceSource,
+struct EditorSession::Impl final : SearchWorkspaceSource,
                                    SearchCommandSource,
                                    FindReplaceWorkspace,
                                    WorkspaceRecoverySink,
@@ -143,7 +139,6 @@ struct EditorSession::Impl final : CommandServices,
          std::filesystem::path archiveRoot,
          bool deferEnrichment = false,
          std::shared_ptr<SyntaxParser> parser = nullptr,
-         std::vector<StatusFieldProviderBinding> statusFieldProviderOverrides = {},
          bool enableGitDiffWorker = true,
          bool enableFilesystemWatcher = true);
     ~Impl();
@@ -180,18 +175,16 @@ struct EditorSession::Impl final : CommandServices,
     DiffModel diff;
     ExternalModificationFlow external;
     FollowEditsModel follow;
-    Revision lastGitScanRevision{0};
+    std::uint64_t lastGitScanRevision{0};
     std::optional<std::string> currentGitBranch;
     TreeModel tree;
     std::shared_ptr<SyntaxParser> syntaxParser;
-    std::vector<StatusFieldCatalogEntry> statusFieldCatalog;
     // The single interaction authority: owner of the whole-screen schema, the
     // prompt surface, panel/focus/provider truth, the interaction projection, and the tree
-    // revision source. The snapshot reads its projection; every focus, presence,
-    // and prompt change flows through it. Declared after `tree` and
-    // `statusFieldCatalog` so both are constructed before it.
-    InteractionAuthority interaction;
-    std::unordered_map<std::string, StatusFieldProvider> statusFieldProviders;
+    // revision source. Presentation reads its projection; every focus, presence,
+    // and prompt change flows through it. Declared after `tree` so it is
+    // constructed first.
+    InteractionState interaction;
     std::unordered_map<std::string, FileDocumentId> liveDiffDocuments;
     // Read-only, in-memory "output" tabs (help, and any future generated-content
     // tab), keyed by the tab's content identity. Mirrors liveDiffDocuments: a
@@ -204,7 +197,7 @@ struct EditorSession::Impl final : CommandServices,
     // The user's home directory, resolved once at construction (HOME, then
     // USERPROFILE, with trailing separators stripped) so the header path field's
     // "~" abbreviation is deterministic across a session rather than re-reading
-    // the process environment on every snapshot. Empty disables abbreviation.
+    // the process environment on every presentation. Empty disables abbreviation.
     std::string homeDirectory;
     // Per-document syntax language override for documents with no on-disk path
     // to infer a language from (a read-only help/output tab). refreshSyntax
@@ -212,6 +205,7 @@ struct EditorSession::Impl final : CommandServices,
     // tab can be highlighted as e.g. Markdown despite being untitled.
     std::unordered_map<std::uint64_t, LanguageId> documentLanguageOverrides;
     SearchController search;
+    std::uint64_t workspaceSearchGeneration = 0;
     NavigationHistory navigation{64};
     LspSyncViewState lspSync;
     LspFeatureViewState lspFeatures;
@@ -231,6 +225,7 @@ struct EditorSession::Impl final : CommandServices,
     // The init.lua-composed header/footer,
     // pushed by the host after each init.lua evaluation via
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
+    std::uint64_t workspaceReplaceGeneration = 0;
     mutable std::mutex operationMutex;
     std::shared_ptr<CommandCatalog> catalog =
         std::make_shared<CommandCatalog>();
@@ -245,10 +240,8 @@ struct EditorSession::Impl final : CommandServices,
     // early return, and a return that forgot to drain silently postponed the
     // work to some later, unrelated dispatch.
     //
-    // Deferring rather than nesting also keeps revisions sequential: each
-    // command is rebased on the revision left by the one before it, whereas a
-    // truly nested dispatch would advance the revision underneath a caller that
-    // had already read it.
+    // Deferring rather than nesting keeps each command complete before the next
+    // command starts.
     struct DeferredCommand {
         ClientCommand command;
     };
@@ -309,6 +302,7 @@ struct EditorSession::Impl final : CommandServices,
     // unrelated dispatch drained it) and enforces the bound.  Returns false if
     // either fails.
     [[nodiscard]] bool defer(ClientCommand command);
+    CommandResult dispatchLocked(ClientCommand const& command);
     // The open file picker's candidate set, built when the picker opens and
     // Published continuously and rebuilt with the workspace tree.
     std::vector<PaletteCandidate> fileCandidates;
@@ -323,7 +317,7 @@ struct EditorSession::Impl final : CommandServices,
     PaneTopology paneTopology = PaneTopology::initial();
     struct DocumentPointerGesture {
         FileDocumentId documentId;
-        Revision documentRevision;
+        std::uint64_t documentRevision;
         DocumentPosition anchor;
         DocumentPosition active;
         bool additive = false;
@@ -333,25 +327,21 @@ struct EditorSession::Impl final : CommandServices,
     bool wordWrap = false;
     bool lineNumbers = false;
     // The active document's immutable flattened text, shared by navigation and
-    // semantic snapshots until its document revision changes.
-    mutable std::optional<Revision> activeTextRevision;
+    // presentation until its document revision changes.
+    mutable std::optional<std::uint64_t> activeTextRevision;
     mutable std::optional<FileDocumentId> activeTextDocument;
     mutable std::string activeTextCache;
     std::uint64_t nextStatusId = 1;
 
-    [[nodiscard]] CommandHandlerResult runTransaction(
-        std::function<CommandHandlerResult()> operation) override;
+    // I1: EditorSession::Impl alone performs workspace/recovery effects for
+    // close/reopen.
+    [[nodiscard]] TabLifecycleResult closeTab(
+        const TabState& tab, std::chrono::milliseconds durabilityTimeout,
+        std::span<const TabId> alreadyClosed = {});
+    [[nodiscard]] TabLifecycleResult reopenTab(
+        const TabState& tab, const RecoveryRecordId& compensation);
 
-    [[nodiscard]] std::any& featureStateValue(std::type_index type) override;
-    void publishStatusValue(std::type_index type, std::any status) override;
-    void publishDeltaValue(std::type_index type, std::any delta) override;
-
-    [[nodiscard]] TabLifecycleResult close(
-        const TabState& tab, std::chrono::milliseconds durabilityTimeout) override;
-    [[nodiscard]] TabLifecycleResult reopen(
-        const TabState& tab, const RecoveryRecordId& compensation) override;
-
-    [[nodiscard]] WorkspaceSnapshot snapshot(Revision revision) const override;
+    [[nodiscard]] WorkspaceSnapshot snapshot(std::uint64_t revision) const override;
     [[nodiscard]] std::vector<SearchCommandDescriptor> descriptors() const override;
     PaletteExecutionResult execute(std::string_view commandId) override;
 
@@ -365,7 +355,7 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] std::optional<LspDocumentSnapshot> snapshot(
         std::string_view uri) const override;
     [[nodiscard]] LspWorkspaceDocumentWriteResult apply(
-        std::string uri, Revision expectedRevision, std::string text) override;
+        std::string uri, std::uint64_t expectedRevision, std::string text) override;
     [[nodiscard]] LspWorkspaceFileResult snapshot(
         std::string_view uri, LspWorkspaceFileNode& node) const override;
     [[nodiscard]] LspWorkspaceFileResult createFile(
@@ -392,8 +382,8 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] Document* activeDocument();
     void ensureDocumentRuntimeState(FileDocumentId document);
     // Discards every per-document association for a document that no longer
-    // exists. Normally the tab close lifecycle does this; delete bypasses that
-    // lifecycle (there is nothing left to flush), so it must do the same
+    // exists. Normally tab close does this; delete bypasses that close
+    // path (there is nothing left to flush), so it must do the same
     // cleanup or the state outlives the document.
     void discardDocumentRuntimeState(FileDocumentId document);
     [[nodiscard]] DocumentHistory& historyFor(FileDocumentId document);
@@ -402,11 +392,6 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] std::optional<WorkspaceDocumentState> activeWorkspaceState() const;
     [[nodiscard]] std::optional<DiffFileView> activeDiffFile() const;
     [[nodiscard]] std::string const& activeText() const;
-    // The line-number gutter width for the active document: 0 when the setting is
-    // off or there is no editor document, else digits(lineCount)+1. The whole-
-    // document line count is cached by revision.
-    [[nodiscard]] int lineNumberGutterWidth(
-        ViewportProjectionState::Impl& presentation) const;
     void resetSelectionForActiveDocument();
     // Collapses to a SINGLE caret at the primary's clamped position.  For a
     // document switch, where the carried selection belongs to the previous
@@ -416,28 +401,14 @@ struct EditorSession::Impl final : CommandServices,
     // and ranges.  For in-document edits, where a multi-cursor set must survive
     // (typing over N selections leaves N carets, Sublime-style).
     void clampSelectionsToActiveDocument();
-    [[nodiscard]] const std::vector<CellRun>& activeCellRuns(
-        ViewportProjectionState::Impl& presentation) const;
-    // The editor viewport, gated on word wrap: exact wrapped geometry when word
-    // wrap is on; O(visible rows) unwrapped projection (compute_viewport_unwrapped)
-    // when off, so a large document's first frame is viewport-bounded (M12).
-    [[nodiscard]] ViewportViewState computeEditorViewport(
-        ViewportProjectionState::Impl& presentation,
-        ViewportDimensions dimensions,
-        std::uint32_t paneContentRows,
-        std::uint32_t paneContentColumns,
-        std::uint32_t firstRow,
-        std::uint32_t firstColumn) const;
-    [[nodiscard]] SessionSnapshotSections sections(
-        PaletteReport const& paletteReport = {}) const;
+    [[nodiscard]] UiSchema projectedUiTree() const;
     [[nodiscard]] PromptStatusViewState promptStatusView() const;
     // The geometry-free semantic projection of the active footer-region prompt,
     // or nullopt unless a footer-region prompt is open.
     // The one draft-conflict notice resolver: the geometry-free NoticeView for the
     // active document, or nullopt unless its reopen outcome is Conflict.
     [[nodiscard]] std::optional<NoticeView> draftNotice() const;
-    // The geometry-free semantic draft-conflict notice for the snapshot section;
-    // exactly draftNotice(), named to sit beside promptView() in sections().
+    // The geometry-free draft-conflict notice used during presentation.
     [[nodiscard]] std::optional<NoticeView> noticeView() const;
     // Whether the active document currently raises a draft-conflict notice. The
     // notice's tree-node presence lives outside the prompt/panel transitions, so the
@@ -464,8 +435,6 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] PaletteViewState paletteView() const;
     // The geometry-free tree state; GridPresenter resolves its visible window.
     [[nodiscard]] TreeViewState treeView() const;
-    [[nodiscard]] TextEncodingViewState textEncodingView() const;
-    [[nodiscard]] DocumentViewState documentView() const;
     [[nodiscard]] CommandHandlerResult updateTabsFor(FileDocumentId document);
     [[nodiscard]] CommandHandlerResult activateDocument(FileDocumentId document);
     [[nodiscard]] DiffIngressResult applyExternalDiffBurst(
@@ -476,7 +445,7 @@ struct EditorSession::Impl final : CommandServices,
     //   `external` and its shared DiffModel it drives run only on the runtime
     //   thread, reached through the wake drain (or the test hook that stands in for
     //   it); the watcher worker thread only queues normalized events and never
-    //   touches the flow. A host never observes a snapshot mid-drain.
+    //   touches the flow. A host never observes a presentation mid-drain.
     void reconcileExternalWatchEvents(std::vector<WatchEvent> events,
                                       bool resync = false);
     // Overflow recovery: the watcher lost events, so re-derive which OPEN documents
@@ -549,13 +518,12 @@ struct EditorSession::Impl final : CommandServices,
     [[nodiscard]] bool revealDiffTarget(
         const FollowTarget& target, NavigationClass classification);
     void recordNavigation(NavigationClass classification);
-    [[nodiscard]] SessionTopology currentTopology() const;
     [[nodiscard]] CommandHandlerResult splitPane(SplitAxis axis);
     [[nodiscard]] CommandHandlerResult closePane();
     [[nodiscard]] CommandHandlerResult cyclePane(PaneCycleDirection direction);
     [[nodiscard]] bool focusPane(PaneId pane);
     [[nodiscard]] bool refreshTree();
-    void refreshTreeForPublication(Revision drainEntryRevision);
+    void refreshTreeForPublication();
     // Re-assemble the authority-owned whole-screen schema from the given UI inputs and
     // migrate the interaction over it. Takes the inputs as parameters (not members) so a
     // caller can build and migrate before adopting the new style.
@@ -595,36 +563,34 @@ struct EditorSession::Impl final : CommandServices,
     bool pendingSyntaxRefresh = false;
     std::uint64_t treeScanCount = 0;
     std::uint64_t syntaxRunCount = 0;
-    std::unique_ptr<GitDiffRefreshWorkerState> gitDiffWorker;
-    // Decision-13 durable capability fact: whether this session has a filesystem
-    // watcher, so the semantic view model can publish "external changes are not
-    // being watched" when the platform cannot provide one. Set optimistically when
-    // a worker is enabled and cleared by the worker thread if watcher construction
-    // fails; atomic because the worker thread writes it and snapshots read it.
-    std::atomic<bool> watcherAvailable{false};
+    // The git-diff/filesystem-watcher background worker: git repository scans,
+    // watcher construction, and their pending-event queues all live behind this
+    // narrow owned member (see git_diff_worker.h). A no-op when both git and
+    // watching are disabled.
+    GitDiffWorker gitDiffWorker;
     // Runtime-owned save correlation. The save primitive records the intended
     // post-write disk state here; the reconcile consumes a match so an SSG write is
     // never mistaken for an external modification. Guarded because the save runs on
     // the dispatch thread and the reconcile on the runtime-thread drain.
     mutable std::mutex externalSaveMutex;
     std::deque<SaveExpectation> pendingSaveExpectations;
-    // Runtime-thread mirror of watcherAvailable, so a transition detected during a
-    // drain advances the session revision exactly once per edge. Owned by the
-    // runtime thread; the atomic is the cross-thread carrier.
-    bool lastPublishedWatcherAvailable = false;
 
     void enqueueStatus(StatusPriority priority, std::string text);
-    void startGitDiffWorker(bool enableGit, bool enableWatcher);
-    void stopGitDiffWorker();
-    [[nodiscard]] bool drainGitDiffScans();
-    void drainWatcherAvailability();
+    // Applies one GitDiffWorker::drain() batch to editor state (the shared
+    // DiffModel, the external-modification flow, the tree): the worker only
+    // produces scans/events/reconcile signals, this is where they land. Returns
+    // whether anything changed that a caller should treat as accepted work.
+    [[nodiscard]] bool drainGitDiffWorker();
     [[nodiscard]] int gitDiffWakeDescriptor() const;
 };
+
 
 [[nodiscard]] CommandHandlerResult success();
 [[nodiscard]] CommandHandlerResult failure(std::string message);
 [[nodiscard]] std::string workspaceMessage(WorkspaceResult const& result);
 [[nodiscard]] std::string tabMessage(TabResult const& result);
 [[nodiscard]] std::string wrongPayload(std::string_view commandId);
+
+ClientInputResult inputLocked(EditorSession::Impl&, ClientInput const&);
 
 } // namespace ssg

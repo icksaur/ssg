@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cassert>
 #include <stdexcept>
-#include <unordered_map>
 #include <utility>
 
 namespace ssg {
@@ -70,8 +69,7 @@ struct TabManager::Impl {
         RecoveryRecordId compensation;
     };
 
-    Impl(TabLifecycle& tabLifecycle, TabManagerConfig managerConfig)
-        : lifecycle{tabLifecycle}, config{managerConfig} {
+    explicit Impl(TabManagerConfig managerConfig) : config{managerConfig} {
         if (config.maximumRecentlyClosed == 0) {
             throw std::invalid_argument(
                 "maximum recently-closed tabs must be greater than zero");
@@ -100,36 +98,41 @@ struct TabManager::Impl {
         }
     }
 
+    [[nodiscard]] const TabLifecycleResult* outcomeFor(
+        TabId id, const std::vector<TabCloseOutcome>& outcomes) const {
+        const auto found = std::find_if(
+            outcomes.begin(), outcomes.end(),
+            [id](const TabCloseOutcome& outcome) { return outcome.tab == id; });
+        return found == outcomes.end() ? nullptr : &found->result;
+    }
+
+    // I2: a dirty tab is removed only after an accepted durable outcome; only an
+    // ephemeral tab may close without compensation or recently-closed history.
     [[nodiscard]] TabResult closeAt(
-        std::size_t index, std::chrono::milliseconds durabilityTimeout,
+        std::size_t index, TabLifecycleResult result,
         std::optional<std::size_t> recordedIndex = {}) {
         const auto tab = view.tabs[index];
-        auto result = lifecycle.close(tab, durabilityTimeout);
         if (!result.accepted()) {
             return failure(result.error, std::move(result.message));
-        }
-        if (!result.compensation) {
-            // An ephemeral (read-only/regenerable) tab closes without a reopen
-            // record and is not added to the reopen-closed history. Any other
-            // tab that returns no compensation is a lifecycle bug.
-            if (!result.ephemeral) {
-                return failure(TabError::LifecycleFailed,
-                               "close did not provide a reopen record");
-            }
-            const auto wasActiveEphemeral = view.active == tab.id;
-            view.tabs.erase(view.tabs.begin() +
-                            static_cast<std::ptrdiff_t>(index));
-            if (view.tabs.empty()) {
-                view.active.reset();
-            } else if (wasActiveEphemeral) {
-                const auto replacement = std::min(index, view.tabs.size() - 1);
-                view.active = view.tabs[replacement].id;
-            }
-            return {TabError::None, {}, tab.id, {}};
         }
         if (tab.dirty && !result.durable) {
             return failure(TabError::DurabilityFailed,
                            "dirty close did not become durable");
+        }
+        if (!result.compensation) {
+            if (!result.ephemeral) {
+                return failure(TabError::LifecycleFailed,
+                               "close did not provide a reopen record");
+            }
+            const auto wasActive = view.active == tab.id;
+            view.tabs.erase(view.tabs.begin() + static_cast<std::ptrdiff_t>(index));
+            if (view.tabs.empty()) {
+                view.active.reset();
+            } else if (wasActive) {
+                const auto replacement = std::min(index, view.tabs.size() - 1);
+                view.active = view.tabs[replacement].id;
+            }
+            return {TabError::None, {}, tab.id, {}};
         }
 
         recentlyClosed.push_back(
@@ -149,13 +152,11 @@ struct TabManager::Impl {
         return {TabError::None, {}, tab.id, {}};
     }
 
-    [[nodiscard]] TabResult closeBatch(
-        std::optional<TabId> keep,
-        std::chrono::milliseconds durabilityTimeout) {
-        if (durabilityTimeout <= std::chrono::milliseconds::zero()) {
-            return failure(TabError::InvalidArgument,
-                           "durability timeout must be positive");
-        }
+    // I3: close-all and close-others apply outcomes in original left-to-right
+    // tab order, keep rejected or omitted targets open, and preserve active-tab
+    // selection with the existing final reconciliation rule.
+    [[nodiscard]] TabResult closeBatch(std::optional<TabId> keep,
+                                       const std::vector<TabCloseOutcome>& outcomes) {
         if (view.tabs.empty()) {
             return failure(TabError::NoTabs, "no tabs are open");
         }
@@ -175,10 +176,19 @@ struct TabManager::Impl {
             if (keep == id) {
                 continue;
             }
+            const auto* outcome = outcomeFor(id, outcomes);
+            if (outcome == nullptr) {
+                aggregate.failures.push_back(
+                    {id, TabError::LifecycleFailed, "close outcome missing for tab"});
+                continue;
+            }
             const auto current = find(id);
+            if (current == view.tabs.end()) {
+                continue;
+            }
             const auto index =
                 static_cast<std::size_t>(std::distance(view.tabs.begin(), current));
-            auto result = closeAt(index, durabilityTimeout, originalIndex);
+            auto result = closeAt(index, *outcome, originalIndex);
             if (!result.accepted()) {
                 aggregate.failures.push_back(
                     {id, result.error, std::move(result.message)});
@@ -212,15 +222,14 @@ struct TabManager::Impl {
         return aggregate;
     }
 
-    TabLifecycle& lifecycle;
     TabManagerConfig config;
     TabViewState view;
     std::vector<ClosedTab> recentlyClosed;
     std::uint64_t nextId = 1;
 };
 
-TabManager::TabManager(TabLifecycle& lifecycle, TabManagerConfig config)
-    : impl_{std::make_unique<Impl>(lifecycle, config)} {}
+TabManager::TabManager(TabManagerConfig config)
+    : impl_{std::make_unique<Impl>(config)} {}
 
 TabManager::~TabManager() = default;
 TabManager::TabManager(TabManager&&) noexcept = default;
@@ -235,11 +244,11 @@ std::size_t TabManager::recentlyClosedCount() const noexcept {
 }
 
 TabResult TabManager::openDocument(FileDocumentId document,
-                                    JournalDocumentKey identity,
-                                    std::string_view label,
-                                    DocumentMode mode,
-                                    bool dirty,
-                                    std::optional<ScratchDurability> recovery) {
+                                   JournalDocumentKey identity,
+                                   std::string_view label,
+                                   DocumentMode mode,
+                                   bool dirty,
+                                   std::optional<ScratchDurability> recovery) {
     if (document.value() == 0) {
         return failure(TabError::InvalidArgument,
                        "document id must be non-zero");
@@ -281,9 +290,9 @@ TabResult TabManager::openDocument(FileDocumentId document,
 }
 
 TabResult TabManager::openContent(TabKind kind,
-                                   std::string_view contentIdentity,
-                                   std::string_view label,
-                                   DocumentMode mode) {
+                                  std::string_view contentIdentity,
+                                  std::string_view label,
+                                  DocumentMode mode) {
     if (kind == TabKind::Document || contentIdentity.empty() || label.empty()) {
         return failure(TabError::InvalidArgument,
                        "non-document tabs require kind, identity, and label");
@@ -308,11 +317,11 @@ TabResult TabManager::openContent(TabKind kind,
 }
 
 TabResult TabManager::updateDocument(FileDocumentId document,
-                                      JournalDocumentKey identity,
-                                      std::string_view label,
-                                      DocumentMode mode,
-                                      bool dirty,
-                                      std::optional<ScratchDurability> recovery) {
+                                     JournalDocumentKey identity,
+                                     std::string_view label,
+                                     DocumentMode mode,
+                                     bool dirty,
+                                     std::optional<ScratchDurability> recovery) {
     const auto found = std::find_if(
         impl_->view.tabs.begin(), impl_->view.tabs.end(),
         [document](const TabState& tab) {
@@ -408,12 +417,7 @@ TabResult TabManager::moveRight(TabId tab) {
     return {TabError::None, {}, tab, {}};
 }
 
-TabResult TabManager::close(
-    TabId tab, std::chrono::milliseconds durabilityTimeout) {
-    if (durabilityTimeout <= std::chrono::milliseconds::zero()) {
-        return failure(TabError::InvalidArgument,
-                       "durability timeout must be positive");
-    }
+TabResult TabManager::close(TabId tab, TabLifecycleResult result) {
     const auto found = impl_->find(tab);
     if (found == impl_->view.tabs.end()) {
         return failure(TabError::NotFound, "tab is not open");
@@ -421,23 +425,22 @@ TabResult TabManager::close(
     return impl_->closeAt(
         static_cast<std::size_t>(
             std::distance(impl_->view.tabs.begin(), found)),
-        durabilityTimeout);
+        std::move(result));
 }
 
-TabResult TabManager::closeOthers(
-    TabId tab, std::chrono::milliseconds durabilityTimeout) {
+TabResult TabManager::closeOthers(TabId tab,
+                                  std::vector<TabCloseOutcome> outcomes) {
     if (impl_->find(tab) == impl_->view.tabs.end()) {
         return failure(TabError::NotFound, "tab is not open");
     }
-    return impl_->closeBatch(tab, durabilityTimeout);
+    return impl_->closeBatch(tab, outcomes);
 }
 
-TabResult TabManager::closeAll(
-    std::chrono::milliseconds durabilityTimeout) {
-    return impl_->closeBatch({}, durabilityTimeout);
+TabResult TabManager::closeAll(std::vector<TabCloseOutcome> outcomes) {
+    return impl_->closeBatch({}, outcomes);
 }
 
-TabResult TabManager::reopenClosed() {
+std::variant<TabResult, TabReopenRequest> TabManager::beginReopenClosed() {
     if (impl_->recentlyClosed.empty()) {
         return failure(TabError::NoRecentlyClosed,
                        "no recently closed tab is available");
@@ -450,22 +453,37 @@ TabResult TabManager::reopenClosed() {
         const auto id = existing->id;
         impl_->view.active = id;
         impl_->recentlyClosed.pop_back();
-        return {TabError::None, {}, id, {}};
+        return TabResult{TabError::None, {}, id, {}};
     }
-    auto restored =
-        impl_->lifecycle.reopen(closed.state, closed.compensation);
-    if (!restored.accepted()) {
-        return failure(restored.error, std::move(restored.message));
+    return TabReopenRequest{closed.state, closed.compensation, closed.index};
+}
+
+TabResult TabManager::finishReopenClosed(TabReopenRequest request,
+                                         TabLifecycleResult result) {
+    // I4: matching open identities are handled by beginReopenClosed without an
+    // effect; a rejected effect keeps history; success restores position and any
+    // replacement document identity.
+    if (impl_->recentlyClosed.empty()) {
+        return failure(TabError::LifecycleFailed, "reopen request is stale");
     }
-    auto restoredState = std::move(closed.state);
+    const auto& closed = impl_->recentlyClosed.back();
+    if (!sameIdentity(closed.state, request.tab) ||
+        closed.compensation != request.compensation) {
+        return failure(TabError::LifecycleFailed, "reopen request is stale");
+    }
+    if (!result.accepted()) {
+        return failure(result.error, std::move(result.message));
+    }
+
+    auto restoredState = std::move(request.tab);
     if (restoredState.kind == TabKind::Document &&
-        restored.reopenedDocument.has_value()) {
-        restoredState.document = restored.reopenedDocument;
-        if (restored.reopenedDocumentKey.has_value()) {
-            restoredState.documentKey = restored.reopenedDocumentKey;
+        result.reopenedDocument.has_value()) {
+        restoredState.document = result.reopenedDocument;
+        if (result.reopenedDocumentKey.has_value()) {
+            restoredState.documentKey = result.reopenedDocumentKey;
         }
     }
-    const auto index = std::min(closed.index, impl_->view.tabs.size());
+    const auto index = std::min(request.index, impl_->view.tabs.size());
     const auto id = restoredState.id;
     impl_->view.tabs.insert(
         impl_->view.tabs.begin() + static_cast<std::ptrdiff_t>(index),

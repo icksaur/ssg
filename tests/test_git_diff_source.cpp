@@ -329,7 +329,7 @@ TEST(branchPublishesIndependentlyWhenDiffScanIsRejected) {
     auto branchScan = source.takeBranchOnlyScanIfChanged();
     ASSERT_TRUE(branchScan.has_value());
     if (branchScan) {
-        ASSERT_EQ(branchScan->revision.value(), std::uint64_t{0});
+        ASSERT_EQ(branchScan->revision, std::uint64_t{0});
         ASSERT_TRUE(branchScan->currentBranch.has_value());
         ASSERT_EQ(*branchScan->currentBranch, std::string{"main"});
     }

@@ -63,6 +63,8 @@ struct KeymapViewState {
     bool operator==(const KeymapViewState&) const = default;
 };
 
+[[nodiscard]] KeymapViewState defaultTerminalKeymap();
+
 struct KeymapDelta {
     bool changed;
     std::optional<KeymapViewState> replacement;

@@ -109,14 +109,14 @@ struct LspDiagnostic {
 
 struct LspDocumentDiagnostics {
     std::string uri;
-    Revision revision{0};
+    std::uint64_t revision{0};
     std::vector<LspDiagnostic> diagnostics;
     friend bool operator==(const LspDocumentDiagnostics&,
                            const LspDocumentDiagnostics&) = default;
 };
 
 struct LspSyncViewState {
-    Revision revision{0};
+    std::uint64_t revision{0};
     std::vector<LspDocumentDiagnostics> documents;
     friend bool operator==(const LspSyncViewState&,
                            const LspSyncViewState&) = default;
@@ -196,7 +196,7 @@ struct LspRequestResult {
 
 struct LspDocumentSnapshot {
     std::string uri;
-    Revision revision{0};
+    std::uint64_t revision{0};
     std::int64_t version = 0;
     std::string text;
     friend bool operator==(const LspDocumentSnapshot&,
@@ -234,10 +234,10 @@ public:
     [[nodiscard]] LspSyncResult poll();
 
     [[nodiscard]] LspSyncResult openDocument(
-        std::string uri, std::string languageId, Revision revision,
+        std::string uri, std::string languageId, std::uint64_t revision,
         std::string text);
     [[nodiscard]] LspSyncResult changeDocument(
-        std::string_view uri, Revision revision, std::string text);
+        std::string_view uri, std::uint64_t revision, std::string text);
     [[nodiscard]] LspSyncResult closeDocument(std::string_view uri);
     [[nodiscard]] std::optional<std::int64_t> documentVersion(
         std::string_view uri) const;

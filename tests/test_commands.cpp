@@ -37,8 +37,6 @@
 #include <string>
 #include <ssg/FileCommands.h>
 
-#include "file_commands.h"
-
 #include <algorithm>
 #include <fstream>
 #include <map>

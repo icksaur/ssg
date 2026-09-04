@@ -1,4 +1,5 @@
 #include "test_helpers.h"
+#include "grid_test_frame.h"
 
 #include <ssg/EditorSession.h>
 #include "startup_audit.h"
@@ -54,34 +55,26 @@ TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(), std::string{"code.txt"}})
+    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}})
                     .accepted());
 
     // Producing the first frame (a snapshot) must not have run the deferrable
     // O(document) syntax pass or the O(workspace) tree scan.
-    (void)runtime.snapshot();
+    (void)ssg::test::projectGridFrame(runtime);
     auto before = runtime.deferredWorkCounts();
     ASSERT_EQ(before.syntaxRuns, std::uint64_t{0});
     ASSERT_EQ(before.treeScans, std::uint64_t{0});
 
     // Priming runs the deferred work; it must actually arrive.
-    auto const revisionBeforePrime = runtime.revision();
     runtime.primeDeferred();
     auto after = runtime.deferredWorkCounts();
     ASSERT_TRUE(after.syntaxRuns >= 1);
     ASSERT_TRUE(after.treeScans >= 1);
-    // The session revision advances so delta-based clients observe the primed
-    // enrichment (a same-revision snapshot pair yields no delta).
-    ASSERT_TRUE(runtime.revision().value() > revisionBeforePrime.value());
-
-    // Idempotent: a second prime does no additional deferred work and does not
-    // advance the revision again.
-    auto const revisionAfterPrime = runtime.revision();
+    // Idempotent: a second prime does no additional deferred work.
     runtime.primeDeferred();
     auto again = runtime.deferredWorkCounts();
     ASSERT_EQ(again.syntaxRuns, after.syntaxRuns);
     ASSERT_EQ(again.treeScans, after.treeScans);
-    ASSERT_EQ(runtime.revision().value(), revisionAfterPrime.value());
 
     fs::remove_all(root);
 }
@@ -92,7 +85,7 @@ TEST(eagerConstructionRunsEnrichmentImmediately) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(), std::string{"code.txt"}})
+    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}})
                     .accepted());
 
     // Default (eager) behavior: the tree scan ran at construction and syntax ran
@@ -128,9 +121,9 @@ TEST(firstFrameConstructsNoOptionalSubsystem) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(), std::string{"code.txt"}})
+    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}})
                     .accepted());
-    (void)runtime.snapshot();
+    (void)ssg::test::projectGridFrame(runtime);
 
     // Exhaustive over the enumerated subsystems (a missing enum entry fails the
     // static_assert in startup_audit.h, so the list cannot silently omit one).
@@ -179,11 +172,11 @@ TEST(panelShowFilesRequiresPrimeDeferredFirst) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    auto tooEarly = runtime.dispatch({"panel.show_files", runtime.revision(), {}});
+    auto tooEarly = runtime.dispatch({"panel.show_files",  {}});
     ASSERT_FALSE(tooEarly.accepted());
 
     runtime.primeDeferred();
-    auto onTime = runtime.dispatch({"panel.show_files", runtime.revision(), {}});
+    auto onTime = runtime.dispatch({"panel.show_files",  {}});
     ASSERT_TRUE(onTime.accepted());
 
     fs::remove_all(root);
@@ -205,27 +198,27 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
     auto& runtime = *created.session;
 
     // Mirrors apps/ssg_main.cpp's pre-loop file-argument open.
-    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(), std::string{"code.txt"}})
+    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}})
                     .accepted());
     runtime.focusEditor();
     auto beforePanel =
-        runtime.snapshot();
+        ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(beforePanel.has_value());
     if (beforePanel) {
-        ASSERT_EQ(ssg::effectiveUiFocus(beforePanel->sections().uiTree),
+        ASSERT_EQ(ssg::effectiveUiFocus(beforePanel->uiTree),
                   ssg::FocusTarget::Editor);
     }
 
     // Mirrors apps/ssg_main.cpp's post-primeDeferred panel dispatch: this
     // moves focus to the panel as a side effect, clobbering the above.
     runtime.primeDeferred();
-    ASSERT_TRUE(runtime.dispatch({"panel.show_files", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"panel.show_files",  {}})
                     .accepted());
     auto afterPanel =
-        runtime.snapshot();
+        ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(afterPanel.has_value());
     if (afterPanel) {
-        ASSERT_EQ(ssg::effectiveUiFocus(afterPanel->sections().uiTree),
+        ASSERT_EQ(ssg::effectiveUiFocus(afterPanel->uiTree),
                   ssg::FocusTarget::Panel);
     }
 
@@ -233,10 +226,10 @@ TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
     // focusEditor() again restores the correct final focus.
     runtime.focusEditor();
     auto restored =
-        runtime.snapshot();
+        ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(restored.has_value());
     if (restored) {
-        ASSERT_EQ(ssg::effectiveUiFocus(restored->sections().uiTree),
+        ASSERT_EQ(ssg::effectiveUiFocus(restored->uiTree),
                   ssg::FocusTarget::Editor);
     }
 

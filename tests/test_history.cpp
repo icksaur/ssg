@@ -264,7 +264,7 @@ TEST(rejectionAndStaleDocumentAreFailureAtomic) {
     ssg::DocumentHistory history{{4096, 750}};
     auto selections = caret(1);
     const auto stale = ssg::EditTransaction{
-        ssg::Revision{99}, {{ssg::ByteOffset{1}, 0, "b"}}};
+        std::uint64_t{99}, {{ssg::ByteOffset{1}, 0, "b"}}};
     const auto rejected =
         history.applyEdit(document, stale, selections, caret(2),
                            ssg::HistoryEditKind::Other, 0);

@@ -240,7 +240,7 @@ private:
     }
 };
 
-SyntaxParseRequestResult requestFor(SyntaxModel& model, Revision revision,
+SyntaxParseRequestResult requestFor(SyntaxModel& model, std::uint64_t revision,
                                      std::string text,
                                      std::vector<SyntaxEdit> edits = {}) {
     return model.request(revision, LanguageId{"toy"}, std::move(text),
@@ -257,7 +257,7 @@ SyntaxAcceptResult parseAndAccept(SyntaxModel& model,
 TEST(handComputedMetadataGoldenCoversAllExportedSections) {
     const std::string text = "fn(a[1]) {\n\t// c\n  x] /* y */\n}\n";
     SyntaxParseOutput raw{
-        .revision = Revision{7},
+        .revision = std::uint64_t{7},
         .status = SyntaxParseStatus::Parsed,
         .parse = std::make_shared<FakeParse>(text),
         .spans =
@@ -291,9 +291,9 @@ TEST(handComputedMetadataGoldenCoversAllExportedSections) {
     };
 
     const auto state = SyntaxViewState::fromParse(
-        Revision{7}, LanguageId{"toy"}, text, raw, SyntaxConfig{.tabWidth = 4});
+        std::uint64_t{7}, LanguageId{"toy"}, text, raw, SyntaxConfig{.tabWidth = 4});
 
-    ASSERT_EQ(state.revision(), Revision{7});
+    ASSERT_EQ(state.revision(), std::uint64_t{7});
     ASSERT_EQ(state.language(), LanguageId{"toy"});
     ASSERT_EQ(state.textBytes(), std::uint64_t{32});
     ASSERT_EQ(
@@ -357,7 +357,7 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
     auto incrementalParser = std::make_shared<DeterministicParser>();
     SyntaxModel incremental{incrementalParser};
     const std::string before = "fn main() {\n  let x = [1];\n}\n";
-    const auto initial = requestFor(incremental, Revision{1}, before);
+    const auto initial = requestFor(incremental, std::uint64_t{1}, before);
     ASSERT_TRUE(parseAndAccept(incremental, initial).accepted());
     const auto acceptedParse = incrementalParser->lastPrior;
     ASSERT_FALSE(acceptedParse != nullptr);
@@ -375,7 +375,7 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
     };
 
     const auto updated =
-        requestFor(incremental, Revision{2}, after, {edit});
+        requestFor(incremental, std::uint64_t{2}, after, {edit});
     ASSERT_TRUE(updated.accepted());
     ASSERT_TRUE(updated.request->priorParse() != nullptr);
     ASSERT_EQ(updated.request->edits(), (std::vector<SyntaxEdit>{edit}));
@@ -386,7 +386,7 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
 
     auto fullParser = std::make_shared<DeterministicParser>();
     SyntaxModel full{fullParser};
-    const auto fullRequest = requestFor(full, Revision{2}, after);
+    const auto fullRequest = requestFor(full, std::uint64_t{2}, after);
     ASSERT_TRUE(parseAndAccept(full, fullRequest).accepted());
     ASSERT_EQ(incremental.viewState(), full.viewState());
 }
@@ -394,14 +394,14 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
 TEST(supersededAndCancelledResultsNeverReplaceNewerState) {
     auto parser = std::make_shared<DeterministicParser>();
     SyntaxModel model{parser};
-    const auto first = requestFor(model, Revision{1}, "let a = 1;\n");
+    const auto first = requestFor(model, std::uint64_t{1}, "let a = 1;\n");
     ASSERT_TRUE(parseAndAccept(model, first).accepted());
     const auto accepted = model.viewState();
 
-    const auto second = requestFor(model, Revision{2}, "let a = 2;\n");
+    const auto second = requestFor(model, std::uint64_t{2}, "let a = 2;\n");
     ASSERT_TRUE(second.accepted());
     const auto completedSecond = model.run(*second.request);
-    const auto third = requestFor(model, Revision{3}, "let a = 3;\n");
+    const auto third = requestFor(model, std::uint64_t{3}, "let a = 3;\n");
     ASSERT_TRUE(third.accepted());
     ASSERT_TRUE(second.request->cancelled());
 
@@ -415,9 +415,9 @@ TEST(supersededAndCancelledResultsNeverReplaceNewerState) {
               SyntaxAcceptError::Cancelled);
     ASSERT_EQ(model.viewState(), accepted);
 
-    const auto newest = requestFor(model, Revision{4}, "let a = 4;\n");
+    const auto newest = requestFor(model, std::uint64_t{4}, "let a = 4;\n");
     ASSERT_TRUE(parseAndAccept(model, newest).accepted());
-    ASSERT_EQ(model.viewState().revision(), Revision{4});
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{4});
     ASSERT_EQ(model.accept(first.request, model.run(*first.request)).error,
               SyntaxAcceptError::StaleRevision);
 }
@@ -426,7 +426,7 @@ TEST(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot) {
     const std::string text = "\tplain\n";
 
     SyntaxModel noParser;
-    const auto absent = requestFor(noParser, Revision{1}, text);
+    const auto absent = requestFor(noParser, std::uint64_t{1}, text);
     const auto absentResult = parseAndAccept(noParser, absent);
     ASSERT_TRUE(absentResult.accepted());
     ASSERT_TRUE(absentResult.usedFallback);
@@ -435,7 +435,7 @@ TEST(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot) {
     unavailableParser->grammarAvailable = false;
     SyntaxModel unavailable{unavailableParser};
     const auto unavailableRequest =
-        requestFor(unavailable, Revision{1}, text);
+        requestFor(unavailable, std::uint64_t{1}, text);
     const auto unavailableResult =
         parseAndAccept(unavailable, unavailableRequest);
     ASSERT_TRUE(unavailableResult.accepted());
@@ -445,7 +445,7 @@ TEST(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot) {
     auto failedParser = std::make_shared<DeterministicParser>();
     failedParser->failParse = true;
     SyntaxModel failedModel{failedParser};
-    const auto failedRequest = requestFor(failedModel, Revision{1}, text);
+    const auto failedRequest = requestFor(failedModel, std::uint64_t{1}, text);
     const auto failedResult =
         parseAndAccept(failedModel, failedRequest);
     ASSERT_TRUE(failedResult.accepted());
@@ -455,7 +455,7 @@ TEST(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot) {
     auto plainParser = std::make_shared<DeterministicParser>();
     SyntaxModel explicitPlain{plainParser};
     const auto plainRequest = explicitPlain.request(
-        Revision{1}, LanguageId::plainText(), text);
+        std::uint64_t{1}, LanguageId::plainText(), text);
     ASSERT_TRUE(parseAndAccept(explicitPlain, plainRequest).accepted());
     ASSERT_EQ(plainParser->parseCalls, std::size_t{0});
 
@@ -476,9 +476,9 @@ TEST(requestAndResultValidationIsFailureAtomic) {
     SyntaxModel model{parser, SyntaxConfig{.maximumDocumentBytes = 8}};
 
     const auto oversized =
-        requestFor(model, Revision{1}, "123456789");
+        requestFor(model, std::uint64_t{1}, "123456789");
     ASSERT_EQ(oversized.error, SyntaxRequestError::DocumentTooLarge);
-    ASSERT_EQ(model.viewState().revision(), Revision{0});
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{0});
 
     const SyntaxEdit malformed{
         .startByte = ByteOffset{4},
@@ -489,36 +489,36 @@ TEST(requestAndResultValidationIsFailureAtomic) {
         .newEndPosition = {line(0), 4},
     };
     const auto malformedRequest =
-        requestFor(model, Revision{1}, "abc", {malformed});
+        requestFor(model, std::uint64_t{1}, "abc", {malformed});
     ASSERT_EQ(malformedRequest.error, SyntaxRequestError::MalformedEdits);
-    ASSERT_EQ(model.viewState().revision(), Revision{0});
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{0});
 
-    const auto valid = requestFor(model, Revision{1}, "let 1\n");
+    const auto valid = requestFor(model, std::uint64_t{1}, "let 1\n");
     ASSERT_TRUE(valid.accepted());
     auto mismatched = model.run(*valid.request);
-    mismatched.revision = Revision{2};
+    mismatched.revision = std::uint64_t{2};
     ASSERT_EQ(model.accept(valid.request, mismatched).error,
               SyntaxAcceptError::MalformedOutput);
-    ASSERT_EQ(model.viewState().revision(), Revision{0});
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{0});
 
     ASSERT_TRUE(parseAndAccept(model, valid).accepted());
-    const auto stale = requestFor(model, Revision{1}, "let 2\n");
+    const auto stale = requestFor(model, std::uint64_t{1}, "let 2\n");
     ASSERT_EQ(stale.error, SyntaxRequestError::StaleRevision);
-    ASSERT_EQ(model.viewState().revision(), Revision{1});
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{1});
 
     const auto switchedLanguage = model.request(
-        Revision{2}, LanguageId{"other"}, "let 1\n");
+        std::uint64_t{2}, LanguageId{"other"}, "let 1\n");
     ASSERT_TRUE(switchedLanguage.accepted());
     ASSERT_TRUE(switchedLanguage.request->priorParse() == nullptr);
     const auto completedSwitch = model.run(*switchedLanguage.request);
 
     const auto rejectedNewer =
-        requestFor(model, Revision{3}, "123456789");
+        requestFor(model, std::uint64_t{3}, "123456789");
     ASSERT_EQ(rejectedNewer.error, SyntaxRequestError::DocumentTooLarge);
     ASSERT_TRUE(switchedLanguage.request->cancelled());
     ASSERT_EQ(model.accept(switchedLanguage.request, completedSwitch).error,
               SyntaxAcceptError::Cancelled);
-    ASSERT_EQ(model.viewState().revision(), Revision{1});
+    ASSERT_EQ(model.viewState().revision(), std::uint64_t{1});
 }
 
 TEST(parseConvenienceMatchesHandDrivenRequestRunAccept) {
@@ -527,13 +527,13 @@ TEST(parseConvenienceMatchesHandDrivenRequestRunAccept) {
     // Grammar hit: parse() must leave the same view-state as the three calls.
     auto convenientParser = std::make_shared<DeterministicParser>();
     SyntaxModel convenient{convenientParser};
-    const auto result = convenient.parse(Revision{1}, LanguageId{"toy"}, text);
+    const auto result = convenient.parse(std::uint64_t{1}, LanguageId{"toy"}, text);
     ASSERT_TRUE(result.accepted());
     ASSERT_FALSE(result.usedFallback);
 
     auto manualParser = std::make_shared<DeterministicParser>();
     SyntaxModel manual{manualParser};
-    const auto prepared = manual.request(Revision{1}, LanguageId{"toy"}, text);
+    const auto prepared = manual.request(std::uint64_t{1}, LanguageId{"toy"}, text);
     ASSERT_TRUE(parseAndAccept(manual, prepared).accepted());
     ASSERT_EQ(convenient.viewState(), manual.viewState());
 
@@ -541,39 +541,39 @@ TEST(parseConvenienceMatchesHandDrivenRequestRunAccept) {
     auto noGrammarParser = std::make_shared<DeterministicParser>();
     noGrammarParser->grammarAvailable = false;
     SyntaxModel noGrammar{noGrammarParser};
-    const auto fallback = noGrammar.parse(Revision{1}, LanguageId{"toy"}, text);
+    const auto fallback = noGrammar.parse(std::uint64_t{1}, LanguageId{"toy"}, text);
     ASSERT_TRUE(fallback.accepted());
     ASSERT_TRUE(fallback.usedFallback);
 
     SyntaxModel plainReference;  // no parser -> plain-text fallback
     ASSERT_TRUE(parseAndAccept(plainReference,
-                               requestFor(plainReference, Revision{1}, text))
+                               requestFor(plainReference, std::uint64_t{1}, text))
                     .accepted());
     ASSERT_EQ(noGrammar.viewState(), plainReference.viewState());
 
     // Oversized document: refused, view-state untouched.
     auto tinyParser = std::make_shared<DeterministicParser>();
     SyntaxModel tiny{tinyParser, SyntaxConfig{.maximumDocumentBytes = 4}};
-    const auto oversized = tiny.parse(Revision{1}, LanguageId{"toy"}, text);
+    const auto oversized = tiny.parse(std::uint64_t{1}, LanguageId{"toy"}, text);
     ASSERT_EQ(oversized.requestError, SyntaxRequestError::DocumentTooLarge);
     ASSERT_FALSE(oversized.accepted());
-    ASSERT_EQ(tiny.viewState().revision(), Revision{0});
+    ASSERT_EQ(tiny.viewState().revision(), std::uint64_t{0});
 
     // Stale revision: refused, the newer accepted state stands.
     auto staleParser = std::make_shared<DeterministicParser>();
     SyntaxModel staleModel{staleParser};
     ASSERT_TRUE(
-        staleModel.parse(Revision{2}, LanguageId{"toy"}, text).accepted());
-    const auto stale = staleModel.parse(Revision{1}, LanguageId{"toy"}, text);
+        staleModel.parse(std::uint64_t{2}, LanguageId{"toy"}, text).accepted());
+    const auto stale = staleModel.parse(std::uint64_t{1}, LanguageId{"toy"}, text);
     ASSERT_EQ(stale.requestError, SyntaxRequestError::StaleRevision);
-    ASSERT_EQ(staleModel.viewState().revision(), Revision{2});
+    ASSERT_EQ(staleModel.viewState().revision(), std::uint64_t{2});
 }
 
 TEST(parseConvenienceRejectsAParserThatCancelsMidParse) {
     auto parser = std::make_shared<DeterministicParser>();
     SyntaxModel model{parser};
     ASSERT_TRUE(
-        model.parse(Revision{1}, LanguageId{"toy"}, "let a = 1;\n").accepted());
+        model.parse(std::uint64_t{1}, LanguageId{"toy"}, "let a = 1;\n").accepted());
     const auto accepted = model.viewState();
 
     // A parser cancelling its own request mid-parse is rejected at accept, and
@@ -581,7 +581,7 @@ TEST(parseConvenienceRejectsAParserThatCancelsMidParse) {
     // superseded-request path.
     parser->selfCancelDuringParse = true;
     const auto result =
-        model.parse(Revision{2}, LanguageId{"toy"}, "let a = 2;\n");
+        model.parse(std::uint64_t{2}, LanguageId{"toy"}, "let a = 2;\n");
     ASSERT_FALSE(result.accepted());
     ASSERT_EQ(result.acceptError, SyntaxAcceptError::Cancelled);
     ASSERT_EQ(model.viewState(), accepted);

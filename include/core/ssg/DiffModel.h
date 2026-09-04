@@ -1,6 +1,5 @@
 #pragma once
 
-#include "ssg/snapshot.h"
 #include "ssg/types.h"
 #include <array>
 #include <cstddef>
@@ -103,11 +102,11 @@ struct DiffFileView {
 };
 
 struct DiffViewState {
-    Revision revision{0};
+    std::uint64_t revision{0};
     std::vector<DiffFileView> files;
 
     [[nodiscard]] std::optional<std::reference_wrapper<const DiffFileView>>
-    fileForDocument(const DocumentViewState& document) const;
+    fileForIdentity(const std::optional<std::string>& identity) const;
 
     friend bool operator==(const DiffViewState&, const DiffViewState&) = default;
 };
@@ -168,13 +167,13 @@ public:
     explicit DiffModel(DiffConfig config = {});
 
     [[nodiscard]] DiffMutationResult updateGitFile(
-        GitDiffFile file, std::string baselineIdentity, Revision revision);
+        GitDiffFile file, std::string baselineIdentity, std::uint64_t revision);
     [[nodiscard]] DiffMutationResult removeFile(const DiffFileId& id,
-                                                Revision revision);
+                                                std::uint64_t revision);
     [[nodiscard]] DiffMutationResult seedNonGit(
-        std::vector<SeededDiffFile> files, Revision revision);
+        std::vector<SeededDiffFile> files, std::uint64_t revision);
     [[nodiscard]] DiffMutationResult applyNonGitEvent(
-        NonGitDiffEvent event, Revision revision);
+        NonGitDiffEvent event, std::uint64_t revision);
 
     [[nodiscard]] DiffViewState viewState() const;
     [[nodiscard]] std::optional<std::reference_wrapper<const DiffFileView>>
@@ -196,7 +195,7 @@ private:
     };
 
     DiffConfig config_;
-    Revision revision_{0};
+    std::uint64_t revision_{0};
     std::vector<Entry> entries_;
 };
 

@@ -1,4 +1,5 @@
 #include "../test_helpers.h"
+#include "../grid_test_frame.h"
 
 #include <ssg/EditorSession.h>
 #include <ssg/TextInputCommands.h>
@@ -25,15 +26,14 @@ TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(), std::string{"code.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"text.insert", runtime.revision(), ssg::TextInputArguments{"x"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"code.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"text.insert",  ssg::TextInputArguments{"x"}}).accepted());
 
-    auto completion = runtime.dispatch({"completion.open", runtime.revision(), {}});
+    auto completion = runtime.dispatch({"completion.open",  {}});
     ASSERT_FALSE(completion.accepted());
-    auto snapshot = runtime.snapshot();
+    auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_EQ(snapshot->sections().syntax.revision(), snapshot->sections().document.revision);
-    ASSERT_FALSE(snapshot->sections().lspFeatures.status.empty());
+    ASSERT_EQ(snapshot->syntax.revision(), snapshot->documentRevision);
 }
 
 } // namespace

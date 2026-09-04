@@ -1,7 +1,6 @@
 #include <ssg/EditorSession.h>
 #include <ssg/Keymap.h>
 #include <tui/Renderer.h>
-#include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"
 #include "grid_test_frame.h"
@@ -22,17 +21,10 @@
 #error "whole-screen interaction intermediates must remain private"
 #endif
 
-template <typename Runtime>
-concept HasDimensionedSnapshot = requires(Runtime& runtime) {
-    runtime.snapshot(ssg::ViewportDimensions{80, 24});
-};
-
-static_assert(!HasDimensionedSnapshot<ssg::EditorSession>);
-
 // Milestone 11 — The semantic library API drives the TUI contract.
 //
 // M11-1: the TUI screen is a pure function of the production EditorSession's
-// SessionSnapshot.  These tests drive the REAL runtime (not a hand-authored
+// GridPresentation.  These tests drive the REAL runtime (not a hand-authored
 // fixture model) through a fixed script and assert the screen contract:
 // geometry, no uninitialised cells, theme-sourced colour, expected content, and
 // render determinism.  They deliberately do not pin an exact appearance.
@@ -118,11 +110,11 @@ ssg::PaletteReport projectReport(
 // The published candidate list for an open palette, straight from the runtime.
 std::vector<ssg::PaletteCandidate> publishedCandidates(
     ssg::EditorSession& runtime) {
-    ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"palette.open",  {}})
                     .accepted());
-    auto snapshot = runtime.snapshot();
+    auto snapshot = ssg::test::projectGridFrame(runtime);
     if (!snapshot) return {};
-    return snapshot->sections().palette.commandCandidates;
+    return snapshot->paletteView.commandCandidates;
 }
 
 // Reconstruct grid row `row` as a plain string (continuation cells contribute no
@@ -201,7 +193,7 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     ASSERT_TRUE(!report.rows.empty());
     if (report.rows.empty()) return;
 
-    auto frame = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, {80, 24}, report);
+    auto frame = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -233,10 +225,10 @@ TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch({"file.open", runtime->revision(),
+    ASSERT_TRUE(runtime->dispatch({"file.open",
                                    std::string{"alpha.txt"}})
                     .accepted());
-    auto frame = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, {80, 24});
+    auto frame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -254,10 +246,10 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch({"file.open", runtime->revision(),
+    ASSERT_TRUE(runtime->dispatch({"file.open",
                                    std::string{"alpha.txt"}})
                     .accepted());
-    ASSERT_TRUE(runtime->dispatch({"palette.open", runtime->revision(), {}})
+    ASSERT_TRUE(runtime->dispatch({"palette.open",  {}})
                     .accepted());
     // The client derived view (query/ghost/rows/selection) is reported as input;
     // the library builds the rendered projection.
@@ -267,7 +259,7 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     report.rows = {{"file.save", "Save File", ""},
                    {"file.save_as", "Save As", ""}};
     report.selected = std::uint32_t{0};
-    auto frame = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, {80, 24}, report);
+    auto frame = ssg::test::projectGridFrame(*runtime, {80, 24}, report);
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -285,10 +277,10 @@ TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    ASSERT_TRUE(runtime->dispatch({"file.open", runtime->revision(),
+    ASSERT_TRUE(runtime->dispatch({"file.open",
                                    std::string{"alpha.txt"}})
                     .accepted());
-    auto frame = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, {24, 3});
+    auto frame = ssg::test::projectGridFrame(*runtime, {24, 3});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     auto grid = ssg::Renderer{}.render(*frame);
@@ -321,21 +313,21 @@ TEST(inMemorySnapshotsPublishTheUiVm) {
         {"prompt.cancel", {}},
     };
 
-    auto previous = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, dims);
+    auto previous = ssg::test::projectGridFrame(*runtime, dims);
     ASSERT_TRUE(previous.has_value());
     if (!previous) return;
 
     for (auto const& step : script) {
-        (void)runtime->dispatch({step.command, runtime->revision(), step.payload});
-        auto fresh = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, dims);
+        (void)runtime->dispatch({step.command,  step.payload});
+        auto fresh = ssg::test::projectGridFrame(*runtime, dims);
         ASSERT_TRUE(fresh.has_value());
         if (!fresh) break;
 
-        auto const& tree = fresh->semantic().sections().uiTree;
+        auto const& tree = fresh->uiTree;
         ASSERT_TRUE(!tree.root.id.empty());
         ASSERT_TRUE(!ssg::uiSchemaNodeIds(tree).empty());
 
-        previous = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, dims);
+        previous = ssg::test::projectGridFrame(*runtime, dims);
         ASSERT_TRUE(previous.has_value());
         if (!previous) break;
     }

@@ -18,7 +18,7 @@
 
 #include <ssg/LayoutConstraints.h>   // Axis, Size, Inset
 #include <ssg/Theme.h>              // SemanticRole
-#include <ssg/UiWidget.h>           // WidgetDescriptor, ValueSource
+#include <ssg/UiWidget.h>           // WidgetDescriptor
 #include <ssg/focus.h>              // FocusTarget
 
 #include <cstdint>
@@ -140,9 +140,11 @@ struct UiNode {
     // isUiNodeVisible for the ancestor-aware effective query. Set once by
     // interaction projection, never baked ahead of time.
     bool visible = true;
-    // A renderable leaf's resolved semantic state, baked in at snapshot
-    // publication (see resolveUiTree). Absent for a container, a spacer, a
-    // client-local TextInput, and an empty-resolved Label/Field.
+    // A renderable leaf's resolved semantic state, written directly at snapshot
+    // publication (DIRECT-VALUE): consumers read it as the widget's already-
+    // computed value and never resolve a string key themselves. Absent for a
+    // container, a spacer, a client-local TextInput, and an empty-resolved
+    // Label/Field.
     std::optional<UiLeafState> resolved;
 
     [[nodiscard]] bool isContainer() const noexcept {
@@ -201,6 +203,25 @@ inline constexpr std::string_view kFooterPromptOptionsNodeId =
     return UiNodeId{std::string{kFooterPromptNodeId} + ".control." +
                     std::string{controlId}};
 }
+// The fixed header/footer status-field leaf nodes, in their stable collapse
+// order (StatusFields.h names the same fields' semantic ids). These are the
+// single identities shared by whole-screen assembly and snapshot-publication
+// population -- neither derives the other's node id mechanically.
+inline constexpr std::string_view kHeaderPathFieldNodeId = "header.left.0";
+inline constexpr std::string_view kHeaderBranchFieldNodeId = "header.left.1";
+inline constexpr std::string_view kFooterStatusFieldNodeId = "footer.left.0";
+inline constexpr std::string_view kFooterFollowFieldNodeId = "footer.left.1";
+// The footer help hint node: the footer's right group's sole fixed member (its
+// widget's own semantic id is "footer.hint"; this is the group-positional node
+// id, matching the id `regionGroup` mechanically assigns it). Its label is the
+// keymap-derived hint text and its command is the stable hint command, both
+// written at snapshot publication.
+inline constexpr std::string_view kFooterHintNodeId = "footer.right.0";
+// The footer status-action anchor: a fixed container whose children mirror the
+// selected status item's actions, rebuilt in tree order at assembly and given
+// their resolved value/command/label at population.
+inline constexpr std::string_view kFooterStatusActionsNodeId =
+    "footer.status_actions";
 // The draft-conflict notice's semantic surface: a content child after the tab bar
 // and before the replaceable document/picker branches, hidden unless the active document has an
 // unresolved draft conflict.
@@ -275,17 +296,6 @@ struct UiSchemaValidation {
 // guaranteed to declare a focusContext by validatePublishedUiTree.
 [[nodiscard]] FocusTarget effectiveUiFocus(const UiSchema& schema) noexcept;
 
-// Resolve one widget's semantic leaf state (NODE-VALUES): a literal or
-// provider-backed value/label/command/checked/active, with `defaultRole` as the
-// widget's role absent an explicit override. Returns nullopt for a widget kind
-// that carries no leaf state, or an empty-resolved Label/Field/TextInput. A free
-// operation (not a UiNode method) because role defaults depend on the node's
-// whole-screen area and provider lookup is a publication concern.
-[[nodiscard]] std::optional<UiLeafState> resolveUiLeafState(
-    const WidgetDescriptor& widget,
-    const WidgetProviderResolver& resolveProvider,
-    SemanticRole defaultRole);
-
 // Validate a schema for publication: validateUiSchema and NODE-FOCUS (a
 // non-empty focus path naming declared focus hosts, starting at an editor or
 // panel host, and ending at an effectively visible node). Pure.
@@ -300,12 +310,5 @@ struct UiSchemaValidation {
 // touch descendants, which read ancestor visibility through isUiNodeVisible at
 // query time. Throws std::invalid_argument if `id` is outside the schema.
 void setUiNodeVisible(UiSchema& schema, const UiNodeId& id, bool visible);
-
-// Resolve every leaf under a schema into a copy of that schema with `resolved`
-// baked onto each leaf node. `visible` is carried through unchanged; `focusPath`
-// is left empty for the caller to set once resolution and focus tracking are
-// joined at publication.
-[[nodiscard]] UiSchema resolveUiTree(const UiSchema& schema,
-                                    const WidgetProviderResolver& resolveProvider);
 
 }  // namespace ssg

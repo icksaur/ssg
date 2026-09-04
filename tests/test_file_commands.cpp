@@ -2,8 +2,6 @@
 
 #include <ssg/FileCommands.h>
 
-#include "file_commands.h"
-
 #include <algorithm>
 #include <array>
 #include <chrono>

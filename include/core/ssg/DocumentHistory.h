@@ -30,7 +30,7 @@ enum class HistoryError : std::uint8_t {
 struct HistoryResult {
     HistoryError error;
     DocumentError documentError;
-    Revision revision;
+    std::uint64_t revision;
     std::optional<SelectionSet> selections;
     std::string message;
 

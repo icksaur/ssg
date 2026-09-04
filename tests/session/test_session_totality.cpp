@@ -101,14 +101,14 @@ void runState(const UiState& state) {
     if (!created.accepted()) { fs::remove_all(root); return; }
     auto& runtime = *created.session;
     if (state.openDocument) {
-        (void)runtime.dispatch({"file.open", runtime.revision(), std::string{"doc.txt"}});
+        (void)runtime.dispatch({"file.open",  std::string{"doc.txt"}});
     }
     for (auto const& command : state.commands) {
-        (void)runtime.dispatch({command, runtime.revision(), {}});
+        (void)runtime.dispatch({command,  {}});
     }
 
     for (auto const dims : sweep()) {
-        auto frame = ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, dims);
+        auto frame = ssg::test::projectGridFrame(runtime, dims);
         ASSERT_TRUE(frame.has_value());
         if (!frame) continue;
         ASSERT_NO_THROW(ssg::Renderer{}.render(*frame));

@@ -1,4 +1,5 @@
 #include "ssg/EditorSession.h"
+#include "grid_test_frame.h"
 #include "ssg/SyntaxModel.h"
 #include "test_helpers.h"
 
@@ -94,15 +95,15 @@ TEST(injectedParserDrivesHighlighting) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"main.cpp"}})
                     .accepted());
 
-    auto snapshot = runtime.snapshot();
+    auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot.has_value()) return;
     ASSERT_TRUE(*calls > 0);
-    ASSERT_TRUE(hasScope(snapshot->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_TRUE(hasScope(snapshot->syntax, SyntaxScope::Keyword));
 }
 
 // Without an injected parser the runtime falls back to plain-text spans.
@@ -120,14 +121,14 @@ TEST(nullParserYieldsPlainText) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"main.cpp"}})
                     .accepted());
 
-    auto snapshot = runtime.snapshot();
+    auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot.has_value()) return;
-    ASSERT_FALSE(hasScope(snapshot->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_FALSE(hasScope(snapshot->syntax, SyntaxScope::Keyword));
 }
 
 // With deferred enrichment enabled, a grammar-backed small file is still parsed
@@ -147,15 +148,15 @@ TEST(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"main.cpp"}})
                     .accepted());
 
-    auto first = runtime.snapshot();
+    auto first = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(first.has_value());
     if (!first.has_value()) return;
     ASSERT_TRUE(*calls > 0);
-    ASSERT_TRUE(hasScope(first->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_TRUE(hasScope(first->syntax, SyntaxScope::Keyword));
 }
 
 // Large files stay deferred under deferEnrichment even with an available grammar:
@@ -176,22 +177,22 @@ TEST(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"big.cpp"}})
                     .accepted());
 
-    auto first = runtime.snapshot();
+    auto first = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(first.has_value());
     if (!first.has_value()) return;
     ASSERT_EQ(*calls, std::size_t{0});
-    ASSERT_FALSE(hasScope(first->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_FALSE(hasScope(first->syntax, SyntaxScope::Keyword));
 
     runtime.primeDeferred();
-    auto after = runtime.snapshot();
+    auto after = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(after.has_value());
     if (!after.has_value()) return;
     ASSERT_TRUE(*calls > 0);
-    ASSERT_TRUE(hasScope(after->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_TRUE(hasScope(after->syntax, SyntaxScope::Keyword));
 }
 
 // Syntax state is document-owned: switching back to a deferred large file must
@@ -214,40 +215,40 @@ TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
     auto& runtime = *created.session;
 
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"fileA.cpp"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"fileB.cpp"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"fileA.cpp"}})
                     .accepted());
 
-    auto firstA = runtime.snapshot();
+    auto firstA = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(firstA.has_value());
     if (!firstA.has_value()) return;
-    ASSERT_FALSE(hasScope(firstA->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_FALSE(hasScope(firstA->syntax, SyntaxScope::Keyword));
 
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"fileB.cpp"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"text.insert", runtime.revision(),
+                    .dispatch({"text.insert",
                                TextInputArguments{"z"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"fileA.cpp"}})
                     .accepted());
 
-    auto secondA = runtime.snapshot();
+    auto secondA = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(secondA.has_value());
     if (!secondA.has_value()) return;
-    ASSERT_FALSE(hasScope(secondA->sections().syntax, SyntaxScope::Keyword));
+    ASSERT_FALSE(hasScope(secondA->syntax, SyntaxScope::Keyword));
 }
 
 TEST(closingTabDestroysDocumentRuntimeState) {
@@ -265,14 +266,14 @@ TEST(closingTabDestroysDocumentRuntimeState) {
         if (!created.accepted()) return;
         auto& runtime = *created.session;
         ASSERT_TRUE(runtime
-                        .dispatch({"file.open", runtime.revision(),
+                        .dispatch({"file.open",
                                    std::string{"main.cpp"}})
                         .accepted());
 
         ASSERT_TRUE(EditorSession::liveDocumentRuntimeStateCountForTests() >=
                     baseline + 1);
         ASSERT_TRUE(runtime
-                        .dispatch({"tab.close", runtime.revision(), {}})
+                        .dispatch({"tab.close",  {}})
                         .accepted());
         ASSERT_EQ(EditorSession::liveDocumentRuntimeStateCountForTests(), baseline);
     }

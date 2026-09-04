@@ -20,7 +20,7 @@ enum class LspWorkspaceDocumentError : std::uint8_t {
 };
 
 struct LspWorkspaceDocumentWriteResult {
-    Revision revision{0};
+    std::uint64_t revision{0};
     LspWorkspaceDocumentError error = LspWorkspaceDocumentError::None;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
@@ -34,7 +34,7 @@ public:
     [[nodiscard]] virtual std::optional<LspDocumentSnapshot> snapshot(
         std::string_view uri) const = 0;
     [[nodiscard]] virtual LspWorkspaceDocumentWriteResult apply(
-        std::string uri, Revision expectedRevision, std::string text) = 0;
+        std::string uri, std::uint64_t expectedRevision, std::string text) = 0;
 };
 
 enum class LspWorkspaceFileNodeKind : std::uint8_t {
@@ -108,7 +108,7 @@ struct LspWorkspaceEditRecoveryOperation {
         LspWorkspaceEditRecoveryKind::DocumentText;
     std::string uri;
     std::string secondaryUri;
-    Revision expectedRevision{0};
+    std::uint64_t expectedRevision{0};
     std::string text;
     LspWorkspaceFileNode node;
     bool recursive = false;
@@ -205,15 +205,15 @@ public:
                                LspWorkspaceEditApplier& applier);
 
     [[nodiscard]] LspRenameRequestResult requestRename(
-        std::string uri, Revision revision, ByteOffset position,
+        std::string uri, std::uint64_t revision, ByteOffset position,
         std::string newName);
-    [[nodiscard]] LspRenamePollResult poll(Revision currentRevision);
+    [[nodiscard]] LspRenamePollResult poll(std::uint64_t currentRevision);
 
 private:
     enum class Disposition : std::uint8_t { Active, Cancelled, Superseded };
     struct Pending {
         std::string uri;
-        Revision revision{0};
+        std::uint64_t revision{0};
         Disposition disposition = Disposition::Active;
     };
 

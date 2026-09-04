@@ -25,7 +25,7 @@ namespace {
 
 std::optional<ssg::GridPresentation> projectFrame(
     ssg::EditorSession& runtime, ssg::ViewportDimensions dimensions) {
-    return ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, dimensions);
+    return ssg::test::projectGridFrame(runtime, dimensions);
 }
 
 std::vector<std::string_view> keyboardRoutes(
@@ -154,11 +154,11 @@ std::optional<ssg::SearchMode> activePickerMode(
 
 ssg::PickerSubmitArguments pickerSubmit(
     ssg::EditorSession& runtime, ssg::SearchMode mode, std::string candidateId) {
-    auto snapshot = runtime.snapshot();
+    auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     const auto activation =
-        snapshot && snapshot->sections().palette.activePicker
-            ? snapshot->sections().palette.activePicker->id
+        snapshot && snapshot->paletteView.activePicker
+            ? snapshot->paletteView.activePicker->id
             : ssg::PickerActivationId{};
     return {ssg::PickerActivation{mode, activation}, std::move(candidateId)};
 }
@@ -174,12 +174,12 @@ std::string overDiffLineBudget(char value) {
 }
 
 ssg::FollowMode followMode(ssg::EditorSession& runtime) {
-    auto snapshot = runtime.snapshot();
+    auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) {
         return ssg::FollowMode::Paused;
     }
-    return snapshot->sections().followEdits.mode;
+    return snapshot->followMode;
 }
 
 std::unique_ptr<ssg::EditorSession> followPauseRuntime(std::string text) {
@@ -194,27 +194,11 @@ std::unique_ptr<ssg::EditorSession> followPauseRuntime(std::string text) {
     }
     auto runtime = std::move(created.session);
     ASSERT_TRUE(runtime
-                    ->dispatch({"file.open", runtime->revision(),
+                    ->dispatch({"file.open",
                                 std::string{"needle.txt"}})
                     .accepted());
     ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
     return runtime;
-}
-
-TEST(searchTreeDiffAndFollowSectionsUseRuntimeState) {
-    auto root = uniqueRoot();
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-
-    ASSERT_TRUE(runtime.dispatch({"search.workspace", runtime.revision(), std::string{"needle"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"follow_edits.pause", runtime.revision(), {}}).accepted());
-    auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    ASSERT_FALSE(snapshot->semantic().sections().search.results.empty());
-    ASSERT_FALSE(snapshot->semantic().sections().tree.providers.empty());
-    ASSERT_EQ(snapshot->semantic().sections().followEdits.mode, ssg::FollowMode::Paused);
 }
 
 TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
@@ -240,40 +224,38 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
                            .path = "a.txt",
                            .baselineContent = "",
                            .targetContent = "a\n"},
-                          ssg::Revision{1}},
+                          std::uint64_t{1}},
                          {{.kind = ssg::NonGitDiffEventKind::Create,
                            .id = ssg::DiffFileId{"b.txt"},
                            .path = "b.txt",
                            .baselineContent = "",
                            .targetContent = "b\n"},
-                          ssg::Revision{2}},
+                          std::uint64_t{2}},
                          {{.kind = ssg::NonGitDiffEventKind::Create,
                            .id = ssg::DiffFileId{"c.txt"},
                            .path = "c.txt",
                            .baselineContent = "",
                            .targetContent = middle},
-                          ssg::Revision{3}}})
+                          std::uint64_t{3}}})
                     .accepted());
 
     const ssg::ViewportDimensions dimensions{20, 6};
     auto snapshot = projectFrame(runtime, dimensions);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->semantic().sections().document.diffFileIdentity,
+    ASSERT_EQ(snapshot->diffFileIdentity,
               std::optional<std::string>{"c.txt"});
-    ASSERT_EQ(snapshot->semantic().sections().followEdits.activeTarget->id,
-              ssg::DiffFileId{"c.txt"});
-    ASSERT_EQ(snapshot->semantic().sections().followEdits.mode, ssg::FollowMode::Following);
+    ASSERT_EQ(snapshot->followMode, ssg::FollowMode::Following);
 
-    ssg::test::GridTestView grid{ssg::ViewId{1}, dimensions};
+    ssg::test::GridTestView grid{dimensions};
     ASSERT_TRUE(grid
                     .dispatch(runtime,
-                              {"cursor.line_up", runtime.revision(), {}})
+                              {"cursor.line_up",  {}})
                     .accepted());
     snapshot = projectFrame(runtime, dimensions);
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
-        ASSERT_EQ(snapshot->semantic().sections().followEdits.mode,
+        ASSERT_EQ(snapshot->followMode,
                   ssg::FollowMode::Paused);
     }
 }
@@ -281,20 +263,20 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
 TEST(followPauseQueuesMultipleChangesAndResumeAdoptsTheNewest) {
     auto runtime = followPauseRuntime("alpha\nbeta\n");
     if (!runtime) return;
-    ssg::test::GridTestView grid{ssg::ViewId{1}, {80, 20}};
+    ssg::test::GridTestView grid{{80, 20}};
 
     ASSERT_TRUE(grid
                     .dispatch(*runtime,
-                              {"view.scroll_lines", runtime->revision(),
+                              {"view.scroll_lines",
                                ssg::ScrollLinesArguments{3}})
                     .accepted());
 
-    auto paused = runtime->snapshot();
+    auto paused = ssg::test::projectGridFrame(*runtime);
     ASSERT_TRUE(paused.has_value());
     if (!paused) return;
-    ASSERT_EQ(paused->sections().followEdits.mode, ssg::FollowMode::Paused);
+    ASSERT_EQ(paused->followMode, ssg::FollowMode::Paused);
 
-    auto const sourceRevision = runtime->revision().value();
+    auto const sourceRevision = paused->diff.revision;
     ASSERT_TRUE(runtime
                     ->applyExternalDiffBurst(
                         {{{.kind = ssg::NonGitDiffEventKind::Create,
@@ -302,33 +284,29 @@ TEST(followPauseQueuesMultipleChangesAndResumeAdoptsTheNewest) {
                            .path = "watched-a.txt",
                            .baselineContent = "",
                            .targetContent = "first\nbeta\n"},
-                          ssg::Revision{sourceRevision + 1}},
+                          std::uint64_t{sourceRevision + 1}},
                          {{.kind = ssg::NonGitDiffEventKind::Create,
                            .id = ssg::DiffFileId{"watched-b"},
                            .path = "watched-b.txt",
                            .baselineContent = "",
                            .targetContent = "newest\n"},
-                          ssg::Revision{sourceRevision + 2}}})
+                          std::uint64_t{sourceRevision + 2}}})
                     .accepted());
 
-    paused = runtime->snapshot();
+    paused = ssg::test::projectGridFrame(*runtime);
     ASSERT_TRUE(paused.has_value());
     if (!paused) return;
-    ASSERT_EQ(paused->sections().followEdits.mode, ssg::FollowMode::Paused);
-    ASSERT_EQ(paused->sections().followEdits.queuedTargets.size(),
-              std::size_t{2});
+    ASSERT_EQ(paused->followMode, ssg::FollowMode::Paused);
 
     ASSERT_TRUE(runtime
-                    ->dispatch({"follow_edits.resume", runtime->revision(), {}})
+                    ->dispatch({"follow_edits.resume",  {}})
                     .accepted());
-    auto resumed = runtime->snapshot();
+    auto resumed = ssg::test::projectGridFrame(*runtime);
     ASSERT_TRUE(resumed.has_value());
     if (!resumed) return;
-    ASSERT_EQ(resumed->sections().followEdits.mode, ssg::FollowMode::Following);
-    ASSERT_TRUE(resumed->sections().followEdits.activeTarget.has_value());
-    if (!resumed->sections().followEdits.activeTarget) return;
-    ASSERT_EQ(resumed->sections().followEdits.activeTarget->id,
-              ssg::DiffFileId{"watched-b"});
+    ASSERT_EQ(resumed->followMode, ssg::FollowMode::Following);
+    ASSERT_EQ(resumed->diffFileIdentity,
+              std::optional<std::string>{"watched-b"});
 }
 
 TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
@@ -343,7 +321,7 @@ TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
     auto& runtime = *created.session;
 
     ssg::GitDiffScan scan{
-        .revision = ssg::Revision{10},
+        .revision = std::uint64_t{10},
         .baselineIdentity = "head-1:index-1",
         .files = {
             {.id = ssg::DiffFileId{"a.txt"},
@@ -360,15 +338,12 @@ TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->semantic().sections().diff.files.size(), std::size_t{2});
-    ASSERT_TRUE(snapshot->semantic().sections().followEdits.activeTarget.has_value());
-    if (snapshot->semantic().sections().followEdits.activeTarget) {
-        ASSERT_EQ(snapshot->semantic().sections().followEdits.activeTarget->id,
-                  ssg::DiffFileId{"b.txt"});
-    }
+    ASSERT_EQ(snapshot->diff.files.size(), std::size_t{2});
+    ASSERT_EQ(snapshot->diffFileIdentity,
+              std::optional<std::string>{"b.txt"});
 
     ssg::GitDiffScan stale{
-        .revision = ssg::Revision{10},
+        .revision = std::uint64_t{10},
         .baselineIdentity = "head-1:index-2",
         .files = {{.id = ssg::DiffFileId{"a.txt"},
                    .path = "a.txt",
@@ -387,16 +362,16 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"needle.txt"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"follow_edits.pause", runtime.revision(), {}})
+                    .dispatch({"follow_edits.pause",  {}})
                     .accepted());
 
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
-                        {.revision = ssg::Revision{20},
+                        {.revision = std::uint64_t{20},
                          .baselineIdentity = "head-2:index-1",
                          .files = {{.id = ssg::DiffFileId{"needle.txt"},
                                     .path = "needle.txt",
@@ -406,250 +381,23 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
                                         std::string{"alpha NEEDLE omega"}}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"text.insert", runtime.revision(),
+                    .dispatch({"text.insert",
                                ssg::TextInputArguments{"!"}})
                     .accepted());
 
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->semantic().sections().document.diffFileIdentity, std::nullopt);
-    ASSERT_NE(snapshot->semantic().sections().document.revision,
-              snapshot->semantic().sections().diff.revision);
+    ASSERT_EQ(snapshot->diffFileIdentity, std::nullopt);
+    ASSERT_NE(snapshot->documentRevision,
+              snapshot->diff.revision);
     const auto byIdentity = std::find_if(
-        snapshot->semantic().sections().diff.files.begin(),
-        snapshot->semantic().sections().diff.files.end(),
+        snapshot->diff.files.begin(),
+        snapshot->diff.files.end(),
         [](const ssg::DiffFileView& file) {
             return file.id == ssg::DiffFileId{"needle.txt"};
         });
-    ASSERT_TRUE(byIdentity != snapshot->semantic().sections().diff.files.end());
-}
-
-TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
-    auto root = uniqueRoot();
-    auto created = ssg::EditorSession::create(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
-                        {.revision = ssg::Revision{20},
-                         .baselineIdentity = "head-1:index-0",
-                         .files = {}})
-                    .accepted());
-    auto emptyFirst =
-        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(emptyFirst.has_value());
-    if (!emptyFirst) return;
-    auto* emptyFirstGit =
-        findProvider(emptyFirst->semantic().sections().tree, ssg::TreeProviderKind::Git);
-    ASSERT_TRUE(emptyFirstGit != nullptr);
-    if (!emptyFirstGit) return;
-    ASSERT_TRUE(gitProviderStatuses(*emptyFirstGit).empty());
-    const std::uint64_t emptyFirstRevision =
-        emptyFirst->semantic().sections().tree.revision.value();
-
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
-                        {.revision = ssg::Revision{21},
-                         .baselineIdentity = "head-1:index-0",
-                         .files = {}})
-                    .accepted());
-    auto emptySecond =
-        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(emptySecond.has_value());
-    if (!emptySecond) return;
-    auto* emptySecondGit =
-        findProvider(emptySecond->semantic().sections().tree, ssg::TreeProviderKind::Git);
-    ASSERT_TRUE(emptySecondGit != nullptr);
-    if (!emptySecondGit) return;
-    ASSERT_TRUE(gitProviderStatuses(*emptySecondGit).empty());
-    ASSERT_TRUE(emptySecond->semantic().sections().tree.revision.value() >
-                emptyFirstRevision);
-
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
-                        {.revision = ssg::Revision{22},
-                         .baselineIdentity = "head-1:index-1",
-                         .files =
-                             {
-                                 {.id = ssg::DiffFileId{"added.txt"},
-                                  .path = "added.txt",
-                                  .baselineContent = std::nullopt,
-                                  .workingContent = std::string{"added\n"}},
-                                 {.id = ssg::DiffFileId{"modified.txt"},
-                                  .path = "modified.txt",
-                                  .baselineContent = std::string{"before\n"},
-                                  .workingContent = std::string{"after\n"}},
-                                 {.id = ssg::DiffFileId{"deleted.txt"},
-                                  .path = "deleted.txt",
-                                  .baselineContent = std::string{"gone\n"},
-                                  .workingContent = std::nullopt},
-                                 {.id = ssg::DiffFileId{"renamed.txt"},
-                                  .path = "renamed.txt",
-                                  .previousPath = std::filesystem::path{"old-name.txt"},
-                                  .baselineContent = std::string{"same\n"},
-                                  .workingContent = std::string{"same\n"}},
-                                 {.id = ssg::DiffFileId{"deleted-rename.txt"},
-                                  .path = "deleted-rename.txt",
-                                  .previousPath =
-                                      std::filesystem::path{"old-deleted.txt"},
-                                  .baselineContent = std::string{"gone\n"},
-                                  .workingContent = std::nullopt},
-                             }})
-                    .accepted());
-
-    auto first = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(first.has_value());
-    if (!first) return;
-    auto* firstGit =
-        findProvider(first->semantic().sections().tree, ssg::TreeProviderKind::Git);
-    ASSERT_TRUE(firstGit != nullptr);
-    if (!firstGit) return;
-
-    const auto firstStatuses = gitProviderStatuses(*firstGit);
-    ASSERT_EQ(firstStatuses.size(), std::size_t{5});
-    ASSERT_EQ(firstStatuses.at("added.txt"), ssg::DiffFileStatus::Added);
-    ASSERT_EQ(firstStatuses.at("modified.txt"), ssg::DiffFileStatus::Modified);
-    ASSERT_EQ(firstStatuses.at("deleted.txt"), ssg::DiffFileStatus::Deleted);
-    ASSERT_EQ(firstStatuses.at("renamed.txt"), ssg::DiffFileStatus::Renamed);
-    ASSERT_EQ(firstStatuses.at("deleted-rename.txt"),
-              ssg::DiffFileStatus::Deleted);
-    ASSERT_EQ(firstStatuses,
-              diffStatuses(first->semantic().sections().diff));
-
-    std::uint64_t firstRevision = first->semantic().sections().tree.revision.value();
-
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
-                        {.revision = ssg::Revision{23},
-                         .baselineIdentity = "head-1:index-2",
-                         .files =
-                             {
-                                 {.id = ssg::DiffFileId{"modified.txt"},
-                                  .path = "modified.txt",
-                                  .baselineContent = std::string{"after\n"},
-                                  .workingContent = std::string{"after again\n"}},
-                                 {.id = ssg::DiffFileId{"renamed.txt"},
-                                  .path = "renamed.txt",
-                                  .previousPath = std::filesystem::path{"old-name.txt"},
-                                  .baselineContent = std::string{"same\n"},
-                                  .workingContent = std::string{"same\n"}},
-                             }})
-                    .accepted());
-
-    auto second = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(second.has_value());
-    if (!second) return;
-    auto* secondGit =
-        findProvider(second->semantic().sections().tree, ssg::TreeProviderKind::Git);
-    ASSERT_TRUE(secondGit != nullptr);
-    if (!secondGit) return;
-
-    const auto secondStatuses = gitProviderStatuses(*secondGit);
-    ASSERT_EQ(secondStatuses.size(), std::size_t{2});
-    ASSERT_EQ(secondStatuses.at("modified.txt"), ssg::DiffFileStatus::Modified);
-    ASSERT_EQ(secondStatuses.at("renamed.txt"), ssg::DiffFileStatus::Renamed);
-    ASSERT_TRUE(second->semantic().sections().tree.revision.value() > firstRevision);
-}
-
-TEST(gitStatusSurvivesDetailedDiffWorkLimit) {
-    auto root = uniqueRoot();
-    std::ofstream{root / "workspace" / "large.txt"} << "working file\n";
-    auto created = ssg::EditorSession::create(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
-                        {.revision = ssg::Revision{24},
-                         .baselineIdentity = "head-limit:index-1",
-                         .files =
-                             {
-                                 {.id = ssg::DiffFileId{"large-id"},
-                                  .path = "large.txt",
-                                  .baselineContent = overDiffLineBudget('a'),
-                                  .workingContent = overDiffLineBudget('b')},
-                                 {.id = ssg::DiffFileId{"small-id"},
-                                  .path = "small.txt",
-                                  .baselineContent = std::string{"before\n"},
-                                  .workingContent = std::string{"after\n"}},
-                             }})
-                    .accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
-                    .accepted());
-
-    auto snapshot =
-        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto* git =
-        findProvider(snapshot->semantic().sections().tree, ssg::TreeProviderKind::Git);
-    ASSERT_TRUE(git != nullptr);
-    if (!git) return;
-    ASSERT_EQ(gitProviderStatuses(*git).size(), std::size_t{2});
-    ASSERT_EQ(snapshot->semantic().sections().diff.files.size(), std::size_t{1});
-    ASSERT_EQ(snapshot->semantic().sections().diff.files.front().id,
-              ssg::DiffFileId{"small-id"});
-    const auto liveDiffsBeforeActivation =
-        countTabsOfKind(snapshot->semantic().sections().tabs, ssg::TabKind::LiveDiff);
-
-    std::optional<ssg::TreeNodeId> largeNode;
-    for (const auto& node : git->nodes) {
-        if (node.node.workspacePath == std::optional<std::string>{"large.txt"}) {
-            largeNode = node.node.id;
-        }
-    }
-    ASSERT_TRUE(largeNode.has_value());
-    if (!largeNode) return;
-    ASSERT_TRUE(runtime
-                    .dispatch({"tree.activate_node", runtime.revision(),
-                               ssg::TreeSelectArguments{*largeNode}})
-                    .accepted());
-    auto opened =
-        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(opened.has_value());
-    if (!opened) return;
-    ASSERT_EQ(countTabsOfKind(opened->semantic().sections().tabs, ssg::TabKind::Document),
-              std::size_t{1});
-    ASSERT_EQ(countTabsOfKind(opened->semantic().sections().tabs, ssg::TabKind::LiveDiff),
-              liveDiffsBeforeActivation);
-    ASSERT_EQ(opened->semantic().sections().document.text, std::string{"working file\n"});
-
-    ASSERT_TRUE(runtime
-                    .applyGitDiffScan(
-                        {.revision = ssg::Revision{25},
-                         .baselineIdentity = "head-limit:index-2",
-                         .files =
-                             {
-                                 {.id = ssg::DiffFileId{"large-id"},
-                                  .path = "large.txt",
-                                  .baselineContent = overDiffLineBudget('a'),
-                                  .workingContent = overDiffLineBudget('b')},
-                                 {.id = ssg::DiffFileId{"small-id"},
-                                  .path = "small.txt",
-                                  .baselineContent = overDiffLineBudget('a'),
-                                  .workingContent = overDiffLineBudget('b')},
-                             }})
-                    .accepted());
-    auto transitioned =
-        projectFrame(runtime, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(transitioned.has_value());
-    if (!transitioned) return;
-    auto* transitionedGit =
-        findProvider(transitioned->semantic().sections().tree, ssg::TreeProviderKind::Git);
-    ASSERT_TRUE(transitionedGit != nullptr);
-    if (!transitionedGit) return;
-    ASSERT_EQ(gitProviderStatuses(*transitionedGit).size(), std::size_t{2});
-    ASSERT_TRUE(transitioned->semantic().sections().diff.files.empty());
-    ASSERT_EQ(
-        countTabsOfKind(transitioned->semantic().sections().tabs, ssg::TabKind::LiveDiff),
-        std::size_t{0});
+    ASSERT_TRUE(byIdentity != snapshot->diff.files.end());
 }
 
 TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
@@ -661,13 +409,13 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"coexist.txt"}})
                     .accepted());
 
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
-                        {.revision = ssg::Revision{30},
+                        {.revision = std::uint64_t{30},
                          .baselineIdentity = "head-x:index-1",
                          .files = {{.id = ssg::DiffFileId{"coexist-id"},
                                     .path = "coexist.txt",
@@ -675,24 +423,24 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
                                     .workingContent = std::string{"after\n"}}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.select_next", runtime.revision(), {}})
+                    .dispatch({"tree.select_next",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate",  {}})
                     .accepted());
 
     auto first = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(first.has_value());
     if (!first) return;
-    ASSERT_EQ(countTabsOfKind(first->semantic().sections().tabs, ssg::TabKind::Document),
+    ASSERT_EQ(countTabsOfKind(first->tabs, ssg::TabKind::Document),
               std::size_t{1});
-    ASSERT_EQ(countTabsOfKind(first->semantic().sections().tabs, ssg::TabKind::LiveDiff),
+    ASSERT_EQ(countTabsOfKind(first->tabs, ssg::TabKind::LiveDiff),
               std::size_t{1});
     std::optional<ssg::TabId> liveDiffId;
-    for (const auto& tab : first->semantic().sections().tabs.tabs) {
+    for (const auto& tab : first->tabs.tabs) {
         if (tab.kind == ssg::TabKind::LiveDiff) {
             liveDiffId = tab.id;
             ASSERT_EQ(tab.contentIdentity, std::string{"coexist-id"});
@@ -702,17 +450,17 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
     if (!liveDiffId) return;
 
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate",  {}})
                     .accepted());
     auto second =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(second.has_value());
     if (!second) return;
-    ASSERT_EQ(countTabsOfKind(second->semantic().sections().tabs, ssg::TabKind::Document),
+    ASSERT_EQ(countTabsOfKind(second->tabs, ssg::TabKind::Document),
               std::size_t{1});
-    ASSERT_EQ(countTabsOfKind(second->semantic().sections().tabs, ssg::TabKind::LiveDiff),
+    ASSERT_EQ(countTabsOfKind(second->tabs, ssg::TabKind::LiveDiff),
               std::size_t{1});
-    ASSERT_EQ(second->semantic().sections().tabs.active, liveDiffId);
+    ASSERT_EQ(second->tabs.active, liveDiffId);
 }
 
 TEST(documentAndLiveDiffTabsCloseIndependently) {
@@ -724,12 +472,12 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"coexist.txt"}})
                     .accepted());
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
-                        {.revision = ssg::Revision{32},
+                        {.revision = std::uint64_t{32},
                          .baselineIdentity = "head-z:index-1",
                          .files = {{.id = ssg::DiffFileId{"coexist-id"},
                                     .path = "coexist.txt",
@@ -737,13 +485,13 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
                                     .workingContent = std::string{"after\n"}}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.select_next", runtime.revision(), {}})
+                    .dispatch({"tree.select_next",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate",  {}})
                     .accepted());
 
     auto first = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
@@ -751,7 +499,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     if (!first) return;
     std::optional<ssg::TabId> documentTab;
     std::optional<ssg::TabId> liveDiffTab;
-    for (const auto& tab : first->semantic().sections().tabs.tabs) {
+    for (const auto& tab : first->tabs.tabs) {
         if (tab.kind == ssg::TabKind::Document) {
             documentTab = tab.id;
         } else if (tab.kind == ssg::TabKind::LiveDiff) {
@@ -763,58 +511,58 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
     if (!documentTab || !liveDiffTab) return;
 
     ASSERT_TRUE(runtime
-                    .dispatch({"tab.activate", runtime.revision(),
+                    .dispatch({"tab.activate",
                                *documentTab})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tab.close", runtime.revision(),
+                    .dispatch({"tab.close",
                                *documentTab})
                     .accepted());
     auto afterDocumentClose =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterDocumentClose.has_value());
     if (!afterDocumentClose) return;
-    ASSERT_EQ(countTabsOfKind(afterDocumentClose->semantic().sections().tabs,
+    ASSERT_EQ(countTabsOfKind(afterDocumentClose->tabs,
                               ssg::TabKind::Document),
               std::size_t{0});
-    ASSERT_EQ(countTabsOfKind(afterDocumentClose->semantic().sections().tabs,
+    ASSERT_EQ(countTabsOfKind(afterDocumentClose->tabs,
                               ssg::TabKind::LiveDiff),
               std::size_t{1});
-    ASSERT_EQ(afterDocumentClose->semantic().sections().document.diffFileIdentity,
+    ASSERT_EQ(afterDocumentClose->diffFileIdentity,
               std::optional<std::string>{"coexist-id"});
 
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"coexist.txt"}})
                     .accepted());
     auto reopened =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(reopened.has_value());
     if (!reopened) return;
-    ASSERT_EQ(countTabsOfKind(reopened->semantic().sections().tabs, ssg::TabKind::Document),
+    ASSERT_EQ(countTabsOfKind(reopened->tabs, ssg::TabKind::Document),
               std::size_t{1});
-    ASSERT_EQ(countTabsOfKind(reopened->semantic().sections().tabs, ssg::TabKind::LiveDiff),
+    ASSERT_EQ(countTabsOfKind(reopened->tabs, ssg::TabKind::LiveDiff),
               std::size_t{1});
 
     ASSERT_TRUE(runtime
-                    .dispatch({"tab.activate", runtime.revision(),
+                    .dispatch({"tab.activate",
                                *liveDiffTab})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tab.close", runtime.revision(),
+                    .dispatch({"tab.close",
                                *liveDiffTab})
                     .accepted());
     auto afterLiveDiffClose =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterLiveDiffClose.has_value());
     if (!afterLiveDiffClose) return;
-    ASSERT_EQ(countTabsOfKind(afterLiveDiffClose->semantic().sections().tabs,
+    ASSERT_EQ(countTabsOfKind(afterLiveDiffClose->tabs,
                               ssg::TabKind::Document),
               std::size_t{1});
-    ASSERT_EQ(countTabsOfKind(afterLiveDiffClose->semantic().sections().tabs,
+    ASSERT_EQ(countTabsOfKind(afterLiveDiffClose->tabs,
                               ssg::TabKind::LiveDiff),
               std::size_t{0});
-    ASSERT_EQ(afterLiveDiffClose->semantic().sections().document.diffFileIdentity,
+    ASSERT_EQ(afterLiveDiffClose->diffFileIdentity,
               std::nullopt);
 }
 
@@ -831,7 +579,7 @@ TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
 
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
-                        {.revision = ssg::Revision{31},
+                        {.revision = std::uint64_t{31},
                          .baselineIdentity = "head-x:index-2",
                          .files = {{.id = ssg::DiffFileId{"deleted-id"},
                                     .path = "gone.txt",
@@ -839,37 +587,37 @@ TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
                                     .workingContent = std::nullopt}}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.select_next", runtime.revision(), {}})
+                    .dispatch({"tree.select_next",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate",  {}})
                     .accepted());
 
     auto snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(countTabsOfKind(snapshot->semantic().sections().tabs, ssg::TabKind::LiveDiff),
+    ASSERT_EQ(countTabsOfKind(snapshot->tabs, ssg::TabKind::LiveDiff),
               std::size_t{1});
-    ASSERT_EQ(snapshot->semantic().sections().document.diffFileIdentity,
+    ASSERT_EQ(snapshot->diffFileIdentity,
               std::optional<std::string>{"deleted-id"});
     // A deleted file has no real document content -- its removed lines are
     // represented entirely as phantom rows (Viewport's removedBlocks
     // projection), derived from diff.files' hunks below, not as literal
     // document text. Synthesizing the baseline here as "current" text would
     // duplicate every removed line: once as a real row, once as its phantom.
-    ASSERT_EQ(snapshot->semantic().sections().document.text, std::string{});
+    ASSERT_EQ(snapshot->documentText, std::string{});
     const auto deleted = std::find_if(
-        snapshot->semantic().sections().diff.files.begin(),
-        snapshot->semantic().sections().diff.files.end(),
+        snapshot->diff.files.begin(),
+        snapshot->diff.files.end(),
         [](const ssg::DiffFileView& file) {
             return file.id == ssg::DiffFileId{"deleted-id"};
         });
-    ASSERT_TRUE(deleted != snapshot->semantic().sections().diff.files.end());
-    if (deleted == snapshot->semantic().sections().diff.files.end()) return;
+    ASSERT_TRUE(deleted != snapshot->diff.files.end());
+    if (deleted == snapshot->diff.files.end()) return;
     ASSERT_TRUE(deleted->deleted);
     ASSERT_FALSE(deleted->hunks.empty());
 }
@@ -883,11 +631,11 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
     auto& runtime = *created.session;
 
     ASSERT_TRUE(runtime
-                    .dispatch({"follow_edits.pause", runtime.revision(), {}})
+                    .dispatch({"follow_edits.pause",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
-                        {.revision = ssg::Revision{40},
+                        {.revision = std::uint64_t{40},
                          .baselineIdentity = "head-y:index-1",
                          .files = {{.id = ssg::DiffFileId{"programmatic-id"},
                                     .path = "needle.txt",
@@ -900,39 +648,39 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(beforeResume.has_value());
     if (!beforeResume) return;
-    ASSERT_EQ(beforeResume->semantic().sections().followEdits.mode,
+    ASSERT_EQ(beforeResume->followMode,
               ssg::FollowMode::Paused);
-    ASSERT_EQ(countTabsOfKind(beforeResume->semantic().sections().tabs,
+    ASSERT_EQ(countTabsOfKind(beforeResume->tabs,
                               ssg::TabKind::LiveDiff),
               std::size_t{0});
 
     ASSERT_TRUE(runtime
-                    .dispatch({"follow_edits.resume", runtime.revision(), {}})
+                    .dispatch({"follow_edits.resume",  {}})
                     .accepted());
     auto afterProgrammatic =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterProgrammatic.has_value());
     if (!afterProgrammatic) return;
-    ASSERT_EQ(afterProgrammatic->semantic().sections().followEdits.mode,
+    ASSERT_EQ(afterProgrammatic->followMode,
               ssg::FollowMode::Following);
-    ASSERT_EQ(countTabsOfKind(afterProgrammatic->semantic().sections().tabs,
+    ASSERT_EQ(countTabsOfKind(afterProgrammatic->tabs,
                               ssg::TabKind::LiveDiff),
               std::size_t{1});
 
     ASSERT_TRUE(runtime
-                    .dispatch({"panel.show_git_status", runtime.revision(), {}})
+                    .dispatch({"panel.show_git_status",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.select_next", runtime.revision(), {}})
+                    .dispatch({"tree.select_next",  {}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"tree.activate", runtime.revision(), {}})
+                    .dispatch({"tree.activate",  {}})
                     .accepted());
     auto afterUser =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(afterUser.has_value());
     if (!afterUser) return;
-    ASSERT_EQ(afterUser->semantic().sections().followEdits.mode, ssg::FollowMode::Paused);
+    ASSERT_EQ(afterUser->followMode, ssg::FollowMode::Paused);
 }
 
 TEST(tabSwitchPausesFollowViaNavigationPath) {
@@ -944,17 +692,17 @@ TEST(tabSwitchPausesFollowViaNavigationPath) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"needle.txt"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                std::string{"other.txt"}})
                     .accepted());
     ASSERT_EQ(followMode(runtime), ssg::FollowMode::Following);
 
     ASSERT_TRUE(runtime
-                    .dispatch({"tab.previous", runtime.revision(), {}})
+                    .dispatch({"tab.previous",  {}})
                     .accepted());
     ASSERT_EQ(followMode(runtime), ssg::FollowMode::Paused);
 }
@@ -968,7 +716,7 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
         if (!created.accepted()) return nullptr;
         auto runtime = std::move(created.session);
         ASSERT_TRUE(runtime
-                        ->dispatch({"file.open", runtime->revision(),
+                        ->dispatch({"file.open",
                                     std::string{"needle.txt"}})
                         .accepted());
         return runtime;
@@ -977,8 +725,10 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
         auto snapshot =
             projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snapshot.has_value());
-        if (!snapshot) return ssg::FollowEditsViewState();
-        return snapshot->semantic().sections().followEdits;
+        return std::pair{
+            snapshot ? snapshot->followMode : ssg::FollowMode::Following,
+            snapshot ? snapshot->diffFileIdentity
+                     : std::optional<std::string>{}};
     };
 
     auto pauseResume = makeRuntime();
@@ -988,19 +738,19 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
     if (!pauseResume || !togglePath) return;
 
     ASSERT_TRUE(pauseResume
-                    ->dispatch({"follow_edits.pause", pauseResume->revision(), {}})
+                    ->dispatch({"follow_edits.pause", {}})
                     .accepted());
     ASSERT_TRUE(togglePath
-                    ->dispatch({"follow_edits.toggle", togglePath->revision(), {}})
+                    ->dispatch({"follow_edits.toggle", {}})
                     .accepted());
 
     const auto pausedWithPause = followState(*pauseResume);
     const auto pausedWithToggle = followState(*togglePath);
-    ASSERT_EQ(pausedWithPause.mode, ssg::FollowMode::Paused);
+    ASSERT_EQ(pausedWithPause.first, ssg::FollowMode::Paused);
     ASSERT_EQ(pausedWithToggle, pausedWithPause);
 
     ssg::GitDiffScan scan{
-        .revision = ssg::Revision{2},
+        .revision = std::uint64_t{2},
         .baselineIdentity = "head-1:index-1",
         .files = {{.id = ssg::DiffFileId{"needle.txt"},
                    .path = "needle.txt",
@@ -1011,24 +761,21 @@ TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
 
     const auto pausedQueuedWithPause = followState(*pauseResume);
     const auto pausedQueuedWithToggle = followState(*togglePath);
-    ASSERT_EQ(pausedQueuedWithPause.mode, ssg::FollowMode::Paused);
-    ASSERT_FALSE(pausedQueuedWithPause.queuedTargets.empty());
+    ASSERT_EQ(pausedQueuedWithPause.first, ssg::FollowMode::Paused);
     ASSERT_EQ(pausedQueuedWithToggle, pausedQueuedWithPause);
 
     ASSERT_TRUE(pauseResume
-                    ->dispatch({"follow_edits.resume", pauseResume->revision(),
-                                {}})
+                    ->dispatch({"follow_edits.resume", {}})
                     .accepted());
     ASSERT_TRUE(togglePath
-                    ->dispatch({"follow_edits.toggle", togglePath->revision(),
-                                {}})
+                    ->dispatch({"follow_edits.toggle", {}})
                     .accepted());
 
     const auto resumedWithResume = followState(*pauseResume);
     const auto resumedWithToggle = followState(*togglePath);
-    ASSERT_EQ(resumedWithResume.mode, ssg::FollowMode::Following);
-    ASSERT_TRUE(resumedWithResume.activeTarget.has_value());
-    ASSERT_TRUE(resumedWithResume.queuedTargets.empty());
+    ASSERT_EQ(resumedWithResume.first, ssg::FollowMode::Following);
+    ASSERT_EQ(resumedWithResume.second,
+              std::optional<std::string>{"needle.txt"});
     ASSERT_EQ(resumedWithToggle, resumedWithResume);
 }
 
@@ -1038,7 +785,7 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch({"text.insert", runtime->revision(),
+                        ->dispatch({"text.insert",
                                     ssg::TextInputArguments{"x"}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
@@ -1048,17 +795,17 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch({"select.right", runtime->revision(), {}})
+                        ->dispatch({"select.right",  {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch({"clipboard.cut", runtime->revision(), {}})
+                        ->dispatch({"clipboard.cut",  {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch({"follow_edits.resume", runtime->revision(), {}})
+                        ->dispatch({"follow_edits.resume",  {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
         ASSERT_TRUE(runtime
-                        ->dispatch({"clipboard.paste", runtime->revision(), {}})
+                        ->dispatch({"clipboard.paste",  {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1067,15 +814,15 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch({"text.insert", runtime->revision(),
+                        ->dispatch({"text.insert",
                                     ssg::TextInputArguments{"x"}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch({"follow_edits.resume", runtime->revision(), {}})
+                        ->dispatch({"follow_edits.resume",  {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
         ASSERT_TRUE(runtime
-                        ->dispatch({"edit.undo", runtime->revision(), {}})
+                        ->dispatch({"edit.undo",  {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1084,21 +831,21 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch({"text.insert", runtime->revision(),
+                        ->dispatch({"text.insert",
                                     ssg::TextInputArguments{"x"}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch({"follow_edits.resume", runtime->revision(), {}})
+                        ->dispatch({"follow_edits.resume",  {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch({"edit.undo", runtime->revision(), {}})
+                        ->dispatch({"edit.undo",  {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch({"follow_edits.resume", runtime->revision(), {}})
+                        ->dispatch({"follow_edits.resume",  {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
         ASSERT_TRUE(runtime
-                        ->dispatch({"edit.redo", runtime->revision(), {}})
+                        ->dispatch({"edit.redo",  {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1107,20 +854,19 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch({"replace.open", runtime->revision(), {}})
+                        ->dispatch({"replace.open",  {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch({"find.update_query", runtime->revision(),
+                        ->dispatch({"find.update_query",
                                     ssg::FindQueryArguments{"needle"}})
                         .accepted());
         ASSERT_TRUE(runtime
                         ->dispatch({"replace.update_replacement",
-                                    runtime->revision(),
                                     ssg::FindQueryArguments{"pin"}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
         ASSERT_TRUE(runtime
-                        ->dispatch({"replace.current", runtime->revision(), {}})
+                        ->dispatch({"replace.current",  {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1129,11 +875,10 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch({"select.add_cursor_down",
-                                    runtime->revision(), {}})
+                        ->dispatch({"select.add_cursor_down",  {}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        ->dispatch({"text.insert", runtime->revision(),
+                        ->dispatch({"text.insert",
                                     ssg::TextInputArguments{"x"}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
@@ -1142,10 +887,10 @@ TEST(followPauseOnEditTransitionTable) {
         auto runtime = followPauseRuntime("alpha needle omega\n");
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
-        ssg::test::GridTestView grid{ssg::ViewId{1}, {80, 20}};
+        ssg::test::GridTestView grid{{80, 20}};
         ASSERT_TRUE(grid
                         .dispatch(*runtime,
-                                  {"pane.next", runtime->revision(), {}})
+                                  {"pane.next",  {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1153,10 +898,10 @@ TEST(followPauseOnEditTransitionTable) {
         auto runtime = followPauseRuntime("alpha needle omega\n");
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
-        ssg::test::GridTestView grid{ssg::ViewId{1}, {80, 20}};
+        ssg::test::GridTestView grid{{80, 20}};
         ASSERT_TRUE(grid
                         .dispatch(*runtime,
-                                  {"view.scroll_lines", runtime->revision(),
+                                  {"view.scroll_lines",
                                    ssg::ScrollLinesArguments{1}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
@@ -1166,7 +911,7 @@ TEST(followPauseOnEditTransitionTable) {
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
         ASSERT_TRUE(runtime
-                        ->dispatch({"cursor.right", runtime->revision(), {}})
+                        ->dispatch({"cursor.right",  {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1179,19 +924,19 @@ TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree),
+    ASSERT_EQ(ssg::effectiveUiFocus(snapshot->uiTree),
               ssg::FocusTarget::Prompt);
-    ASSERT_FALSE(snapshot->semantic().sections().palette.commandCandidates.empty());
+    ASSERT_FALSE(snapshot->paletteView.commandCandidates.empty());
 
-    ASSERT_TRUE(runtime.dispatch({"palette.close", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"palette.close",  {}}).accepted());
     auto closed = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(closed.has_value());
     if (!closed) return;
-    ASSERT_EQ(ssg::effectiveUiFocus(closed->semantic().sections().uiTree),
+    ASSERT_EQ(ssg::effectiveUiFocus(closed->uiTree),
               ssg::FocusTarget::Editor);
 }
 
@@ -1208,18 +953,18 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
     auto& runtime = *created.session;
 
     auto pickerStateAfter = [&](std::string const& closeCommand) {
-        ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}}).accepted());
+        ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
         auto open = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(open.has_value());
         if (open) {
-            ASSERT_EQ(activePickerMode(open->semantic().sections().palette),
+            ASSERT_EQ(activePickerMode(open->paletteView),
                       std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
         }
-        (void)runtime.dispatch({closeCommand, runtime.revision(), {}});
+        (void)runtime.dispatch({closeCommand,  {}});
         auto shut = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(shut.has_value());
         if (shut) {
-            ASSERT_FALSE(shut->semantic().sections().palette.activePicker.has_value());
+            ASSERT_FALSE(shut->paletteView.activePicker.has_value());
         }
     };
 
@@ -1228,12 +973,12 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
 
     // A successful palette.execute cancels the prompt as part of executing; the
     // picker must not survive into the next open.
-    ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}}).accepted());
-    (void)runtime.dispatch({"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"edit.undo"}});
+    ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
+    (void)runtime.dispatch({"palette.execute",  ssg::PaletteExecuteArguments{"edit.undo"}});
     auto executed = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(executed.has_value());
     if (executed) {
-        ASSERT_FALSE(executed->semantic().sections().palette.activePicker.has_value());
+        ASSERT_FALSE(executed->paletteView.activePicker.has_value());
     }
 }
 
@@ -1260,15 +1005,15 @@ TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(closed.has_value());
     if (!closed) return;
-    ASSERT_FALSE(closed->semantic().sections().palette.activePicker.has_value());
-    ASSERT_FALSE(closed->semantic().sections().palette.fileCandidates.empty());
+    ASSERT_FALSE(closed->paletteView.activePicker.has_value());
+    ASSERT_FALSE(closed->paletteView.fileCandidates.empty());
 
-    ASSERT_TRUE(runtime.dispatch({"file_finder.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file_finder.open",  {}}).accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
-    auto const& palette = snapshot->semantic().sections().palette;
+    auto const& palette = snapshot->paletteView;
     ASSERT_EQ(activePickerMode(palette),
               std::optional<ssg::SearchMode>{ssg::SearchMode::File});
     std::set<std::string> paths;
@@ -1278,11 +1023,11 @@ TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
 
     // Candidate ids are paths here; executing one as a command must be refused
     // even though a Palette prompt is genuinely open.
-    auto rejected = runtime.dispatch({"palette.execute", runtime.revision(),
+    auto rejected = runtime.dispatch({"palette.execute",
          ssg::PaletteExecuteArguments{"src/beta.cpp"}});
     ASSERT_FALSE(rejected.accepted());
     // Not even a real command id is executable through the file picker.
-    auto alsoRejected = runtime.dispatch({"palette.execute", runtime.revision(),
+    auto alsoRejected = runtime.dispatch({"palette.execute",
          ssg::PaletteExecuteArguments{"edit.undo"}});
     ASSERT_FALSE(alsoRejected.accepted());
     std::filesystem::remove_all(root);
@@ -1309,20 +1054,20 @@ TEST(togglingGitignoreRebuildsTheOpenFilePickerIndex) {
         std::set<std::string> paths;
         if (snapshot) {
             for (auto const& candidate :
-                 snapshot->semantic().sections().palette.fileCandidates) {
+                 snapshot->paletteView.fileCandidates) {
                 paths.insert(candidate.id);
             }
         }
         return paths;
     };
 
-    ASSERT_TRUE(runtime.dispatch({"file_finder.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file_finder.open",  {}}).accepted());
     auto before = candidateIds();
     ASSERT_TRUE(before.contains("kept.txt"));
     ASSERT_FALSE(before.contains("build/hidden.o"));
 
     // No reopen in between: the SAME open picker must change.
-    ASSERT_TRUE(runtime.dispatch({"file_finder.toggle_gitignore", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file_finder.toggle_gitignore",  {}}).accepted());
     auto after = candidateIds();
     ASSERT_TRUE(after.contains("build/hidden.o"));
     std::filesystem::remove_all(root);
@@ -1343,18 +1088,16 @@ TEST(workerFilesystemRefreshPublishesChangedFileCandidates) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    const auto before = runtime.revision();
     std::ofstream{root / "workspace" / "arrived.txt"} << "new\n";
 
     runtime.refreshFilesystemForTest();
 
-    ASSERT_TRUE(runtime.revision() > before);
     auto snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_TRUE(std::ranges::any_of(
-        snapshot->semantic().sections().palette.fileCandidates,
+        snapshot->paletteView.fileCandidates,
         [](const auto& candidate) { return candidate.id == "arrived.txt"; }));
 }
 
@@ -1377,14 +1120,14 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     auto pickerIsOpen = [&] {
         auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         return snapshot &&
-               activePickerMode(snapshot->semantic().sections().palette) ==
+               activePickerMode(snapshot->paletteView) ==
                    std::optional<ssg::SearchMode>{ssg::SearchMode::File};
     };
 
     // A rejected open leaves the picker up.
-    ASSERT_TRUE(runtime.dispatch({"file_finder.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file_finder.open",  {}}).accepted());
     ASSERT_TRUE(pickerIsOpen());
-    auto missing = runtime.dispatch({"picker.submit", runtime.revision(),
+    auto missing = runtime.dispatch({"picker.submit",
          pickerSubmit(runtime, ssg::SearchMode::File, "gone.txt")});
     ASSERT_FALSE(missing.accepted());
     ASSERT_TRUE(pickerIsOpen());
@@ -1392,7 +1135,7 @@ TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
     // A successful open dismisses it.
     ASSERT_TRUE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        pickerSubmit(runtime, ssg::SearchMode::File,
                                     "present.txt")})
             .accepted());
@@ -1418,18 +1161,18 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
     // matching authoritative picker.
     ASSERT_FALSE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        ssg::PickerSubmitArguments{
                            {ssg::SearchMode::Command,
                             ssg::PickerActivationId{1}},
                            "panel.toggle"}})
             .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open",  {}})
                     .accepted());
     ASSERT_TRUE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        pickerSubmit(runtime, ssg::SearchMode::Command,
                                     "panel.toggle")})
             .accepted());
@@ -1437,17 +1180,17 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(commandSubmitted.has_value());
     if (!commandSubmitted) return;
-    ASSERT_FALSE(commandSubmitted->semantic().sections().palette.activePicker.has_value());
+    ASSERT_FALSE(commandSubmitted->paletteView.activePicker.has_value());
     ASSERT_TRUE(
-        ssg::effectiveUiFocus(commandSubmitted->semantic().sections().uiTree) ==
+        ssg::effectiveUiFocus(commandSubmitted->uiTree) ==
         ssg::FocusTarget::Panel);
 
     ASSERT_TRUE(runtime
-            .dispatch({"file_finder.open", runtime.revision(), {}})
+            .dispatch({"file_finder.open",  {}})
             .accepted());
     ASSERT_TRUE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        pickerSubmit(runtime, ssg::SearchMode::File,
                                     "present.txt")})
             .accepted());
@@ -1455,8 +1198,8 @@ TEST(pickerSubmissionRequiresAndClosesTheAuthoritativePicker) {
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(submitted.has_value());
     if (!submitted) return;
-    ASSERT_FALSE(submitted->semantic().sections().palette.activePicker.has_value());
-    ASSERT_TRUE(ssg::effectiveUiFocus(submitted->semantic().sections().uiTree) ==
+    ASSERT_FALSE(submitted->paletteView.activePicker.has_value());
+    ASSERT_TRUE(ssg::effectiveUiFocus(submitted->uiTree) ==
                 ssg::FocusTarget::Panel);
 }
 
@@ -1470,11 +1213,11 @@ TEST(pickerSubmissionRequiresMatchingPickerMode) {
 
     ASSERT_TRUE(
         runtime
-            .dispatch({"file_finder.open", runtime.revision(), {}})
+            .dispatch({"file_finder.open",  {}})
             .accepted());
     ASSERT_FALSE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        pickerSubmit(runtime, ssg::SearchMode::Command,
                                     "panel.toggle")})
             .accepted());
@@ -1482,19 +1225,19 @@ TEST(pickerSubmissionRequiresMatchingPickerMode) {
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
+    ASSERT_TRUE(activePickerMode(snapshot->paletteView) ==
                 std::optional<ssg::SearchMode>{ssg::SearchMode::File});
 
     ASSERT_TRUE(
         runtime
-            .dispatch({"palette.close", runtime.revision(), {}})
+            .dispatch({"palette.close",  {}})
             .accepted());
     ASSERT_TRUE(runtime
-                    .dispatch({"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open",  {}})
                     .accepted());
     ASSERT_TRUE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        pickerSubmit(runtime, ssg::SearchMode::Command,
                                     "panel.toggle")})
             .accepted());
@@ -1502,7 +1245,7 @@ TEST(pickerSubmissionRequiresMatchingPickerMode) {
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_FALSE(snapshot->semantic().sections().palette.activePicker.has_value());
+    ASSERT_FALSE(snapshot->paletteView.activePicker.has_value());
     std::filesystem::remove_all(root);
 }
 
@@ -1514,18 +1257,18 @@ TEST(commandPickerActionThatOpensPromptDismissesPickerWithoutFailure) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open",  {}})
                     .accepted());
 
-    auto result = runtime.dispatch({"picker.submit", runtime.revision(),
+    auto result = runtime.dispatch({"picker.submit",
          pickerSubmit(runtime, ssg::SearchMode::Command, "goto.line")});
     ASSERT_TRUE(result.accepted());
     auto snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_FALSE(snapshot->semantic().sections().palette.activePicker.has_value());
-    ASSERT_EQ(snapshot->sections().promptStatus.activeKind,
+    ASSERT_FALSE(snapshot->paletteView.activePicker.has_value());
+    ASSERT_EQ(snapshot->promptStatus.activeKind,
               std::optional{ssg::PromptKind::CommandArgument});
 }
 
@@ -1536,56 +1279,43 @@ TEST(pickerSubmissionUsesActivationIdentityInsteadOfGlobalRevision) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    const auto catalog = runtime.commandCatalog();
-    const auto commands = catalog->commands();
-    const auto stateValidated = std::count_if(
-        commands.begin(), commands.end(),
-        [](const auto* command) {
-            return command->revisionPolicy ==
-                   ssg::CommandRevisionPolicy::StateValidated;
-        });
-    ASSERT_EQ(stateValidated, std::ptrdiff_t{1});
-    ASSERT_TRUE(catalog->find("picker.submit")->revisionPolicy ==
-                ssg::CommandRevisionPolicy::StateValidated);
     ASSERT_TRUE(runtime
-                    .dispatch({"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open",  {}})
                     .accepted());
     auto snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot || !snapshot->semantic().sections().palette.activePicker) return;
-    const auto first = *snapshot->semantic().sections().palette.activePicker;
-    const auto staleSessionRevision = runtime.revision();
-
+    if (!snapshot || !snapshot->paletteView.activePicker) return;
+    const auto first = *snapshot->paletteView.activePicker;
     ASSERT_TRUE(
         runtime
-            .dispatch({"panel.toggle", runtime.revision(), {}})
+            .dispatch({"panel.toggle",  {}})
             .accepted());
     ASSERT_TRUE(
         runtime
-            .dispatch({"picker.submit", staleSessionRevision,
+            .dispatch({"picker.submit",
                        ssg::PickerSubmitArguments{first, "panel.toggle"}})
             .accepted());
 
     ASSERT_TRUE(runtime
-                    .dispatch({"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open",  {}})
                     .accepted());
     snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot || !snapshot->semantic().sections().palette.activePicker) return;
-    const auto second = *snapshot->semantic().sections().palette.activePicker;
+    if (!snapshot || !snapshot->paletteView.activePicker) return;
+    const auto second = *snapshot->paletteView.activePicker;
     ASSERT_FALSE(second.id == first.id);
     ASSERT_FALSE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        ssg::PickerSubmitArguments{first, "panel.toggle"}})
             .accepted());
     snapshot =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->semantic().sections().palette.activePicker,
+    ASSERT_EQ(snapshot->paletteView.activePicker,
               std::optional<ssg::PickerActivation>{second});
 }
 
@@ -1598,63 +1328,52 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
     auto& runtime = *created.session;
     const ssg::ViewportDimensions viewport{80, 24};
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                        std::string{"needle.txt"}})
                     .accepted());
     auto document = projectFrame(runtime, viewport);
     ASSERT_TRUE(document.has_value());
-    if (!document || !document->semantic().sections().tabs.active) return;
-    const auto documentTab = *document->semantic().sections().tabs.active;
+    if (!document || !document->tabs.active) return;
+    const auto documentTab = *document->tabs.active;
 
     ASSERT_TRUE(
-        runtime.dispatch({"file.new", runtime.revision(), {}}).accepted());
+        runtime.dispatch({"file.new",  {}}).accepted());
     auto scratch = projectFrame(runtime, viewport);
     ASSERT_TRUE(scratch.has_value());
-    if (!scratch || !scratch->semantic().sections().tabs.active) return;
-    const auto scratchTab = *scratch->semantic().sections().tabs.active;
-    auto activate = runtime.input(ssg::TabPointerInput{{scratch->semantic().revision()}, documentTab});
+    if (!scratch || !scratch->tabs.active) return;
+    const auto scratchTab = *scratch->tabs.active;
+    auto activate = runtime.input(ssg::TabPointerInput{documentTab});
     ASSERT_EQ(activate.outcome, ssg::ClientInputOutcome::Dispatched);
     ASSERT_TRUE(activate.command.has_value() && activate.command->accepted());
-    ASSERT_EQ(projectFrame(runtime, viewport)->semantic().sections().tabs.active,
+    ASSERT_EQ(projectFrame(runtime, viewport)->tabs.active,
               std::optional<ssg::TabId>{documentTab});
-
-    auto beforeStale = projectFrame(runtime, viewport);
-    ASSERT_TRUE(beforeStale.has_value());
-    if (!beforeStale) return;
-    auto stale = runtime.input(ssg::TabPointerInput{
-            {ssg::Revision{beforeStale->semantic().revision().value() - 1}}, scratchTab});
-    ASSERT_EQ(stale.outcome, ssg::ClientInputOutcome::Rejected);
-    ASSERT_TRUE(stale.command.has_value());
-    ASSERT_EQ(stale.command->error, ssg::CommandError::StaleRevision);
-    ASSERT_EQ(projectFrame(runtime, viewport)->semantic().sections().tabs.active,
-              beforeStale->semantic().sections().tabs.active);
 
     auto closeBasis = projectFrame(runtime, viewport);
     ASSERT_TRUE(closeBasis.has_value());
     if (!closeBasis) return;
-    auto close = runtime.input(ssg::TabPointerInput{{closeBasis->semantic().revision()}, scratchTab,
+    auto close = runtime.input(ssg::TabPointerInput{scratchTab,
                              ssg::InputPointerButton::Auxiliary});
     ASSERT_TRUE(close.command.has_value() && close.command->accepted());
     auto afterClose = projectFrame(runtime, viewport);
     ASSERT_TRUE(afterClose.has_value());
     ASSERT_TRUE(std::none_of(
-        afterClose->semantic().sections().tabs.tabs.begin(),
-        afterClose->semantic().sections().tabs.tabs.end(),
+        afterClose->tabs.tabs.begin(),
+        afterClose->tabs.tabs.end(),
         [&](const ssg::TabState& tab) { return tab.id == scratchTab; }));
 
     ASSERT_TRUE(runtime
-                    .dispatch({"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open",  {}})
                     .accepted());
     auto palette = projectFrame(runtime, viewport);
     ASSERT_TRUE(palette.has_value());
-    if (!palette || !palette->semantic().sections().palette.activePicker) return;
-    const auto activation = *palette->semantic().sections().palette.activePicker;
+    if (!palette || !palette->paletteView.activePicker) return;
+    const auto activation = *palette->paletteView.activePicker;
     auto submit = runtime.input(ssg::PickerPointerInput{activation, "panel.toggle"});
     ASSERT_TRUE(submit.command.has_value() && submit.command->accepted());
     auto afterSubmit = projectFrame(runtime, viewport);
     ASSERT_TRUE(afterSubmit.has_value());
-    ASSERT_FALSE(afterSubmit->semantic().sections().palette.activePicker.has_value());
-    ASSERT_TRUE(afterSubmit->panel().has_value());
+    ASSERT_FALSE(afterSubmit->paletteView.activePicker.has_value());
+    ASSERT_TRUE(afterSubmit->panel.has_value());
 
     const ssg::UiNode* actionNode = nullptr;
     const auto findActionNode = [&](const auto& self,
@@ -1671,138 +1390,102 @@ TEST(simpleSemanticInputsLowerThroughAuthoritativeTransactions) {
         }
     };
     findActionNode(findActionNode,
-                    afterSubmit->semantic().sections().uiTree.root);
+                    afterSubmit->uiTree.root);
     ASSERT_TRUE(actionNode != nullptr);
     if (!actionNode) return;
-    const auto revisionBeforeInvalid = runtime.revision();
-    auto invalidUiAction = runtime.dispatch({"ui.activate", revisionBeforeInvalid,
+    auto invalidUiAction = runtime.dispatch({"ui.activate",
          ssg::UiNodeActivationArguments{
              ssg::UiNodeId{"missing.action"}}});
     ASSERT_FALSE(invalidUiAction.accepted());
-    ASSERT_EQ(runtime.revision(), revisionBeforeInvalid);
 
-    auto publishedAction = runtime.dispatch({"ui.activate", runtime.revision(),
+    auto publishedAction = runtime.dispatch({"ui.activate",
          ssg::UiNodeActivationArguments{actionNode->id}});
     ASSERT_TRUE(publishedAction.accepted());
 
     for (auto target : {ssg::ScrollTarget::Document,
                         ssg::ScrollTarget::Tree}) {
         auto scroll = runtime.input(ssg::ScrollLinesInput{
-                        {runtime.revision()}, {target, 1}});
+                        {target, 1}});
         ASSERT_TRUE(scroll.command.has_value() && scroll.command->accepted());
         auto fraction = runtime.input(ssg::ScrollFractionInput{
-                        {runtime.revision()}, {target, 0, 1}});
+                        {target, 0, 1}});
         ASSERT_TRUE(fraction.command.has_value() &&
                     fraction.command->accepted());
     }
 
-    const auto beforeInvalidScroll = runtime.revision();
     auto invalidScroll = runtime.input(ssg::ScrollFractionInput{
-                    {beforeInvalidScroll},
                     {ssg::ScrollTarget::Document, 2, 1}});
     ASSERT_EQ(invalidScroll.outcome, ssg::ClientInputOutcome::Rejected);
-    ASSERT_EQ(runtime.revision(), beforeInvalidScroll);
 
     ASSERT_TRUE(runtime
-                    .dispatch({"replace.open", runtime.revision(), {}})
+                    .dispatch({"replace.open",  {}})
                     .accepted());
     auto replace = projectFrame(runtime, viewport);
     ASSERT_TRUE(replace.has_value());
     if (!replace) return;
     const auto replacementNode =
         ssg::footerPromptControlNodeId("replace.replacement");
-    auto focusReplacement = runtime.dispatch({"ui.activate", replace->semantic().revision(),
+    auto focusReplacement = runtime.dispatch({"ui.activate",
          ssg::UiNodeActivationArguments{replacementNode}});
     ASSERT_TRUE(focusReplacement.accepted());
     auto focused = projectFrame(runtime, viewport);
     ASSERT_TRUE(focused.has_value());
     if (focused) {
         const auto* replacement = ssg::findUiNode(
-            focused->semantic().sections().uiTree, replacementNode);
+            focused->uiTree, replacementNode);
         ASSERT_TRUE(replacement != nullptr);
         if (replacement) {
             ASSERT_TRUE(replacement->resolved.has_value());
             ASSERT_EQ(replacement->resolved->active, std::optional<bool>{true});
         }
-        const auto missing = runtime.dispatch({"ui.activate", runtime.revision(),
+        const auto missing = runtime.dispatch({"ui.activate",
              ssg::UiNodeActivationArguments{
                  ssg::UiNodeId{"missing.control"}}});
         ASSERT_FALSE(missing.accepted());
         ASSERT_TRUE(runtime
-                        .dispatch({"prompt.cancel", runtime.revision(), {}})
+                        .dispatch({"prompt.cancel",  {}})
                         .accepted());
-        const auto hidden = runtime.dispatch({"ui.activate", runtime.revision(),
+        const auto hidden = runtime.dispatch({"ui.activate",
              ssg::UiNodeActivationArguments{replacementNode}});
         ASSERT_FALSE(hidden.accepted());
     }
 }
 
-TEST(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity) {
+TEST(resolvedSelectionInputRejectsMalformedModelIdentity) {
     auto runtime = followPauseRuntime("a\xC3\xA9z\n");
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    auto snapshot = runtime->snapshot();
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot || !snapshot->sections().tabs.active) return;
-    const auto basis = ssg::SemanticInputBasis{runtime->revision()};
-    const auto tab = *snapshot->sections().tabs.active;
-    const auto documentRevision = snapshot->sections().document.revision;
-    const auto valid = ssg::ViewTransitionInput{
-        basis,
-        ssg::SelectionTransition{
-            tab, documentRevision,
-            {{ssg::ByteOffset{1}, ssg::ByteOffset{3}}}}};
-
-    const auto beforeSelection = snapshot->sections().selection;
-    const auto beforeRevision = runtime->revision();
+    auto frame = ssg::test::projectGridFrame(*runtime);
+    ASSERT_TRUE(frame && frame->tabs.active);
+    if (!frame || !frame->tabs.active) return;
+    const auto valid = ssg::ViewTransitionInput{ssg::SelectionTransition{
+        *frame->tabs.active, frame->documentRevision,
+        {{ssg::ByteOffset{1}, ssg::ByteOffset{3}}}}};
+    const auto before = frame->selections;
     const auto expectRejected = [&](ssg::ViewTransitionInput input) {
-        const auto result =
-            runtime->input(ssg::ClientInput{std::move(input)});
-        ASSERT_EQ(result.outcome, ssg::ClientInputOutcome::Rejected);
-        const auto after = runtime->snapshot();
+        ASSERT_EQ(runtime->input(std::move(input)).outcome,
+                  ssg::ClientInputOutcome::Rejected);
+        auto after = ssg::test::projectGridFrame(*runtime);
         ASSERT_TRUE(after.has_value());
-        if (after) {
-            ASSERT_EQ(after->sections().selection, beforeSelection);
-            ASSERT_EQ(after->revision(), beforeRevision);
-        }
+        if (after) ASSERT_EQ(after->selections, before);
     };
-
-    auto stale = valid;
-    stale.basis.observedRevision =
-        ssg::Revision{beforeRevision.value() + 1};
-    expectRejected(stale);
     auto wrongTab = valid;
     std::get<ssg::SelectionTransition>(wrongTab.transition).activeTab =
-        ssg::TabId{tab.value() + 1};
+        ssg::TabId{frame->tabs.active->value() + 1};
     expectRejected(wrongTab);
     auto wrongDocument = valid;
-    std::get<ssg::SelectionTransition>(wrongDocument.transition)
-        .documentRevision =
-        ssg::Revision{documentRevision.value() + 1};
+    ++std::get<ssg::SelectionTransition>(wrongDocument.transition)
+          .documentRevision;
     expectRejected(wrongDocument);
     auto empty = valid;
     std::get<ssg::SelectionTransition>(empty.transition).selections.clear();
     expectRejected(empty);
-    auto outside = valid;
-    std::get<ssg::SelectionTransition>(outside.transition)
-        .selections.front().active = ssg::ByteOffset{99};
-    expectRejected(outside);
     auto insideCodePoint = valid;
     std::get<ssg::SelectionTransition>(insideCodePoint.transition)
         .selections.front().active = ssg::ByteOffset{2};
     expectRejected(insideCodePoint);
-
-    const auto accepted =
-        runtime->input(ssg::ClientInput{valid});
-    ASSERT_EQ(accepted.outcome, ssg::ClientInputOutcome::Dispatched);
-    const auto after = runtime->snapshot();
-    ASSERT_TRUE(after.has_value());
-    if (after) {
-        ASSERT_EQ(after->sections().selection.primary().anchor.byteOffset,
-                  ssg::ByteOffset{1});
-        ASSERT_EQ(after->sections().selection.primary().active.byteOffset,
-                  ssg::ByteOffset{3});
-    }
+    ASSERT_EQ(runtime->input(valid).outcome,
+              ssg::ClientInputOutcome::Dispatched);
 }
 
 TEST(documentPointerInputOwnsSelectionGesturePolicy) {
@@ -1814,145 +1497,31 @@ TEST(documentPointerInputOwnsSelectionGesturePolicy) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
-                                       std::string{"words.txt"}})
+    ASSERT_TRUE(runtime.dispatch({"file.open", std::string{"words.txt"}})
                     .accepted());
 
-    auto press = runtime.input(ssg::DocumentPointerInput{
-                    {runtime.revision()}, ssg::ByteOffset{1}});
-    ASSERT_TRUE(press.command.has_value() && press.command->accepted());
+    auto press = runtime.input(
+        ssg::DocumentPointerInput{ssg::ByteOffset{1}});
+    ASSERT_TRUE(press.command && press.command->accepted());
     auto move = runtime.input(ssg::DocumentPointerInput{
-                    {runtime.revision()}, ssg::ByteOffset{9}, false, false,
-                    ssg::InputPointerButton::Primary,
-                    ssg::InputPointerPhase::Move});
-    ASSERT_TRUE(move.command.has_value() && move.command->accepted());
-    auto snapshot = runtime.snapshot();
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
+        ssg::ByteOffset{9}, false, false, ssg::InputPointerButton::Primary,
+        ssg::InputPointerPhase::Move});
+    ASSERT_TRUE(move.command && move.command->accepted());
+    auto frame = ssg::test::projectGridFrame(runtime);
+    ASSERT_TRUE(frame.has_value());
+    if (!frame) return;
+    ASSERT_EQ(frame->selections.primary().anchor.byteOffset,
               ssg::ByteOffset{1});
-    ASSERT_EQ(snapshot->sections().selection.primary().active.byteOffset,
+    ASSERT_EQ(frame->selections.primary().active.byteOffset,
               ssg::ByteOffset{9});
 
-    auto release = runtime.input(ssg::DocumentPointerInput{
-                    {runtime.revision()}, std::nullopt, false, false,
-                    ssg::InputPointerButton::Primary,
-                    ssg::InputPointerPhase::Release});
-    ASSERT_EQ(release.outcome, ssg::ClientInputOutcome::Dispatched);
-    auto strayMove = runtime.input(ssg::DocumentPointerInput{
-                    {runtime.revision()}, ssg::ByteOffset{4}, false, false,
-                    ssg::InputPointerButton::Primary,
-                    ssg::InputPointerPhase::Move});
-    ASSERT_EQ(strayMove.outcome, ssg::ClientInputOutcome::Unhandled);
-
-    ASSERT_TRUE(runtime
-                    .input(ssg::DocumentPointerInput{
-                                       {runtime.revision()},
-                                       ssg::ByteOffset{3}})
-                    .command->accepted());
-    auto stalePress = runtime.input(ssg::DocumentPointerInput{
-                    {ssg::Revision{runtime.revision().value() - 1}},
-                    ssg::ByteOffset{4}});
-    ASSERT_EQ(stalePress.outcome, ssg::ClientInputOutcome::Rejected);
-    auto moveAfterStalePress = runtime.input(ssg::DocumentPointerInput{
-                    {runtime.revision()}, ssg::ByteOffset{5}, false, false,
-                    ssg::InputPointerButton::Primary,
-                    ssg::InputPointerPhase::Move});
-    ASSERT_EQ(moveAfterStalePress.outcome,
-              ssg::ClientInputOutcome::Unhandled);
-
-    ASSERT_TRUE(runtime
-                    .input(ssg::DocumentPointerInput{
-                                       {runtime.revision()},
-                                       ssg::ByteOffset{3}})
-                    .command->accepted());
-    auto staleCancel = runtime.input(ssg::DocumentPointerInput{
-                    {ssg::Revision{runtime.revision().value() - 1}},
-                    std::nullopt, false, false,
-                    ssg::InputPointerButton::Primary,
-                    ssg::InputPointerPhase::Cancel});
-    ASSERT_EQ(staleCancel.outcome, ssg::ClientInputOutcome::Rejected);
-    auto moveAfterStaleCancel = runtime.input(ssg::DocumentPointerInput{
-                    {runtime.revision()}, ssg::ByteOffset{5}, false, false,
-                    ssg::InputPointerButton::Primary,
-                    ssg::InputPointerPhase::Move});
-    ASSERT_EQ(moveAfterStaleCancel.outcome,
-              ssg::ClientInputOutcome::Unhandled);
-
-    ASSERT_TRUE(runtime
-                    .dispatch({"cursor.set_position", runtime.revision(),
-                               ssg::SelectionCommandArguments{
-                                   ssg::SelectionNavigator::resolvePosition(
-                                       runtime.activeDocumentText(),
-                                       ssg::ByteOffset{2}),
-                                   std::nullopt}})
-                    .accepted());
-    const auto second = ssg::SelectionNavigator::resolvePosition(
-        runtime.activeDocumentText(), ssg::ByteOffset{12});
-    ASSERT_TRUE(second.has_value());
-    if (!second) return;
-    ASSERT_TRUE(runtime
-                    .dispatch({"select.add_range", runtime.revision(),
-                               ssg::SelectionCommandArguments{
-                                   std::nullopt,
-                                   ssg::Selection{*second, *second}}})
-                    .accepted());
-    auto toggle = runtime.input(ssg::DocumentPointerInput{
-                    {runtime.revision()}, ssg::ByteOffset{2}, true});
-    ASSERT_TRUE(toggle.command.has_value() && toggle.command->accepted());
-    snapshot = runtime.snapshot();
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().selection.items().size(), std::size_t{1});
-    ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
-              ssg::ByteOffset{12});
-
-    auto word = runtime.input(ssg::DocumentPointerInput{
-                    {runtime.revision()}, ssg::ByteOffset{7}, false, true});
-    ASSERT_TRUE(word.command.has_value() && word.command->accepted());
-    snapshot = runtime.snapshot();
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().selection.primary().lower().byteOffset,
-              ssg::ByteOffset{6});
-    ASSERT_EQ(snapshot->sections().selection.primary().upper().byteOffset,
-              ssg::ByteOffset{10});
-
-    ASSERT_TRUE(runtime
-                    .input(ssg::DocumentPointerInput{
-                                       {runtime.revision()},
-                                       ssg::ByteOffset{0}})
-                    .command->accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"text.insert", runtime.revision(),
-                               ssg::TextInputArguments{"X"}})
-                    .accepted());
-    const auto editedDocumentRevision = runtime.revision();
-    auto editedDocumentMove = runtime.input(ssg::DocumentPointerInput{
-                    {editedDocumentRevision}, ssg::ByteOffset{1}, false, false,
-                    ssg::InputPointerButton::Primary,
-                    ssg::InputPointerPhase::Move});
-    ASSERT_EQ(editedDocumentMove.outcome,
-              ssg::ClientInputOutcome::Rejected);
-    ASSERT_EQ(runtime.revision(), editedDocumentRevision);
-
-    ASSERT_TRUE(runtime
-                    .input(ssg::DocumentPointerInput{
-                                       {runtime.revision()},
-                                       ssg::ByteOffset{0}})
-                    .command->accepted());
-    ASSERT_TRUE(runtime
-                    .dispatch({"file.new", runtime.revision(), {}})
-                    .accepted());
-    const auto changedDocumentRevision = runtime.revision();
+    ASSERT_TRUE(runtime.dispatch(
+        {"text.insert", ssg::TextInputArguments{"X"}}).accepted());
     auto changedDocumentMove = runtime.input(ssg::DocumentPointerInput{
-                    {changedDocumentRevision}, ssg::ByteOffset{0}, false, false,
-                    ssg::InputPointerButton::Primary,
-                    ssg::InputPointerPhase::Move});
+        ssg::ByteOffset{1}, false, false, ssg::InputPointerButton::Primary,
+        ssg::InputPointerPhase::Move});
     ASSERT_EQ(changedDocumentMove.outcome,
               ssg::ClientInputOutcome::Rejected);
-    ASSERT_EQ(runtime.revision(), changedDocumentRevision);
 }
 
 TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
@@ -1965,36 +1534,33 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ssg::GridPresenter presenter{ssg::ViewId{1}};
+    ssg::GridPresenter presenter{};
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                        std::string{"lines.txt"}})
                     .accepted());
     auto frame = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto noGesture = runtime.input(ssg::ViewTransitionInput{
-            {runtime.revision()},
             ssg::PointerSelectionTransition{ssg::ByteOffset{1}}});
     ASSERT_EQ(noGesture.outcome, ssg::ClientInputOutcome::Rejected);
     ASSERT_TRUE(runtime
                     .input(ssg::DocumentPointerInput{
-                                       {runtime.revision()},
                                        ssg::ByteOffset{1}})
                     .command->accepted());
     frame = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
     const auto invalidEdge = presenter.apply(
-        {ssg::ViewId{1}, runtime.revision(),
-         ssg::ContinuePointerEdge{ssg::DocumentPointerEdge::None}},
+        ssg::ContinuePointerEdge{ssg::DocumentPointerEdge::None},
         *frame);
     ASSERT_FALSE(invalidEdge.accepted());
 
     for (const auto expected :
          {ssg::ByteOffset{4}, ssg::ByteOffset{7}, ssg::ByteOffset{10}}) {
         auto edge = runtime.input(ssg::DocumentPointerInput{
-                        {runtime.revision()}, std::nullopt, false, false,
+                        std::nullopt, false, false,
                         ssg::InputPointerButton::Primary,
                         ssg::InputPointerPhase::Move,
                         ssg::DocumentPointerEdge::After});
@@ -2004,7 +1570,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
         const auto expectedAction = ssg::ViewAction{
             ssg::ContinuePointerEdge{
                 ssg::DocumentPointerEdge::After}};
-        ASSERT_EQ(edge.command->viewAction->action, expectedAction);
+        ASSERT_EQ(*edge.command->viewAction, expectedAction);
         auto applied = presenter.apply(*edge.command->viewAction, *frame);
         ASSERT_TRUE(applied.accepted() && applied.transition.has_value());
         ASSERT_TRUE(
@@ -2019,14 +1585,14 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
         auto snapshot = presenter.project(runtime, {{20, 4}, {}});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
-        ASSERT_EQ(snapshot->sections().selection.primary().anchor.byteOffset,
+        ASSERT_EQ(snapshot->selections.primary().anchor.byteOffset,
                   ssg::ByteOffset{1});
-        ASSERT_EQ(snapshot->sections().selection.primary().active.byteOffset,
+        ASSERT_EQ(snapshot->selections.primary().active.byteOffset,
                   expected);
         frame = std::move(snapshot);
     }
     auto beforeEdge = runtime.input(ssg::DocumentPointerInput{
-                    {runtime.revision()}, std::nullopt, false, false,
+                    std::nullopt, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move,
                     ssg::DocumentPointerEdge::Before});
@@ -2034,7 +1600,7 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     if (!beforeEdge.command || !beforeEdge.command->viewAction) return;
     const auto beforeAction = ssg::ViewAction{
         ssg::ContinuePointerEdge{ssg::DocumentPointerEdge::Before}};
-    ASSERT_EQ(beforeEdge.command->viewAction->action, beforeAction);
+    ASSERT_EQ(*beforeEdge.command->viewAction, beforeAction);
     auto beforeApplied =
         presenter.apply(*beforeEdge.command->viewAction, *frame);
     ASSERT_TRUE(beforeApplied.transition.has_value());
@@ -2044,10 +1610,10 @@ TEST(documentEdgeMovesResolveThroughPresenterAndReveal) {
     auto snapshot = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
-        ASSERT_EQ(snapshot->sections().selection.primary().active.byteOffset,
+        ASSERT_EQ(snapshot->selections.primary().active.byteOffset,
                   ssg::ByteOffset{7});
         ASSERT_TRUE(
-            snapshot->presentation().viewport.firstVisualRow > 0);
+            snapshot->viewport.firstVisualRow > 0);
     }
 }
 
@@ -2062,18 +1628,17 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"file.open", runtime.revision(),
+                    .dispatch({"file.open",
                                        std::string{"lines.txt"}})
                     .accepted());
     ASSERT_TRUE(runtime
                     .input(ssg::DocumentPointerInput{
-                                       {runtime.revision()},
                                        ssg::ByteOffset{1}})
                     .command->accepted());
     ASSERT_EQ(
         runtime
             .input(ssg::DocumentPointerInput{
-                       {runtime.revision()}, std::nullopt, false, false,
+                       std::nullopt, false, false,
                        ssg::InputPointerButton::Primary,
                        ssg::InputPointerPhase::Release})
             .outcome,
@@ -2083,24 +1648,24 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
     ASSERT_TRUE(second.has_value());
     if (!second) return;
     ASSERT_TRUE(runtime
-                    .dispatch({"select.add_range", runtime.revision(),
+                    .dispatch({"select.add_range",
                                ssg::SelectionCommandArguments{
                                    std::nullopt,
                                    ssg::Selection{*second, *second}}})
                     .accepted());
     ASSERT_TRUE(runtime
                     .input(ssg::DocumentPointerInput{
-                               {runtime.revision()}, ssg::ByteOffset{10}, true})
+                               ssg::ByteOffset{10}, true})
                     .command->accepted());
 
-    ssg::GridPresenter presenter{ssg::ViewId{1}};
+    ssg::GridPresenter presenter{};
     auto frame = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    const auto baseline = frame->sections().selection.items();
+    const auto baseline = frame->selections.items();
     ASSERT_EQ(baseline.size(), std::size_t{3});
     auto edge = runtime.input(ssg::DocumentPointerInput{
-                    {runtime.revision()}, std::nullopt, false, false,
+                    std::nullopt, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move,
                     ssg::DocumentPointerEdge::After});
@@ -2114,93 +1679,12 @@ TEST(documentEdgeContinuationPreservesAdditiveBaseline) {
     frame = presenter.project(runtime, {{20, 4}, {}});
     ASSERT_TRUE(frame.has_value());
     if (!frame) return;
-    const auto& selections = frame->sections().selection.items();
+    const auto& selections = frame->selections.items();
     ASSERT_EQ(selections.size(), baseline.size());
     ASSERT_EQ(selections[0], baseline[0]);
     ASSERT_EQ(selections[1], baseline[1]);
     ASSERT_EQ(selections[2].anchor.byteOffset, ssg::ByteOffset{10});
     ASSERT_EQ(selections[2].active.byteOffset, ssg::ByteOffset{13});
-}
-
-TEST(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath) {
-    auto root = uniqueRoot();
-    auto created = ssg::EditorSession::create(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.session;
-    auto snapshot = runtime.snapshot();
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-
-    std::set<std::string> bound;
-    for (const auto& binding : snapshot->sections().keymap.bindings) {
-        bound.insert(binding.commandId);
-    }
-    const auto routes = allKeyboardRoutes(std::make_index_sequence<
-                                          std::variant_size_v<
-                                              ssg::ClientInput>>{});
-    for (const auto command : routes) {
-        if (!bound.contains(std::string{command})) {
-            std::cerr << "  pointer route has no keyboard path: " << command
-                      << '\n';
-        }
-        ASSERT_TRUE(bound.contains(std::string{command}));
-    }
-
-    ASSERT_TRUE(runtime
-                    .dispatch({"palette.open", runtime.revision(), {}})
-                    .accepted());
-    auto presented = projectFrame(runtime, {80, 24});
-    ASSERT_TRUE(presented.has_value());
-    if (!presented) return;
-    std::map<std::string, std::string> paletteCandidates;
-    for (const auto& candidate :
-         presented->semantic().sections().palette.commandCandidates) {
-        paletteCandidates.emplace(candidate.id, candidate.label);
-    }
-
-    ssg::StatusQueue status;
-    auto enqueued = status.enqueue(
-        {ssg::StatusId{1}, ssg::StatusPriority::Information, "Help available",
-         {{"sort", "Sort lines", "edit.sort_lines"}}});
-    ASSERT_TRUE(enqueued.accepted);
-    const auto statusActions = status.viewState().items.front().actions;
-    ASSERT_EQ(statusActions.size(), std::size_t{1});
-    for (const auto& action : statusActions) {
-        const auto candidate = paletteCandidates.find(action.commandId);
-        if (candidate == paletteCandidates.end()) {
-            std::cerr << "  status action is not a palette candidate: "
-                      << action.commandId << " (" << paletteCandidates.size()
-                      << " candidates)\n";
-        }
-        ASSERT_TRUE(candidate != paletteCandidates.end());
-        if (candidate != paletteCandidates.end()) {
-            ASSERT_FALSE(candidate->second.empty());
-        }
-    }
-
-    std::size_t publishedActions = 0;
-    const auto inspectNode = [&](const auto& self,
-                                 const ssg::UiNode& node) -> void {
-        if (const auto* leaf = std::get_if<ssg::UiLeaf>(&node.content)) {
-            if (leaf->widget.command) {
-                ++publishedActions;
-                const auto& command = *leaf->widget.command;
-                const auto candidate = paletteCandidates.find(command);
-                ASSERT_TRUE(bound.contains(command) ||
-                            (candidate != paletteCandidates.end() &&
-                             !candidate->second.empty()));
-            }
-            return;
-        }
-        for (const auto& child :
-             std::get<ssg::UiContainer>(node.content).children) {
-            self(self, child);
-        }
-    };
-    inspectNode(inspectNode, snapshot->sections().uiTree.root);
-    ASSERT_TRUE(publishedActions > 0);
 }
 
 TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
@@ -2211,71 +1695,78 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     std::optional<ssg::PickerActivation> nestedActivation;
-    auto const failureCommand = runtime.registerCommand(
-        ssg::CommandSpecBuilder{"test.picker_failure"}
-            .owner("test")
-            .summary("Picker failure")
-            .mutates()
-            .handler([](ssg::CommandContext&) {
-                return ssg::CommandHandlerResult::failure("expected failure");
-            }));
+    auto const failureCommand = runtime.registerCommand(ssg::CommandSpec{
+        .id = "test.picker_failure",
+        .owner = "test",
+        .summary = "Picker failure",
+        .effect = ssg::CommandEffect::Mutation,
+        .binding = ssg::bindNoArgumentHandler([](ssg::CommandContext&) {
+            return ssg::CommandHandlerResult::failure("expected failure");
+        }),
+    });
     ASSERT_TRUE(failureCommand.valid());
-    auto const nestedFailure = runtime.registerCommand(
-        ssg::CommandSpecBuilder{"test.picker_nested_failure"}
-            .owner("test")
-            .summary("Picker nested failure")
-            .mutates()
-            .handler([](ssg::CommandContext&) {
-                return ssg::CommandHandlerResult::failure(
-                    "expected nested failure");
-            }));
+    auto const nestedFailure = runtime.registerCommand(ssg::CommandSpec{
+        .id = "test.picker_nested_failure",
+        .owner = "test",
+        .summary = "Picker nested failure",
+        .effect = ssg::CommandEffect::Mutation,
+        .binding = ssg::bindNoArgumentHandler([](ssg::CommandContext&) {
+            return ssg::CommandHandlerResult::failure(
+                "expected nested failure");
+        }),
+    });
     ASSERT_TRUE(nestedFailure.valid());
-    auto const deferringCommand = runtime.registerCommand(
-        ssg::CommandSpecBuilder{"test.picker_defers_failure"}
-            .owner("test")
-            .summary("Picker defers failure")
-            .mutates()
-            .handler([&runtime](ssg::CommandContext& context) {
-                if (!runtime.deferDispatch({"test.picker_nested_failure", context.revision(),
+    auto const deferringCommand = runtime.registerCommand(ssg::CommandSpec{
+        .id = "test.picker_defers_failure",
+        .owner = "test",
+        .summary = "Picker defers failure",
+        .effect = ssg::CommandEffect::Mutation,
+        .binding = ssg::bindNoArgumentHandler(
+            [&runtime](ssg::CommandContext& context) {
+                if (!runtime.deferDispatch(
+                        {"test.picker_nested_failure",
                          {}})) {
                     return ssg::CommandHandlerResult::failure(
                         "could not defer nested failure");
                 }
                 return ssg::CommandHandlerResult::success();
-            }));
+            }),
+    });
     ASSERT_TRUE(deferringCommand.valid());
-    auto const nestedSubmit = runtime.registerCommand(
-        ssg::CommandSpecBuilder{"test.picker_defers_submit"}
-            .owner("test")
-            .summary("Picker defers another submit")
-            .mutates()
-            .handler([&runtime, &nestedActivation](
-                         ssg::CommandContext& context) {
+    auto const nestedSubmit = runtime.registerCommand(ssg::CommandSpec{
+        .id = "test.picker_defers_submit",
+        .owner = "test",
+        .summary = "Picker defers another submit",
+        .effect = ssg::CommandEffect::Mutation,
+        .binding = ssg::bindNoArgumentHandler(
+            [&runtime, &nestedActivation](ssg::CommandContext& context) {
                 if (!nestedActivation) {
                     return ssg::CommandHandlerResult::failure(
                         "picker activation was not captured");
                 }
-                if (!runtime.deferDispatch({"picker.submit", context.revision(),
-                         ssg::PickerSubmitArguments{
-                             *nestedActivation, "panel.toggle"}})) {
+                if (!runtime.deferDispatch(
+                        {"picker.submit",
+                         ssg::PickerSubmitArguments{*nestedActivation,
+                                                    "panel.toggle"}})) {
                     return ssg::CommandHandlerResult::failure(
                         "could not defer nested picker submit");
                 }
                 return ssg::CommandHandlerResult::success();
-            }));
+            }),
+    });
     ASSERT_TRUE(nestedSubmit.valid());
     ASSERT_TRUE(runtime
-                    .dispatch({"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open",  {}})
                     .accepted());
     auto opened =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(opened.has_value());
     if (!opened) return;
-    nestedActivation = opened->semantic().sections().palette.activePicker;
+    nestedActivation = opened->paletteView.activePicker;
     ASSERT_TRUE(nestedActivation.has_value());
     ASSERT_FALSE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        pickerSubmit(runtime, ssg::SearchMode::Command,
                                     "test.picker_failure")})
             .accepted());
@@ -2283,14 +1774,14 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
+    ASSERT_TRUE(activePickerMode(snapshot->paletteView) ==
                 std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
-    ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree) ==
+    ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->uiTree) ==
                 ssg::FocusTarget::Prompt);
 
     ASSERT_FALSE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        pickerSubmit(runtime, ssg::SearchMode::Command,
                                     "test.picker_defers_submit")})
             .accepted());
@@ -2298,14 +1789,14 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
+    ASSERT_TRUE(activePickerMode(snapshot->paletteView) ==
                 std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
-    ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree) ==
+    ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->uiTree) ==
                 ssg::FocusTarget::Prompt);
 
     ASSERT_FALSE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        pickerSubmit(runtime, ssg::SearchMode::Command,
                                     "test.picker_defers_failure")})
             .accepted());
@@ -2313,9 +1804,9 @@ TEST(failedSelectedCommandLeavesPickerOpenForEveryOrigin) {
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
+    ASSERT_TRUE(activePickerMode(snapshot->paletteView) ==
                 std::optional<ssg::SearchMode>{ssg::SearchMode::Command});
-    ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree) ==
+    ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->uiTree) ==
                 ssg::FocusTarget::Prompt);
 
 }
@@ -2328,15 +1819,15 @@ TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
         if (!created.accepted()) return;
         auto& runtime = *created.session;
         ASSERT_TRUE(runtime
-                        .dispatch({"file.open", runtime.revision(),
+                        .dispatch({"file.open",
                                    std::string{"needle.txt"}})
                         .accepted());
         ASSERT_TRUE(runtime
-                        .dispatch({"palette.open", runtime.revision(), {}})
+                        .dispatch({"palette.open",  {}})
                         .accepted());
         ASSERT_TRUE(
             runtime
-                .dispatch({"picker.submit", runtime.revision(),
+                .dispatch({"picker.submit",
                            pickerSubmit(runtime, ssg::SearchMode::Command,
                                         "file_finder.open")})
                 .accepted());
@@ -2344,11 +1835,11 @@ TEST(selectedCommandThatOpensAnotherPickerKeepsTheNewPicker) {
             projectFrame(runtime, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
-        ASSERT_TRUE(activePickerMode(snapshot->semantic().sections().palette) ==
+        ASSERT_TRUE(activePickerMode(snapshot->paletteView) ==
                     std::optional<ssg::SearchMode>{ssg::SearchMode::File});
-        ASSERT_TRUE(snapshot->semantic().sections().promptStatus.activeKind ==
+        ASSERT_TRUE(snapshot->promptStatus.activeKind ==
                     std::optional<ssg::PromptKind>{ssg::PromptKind::Palette});
-        ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree) ==
+        ASSERT_TRUE(ssg::effectiveUiFocus(snapshot->uiTree) ==
                     ssg::FocusTarget::Prompt);
 }
 
@@ -2360,27 +1851,27 @@ TEST(selectedCommandThatReopensTheSamePickerKeepsTheNewActivation) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
-                    .dispatch({"palette.open", runtime.revision(), {}})
+                    .dispatch({"palette.open",  {}})
                     .accepted());
     auto before =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(before.has_value());
-    if (!before || !before->semantic().sections().palette.activePicker) return;
-    const auto first = *before->semantic().sections().palette.activePicker;
+    if (!before || !before->paletteView.activePicker) return;
+    const auto first = *before->paletteView.activePicker;
 
     ASSERT_TRUE(
         runtime
-            .dispatch({"picker.submit", runtime.revision(),
+            .dispatch({"picker.submit",
                        ssg::PickerSubmitArguments{first, "palette.open"}})
             .accepted());
     auto after =
         projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
-    if (!after || !after->semantic().sections().palette.activePicker) return;
-    ASSERT_TRUE(after->semantic().sections().palette.activePicker->mode ==
+    if (!after || !after->paletteView.activePicker) return;
+    ASSERT_TRUE(after->paletteView.activePicker->mode ==
                 ssg::SearchMode::Command);
-    ASSERT_FALSE(after->semantic().sections().palette.activePicker->id == first.id);
-    ASSERT_TRUE(ssg::effectiveUiFocus(after->semantic().sections().uiTree) ==
+    ASSERT_FALSE(after->paletteView.activePicker->id == first.id);
+    ASSERT_TRUE(ssg::effectiveUiFocus(after->uiTree) ==
                 ssg::FocusTarget::Prompt);
 }
 
@@ -2391,19 +1882,19 @@ TEST(paletteExecuteValidatesCandidateMembership) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
 
-    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(), std::string{"needle.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"needle.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
 
     // A command outside the published candidate set is rejected before dispatch.
-    ASSERT_FALSE(runtime.dispatch({"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"not.a.command"}}).accepted());
+    ASSERT_FALSE(runtime.dispatch({"palette.execute",  ssg::PaletteExecuteArguments{"not.a.command"}}).accepted());
     // Missing the id payload is rejected.
-    ASSERT_FALSE(runtime.dispatch({"palette.execute", runtime.revision(), {}}).accepted());
+    ASSERT_FALSE(runtime.dispatch({"palette.execute",  {}}).accepted());
     // A published command id validates, executes server-side, and closes the palette.
-    ASSERT_TRUE(runtime.dispatch({"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"file.save"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"palette.execute",  ssg::PaletteExecuteArguments{"file.save"}}).accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(ssg::effectiveUiFocus(snapshot->semantic().sections().uiTree),
+    ASSERT_EQ(ssg::effectiveUiFocus(snapshot->uiTree),
               ssg::FocusTarget::Editor);
 }
 
@@ -2413,12 +1904,12 @@ TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"palette.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"palette.open",  {}}).accepted());
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
-    const auto& candidates = snapshot->semantic().sections().palette.commandCandidates;
+    const auto& candidates = snapshot->paletteView.commandCandidates;
     ASSERT_FALSE(candidates.empty());
 
     const ssg::PaletteCandidate* save = nullptr;
@@ -2466,12 +1957,12 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
     if (!created.accepted()) return;
     auto& runtime = *created.session;
     // Show the panel; a 12-row terminal gives a panel content height of ~9.
-    ASSERT_TRUE(runtime.dispatch({"panel.toggle", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle",  {}}).accepted());
     // Select the workspace root and expand it so its 40 files become visible.
-    ASSERT_TRUE(runtime.dispatch({"tree.select_next", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select_next",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.activate",  {}}).accepted());
     const ssg::ViewportDimensions dims{80, 12};
-    ssg::test::GridTestView grid{ssg::ViewId{1}, dims};
+    ssg::test::GridTestView grid{dims};
 
     // Baseline: selection at the top (root), window pinned to the top with a live
     // thumb.
@@ -2479,62 +1970,49 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
         auto snap = grid.present(runtime);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
-        auto const& p = snap->sections().tree.providers.front();
-        ASSERT_TRUE(snap->panel().has_value());
-        if (!snap->panel()) return;
-        auto const& w = *snap->panel();
-        ASSERT_TRUE(p.nodes.size() >= 40);
+        ASSERT_TRUE(snap->panel.has_value());
+        if (!snap->panel) return;
+        auto const& w = *snap->panel;
+        ASSERT_TRUE(w.scrollbar.totalRows >= 40);
         ASSERT_EQ(w.firstVisible, std::uint32_t{0});
         ASSERT_TRUE(w.scrollbar.maximumFirstRow > 0);          // scrollable
         ASSERT_TRUE(w.scrollbar.thumbSize < w.scrollbar.viewportRows);
         ASSERT_EQ(w.rows.size(),
                   std::size_t{w.scrollbar.viewportRows});       // window bound
-        ASSERT_EQ(w.rows.front().nodeId, p.nodes.front().node.id);
     }
 
     // Move the selection to the bottom: the window scrolls to keep it shown.
     for (int i = 0; i < 60; ++i) {
-        ASSERT_TRUE(runtime.dispatch({"tree.select_next", runtime.revision(), {}}).accepted());
+        ASSERT_TRUE(runtime.dispatch({"tree.select_next",  {}}).accepted());
     }
     std::uint32_t deepFirst = 0;
     {
         auto snap = grid.present(runtime);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
-        auto const& p = snap->sections().tree.providers.front();
-        ASSERT_TRUE(snap->panel().has_value());
-        if (!snap->panel()) return;
-        auto const& w = *snap->panel();
-        ASSERT_TRUE(p.selected.has_value());
-        // The selected node's absolute index lies within the visible window.
-        std::optional<std::uint32_t> selIndex;
-        for (std::uint32_t i = 0; i < p.nodes.size(); ++i) {
-            if (p.nodes[i].node.id == *p.selected) { selIndex = i; break; }
-        }
-        ASSERT_TRUE(selIndex.has_value());
+        ASSERT_TRUE(snap->panel.has_value());
+        if (!snap->panel) return;
+        auto const& w = *snap->panel;
+        ASSERT_TRUE(std::ranges::any_of(
+            w.rows, [](const ssg::SolvedPanelRow& row) {
+                return row.selected;
+            }));
         ASSERT_TRUE(w.firstVisible > 0);
-        ASSERT_TRUE(*selIndex >= w.firstVisible &&
-                    *selIndex < w.firstVisible + w.rows.size());
-        // The hit map maps each viewport row to the correct on-screen node id.
-        for (std::size_t row = 0; row < w.rows.size(); ++row) {
-            ASSERT_EQ(w.rows[row].nodeId,
-                      p.nodes[w.firstVisible + row].node.id);
-        }
         deepFirst = w.firstVisible;
     }
     ASSERT_TRUE(deepFirst > 0);
 
     // Move back up to the top: the window scrolls back to first_visible == 0.
     for (int i = 0; i < 40; ++i) {
-        ASSERT_TRUE(runtime.dispatch({"tree.select_previous", runtime.revision(), {}}).accepted());
+        ASSERT_TRUE(runtime.dispatch({"tree.select_previous",  {}}).accepted());
     }
     {
         auto snap = grid.present(runtime);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
-        ASSERT_TRUE(snap->panel().has_value());
-        if (snap->panel()) {
-            ASSERT_EQ(snap->panel()->firstVisible, std::uint32_t{0});
+        ASSERT_TRUE(snap->panel.has_value());
+        if (snap->panel) {
+            ASSERT_EQ(snap->panel->firstVisible, std::uint32_t{0});
         }
     }
     std::filesystem::remove_all(root);
@@ -2556,38 +2034,49 @@ TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"panel.toggle", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle",  {}}).accepted());
     // Expand the workspace root so its files become visible/selectable nodes.
-    ASSERT_TRUE(runtime.dispatch({"tree.select_next", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select_next",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.activate",  {}}).accepted());
 
     const ssg::ViewportDimensions dims{80, 24};
     auto snap = projectFrame(runtime, dims);
     ASSERT_TRUE(snap.has_value());
     if (!snap) return;
-    auto const& nodes = snap->semantic().sections().tree.providers.front().nodes;
+    ASSERT_TRUE(snap->panel.has_value());
+    if (!snap->panel) return;
+    auto const& nodes = snap->panel->rows;
     ASSERT_TRUE(nodes.size() >= 4);
     if (nodes.size() < 4) return;
     // Pick a node that is NOT already selected (the third visible node).
-    auto const target = nodes[2].node.id;
+    auto const target = nodes[2].nodeId;
 
-    ASSERT_TRUE(runtime.dispatch({"tree.select", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"tree.select",
                                   ssg::TreeSelectArguments{target}}).accepted());
     auto after = projectFrame(runtime, dims);
     ASSERT_TRUE(after.has_value());
     if (!after) return;
-    ASSERT_TRUE(after->semantic().sections().tree.providers.front().selected.has_value());
-    ASSERT_EQ(*after->semantic().sections().tree.providers.front().selected, target);
+    ASSERT_TRUE(after->panel.has_value());
+    if (!after->panel) return;
+    ASSERT_TRUE(std::ranges::any_of(
+        after->panel->rows, [&](const ssg::SolvedPanelRow& row) {
+            return row.nodeId == target && row.selected;
+        }));
 
     // An id absent from the active provider is rejected; a missing payload too.
-    ASSERT_FALSE(runtime.dispatch({"tree.select", runtime.revision(),
+    ASSERT_FALSE(runtime.dispatch({"tree.select",
                                    ssg::TreeSelectArguments{ssg::TreeNodeId{"nope"}}}).accepted());
-    ASSERT_FALSE(runtime.dispatch({"tree.select", runtime.revision(), {}}).accepted());
+    ASSERT_FALSE(runtime.dispatch({"tree.select",  {}}).accepted());
     // The selection is unchanged after the rejected attempts.
     auto again = projectFrame(runtime, dims);
     ASSERT_TRUE(again.has_value());
     if (!again) return;
-    ASSERT_EQ(*again->semantic().sections().tree.providers.front().selected, target);
+    ASSERT_TRUE(again->panel.has_value());
+    if (!again->panel) return;
+    ASSERT_TRUE(std::ranges::any_of(
+        again->panel->rows, [&](const ssg::SolvedPanelRow& row) {
+            return row.nodeId == target && row.selected;
+        }));
     std::filesystem::remove_all(root);
 }
 
@@ -2607,14 +2096,14 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = projectFrame(runtime, dims);
-        return snap ? ssg::effectiveUiFocus(snap->semantic().sections().uiTree)
+        return snap ? ssg::effectiveUiFocus(snap->uiTree)
                     : ssg::FocusTarget::Editor;
     };
     // Showing the panel now focuses it (QOL); expand the root so a directory node
     // and a file node are both visible/selectable.
-    ASSERT_TRUE(runtime.dispatch({"panel.toggle", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"tree.select_next", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select_next",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.activate",  {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     auto snap = projectFrame(runtime, dims);
@@ -2622,9 +2111,11 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
     if (!snap) return;
     std::optional<ssg::TreeNodeId> dirId;
     std::optional<ssg::TreeNodeId> fileId;
-    for (auto const& view : snap->semantic().sections().tree.providers.front().nodes) {
-        if (view.node.expandable && !dirId) dirId = view.node.id;
-        if (!view.node.expandable && view.node.workspacePath && !fileId) fileId = view.node.id;
+    ASSERT_TRUE(snap->panel.has_value());
+    if (!snap->panel) return;
+    for (auto const& row : snap->panel->rows) {
+        if (row.text.find("dir") != std::string::npos) dirId = row.nodeId;
+        if (row.text.find("top.txt") != std::string::npos) fileId = row.nodeId;
     }
     ASSERT_TRUE(dirId.has_value());
     ASSERT_TRUE(fileId.has_value());
@@ -2632,18 +2123,18 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
 
     // The file click pair [tree.select, tree.activate] ends on the editor (the
     // file opens, so tree.activate's focus_editor wins over tree.select's panel).
-    ASSERT_TRUE(runtime.dispatch({"tree.activate_node", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"tree.activate_node",
          ssg::TreeSelectArguments{*fileId}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // From editor focus, tree.select alone moves keyboard focus to the panel.
-    ASSERT_TRUE(runtime.dispatch({"tree.select", runtime.revision(), ssg::TreeSelectArguments{*fileId}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select",  ssg::TreeSelectArguments{*fileId}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     // The directory click pair ends on the panel (tree.select focuses the panel,
     // tree.activate toggles the directory and leaves focus alone).
-    ASSERT_TRUE(runtime.dispatch({"tree.select", runtime.revision(), ssg::TreeSelectArguments{*dirId}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select",  ssg::TreeSelectArguments{*dirId}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.activate",  {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     std::filesystem::remove_all(root);
 }
@@ -2664,97 +2155,89 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"panel.toggle", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"panel.toggle",  {}}).accepted());
     // Expand the root so the 40 files become a tree taller than a short panel.
-    ASSERT_TRUE(runtime.dispatch({"tree.select_next", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.select_next",  {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch({"tree.activate",  {}}).accepted());
     const ssg::ViewportDimensions dims{80, 12};
-    ssg::test::GridTestView firstGrid{ssg::ViewId{1}, dims};
+    ssg::test::GridTestView firstGrid{dims};
 
     auto baseline = firstGrid.present(runtime);
     ASSERT_TRUE(baseline.has_value());
     if (!baseline) return;
-    auto const& p0 = baseline->sections().tree.providers.front();
-    ASSERT_TRUE(baseline->panel().has_value());
-    if (!baseline->panel()) return;
-    auto const& w0 = *baseline->panel();
+    ASSERT_TRUE(baseline->panel.has_value());
+    if (!baseline->panel) return;
+    auto const& w0 = *baseline->panel;
     ASSERT_EQ(w0.firstVisible, std::uint32_t{0});
     ASSERT_TRUE(w0.scrollbar.maximumFirstRow > 0);
-    auto const selectedBefore = p0.selected;
 
     // Wheel down: the viewport offset advances, but the selection does not move.
     ASSERT_TRUE(firstGrid.dispatch(runtime,
-                                   {"tree.scroll", runtime.revision(),
+                                   {"tree.scroll",
                                     ssg::ScrollLinesArguments{3}}).accepted());
     auto scrolled = firstGrid.present(runtime);
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
-    auto const& p1 = scrolled->sections().tree.providers.front();
-    ASSERT_TRUE(scrolled->panel().has_value());
-    if (!scrolled->panel()) return;
-    ASSERT_EQ(scrolled->panel()->firstVisible, std::uint32_t{3});
-    ASSERT_EQ(p1.selected, selectedBefore);  // selection unchanged
+    ASSERT_TRUE(scrolled->panel.has_value());
+    if (!scrolled->panel) return;
+    ASSERT_EQ(scrolled->panel->firstVisible, std::uint32_t{3});
 
     // Wheel up past the top clamps at 0.
     ASSERT_TRUE(firstGrid.dispatch(runtime,
-                                   {"tree.scroll", runtime.revision(),
+                                   {"tree.scroll",
                                     ssg::ScrollLinesArguments{-99}}).accepted());
     auto topped = firstGrid.present(runtime);
     ASSERT_TRUE(topped.has_value());
     if (!topped) return;
-    ASSERT_TRUE(topped->panel().has_value());
-    if (!topped->panel()) return;
-    ASSERT_EQ(topped->panel()->firstVisible, std::uint32_t{0});
+    ASSERT_TRUE(topped->panel.has_value());
+    if (!topped->panel) return;
+    ASSERT_EQ(topped->panel->firstVisible, std::uint32_t{0});
 
     // Wheel down past the bottom clamps at maximum_first_row.
     ASSERT_TRUE(firstGrid.dispatch(runtime,
-                                   {"tree.scroll", runtime.revision(),
+                                   {"tree.scroll",
                                     ssg::ScrollLinesArguments{999}}).accepted());
     auto bottomed = firstGrid.present(runtime);
     ASSERT_TRUE(bottomed.has_value());
     if (!bottomed) return;
-    ASSERT_TRUE(bottomed->panel().has_value());
-    if (!bottomed->panel()) return;
-    auto const& w3 = *bottomed->panel();
+    ASSERT_TRUE(bottomed->panel.has_value());
+    if (!bottomed->panel) return;
+    auto const& w3 = *bottomed->panel;
     ASSERT_EQ(w3.firstVisible, w3.scrollbar.maximumFirstRow);
-    ASSERT_EQ(w3.scrollbar.totalRows,
-              bottomed->sections().tree.providers.front().nodes.size());
+    ASSERT_TRUE(w3.scrollbar.totalRows >= w3.rows.size());
 
     for (int i = 0; i < 60; ++i) {
         ASSERT_TRUE(runtime
-                        .dispatch({"tree.select_next", runtime.revision(), {}})
+                        .dispatch({"tree.select_next",  {}})
                         .accepted());
     }
     auto selectedAtBottom = firstGrid.present(runtime);
     ASSERT_TRUE(selectedAtBottom.has_value());
-    if (!selectedAtBottom || !selectedAtBottom->panel()) return;
-    const auto retainedFirst = selectedAtBottom->panel()->firstVisible;
+    if (!selectedAtBottom || !selectedAtBottom->panel) return;
+    const auto retainedFirst = selectedAtBottom->panel->firstVisible;
     ASSERT_TRUE(retainedFirst > 0);
 
     firstGrid.resize({31, 12});
     auto hidden = firstGrid.present(runtime);
     ASSERT_TRUE(hidden.has_value());
     if (!hidden) return;
-    ASSERT_FALSE(hidden->panel().has_value());
+    ASSERT_FALSE(hidden->panel.has_value());
     ASSERT_TRUE(firstGrid.dispatch(
-        runtime, {"tree.scroll", runtime.revision(),
+        runtime, {"tree.scroll",
                   ssg::ScrollLinesArguments{-999}})
                     .accepted());
 
     firstGrid.resize(dims);
     auto restored = firstGrid.present(runtime);
     ASSERT_TRUE(restored.has_value());
-    if (!restored || !restored->panel()) return;
-    ASSERT_EQ(restored->panel()->firstVisible, retainedFirst);
-    const auto selected = restored->sections().tree.providers.front().selected;
-    ASSERT_TRUE(selected.has_value());
+    if (!restored || !restored->panel) return;
+    ASSERT_EQ(restored->panel->firstVisible, retainedFirst);
     ASSERT_TRUE(std::ranges::any_of(
-        restored->panel()->rows, [&](const ssg::SolvedPanelRow& row) {
-            return row.nodeId == selected;
-        }));
+        restored->panel->rows,
+        [](const ssg::SolvedPanelRow& row) { return row.selected; }));
 
     // A missing payload is rejected.
-    ASSERT_FALSE(runtime.dispatch({"tree.scroll", runtime.revision(), {}}).accepted());
+    ASSERT_FALSE(runtime.dispatch({"tree.scroll",  {}}).accepted());
     std::filesystem::remove_all(root);
 }
 
@@ -2778,37 +2261,37 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"long.txt"}}).accepted());
 
     ssg::ViewportDimensions const dims{24, 6};
-    ssg::test::GridTestView grid{ssg::ViewId{1}, dims};
+    ssg::test::GridTestView grid{dims};
     // Prime the pane-size cache the reveal path reads.
     auto primed = grid.present(runtime);
     ASSERT_TRUE(primed.has_value());
     if (!primed) return;
-    ASSERT_EQ(primed->presentation().viewport.firstVisualColumn, std::uint32_t{0});
+    ASSERT_EQ(primed->viewport.firstVisualColumn, std::uint32_t{0});
 
     // Move the caret to the end of the long line: it is past the pane width, so
     // the viewport scrolls horizontally to keep it visible.
-    ASSERT_TRUE(runtime.dispatch({"cursor.line_end", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"cursor.line_end",  {}})
                     .accepted());
     auto scrolled = grid.present(runtime);
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
-    auto const offset = scrolled->presentation().viewport.firstVisualColumn;
+    auto const offset = scrolled->viewport.firstVisualColumn;
     ASSERT_TRUE(offset > 0);
     // The caret's cell (60) is within the visible horizontal window.
     ASSERT_TRUE(60u >= offset);
     ASSERT_TRUE(60u < offset + dims.columns);
 
     // Returning to the line start resets the horizontal offset to zero.
-    ASSERT_TRUE(runtime.dispatch({"cursor.line_start", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"cursor.line_start",  {}})
                     .accepted());
     auto reset = grid.present(runtime);
     ASSERT_TRUE(reset.has_value());
     if (!reset) return;
-    ASSERT_EQ(reset->presentation().viewport.firstVisualColumn, std::uint32_t{0});
+    ASSERT_EQ(reset->viewport.firstVisualColumn, std::uint32_t{0});
     std::filesystem::remove_all(root);
 }
 
@@ -2830,7 +2313,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"wide.txt"}}).accepted());
     ssg::ViewportDimensions const dims{80, 24};
 
@@ -2840,33 +2323,33 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     auto off = projectFrame(runtime, dims);
     ASSERT_TRUE(off.has_value());
     if (!off) return;
-    ASSERT_EQ(off->presentation().viewport.totalVisualRows, std::uint32_t{3});
+    ASSERT_EQ(off->viewport.totalVisualRows, std::uint32_t{3});
     std::uint32_t offRowsForLine0 = 0;
-    for (auto const& row : off->presentation().viewport.visibleRows) {
+    for (auto const& row : off->viewport.visibleRows) {
         if (row.logicalLine == 0) ++offRowsForLine0;
     }
     ASSERT_EQ(offRowsForLine0, std::uint32_t{1});  // clipped, not wrapped
 
     // Word wrap ON: the 200-cell line wraps into ceil(200/80) = 3 visual rows, so
     // the total exceeds the OFF total and logical line 0 spans >1 row.
-    ASSERT_TRUE(runtime.dispatch({"view.toggle_word_wrap", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"view.toggle_word_wrap",  {}})
                     .accepted());
     auto on = projectFrame(runtime, dims);
     ASSERT_TRUE(on.has_value());
     if (!on) return;
-    ASSERT_TRUE(on->presentation().viewport.totalVisualRows > 3u);  // wrapped
+    ASSERT_TRUE(on->viewport.totalVisualRows > 3u);  // wrapped
     std::uint32_t onRowsForLine0 = 0;
-    for (auto const& row : on->presentation().viewport.visibleRows) {
+    for (auto const& row : on->viewport.visibleRows) {
         if (row.logicalLine == 0) ++onRowsForLine0;
     }
     ASSERT_EQ(onRowsForLine0, std::uint32_t{3});  // 200 cells / 80 -> 3 rows
     // Wrapped lines never scroll horizontally.
-    ASSERT_TRUE(runtime.dispatch({"cursor.line_end", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"cursor.line_end",  {}})
                     .accepted());
     auto wrappedEnd = projectFrame(runtime, dims);
     ASSERT_TRUE(wrappedEnd.has_value());
     if (!wrappedEnd) return;
-    ASSERT_EQ(wrappedEnd->presentation().viewport.firstVisualColumn, std::uint32_t{0});
+    ASSERT_EQ(wrappedEnd->viewport.firstVisualColumn, std::uint32_t{0});
     std::filesystem::remove_all(root);
 }
 
@@ -2892,12 +2375,12 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
-    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"doc.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch({"view.toggle_word_wrap", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"view.toggle_word_wrap",  {}})
                     .accepted());
     ssg::ViewportDimensions const dims{80, 24};
-    ssg::test::GridTestView grid{ssg::ViewId{1}, dims};
+    ssg::test::GridTestView grid{dims};
     (void)grid.present(runtime);
 
     // Two identical wrap snapshots: the second re-shapes nothing from the
@@ -2911,7 +2394,7 @@ TEST(wordWrapShapingIsCachedUntilTheDocumentRevisionChanges) {
 
     // An edit bumps the document revision, so the whole document is re-shaped:
     // the count jumps well past the cached-snapshot baseline.
-    ASSERT_TRUE(runtime.dispatch({"text.insert", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"text.insert",
                                   ssg::TextInputArguments{"z"}})
                     .accepted());
     ssg::GraphemeLayout::resetCellRunCalls();
@@ -2947,13 +2430,13 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
     ssg::ViewportDimensions const dims{80, 24};
 
     auto navSegmentations = [&](std::string const& file) -> std::uint64_t {
-        ssg::test::GridTestView grid{ssg::ViewId{1}, dims};
-        (void)runtime.dispatch({"file.open", runtime.revision(), file});
+        ssg::test::GridTestView grid{dims};
+        (void)runtime.dispatch({"file.open",  file});
         (void)grid.present(runtime);
         ssg::GraphemeLayout::resetCellRunCalls();
         for (int i = 0; i < 4; ++i) {
             (void)grid.dispatch(
-                runtime, {"cursor.line_down", runtime.revision(), {}});
+                runtime, {"cursor.line_down",  {}});
         }
         return ssg::GraphemeLayout::cellRunCalls();
     };
@@ -2978,14 +2461,14 @@ std::unique_ptr<ssg::EditorSession> gotoLineRuntime() {
         {root / "workspace", root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.session);
-    (void)runtime->dispatch({"file.open", runtime->revision(), std::string{"lines.txt"}});
+    (void)runtime->dispatch({"file.open",  std::string{"lines.txt"}});
     return runtime;
 }
 
 std::uint32_t gotoCaretLine(ssg::EditorSession& runtime) {
     auto snapshot = projectFrame(runtime, ssg::ViewportDimensions{80, 24});
     if (!snapshot) return 0;
-    return snapshot->semantic().sections().selection.primary().active.line.value();
+    return snapshot->selections.primary().active.line.value();
 }
 
 TEST(gotoLineClampsToTheOneBasedLineRange) {
@@ -2994,36 +2477,36 @@ TEST(gotoLineClampsToTheOneBasedLineRange) {
     if (!runtime) return;
     // "3" is 1-based, so the caret lands on line index 2.
     ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line", runtime->revision(), std::string{"3"}})
+                    ->dispatch({"goto.line",  std::string{"3"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 2U);
     // A number past the end clamps to the last line (index 4).
     ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line", runtime->revision(), std::string{"999"}})
+                    ->dispatch({"goto.line",  std::string{"999"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 4U);
     // "1" is the first line.
     ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line", runtime->revision(), std::string{"1"}})
+                    ->dispatch({"goto.line",  std::string{"1"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 0U);
     // Below the range clamps to the first line rather than failing: "0" and a
     // negative both go to line 1 (index 0). Move off line 0 between each so a
     // no-op could not masquerade as a successful clamp.
     ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line", runtime->revision(), std::string{"4"}})
+                    ->dispatch({"goto.line",  std::string{"4"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 3U);
     ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line", runtime->revision(), std::string{"0"}})
+                    ->dispatch({"goto.line",  std::string{"0"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 0U);
     ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line", runtime->revision(), std::string{"4"}})
+                    ->dispatch({"goto.line",  std::string{"4"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 3U);
     ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line", runtime->revision(), std::string{"-7"}})
+                    ->dispatch({"goto.line",  std::string{"-7"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 0U);
 }
@@ -3033,12 +2516,12 @@ TEST(gotoLineRejectsNonNumericInput) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line", runtime->revision(), std::string{"3"}})
+                    ->dispatch({"goto.line",  std::string{"3"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 2U);
     for (const auto* bad : {"abc", "2x", "1.5", ""}) {
         ASSERT_FALSE(runtime
-                         ->dispatch({"goto.line", runtime->revision(),
+                         ->dispatch({"goto.line",
                                      std::string{bad}})
                          .accepted());
     }
@@ -3051,20 +2534,20 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     ASSERT_TRUE(runtime
-                    ->dispatch({"goto.line", runtime->revision(), {}})
+                    ->dispatch({"goto.line",  {}})
                     .accepted());
-    auto snapshot = runtime->snapshot();
+    auto snapshot = ssg::test::projectGridFrame(*runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().promptStatus.activeKind,
+    ASSERT_EQ(snapshot->promptStatus.activeKind,
               std::optional{ssg::PromptKind::CommandArgument});
     // The generic prompt round-trip re-dispatches goto.line with the typed value.
     ASSERT_TRUE(runtime
-                    ->dispatch({"prompt.update_value", runtime->revision(),
+                    ->dispatch({"prompt.update_value",
                                 ssg::PromptValueArguments{0, "4"}})
                     .accepted());
     ASSERT_TRUE(runtime
-                    ->dispatch({"prompt.submit", runtime->revision(), {}})
+                    ->dispatch({"prompt.submit",  {}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 3U);
 }
@@ -3072,13 +2555,10 @@ TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
 } // namespace
 
 SSG_TEST_SUITE(test_session_navigation) {
-    RUN(searchTreeDiffAndFollowSectionsUseRuntimeState);
     RUN(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow);
     RUN(followPauseQueuesMultipleChangesAndResumeAdoptsTheNewest);
     RUN(gitDiffScanUpdatesDiffAndRejectsStaleBatches);
     RUN(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision);
-    RUN(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan);
-    RUN(gitStatusSurvivesDetailedDiffWorkLimit);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
@@ -3113,11 +2593,10 @@ SSG_TEST_SUITE(test_session_pickers) {
 
 SSG_TEST_SUITE(test_session_interaction) {
     RUN(simpleSemanticInputsLowerThroughAuthoritativeTransactions);
-    RUN(resolvedSelectionInputRejectsEveryStaleOrMalformedIdentity);
+    RUN(resolvedSelectionInputRejectsMalformedModelIdentity);
     RUN(documentPointerInputOwnsSelectionGesturePolicy);
     RUN(documentEdgeMovesResolveThroughPresenterAndReveal);
     RUN(documentEdgeContinuationPreservesAdditiveBaseline);
-    RUN(everySemanticPointerRouteHasAnAuthoritativeKeyboardPath);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -16,7 +16,7 @@ using ssg::LspFeaturePublishResult;
 using ssg::LspPosition;
 using ssg::LspRange;
 using ssg::LspSyncClient;
-using ssg::Revision;
+using std::uint64_t;
 using ssg::test::FakeLspServer;
 
 std::string fixture(std::string_view name) {
@@ -32,7 +32,7 @@ void ready(LspSyncClient& client, FakeLspServer& server,
     server.queue_payload(ssg::test::response(1, "{\"capabilities\":{}}"));
     ASSERT_TRUE(client.poll().accepted());
     ASSERT_TRUE(client.openDocument("file:///workspace/main.cpp", "cpp",
-                                     Revision{1}, std::move(text))
+                                     std::uint64_t{1}, std::move(text))
                     .accepted());
 }
 
@@ -43,7 +43,7 @@ TEST(requestUsesTheExactSynchronizedSnapshotAndUtf16Position) {
     LspFeatureController features{client};
 
     const auto request = features.requestCompletion(
-        "file:///workspace/main.cpp", Revision{1}, ByteOffset{5});
+        "file:///workspace/main.cpp", std::uint64_t{1}, ByteOffset{5});
     ASSERT_TRUE(request.accepted());
     const auto& payload = server.received_payloads().back();
     ASSERT_TRUE(payload.find("\"method\":\"textDocument/completion\"") !=
@@ -59,10 +59,10 @@ TEST(completionResultsAreSortedAndAcceptTheSelectedEdit) {
     LspFeatureController features{client};
 
     ASSERT_TRUE(features.requestCompletion("file:///workspace/main.cpp",
-                                            Revision{1}, ByteOffset{1})
+                                            std::uint64_t{1}, ByteOffset{1})
                     .accepted());
     server.queue_payload(fixture("completion.json"));
-    const auto published = features.poll(Revision{1});
+    const auto published = features.poll(std::uint64_t{1});
     ASSERT_TRUE(published.accepted());
     ASSERT_EQ(published.publications.front().result,
               LspFeaturePublishResult::Accepted);
@@ -89,10 +89,10 @@ TEST(nullCompletionResultIsAnAcceptedEmptyList) {
     LspFeatureController features{client};
 
     const auto request = features.requestCompletion(
-        "file:///workspace/main.cpp", Revision{1}, ByteOffset{0});
+        "file:///workspace/main.cpp", std::uint64_t{1}, ByteOffset{0});
     ASSERT_TRUE(request.accepted());
     server.queue_payload(ssg::test::response(request.requestId, "null"));
-    const auto published = features.poll(Revision{1});
+    const auto published = features.poll(std::uint64_t{1});
     ASSERT_TRUE(published.accepted());
     ASSERT_EQ(published.publications.front().result,
               LspFeaturePublishResult::Accepted);
@@ -108,16 +108,16 @@ TEST(staleAndCancelledResultsDoNotPublishState) {
     LspFeatureController features{client};
 
     ASSERT_TRUE(features.requestHover("file:///workspace/main.cpp",
-                                       Revision{1}, ByteOffset{0})
+                                       std::uint64_t{1}, ByteOffset{0})
                     .accepted());
     server.queue_payload(fixture("hover.json"));
-    const auto stale = features.poll(Revision{2});
+    const auto stale = features.poll(std::uint64_t{2});
     ASSERT_EQ(stale.publications.front().result,
               LspFeaturePublishResult::StaleRevision);
     ASSERT_FALSE(features.viewState().hover.has_value());
 
     ASSERT_TRUE(features.requestHover("file:///workspace/main.cpp",
-                                       Revision{1}, ByteOffset{0})
+                                       std::uint64_t{1}, ByteOffset{0})
                     .accepted());
     features.dismissHover();
     auto late = fixture("hover.json");
@@ -126,7 +126,7 @@ TEST(staleAndCancelledResultsDoNotPublishState) {
     late.replace(late.find(marker), marker.size(),
                  "\"id\":" + std::to_string(id));
     server.queue_payload(std::move(late));
-    const auto cancelled = features.poll(Revision{1});
+    const auto cancelled = features.poll(std::uint64_t{1});
     ASSERT_EQ(cancelled.publications.front().result,
               LspFeaturePublishResult::Cancelled);
     ASSERT_FALSE(features.viewState().hover.has_value());
@@ -140,15 +140,15 @@ TEST(successfulHoverAndInvalidRequestAreFailureAtomic) {
 
     const auto before = features.viewState();
     ASSERT_FALSE(features.requestHover("file:///workspace/missing.cpp",
-                                        Revision{1}, ByteOffset{0})
+                                        std::uint64_t{1}, ByteOffset{0})
                      .accepted());
     ASSERT_EQ(features.viewState(), before);
 
     ASSERT_TRUE(features.requestHover("file:///workspace/main.cpp",
-                                       Revision{1}, ByteOffset{0})
+                                       std::uint64_t{1}, ByteOffset{0})
                     .accepted());
     server.queue_payload(fixture("hover.json"));
-    ASSERT_TRUE(features.poll(Revision{1}).accepted());
+    ASSERT_TRUE(features.poll(std::uint64_t{1}).accepted());
     ASSERT_TRUE(features.viewState().hover.has_value());
     ASSERT_EQ(features.viewState().hover->contents,
               std::string{"**symbol** documentation"});
@@ -161,24 +161,24 @@ TEST(malformedAndServerErrorResponsesAreCorrelatedAndBounded) {
     LspFeatureController features{client};
 
     const auto malformedRequest = features.requestCompletion(
-        "file:///workspace/main.cpp", Revision{1}, ByteOffset{0});
+        "file:///workspace/main.cpp", std::uint64_t{1}, ByteOffset{0});
     ASSERT_TRUE(malformedRequest.accepted());
     server.queue_payload(ssg::test::response(
         malformedRequest.requestId, R"({"items":[{"detail":"no label"}]})"));
-    const auto malformed = features.poll(Revision{1});
+    const auto malformed = features.poll(std::uint64_t{1});
     ASSERT_EQ(malformed.publications.front().result,
               LspFeaturePublishResult::MalformedResponse);
     ASSERT_FALSE(features.viewState().completion.loading);
     ASSERT_TRUE(features.viewState().completion.items.empty());
 
     const auto errorRequest = features.requestHover(
-        "file:///workspace/main.cpp", Revision{1}, ByteOffset{0});
+        "file:///workspace/main.cpp", std::uint64_t{1}, ByteOffset{0});
     ASSERT_TRUE(errorRequest.accepted());
     server.queue_payload(
         "{\"jsonrpc\":\"2.0\",\"id\":" +
         std::to_string(errorRequest.requestId) +
         ",\"error\":{\"code\":-32603,\"message\":\"failed\"}}");
-    const auto error = features.poll(Revision{1});
+    const auto error = features.poll(std::uint64_t{1});
     ASSERT_TRUE(error.accepted());
     ASSERT_EQ(error.publications.front().result,
               LspFeaturePublishResult::ServerError);
@@ -192,13 +192,13 @@ TEST(supersededCompletionResponseCannotReplaceTheNewerResult) {
     LspFeatureController features{client};
 
     const auto first = features.requestCompletion(
-        "file:///workspace/main.cpp", Revision{1}, ByteOffset{0});
+        "file:///workspace/main.cpp", std::uint64_t{1}, ByteOffset{0});
     const auto second = features.requestCompletion(
-        "file:///workspace/main.cpp", Revision{1}, ByteOffset{1});
+        "file:///workspace/main.cpp", std::uint64_t{1}, ByteOffset{1});
     ASSERT_TRUE(first.accepted());
     ASSERT_TRUE(second.accepted());
     server.queue_payload(ssg::test::response(first.requestId, "[]"));
-    const auto old = features.poll(Revision{1});
+    const auto old = features.poll(std::uint64_t{1});
     ASSERT_EQ(old.publications.front().result,
               LspFeaturePublishResult::Superseded);
     ASSERT_TRUE(features.viewState().completion.loading);
@@ -208,7 +208,7 @@ TEST(supersededCompletionResponseCannotReplaceTheNewerResult) {
     completion.replace(completion.find(marker), marker.size(),
                        "\"id\":" + std::to_string(second.requestId));
     server.queue_payload(std::move(completion));
-    ASSERT_TRUE(features.poll(Revision{1}).accepted());
+    ASSERT_TRUE(features.poll(std::uint64_t{1}).accepted());
     ASSERT_EQ(features.viewState().completion.items[0].label,
               std::string{"alpha"});
 }
@@ -220,10 +220,10 @@ TEST(definitionAndReferencesPublishUserNavigationTargets) {
     LspFeatureController features{client};
 
     ASSERT_TRUE(features.requestDefinition("file:///workspace/main.cpp",
-                                            Revision{1}, ByteOffset{0})
+                                            std::uint64_t{1}, ByteOffset{0})
                     .accepted());
     server.queue_payload(fixture("definition.json"));
-    ASSERT_TRUE(features.poll(Revision{1}).accepted());
+    ASSERT_TRUE(features.poll(std::uint64_t{1}).accepted());
     ASSERT_EQ(features.viewState().navigation.targets.size(), std::size_t{1});
     ASSERT_EQ(features.viewState().navigation.targets[0].uri,
               std::string{"file:///workspace/definition.cpp"});
@@ -231,10 +231,10 @@ TEST(definitionAndReferencesPublishUserNavigationTargets) {
     ASSERT_TRUE(features.viewState().navigation.revealPrimaryCaret);
 
     ASSERT_TRUE(features.requestReferences("file:///workspace/main.cpp",
-                                            Revision{1}, ByteOffset{0})
+                                            std::uint64_t{1}, ByteOffset{0})
                     .accepted());
     server.queue_payload(fixture("references.json"));
-    ASSERT_TRUE(features.poll(Revision{1}).accepted());
+    ASSERT_TRUE(features.poll(std::uint64_t{1}).accepted());
     ASSERT_EQ(features.viewState().navigation.targets.size(), std::size_t{2});
     ASSERT_EQ(features.viewState().navigation.selectedIndex,
               std::optional<std::size_t>{0});

@@ -484,7 +484,7 @@ bool LanguageId::isPlainText() const noexcept {
 }
 
 SyntaxParseRequest::SyntaxParseRequest(
-    Revision revision, LanguageId language, std::string text,
+    std::uint64_t revision, LanguageId language, std::string text,
     SyntaxParseHandle priorParse, std::vector<SyntaxEdit> edits)
     : revision_(revision),
       language_(std::move(language)),
@@ -502,7 +502,7 @@ void SyntaxParseRequest::cancel() const noexcept {
 }
 
 SyntaxViewState::SyntaxViewState(
-    Revision revision, LanguageId language, std::uint64_t textBytes,
+    std::uint64_t revision, LanguageId language, std::uint64_t textBytes,
     std::vector<SyntaxSpan> spans, std::vector<SyntaxBracketPair> bracketPairs,
     std::vector<UnmatchedBracket> unmatchedBrackets,
     std::vector<CommentToken> commentTokens,
@@ -519,7 +519,7 @@ SyntaxViewState::SyntaxViewState(
       indentation_(std::move(indentation)) {}
 
 SyntaxViewState SyntaxViewState::plainText(
-    Revision revision, LanguageId language, std::string_view text,
+    std::uint64_t revision, LanguageId language, std::string_view text,
     std::uint32_t tabWidth) {
     if (tabWidth == 0) {
         throw std::invalid_argument{"tab width must be positive"};
@@ -541,7 +541,7 @@ SyntaxViewState SyntaxViewState::plainText(
 }
 
 SyntaxViewState SyntaxViewState::fromParse(
-    Revision revision, LanguageId language, std::string_view text,
+    std::uint64_t revision, LanguageId language, std::string_view text,
     const SyntaxParseOutput& output, const SyntaxConfig& config) {
     if (config.tabWidth == 0) {
         throw std::invalid_argument{"tab width must be positive"};
@@ -597,7 +597,7 @@ SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
     : parser_(std::move(parser)),
       config_(config),
       viewState_(SyntaxViewState::plainText(
-          Revision{0}, LanguageId::plainText(), {}, config.tabWidth)) {
+          std::uint64_t{0}, LanguageId::plainText(), {}, config.tabWidth)) {
     // A real Tree-sitter grammar is only present when a parser is injected; the
     // plain-text fallback (parser == nullptr) constructs no grammar, so it is not
     // counted by the startup audit.
@@ -627,7 +627,7 @@ bool SyntaxModel::canIncrementallyParse(
 }
 
 SyntaxParseResult SyntaxModel::parse(
-    Revision revision, LanguageId language, std::string text,
+    std::uint64_t revision, LanguageId language, std::string text,
     std::vector<SyntaxEdit> edits) {
     auto prepared = request(revision, std::move(language), std::move(text),
                             std::move(edits));
@@ -640,7 +640,7 @@ SyntaxParseResult SyntaxModel::parse(
 }
 
 SyntaxParseRequestResult SyntaxModel::request(
-    Revision revision, LanguageId language, std::string text,
+    std::uint64_t revision, LanguageId language, std::string text,
     std::vector<SyntaxEdit> edits) {
     if (revision <= viewState_.revision() ||
         (pending_ && revision <= pending_->revision())) {

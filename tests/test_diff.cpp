@@ -81,7 +81,7 @@ TEST(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines) {
          .path = "src/file.cpp",
         .baselineContent = fixture("tracked.baseline"),
          .workingContent = fixture("tracked.target")},
-        "index-a", Revision{1});
+        "index-a", std::uint64_t{1});
 
     ASSERT_TRUE(result.accepted());
     const auto& view = onlyFile(model);
@@ -99,7 +99,7 @@ TEST(modifiedLineMarksOnlyChangedWordTokens) {
                          .path = "words.cpp",
                         .baselineContent = "int foo = 1;\n",
                          .workingContent = "int foo = 42;\n"},
-                        "index", Revision{1})
+                        "index", std::uint64_t{1})
                     .accepted());
 
     const auto& changes = onlyFile(model).changedLines;
@@ -124,7 +124,7 @@ TEST(wordDiffWorkLimitIsFailureAtomic) {
                        .path = "words.cpp",
                        .baselineContent = "one two\n",
                        .workingContent = "three four\n"},
-                      "index", Revision{1})
+                      "index", std::uint64_t{1})
                   .error,
               DiffError::WorkLimitExceeded);
     ASSERT_EQ(model.viewState(), before);
@@ -138,7 +138,7 @@ TEST(wordMarksUseStableByteRangesForInsertionAndUtf8) {
                          .path = "insertion.cpp",
                          .baselineContent = "int foo;\n",
                          .workingContent = "int new foo;\n"},
-                        "index", Revision{1})
+                        "index", std::uint64_t{1})
                     .accepted());
     const auto& inserted = onlyFile(insertion).changedLines.front();
     ASSERT_EQ(inserted.targetAddedWordRanges,
@@ -153,7 +153,7 @@ TEST(wordMarksUseStableByteRangesForInsertionAndUtf8) {
                          .path = "utf8.txt",
                          .baselineContent = "\xf0\x9f\x98\x80 x\n",
                          .workingContent = "\xf0\x9f\x98\x80 y\n"},
-                        "index", Revision{1})
+                        "index", std::uint64_t{1})
                     .accepted());
     const auto& changed = onlyFile(utf8).changedLines.front();
     ASSERT_EQ(changed.baselineRemovedWordRanges,
@@ -169,7 +169,7 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                         {.id = DiffFileId{"untracked"},
                          .path = "new.txt",
                          .workingContent = fixture("untracked.target")},
-                        "index-a", Revision{1})
+                        "index-a", std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(normalized(onlyFile(untracked)),
               fixtureChanges("untracked.changes"));
@@ -182,7 +182,7 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                          .previousPath = std::filesystem::path{"old-name.txt"},
                          .baselineContent = fixture("tracked.baseline"),
                          .workingContent = fixture("tracked.target")},
-                        "index-a", Revision{1})
+                        "index-a", std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(onlyFile(renamed).id, DiffFileId{"stable"});
     ASSERT_EQ(onlyFile(renamed).previousPath,
@@ -194,7 +194,7 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                         {.id = DiffFileId{"deleted"},
                          .path = "gone.txt",
                          .baselineContent = fixture("delete.baseline")},
-                        "index-a", Revision{1})
+                        "index-a", std::uint64_t{1})
                     .accepted());
     ASSERT_TRUE(onlyFile(removed).deleted);
     ASSERT_EQ(normalized(onlyFile(removed)),
@@ -208,7 +208,7 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                          .path = "new-name.txt",
                          .baselineContent = fixture("tracked.target"),
                          .workingContent = fixture("tracked.target")},
-                        "index-b", Revision{2})
+                        "index-b", std::uint64_t{2})
                     .accepted());
     ASSERT_TRUE(onlyFile(renamed).hunks.empty());
     ASSERT_EQ(onlyFile(renamed).baselineIdentity, std::string{"index-b"});
@@ -221,7 +221,7 @@ TEST(gitFileStatusIsComputedWithDeterministicPrecedence) {
                         {.id = DiffFileId{"added"},
                          .path = "added.txt",
                          .workingContent = "new\n"},
-                        "head", Revision{1})
+                        "head", std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(onlyFile(added).status, DiffFileStatus::Added);
 
@@ -232,7 +232,7 @@ TEST(gitFileStatusIsComputedWithDeterministicPrecedence) {
                          .path = "modified.txt",
                          .baselineContent = "old\n",
                          .workingContent = "new\n"},
-                        "head", Revision{1})
+                        "head", std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(onlyFile(modified).status, DiffFileStatus::Modified);
 
@@ -242,7 +242,7 @@ TEST(gitFileStatusIsComputedWithDeterministicPrecedence) {
                         {.id = DiffFileId{"deleted"},
                          .path = "deleted.txt",
                          .baselineContent = "old\n"},
-                        "head", Revision{1})
+                        "head", std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(onlyFile(deleted).status, DiffFileStatus::Deleted);
 
@@ -254,7 +254,7 @@ TEST(gitFileStatusIsComputedWithDeterministicPrecedence) {
                          .previousPath = std::filesystem::path{"old-name.txt"},
                          .baselineContent = "same\n",
                          .workingContent = "same\n"},
-                        "head", Revision{1})
+                        "head", std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(onlyFile(renamed).status, DiffFileStatus::Renamed);
 
@@ -266,7 +266,7 @@ TEST(gitFileStatusIsComputedWithDeterministicPrecedence) {
                          .previousPath = std::filesystem::path{"old-name.txt"},
                          .baselineContent = "old\n",
                          .workingContent = "new\n"},
-                        "head", Revision{1})
+                        "head", std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(onlyFile(renamedModified).status, DiffFileStatus::Renamed);
 
@@ -277,7 +277,7 @@ TEST(gitFileStatusIsComputedWithDeterministicPrecedence) {
                          .path = "new-name.txt",
                          .previousPath = std::filesystem::path{"old-name.txt"},
                          .baselineContent = "old\n"},
-                        "head", Revision{1})
+                        "head", std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(onlyFile(deletedRenamed).status, DiffFileStatus::Deleted);
 
@@ -286,7 +286,7 @@ TEST(gitFileStatusIsComputedWithDeterministicPrecedence) {
                     .updateGitFile(
                         {.id = DiffFileId{"deleted-added"},
                          .path = "edge.txt"},
-                        "head", Revision{1})
+                        "head", std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(onlyFile(deletedAddedLooking).status, DiffFileStatus::Deleted);
 }
@@ -297,7 +297,7 @@ TEST(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete) {
                          {{.id = DiffFileId{"seed"},
                            .path = "old.txt",
                            .content = fixture("tracked.baseline")}},
-                         Revision{1})
+                         std::uint64_t{1})
                     .accepted());
     ASSERT_TRUE(model
                     .applyNonGitEvent(
@@ -307,7 +307,7 @@ TEST(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete) {
                          .previousPath = std::filesystem::path{"old.txt"},
                          .baselineContent = fixture("tracked.baseline"),
                          .targetContent = fixture("tracked.target")},
-                        Revision{2})
+                        std::uint64_t{2})
                     .accepted());
     ASSERT_EQ(onlyFile(model).id, DiffFileId{"seed"});
     ASSERT_EQ(onlyFile(model).previousPath,
@@ -322,7 +322,7 @@ TEST(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete) {
                          .path = "new.txt",
                         .baselineContent = fixture("tracked.baseline"),
                         .targetContent = fixture("tracked.target") + "tail\n"},
-                        Revision{3})
+                        std::uint64_t{3})
                     .accepted());
     ASSERT_EQ(reconstruct(fixture("tracked.baseline"), onlyFile(model).hunks),
               fixture("tracked.target") + "tail\n");
@@ -334,7 +334,7 @@ TEST(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete) {
                          .id = DiffFileId{"seed"},
                         .path = "new.txt",
                         .baselineContent = fixture("tracked.baseline")},
-                        Revision{4})
+                        std::uint64_t{4})
                     .accepted());
     ASSERT_TRUE(onlyFile(model).deleted);
     ASSERT_EQ(diffOpenFile(onlyFile(model)).path,
@@ -347,7 +347,7 @@ TEST(nonGitStatusUsesSourceAgnosticClassification) {
                          {{.id = DiffFileId{"seed"},
                            .path = "seed.txt",
                            .content = "seed\n"}},
-                         Revision{1})
+                         std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(onlyFile(seeded).status, DiffFileStatus::Added);
 
@@ -359,7 +359,7 @@ TEST(nonGitStatusUsesSourceAgnosticClassification) {
                          .path = "created.txt",
                          .baselineContent = "",
                          .targetContent = std::string{"new\n"}},
-                        Revision{1})
+                        std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(onlyFile(created).status, DiffFileStatus::Added);
 
@@ -371,7 +371,7 @@ TEST(nonGitStatusUsesSourceAgnosticClassification) {
                          .previousPath = std::filesystem::path{"created.txt"},
                          .baselineContent = "new\n",
                          .targetContent = std::string{"new\n"}},
-                        Revision{2})
+                        std::uint64_t{2})
                     .accepted());
     ASSERT_EQ(onlyFile(created).status, DiffFileStatus::Renamed);
 
@@ -383,7 +383,7 @@ TEST(nonGitStatusUsesSourceAgnosticClassification) {
                          .previousPath = std::filesystem::path{"stale-old.txt"},
                          .baselineContent = "new\n",
                          .targetContent = std::string{"changed\n"}},
-                        Revision{3})
+                        std::uint64_t{3})
                     .accepted());
     ASSERT_EQ(onlyFile(created).status, DiffFileStatus::Modified);
 
@@ -393,7 +393,7 @@ TEST(nonGitStatusUsesSourceAgnosticClassification) {
                          .id = DiffFileId{"created"},
                          .path = "renamed.txt",
                          .baselineContent = "changed\n"},
-                        Revision{4})
+                        std::uint64_t{4})
                     .accepted());
     ASSERT_EQ(onlyFile(created).status, DiffFileStatus::Deleted);
 }
@@ -405,7 +405,7 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                          {{.id = DiffFileId{"seed"},
                            .path = "a.txt",
                            .content = "a\n"}},
-                         Revision{1})
+                         std::uint64_t{1})
                     .accepted());
     const auto before = model.viewState();
 
@@ -416,7 +416,7 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                        .path = "a.txt",
                       .baselineContent = "a\n",
                       .targetContent = "b\n"},
-                      Revision{1})
+                      std::uint64_t{1})
                   .error,
               DiffError::StaleRevision);
     ASSERT_EQ(model.viewState(), before);
@@ -427,7 +427,7 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                        .id = DiffFileId{"missing"},
                       .path = "missing.txt",
                       .baselineContent = "a\n"},
-                      Revision{2})
+                      std::uint64_t{2})
                   .error,
               DiffError::UnknownFile);
     ASSERT_EQ(model.viewState(), before);
@@ -438,7 +438,7 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                        .path = "a.txt",
                       .baselineContent = "a\n",
                        .workingContent = "b\n"},
-                      "index", Revision{2})
+                      "index", std::uint64_t{2})
                   .error,
               DiffError::DuplicateFile);
     ASSERT_EQ(model.viewState(), before);
@@ -449,7 +449,7 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                        .path = "git.txt",
                        .baselineContent = "a\n",
                        .workingContent = "b\n"},
-                      "", Revision{2})
+                      "", std::uint64_t{2})
                   .error,
               DiffError::BaselineIdentityRequired);
     ASSERT_EQ(model.viewState(), before);
@@ -460,7 +460,7 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                        .id = DiffFileId{"seed"},
                       .path = "a.txt",
                       .baselineContent = ""},
-                      Revision{2})
+                      std::uint64_t{2})
                   .error,
               DiffError::ContentRequired);
     ASSERT_EQ(model.viewState(), before);
@@ -472,7 +472,7 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                        .path = "a.txt",
                       .baselineContent = "a\n",
                       .targetContent = "b\nc\nd\ne\nf\n"},
-                      Revision{2})
+                      std::uint64_t{2})
                   .error,
               DiffError::WorkLimitExceeded);
     ASSERT_EQ(model.viewState(), before);
@@ -486,7 +486,7 @@ TEST(hunkNavigationWrapsAroundChanges) {
                          .path = "file.txt",
                          .baselineContent = "a\nsame\nb\n",
                          .workingContent = "A\nsame\nB\n"},
-                        "index", Revision{1})
+                        "index", std::uint64_t{1})
                     .accepted());
     const auto& file = onlyFile(model);
     ASSERT_EQ(nextDiffHunk(file, std::nullopt), std::optional<std::size_t>{0});
@@ -505,24 +505,17 @@ TEST(documentDiffLookupUsesIdentityOnly) {
     fileA.path = "a.cpp";
     DiffFileView fileB{DiffFileId{"b.cpp"}};
     fileB.path = "b.cpp";
-    DiffViewState diff{Revision{8}, {fileA, fileB}};
+    DiffViewState diff{std::uint64_t{8}, {fileA, fileB}};
 
-    DocumentViewState document{Revision{8}, "x", ByteOffset{0}};
-    document.diffFileIdentity = std::string{"b.cpp"};
-    auto const selected = diff.fileForDocument(document);
+    auto const selected =
+        diff.fileForIdentity(std::optional<std::string>{"b.cpp"});
     ASSERT_TRUE(selected.has_value());
     ASSERT_EQ(selected->get().id, DiffFileId{"b.cpp"});
 
-    DocumentViewState missing{Revision{8}, "x", ByteOffset{0}};
-    missing.diffFileIdentity = std::string{"missing.cpp"};
-    ASSERT_FALSE(diff.fileForDocument(missing).has_value());
-
-    DocumentViewState revisionMismatch{Revision{7}, "x", ByteOffset{0}};
-    revisionMismatch.diffFileIdentity = std::string{"b.cpp"};
-    auto const matchedWithDifferentRevision =
-        diff.fileForDocument(revisionMismatch);
-    ASSERT_TRUE(matchedWithDifferentRevision.has_value());
-    ASSERT_EQ(matchedWithDifferentRevision->get().id, DiffFileId{"b.cpp"});
+    ASSERT_FALSE(
+        diff.fileForIdentity(std::optional<std::string>{"missing.cpp"})
+            .has_value());
+    ASSERT_FALSE(diff.fileForIdentity(std::nullopt).has_value());
 }
 
 TEST(gitRemoveFileRejectsStaleOrEqualRevisionAndRemovesOnNextRevision) {
@@ -533,18 +526,18 @@ TEST(gitRemoveFileRejectsStaleOrEqualRevisionAndRemovesOnNextRevision) {
                          .path = "tracked.txt",
                          .baselineContent = "a\n",
                          .workingContent = "b\n"},
-                        "head-a", Revision{1})
+                        "head-a", std::uint64_t{1})
                     .accepted());
     ASSERT_EQ(model.viewState().files.size(), std::size_t{1});
 
     const auto before = model.viewState();
-    ASSERT_EQ(model.removeFile(DiffFileId{"tracked"}, Revision{1}).error,
+    ASSERT_EQ(model.removeFile(DiffFileId{"tracked"}, std::uint64_t{1}).error,
               DiffError::StaleRevision);
     ASSERT_EQ(model.viewState(), before);
 
-    ASSERT_TRUE(model.removeFile(DiffFileId{"tracked"}, Revision{2}).accepted());
+    ASSERT_TRUE(model.removeFile(DiffFileId{"tracked"}, std::uint64_t{2}).accepted());
     ASSERT_TRUE(model.viewState().files.empty());
-    ASSERT_EQ(model.viewState().revision, Revision{2});
+    ASSERT_EQ(model.viewState().revision, std::uint64_t{2});
 }
 
 TEST(gitScanClassificationDistinguishesGitFromNonGitEntries) {
@@ -558,7 +551,7 @@ TEST(gitScanClassificationDistinguishesGitFromNonGitEntries) {
                                     .path = "src/file.cpp",
                                     .baselineContent = std::string{"a\n"},
                                     .workingContent = std::string{"b\n"}},
-                                   "index-a", Revision{1})
+                                   "index-a", std::uint64_t{1})
                     .accepted());
     ASSERT_TRUE(model
                     .applyNonGitEvent({NonGitDiffEventKind::Create,
@@ -566,7 +559,7 @@ TEST(gitScanClassificationDistinguishesGitFromNonGitEntries) {
                                        "note.txt", std::nullopt,
                                        std::string{"disk\n"},
                                        std::string{"draft\n"}},
-                                      Revision{2})
+                                      std::uint64_t{2})
                     .accepted());
 
     ASSERT_TRUE(model.isGitFile(DiffFileId{"tracked"}));

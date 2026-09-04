@@ -27,7 +27,7 @@ struct HistoryUnit {
     bool coalescible;
 };
 
-HistoryResult failure(HistoryError error, Revision revision,
+HistoryResult failure(HistoryError error, std::uint64_t revision,
                       std::string message,
                       DocumentError documentError = DocumentError::None) {
     return {error, documentError, revision, std::nullopt, std::move(message)};
@@ -164,7 +164,7 @@ struct DocumentHistory::Impl {
     HistoryConfig config;
     std::vector<HistoryUnit> undo;
     std::vector<HistoryUnit> redo;
-    std::optional<Revision> expectedRevision;
+    std::optional<std::uint64_t> expectedRevision;
     std::uint64_t retained{0};
     bool barrier{true};
 
@@ -284,7 +284,7 @@ HistoryResult DocumentHistory::undo(Document& document) {
     }
 
     auto& unit = impl_->undo.back();
-    const auto revision = document.revision().value();
+    const auto revision = document.revision();
     if (unit.steps.size() >
         std::numeric_limits<std::uint64_t>::max() - revision) {
         return failure(HistoryError::RevisionExhausted, document.revision(),
@@ -323,7 +323,7 @@ HistoryResult DocumentHistory::redo(Document& document) {
     }
 
     auto& unit = impl_->redo.back();
-    const auto revision = document.revision().value();
+    const auto revision = document.revision();
     if (unit.steps.size() >
         std::numeric_limits<std::uint64_t>::max() - revision) {
         return failure(HistoryError::RevisionExhausted, document.revision(),

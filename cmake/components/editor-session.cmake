@@ -1,26 +1,28 @@
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/EditorSession.cpp
-    ${SSG_SOURCE_DIR}/src/ViewportProjection.cpp
     ${SSG_SOURCE_DIR}/src/runtime/editing.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/input_routing.cpp
     ${SSG_SOURCE_DIR}/src/runtime/files.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/git_diff_worker.cpp
     ${SSG_SOURCE_DIR}/src/runtime/help.cpp
     ${SSG_SOURCE_DIR}/src/runtime/language_services.cpp
     ${SSG_SOURCE_DIR}/src/runtime/navigation.cpp
     ${SSG_SOURCE_DIR}/src/runtime/presentation.cpp
-    ${SSG_SOURCE_DIR}/src/runtime/snapshot.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/presentation_projection.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/ui_tree_population.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
-        NAME test_session_snapshot
-        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_snapshot.cpp
-        SYMBOL test_session_snapshot)
-    ssg_test_compile_definitions(test_session_snapshot PRIVATE
+        NAME test_session_presentation
+        ENTRY ${SSG_SOURCE_DIR}/tests/session/test_session_presentation.cpp
+        SYMBOL test_session_presentation)
+    ssg_test_compile_definitions(test_session_presentation PRIVATE
         SSG_SOURCE_SCAN_ROOT="${SSG_SOURCE_DIR}"
     )
-    ssg_test_include_directories(test_session_snapshot PRIVATE
+    ssg_test_include_directories(test_session_presentation PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    ssg_test_link_libraries(test_session_snapshot PRIVATE ssg_tui_objects)
+    ssg_test_link_libraries(test_session_presentation PRIVATE ssg_tui_objects)
 
     ssg_add_test_suite(
         NAME test_syntax_injection

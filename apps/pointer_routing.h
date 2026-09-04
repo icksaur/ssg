@@ -116,7 +116,6 @@ struct PointerDispatch {
 // The snapshot-derived data a pointer event needs, resolved by the caller (only
 // the field matching the hit region is populated).
 struct PointerTargets {
-    ssg::Revision observed_revision{0};
     std::optional<ssg::DocumentPosition> document_position;  // an editor hit
     std::optional<ssg::TabId> tab_id;             // a tab hit (tabs[index] id)
     // A picker-row candidate id, plus which picker published it.  The id alone
@@ -146,8 +145,7 @@ struct PointerTargets {
 // the app loop) so the "double-click selects the word, no drag" decision is a
 // pure, unit-tested unit like route_pointer.
 [[nodiscard]] PointerDispatch double_click_dispatch(
-    ssg::DocumentPosition position,
-    ssg::Revision observedRevision = ssg::Revision{0});
+    ssg::DocumentPosition position);
 
 // Route a mouse-wheel event to the scroll it drives for the region under the
 // pointer: the side panel (or its gutter) scrolls the tree, the palette (or its

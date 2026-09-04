@@ -1,7 +1,7 @@
 #pragma once
 
 // The authoritative cell renderer.  ssg::Renderer{}.render turns a
-// SessionSnapshot into a
+// GridPresentation into a
 // deterministic monospace CellGrid: the single place where shell geometry and
 // content become cells. The terminal client translates the grid to its medium;
 // it adds no layout, content, or color.

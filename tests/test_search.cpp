@@ -18,7 +18,7 @@ using namespace ssg;
 
 class FixtureWorkspace final : public SearchWorkspaceSource {
 public:
-    WorkspaceSnapshot snapshot(Revision revision) const override {
+    WorkspaceSnapshot snapshot(std::uint64_t revision) const override {
         return {
             .revision = revision,
             .files = {
@@ -119,7 +119,7 @@ TEST(queryModesAreUnambiguousAndLinesAreValidated) {
 
 TEST(acceptedRankingGoldensMatch) {
     FixtureWorkspace workspace;
-    const auto snapshot = workspace.snapshot(Revision{7});
+    const auto snapshot = workspace.snapshot(std::uint64_t{7});
     std::ifstream fixture{
         std::filesystem::path{SSG_SEARCH_FIXTURE_DIR} / "ranking.tsv"};
     ASSERT_TRUE(fixture.good());
@@ -151,24 +151,24 @@ TEST(cancellationSupersessionAndStaleRevisionAreRejected) {
     FixtureCommands commands;
     SearchController controller{workspace, commands};
 
-    const auto first = controller.beginWorkspaceSearch("#search", Revision{8});
-    const auto second = controller.beginWorkspaceSearch("#cancel", Revision{8});
+    const auto first = controller.beginWorkspaceSearch("#search", std::uint64_t{8});
+    const auto second = controller.beginWorkspaceSearch("#cancel", std::uint64_t{8});
     ASSERT_TRUE(first.cancellation.cancelled());
 
     const auto cancelled = controller.evaluate(first);
     ASSERT_TRUE(cancelled.cancelled);
-    ASSERT_EQ(controller.publish(cancelled, Revision{8}),
+    ASSERT_EQ(controller.publish(cancelled, std::uint64_t{8}),
               SearchPublishResult::Cancelled);
 
     auto superseded = controller.evaluate(second);
     superseded.generation = first.generation;
-    ASSERT_EQ(controller.publish(superseded, Revision{8}),
+    ASSERT_EQ(controller.publish(superseded, std::uint64_t{8}),
               SearchPublishResult::Superseded);
 
     const auto completed = controller.evaluate(second);
-    ASSERT_EQ(controller.publish(completed, Revision{9}),
+    ASSERT_EQ(controller.publish(completed, std::uint64_t{9}),
               SearchPublishResult::StaleRevision);
-    ASSERT_EQ(controller.publish(completed, Revision{8}),
+    ASSERT_EQ(controller.publish(completed, std::uint64_t{8}),
               SearchPublishResult::Accepted);
     ASSERT_EQ(labels(controller.viewState().results),
               std::vector<std::string>{"src/search.cpp:3"});
@@ -217,15 +217,15 @@ TEST(paletteUsesInjectedCatalogAndDispatch) {
     FixtureCommands commands;
     SearchController controller{workspace, commands};
 
-    controller.openPalette(Revision{11});
-    controller.updatePaletteQuery("open f", Revision{12});
+    controller.openPalette(std::uint64_t{11});
+    controller.updatePaletteQuery("open f", std::uint64_t{12});
     ASSERT_TRUE(controller.viewState().paletteOpen);
     ASSERT_EQ(labels(controller.viewState().results),
               std::vector<std::string>{"Open File"});
     ASSERT_EQ(controller.executePalette().accepted, true);
     ASSERT_EQ(commands.executed, std::vector<std::string>{"file.open"});
 
-    controller.closePalette(Revision{13});
+    controller.closePalette(std::uint64_t{13});
     ASSERT_FALSE(controller.executePalette().accepted);
 }
 

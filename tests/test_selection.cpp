@@ -1,8 +1,6 @@
 #include <ssg/Selection.h>
 #include <ssg/DiffModel.h>
 
-#include "selection_commands.h"
-
 #include "reference_editor.h"
 #include "test_helpers.h"
 

@@ -524,7 +524,7 @@ std::optional<std::vector<ParsedOperation>> parseWorkspaceEdit(
 
 struct PlannedDocumentOperation {
     std::string uri;
-    Revision expectedRevision{0};
+    std::uint64_t expectedRevision{0};
     std::string oldText;
     std::string newText;
 };
@@ -612,12 +612,12 @@ bool setRecoveryDocumentRevisions(
         if (inserted) {
             const auto snapshot = documents.snapshot(operation.uri);
             if (!snapshot) return false;
-            found->second = snapshot->revision.value();
+            found->second = snapshot->revision;
         }
         if (found->second == std::numeric_limits<std::uint64_t>::max()) {
             return false;
         }
-        operation.expectedRevision = Revision{found->second++};
+        operation.expectedRevision = std::uint64_t{found->second++};
     }
     return true;
 }
@@ -731,7 +731,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
     }
 
     struct SimulatedDocument {
-        Revision revision{0};
+        std::uint64_t revision{0};
         std::int64_t version = 0;
         std::string text;
     };
@@ -800,7 +800,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
             plan.emplace_back(PlannedDocumentOperation{
                 edit.uri, document->revision, document->text, *updated});
             document->text = std::move(*updated);
-            document->revision = Revision{document->revision.value() + 1};
+            document->revision = std::uint64_t{document->revision + 1};
             ++document->version;
             continue;
         }
@@ -884,7 +884,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
         const auto& edit = std::get<PlannedDocumentOperation>(operation);
         auto [budget, inserted] = documentRevisionBudgets.try_emplace(
             edit.uri,
-            std::pair{edit.expectedRevision.value(), std::uint64_t{0}});
+            std::pair{edit.expectedRevision, std::uint64_t{0}});
         ++budget->second.second;
     }
     for (const auto& [uri, budget] : documentRevisionBudgets) {
@@ -943,7 +943,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
                     LspWorkspaceEditRecoveryKind::RestorePath,
                     file.source.uri,
                     {},
-                    Revision{0},
+                    std::uint64_t{0},
                     {},
                     file.before,
                     true,
@@ -954,7 +954,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
                     LspWorkspaceEditRecoveryKind::RestorePath,
                     file.source.uri,
                     {},
-                    Revision{0},
+                    std::uint64_t{0},
                     {},
                     file.before,
                     false,
@@ -981,7 +981,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
                 LspWorkspaceEditRecoveryKind::RestorePath,
                 file.source.uri,
                 {},
-                Revision{0},
+                std::uint64_t{0},
                 {},
                 file.before,
                 false,
@@ -991,7 +991,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
                 LspWorkspaceEditRecoveryKind::RestorePath,
                 file.source.secondaryUri,
                 {},
-                Revision{0},
+                std::uint64_t{0},
                 {},
                 file.beforeSecondary,
                 false,
@@ -1016,7 +1016,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
             LspWorkspaceEditRecoveryKind::RestorePath,
             file.source.uri,
             {},
-            Revision{0},
+            std::uint64_t{0},
             {},
             file.before,
             false,
@@ -1061,7 +1061,7 @@ void LspWorkspaceEditController::supersede() {
 }
 
 LspRenameRequestResult LspWorkspaceEditController::requestRename(
-    std::string uri, Revision revision, ByteOffset position, std::string newName) {
+    std::string uri, std::uint64_t revision, ByteOffset position, std::string newName) {
     if (newName.empty()) {
         return {0, LspRenameError::InvalidArgument,
                 "LSP rename new name must not be empty"};
@@ -1099,7 +1099,7 @@ LspRenameRequestResult LspWorkspaceEditController::requestRename(
     return {sent.id, LspRenameError::None, {}};
 }
 
-LspRenamePollResult LspWorkspaceEditController::poll(Revision currentRevision) {
+LspRenamePollResult LspWorkspaceEditController::poll(std::uint64_t currentRevision) {
     const auto transport = client_->poll();
     if (!transport.accepted()) {
         return {transport.error, transport.message, {}};

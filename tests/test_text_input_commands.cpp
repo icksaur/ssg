@@ -228,7 +228,7 @@ TEST(boundaryDeletionIsSuccessfulNoop) {
     ASSERT_TRUE(backward.accepted());
     ASSERT_FALSE(backward.transaction.has_value());
     ASSERT_EQ(applyResult(backwardDocument, backward), std::string{"abc"});
-    ASSERT_EQ(backwardDocument.revision(), ssg::Revision{1});
+    ASSERT_EQ(backwardDocument.revision(), std::uint64_t{1});
 
     Document forwardDocument{"abc"};
     auto forward = ssg::TextInputInterpreter{}.apply(

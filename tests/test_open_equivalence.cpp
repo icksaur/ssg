@@ -186,7 +186,7 @@ std::string capture() {
             << " eol=" << endingName(state->encoding.lineEnding)
             << " final_nl=" << (state->encoding.finalNewline ? 1 : 0)
             << " dirty=" << (state->dirty ? 1 : 0)
-            << " revision=" << snapshot.revision.value()
+            << " revision=" << snapshot.revision
             << " mode=" << modeName(snapshot.mode)
             << " texthash=" << hashHex(snapshot.text)
             << " terms=" << terminatorSummary(entry.bytes)

@@ -59,7 +59,7 @@ struct Fixture {
     Fixture() {
         ASSERT_TRUE(diff.seedNonGit(
                             {{ssg::DiffFileId{"note"}, "note.txt", "base\n"}},
-                            ssg::Revision{1})
+                            std::uint64_t{1})
                         .accepted());
     }
 };
@@ -86,7 +86,7 @@ TEST(cleanExternalEditAutoReloadsWithoutRecoveryStatus) {
     std::optional<ssg::JournalDocument> open{document("base\n", false)};
 
     const auto result =
-        fixture.flow.processEvent(input(2, "disk\n"), ssg::Revision{2}, open);
+        fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open);
 
     ASSERT_TRUE(result.accepted());
     ASSERT_FALSE(result.statusPublished);
@@ -104,7 +104,7 @@ TEST(aFailedCleanCommitRaisesTheConflictInsteadOfClearing) {
     // flow must NOT clear to a stale buffer: it stages, sees the commit fail, and
     // raises the conflict (Decision 11's stage->commit->publish for the clean path).
     const auto result = fixture.flow.processEvent(
-        input(2, "disk\n"), ssg::Revision{2}, open, []() { return false; });
+        input(2, "disk\n"), std::uint64_t{2}, open, []() { return false; });
 
     ASSERT_TRUE(result.accepted());
     ASSERT_TRUE(result.statusPublished);
@@ -122,7 +122,7 @@ TEST(aSucceedingCleanCommitAdoptsTheDiskContent) {
 
     bool committed = false;
     const auto result = fixture.flow.processEvent(
-        input(2, "disk\n"), ssg::Revision{2}, open,
+        input(2, "disk\n"), std::uint64_t{2}, open,
         [&]() { committed = true; return true; });
 
     ASSERT_TRUE(committed);
@@ -137,7 +137,7 @@ TEST(dirtyExternalEditPreservesBufferAndPublishesActions) {
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
 
     const auto result =
-        fixture.flow.processEvent(input(2, "disk\n"), ssg::Revision{2}, open);
+        fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open);
     const auto state = fixture.flow.viewState();
 
     ASSERT_TRUE(result.accepted());
@@ -169,7 +169,7 @@ TEST(dirtyExternalEditPreservesBufferAndPublishesActions) {
 TEST(openDiffIsObservationalAndKeepBufferAcknowledgesDisk) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), ssg::Revision{2}, open).accepted());
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open).accepted());
     const auto before = fixture.flow.viewState();
 
     const auto target = fixture.flow.openDiff(ssg::DiffFileId{"note"});
@@ -190,7 +190,7 @@ TEST(openDiffIsObservationalAndKeepBufferAcknowledgesDisk) {
 TEST(reloadIsReversibleAndRecordPrecedesBufferReplacement) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), ssg::Revision{2}, open).accepted());
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open).accepted());
 
     const auto reloaded =
         fixture.flow.reload(ssg::DiffFileId{"note"}, open);
@@ -214,7 +214,7 @@ TEST(ssgSaveAdvancesBaselineWithoutDuplicateStatus) {
     std::optional<ssg::JournalDocument> open{document("saved\n", false)};
 
     const auto saved = fixture.flow.processEvent(
-        input(2, "saved\n", ssg::WatchEventOrigin::SsgSave), ssg::Revision{2}, open);
+        input(2, "saved\n", ssg::WatchEventOrigin::SsgSave), std::uint64_t{2}, open);
 
     ASSERT_TRUE(saved.accepted());
     ASSERT_FALSE(saved.statusPublished);
@@ -228,11 +228,11 @@ TEST(genuineExternalEditIsNotConsumedBySaveCorrelation) {
     ASSERT_TRUE(fixture.flow
                     .processEvent(
                         input(2, "saved\n", ssg::WatchEventOrigin::SsgSave),
-                        ssg::Revision{2}, open)
+                        std::uint64_t{2}, open)
                     .accepted());
 
     const auto external =
-        fixture.flow.processEvent(input(3, "other\n"), ssg::Revision{3}, open);
+        fixture.flow.processEvent(input(3, "other\n"), std::uint64_t{3}, open);
 
     ASSERT_TRUE(external.accepted());
     ASSERT_TRUE(external.statusPublished);
@@ -243,13 +243,13 @@ TEST(genuineExternalEditIsNotConsumedBySaveCorrelation) {
 TEST(staleEventIsFailureAtomic) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), ssg::Revision{2}, open).accepted());
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open).accepted());
     const auto state = fixture.flow.viewState();
     const auto diff = fixture.diff.viewState();
     const auto before = open;
 
     const auto stale =
-        fixture.flow.processEvent(input(2, "stale\n"), ssg::Revision{3}, open);
+        fixture.flow.processEvent(input(2, "stale\n"), std::uint64_t{3}, open);
 
     ASSERT_FALSE(stale.accepted());
     ASSERT_EQ(stale.error, ssg::ExternalModificationError::StaleEvent);
@@ -266,7 +266,7 @@ TEST(diffRejectionDoesNotSuppressDirtyBufferSafetyStatus) {
     ssg::ExternalModificationFlow flow{recovery, diff};
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
 
-    const auto result = flow.processEvent(input(2, "disk\n"), ssg::Revision{2}, open);
+    const auto result = flow.processEvent(input(2, "disk\n"), std::uint64_t{2}, open);
 
     ASSERT_TRUE(result.accepted());
     ASSERT_FALSE(result.diffRouted);
@@ -280,7 +280,7 @@ TEST(aFailedWorkspaceCommitLeavesThePendingActionRaised) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
     ASSERT_TRUE(fixture.flow
-                    .processEvent(input(2, "disk\n"), ssg::Revision{2}, open)
+                    .processEvent(input(2, "disk\n"), std::uint64_t{2}, open)
                     .accepted());
     ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
 
@@ -313,7 +313,7 @@ TEST(aFailedKeepBufferCommitLeavesTheConflictRaised) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
     ASSERT_TRUE(fixture.flow
-                    .processEvent(input(2, "disk\n"), ssg::Revision{2}, open)
+                    .processEvent(input(2, "disk\n"), std::uint64_t{2}, open)
                     .accepted());
     ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
 
@@ -346,7 +346,7 @@ TEST(keepBufferWithNoBaselineAdvancingCommitNeverClears) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
     ASSERT_TRUE(fixture.flow
-                    .processEvent(input(2, "disk\n"), ssg::Revision{2}, open)
+                    .processEvent(input(2, "disk\n"), std::uint64_t{2}, open)
                     .accepted());
     ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
 
@@ -367,11 +367,11 @@ TEST(aRenameRetiresPendingKeyedByThePreviousId) {
     ASSERT_TRUE(fixture.diff
                     .seedNonGit({{ssg::DiffFileId{"note2"}, "renamed.txt",
                                   "base\n"}},
-                                ssg::Revision{2})
+                                std::uint64_t{2})
                     .accepted());
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
     ASSERT_TRUE(fixture.flow
-                    .processEvent(input(3, "disk\n"), ssg::Revision{3}, open)
+                    .processEvent(input(3, "disk\n"), std::uint64_t{3}, open)
                     .accepted());
     ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
 
@@ -385,7 +385,7 @@ TEST(aRenameRetiresPendingKeyedByThePreviousId) {
                                         std::string{"disk2\n"}};
     renameInput.previousId = ssg::DiffFileId{"note"};
     const auto result = fixture.flow.processEvent(std::move(renameInput),
-                                                  ssg::Revision{4}, open);
+                                                  std::uint64_t{4}, open);
 
     ASSERT_TRUE(result.accepted());
     // The old-id pending entry was retired; only the new-id entry remains.
@@ -401,12 +401,12 @@ TEST(theExternalModSelectionFollowsTheListAndSurvivesResolves) {
     ssg::DiffModel diff;
     ASSERT_TRUE(diff.seedNonGit({{ssg::DiffFileId{"a"}, "a.txt", "base\n"},
                                  {ssg::DiffFileId{"b"}, "b.txt", "base\n"}},
-                                ssg::Revision{1})
+                                std::uint64_t{1})
                     .accepted());
     ssg::ExternalModificationFlow flow{recovery, diff};
 
     auto raise = [&](const char* id, const char* path, std::uint64_t sequence,
-                     ssg::Revision revision) {
+                     std::uint64_t revision) {
         std::optional<ssg::JournalDocument> open{
             {ssg::JournalDocumentKey::saved(path), ssg::DocumentMode::Edit, true,
              "buffer\n"}};
@@ -421,10 +421,10 @@ TEST(theExternalModSelectionFollowsTheListAndSurvivesResolves) {
     };
 
     // The section becomes non-empty: the selection homes to the first file.
-    raise("a", "a.txt", 2, ssg::Revision{2});
+    raise("a", "a.txt", 2, std::uint64_t{2});
     ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"a"});
     // Adding a file keeps the selection where it was.
-    raise("b", "b.txt", 3, ssg::Revision{3});
+    raise("b", "b.txt", 3, std::uint64_t{3});
     ASSERT_EQ(flow.viewState().files.size(), 2U);
     ASSERT_TRUE(flow.viewState().selected == ssg::DiffFileId{"a"});
 

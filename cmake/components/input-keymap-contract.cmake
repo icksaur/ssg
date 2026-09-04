@@ -26,13 +26,5 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
 
-    ssg_add_test_suite(
-        NAME test_keymap_single_stroke
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_keymap_single_stroke.cpp
-        SYMBOL test_keymap_single_stroke)
-    ssg_test_link_libraries(test_keymap_single_stroke PRIVATE ssg_core)
-    ssg_test_include_directories(test_keymap_single_stroke PRIVATE
-        ${SSG_SOURCE_DIR}/tests
-    )
 
 endif()

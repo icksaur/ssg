@@ -11,14 +11,16 @@ TEST(commandLabelUsesAuthoredLabelsAndHumanizesTheRest) {
     // happens to offer.
     ssg::CommandCatalog catalog;
     auto declare = [&catalog](std::string id, std::string label) {
-        auto spec = ssg::CommandSpecBuilder{std::move(id)}
-                        .owner("test-owner")
-                        .summary("a command")
-                        .observes()
-                        .handler([](ssg::CommandContext&) {
-                            return ssg::CommandHandlerResult::success();
-                        });
-        if (!label.empty()) spec.label(std::move(label));
+        ssg::CommandSpec spec{
+            .id = std::move(id),
+            .owner = "test-owner",
+            .summary = "a command",
+            .effect = ssg::CommandEffect::Observation,
+            .binding = ssg::bindNoArgumentHandler([](ssg::CommandContext&) {
+                return ssg::CommandHandlerResult::success();
+            }),
+        };
+        if (!label.empty()) spec.label = std::move(label);
         catalog.add(std::move(spec));
     };
     declare("file.save", "Save File");

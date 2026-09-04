@@ -3,6 +3,7 @@
 #include <ssg/types.h>
 #include <ssg/Viewport.h>
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -52,18 +53,6 @@ struct SelectionViewState {
     std::optional<CellIndex> desiredCell;
 
     bool operator==(const SelectionViewState&) const noexcept = default;
-};
-
-// Grid projection of selection navigation: the scroll anchor and the desired
-// cell a vertical move remembers. Pure presentation -- the semantic selection is
-// the SelectionSet in the snapshot's sections. Absent from a native-layout
-// client's snapshot, which scrolls its own view.
-struct SelectionNavigation {
-    std::uint32_t firstVisualRow = 0;
-    std::uint32_t firstVisualColumn = 0;
-    std::optional<CellIndex> desiredCell;
-
-    bool operator==(const SelectionNavigation&) const noexcept = default;
 };
 
 struct SelectionViewDelta {
@@ -126,6 +115,17 @@ struct SelectionCommandArguments {
     std::optional<Selection> selection;
     std::vector<Selection> selections;
 };
+
+// CONTRACT: This is the single selection-command inventory consumed by
+// registration and command lookup.
+struct SelectionCommandDescriptor {
+    std::string_view id;
+    SelectionCommand command;
+
+};
+
+extern const std::array<SelectionCommandDescriptor, 38> kSelectionCommands;
+
 
 enum class SelectionNavigationError : std::uint8_t {
     None,

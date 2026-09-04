@@ -590,13 +590,14 @@ std::vector<std::string> splitDiffLines(std::string_view content) {
 }
 
 std::optional<std::reference_wrapper<const DiffFileView>>
-DiffViewState::fileForDocument(const DocumentViewState& document) const {
-    if (!document.diffFileIdentity) {
+DiffViewState::fileForIdentity(
+    const std::optional<std::string>& identity) const {
+    if (!identity) {
         return std::nullopt;
     }
     auto const found = std::find_if(
         files.begin(), files.end(), [&](const DiffFileView& file) {
-            return file.id.value() == *document.diffFileIdentity;
+            return file.id.value() == *identity;
         });
     if (found == files.end()) {
         return std::nullopt;
@@ -613,7 +614,7 @@ DiffModel::DiffModel(DiffConfig config) : config_(config) {
 }
 
 DiffMutationResult DiffModel::updateGitFile(
-    GitDiffFile file, std::string baselineIdentity, Revision revision) {
+    GitDiffFile file, std::string baselineIdentity, std::uint64_t revision) {
     if (revision <= revision_) {
         return {DiffError::StaleRevision};
     }
@@ -657,7 +658,7 @@ DiffMutationResult DiffModel::updateGitFile(
 }
 
 DiffMutationResult DiffModel::removeFile(const DiffFileId& id,
-                                         Revision revision) {
+                                         std::uint64_t revision) {
     if (revision <= revision_) {
         return {DiffError::StaleRevision};
     }
@@ -671,7 +672,7 @@ DiffMutationResult DiffModel::removeFile(const DiffFileId& id,
 }
 
 DiffMutationResult DiffModel::seedNonGit(std::vector<SeededDiffFile> files,
-                                           Revision revision) {
+                                           std::uint64_t revision) {
     if (revision <= revision_) {
         return {DiffError::StaleRevision};
     }
@@ -705,7 +706,7 @@ DiffMutationResult DiffModel::seedNonGit(std::vector<SeededDiffFile> files,
 }
 
 DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
-                                                  Revision revision) {
+                                                  std::uint64_t revision) {
     if (revision <= revision_) {
         return {DiffError::StaleRevision};
     }

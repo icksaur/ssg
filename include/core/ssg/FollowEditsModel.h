@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ssg/CommandInvocation.h"
+#include "ssg/CommandCatalog.h"
 #include "ssg/DiffModel.h"
 #include "ssg/PaneNavigation.h"
 
@@ -29,7 +29,7 @@ struct FollowTarget {
     std::filesystem::path path;
     bool deleted = false;
     std::size_t newestHunkLine = 0;
-    Revision sourceRevision{0};
+    std::uint64_t sourceRevision{0};
     friend bool operator==(const FollowTarget&, const FollowTarget&) = default;
 };
 
@@ -75,7 +75,7 @@ struct FollowNavigation {
 struct FollowDiffChange {
     DiffFileView file;
     std::vector<DiffHunk> priorHunks;
-    Revision sourceRevision{0};
+    std::uint64_t sourceRevision{0};
 };
 
 class FollowEditsModel {
@@ -83,7 +83,7 @@ public:
     explicit FollowEditsModel(FollowEditsConfig config = {});
 
     [[nodiscard]] FollowEditsResult acceptExternalChange(
-        const DiffFileView& file, Revision sourceRevision);
+        const DiffFileView& file, std::uint64_t sourceRevision);
     [[nodiscard]] FollowEditsResult acceptExternalChanges(
         std::vector<FollowDiffChange> changes);
     [[nodiscard]] FollowEditsResult applyNavigation(
@@ -99,13 +99,13 @@ public:
 private:
     [[nodiscard]] FollowTarget targetFor(const DiffFileView& file,
                                           const DiffHunk& hunk,
-                                          Revision sourceRevision) const;
+                                          std::uint64_t sourceRevision) const;
     void activate(const FollowTarget& target);
     void advanceGeneration() noexcept;
 
     FollowEditsConfig config_;
     FollowEditsViewState state_;
-    Revision latestSourceRevision_{0};
+    std::uint64_t latestSourceRevision_{0};
 };
 
 }  // namespace ssg

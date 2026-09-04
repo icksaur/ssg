@@ -1,17 +1,27 @@
 #pragma once
 
+#include <ssg/ClipboardRegister.h>
 #include <ssg/DiffModel.h>
 #include <ssg/ClientInput.h>
-#include <ssg/CommandInvocation.h>
-#include <ssg/CommandSpecBuilder.h>
+#include <ssg/CommandCatalog.h>
+#include <ssg/ExternalModificationFlow.h>
 #include <ssg/FilesystemWatcher.h>
+#include <ssg/FindReplace.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/GitDiffSource.h>
-#include <ssg/StatusFields.h>
-#include <ssg/session_snapshot.h>
+#include <ssg/PaletteSearcher.h>
+#include <ssg/PaneTopology.h>
+#include <ssg/PromptSurface.h>
+#include <ssg/Selection.h>
+#include <ssg/Style.h>
+#include <ssg/StatusQueue.h>
 #include <ssg/SyntaxModel.h>
+#include <ssg/TabManager.h>
+#include <ssg/Theme.h>
+#include <ssg/TreeModel.h>
+#include <ssg/UiTree.h>
 #include <ssg/Viewport.h>
-#include <ssg/ViewportProjection.h>
+#include <ssg/lsp_sync_client.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -24,6 +34,13 @@
 namespace ssg {
 
 class CommandCatalog;
+class GridPresenter;
+
+struct NoticeView {
+    std::string text;
+    std::vector<UiAction> actions;
+    friend bool operator==(const NoticeView&, const NoticeView&) = default;
+};
 
 struct EditorSessionConfig {
     std::filesystem::path cwd;
@@ -44,9 +61,6 @@ struct EditorSessionConfig {
     // source substitutes another implementation, and tests inject a
     // deterministic double. Null = plain-text highlighting.
     std::shared_ptr<SyntaxParser> syntaxParser;
-    // Optional provider overrides keyed by status-field id. These replace the
-    // default compiled providers for matching ids.
-    std::vector<StatusFieldProviderBinding> statusFieldProviders;
     // When false, disables the internal git-diff refresh worker. Tests can use
     // this for deterministic control; default true keeps git-diff wiring library-owned.
     // This controls git diff computation only, never file watching: the filesystem
@@ -71,7 +85,7 @@ struct EditorSessionCreateResult {
 
 struct ExternalDiffRevision {
     NonGitDiffEvent event;
-    Revision revision{0};
+    std::uint64_t revision{0};
 };
 
 enum class DiffIngressError {
@@ -90,7 +104,6 @@ struct DiffIngressResult {
 
 struct PumpResult {
     bool advanced;
-    Revision revision;
 };
 
 // CONTRACT
@@ -113,8 +126,8 @@ public:
     // CONTRACT
     // EditorSession is the serialized aggregate boundary. Each public state
     // operation completes before another state operation can observe it; command
-    // dispatch includes handler requests, reconciliation, revision publication,
-    // and public result construction. A handler must request a follow-up through
+    // dispatch includes handler requests, reconciliation, and public result
+    // construction. A handler must request a follow-up through
     // deferDispatch rather than re-entering a state operation.
     [[nodiscard]] PumpResult pump();
     [[nodiscard]] CommandResult dispatch(ClientCommand const& command);
@@ -125,9 +138,8 @@ public:
     //
     // For a handler that needs to invoke another command.  A handler runs with
     // the session locked, so it cannot dispatch directly -- `dispatch` refuses
-    // it rather than deadlocking.  Queued commands run in order, each rebased
-    // on the revision the previous one left, and a failure among them becomes
-    // the result of the dispatch that queued them.
+    // it rather than deadlocking. Queued commands run in order, and a failure
+    // among them becomes the result of the dispatch that queued them.
     //
     // Returns false when called outside a dispatch (where the caller should
     // simply dispatch) or when the queue is full, which means a handler is
@@ -145,12 +157,11 @@ public:
     // Command registration is host orchestration on the session thread. It must
     // not run concurrently with input, dispatch, or another registration, and a
     // command handler must defer orchestration rather than register reentrantly.
-    [[nodiscard]] CommandHandle registerCommand(CommandSpecBuilder command);
+    [[nodiscard]] CommandHandle registerCommand(CommandSpec command);
     [[nodiscard]] std::vector<CommandHandle> replaceCommandGeneration(
         std::span<CommandHandle const> retire,
-        std::vector<CommandSpecBuilder> commands);
+        std::vector<CommandSpec> commands);
 
-    [[nodiscard]] Revision revision() const;
     [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
     [[nodiscard]] DiffIngressResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
@@ -174,8 +185,7 @@ public:
     void focusEditor();
     // M10 fast startup: run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
-    // syntax highlighting), then publish it through the normal snapshot/delta
-    // channel.  Idempotent and a no-op when nothing was deferred; the client
+    // syntax highlighting). Idempotent and a no-op when nothing was deferred; the client
     // calls it once after drawing its first frame.
     void primeDeferred();
     // Autosave open dirty documents' drafts (single-file draft recovery, M15).
@@ -211,28 +221,12 @@ public:
     // entry keyed to a path no pending action owns.
     [[nodiscard]] bool diffModelHasFileForTest(const DiffFileId& id) const;
     // Drives a watcher-availability transition through the runtime-thread path a
-    // real worker uses (store the capability, then drain it so the session
-    // revision advances and delta clients observe the change). Test-only;
+    // real worker uses. Test-only;
     // production transitions arrive via the worker's wake drain.
     void reportWatcherAvailabilityForTest(bool available);
-    // Drives the synchronous worker-side filesystem refresh and its publication
-    // revision without relying on platform watcher timing.
+    // Drives the synchronous worker-side filesystem refresh without relying on
+    // platform watcher timing.
     void refreshFilesystemForTest();
-    // CONTRACT: Snapshot publishes semantic state without computing grid
-    // geometry, pumping worker results, or advancing the revision.
-    [[nodiscard]] std::optional<SessionSnapshot> snapshot(
-        PaletteReport paletteReport = {}) const;
-    // CONTRACT: These two operations intentionally release the session lock
-    // between semantic capture and viewport projection. projectViewport rejects
-    // a changed view/revision basis without mutating the retained
-    // projection state, so a presenter can retry without blocking commands while
-    // it solves layout.
-    [[nodiscard]] std::optional<PresentationCapture> capturePresentation(
-        std::optional<ViewId> expectedView,
-        const PaletteReport& paletteReport = {}) const;
-    [[nodiscard]] std::optional<ViewportProjectionResult> projectViewport(
-        const ViewportProjectionRequest& request,
-        ViewportProjectionState& presentation) const;
     [[nodiscard]] int gitDiffWakeDescriptor() const;
     [[nodiscard]] std::uint64_t gitFullRefreshCountForTest() const;
     [[nodiscard]] std::string activeDocumentText() const;
@@ -250,6 +244,8 @@ public:
     struct Impl;
 
 private:
+    friend class GridPresenter;
+
     explicit EditorSession(std::unique_ptr<Impl> implementation) noexcept;
 
     std::unique_ptr<Impl> impl_;

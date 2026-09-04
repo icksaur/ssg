@@ -43,8 +43,7 @@ CommandHandlerResult validatePaletteTarget(EditorSession::Impl& runtime,
     return validatePublishedCommand(runtime, commandId);
 }
 
-CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext& context, std::string_view id, std::any const& payload) {
-    Revision const revision = context.revision();
+CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_view id, std::any const& payload) {
     if (id == "palette.open") {
         if (!runtime.openPickerPrompt(PickerKind::Command)) {
             return failure("could not open the command picker");
@@ -67,8 +66,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext&
         if (auto const* expected = payloadAs<PickerActivation>(payload)) {
             if (!runtime.deferredCommands.empty()) {
                 if (!runtime.defer(
-                        ClientCommand{"palette.close", context.revision(),
-                                      *expected})) {
+                        ClientCommand{"palette.close", *expected})) {
                     return failure("could not defer the picker close");
                 }
                 return success();
@@ -77,7 +75,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext&
                 return success();
             }
         }
-        if (!runtime.interaction.apply(CloseFinder{})) {
+        if (!runtime.interaction.closeFinder()) {
             return failure("no palette to close");
         }
     }
@@ -88,16 +86,18 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext&
         if (arguments == nullptr) return failure("palette.execute requires a command id payload");
         auto validation = validatePaletteTarget(runtime, arguments->commandId);
         if (!validation.accepted) return validation;
-        if (!runtime.defer(ClientCommand{arguments->commandId, revision, {}})) {
+        if (!runtime.defer(ClientCommand{arguments->commandId, {}})) {
             return failure("could not queue the selected command");
         }
-        (void)runtime.interaction.apply(CloseFinder{});
+        (void)runtime.interaction.closeFinder();
     } else if (id == "search.workspace") {
         std::string query;
         if (auto const* text = payloadAs<std::string>(payload)) query = *text;
-        auto request = runtime.search.beginWorkspaceSearch(std::move(query), revision);
+        const auto sourceGeneration = ++runtime.workspaceSearchGeneration;
+        auto request = runtime.search.beginWorkspaceSearch(
+            std::move(query), sourceGeneration);
         auto batch = runtime.search.evaluate(request);
-        (void)runtime.search.publish(batch, revision);
+        (void)runtime.search.publish(batch, sourceGeneration);
     } else if (id == "goto.back") {
         (void)runtime.navigation.back();
     } else if (id == "goto.forward") {
@@ -163,7 +163,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, CommandContext&
         // through it (deferred, since the session lock is non-reentrant) rather
         // than duplicating the reveal/focus/history contract here.
         if (!runtime.defer(
-                           ClientCommand{"cursor.set_position", revision,
+                           ClientCommand{"cursor.set_position",
                                          std::any{arguments}})) {
             return failure("could not queue cursor.set_position");
         }
@@ -310,23 +310,21 @@ CommandHandlerResult followCommand(EditorSession::Impl& runtime, std::string_vie
 // The diff commands take a live document id, which is meaningless to a remote
 // client, so they are in-process only: typed for the handler, absent from the
 // interface.
-void registerDiffAndFollowCommands(CommandCatalog& builder,
+void registerDiffAndFollowCommands(CommandCatalog& catalog,
                                    EditorSession::Impl& runtime) {
     auto diff = [&](std::string id, std::string summary) {
         auto const name = id;
-        builder.add(CommandSpecBuilder{std::move(id)}
-                        .owner("diff-model")
-                        .summary(std::move(summary))
-                        .mutates()
-                        .lua()
-                        .inProcessHandler<DiffFileId>(
-                            [&runtime, name](CommandContext&,
-                                             DiffFileId const& file) {
-                                return runtime.runTransaction([&] {
-                                    return diffCommand(runtime, name,
-                                                       std::any{file});
-                                });
-                            }));
+        catalog.add(CommandSpec{
+            .id = std::move(id),
+            .owner = "diff-model",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+            .binding = bindInProcessHandler<DiffFileId>(
+                [&runtime, name](CommandContext&, DiffFileId const& file) {
+                    return diffCommand(runtime, name, std::any{file});
+                }),
+        });
     };
     diff("diff.next_hunk", "Next Hunk");
     diff("diff.previous_hunk", "Previous Hunk");
@@ -334,16 +332,16 @@ void registerDiffAndFollowCommands(CommandCatalog& builder,
 
     auto follow = [&](std::string id, std::string summary) {
         auto const name = id;
-        builder.add(CommandSpecBuilder{std::move(id)}
-                        .owner("follow-edits")
-                        .summary(std::move(summary))
-                        .mutates()
-                        .lua()
-                        .handler([&runtime, name](CommandContext&) {
-                            return runtime.runTransaction([&] {
-                                return followCommand(runtime, name);
-                            });
-                        }));
+        catalog.add(CommandSpec{
+            .id = std::move(id),
+            .owner = "follow-edits",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+            .binding = bindNoArgumentHandler([&runtime, name](CommandContext&) {
+                return followCommand(runtime, name);
+            }),
+        });
     };
     follow("follow_edits.resume", "Resume");
     follow("follow_edits.pause", "Pause");
@@ -354,121 +352,122 @@ void registerDiffAndFollowCommands(CommandCatalog& builder,
 //
 // Semantic tree actions share one handler. Scroll actions resolve to the
 // attached view owner instead of mutating session presentation state.
-void registerTreeCommands(CommandCatalog& builder,
+void registerTreeCommands(CommandCatalog& catalog,
                           EditorSession::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
-        return CommandSpecBuilder{std::move(id)}
-            .owner("tree-providers")
-            .summary(std::move(summary))
-            .mutates()
-            .lua();
+        return CommandSpec{
+            .id = std::move(id),
+            .owner = "tree-providers",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+        };
     };
     // The id is captured by value so the lambda owns it: a string_view into
     // the caller's temporary would dangle by the time the command runs.
     auto bare = [&](std::string id, std::string summary) {
         auto name = id;
-        builder.add(spec(std::move(id), std::move(summary))
-                        .handler([&runtime, name](CommandContext& context) {
-                            return runtime.runTransaction([&] {
-                                return treeCommand(runtime, context, name, {});
-                            });
-                        }));
+        auto built = spec(std::move(id), std::move(summary));
+        built.binding = bindNoArgumentHandler(
+            [&runtime, name](CommandContext& context) {
+                return treeCommand(runtime, context, name, {});
+            });
+        catalog.add(std::move(built));
     };
 
     bare("tree.toggle_expanded", "Toggle Expanded");
     bare("tree.select_next", "Select Next");
     bare("tree.select_previous", "Select Previous");
 
-    builder.add(spec("tree.activate", "Open Selected")
-                    .label("Open Selected")
-                    .handler([&runtime](CommandContext& context) {
-                        return runtime.runTransaction([&] {
-                            return treeCommand(runtime, context,
-                                               "tree.activate", {});
-                        });
-                    }));
-    builder.add(spec("tree.activate_node", "Open Node")
-                    .handler<TreeSelectArguments>(
-                       [&runtime](CommandContext& context,
-                                  TreeSelectArguments const& arguments) {
-                           return runtime.runTransaction([&] {
-                               return treeCommand(
-                                   runtime, context, "tree.activate_node",
+    {
+        auto built = spec("tree.activate", "Open Selected");
+        built.label = "Open Selected";
+        built.binding = bindNoArgumentHandler(
+            [&runtime](CommandContext& context) {
+                return treeCommand(runtime, context, "tree.activate", {});
+            });
+        catalog.add(std::move(built));
+    }
+    {
+        auto built = spec("tree.activate_node", "Open Node");
+        built.binding = bindWireHandler<TreeSelectArguments>(
+            [&runtime](CommandContext& context,
+                       TreeSelectArguments const& arguments) {
+                return treeCommand(runtime, context, "tree.activate_node",
                                    std::any{arguments});
-                           });
-                       }));
-    builder.add(spec("tree.invoke_node_command", "Invoke Node Command")
-                    .optionalInProcessHandler<TreeCommandInvocation>(
-                        [&runtime](CommandContext& context,
-                                   std::optional<TreeCommandInvocation> const&
-                                       invocation) {
-                            return runtime.runTransaction([&] {
-                                return treeCommand(
-                                    runtime, context,
-                                    "tree.invoke_node_command",
-                                    invocation ? std::any{*invocation}
-                                               : std::any{});
-                            });
-                        }));
-    builder.add(spec("tree.select", "Select")
-                    .handler<TreeSelectArguments>(
-                        [&runtime](CommandContext& context,
-                                   TreeSelectArguments const& arguments) {
-                            return runtime.runTransaction([&] {
-                                return treeCommand(runtime, context,
-                                                   "tree.select",
-                                                   std::any{arguments});
-                            });
-                        }));
-    builder.add(CommandSpecBuilder{"tree.scroll"}
-                    .owner("tree-providers")
-                    .summary("Scroll")
-                    .viewAction()
-                    .lua()
-                    .handler<ScrollLinesArguments>(
-                        [](CommandContext&,
-                           ScrollLinesArguments const& arguments) {
-                            return CommandHandlerResult::requireView(
-                                ScrollLines{ScrollTarget::Tree,
-                                            arguments.rows});
-                        }));
-    builder.add(CommandSpecBuilder{"tree.scroll_to_fraction"}
-                    .owner("tree-providers")
-                    .summary("Scroll To Fraction")
-                    .viewAction()
-                    .lua()
-                    .handler<ScrollFractionArguments>(
-                        [](CommandContext&,
-                           ScrollFractionArguments const& arguments) {
-                            return CommandHandlerResult::requireView(
-                                ScrollFraction{
-                                    ScrollTarget::Tree,
-                                    arguments.numerator,
-                                    arguments.denominator});
-                        }));
+            });
+        catalog.add(std::move(built));
+    }
+    {
+        auto built = spec("tree.invoke_node_command", "Invoke Node Command");
+        built.binding = bindOptionalInProcessHandler<TreeCommandInvocation>(
+            [&runtime](CommandContext& context,
+                       std::optional<TreeCommandInvocation> const&
+                           invocation) {
+                return treeCommand(
+                    runtime, context, "tree.invoke_node_command",
+                    invocation ? std::any{*invocation} : std::any{});
+            });
+        catalog.add(std::move(built));
+    }
+    {
+        auto built = spec("tree.select", "Select");
+        built.binding = bindWireHandler<TreeSelectArguments>(
+            [&runtime](CommandContext& context,
+                       TreeSelectArguments const& arguments) {
+                return treeCommand(runtime, context, "tree.select",
+                                   std::any{arguments});
+            });
+        catalog.add(std::move(built));
+    }
+    catalog.add(CommandSpec{
+        .id = "tree.scroll",
+        .owner = "tree-providers",
+        .summary = "Scroll",
+        .effect = CommandEffect::ViewAction,
+        .luaApi = true,
+        .binding = bindWireHandler<ScrollLinesArguments>(
+            [](CommandContext&, ScrollLinesArguments const& arguments) {
+                return CommandHandlerResult::requireView(
+                    ScrollLines{ScrollTarget::Tree, arguments.rows});
+            }),
+    });
+    catalog.add(CommandSpec{
+        .id = "tree.scroll_to_fraction",
+        .owner = "tree-providers",
+        .summary = "Scroll To Fraction",
+        .effect = CommandEffect::ViewAction,
+        .luaApi = true,
+        .binding = bindWireHandler<ScrollFractionArguments>(
+            [](CommandContext&, ScrollFractionArguments const& arguments) {
+                return CommandHandlerResult::requireView(ScrollFraction{
+                    ScrollTarget::Tree, arguments.numerator,
+                    arguments.denominator});
+            }),
+    });
 }
 
 // The pickers, workspace search, and the go-to jumps.
-void registerSearchPaletteCommands(CommandCatalog& builder,
+void registerSearchPaletteCommands(CommandCatalog& catalog,
                                    EditorSession::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
-        return CommandSpecBuilder{std::move(id)}
-            .owner("search-palette")
-            .summary(std::move(summary))
-            .mutates()
-            .lua();
+        return CommandSpec{
+            .id = std::move(id),
+            .owner = "search-palette",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+        };
     };
     auto bare = [&](std::string id, std::string label, std::string summary) {
         auto name = id;
-        auto built = spec(std::move(id), std::move(summary))
-                         .handler([&runtime, name](CommandContext& context) {
-                             return runtime.runTransaction([&] {
-                                 return searchCommand(runtime, context, name,
-                                                      {});
-                             });
-                         });
-        if (!label.empty()) built.label(std::move(label));
-        builder.add(std::move(built));
+        auto built = spec(std::move(id), std::move(summary));
+        built.binding = bindNoArgumentHandler(
+            [&runtime, name](CommandContext&) {
+                return searchCommand(runtime, name, {});
+            });
+        if (!label.empty()) built.label = std::move(label);
+        catalog.add(std::move(built));
     };
 
     bare("palette.open", "Command Palette", "Command Palette");
@@ -484,131 +483,126 @@ void registerSearchPaletteCommands(CommandCatalog& builder,
     // Direct clients close unconditionally with no payload. The internal
     // post-submit close carries the activation it is allowed to dismiss, so a
     // selected command that replaced the picker cannot have its new UI canceled.
-    builder.add(
-        spec("palette.close", "Close")
-            .optionalInProcessHandler<PickerActivation>(
-                [&runtime](CommandContext& context,
-                           std::optional<PickerActivation> expected) {
-                    return runtime.runTransaction([&] {
-                        return searchCommand(
-                            runtime, context, "palette.close",
-                            expected ? std::any{*expected} : std::any{});
-                    });
-                }));
+    {
+        auto built = spec("palette.close", "Close");
+        built.binding = bindOptionalInProcessHandler<PickerActivation>(
+            [&runtime](CommandContext&,
+                       std::optional<PickerActivation> expected) {
+                return searchCommand(
+                    runtime, "palette.close",
+                    expected ? std::any{*expected} : std::any{});
+            });
+        catalog.add(std::move(built));
+    }
 
     // Names the command to run, so it is the one search command a remote client
     // may send an argument for.
-    builder.add(spec("palette.execute", "Execute")
-                    .handler<PaletteExecuteArguments>(
-                        [&runtime](CommandContext& context,
-                                   PaletteExecuteArguments const& arguments) {
-                            return runtime.runTransaction([&] {
-                                return searchCommand(runtime, context,
-                                                     "palette.execute",
-                                                     std::any{arguments});
-                            });
-                        }));
+    {
+        auto built = spec("palette.execute", "Execute");
+        built.binding = bindWireHandler<PaletteExecuteArguments>(
+            [&runtime](CommandContext&,
+                       PaletteExecuteArguments const& arguments) {
+                return searchCommand(runtime, "palette.execute",
+                                     std::any{arguments});
+            });
+        catalog.add(std::move(built));
+    }
 
-    builder.add(CommandSpecBuilder{"picker.submit"}
-                    .owner("search-palette")
-                    .summary("Submit Picker Candidate")
-                    .stateValidatedMutation()
-                    .lua()
-                    .handler<PickerSubmitArguments>(
-                        [&runtime](CommandContext& context,
-                                  PickerSubmitArguments const& arguments) {
-                           return runtime.runTransaction([&] {
-                               auto const palette = runtime.paletteView();
-                               auto const* candidates =
-                                   palette.candidatesFor(
-                                       arguments.activation.mode);
-                               if (candidates == nullptr) {
-                                   return failure(
-                                       "picker mode has no candidate inventory");
-                               }
-                               auto const published = std::find_if(
-                                   candidates->begin(),
-                                   candidates->end(),
-                                   [&](auto const& candidate) {
-                                       return candidate.id ==
-                                              arguments.candidateId;
-                                   });
-                               if (published == candidates->end()) {
-                                   return failure(
-                                       "candidate is not in the picker inventory");
-                               }
-                               if (runtime.interaction.openPickerActivation() !=
-                                   arguments.activation) {
-                                   return failure(
-                                       "picker.submit requires a matching open picker");
-                               }
-                               ClientCommand selected;
-                               if (arguments.activation.mode ==
-                                   SearchMode::Command) {
-                                   auto validation = validatePublishedCommand(
-                                       runtime, arguments.candidateId);
-                                   if (!validation.accepted) return validation;
-                                   selected = ClientCommand{
-                                       arguments.candidateId,
-                                       context.revision(), {}};
-                               } else if (arguments.activation.mode ==
-                                          SearchMode::File) {
-                                   selected = ClientCommand{
-                                       "file.open", context.revision(),
-                                       arguments.candidateId};
-                               } else {
-                                   return failure(
-                                       "open picker has no submit action");
-                               }
-                               if (runtime.deferredCommands.contains(
-                                       "palette.close")) {
-                                   return failure(
-                                       "another picker submission is pending");
-                               }
-                               if (!runtime.defer(std::move(selected))) {
-                                   return failure(
-                                       "could not queue the selected command");
-                               }
-                               if (!runtime.defer(
-                                       ClientCommand{"palette.close",
-                                                     context.revision(),
-                                                     arguments.activation})) {
-                                   return failure(
-                                       "could not queue the picker close");
-                               }
-                               return success();
-                           });
-                        }));
+    catalog.add(CommandSpec{
+        .id = "picker.submit",
+        .owner = "search-palette",
+        .summary = "Submit Picker Candidate",
+        .effect = CommandEffect::Mutation,
+        .luaApi = true,
+        .binding = bindWireHandler<PickerSubmitArguments>(
+            [&runtime](CommandContext& context,
+                     PickerSubmitArguments const& arguments) {
+               auto const palette = runtime.paletteView();
+               auto const* candidates =
+                  palette.candidatesFor(
+                      arguments.activation.mode);
+               if (candidates == nullptr) {
+                  return failure(
+                      "picker mode has no candidate inventory");
+               }
+               auto const published = std::find_if(
+                  candidates->begin(),
+                  candidates->end(),
+                  [&](auto const& candidate) {
+                      return candidate.id ==
+                             arguments.candidateId;
+                  });
+               if (published == candidates->end()) {
+                  return failure(
+                      "candidate is not in the picker inventory");
+               }
+               if (runtime.interaction.openPickerActivation() !=
+                  arguments.activation) {
+                  return failure(
+                      "picker.submit requires a matching open picker");
+               }
+               ClientCommand selected;
+               if (arguments.activation.mode ==
+                  SearchMode::Command) {
+                  auto validation = validatePublishedCommand(
+                      runtime, arguments.candidateId);
+                  if (!validation.accepted) return validation;
+                  selected = ClientCommand{arguments.candidateId, {}};
+               } else if (arguments.activation.mode ==
+                         SearchMode::File) {
+                  selected =
+                      ClientCommand{"file.open", arguments.candidateId};
+               } else {
+                  return failure(
+                      "open picker has no submit action");
+               }
+               if (runtime.deferredCommands.contains(
+                      "palette.close")) {
+                  return failure(
+                      "another picker submission is pending");
+               }
+               if (!runtime.defer(std::move(selected))) {
+                  return failure(
+                      "could not queue the selected command");
+               }
+               if (!runtime.defer(
+                      ClientCommand{"palette.close",
+                                    arguments.activation})) {
+                  return failure(
+                      "could not queue the picker close");
+               }
+               return success();
+            }),
+    });
 
     // An absent query searches for the current one.
-    builder.add(spec("search.workspace", "Workspace")
-                    .optionalInProcessHandler<std::string>(
-                        [&runtime](CommandContext& context,
-                                   std::optional<std::string> const& query) {
-                            return runtime.runTransaction([&] {
-                                return searchCommand(
-                                    runtime, context, "search.workspace",
-                                    query ? std::any{*query} : std::any{});
-                            });
-                        }));
+    {
+        auto built = spec("search.workspace", "Workspace");
+        built.binding = bindOptionalInProcessHandler<std::string>(
+            [&runtime](CommandContext&,
+                       std::optional<std::string> const& query) {
+                return searchCommand(
+                    runtime, "search.workspace",
+                    query ? std::any{*query} : std::any{});
+            });
+        catalog.add(std::move(built));
+    }
 
     // Each jumps to a place the client resolved, which is meaningless to
     // another process.
     auto jump = [&](std::string id, std::string label, std::string summary) {
         auto name = id;
-        builder.add(spec(std::move(id), std::move(summary))
-                        .label(std::move(label))
-                        .optionalInProcessHandler<NavigationTarget>(
-                            [&runtime, name](
-                                CommandContext& context,
-                                std::optional<NavigationTarget> const& target) {
-                                return runtime.runTransaction([&] {
-                                    return searchCommand(
-                                        runtime, context, name,
-                                        target ? std::any{*target}
-                                               : std::any{});
-                                });
-                            }));
+        auto built = spec(std::move(id), std::move(summary));
+        built.label = std::move(label);
+        built.binding = bindOptionalInProcessHandler<NavigationTarget>(
+            [&runtime, name](
+                CommandContext&,
+                std::optional<NavigationTarget> const& target) {
+                return searchCommand(
+                    runtime, name,
+                    target ? std::any{*target} : std::any{});
+            });
+        catalog.add(std::move(built));
     };
     jump("goto.file", "Go to File", "Go to File");
     jump("goto.symbol", "Go to Symbol", "Go to Symbol");
@@ -616,23 +610,24 @@ void registerSearchPaletteCommands(CommandCatalog& builder,
     // goto.line is not a client-resolved jump: with no argument it opens a
     // line-number prompt, and the prompt round-trip re-dispatches it with the
     // typed string. An absent payload therefore opens the prompt.
-    builder.add(spec("goto.line", "Go to Line")
-                    .label("Go to Line")
-                    .optionalInProcessHandler<std::string>(
-                        [&runtime](CommandContext& context,
-                                   std::optional<std::string> const& line) {
-                            return runtime.runTransaction([&] {
-                                return searchCommand(
-                                    runtime, context, "goto.line",
-                                    line ? std::any{*line} : std::any{});
-                            });
-                        }));
+    {
+        auto built = spec("goto.line", "Go to Line");
+        built.label = "Go to Line";
+        built.binding = bindOptionalInProcessHandler<std::string>(
+            [&runtime](CommandContext&,
+                       std::optional<std::string> const& line) {
+                return searchCommand(
+                    runtime, "goto.line",
+                    line ? std::any{*line} : std::any{});
+            });
+        catalog.add(std::move(built));
+    }
 }
 
-void bindRuntimeNavigation(CommandCatalog& builder, EditorSession::Impl& runtime) {
-    registerDiffAndFollowCommands(builder, runtime);
-    registerSearchPaletteCommands(builder, runtime);
-    registerTreeCommands(builder, runtime);
+void bindRuntimeNavigation(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+    registerDiffAndFollowCommands(catalog, runtime);
+    registerSearchPaletteCommands(catalog, runtime);
+    registerTreeCommands(catalog, runtime);
 }
 
 } // namespace ssg

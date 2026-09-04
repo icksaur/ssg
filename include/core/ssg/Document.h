@@ -21,7 +21,7 @@ struct TextEdit {
 };
 
 struct EditTransaction {
-    Revision baseRevision;
+    std::uint64_t baseRevision;
     std::vector<TextEdit> edits;
 
     bool operator==(EditTransaction const&) const = default;
@@ -42,7 +42,7 @@ enum class DocumentError : std::uint8_t {
 
 struct TransactionResult {
     DocumentError error;
-    Revision revision;
+    std::uint64_t revision;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
@@ -54,7 +54,7 @@ struct TransactionResult {
 
 struct DocumentSnapshot {
     std::string text;
-    Revision revision;
+    std::uint64_t revision;
     DocumentMode mode;
     bool dirty;
 
@@ -76,7 +76,7 @@ public:
     Document(Document&&) noexcept;
     Document& operator=(Document&&) noexcept;
 
-    [[nodiscard]] Revision revision() const noexcept;
+    [[nodiscard]] std::uint64_t revision() const noexcept;
     [[nodiscard]] DocumentMode mode() const noexcept;
     [[nodiscard]] bool dirty() const noexcept;
     [[nodiscard]] DocumentSnapshot snapshot() const;

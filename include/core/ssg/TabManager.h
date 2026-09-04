@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 namespace ssg {
@@ -104,13 +105,15 @@ struct TabLifecycleResult {
     }
 };
 
-class TabLifecycle {
-public:
-    virtual ~TabLifecycle() = default;
-    [[nodiscard]] virtual TabLifecycleResult close(
-        const TabState& tab, std::chrono::milliseconds durabilityTimeout) = 0;
-    [[nodiscard]] virtual TabLifecycleResult reopen(
-        const TabState& tab, const RecoveryRecordId& compensation) = 0;
+struct TabCloseOutcome {
+    TabId tab;
+    TabLifecycleResult result;
+};
+
+struct TabReopenRequest {
+    TabState tab;
+    RecoveryRecordId compensation;
+    std::size_t index = 0;
 };
 
 struct TabManagerConfig {
@@ -119,8 +122,7 @@ struct TabManagerConfig {
 
 class TabManager {
 public:
-    explicit TabManager(TabLifecycle& lifecycle,
-                        TabManagerConfig config = {});
+    explicit TabManager(TabManagerConfig config = {});
     ~TabManager();
 
     TabManager(const TabManager&) = delete;
@@ -149,26 +151,27 @@ public:
         std::optional<ScratchDurability> recovery);
 
     // Removes every tab for a document that NO LONGER EXISTS, without running
-    // the close lifecycle. Distinct from close(): closing flushes a document
+    // the ordinary close path. Distinct from close(): closing flushes a document
     // and records it as reopenable, and neither is meaningful once the file and
-    // its workspace entry are gone -- the lifecycle would simply fail on the
-    // missing document and leave the tab stranded.
+    // its workspace entry are gone -- that path would simply fail on the missing
+    // document and leave the tab stranded.
     //
     // Returns the number of tabs removed.
     std::size_t dropDocument(FileDocumentId document);
 
-    [[nodiscard]] TabResult activate(TabId tab);    [[nodiscard]] TabResult next();
+    [[nodiscard]] TabResult activate(TabId tab);
+    [[nodiscard]] TabResult next();
     [[nodiscard]] TabResult previous();
     [[nodiscard]] TabResult moveLeft(TabId tab);
     [[nodiscard]] TabResult moveRight(TabId tab);
 
-    [[nodiscard]] TabResult close(
-        TabId tab, std::chrono::milliseconds durabilityTimeout);
-    [[nodiscard]] TabResult closeOthers(
-        TabId tab, std::chrono::milliseconds durabilityTimeout);
-    [[nodiscard]] TabResult closeAll(
-        std::chrono::milliseconds durabilityTimeout);
-    [[nodiscard]] TabResult reopenClosed();
+    [[nodiscard]] TabResult close(TabId tab, TabLifecycleResult result);
+    [[nodiscard]] TabResult closeOthers(TabId tab,
+                                        std::vector<TabCloseOutcome> outcomes);
+    [[nodiscard]] TabResult closeAll(std::vector<TabCloseOutcome> outcomes);
+    [[nodiscard]] std::variant<TabResult, TabReopenRequest> beginReopenClosed();
+    [[nodiscard]] TabResult finishReopenClosed(TabReopenRequest request,
+                                               TabLifecycleResult result);
 
 private:
     struct Impl;

@@ -6,7 +6,6 @@
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/TextInputCommands.h>
-#include <ssg/session_snapshot.h>
 #include <tui/HitTester.h>
 
 #include <filesystem>
@@ -52,24 +51,24 @@ struct Harness {
 };
 
 std::optional<ssg::TabState> activeTab(ssg::EditorSession& runtime) {
-    auto snapshot = runtime.snapshot();
-    if (!snapshot || !snapshot->sections().tabs.active) return std::nullopt;
-    for (const auto& tab : snapshot->sections().tabs.tabs) {
-        if (tab.id == *snapshot->sections().tabs.active) return tab;
+    auto snapshot = ssg::test::projectGridFrame(runtime);
+    if (!snapshot || !snapshot->tabs.active) return std::nullopt;
+    for (const auto& tab : snapshot->tabs.tabs) {
+        if (tab.id == *snapshot->tabs.active) return tab;
     }
     return std::nullopt;
 }
 
 std::size_t tabCount(ssg::EditorSession& runtime) {
-    auto snapshot = runtime.snapshot();
-    return snapshot ? snapshot->sections().tabs.tabs.size() : 0;
+    auto snapshot = ssg::test::projectGridFrame(runtime);
+    return snapshot ? snapshot->tabs.tabs.size() : 0;
 }
 
 std::optional<ssg::SolvedUiItem> footerHelpNode(
     ssg::EditorSession& runtime) {
-    auto frame = ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, {120, 24});
-    if (!frame || !frame->footer()) return std::nullopt;
-    for (const auto& item : frame->footer()->items) {
+    auto frame = ssg::test::projectGridFrame(runtime, {120, 24});
+    if (!frame || !frame->footer) return std::nullopt;
+    for (const auto& item : frame->footer->items) {
         if (item.id == "footer.hint") return item;
     }
     return std::nullopt;
@@ -85,7 +84,7 @@ TEST(helpOpenOpensAReadOnlyOutputTab) {
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     auto tab = activeTab(runtime);
     ASSERT_TRUE(tab.has_value());
@@ -101,7 +100,7 @@ TEST(clickingFooterHelpHintOpensHelp) {
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    auto frame = ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, {120, 24});
+    auto frame = ssg::test::projectGridFrame(runtime, {120, 24});
     auto hint = footerHelpNode(runtime);
     ASSERT_TRUE(frame.has_value());
     ASSERT_TRUE(hint.has_value());
@@ -115,7 +114,7 @@ TEST(clickingFooterHelpHintOpensHelp) {
 
     ASSERT_TRUE(
         runtime
-            .dispatch({"ui.activate", runtime.revision(),
+            .dispatch({"ui.activate",
                  ssg::UiNodeActivationArguments{
                      ssg::UiNodeId{*hit.fieldId}}})
             .accepted());
@@ -130,7 +129,7 @@ TEST(helpDocumentContainsProseAndTheLiveKeybinding) {
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     const auto text = runtime.activeDocumentText();
     ASSERT_TRUE(contains(text, "SSG Help"));
@@ -162,7 +161,7 @@ TEST(helpDocumentListsChromeGlyphsIncludingTabGlyphsWithValues) {
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     const auto text = runtime.activeDocumentText();
     // The glyph listing is generated from styleGlyphValues, so both a fixed-slot
@@ -184,9 +183,9 @@ TEST(helpGlyphListingEscapesQuotesSoItStaysCopyPasteable) {
     ssg::StyleDefineArguments args;
     args.values = {{"tab_separator", "\""}};
     ASSERT_TRUE(
-        runtime.dispatch({"style.define", runtime.revision(), args})
+        runtime.dispatch({"style.define",  args})
             .accepted());
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     const auto text = runtime.activeDocumentText();
     // The quote is backslash-escaped so the listed value is a valid Lua string.
@@ -201,10 +200,10 @@ TEST(helpKeybindingSectionReflectsACustomBind) {
 
     ASSERT_TRUE(
         runtime
-            .dispatch({"keymap.bind", runtime.revision(),
+            .dispatch({"keymap.bind",
                        ssg::KeymapBindArguments{"Alt+KeyG", "file.save", "*"}})
             .accepted());
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     const auto text = runtime.activeDocumentText();
     // A user's custom binding appears because help reads the live keymap
@@ -218,10 +217,10 @@ TEST(helpOpenIsIdempotentAndRefreshes) {
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     const auto firstCount = tabCount(runtime);
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     // No second help tab.
     ASSERT_EQ(tabCount(runtime), firstCount);
@@ -238,11 +237,11 @@ TEST(helpTabRejectsEditsAndLeavesTheBufferUnchanged) {
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     const auto before = runtime.activeDocumentText();
     // Any mutating command is rejected at the read-only chokepoint.
-    ASSERT_FALSE(runtime.dispatch({"text.insert", runtime.revision(),
+    ASSERT_FALSE(runtime.dispatch({"text.insert",
                                    ssg::TextInputArguments{"X"}})
                      .accepted());
     ASSERT_EQ(runtime.activeDocumentText(), before);
@@ -254,16 +253,16 @@ TEST(savingAHelpTabFailsGracefullyWithoutAPrompt) {
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
-    auto save = runtime.dispatch({"file.save", runtime.revision(), {}});
+    auto save = runtime.dispatch({"file.save",  {}});
     // Refused, not prompted: a read-only document cannot be saved.
     ASSERT_FALSE(save.accepted());
     // No Save-As path prompt was opened.
-    auto snapshot = runtime.snapshot();
+    auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
-        ASSERT_FALSE(snapshot->sections().promptStatus.activeKind.has_value());
+        ASSERT_FALSE(snapshot->promptStatus.activeKind.has_value());
     }
 }
 
@@ -273,7 +272,7 @@ TEST(helpTabNeverPersistsADraft) {
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     // The read-only help document is not an autosave candidate.
     ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{0});
@@ -303,7 +302,7 @@ TEST(helpTabTitleCarriesTheReadOnlyMarker) {
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
 }
 
@@ -323,7 +322,7 @@ TEST(footerHelpShowsTheHelpKeyAndYieldsWhenUnbound) {
     }
     // Unbinding help.open drops the key label from the hint.
     ASSERT_TRUE(runtime
-                    .dispatch({"keymap.unbind", runtime.revision(),
+                    .dispatch({"keymap.unbind",
                                ssg::KeymapUnbindArguments{"Alt+KeyH", "*"}})
                     .accepted());
     auto unbound = footerHelpNode(runtime);
@@ -342,15 +341,15 @@ TEST(closingAHelpTabSucceedsAndReopenIsSkipped) {
 
     // A real editable tab plus the help tab, so closing help leaves something.
     std::ofstream{harness.root / "workspace" / "a.txt"} << "hi\n";
-    ASSERT_TRUE(runtime.dispatch({"file.open", runtime.revision(),
+    ASSERT_TRUE(runtime.dispatch({"file.open",
                                   std::string{"a.txt"}})
                     .accepted());
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
     const auto openCount = tabCount(runtime);
     // Closing the (active) read-only help tab must succeed despite the tab
     // carrying no reopen record.
-    ASSERT_TRUE(runtime.dispatch({"tab.close", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"tab.close",  {}})
                     .accepted());
     ASSERT_EQ(tabCount(runtime), openCount - 1);
     auto tab = activeTab(runtime);
@@ -364,12 +363,12 @@ TEST(helpTabIsHighlightedAsMarkdown) {
     if (!harness.runtime) return;
     auto& runtime = *harness.runtime;
 
-    ASSERT_TRUE(runtime.dispatch({"help.open", runtime.revision(), {}})
+    ASSERT_TRUE(runtime.dispatch({"help.open",  {}})
                     .accepted());
-    auto snapshot = runtime.snapshot();
+    auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& syntax = snapshot->sections().syntax;
+    auto const& syntax = snapshot->syntax;
     // The untitled help buffer is highlighted as Markdown (not plain text)
     // because openReadOnlyTab set a language override.
     ASSERT_EQ(syntax.language().value(), std::string{"markdown"});

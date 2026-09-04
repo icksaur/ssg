@@ -26,7 +26,7 @@ RegionHit scrollbarHit(HitRegion region, Rect const& /*gutter*/, int /*row*/) {
 
 RegionHit editorHit(GridPresentation const& snapshot, Rect const& content,
                      int column, int row) {
-    auto const& viewport = snapshot.presentation().viewport;
+    auto const& viewport = snapshot.viewport;
     auto const viewportRow = static_cast<std::uint32_t>(row - content.y);
     auto const viewportColumn = static_cast<std::uint32_t>(column - content.x);
     for (auto const& target : viewport.hitTargets) {
@@ -137,7 +137,7 @@ RegionHit promptHit(const GridPresentation& snapshot, const UiNode& node,
         ((leaf->widget.kind == WidgetKind::Checkbox ||
           leaf->widget.kind == WidgetKind::Field) &&
          node.resolved->command && !node.resolved->command->empty());
-    const auto* solved = snapshot.layout().find(node.id);
+    const auto* solved = snapshot.layout.find(node.id);
     if (!actionable || !solved ||
         !contains(solved->rect, column, row)) {
         return {};
@@ -154,24 +154,24 @@ RegionHit promptHit(const GridPresentation& snapshot, const UiNode& node,
 RegionHit HitTester::at(int column, int row) const {
     auto const& snapshot = snapshot_;
     const auto* root =
-        snapshot.layout().find(UiNodeId{std::string{kRootNodeId}});
+        snapshot.layout.find(UiNodeId{std::string{kRootNodeId}});
     if (!root || column < root->rect.x || row < root->rect.y ||
         column >= root->rect.right() || row >= root->rect.bottom()) {
         return {};
     }
 
-    if (snapshot.sections().promptStatus.activeKind &&
-        promptFocusRegion(*snapshot.sections().promptStatus.activeKind) ==
+    if (snapshot.promptStatus.activeKind &&
+        promptFocusRegion(*snapshot.promptStatus.activeKind) ==
             PromptRegion::Footer) {
         const auto* prompt =
-            snapshot.layout().find(UiNodeId{std::string{kFooterPromptNodeId}});
+            snapshot.layout.find(UiNodeId{std::string{kFooterPromptNodeId}});
         if (!prompt) {
             throw std::logic_error(
                 "HitTester: prompt has no solved UI node");
         }
         if (contains(prompt->rect, column, row)) {
             const auto* promptSchema = nodeById(
-                snapshot.sections().uiTree.root,
+                snapshot.uiTree.root,
                 kFooterPromptNodeId);
             return promptSchema
                        ? promptHit(snapshot, *promptSchema, column, row)
@@ -179,16 +179,16 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
-    if (snapshot.sections().noticeView) {
+    if (snapshot.notice) {
         const auto* node =
-            snapshot.layout().find(UiNodeId{std::string{kNoticeNodeId}});
+            snapshot.layout.find(UiNodeId{std::string{kNoticeNodeId}});
         if (!node) {
             throw std::logic_error(
                 "HitTester: notice has no solved UI node");
         }
         if (contains(node->rect, column, row)) {
             const auto solved =
-                solveNoticeSurface(*snapshot.sections().noticeView, node->rect);
+                solveNoticeSurface(*snapshot.notice, node->rect);
             for (const auto& action : solved.actions) {
                 if (!contains(action.rect, column, row)) continue;
                 RegionHit hit;
@@ -200,8 +200,8 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
-    if (!snapshot.sections().externalModification.files.empty()) {
-        const auto* node = snapshot.layout().find(
+    if (!snapshot.externalModification.files.empty()) {
+        const auto* node = snapshot.layout.find(
             UiNodeId{std::string{kExternalModNodeId}});
         if (!node) {
             throw std::logic_error(
@@ -209,7 +209,7 @@ RegionHit HitTester::at(int column, int row) const {
         }
         if (contains(node->rect, column, row)) {
             const auto solved = solveExternalModificationSurface(
-                snapshot.sections().externalModification, node->rect);
+                snapshot.externalModification, node->rect);
             for (const auto& externalRow : solved.rows) {
                 for (const auto& action : externalRow.actions) {
                     if (!contains(action.rect, column, row)) continue;
@@ -224,11 +224,11 @@ RegionHit HitTester::at(int column, int row) const {
         }
     }
 
-    if (const auto* node = snapshot.layout().find(
+    if (const auto* node = snapshot.layout.find(
             UiNodeId{std::string{kTabBarNodeId}});
         node && contains(node->rect, column, row)) {
         const auto solved = solveTabBar(
-            snapshot.sections().tabs, snapshot.presentation().style.tab,
+            snapshot.tabs, snapshot.style.tab,
             node->rect);
         for (const auto& tab : solved.tabs) {
             if (!contains(tab.rect, column, row)) continue;
@@ -242,40 +242,40 @@ RegionHit HitTester::at(int column, int row) const {
 
     // The picker replaces the editor branch, so its solved viewport takes
     // precedence over every legacy hit.
-    if (const auto* node = snapshot.layout().find(
+    if (const auto* node = snapshot.layout.find(
             UiNodeId{std::string{kFindResultsViewportNodeId}})) {
         const auto solved = solvePaletteSurface(
-            snapshot.palette(), node->rect,
-            snapshot.presentation().style.dimensions.scrollbarGutterWidth);
+            snapshot.palette, node->rect,
+            snapshot.style.dimensions.scrollbarGutterWidth);
         auto hit = paletteHit(solved, column, row);
         if (hit.hit()) return hit;
         if (contains(solved.rect, column, row)) return {};
     }
 
-    if (snapshot.header() &&
-        contains(snapshot.header()->rect, column, row)) {
-        return uiRegionHit(*snapshot.header(), HitRegion::HeaderField,
+    if (snapshot.header &&
+        contains(snapshot.header->rect, column, row)) {
+        return uiRegionHit(*snapshot.header, HitRegion::HeaderField,
                          column, row);
     }
-    if (snapshot.footer() &&
-        contains(snapshot.footer()->rect, column, row)) {
-        return uiRegionHit(*snapshot.footer(), HitRegion::FooterField,
+    if (snapshot.footer &&
+        contains(snapshot.footer->rect, column, row)) {
+        return uiRegionHit(*snapshot.footer, HitRegion::FooterField,
                          column, row);
     }
 
     for (const auto id : {kHeaderNodeId, kFooterNodeId}) {
         const auto* node =
-            snapshot.layout().find(UiNodeId{std::string{id}});
+            snapshot.layout.find(UiNodeId{std::string{id}});
         if (node && contains(node->rect, column, row)) return {};
     }
 
-    if (snapshot.panel() &&
-        contains(snapshot.panel()->rect, column, row)) {
-        return panelHit(*snapshot.panel(), column, row);
+    if (snapshot.panel &&
+        contains(snapshot.panel->rect, column, row)) {
+        return panelHit(*snapshot.panel, column, row);
     }
 
-    if (snapshot.document()) {
-        const auto& document = *snapshot.document();
+    if (snapshot.document) {
+        const auto& document = *snapshot.document;
         if (contains(document.scrollbarGutter, column, row)) {
             return scrollbarHit(HitRegion::EditorScrollbar,
                                 document.scrollbarGutter, row);
@@ -295,23 +295,23 @@ std::optional<HitTester::GutterThumb> HitTester::gutterThumb(
     };
     switch (region) {
     case HitRegion::EditorScrollbar:
-        if (!snapshot_.document()) return std::nullopt;
-        return make(snapshot_.document()->scrollbarGutter,
-                    snapshot_.presentation().viewport.scrollbar);
+        if (!snapshot_.document) return std::nullopt;
+        return make(snapshot_.document->scrollbarGutter,
+                    snapshot_.viewport.scrollbar);
     case HitRegion::PanelScrollbar: {
-        if (!snapshot_.panel() || !snapshot_.panel()->scrollbarGutter) {
+        if (!snapshot_.panel || !snapshot_.panel->scrollbarGutter) {
             return std::nullopt;
         }
-        return make(*snapshot_.panel()->scrollbarGutter,
-                    snapshot_.panel()->scrollbar);
+        return make(*snapshot_.panel->scrollbarGutter,
+                    snapshot_.panel->scrollbar);
     }
     case HitRegion::PaletteScrollbar:
-        if (const auto* node = snapshot_.layout().find(
+        if (const auto* node = snapshot_.layout.find(
                 UiNodeId{std::string{kFindResultsViewportNodeId}})) {
             const auto solved = solvePaletteSurface(
-                snapshot_.palette(), node->rect,
-                snapshot_.presentation().style.dimensions.scrollbarGutterWidth);
-            return make(solved.scrollbar, snapshot_.palette().scrollbar);
+                snapshot_.palette, node->rect,
+                snapshot_.style.dimensions.scrollbarGutterWidth);
+            return make(solved.scrollbar, snapshot_.palette.scrollbar);
         }
         return std::nullopt;
     default:

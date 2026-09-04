@@ -18,7 +18,7 @@ using ssg::Document;
 using ssg::DocumentError;
 using ssg::DocumentMode;
 using ssg::EditTransaction;
-using ssg::Revision;
+using std::uint64_t;
 using ssg::TextEdit;
 
 TextEdit edit(std::uint64_t offset, std::uint64_t erased,
@@ -26,7 +26,7 @@ TextEdit edit(std::uint64_t offset, std::uint64_t erased,
     return TextEdit{ByteOffset{offset}, erased, std::move(inserted)};
 }
 
-EditTransaction transaction(Revision base, std::vector<TextEdit> edits) {
+EditTransaction transaction(std::uint64_t base, std::vector<TextEdit> edits) {
     return EditTransaction{base, std::move(edits)};
 }
 
@@ -50,7 +50,7 @@ TEST(constructionProducesCanonicalCleanSnapshot) {
     const auto snapshot = document.snapshot();
 
     ASSERT_EQ(snapshot.text, std::string("alpha\n\xCE\xB2" "eta"));
-    ASSERT_EQ(snapshot.revision, Revision{1});
+    ASSERT_EQ(snapshot.revision, std::uint64_t{1});
     ASSERT_EQ(snapshot.mode, DocumentMode::Edit);
     ASSERT_FALSE(snapshot.dirty);
 }
@@ -69,7 +69,7 @@ TEST(referenceEditorTransactionScript) {
 
     ASSERT_TRUE(result.accepted());
     ASSERT_EQ(document.snapshot().text, std::string(ref::snapshot_text(oracle)));
-    ASSERT_EQ(result.revision, Revision{2});
+    ASSERT_EQ(result.revision, std::uint64_t{2});
     ASSERT_TRUE(document.dirty());
 }
 
@@ -129,7 +129,7 @@ TEST(randomizedMultiEditSnapshotsMatchReferenceEditor) {
                   std::string(ref::snapshot_text(oracle)));
     }
 
-    ASSERT_EQ(document.revision(), Revision{501});
+    ASSERT_EQ(document.revision(), std::uint64_t{501});
     ASSERT_TRUE(document.dirty());
 }
 
@@ -155,7 +155,7 @@ TEST(staleRevisionRejectsWithoutStateChange) {
     const auto before = document.snapshot();
 
     const auto result =
-        document.apply(transaction(Revision{1}, {edit(0, 1, "A")}));
+        document.apply(transaction(std::uint64_t{1}, {edit(0, 1, "A")}));
 
     ASSERT_EQ(result.error, DocumentError::StaleRevision);
     ASSERT_EQ(document.snapshot(), before);
@@ -244,8 +244,8 @@ TEST(snapshotIsOwningAndRevisionAdvancesOncePerTransaction) {
         document.revision(), {edit(0, 1, "A"), edit(3, 0, "!")}));
 
     ASSERT_TRUE(result.accepted());
-    ASSERT_EQ(result.revision, Revision{2});
-    ASSERT_EQ(document.revision(), Revision{2});
+    ASSERT_EQ(result.revision, std::uint64_t{2});
+    ASSERT_EQ(document.revision(), std::uint64_t{2});
     ASSERT_EQ(oldSnapshot.text, std::string("abc"));
     ASSERT_FALSE(oldSnapshot.dirty);
     ASSERT_EQ(document.snapshot().text, std::string("Abc!"));

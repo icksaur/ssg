@@ -1,5 +1,4 @@
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/CommandInvocation.cpp
     ${SSG_SOURCE_DIR}/src/runtime/command_executor.cpp
 )
 

@@ -1,11 +1,9 @@
 #include <tui/GridPresenter.h>
 
-#include <ssg/EditorSession.h>
-
+#include "../../src/runtime/editor_session_internal.h"
 #include "grid_projection_state.h"
 
 #include <algorithm>
-#include <limits>
 #include <set>
 #include <stdexcept>
 #include <type_traits>
@@ -23,8 +21,8 @@ const UiNode* findUiNode(const UiNode& node, std::string_view id) {
     return nullptr;
 }
 
-std::vector<GridIntrinsicSize> semanticIntrinsicSizes(
-    const UiNode& root, const SessionSnapshotSections& sections) {
+std::vector<GridIntrinsicSize> intrinsicSizes(
+    const UiNode& root, const ExternalModificationViewState& external) {
     std::vector<GridIntrinsicSize> sizes;
     const auto collect = [&](const auto& self, const UiNode& node) -> void {
         if (node.size.kind() == SizeKind::Auto && node.isLeaf()) {
@@ -37,63 +35,46 @@ std::vector<GridIntrinsicSize> semanticIntrinsicSizes(
     collect(collect, root);
     for (auto& size : sizes) {
         if (size.id == UiNodeId{std::string{kExternalModNodeId}}) {
-            size.size =
-                measureExternalModificationSurface(
-                    sections.externalModification);
+            size.size = measureExternalModificationSurface(external);
             break;
         }
     }
     return sizes;
 }
 
-SolveUiFrameResult trySolveFrameLayout(
-    const SessionSnapshot& semantic,
-    GridSize dimensions, const Style& style) {
-    if (dimensions.columns <= 0 || dimensions.rows <= 0) {
-        return {SolvedGridTree{}, {}};
-    }
-    if (dimensions.columns <
-            static_cast<int>(style.dimensions.minimumColumns) ||
+SolveUiFrameResult solveFrameLayout(
+    const UiSchema& schema, const PromptStatusViewState& promptStatus,
+    bool noticePresent, const ExternalModificationViewState& external,
+    bool palettePresent, GridSize dimensions, const Style& style) {
+    if (dimensions.columns <= 0 || dimensions.rows <= 0 ||
+        dimensions.columns < static_cast<int>(style.dimensions.minimumColumns) ||
         dimensions.rows < static_cast<int>(style.dimensions.minimumRows)) {
         return {SolvedGridTree{}, {}};
     }
-
-    const UiSchema& schema = semantic.sections().uiTree;
-    const UiSchemaValidation validation = validateUiSchema(schema);
+    const auto validation = validateUiSchema(schema);
     if (!validation.ok()) {
-        return {std::nullopt,
-                "invalid UI schema: " + *validation.error};
+        return {std::nullopt, "invalid UI schema: " + *validation.error};
     }
 
-    const auto& root = schema.root;
-    auto intrinsicSizes =
-        semanticIntrinsicSizes(root, semantic.sections());
+    auto sizes = intrinsicSizes(schema.root, external);
     SolveUiFrameResult result;
     for (;;) {
         result = solveUiFrame(
-            schema,
-            intrinsicSizes, {0, 0, dimensions.columns, dimensions.rows});
-        // WholeScreenAssembly's exhaustive replaceable content branches are
-        // editor and find-results. Extend this check with that topology.
+            schema, sizes, {0, 0, dimensions.columns, dimensions.rows});
         const auto* content =
             result.tree
                 ? (result.tree->find(UiNodeId{std::string{kEditorNodeId}})
-                       ? result.tree->find(
-                             UiNodeId{std::string{kEditorNodeId}})
+                       ? result.tree->find(UiNodeId{std::string{kEditorNodeId}})
                        : result.tree->find(UiNodeId{
                              std::string{kFindResultsViewportNodeId}}))
                 : nullptr;
         if (result.tree && (!content || content->rect.height > 0)) break;
-        auto external = std::find_if(
-            intrinsicSizes.begin(), intrinsicSizes.end(),
-            [](const GridIntrinsicSize& size) {
-                return size.id ==
-                       UiNodeId{std::string{kExternalModNodeId}};
+        auto externalSize = std::find_if(
+            sizes.begin(), sizes.end(), [](const GridIntrinsicSize& size) {
+                return size.id == UiNodeId{std::string{kExternalModNodeId}};
             });
-        if (external == intrinsicSizes.end() || external->size.rows <= 1) {
-            break;
-        }
-        --external->size.rows;
+        if (externalSize == sizes.end() || externalSize->size.rows <= 1) break;
+        --externalSize->size.rows;
     }
     if (!result.tree) {
         if (result.error == "UI frame does not fit grid bounds") {
@@ -102,10 +83,6 @@ SolveUiFrameResult trySolveFrameLayout(
         return result;
     }
 
-    // Only migrated placements are exposed. Unit intrinsic sizes let the outer
-    // tree solve while unmigrated surfaces still own their legacy projections;
-    // erasing those provisional nodes prevents a later consumer from treating
-    // placeholder geometry as authoritative.
     std::set<UiNodeId> retained{
         UiNodeId{std::string{kRootNodeId}},
         UiNodeId{std::string{kHeaderNodeId}},
@@ -119,19 +96,14 @@ SolveUiFrameResult trySolveFrameLayout(
         UiNodeId{std::string{kFindResultsViewportNodeId}},
         UiNodeId{std::string{kHeaderPromptInputNodeId}},
     };
-    const auto* promptSchema = findUiNode(
-        semantic.sections().uiTree.root, kFooterPromptNodeId);
-    if (semantic.sections().promptStatus.activeKind && promptSchema &&
-        promptFocusRegion(*semantic.sections().promptStatus.activeKind) ==
-            PromptRegion::Footer) {
+    const auto* promptSchema = findUiNode(schema.root, kFooterPromptNodeId);
+    if (promptStatus.activeKind && promptSchema &&
+        promptFocusRegion(*promptStatus.activeKind) == PromptRegion::Footer) {
         const auto retainPrompt = [&](const auto& self,
                                       const UiNode& node) -> void {
             retained.insert(node.id);
-            if (const auto* container =
-                    std::get_if<UiContainer>(&node.content)) {
-                for (const auto& child : container->children) {
-                    self(self, child);
-                }
+            if (const auto* container = std::get_if<UiContainer>(&node.content)) {
+                for (const auto& child : container->children) self(self, child);
             }
         };
         retainPrompt(retainPrompt, *promptSchema);
@@ -139,336 +111,320 @@ SolveUiFrameResult trySolveFrameLayout(
     std::erase_if(result.tree->nodes, [&](const SolvedGridNode& node) {
         return !retained.contains(node.id);
     });
-    if (semantic.sections().promptStatus.activeKind && promptSchema &&
-        promptFocusRegion(*semantic.sections().promptStatus.activeKind) ==
-            PromptRegion::Footer) {
-        const auto validatePrompt = [&](const auto& self,
-                                        const UiNode& schemaNode) -> bool {
+    if (promptStatus.activeKind && promptSchema &&
+        promptFocusRegion(*promptStatus.activeKind) == PromptRegion::Footer) {
+        const auto validPrompt = [&](const auto& self,
+                                     const UiNode& schemaNode) -> bool {
             const auto* node = result.tree->find(schemaNode.id);
             if (!node) return false;
-            if (const auto* leaf =
-                    std::get_if<UiLeaf>(&schemaNode.content)) {
-                return node->widget &&
-                       node->widget->id == leaf->widget.id &&
+            if (const auto* leaf = std::get_if<UiLeaf>(&schemaNode.content)) {
+                return node->widget && node->widget->id == leaf->widget.id &&
                        node->widget->kind == leaf->widget.kind &&
                        (leaf->widget.kind != WidgetKind::Label ||
                         node->rect.width > 0);
             }
-            const auto* container =
-                std::get_if<UiContainer>(&schemaNode.content);
+            const auto* container = std::get_if<UiContainer>(&schemaNode.content);
             if (!container) return true;
             return std::all_of(
                 container->children.begin(), container->children.end(),
                 [&](const UiNode& child) { return self(self, child); });
         };
-        if (!validatePrompt(validatePrompt, *promptSchema)) {
+        if (!validPrompt(validPrompt, *promptSchema)) {
             return {std::nullopt,
                     "prompt backing does not correspond to UI nodes"};
         }
     }
-    if (semantic.sections().noticeView &&
+    if (noticePresent &&
         !result.tree->find(UiNodeId{std::string{kNoticeNodeId}})) {
-        return {std::nullopt,
-                "notice backing has no solved UI node"};
+        return {std::nullopt, "notice backing has no solved UI node"};
     }
-    if (!semantic.sections().externalModification.files.empty() &&
+    if (!external.files.empty() &&
         !result.tree->find(UiNodeId{std::string{kExternalModNodeId}})) {
         return {std::nullopt,
                 "external-modification backing has no solved UI node"};
     }
-    if (semantic.sections().palette.activePicker &&
+    if (palettePresent &&
         !result.tree->find(
             UiNodeId{std::string{kFindResultsViewportNodeId}})) {
-        return {std::nullopt,
-                "palette backing has no solved UI node"};
+        return {std::nullopt, "palette backing has no solved UI node"};
     }
     return result;
 }
 
-SolvedGridTree requireFrameLayout(
-    const SessionSnapshot& semantic,
-    GridSize dimensions, const Style& style) {
-    auto result = trySolveFrameLayout(semantic, dimensions, style);
-    if (!result.tree) {
-        throw std::logic_error(
-            "GridFrame: semantic UI frame cannot be solved: " + result.error);
-    }
-    return std::move(*result.tree);
-}
-
-}  // namespace
-
-GridFrame::GridFrame(SessionSnapshot const& semantic,
-                     GridProjection projection, GridBasis basis,
-                     PaletteReport palette)
-    : projection_{std::move(projection)},
-      layout_{requireFrameLayout(
-          semantic,
-          {static_cast<int>(projection_.viewport.dimensions.columns),
-           static_cast<int>(projection_.viewport.dimensions.rows)},
-          projection_.style)},
-      palette_{std::move(palette)},
-      basis_{basis} {
-    if (auto error = solveUiRegions(semantic)) {
-        throw std::logic_error("GridFrame: " + *error);
-    }
-    solvePanel(semantic, 0, false);
-    solveDocument(semantic);
-}
-
-GridFrame::GridFrame(GridProjection projection, SolvedGridTree layout,
-                     GridBasis basis,
-                     PaletteReport palette)
-    : projection_{std::move(projection)},
-      layout_{std::move(layout)},
-      palette_{std::move(palette)},
-      basis_{basis} {}
-
-std::optional<std::string> GridFrame::solveUiRegions(
-    SessionSnapshot const& semantic) {
-    const auto& schema = semantic.sections().uiTree;
+bool solveUiRegions(
+    const SolvedGridTree& layout, const UiSchema& schema,
+    const PromptStatusViewState& promptStatus,
+    const PaletteViewState& paletteView, const PaletteReport& palette,
+    const Style& style, std::optional<SolvedUiRegion>& header,
+    std::optional<SolvedUiRegion>& footer) {
     const auto solve = [&](std::string_view id, SemanticRole role,
                            std::optional<SolvedUiRegion>& output,
                            const StatusViewState* status,
-                           const PromptInputProjection* input)
-        -> std::optional<std::string> {
-        const auto* solved = layout_.find(UiNodeId{std::string{id}});
+                           const PromptInputProjection* input) {
+        const auto* solved = layout.find(UiNodeId{std::string{id}});
         if (!solved) {
             output.reset();
-            return std::nullopt;
+            return true;
         }
         const auto* subtree = findUiNode(schema.root, id);
-        if (!subtree) {
-            return "solved " + std::string{id} +
-                   " band has no schema subtree";
-        }
+        if (!subtree) return false;
         SolvedUiRegion surface;
-        const auto lowered =
-            solveUiRegion(*subtree, solved->rect, role, projection_.style,
-                          surface, status, input);
-        if (!lowered.ok()) {
-            return std::string{id} + " UI projection failed: " +
-                   *lowered.error;
+        if (!projectUiRegion(*subtree, solved->rect, role, style, surface,
+                             status, input)
+                 .ok()) {
+            return false;
         }
         output = std::move(surface);
-        return std::nullopt;
+        return true;
     };
 
     PromptInputProjection input;
     const PromptInputProjection* inputPtr = nullptr;
-    if (semantic.sections().palette.activePicker &&
-        layout_.find(
-            UiNodeId{std::string{kHeaderPromptInputNodeId}})) {
-        input = {true, palette_.query, palette_.ghost};
+    if (paletteView.activePicker &&
+        layout.find(UiNodeId{std::string{kHeaderPromptInputNodeId}})) {
+        input = {true, palette.query, palette.ghost};
         inputPtr = &input;
     }
-    if (auto error =
-            solve(kHeaderNodeId, SemanticRole::Header, header_, nullptr,
-                  inputPtr)) {
-        return error;
-    }
-    return solve(kFooterNodeId, SemanticRole::Footer, footer_,
-                 &semantic.sections().promptStatus.status, nullptr);
+    return solve(kHeaderNodeId, SemanticRole::Header, header, nullptr, inputPtr) &&
+           solve(kFooterNodeId, SemanticRole::Footer, footer,
+                 &promptStatus.status, nullptr);
 }
 
-void GridFrame::solvePanel(SessionSnapshot const& semantic,
-                           std::uint32_t treeFirstVisible,
-                           bool revealTreeSelection) {
-    const auto* node =
-        layout_.find(UiNodeId{std::string{kPanelNodeId}});
-    if (!node) {
-        panel_.reset();
-        return;
-    }
-    panel_ = solvePanelSurface(semantic.sections().tree, *node,
-                               treeFirstVisible, revealTreeSelection,
-                               projection_.style);
-}
+}  // namespace
 
-void GridFrame::solveDocument(SessionSnapshot const& semantic) {
-    const auto* node =
-        layout_.find(UiNodeId{std::string{kDocumentViewportNodeId}});
-    if (!node) {
-        document_.reset();
-        return;
-    }
-    bool lineNumbers = false;
-    if (const auto* setting =
-            semantic.sections().settings.find(SettingKey::LineNumbers)) {
-        if (const auto* enabled =
-                std::get_if<bool>(&setting->effective.value)) {
-            lineNumbers = *enabled;
-        }
-    }
-    const auto lines = static_cast<std::uint32_t>(
-        semantic.sections().syntax.indentation().size());
-    document_ = solveDocumentSurface(
-        *node, semantic.topology().panes, lineNumbers, lines,
-        projection_.style.dimensions);
-}
-
-std::optional<GridFrame> GridFrame::fromSemantic(
-    SessionSnapshot const& semantic, Style style, ViewportDimensions dimensions,
-    GridBasis basis, PaletteReport palette,
-    std::uint32_t treeFirstVisible, bool revealTreeSelection,
-    SelectionNavigation navigation) {
-    const GridSize gridSize{static_cast<int>(dimensions.columns),
-                            static_cast<int>(dimensions.rows)};
-    auto result = trySolveFrameLayout(semantic, gridSize, style);
-    if (!result.tree) return std::nullopt;
-    GridFrame frame{
-        GridProjection{ViewportViewState{dimensions}, std::move(style),
-                       navigation},
-        std::move(*result.tree), basis, std::move(palette)};
-    if (frame.solveUiRegions(semantic)) return std::nullopt;
-    frame.solvePanel(semantic, treeFirstVisible, revealTreeSelection);
-    frame.solveDocument(semantic);
-    return frame;
-}
-
-GridPresentation::GridPresentation(SessionSnapshot semantic, GridFrame frame)
-    : semantic_{std::move(semantic)}, frame_{std::move(frame)} {
-    if (frame_.basis().semanticRevision != semantic_.revision()) {
-        throw std::logic_error(
-            "GridPresentation: frame and semantic snapshot revisions differ");
-    }
-}
-
-void GridFrame::finalizeViewport(ViewportViewState viewport,
-                                 SelectionNavigation navigation) {
-    projection_.viewport = std::move(viewport);
-    projection_.selectionNav = navigation;
-}
-
-GridPresenter::GridPresenter(ViewId viewId)
-    : viewId_{viewId},
-      state_{std::make_unique<detail::GridProjectionState>()} {}
+GridPresenter::GridPresenter()
+    : state_{std::make_unique<detail::GridProjectionState>()} {}
 GridPresenter::~GridPresenter() = default;
 GridPresenter::GridPresenter(GridPresenter&&) noexcept = default;
 GridPresenter& GridPresenter::operator=(GridPresenter&&) noexcept = default;
 
 std::optional<GridPresentation> GridPresenter::project(
     EditorSession& session, GridPresentationRequest request) {
-    auto& state = *state_;
-    constexpr int kProjectionAttempts = 3;
-    for (int attempt = 0; attempt < kProjectionAttempts; ++attempt) {
-        auto captured = session.capturePresentation(
-            viewId_, request.palette);
-        if (!captured) return std::nullopt;
-        if (state.adoptedRevision &&
-            captured->semantic.revision() < *state.adoptedRevision) {
-            return std::nullopt;
-        }
-        auto semantic = std::move(captured->semantic);
-        const auto& sections = semantic.sections();
-        auto proposedNavigation = state.navigation;
-        bool confirmedSelection = false;
-        if (state.pendingSelection &&
-            sections.tabs.active == state.pendingSelection->activeTab &&
-            sections.document.revision ==
-                state.pendingSelection->documentRevision &&
-            sections.selection == state.pendingSelection->expected) {
-            proposedNavigation = state.pendingSelection->navigation;
-            confirmedSelection = true;
-        }
-        const bool documentChanged =
-            !state.documentRevision ||
-            *state.documentRevision != sections.document.revision ||
-            !state.findGeneration ||
-            *state.findGeneration != sections.findReplace.generation ||
-            state.activeTab != sections.tabs.active ||
-            !state.selections || *state.selections != sections.selection;
-        const auto* treeProvider = activeTreeProvider(sections.tree);
-        const auto selectedTree =
-            treeProvider == nullptr ? std::optional<TreeNodeId>{}
-                                    : treeProvider->selected;
-        const auto documentRevision = sections.document.revision;
-        const auto findGeneration = sections.findReplace.generation;
-        const auto activeTab = sections.tabs.active;
-        const auto selections = sections.selection;
-        const auto revision = semantic.revision();
-        const auto nextGeneration = state.generation + 1;
-        auto frame = GridFrame::fromSemantic(
-            semantic, std::move(captured->style),
-            request.dimensions,
-            GridBasis{viewId_, revision, nextGeneration}, request.palette,
-            state.treeFirstVisible,
-            selectedTree != state.treeSelection || !state.panelVisible,
-            proposedNavigation);
-        if (!frame) return std::nullopt;
-        const auto& frameSections = semantic.sections();
-        if (frameSections.palette.activePicker && frame->palette_.rows.empty() &&
-            frame->palette_.query.empty()) {
-            const auto* candidates = frameSections.palette.candidatesFor(
-               frameSections.palette.activePicker->mode);
-            const auto* pickerNode = frame->layout().find(
-               UiNodeId{std::string{kFindResultsViewportNodeId}});
-            if (candidates && !candidates->empty() && pickerNode) {
-               PaletteWindowState window;
-               window.paneRows = static_cast<std::uint32_t>(
-                   std::max(pickerNode->rect.height, 1));
-               frame->palette_ =
-                   PaletteSearcher{}.report(*candidates, window);
-            }
-        }
-
-        std::uint32_t paneRows = 1;
-        std::uint32_t paneColumns = 1;
-        if (frame->document() && !frame->document()->panes.empty()) {
-            const auto& pane =
-                frame->document()
-                    ->panes[frame->document()->activePaneIndex]
-                    .content;
-            paneRows = static_cast<std::uint32_t>(std::max(pane.height, 1));
-            paneColumns =
-                static_cast<std::uint32_t>(std::max(pane.width, 1));
-        }
-        auto viewport = session.projectViewport(
-            {viewId_, revision, request.dimensions, paneRows,
-             paneColumns, proposedNavigation,
-             documentChanged && !confirmedSelection},
-            state.viewport);
-        if (!viewport) continue;
-
-        frame->finalizeViewport(std::move(viewport->viewport),
-                                viewport->navigation);
-        state.pendingSelection.reset();
-        state.documentRevision = documentRevision;
-        state.findGeneration = findGeneration;
-        state.activeTab = activeTab;
-        state.selections = selections;
-        state.adoptedRevision = revision;
-        state.generation = nextGeneration;
-        state.navigation = viewport->navigation;
-        state.navigation.firstVisualRow =
-            frame->presentation().viewport.firstVisualRow;
-        state.navigation.firstVisualColumn =
-            frame->presentation().viewport.firstVisualColumn;
-        if (frame->panel()) {
-            state.treeFirstVisible = frame->panel()->firstVisible;
-            state.panelVisible = true;
-        } else {
-            state.panelVisible = false;
-        }
-        state.treeSelection = selectedTree;
-        return GridPresentation{std::move(semantic), std::move(*frame)};
+    if (session.impl_->session->dispatchInProgress()) {
+        throw std::logic_error{"a view cannot be presented during dispatch"};
     }
-    return std::nullopt;
+    std::lock_guard operationLock{session.impl_->operationMutex};
+    return project(*session.impl_, std::move(request));
 }
 
-ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
+std::optional<GridPresentation> GridPresenter::project(
+    EditorSession::Impl& runtime, GridPresentationRequest request) {
+    const auto* activeDocument = runtime.activeDocument();
+    std::string documentText = runtime.activeText();
+    std::uint64_t documentRevision =
+        activeDocument ? activeDocument->revision() : 0;
+    std::optional<std::string> diffFileIdentity;
+    if (const auto* tab = runtime.activeTabState();
+        tab && tab->kind == TabKind::LiveDiff &&
+        !tab->contentIdentity.empty()) {
+        diffFileIdentity = tab->contentIdentity;
+        documentRevision = runtime.diff.viewState().revision;
+    }
+    auto style = runtime.style;
+    auto panes = runtime.paneTopology;
+    auto selections = runtime.selection.selections;
+    auto findReplace = runtime.findReplace.viewState();
+    auto diff = runtime.diff.viewState();
+    auto lspSync = runtime.lspSync;
+    auto syntax = runtime.activeSyntaxView();
+    auto theme = runtime.theme;
+    auto uiTree = runtime.projectedUiTree();
+    auto tabs = runtime.tabs.viewState();
+    auto notice = runtime.noticeView();
+    auto externalModification = runtime.external.viewState();
+    auto followMode = runtime.follow.viewState().mode;
+    auto promptStatus = runtime.promptStatusView();
+    auto paletteView = runtime.paletteView();
+    auto tree = runtime.treeView();
+    auto clipboardWrite = runtime.clipboard.viewState().systemWrite;
+    const bool wordWrap = runtime.wordWrap;
+    const bool lineNumbers = runtime.lineNumbers;
+
+    auto& state = *state_;
+    auto proposedNavigation = state.navigation;
+    bool confirmedSelection = false;
+    if (state.pendingSelection &&
+        tabs.active == state.pendingSelection->activeTab &&
+        documentRevision == state.pendingSelection->documentRevision &&
+        selections == state.pendingSelection->expected) {
+        proposedNavigation = state.pendingSelection->navigation;
+        confirmedSelection = true;
+    }
+    const bool documentChanged =
+        !state.documentRevision || *state.documentRevision != documentRevision ||
+        !state.findGeneration ||
+        *state.findGeneration != findReplace.generation ||
+        state.activeTab != tabs.active || !state.selections ||
+        *state.selections != selections;
+    const auto* treeProvider = activeTreeProvider(tree);
+    const auto selectedTree = treeProvider == nullptr
+                                  ? std::optional<TreeNodeId>{}
+                                  : treeProvider->selected;
+
+    const GridSize gridSize{
+        static_cast<int>(request.dimensions.columns),
+        static_cast<int>(request.dimensions.rows)};
+    auto solved = solveFrameLayout(
+        uiTree, promptStatus, notice.has_value(), externalModification,
+        paletteView.activePicker.has_value(), gridSize, style);
+    if (!solved.tree) return std::nullopt;
+    auto layout = std::move(*solved.tree);
+
+    auto palette = request.palette;
+    if (paletteView.activePicker && palette.rows.empty() &&
+        palette.query.empty()) {
+        const auto* candidates =
+            paletteView.candidatesFor(paletteView.activePicker->mode);
+        const auto* pickerNode = layout.find(
+            UiNodeId{std::string{kFindResultsViewportNodeId}});
+        if (candidates && !candidates->empty() && pickerNode) {
+            PaletteWindowState window;
+            window.paneRows = static_cast<std::uint32_t>(
+                std::max(pickerNode->rect.height, 1));
+            palette = PaletteSearcher{}.report(*candidates, window);
+        }
+    }
+
+    std::optional<SolvedUiRegion> header;
+    std::optional<SolvedUiRegion> footer;
+    if (!solveUiRegions(layout, uiTree, promptStatus, paletteView, palette,
+                        style, header, footer)) {
+        return std::nullopt;
+    }
+    std::optional<SolvedPanelSurface> panel;
+    if (const auto* node =
+            layout.find(UiNodeId{std::string{kPanelNodeId}})) {
+        panel = solvePanelSurface(
+            tree, *node, state.treeFirstVisible,
+            selectedTree != state.treeSelection || !state.panelVisible, style);
+    }
+    std::optional<SolvedDocumentSurface> document;
+    if (const auto* node =
+            layout.find(UiNodeId{std::string{kDocumentViewportNodeId}})) {
+        document = solveDocumentSurface(
+            *node, panes, lineNumbers,
+            static_cast<std::uint32_t>(syntax.indentation().size()),
+            style.dimensions);
+    }
+
+    std::uint32_t paneRows = 1;
+    std::uint32_t paneColumns = 1;
+    if (document && !document->panes.empty()) {
+        const auto& content = document->panes[document->activePaneIndex].content;
+        paneRows = static_cast<std::uint32_t>(std::max(content.height, 1));
+        paneColumns = static_cast<std::uint32_t>(std::max(content.width, 1));
+    }
+    auto navigation = proposedNavigation;
+    const auto activeDiff = diff.fileForIdentity(diffFileIdentity);
+    const DiffFileView* activeDiffFile =
+        activeDiff ? &activeDiff->get() : nullptr;
+    if (documentChanged && !confirmedSelection) {
+        const ViewportDimensions revealViewport{
+            std::max(paneColumns, std::uint32_t{1}),
+            std::max(paneRows, std::uint32_t{1})};
+        auto selectionView = SelectionViewState{
+            selections, proposedNavigation.firstVisualRow,
+            proposedNavigation.firstVisualColumn,
+            proposedNavigation.desiredCell};
+        auto revealed = SelectionNavigator{}.apply(
+            documentText, selectionView, SelectionCommand::ViewRevealCaret,
+            revealViewport, {}, {}, 4, wordWrap, activeDiffFile);
+        if (revealed.accepted() && revealed.delta.replacement) {
+            navigation = {revealed.delta.replacement->firstVisualRow,
+                          revealed.delta.replacement->firstVisualColumn,
+                          revealed.delta.replacement->desiredCell};
+        }
+    }
+    const ViewportDimensions content{
+        std::max<std::uint32_t>(
+            1, std::min(paneColumns, request.dimensions.columns)),
+        std::max<std::uint32_t>(
+            1, std::min(paneRows, request.dimensions.rows))};
+    ViewportViewState viewport = [&] {
+        if (!wordWrap) {
+            return state.viewport.computeUnwrapped(
+                documentText, content, navigation.firstVisualRow,
+                navigation.firstVisualColumn, 4, activeDiffFile,
+                request.dimensions, &state.lineCache);
+        }
+        if (state.wrappedDocumentRevision != documentRevision ||
+            state.wrappedTab != tabs.active) {
+            state.wrappedCellRuns.clear();
+            std::size_t start = 0;
+            while (start <= documentText.size()) {
+                const auto end = documentText.find('\n', start);
+                state.wrappedCellRuns.push_back(GraphemeLayout{}.computeRun(
+                    documentText.substr(start, end == std::string::npos
+                                                   ? end
+                                                   : end - start),
+                    4));
+                if (end == std::string::npos) break;
+                start = end + 1;
+            }
+            state.wrappedDocumentRevision = documentRevision;
+            state.wrappedTab = tabs.active;
+        }
+        return state.viewport.compute(
+            state.wrappedCellRuns, content, navigation.firstVisualRow,
+            activeDiffFile, request.dimensions);
+    }();
+
+    state.pendingSelection.reset();
+    state.documentRevision = documentRevision;
+    state.findGeneration = findReplace.generation;
+    state.activeTab = tabs.active;
+    state.selections = selections;
+    ++state.generation;
+    state.navigation = navigation;
+    state.navigation.firstVisualRow = viewport.firstVisualRow;
+    state.navigation.firstVisualColumn = viewport.firstVisualColumn;
+    if (panel) {
+        state.treeFirstVisible = panel->firstVisible;
+        state.panelVisible = true;
+    } else {
+        state.panelVisible = false;
+    }
+    state.treeSelection = selectedTree;
+
+    return GridPresentation{
+        .presentationGeneration = state.generation,
+        .viewport = std::move(viewport),
+        .style = std::move(style),
+        .layout = std::move(layout),
+        .palette = std::move(palette),
+        .header = std::move(header),
+        .footer = std::move(footer),
+        .panel = std::move(panel),
+        .document = std::move(document),
+        .documentText = std::move(documentText),
+        .documentRevision = documentRevision,
+        .diffFileIdentity = std::move(diffFileIdentity),
+        .selections = std::move(selections),
+        .findReplace = std::move(findReplace),
+        .diff = std::move(diff),
+        .lspSync = std::move(lspSync),
+        .syntax = std::move(syntax),
+        .theme = std::move(theme),
+        .uiTree = std::move(uiTree),
+        .tabs = std::move(tabs),
+        .notice = std::move(notice),
+        .externalModification = std::move(externalModification),
+        .followMode = followMode,
+        .promptStatus = std::move(promptStatus),
+        .paletteView = std::move(paletteView),
+        .clipboardWrite = std::move(clipboardWrite),
+        .wordWrap = wordWrap,
+    };
+}
+
+ViewActionResult GridPresenter::apply(ViewAction const& request,
                                       GridPresentation const& frame) {
     auto& state = *state_;
-    const auto basis = frame.basis();
-    if (request.viewId != viewId_ || basis.viewId != viewId_ ||
-        request.semanticRevision != basis.semanticRevision ||
-        !state.adoptedRevision ||
-        basis.semanticRevision != *state.adoptedRevision ||
-        basis.presentationGeneration != state.generation) {
+    if (frame.presentationGeneration != state.generation) {
         return {ViewActionStatus::Rejected, std::nullopt,
-                "view action basis is stale"};
+                "view action presentation is stale"};
     }
-    const auto* presentation = &frame.presentation();
+    const auto* presentation = &frame;
 
     bool supported = true;
     bool changed = false;
@@ -476,10 +432,10 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
     std::optional<ViewTransitionInput> resolvedInput;
     auto resolveVisualSelection = [&](SelectionCommand command,
                                       bool primaryOnly) {
-        auto inputSelections = frame.sections().selection;
+        auto inputSelections = frame.selections;
         if (primaryOnly) {
             inputSelections =
-                SelectionSet{{frame.sections().selection.primary()}};
+                SelectionSet{{frame.selections.primary()}};
         }
         auto before = SelectionViewState{
             std::move(inputSelections),
@@ -487,19 +443,19 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
             state.navigation.firstVisualColumn,
             state.navigation.desiredCell};
         const DiffFileView* activeDiff = nullptr;
-        if (frame.sections().document.diffFileIdentity) {
+        if (frame.diffFileIdentity) {
             const auto found = std::ranges::find(
-                frame.sections().diff.files,
-                *frame.sections().document.diffFileIdentity,
+                frame.diff.files,
+                *frame.diffFileIdentity,
                 [](const DiffFileView& file) {
                     return file.id.value();
                 });
-            if (found != frame.sections().diff.files.end()) {
+            if (found != frame.diff.files.end()) {
                 activeDiff = &*found;
             }
         }
-        const auto* activeDocumentPane = frame.document()
-            ? &frame.document()->panes[frame.document()->activePaneIndex]
+        const auto* activeDocumentPane = frame.document
+            ? &frame.document->panes[frame.document->activePaneIndex]
             : nullptr;
         const auto paneColumns = activeDocumentPane
             ? static_cast<std::uint32_t>(
@@ -510,22 +466,16 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                   std::max(activeDocumentPane->content.height, 1))
             : std::max(presentation->viewport.scrollbar.viewportRows,
                        std::uint32_t{1});
-        const auto* wordWrapSetting =
-            frame.sections().settings.find(SettingKey::WordWrap);
-        const auto* wordWrap =
-            wordWrapSetting
-                ? std::get_if<bool>(&wordWrapSetting->effective.value)
-                : nullptr;
         auto result = SelectionNavigator{}.apply(
-            frame.sections().document.text, before, command,
+            frame.documentText, before, command,
             {paneColumns, paneRows}, {}, {}, 4,
-            wordWrap != nullptr && *wordWrap, activeDiff);
+            frame.wordWrap, activeDiff);
         if (!result.accepted()) return false;
 
         auto resolved = result.delta.replacement.value_or(before);
         auto resolvedSelections = resolved.selections;
         if (primaryOnly) {
-            auto selections = frame.sections().selection.items();
+            auto selections = frame.selections.items();
             selections.back() = resolved.selections.primary();
             resolvedSelections = SelectionSet{std::move(selections)};
         }
@@ -537,21 +487,19 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
         }
         if (primaryOnly) {
             resolvedInput = ViewTransitionInput{
-                SemanticInputBasis{basis.semanticRevision},
                 PointerSelectionTransition{
                     resolvedSelections.primary().active.byteOffset}};
         } else {
             resolvedInput = ViewTransitionInput{
-                SemanticInputBasis{basis.semanticRevision},
-                SelectionTransition{*frame.sections().tabs.active,
-                                    frame.sections().document.revision,
+                SelectionTransition{*frame.tabs.active,
+                                    frame.documentRevision,
                                     std::move(ranges)}};
         }
-        if (resolvedSelections != frame.sections().selection) {
+        if (resolvedSelections != frame.selections) {
             state.pendingSelection =
                 detail::GridProjectionState::PendingSelection{
-                    *frame.sections().tabs.active,
-                    frame.sections().document.revision,
+                    *frame.tabs.active,
+                    frame.documentRevision,
                     std::move(resolvedSelections),
                     {resolved.firstVisualRow,
                      resolved.firstVisualColumn,
@@ -579,8 +527,8 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                     state.navigation.firstVisualRow =
                         offset.firstVisible();
                 } else if (action.target == ScrollTarget::Tree &&
-                           frame.panel()) {
-                    auto const& tree = *frame.panel();
+                           frame.panel) {
+                    auto const& tree = *frame.panel;
                     ScrollOffset offset{state.treeFirstVisible};
                     offset.byLines(action.rows, tree.scrollbar.totalRows,
                                    tree.scrollbar.viewportRows);
@@ -623,8 +571,8 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                     state.navigation.firstVisualRow =
                         offset.firstVisible();
                 } else if (action.target == ScrollTarget::Tree &&
-                           frame.panel()) {
-                    auto const& tree = *frame.panel();
+                           frame.panel) {
+                    auto const& tree = *frame.panel;
                     ScrollOffset offset{state.treeFirstVisible};
                     offset.toFraction(action.numerator, action.denominator,
                                       tree.scrollbar.totalRows,
@@ -638,7 +586,7 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
             } else if constexpr (std::same_as<Action, RevealSelection> ||
                                  std::same_as<Action, CenterSelection>) {
                 pausesFollow = true;
-                auto const& selections = frame.sections().selection;
+                auto const& selections = frame.selections;
                 RowProjection rows{presentation->viewport.rowProjection};
                 const auto selected =
                     rows.visualRowForPosition(selections.primary().active);
@@ -667,7 +615,7 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                 state.navigation.firstVisualRow = next;
             } else if constexpr (std::same_as<Action,
                                               MoveVisualSelection>) {
-                if (!frame.sections().tabs.active) {
+                if (!frame.tabs.active) {
                     supported = false;
                     return;
                 }
@@ -704,7 +652,7 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                     supported = false;
                     return;
                 }
-                if (!frame.sections().tabs.active ||
+                if (!frame.tabs.active ||
                     !resolveVisualSelection(
                         action.direction == DocumentPointerEdge::Before
                             ? SelectionCommand::SelectLineUp
@@ -714,21 +662,20 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                 }
                 return;
             } else if constexpr (std::same_as<Action, ResolvePaneFocus>) {
-                if (!frame.document()) {
+                if (!frame.document) {
                     supported = false;
                     return;
                 }
                 if (const auto pane =
-                        paneInDirection(*frame.document(), action.direction)) {
+                        paneInDirection(*frame.document, action.direction)) {
                     resolvedInput = ViewTransitionInput{
-                        SemanticInputBasis{basis.semanticRevision},
                         PaneFocusTransition{*pane}};
                 }
             } else {
                 supported = false;
             }
         },
-        request.action);
+        request);
 
     if (!supported) {
         return {ViewActionStatus::Rejected, std::nullopt,
@@ -740,11 +687,9 @@ ViewActionResult GridPresenter::apply(ViewActionRequest const& request,
                 std::move(*resolvedInput), {}};
     }
     if (pausesFollow &&
-        frame.sections().followEdits.mode == FollowMode::Following) {
+        frame.followMode == FollowMode::Following) {
         return {ViewActionStatus::TransitionRequired,
-                ViewTransitionInput{
-                    SemanticInputBasis{basis.semanticRevision},
-                    PauseFollowTransition{}},
+                ViewTransitionInput{PauseFollowTransition{}},
                 {}};
     }
     return {ViewActionStatus::Applied, std::nullopt, {}};

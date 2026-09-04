@@ -58,7 +58,7 @@ struct ExternalDocumentView {
 };
 
 struct ExternalModificationViewState {
-    Revision revision{0};
+    std::uint64_t revision{0};
     std::string message;
     std::vector<ExternalDocumentView> files;
     // The library-owned selection, mirroring TreeProviderView::selected. An id is
@@ -157,7 +157,7 @@ public:
     //   are the two entry points; there is no way to run a NORMAL watcher event
     //   without sequence enforcement.
     [[nodiscard]] ExternalModificationResult processEvent(
-        ExternalEventInput input, Revision diffRevision,
+        ExternalEventInput input, std::uint64_t diffRevision,
         std::optional<JournalDocument>& document,
         std::function<bool()> commitClean = {},
         std::function<bool()> commitConflictRename = {});
@@ -167,7 +167,7 @@ public:
     // neither consults nor advances the sequence high-water mark -- otherwise the
     // real events that resume after the overflow would be rejected as stale.
     [[nodiscard]] ExternalModificationResult processResyncEvent(
-        ExternalEventInput input, Revision diffRevision,
+        ExternalEventInput input, std::uint64_t diffRevision,
         std::optional<JournalDocument>& document,
         std::function<bool()> commitClean = {},
         std::function<bool()> commitConflictRename = {});

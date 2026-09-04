@@ -48,7 +48,7 @@ std::string captureGridMatrix() {
         {root / "workspace", root / "scratch", root / "recovery"});
     if (!created.accepted() || !created.session) return "runtime create failed";
     auto& runtime = *created.session;
-    (void)runtime.dispatch({"file.open", runtime.revision(), std::string{"alpha.txt"}});
+    (void)runtime.dispatch({"file.open",  std::string{"alpha.txt"}});
 
     const ssg::ViewportDimensions dims{80, 24};
     std::ostringstream out;
@@ -57,7 +57,7 @@ std::string captureGridMatrix() {
     // parity is already covered by the ui-layout golden and test_render. The publish's real
     // risk -- the body/panel/content region -- is fully captured.
     auto emit = [&](const std::string& name) {
-        auto frame = ssg::test::projectGridFrame(runtime, ssg::ViewId{1}, dims);
+        auto frame = ssg::test::projectGridFrame(runtime, dims);
         out << "=== " << name << " ===\n";
         if (!frame) {
             out << "(no snapshot)\n";
@@ -81,12 +81,12 @@ std::string captureGridMatrix() {
     };
 
     emit("editor-only");
-    (void)runtime.dispatch({"panel.show_files", runtime.revision(), {}});
+    (void)runtime.dispatch({"panel.show_files",  {}});
     emit("panel-files-shown");
-    (void)runtime.dispatch({"palette.open", runtime.revision(), {}});
+    (void)runtime.dispatch({"palette.open",  {}});
     emit("palette-open");
-    (void)runtime.dispatch({"palette.close", runtime.revision(), {}});
-    (void)runtime.dispatch({"find.open", runtime.revision(), {}});
+    (void)runtime.dispatch({"palette.close",  {}});
+    (void)runtime.dispatch({"find.open",  {}});
     emit("find-open");
     return out.str();
 }

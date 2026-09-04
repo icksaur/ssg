@@ -1,33 +1,34 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
 #include <optional>
 
-#include <ssg/CommandTransition.h>
 #include <ssg/Picker.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
+#include "interaction_state.h"
+#include "whole_screen_interaction.h"
+#include "whole_screen_schema.h"
 
 namespace ssg {
 
-class InteractionAuthority {
+enum class CycleDirection : std::uint8_t { Next, Previous };
+
+class InteractionState {
 public:
-    InteractionAuthority(UiComposition initialAssembly, TreeModel& tree,
-                         std::uint64_t firstTreeRevision = 1,
-                         PickerActivationId firstPickerActivation =
-                             PickerActivationId{1});
-    ~InteractionAuthority();
+    InteractionState(UiComposition initialAssembly, TreeModel& tree,
+                     std::uint64_t firstTreeRevision = 1,
+                     PickerActivationId firstPickerActivation =
+                         PickerActivationId{1});
 
-    InteractionAuthority(InteractionAuthority const&) = delete;
-    InteractionAuthority& operator=(InteractionAuthority const&) = delete;
-    InteractionAuthority(InteractionAuthority&&) noexcept;
-    InteractionAuthority& operator=(InteractionAuthority&&) noexcept;
-
-    bool apply(const CommandTransition& transition);
+    bool togglePanel();
+    bool showPanelProvider(TreeProviderKind kind);
+    bool switchPanelProvider(CycleDirection direction);
+    bool openFinder(PickerKind kind);
+    bool closeFinder();
 
     PromptCommandResult openPrompt(PromptRequest request);
     PromptCommandResult submitPrompt();
@@ -61,8 +62,23 @@ public:
     [[nodiscard]] PalettePresenceOverlay pickerPresenceOverlay() const;
 
 private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
+    [[nodiscard]] UiComposition assembled(const UiComposition& base,
+                                          const PromptSurface& prompt) const;
+    void adopt(WholeScreenTruth next, PromptSurface prompt);
+    bool activatePanelProvider(TreeProviderBinding binding,
+                               WholeScreenTruth next);
+
+    UiComposition baseComposition_;
+    std::vector<StatusActionNode> statusActions_;
+    WholeScreenSchema schema_;
+    TreeModel& tree_;
+    std::uint64_t nextTreeRevision_;
+    PickerActivationId nextPickerActivation_;
+    std::optional<PickerActivation> openPickerActivation_;
+    std::uint64_t routingGeneration_ = 0;
+    PromptSurface prompt_;
+    WholeScreenTruth truth_;
+    UiInteractionState interaction_;
 };
 
 }  // namespace ssg

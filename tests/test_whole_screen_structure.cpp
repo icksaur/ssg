@@ -1,5 +1,6 @@
 #include "ssg/WholeScreenAssembly.h"
 
+#include "ssg/StatusFields.h"
 #include "ssg/Style.h"
 #include "ssg/UiTree.h"
 #include "test_helpers.h"
@@ -32,17 +33,8 @@ const UiNode* find(const UiNode& root, std::string_view id) {
     return nullptr;
 }
 
-StatusFieldCatalogEntry entry(std::string id, StatusFieldRegion region,
-                              std::uint8_t rank = 0) {
-    return {std::move(id), {}, region, rank};
-}
-
 TEST(fixedHeaderAndFooterAreSemanticUiNodes) {
     const auto composition = assembleWholeScreen(
-        {entry("path", StatusFieldRegion::Header, 3),
-         entry("mode", StatusFieldRegion::Footer),
-         entry("branch", StatusFieldRegion::Header),
-         entry("position", StatusFieldRegion::Footer)},
         "help.open", StyleDimensions{}, Style{}.inputLineSigil);
     const UiSchema schema{composition.root};
     ASSERT_TRUE(validateUiSchema(schema).ok());
@@ -67,35 +59,34 @@ TEST(fixedHeaderAndFooterAreSemanticUiNodes) {
     ASSERT_TRUE(footerRight != nullptr);
     if (!headerLeft || !footerLeft || !footerRight) return;
 
-    const auto& headerField =
-        std::get<UiLeaf>(
-            std::get<UiContainer>(headerLeft->content).children.at(0).content)
-            .widget;
-    const auto& footerField =
-        std::get<UiLeaf>(
-            std::get<UiContainer>(footerLeft->content).children.at(0).content)
-            .widget;
-    ASSERT_TRUE(headerField.value && headerField.value->isProvider);
-    ASSERT_EQ(headerField.value->provider, std::string{"path"});
-    ASSERT_EQ(headerField.rank, 3);
-    ASSERT_TRUE(footerField.value && footerField.value->isProvider);
-    ASSERT_EQ(footerField.value->provider, std::string{"mode"});
+    // The header/footer left groups are the fixed status fields (StatusFields.h),
+    // in their stable collapse-rank order: path/branch, then status/follow.
     const auto& headerFields =
         std::get<UiContainer>(headerLeft->content).children;
     const auto& footerFields =
         std::get<UiContainer>(footerLeft->content).children;
-    ASSERT_EQ(std::get<UiLeaf>(headerFields.at(1).content).widget.id,
-              std::string{"branch"});
-    ASSERT_EQ(std::get<UiLeaf>(footerFields.at(1).content).widget.id,
-              std::string{"position"});
+    ASSERT_EQ(headerFields.size(), std::size_t{2});
+    ASSERT_EQ(footerFields.size(), std::size_t{2});
+
+    const auto& pathField = std::get<UiLeaf>(headerFields.at(0).content).widget;
+    const auto& branchField = std::get<UiLeaf>(headerFields.at(1).content).widget;
+    const auto& statusField = std::get<UiLeaf>(footerFields.at(0).content).widget;
+    const auto& followField = std::get<UiLeaf>(footerFields.at(1).content).widget;
+    ASSERT_EQ(pathField.id, std::string{kPathStatusFieldId});
+    ASSERT_EQ(pathField.rank, 0);
+    ASSERT_EQ(branchField.id, std::string{kBranchStatusFieldId});
+    ASSERT_EQ(branchField.rank, 1);
+    ASSERT_EQ(statusField.id, std::string{kStatusValueFieldId});
+    ASSERT_EQ(statusField.rank, 0);
+    ASSERT_EQ(followField.id, std::string{kFollowStatusFieldId});
+    ASSERT_EQ(followField.rank, 1);
 
     const auto& right = std::get<UiContainer>(footerRight->content).children;
-    ASSERT_EQ(right.at(0).id.value(), std::string{"footer.right.0"});
+    ASSERT_EQ(right.at(0).id.value(), std::string{kFooterHintNodeId});
     const auto& hint = std::get<UiLeaf>(right.at(0).content).widget;
-    ASSERT_TRUE(hint.value && hint.value->isProvider);
-    ASSERT_EQ(hint.value->provider, std::string{"footer.hint"});
+    ASSERT_EQ(hint.id, std::string{"footer.hint"});
     ASSERT_TRUE(hint.command && *hint.command == "help.open");
-    ASSERT_EQ(right.at(1).id.value(), std::string{"footer.status_actions"});
+    ASSERT_EQ(right.at(1).id.value(), std::string{kFooterStatusActionsNodeId});
 
     struct ExpectedStyle {
         std::string_view id;
@@ -128,7 +119,7 @@ TEST(fixedHeaderAndFooterAreSemanticUiNodes) {
 
 TEST(viewportsRemainSemanticTreeProperties) {
     const auto composition = assembleWholeScreen(
-        {}, "help.open", StyleDimensions{}, Style{}.inputLineSigil);
+        "help.open", StyleDimensions{}, Style{}.inputLineSigil);
     const auto* body = child(composition.root, kBodyNodeId);
     const auto* panel = body ? child(*body, kPanelNodeId) : nullptr;
     const auto* content = body ? child(*body, kContentNodeId) : nullptr;

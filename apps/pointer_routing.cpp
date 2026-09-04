@@ -36,20 +36,18 @@ const ScrollableRegionDescriptor* gutterRegion(ssg::HitRegion region) {
 // offset, or a client-local scroll for a client-owned one. One place, so every
 // gutter behaves alike.
 PointerDispatch gutterScroll(ScrollableRegionDescriptor const& descriptor,
-                             ssg::RegionHit const& hit,
-                             ssg::Revision observedRevision) {
+                             ssg::RegionHit const& hit) {
     PointerDispatch dispatch;
     if (descriptor.target == WheelTarget::palette) {
         dispatch.client_scroll = ClientScroll{
             descriptor.target, hit.scrollNumerator, hit.scrollDenominator};
         return dispatch;
     }
-    dispatch.semantic_input = ssg::ScrollFractionInput{
-        {observedRevision},
-        {descriptor.target == WheelTarget::editor
+    dispatch.semantic_input = ssg::ScrollFractionInput{{
+        descriptor.target == WheelTarget::editor
              ? ssg::ScrollTarget::Document
              : ssg::ScrollTarget::Tree,
-         hit.scrollNumerator, hit.scrollDenominator}};
+        hit.scrollNumerator, hit.scrollDenominator}};
     return dispatch;
 }
 
@@ -96,11 +94,10 @@ bool register_click_is_double(ClickTracker& tracker,
     return false;
 }
 
-PointerDispatch double_click_dispatch(ssg::DocumentPosition position,
-                                      ssg::Revision observedRevision) {
+PointerDispatch double_click_dispatch(ssg::DocumentPosition position) {
     PointerDispatch dispatch;
     dispatch.semantic_input = ssg::DocumentPointerInput{
-        {observedRevision}, position.byteOffset, false, true};
+        position.byteOffset, false, true};
     // A double-click selects a word; it must not also start a drag-select.
     dispatch.begins_drag = false;
     return dispatch;
@@ -117,8 +114,7 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
         if (kind == PointerKind::press && hit.region == ssg::HitRegion::Tab &&
             targets.tab_id) {
             dispatch.semantic_input = ssg::TabPointerInput{
-                {targets.observed_revision}, *targets.tab_id,
-                ssg::InputPointerButton::Auxiliary};
+                *targets.tab_id, ssg::InputPointerButton::Auxiliary};
         }
         return dispatch;
     }
@@ -135,15 +131,14 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // Independent of the selection drag state: the offset moves live as
             // the thumb is dragged.
             if (auto const* gutter = gutterRegion(hit.region)) {
-                return gutterScroll(*gutter, hit, targets.observed_revision);
+                return gutterScroll(*gutter, hit);
             }
             // A left press on a tab activates it (the caller resolved tab_index
             // -> TabId); on a palette row it executes that candidate (the caller
             // mapped the absolute item_index -> candidate id). Neither begins a
             // selection drag.
             if (hit.region == ssg::HitRegion::Tab && targets.tab_id) {
-                dispatch.semantic_input = ssg::TabPointerInput{
-                    {targets.observed_revision}, *targets.tab_id};
+                dispatch.semantic_input = ssg::TabPointerInput{*targets.tab_id};
                 return dispatch;
             }
             if (hit.region == ssg::HitRegion::Palette &&
@@ -161,29 +156,28 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             if (hit.region == ssg::HitRegion::ExternalAction &&
                 targets.external_invocation) {
                 dispatch.semantic_input = ssg::ExternalActionPointerInput{
-                    {targets.observed_revision}, *targets.external_invocation};
+                    *targets.external_invocation};
                 return dispatch;
             }
             if ((hit.region == ssg::HitRegion::HeaderField ||
                  hit.region == ssg::HitRegion::FooterField) &&
                 targets.ui_node_id) {
                 dispatch.command = ssg::ClientCommand{
-                   "ui.activate", targets.observed_revision,
+                   "ui.activate",
                    ssg::UiNodeActivationArguments{*targets.ui_node_id}};
                 return dispatch;
             }
             if (hit.region == ssg::HitRegion::NoticeAction &&
                 targets.notice_action_id) {
                 dispatch.semantic_input = ssg::NoticeActionPointerInput{
-                   {targets.observed_revision}, *targets.notice_action_id};
+                   *targets.notice_action_id};
                 return dispatch;
             }
             // A left press on a tree row selects that node and then activates it
             // (opens a file / toggles a directory), matching the keyboard
             // select-then-Enter behavior. The node id travels on the hit.
             if (hit.region == ssg::HitRegion::Panel && hit.nodeId) {
-                dispatch.semantic_input = ssg::TreePointerInput{
-                    {targets.observed_revision}, *hit.nodeId};
+                dispatch.semantic_input = ssg::TreePointerInput{*hit.nodeId};
                 return dispatch;
             }
             // A left press on the editor places the caret and begins a potential
@@ -193,7 +187,6 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // gestures compose with the existing set.
             if (hit.region == ssg::HitRegion::Editor && targets.document_position) {
                 dispatch.semantic_input = ssg::DocumentPointerInput{
-                    {targets.observed_revision},
                     targets.document_position->byteOffset, alt, false};
                 dispatch.begins_drag = true;
             }
@@ -202,7 +195,7 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // Dragging any gutter thumb scrolls that surface live, each motion,
             // independent of the selection drag state. Same catalog as press.
             if (auto const* gutter = gutterRegion(hit.region)) {
-                return gutterScroll(*gutter, hit, targets.observed_revision);
+                return gutterScroll(*gutter, hit);
             }
             // While dragging, a motion over an editor cell extends the selection
             // from the press anchor to the cell under the pointer. A drag over a
@@ -212,7 +205,6 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             if (dragging && dragAnchor && hit.region == ssg::HitRegion::Editor &&
                 targets.document_position) {
                 dispatch.semantic_input = ssg::DocumentPointerInput{
-                    {targets.observed_revision},
                     targets.document_position->byteOffset, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Move};
@@ -223,7 +215,7 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // reflects the selection, so no command is dispatched.
             if (dragging) {
                 dispatch.semantic_input = ssg::DocumentPointerInput{
-                    {targets.observed_revision}, std::nullopt, false, false,
+                    std::nullopt, false, false,
                     ssg::InputPointerButton::Primary,
                     ssg::InputPointerPhase::Release};
                 dispatch.ends_drag = true;

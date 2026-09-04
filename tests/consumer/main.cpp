@@ -9,7 +9,7 @@
 
 int main() {
     // Exercise construction paths for both header groups.
-    ssg::Revision  r{42};
+    std::uint64_t  r{42};
     ssg::ByteOffset o{100};
     ssg::TabWidth  w{4};
     ssg::HistoryConfig h = ssg::HistoryConfig::defaults();

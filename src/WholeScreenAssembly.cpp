@@ -1,5 +1,6 @@
 #include <ssg/WholeScreenAssembly.h>
 
+#include <ssg/StatusFields.h>  // kPathStatusFieldId, ...
 #include <ssg/Widget.h>  // ViewSurface, Overflow
 
 #include <string>
@@ -11,36 +12,38 @@ namespace ssg {
 
 namespace {
 
-// A built-in status field is a provider-backed Field keyed by the catalog entry id. It
-// carries only STABLE structure -- the id and the collapse rank; its value, accessible
-// label, and click command all ride uiState (resolved per frame by the
-// WidgetProviderResolver keyed by id), so a field whose value, command, or provider
-// presence changes never alters the schema structure. A field the resolver has no value
-// for resolves to no leaf state (the semantic drop), exactly as the grid drops an empty
-// status field.
-WidgetDescriptor fieldFor(const StatusFieldCatalogEntry& entry) {
+// A built-in status field is a fixed Field keyed by its shared semantic id
+// (StatusFields.h). It carries only STABLE structure -- the id and the
+// collapse rank; its value, accessible label, and click command are all
+// written into UiNode::resolved at snapshot publication, so a field whose
+// value, command, or presence changes never alters the schema structure. A
+// field with no computed value at publication resolves to no leaf state (the
+// semantic drop), exactly as the grid drops an empty status field.
+WidgetDescriptor fieldFor(std::string_view id, int collapseRank) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::Field;
-    widget.id = entry.id;
-    widget.value = ValueSource{/*isProvider=*/true, /*literal=*/"", entry.id};
-    widget.rank = entry.collapseRank;
+    widget.id = std::string{id};
+    widget.rank = collapseRank;
     return widget;
 }
 
-// The stable footer hint node id, and the provider id its label resolves through.
-inline constexpr std::string_view kFooterHintId = "footer.hint";
+// The footer hint widget's own semantic id (matched by the grid's sizing
+// special-case and by populateUiTree's fixed kFooterHintNodeId lookup, which
+// names the group-positional NODE this widget sits in -- the two ids are
+// deliberately distinct, exactly like a status field's semantic id and its
+// positional header/footer.left.N node id).
+inline constexpr std::string_view kFooterHintFieldId = "footer.hint";
 
-// The footer help hint is a STABLE right-group Field whose LABEL rides uiState (a
-// provider keyed by the hint id), not a literal in the structure -- so the keymap-
-// derived hint text changing never alters the schema structure or advances its
-// generation. Its click command is the stable hint command. When the label resolves
-// empty (the hint unbound), resolveUiTree drops the leaf, as the grid drops it.
+// The footer help hint is a STABLE right-group Field whose LABEL is written at
+// snapshot publication (the keymap-derived hint text), not a literal in the
+// structure -- so the hint text changing never alters the schema structure or
+// advances its generation. Its click command is the stable hint command. When
+// the label resolves empty (the hint unbound), population drops the leaf, as
+// the grid drops it.
 WidgetDescriptor hintField(std::string_view hintCommandId) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::Field;
-    widget.id = std::string{kFooterHintId};
-    widget.value =
-        ValueSource{/*isProvider=*/true, /*literal=*/"", std::string{kFooterHintId}};
+    widget.id = std::string{kFooterHintFieldId};
     if (!hintCommandId.empty()) widget.command = std::string{hintCommandId};
     widget.overflow = Overflow::Truncate;
     return widget;
@@ -62,12 +65,8 @@ UiNode regionGroup(std::string id, std::vector<WidgetDescriptor> widgets,
 // A fixed header/footer region expressed only through the published UiNode
 // vocabulary: content-sized end groups and a flex spacer group between them.
 UiNode builtinRegion(std::string_view base,
-                     const std::vector<StatusFieldCatalogEntry>& entries,
+                     std::vector<WidgetDescriptor> left,
                      std::vector<WidgetDescriptor> right) {
-    std::vector<WidgetDescriptor> left;
-    left.reserve(entries.size());
-    for (const StatusFieldCatalogEntry& entry : entries)
-        left.push_back(fieldFor(entry));
     const std::string baseId{base};
     UiContainer region;
     region.axis = Axis::Row;
@@ -135,8 +134,6 @@ UiNode footerPromptInput(const PromptControl& control) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::TextInput;
     widget.id = control.id;
-    widget.value =
-        ValueSource{true, "", footerPromptControlNodeId(control.id).value()};
     widget.command = control.command;
     widget.role = "prompt";
     return UiNode{footerPromptControlNodeId(control.id), Size::exact(1),
@@ -147,9 +144,6 @@ UiNode footerPromptToggle(const PromptControl& control, int width) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::Checkbox;
     widget.id = control.id;
-    widget.value = ValueSource{false, control.accessibleLabel, ""};
-    widget.checked =
-        ValueSource{true, "", footerPromptControlNodeId(control.id).value()};
     widget.command = control.command;
     widget.role = "prompt";
     return UiNode{footerPromptControlNodeId(control.id), Size::exact(width),
@@ -160,8 +154,6 @@ UiNode footerPromptCount(const PromptControl& control) {
     WidgetDescriptor widget;
     widget.kind = WidgetKind::Label;
     widget.id = control.id;
-    widget.value =
-        ValueSource{true, "", footerPromptControlNodeId(control.id).value()};
     widget.role = "prompt";
     return UiNode{footerPromptControlNodeId(control.id), Size::flex(),
                   UiLeaf{std::move(widget)}};
@@ -180,32 +172,27 @@ void insertPromptInput(UiNode& header, std::string_view promptSigil) {
 }  // namespace
 
 UiComposition assembleWholeScreen(
-    const std::vector<StatusFieldCatalogEntry>& catalog,
     std::string_view hintCommandId,
     const StyleDimensions& dimensions,
     std::string_view promptSigil) {
 
-    // Split the stable catalog superset by region -- the entry's own region, so a
-    // caller cannot mis-split header/footer or smuggle in a projected subset.
-    std::vector<StatusFieldCatalogEntry> headerEntries;
-    std::vector<StatusFieldCatalogEntry> footerEntries;
-    for (const StatusFieldCatalogEntry& entry : catalog) {
-        (entry.region == StatusFieldRegion::Header ? headerEntries : footerEntries)
-            .push_back(entry);
-    }
-
-    // The footer carries the provider-backed hint and an ordinary status-action
-    // container as fixed semantic nodes.
+    // The footer carries the hint and an ordinary status-action container as
+    // fixed semantic nodes.
     std::vector<WidgetDescriptor> footerRight;
     footerRight.push_back(hintField(hintCommandId));
 
-    UiNode header = builtinRegion(kHeaderNodeId, headerEntries, {});
-    UiNode footer =
-        builtinRegion(kFooterNodeId, footerEntries, std::move(footerRight));
+    UiNode header = builtinRegion(
+        kHeaderNodeId,
+        {fieldFor(kPathStatusFieldId, 0), fieldFor(kBranchStatusFieldId, 1)},
+        {});
+    UiNode footer = builtinRegion(
+        kFooterNodeId,
+        {fieldFor(kStatusValueFieldId, 0), fieldFor(kFollowStatusFieldId, 1)},
+        std::move(footerRight));
     auto& region = std::get<UiContainer>(footer.content);
     auto& right = std::get<UiContainer>(region.children[2].content);
-    right.children.push_back(
-        container("footer.status_actions", Axis::Row, Size::autoSize(), {}));
+    right.children.push_back(container(kFooterStatusActionsNodeId, Axis::Row,
+                                       Size::autoSize(), {}));
     header = withStyle(
         withSize(std::move(header), Size::exact(dimensions.headerHeight)),
         SemanticRole::Header, SemanticRole::HeaderBackground);
@@ -318,7 +305,7 @@ UiComposition withStatusActions(
                 std::get_if<UiContainer>(&region->children[2].content);
             if (!right) break;
             for (auto& child : right->children) {
-                if (child.id.value() == "footer.status_actions") {
+                if (child.id.value() == kFooterStatusActionsNodeId) {
                     actionContainer = &child;
                     break;
                 }
@@ -339,7 +326,6 @@ UiComposition withStatusActions(
         WidgetDescriptor widget;
         widget.kind = WidgetKind::Field;
         widget.id = action.id.value();
-        widget.value = ValueSource{true, "", action.id.value()};
         widget.role = "status_info";
         actionChildren->children.push_back(
             UiNode{action.id, Size::autoSize(), UiLeaf{std::move(widget)}});

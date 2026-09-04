@@ -18,30 +18,6 @@
 #include <stdexcept>
 
 // ---------------------------------------------------------------------------
-// Revision
-
-TEST(revisionDefaultIsZero) {
-    ssg::Revision r;
-    ASSERT_EQ(r.value(), uint64_t{0});
-}
-
-TEST(revisionRoundTrip) {
-    ssg::Revision r{42};
-    ASSERT_EQ(r.value(), uint64_t{42});
-}
-
-TEST(revisionEquality) {
-    ASSERT_TRUE(ssg::Revision{1} == ssg::Revision{1});
-    ASSERT_TRUE(ssg::Revision{1} != ssg::Revision{2});
-}
-
-TEST(revisionOrdering) {
-    ASSERT_TRUE(ssg::Revision{1} < ssg::Revision{2});
-    ASSERT_TRUE(ssg::Revision{2} > ssg::Revision{1});
-    ASSERT_TRUE(ssg::Revision{1} <= ssg::Revision{1});
-}
-
-// ---------------------------------------------------------------------------
 // ByteOffset
 
 TEST(byteOffsetDefaultIsZero) {
@@ -199,10 +175,6 @@ TEST(lineEndingDistinctValues) {
 SSG_TEST_SUITE(test_types) {
     std::cout << "=== SSG types tests ===" << "\n";
 
-    RUN(revisionDefaultIsZero);
-    RUN(revisionRoundTrip);
-    RUN(revisionEquality);
-    RUN(revisionOrdering);
 
     RUN(byteOffsetDefaultIsZero);
     RUN(byteOffsetRoundTrip);

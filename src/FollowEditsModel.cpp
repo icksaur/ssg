@@ -47,7 +47,7 @@ FollowEditsModel::FollowEditsModel(FollowEditsConfig config)
 }
 
 FollowEditsResult FollowEditsModel::acceptExternalChange(
-    const DiffFileView& file, Revision sourceRevision) {
+    const DiffFileView& file, std::uint64_t sourceRevision) {
     return acceptExternalChanges({FollowDiffChange{file, {}, sourceRevision}});
 }
 
@@ -168,7 +168,7 @@ FollowEditsFooterProjection FollowEditsModel::footerProjection() const {
 
 FollowTarget FollowEditsModel::targetFor(const DiffFileView& file,
                                           const DiffHunk& hunk,
-                                          Revision sourceRevision) const {
+                                          std::uint64_t sourceRevision) const {
     const auto opened = diffOpenFile(file);
     return {file.id, opened.path, file.deleted, hunk.targetStart, sourceRevision};
 }

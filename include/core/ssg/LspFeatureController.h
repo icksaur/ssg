@@ -54,7 +54,7 @@ struct LspNavigationViewState {
 };
 
 struct LspFeatureViewState {
-    Revision revision{0};
+    std::uint64_t revision{0};
     LspCompletionViewState completion;
     std::optional<LspHover> hover;
     LspNavigationViewState navigation;
@@ -125,14 +125,14 @@ public:
                                   LspFeatureConfig config = {});
 
     [[nodiscard]] LspFeatureRequestResult requestCompletion(
-        std::string uri, Revision revision, ByteOffset position);
+        std::string uri, std::uint64_t revision, ByteOffset position);
     [[nodiscard]] LspFeatureRequestResult requestHover(
-        std::string uri, Revision revision, ByteOffset position);
+        std::string uri, std::uint64_t revision, ByteOffset position);
     [[nodiscard]] LspFeatureRequestResult requestDefinition(
-        std::string uri, Revision revision, ByteOffset position);
+        std::string uri, std::uint64_t revision, ByteOffset position);
     [[nodiscard]] LspFeatureRequestResult requestReferences(
-        std::string uri, Revision revision, ByteOffset position);
-    [[nodiscard]] LspFeaturePollResult poll(Revision currentRevision);
+        std::string uri, std::uint64_t revision, ByteOffset position);
+    [[nodiscard]] LspFeaturePollResult poll(std::uint64_t currentRevision);
 
     void selectNextCompletion();
     void selectPreviousCompletion();
@@ -155,13 +155,13 @@ private:
     struct Pending {
         Kind kind = Kind::Completion;
         std::string uri;
-        Revision revision{0};
+        std::uint64_t revision{0};
         std::uint64_t generation = 0;
         Disposition disposition = Disposition::Active;
     };
 
     [[nodiscard]] LspFeatureRequestResult request(
-        Kind kind, std::string uri, Revision revision, ByteOffset position);
+        Kind kind, std::string uri, std::uint64_t revision, ByteOffset position);
     void supersede(Kind kind);
     void cancel(Kind kind, Disposition disposition);
     void changed();

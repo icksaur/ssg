@@ -185,10 +185,9 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
 // since moved into those positions.
 void paintDiagnostics(CellGrid& grid, GridPresentation const& snapshot,
                        Rect const& content) {
-    auto const& lsp = snapshot.sections().lspSync;
+    auto const& lsp = snapshot.lspSync;
     if (lsp.documents.empty()) return;
-    auto const& document = snapshot.sections().document;
-    auto const& viewport = snapshot.presentation().viewport;
+    auto const& viewport = snapshot.viewport;
 
     // Highest severity wins per cell, so an error is never hidden by a hint
     // that happens to be painted after it.
@@ -215,12 +214,14 @@ void paintDiagnostics(CellGrid& grid, GridPresentation const& snapshot,
     };
 
     for (auto const& file : lsp.documents) {
-        if (file.revision != document.revision) continue;
+        if (file.revision != snapshot.documentRevision) continue;
         for (auto const& diagnostic : file.diagnostics) {
             auto const begin =
-                lspPositionToByteOffset(document.text, diagnostic.range.start);
+                lspPositionToByteOffset(snapshot.documentText,
+                                        diagnostic.range.start);
             auto const end =
-                lspPositionToByteOffset(document.text, diagnostic.range.end);
+                lspPositionToByteOffset(snapshot.documentText,
+                                        diagnostic.range.end);
             if (!begin.accepted() || !end.accepted()) continue;
             auto const from = begin.offset.value();
             // A zero-width diagnostic still marks something: give it the one
@@ -253,8 +254,8 @@ void paintDiagnostics(CellGrid& grid, GridPresentation const& snapshot,
 // is the "cheap for any language" the feature asks for.
 void paintHyperlinks(CellGrid& grid, GridPresentation const& snapshot,
                       Rect const& content) {
-    auto const& text = snapshot.sections().document.text;
-    auto const& viewport = snapshot.presentation().viewport;
+    auto const& text = snapshot.documentText;
+    auto const& viewport = snapshot.viewport;
     if (text.empty() || viewport.hitTargets.empty()) return;
 
     // Where a URL stops.  Whitespace and the C0 range always end it; the closing
@@ -651,9 +652,9 @@ void paintDocument(CellGrid& grid, GridPresentation const& snapshot,
                     Rect const& content, ThemeSnapshot const& theme,
                     std::uint8_t background, Style const& style,
                     LineLayoutCache* lineCache) {
-    auto const& viewport = snapshot.presentation().viewport;
+    auto const& viewport = snapshot.viewport;
     auto const activeDiff =
-        snapshot.sections().diff.fileForDocument(snapshot.sections().document);
+        snapshot.diff.fileForIdentity(snapshot.diffFileIdentity);
     std::unordered_map<std::size_t, DiffTint> rowTints;
     std::unordered_map<std::size_t, const DiffLineChange*> targetChanges;
     if (activeDiff) {
@@ -671,17 +672,17 @@ void paintDocument(CellGrid& grid, GridPresentation const& snapshot,
             }
         }
     }
-    auto lines = visibleLogicalLines(snapshot.sections().document.text,
+    auto lines = visibleLogicalLines(snapshot.documentText,
                                        viewport.visibleRows, lineCache);
-    auto const& selection = snapshot.sections().selection;
-    auto const& findState = snapshot.sections().findReplace;
+    auto const& selection = snapshot.selections;
+    auto const& findState = snapshot.findReplace;
     // Find matches are byte offsets into a specific document revision; only paint
     // them when that revision still matches the document being rendered.  A
     // global undo/redo or tab switch during prompt focus moves the document out
     // from under stale offsets, which must not highlight unrelated cells.
     bool const findMatchesCurrent =
         findState.open &&
-        findState.sourceRevision == snapshot.sections().document.revision;
+        findState.sourceRevision == snapshot.documentRevision;
     auto const matchRoleAt =
         [&](std::uint64_t offset) -> std::optional<SemanticRole> {
         if (!findMatchesCurrent) return std::nullopt;
@@ -869,7 +870,7 @@ void paintDocument(CellGrid& grid, GridPresentation const& snapshot,
             }
             auto const documentOffset = line.documentOffset + span.byteOffset;
             auto const scope =
-                snapshot.sections().syntax.scopeAt(ByteOffset{documentOffset});
+                snapshot.syntax.scopeAt(ByteOffset{documentOffset});
             auto const foreground = syntaxIndex(theme, scope);
             auto const selected = offsetInSelection(selection, documentOffset);
             auto cellBg = selected ? selectionBg : background;
@@ -976,7 +977,7 @@ void paintLineNumbers(CellGrid& grid, GridPresentation const& snapshot,
                       SolvedDocumentSurface const& document,
                       ThemeSnapshot const& theme) {
     if (document.lineNumbers.width <= 0) return;
-    auto const& viewport = snapshot.presentation().viewport;
+    auto const& viewport = snapshot.viewport;
     auto const numberFg = semanticIndex(theme, SemanticRole::LineNumber);
     auto const numberBg = semanticIndex(theme, SemanticRole::LineNumberBackground);
     auto const currentFg = semanticIndex(theme, SemanticRole::CurrentLineNumber);
@@ -984,7 +985,7 @@ void paintLineNumbers(CellGrid& grid, GridPresentation const& snapshot,
         semanticIndex(theme, SemanticRole::CurrentLineNumberBackground);
     // Every caret's logical line highlights its gutter number, not just the
     // primary's, so multi-cursor edits show one lit number per cursor.
-    auto const& selections = snapshot.sections().selection;
+    auto const& selections = snapshot.selections;
     std::vector<std::uint32_t> caretLines;
     caretLines.reserve(selections.items().size());
     for (auto const& selection : selections.items()) {
@@ -1182,24 +1183,24 @@ std::string CellGrid::canonical() const {
 
 CellGrid Renderer::render(GridPresentation const& snapshot,
                           LineLayoutCache* lineCache) const {
-    auto const& theme = snapshot.sections().theme;
-    auto const& style = snapshot.presentation().style;
+    auto const& theme = snapshot.theme;
+    auto const& style = snapshot.style;
     const FocusTarget effectiveFocus =
-        effectiveUiFocus(snapshot.sections().uiTree);
+        effectiveUiFocus(snapshot.uiTree);
     const auto* root =
-        snapshot.layout().find(UiNodeId{std::string{kRootNodeId}});
+        snapshot.layout.find(UiNodeId{std::string{kRootNodeId}});
     if (!root) {
         // The shell layout was declined (viewport below the 20x4 minimum): the
         // library renders the too-small placeholder, sized from the terminal
         // dimensions the client viewport carries (M11-L).
-        auto const& dimensions = snapshot.presentation().viewport.dimensions;
+        auto const& dimensions = snapshot.viewport.dimensions;
         return renderTooSmall(
             GridSize{static_cast<int>(dimensions.columns),
                      static_cast<int>(dimensions.rows)},
             theme, style);
     }
 
-    const auto& ui = snapshot.sections().uiTree;
+    const auto& ui = snapshot.uiTree;
     const auto rootForeground =
         nodeForeground(ui, kRootNodeId, SemanticRole::Text);
     const auto rootBackground =
@@ -1220,14 +1221,14 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
     grid.diffTints = themeDiffTints(theme);
     grid.selectionFill = theme.color(SemanticRole::Selection);
 
-    auto const panelBackground = snapshot.panel()
+    auto const panelBackground = snapshot.panel
         ? semanticIndex(theme, nodeBackground(ui, kPanelNodeId,
                                              SemanticRole::TreeBackground))
         : background;
-    if (snapshot.panel()) {
+    if (snapshot.panel) {
         const auto panelBackgroundRole =
             nodeBackground(ui, kPanelNodeId, SemanticRole::TreeBackground);
-        fillRect(grid, snapshot.panel()->rect, foreground, panelBackground,
+        fillRect(grid, snapshot.panel->rect, foreground, panelBackground,
                   panelBackgroundRole);
     }
 
@@ -1236,103 +1237,103 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
     // the gaps between fields carry the band colour rather than the document
     // background.
     if (const auto* header =
-            snapshot.layout().find(UiNodeId{std::string{kHeaderNodeId}})) {
+            snapshot.layout.find(UiNodeId{std::string{kHeaderNodeId}})) {
         const auto role =
             nodeBackground(ui, kHeaderNodeId, SemanticRole::HeaderBackground);
         fillRect(grid, header->rect, foreground,
                  semanticIndex(theme, role), role);
     }
     if (const auto* footer =
-            snapshot.layout().find(UiNodeId{std::string{kFooterNodeId}})) {
+            snapshot.layout.find(UiNodeId{std::string{kFooterNodeId}})) {
         const auto role =
             nodeBackground(ui, kFooterNodeId, SemanticRole::FooterBackground);
         fillRect(grid, footer->rect, foreground,
                  semanticIndex(theme, role), role);
     }
-    if (const auto* tabBar = snapshot.layout().find(
+    if (const auto* tabBar = snapshot.layout.find(
             UiNodeId{std::string{kTabBarNodeId}})) {
         const auto role =
             nodeBackground(ui, kTabBarNodeId,
                            SemanticRole::TabInactiveBackground);
         paintTabBar(
             grid,
-            solveTabBar(snapshot.sections().tabs, style.tab, tabBar->rect),
+            solveTabBar(snapshot.tabs, style.tab, tabBar->rect),
             theme, style, role, foreground, documentBackground);
     }
 
-    if (snapshot.header()) {
+    if (snapshot.header) {
         paintUiRegion(
-            grid, *snapshot.header(), theme, ui,
+            grid, *snapshot.header, theme, ui,
             nodeBackground(ui, kHeaderNodeId,
                            SemanticRole::HeaderBackground),
             style);
     }
-    if (snapshot.footer()) {
+    if (snapshot.footer) {
         paintUiRegion(
-            grid, *snapshot.footer(), theme, ui,
+            grid, *snapshot.footer, theme, ui,
             nodeBackground(ui, kFooterNodeId,
                            SemanticRole::FooterBackground),
             style);
     }
-    if (snapshot.sections().noticeView) {
+    if (snapshot.notice) {
         const auto* node =
-            snapshot.layout().find(UiNodeId{std::string{kNoticeNodeId}});
+            snapshot.layout.find(UiNodeId{std::string{kNoticeNodeId}});
         if (!node) {
             throw std::logic_error(
                 "Renderer: notice has no solved UI node");
         }
-        paintNotice(grid, *snapshot.sections().noticeView,
-                    solveNoticeSurface(*snapshot.sections().noticeView,
+        paintNotice(grid, *snapshot.notice,
+                    solveNoticeSurface(*snapshot.notice,
                                        node->rect),
                     theme, style,
                     node->style.foreground.value_or(SemanticRole::Canvas),
                     node->style.background.value_or(
                         SemanticRole::StatusWarning));
     }
-    if (!snapshot.sections().externalModification.files.empty()) {
-        const auto* node = snapshot.layout().find(
+    if (!snapshot.externalModification.files.empty()) {
+        const auto* node = snapshot.layout.find(
             UiNodeId{std::string{kExternalModNodeId}});
         if (!node) {
             throw std::logic_error(
                 "Renderer: external modification has no solved UI node");
         }
         paintExternalModification(
-            grid, snapshot.sections().externalModification,
+            grid, snapshot.externalModification,
             solveExternalModificationSurface(
-                snapshot.sections().externalModification, node->rect),
+                snapshot.externalModification, node->rect),
             theme, style,
             node->style.foreground.value_or(SemanticRole::Canvas),
             node->style.background.value_or(
                 SemanticRole::StatusWarning));
     }
 
-    if (snapshot.panel()) {
-        paintPanelTree(grid, *snapshot.panel(), theme, panelBackground,
+    if (snapshot.panel) {
+        paintPanelTree(grid, *snapshot.panel, theme, panelBackground,
                        effectiveFocus == FocusTarget::Panel, style);
     }
-    if (snapshot.document() ||
-        snapshot.layout().find(
+    if (snapshot.document ||
+        snapshot.layout.find(
             UiNodeId{std::string{kFindResultsViewportNodeId}})) {
-        if (const auto* palette = snapshot.layout().find(
+        if (const auto* palette = snapshot.layout.find(
                 UiNodeId{std::string{kFindResultsViewportNodeId}})) {
             const auto paletteBackground = semanticIndex(
                 theme, nodeBackground(ui, kFindResultsNodeId,
                                       SemanticRole::Canvas));
             const auto solved = solvePaletteSurface(
-                snapshot.palette(), palette->rect,
+                snapshot.palette, palette->rect,
                 style.dimensions.scrollbarGutterWidth);
             fillRect(grid, solved.rect, foreground, paletteBackground,
                      SemanticRole::Canvas);
-            paintPalette(grid, snapshot.palette(), solved, theme,
+            paintPalette(grid, snapshot.palette, solved, theme,
                          paletteBackground, style);
-        } else if (snapshot.document()) {
-            const auto& document = *snapshot.document();
+        } else if (snapshot.document) {
+            const auto& document = *snapshot.document;
             fillRect(grid, document.content, foreground, documentBackground,
                      documentBackgroundRole);
             paintDocument(grid, snapshot, document.content, theme,
                            documentBackground, style, lineCache);
-            if (snapshot.sections().tabs.tabs.empty() &&
-                snapshot.sections().document.revision.value() == 0) {
+            if (snapshot.tabs.tabs.empty() &&
+                snapshot.documentRevision == 0) {
                 paintText(grid, document.content.x, document.content.y,
                           document.content.right(), "empty editor",
                           foreground, documentBackground,
@@ -1343,13 +1344,13 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
             paintDiagnostics(grid, snapshot, document.content);
             paintHyperlinks(grid, snapshot, document.content);
             paintLineNumbers(grid, snapshot, document, theme);
-            paintScrollbar(grid, document, snapshot.presentation().viewport,
+            paintScrollbar(grid, document, snapshot.viewport,
                            theme, documentBackground, style);
 
             // Paint the reserved prompt rows (find/replace/settings) and place
             // the hardware cursor at the query when the prompt is focused.
-            if (snapshot.sections().promptStatus.activeKind &&
-                promptFocusRegion(*snapshot.sections().promptStatus.activeKind) ==
+            if (snapshot.promptStatus.activeKind &&
+                promptFocusRegion(*snapshot.promptStatus.activeKind) ==
                     PromptRegion::Footer) {
                 const auto promptForegroundRole =
                     nodeForeground(ui, kFooterPromptNodeId,
@@ -1358,8 +1359,8 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
                     nodeBackground(ui, kFooterPromptNodeId,
                                    SemanticRole::Canvas);
                 auto promptCaret =
-                    paintPrompt(grid, snapshot.sections().uiTree,
-                                snapshot.layout(), theme,
+                    paintPrompt(grid, snapshot.uiTree,
+                                snapshot.layout, theme,
                                 promptForegroundRole, promptBackgroundRole,
                                 style);
                 if (effectiveFocus == FocusTarget::Prompt && promptCaret) {
@@ -1378,9 +1379,9 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
             // focused.
             if (effectiveFocus == FocusTarget::Editor) {
                 auto const& content = document.content;
-                auto const& viewport = snapshot.presentation().viewport;
+                auto const& viewport = snapshot.viewport;
                 auto const& selections =
-                    snapshot.sections().selection;
+                    snapshot.selections;
                 auto const& primary = selections.primary();
                 if (auto cell = screenCellFor(viewport, content,
                                                 primary.active.line.value(),
@@ -1421,8 +1422,8 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
     // way a user can tell a text input has focus, so it must
     // not depend on which pane branch ran.
     if (effectiveFocus == FocusTarget::Prompt &&
-        snapshot.header() && snapshot.header()->input) {
-        const auto& caret = snapshot.header()->input->caret;
+        snapshot.header && snapshot.header->input) {
+        const auto& caret = snapshot.header->input->caret;
         grid.caret = GridPosition{caret.x, caret.y};
     }
     return grid;

@@ -1,11 +1,9 @@
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Widget.cpp
     ${SSG_SOURCE_DIR}/src/UiTree.cpp
-    ${SSG_SOURCE_DIR}/src/ViewSurfaceBacking.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenSchema.cpp
     ${SSG_SOURCE_DIR}/src/WholeScreenInteraction.cpp
-    ${SSG_SOURCE_DIR}/src/CommandTransition.cpp
-    ${SSG_SOURCE_DIR}/src/InteractionAuthority.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/interaction.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(

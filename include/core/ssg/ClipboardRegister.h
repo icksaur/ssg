@@ -24,7 +24,7 @@ namespace ssg {
 // the register ever learning that it did.
 struct ClipboardWrite {
     std::uint64_t id;
-    Revision requestRevision;
+    std::uint64_t requestRevision;
     std::string text;
 
     bool operator==(const ClipboardWrite&) const = default;
@@ -42,7 +42,7 @@ enum class ClipboardError : std::uint8_t {
 
 struct ClipboardResult {
     ClipboardError error;
-    Revision revision;
+    std::uint64_t revision;
     std::optional<SelectionSet> selections;
     std::optional<ClipboardWrite> write;
     bool documentChanged;

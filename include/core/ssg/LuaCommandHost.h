@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/CommandInvocation.h>
+#include <ssg/CommandCatalog.h>
 
 #include <chrono>
 #include <compare>

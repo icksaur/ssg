@@ -6,7 +6,6 @@
 #include <ssg/Geometry.h>
 #include <ssg/Style.h>
 #include <ssg/UiTree.h>      // UiRegion
-#include <ssg/UiWidget.h>    // WidgetProviderResolver
 
 #include <optional>
 #include <string>
@@ -85,20 +84,15 @@ struct PromptInputProjection {
 // is placed by the reserve/expand rule: its fixed reservation is subtracted from the
 // groups' width first, then the input grows across the header's remaining width
 // after them.
+//
+// Uses each leaf's own resolved semantic state (UiNode::resolved) directly as
+// its value/label/command/checked source; there is no resolver to
+// reconstruct.
 [[nodiscard]] UiRegionProjectionResult projectUiRegion(
     const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
     const Style& style,
-    const WidgetProviderResolver& resolveProvider,
     SolvedUiRegion& out,
     const StatusViewState* statusView = nullptr,
-    const PromptInputProjection* input = nullptr);
-
-// Uses the tree's own resolved leaf state as the value source while retaining
-// grid-only display conversion at this presentation boundary.
-[[nodiscard]] UiRegionProjectionResult solveUiRegion(
-    const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
-    const Style& style,
-    SolvedUiRegion& out, const StatusViewState* statusView = nullptr,
     const PromptInputProjection* input = nullptr);
 
 }  // namespace ssg

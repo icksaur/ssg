@@ -314,7 +314,7 @@ SearchController::SearchController(const SearchWorkspaceSource& workspace,
                                    SearchCommandSource& commands) noexcept
     : workspace_{workspace}, commands_{commands} {}
 
-void SearchController::openPalette(Revision revision) {
+void SearchController::openPalette(std::uint64_t revision) {
     state_.paletteOpen = true;
     state_.revision = revision;
     state_.query.clear();
@@ -322,7 +322,7 @@ void SearchController::openPalette(Revision revision) {
     rankPalette();
 }
 
-void SearchController::closePalette(Revision revision) {
+void SearchController::closePalette(std::uint64_t revision) {
     state_.paletteOpen = false;
     state_.revision = revision;
     state_.query.clear();
@@ -331,7 +331,7 @@ void SearchController::closePalette(Revision revision) {
 }
 
 void SearchController::updatePaletteQuery(std::string query,
-                                            Revision revision) {
+                                            std::uint64_t revision) {
     if (!state_.paletteOpen) {
         return;
     }
@@ -394,7 +394,7 @@ PaletteExecutionResult SearchController::executePalette() {
 }
 
 WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
-    std::string query, Revision sourceRevision) {
+    std::string query, std::uint64_t sourceRevision) {
     cancelWorkspaceSearch();
     WorkspaceSearchRequest request{
         .generation = state_.searchGeneration + 1,
@@ -424,7 +424,7 @@ void SearchController::cancelWorkspaceSearch() noexcept {
 }
 
 SearchPublishResult SearchController::publish(
-    const WorkspaceSearchBatch& batch, Revision currentRevision) {
+    const WorkspaceSearchBatch& batch, std::uint64_t currentRevision) {
     if (batch.cancelled) {
         return SearchPublishResult::Cancelled;
     }

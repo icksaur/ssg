@@ -405,24 +405,24 @@ LspFeatureController::LspFeatureController(LspSyncClient& client,
 }
 
 LspFeatureRequestResult LspFeatureController::requestCompletion(
-    std::string uri, Revision revision, ByteOffset position) {
+    std::string uri, std::uint64_t revision, ByteOffset position) {
     return request(Kind::Completion, std::move(uri), revision, position);
 }
 LspFeatureRequestResult LspFeatureController::requestHover(
-    std::string uri, Revision revision, ByteOffset position) {
+    std::string uri, std::uint64_t revision, ByteOffset position) {
     return request(Kind::Hover, std::move(uri), revision, position);
 }
 LspFeatureRequestResult LspFeatureController::requestDefinition(
-    std::string uri, Revision revision, ByteOffset position) {
+    std::string uri, std::uint64_t revision, ByteOffset position) {
     return request(Kind::Definition, std::move(uri), revision, position);
 }
 LspFeatureRequestResult LspFeatureController::requestReferences(
-    std::string uri, Revision revision, ByteOffset position) {
+    std::string uri, std::uint64_t revision, ByteOffset position) {
     return request(Kind::References, std::move(uri), revision, position);
 }
 
 LspFeatureRequestResult LspFeatureController::request(
-    Kind kind, std::string uri, Revision revision, ByteOffset position) {
+    Kind kind, std::string uri, std::uint64_t revision, ByteOffset position) {
     const auto snapshot = client_.documentSnapshot(uri);
     if (!snapshot) {
         return {0, LspFeatureError::UnknownDocument,
@@ -489,7 +489,7 @@ void LspFeatureController::cancel(Kind kind, Disposition disposition) {
     id = 0;
 }
 
-LspFeaturePollResult LspFeatureController::poll(Revision currentRevision) {
+LspFeaturePollResult LspFeatureController::poll(std::uint64_t currentRevision) {
     const auto transport = client_.poll();
     if (!transport.accepted()) {
         return {transport.error, transport.message, {}};
@@ -642,7 +642,7 @@ void LspFeatureController::dismissHover() {
 }
 
 void LspFeatureController::changed() {
-    state_.revision = Revision{state_.revision.value() + 1};
+    state_.revision = std::uint64_t{state_.revision + 1};
 }
 
 } // namespace ssg

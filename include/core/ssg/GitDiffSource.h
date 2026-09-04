@@ -35,7 +35,7 @@ struct GitDiffConfig {
 };
 
 struct GitDiffScan {
-    Revision revision{0};
+    std::uint64_t revision{0};
     std::string baselineIdentity;
     std::optional<std::string> currentBranch;
     std::vector<GitDiffFile> files;
@@ -45,7 +45,7 @@ struct GitDiffScan {
 };
 
 struct GitWorkingTreeScan {
-    Revision revision{0};
+    std::uint64_t revision{0};
     std::string baselineIdentity;
     std::vector<std::filesystem::path> requestedPaths;
     std::vector<GitDiffFile> files;
@@ -136,8 +136,8 @@ private:
 
     DiffModel* diffModel_ = nullptr;
     GitDiffConfig config_{};
-    Revision nextRevision_{1};
-    Revision publishedRevision_{1};
+    std::uint64_t nextRevision_{1};
+    std::uint64_t publishedRevision_{1};
     std::map<DiffFileId, GitDiffFile> currentFiles_;
     std::string baselineIdentity_;
     std::optional<std::string> currentBranch_;

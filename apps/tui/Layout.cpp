@@ -2,7 +2,7 @@
 
 #include "ssg/GraphemeLayout.h"
 #include "ssg/Viewport.h"
-#include "ssg/session_snapshot.h"
+#include <ssg/EditorSession.h>
 
 #include <algorithm>
 #include <cstdint>

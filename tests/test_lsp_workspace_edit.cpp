@@ -29,7 +29,7 @@ using ssg::LspWorkspaceFileOperations;
 using ssg::LspWorkspaceFileResult;
 using ssg::LspWorkspaceDocumentWriteResult;
 using ssg::LspSyncClient;
-using ssg::Revision;
+using std::uint64_t;
 using ssg::test::FakeLspServer;
 
 std::string fixture(std::string_view name) {
@@ -62,7 +62,7 @@ void ready(LspSyncClient& client, FakeLspServer& server,
     server.queue_payload(ssg::test::response(1, "{\"capabilities\":{}}"));
     ASSERT_TRUE(client.poll().accepted());
     ASSERT_TRUE(client.openDocument("file:///workspace/main.cpp", "cpp",
-                                     Revision{1}, std::move(text))
+                                     std::uint64_t{1}, std::move(text))
                     .accepted());
 }
 
@@ -75,12 +75,12 @@ public:
                                               found->second};
     }
 
-    LspWorkspaceDocumentWriteResult apply(std::string uri, Revision expectedRevision,
+    LspWorkspaceDocumentWriteResult apply(std::string uri, std::uint64_t expectedRevision,
                                           std::string text) override {
         ++applyCalls;
         const auto found = documents.find(uri);
         if (found == documents.end()) {
-            return {Revision{0},
+            return {std::uint64_t{0},
                     ssg::LspWorkspaceDocumentError::UnknownDocument,
                     "unknown document"};
         }
@@ -95,7 +95,7 @@ public:
                     ssg::LspWorkspaceDocumentError::WriteFailed,
                     "injected write failure"};
         }
-        found->second.revision = Revision{found->second.revision.value() + 1};
+        found->second.revision = std::uint64_t{found->second.revision + 1};
         ++found->second.version;
         found->second.text = std::move(text);
         return {found->second.revision, ssg::LspWorkspaceDocumentError::None,
@@ -241,7 +241,7 @@ TEST(unicodePositionFixtureAppliesExpectedEdit) {
     FakeDocuments documents;
     documents.documents.emplace(
         "file:///workspace/main.cpp",
-        LspDocumentSnapshot{"file:///workspace/main.cpp", Revision{7}, 3,
+        LspDocumentSnapshot{"file:///workspace/main.cpp", std::uint64_t{7}, 3,
                             "a\xF0\x9F\x98\x80" "b"});
     FakeFiles files;
     LspWorkspaceEditApplier applier{documents, files};
@@ -261,11 +261,11 @@ TEST(validationRejectsMalformedRangesBeforeAnyMutation) {
     FakeDocuments documents;
     documents.documents.emplace(
         "file:///workspace/main.cpp",
-        LspDocumentSnapshot{"file:///workspace/main.cpp", Revision{1}, 1,
+        LspDocumentSnapshot{"file:///workspace/main.cpp", std::uint64_t{1}, 1,
                             "alpha"});
     documents.documents.emplace(
         "file:///workspace/other.cpp",
-        LspDocumentSnapshot{"file:///workspace/other.cpp", Revision{1}, 1,
+        LspDocumentSnapshot{"file:///workspace/other.cpp", std::uint64_t{1}, 1,
                             "beta"});
     FakeFiles files;
     files.files["file:///workspace/file.txt"] = "payload";
@@ -287,7 +287,7 @@ TEST(equalPositionInsertionsPreservePayloadOrder) {
     FakeDocuments documents;
     documents.documents.emplace(
         "file:///workspace/main.cpp",
-        LspDocumentSnapshot{"file:///workspace/main.cpp", Revision{1}, 1,
+        LspDocumentSnapshot{"file:///workspace/main.cpp", std::uint64_t{1}, 1,
                             "ab"});
     FakeFiles files;
     LspWorkspaceEditApplier applier{documents, files};
@@ -307,11 +307,11 @@ TEST(multiDocumentWriteFailureRollsBackAtomically) {
     FakeDocuments documents;
     documents.documents.emplace(
         "file:///workspace/a.cpp",
-        LspDocumentSnapshot{"file:///workspace/a.cpp", Revision{3}, 1,
+        LspDocumentSnapshot{"file:///workspace/a.cpp", std::uint64_t{3}, 1,
                             "one"});
     documents.documents.emplace(
         "file:///workspace/b.cpp",
-        LspDocumentSnapshot{"file:///workspace/b.cpp", Revision{4}, 1,
+        LspDocumentSnapshot{"file:///workspace/b.cpp", std::uint64_t{4}, 1,
                             "two"});
     documents.failingCalls = {2};
     FakeFiles files;
@@ -330,7 +330,7 @@ TEST(repeatedDocumentEditsRecoverInReverseRevisionOrder) {
     FakeDocuments documents;
     documents.documents.emplace(
         "file:///workspace/main.cpp",
-        LspDocumentSnapshot{"file:///workspace/main.cpp", Revision{1}, 1,
+        LspDocumentSnapshot{"file:///workspace/main.cpp", std::uint64_t{1}, 1,
                             "123456"});
     FakeFiles files;
     LspWorkspaceEditApplier applier{documents, files};
@@ -359,7 +359,7 @@ TEST(documentChangesTakePrecedenceOverChanges) {
     FakeDocuments documents;
     documents.documents.emplace(
         "file:///workspace/main.cpp",
-        LspDocumentSnapshot{"file:///workspace/main.cpp", Revision{1}, 1,
+        LspDocumentSnapshot{"file:///workspace/main.cpp", std::uint64_t{1}, 1,
                             "old"});
     FakeFiles files;
     LspWorkspaceEditApplier applier{documents, files};
@@ -382,11 +382,11 @@ TEST(rollbackFailureSurfacesRecoveryRecordForRetry) {
     FakeDocuments documents;
     documents.documents.emplace(
         "file:///workspace/a.cpp",
-        LspDocumentSnapshot{"file:///workspace/a.cpp", Revision{3}, 1,
+        LspDocumentSnapshot{"file:///workspace/a.cpp", std::uint64_t{3}, 1,
                             "one"});
     documents.documents.emplace(
         "file:///workspace/b.cpp",
-        LspDocumentSnapshot{"file:///workspace/b.cpp", Revision{4}, 1,
+        LspDocumentSnapshot{"file:///workspace/b.cpp", std::uint64_t{4}, 1,
                             "two"});
     documents.failingCalls = {2, 3};
     FakeFiles files;
@@ -411,7 +411,7 @@ TEST(fileOperationFailureRollsBackDocumentsAndPaths) {
     FakeDocuments documents;
     documents.documents.emplace(
         "file:///workspace/main.cpp",
-        LspDocumentSnapshot{"file:///workspace/main.cpp", Revision{1}, 1,
+        LspDocumentSnapshot{"file:///workspace/main.cpp", std::uint64_t{1}, 1,
                             "hello"});
     FakeFiles files;
     files.files["file:///workspace/old.txt"] = "old";
@@ -461,14 +461,14 @@ TEST(renameRequestsUseSyncedUtf16PositionsAndApplyWorkspaceEdits) {
     FakeDocuments documents;
     documents.documents.emplace(
         "file:///workspace/main.cpp",
-        LspDocumentSnapshot{"file:///workspace/main.cpp", Revision{1}, 1,
+        LspDocumentSnapshot{"file:///workspace/main.cpp", std::uint64_t{1}, 1,
                             "a\xF0\x9F\x98\x80" "b"});
     FakeFiles files;
     LspWorkspaceEditApplier applier{documents, files};
     LspWorkspaceEditController controller{client, applier};
 
     const auto request = controller.requestRename(
-        "file:///workspace/main.cpp", Revision{1}, ByteOffset{5}, "renamed");
+        "file:///workspace/main.cpp", std::uint64_t{1}, ByteOffset{5}, "renamed");
     ASSERT_TRUE(request.accepted());
     const auto& payload = server.received_payloads().back();
     ASSERT_TRUE(payload.find("\"method\":\"textDocument/rename\"") !=
@@ -480,7 +480,7 @@ TEST(renameRequestsUseSyncedUtf16PositionsAndApplyWorkspaceEdits) {
 
     server.queue_payload(withId(fixture("rename_response.json"),
                                  request.requestId));
-    const auto published = controller.poll(Revision{1});
+    const auto published = controller.poll(std::uint64_t{1});
 
     ASSERT_TRUE(published.accepted());
     ASSERT_EQ(published.publications.size(), std::size_t{1});
@@ -497,22 +497,22 @@ TEST(supersededRenameResponseCannotReplaceNewerResult) {
     FakeDocuments documents;
     documents.documents.emplace(
         "file:///workspace/main.cpp",
-        LspDocumentSnapshot{"file:///workspace/main.cpp", Revision{1}, 1,
+        LspDocumentSnapshot{"file:///workspace/main.cpp", std::uint64_t{1}, 1,
                             "symbol"});
     FakeFiles files;
     LspWorkspaceEditApplier applier{documents, files};
     LspWorkspaceEditController controller{client, applier};
 
     const auto first = controller.requestRename(
-        "file:///workspace/main.cpp", Revision{1}, ByteOffset{0}, "old");
+        "file:///workspace/main.cpp", std::uint64_t{1}, ByteOffset{0}, "old");
     const auto second = controller.requestRename(
-        "file:///workspace/main.cpp", Revision{1}, ByteOffset{0}, "new");
+        "file:///workspace/main.cpp", std::uint64_t{1}, ByteOffset{0}, "new");
     ASSERT_TRUE(first.accepted());
     ASSERT_TRUE(second.accepted());
 
     server.queue_payload(withId(fixture("rename_response.json"),
                                  first.requestId));
-    const auto stale = controller.poll(Revision{1});
+    const auto stale = controller.poll(std::uint64_t{1});
     ASSERT_EQ(stale.publications[0].result,
               LspRenamePublishResult::Superseded);
     ASSERT_EQ(documents.documents["file:///workspace/main.cpp"].text,
@@ -520,7 +520,7 @@ TEST(supersededRenameResponseCannotReplaceNewerResult) {
 
     server.queue_payload(withId(fixture("rename_response_second.json"),
                                  second.requestId));
-    const auto accepted = controller.poll(Revision{1});
+    const auto accepted = controller.poll(std::uint64_t{1});
     ASSERT_EQ(accepted.publications[0].result,
               LspRenamePublishResult::Accepted);
     ASSERT_EQ(documents.documents["file:///workspace/main.cpp"].text,

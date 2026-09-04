@@ -123,7 +123,7 @@ std::map<std::string, DiffFileStatus> modelStatuses(const GitDiffScan& scan) {
     std::uint64_t revisionValue = 1;
     for (const auto& file : scan.files) {
         auto result = model.updateGitFile(
-            file, scan.baselineIdentity, Revision{revisionValue++});
+            file, scan.baselineIdentity, std::uint64_t{revisionValue++});
         ASSERT_TRUE(result.accepted());
     }
 

@@ -96,7 +96,7 @@ TEST(treeSitterSyntaxGoldenByLanguage) {
     std::uint64_t revision = 1;
     for (const auto& fixture : cases) {
         const auto text = readFile(fixtureRoot / fixture.sourceFile);
-        const auto request = model.request(Revision{revision++}, LanguageId{fixture.language}, text);
+        const auto request = model.request(std::uint64_t{revision++}, LanguageId{fixture.language}, text);
         ASSERT_TRUE(request.accepted());
         if (!request.accepted()) {
             continue;

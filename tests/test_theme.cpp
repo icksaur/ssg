@@ -1,4 +1,5 @@
 #include "ssg/EditorSession.h"
+#include "grid_test_frame.h"
 #include "ssg/Theme.h"
 #include "test_helpers.h"
 
@@ -155,10 +156,10 @@ TEST(editorRuntimeStartsFromTheDefaultTheme) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) { std::filesystem::remove_all(root); return; }
     auto& runtime = *created.session;
-    auto snapshot = runtime.snapshot();
+    auto snapshot = ssg::test::projectGridFrame(runtime);
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
-        ASSERT_EQ(snapshot->sections().theme, ssg::defaultTheme());
+        ASSERT_EQ(snapshot->theme, ssg::defaultTheme());
     }
     std::filesystem::remove_all(root);
 }

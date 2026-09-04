@@ -1,6 +1,6 @@
 // Kind: seam.
 //
-// Proves SessionSnapshotBuilder is faithful: a frame it builds renders the
+// Proves GridPresentationBuilder is faithful: a frame it builds renders the
 // document region identically to one the real EditorSession produces for the
 // same text.
 //
@@ -9,11 +9,12 @@
 // uses the builder and pays nothing.  If the builder ever drifts from the
 // production projection, this fails and the cheap tests stay honest.
 
-#include "session_snapshot_builder.h"
+#include "grid_presentation_builder.h"
 #include "grid_test_frame.h"
 #include "test_helpers.h"
 
 #include <ssg/EditorSession.h>
+#include <tui/Renderer.h>
 
 #include <filesystem>
 #include <fstream>
@@ -65,14 +66,14 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
     auto runtime = std::move(created.session);
     ASSERT_TRUE(runtime
                     ->dispatch(
-                               {"file.open", runtime->revision(),
+                               {"file.open", 
                                 std::string{"a.txt"}})
                     .accepted());
-    auto realFrame = ssg::test::projectGridFrame(*runtime, ssg::ViewId{1}, {80, 24});
+    auto realFrame = ssg::test::projectGridFrame(*runtime, {80, 24});
     ASSERT_TRUE(realFrame.has_value());
     if (!realFrame) return;
 
-    auto built = ssg::test::SessionSnapshotBuilder{}
+    auto built = ssg::test::GridPresentationBuilder{}
                      .document(text)
                      .viewport(80, 24)
                      .build();
@@ -102,8 +103,8 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
     // The projections agree field-for-field: same visual row count, same first
     // row, same scrollbar metrics.  This is the part that would silently drift
     // if the builder reimplemented projection instead of calling it.
-    auto const& realViewport = realFrame->presentation().viewport;
-    auto const& builtViewport = built.presentation().viewport;
+    auto const& realViewport = realFrame->viewport;
+    auto const& builtViewport = built.viewport;
     ASSERT_EQ(realViewport.totalVisualRows, builtViewport.totalVisualRows);
     ASSERT_EQ(realViewport.firstVisualRow, builtViewport.firstVisualRow);
     ASSERT_EQ(realViewport.visibleRows.size(), builtViewport.visibleRows.size());
@@ -113,7 +114,7 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
 
 TEST(theBuilderProducesARenderableScreenWithoutAnyFilesystem) {
     // The whole point: no temp directory, no runtime, no disk.
-    auto snapshot = ssg::test::SessionSnapshotBuilder{}
+    auto snapshot = ssg::test::GridPresentationBuilder{}
                         .document("hello\n")
                         .viewport(40, 10)
                         .build();
@@ -131,7 +132,7 @@ TEST(theBuilderProducesARenderableScreenWithoutAnyFilesystem) {
 TEST(builderSettersReachTheRenderedScreen) {
     // Sections set through the escape hatch reach the renderer, so a test can
     // express states the named setters do not cover.
-    auto snapshot = ssg::test::SessionSnapshotBuilder{}
+    auto snapshot = ssg::test::GridPresentationBuilder{}
                         .document("body\n")
                         .viewport(60, 12)
                         .style([] {
@@ -140,16 +141,16 @@ TEST(builderSettersReachTheRenderedScreen) {
                             return s;
                         }())
                         .build();
-    ASSERT_EQ(snapshot.presentation().style.unrenderable, std::string{"?"});
+    ASSERT_EQ(snapshot.style.unrenderable, std::string{"?"});
 
     // And the caret is placed at a consistent document position.
-    auto positioned = ssg::test::SessionSnapshotBuilder{}
+    auto positioned = ssg::test::GridPresentationBuilder{}
                           .document("ab\ncd\n")
                           .caret(4)
                           .viewport(60, 12)
                           .build();
     auto const& primary =
-        positioned.sections().selection.primary().active;
+        positioned.selections.primary().active;
     ASSERT_EQ(primary.byteOffset, ssg::ByteOffset{4});
     ASSERT_EQ(primary.line, ssg::LineIndex{1});
     ASSERT_EQ(primary.cell, ssg::CellIndex{1});
@@ -157,7 +158,7 @@ TEST(builderSettersReachTheRenderedScreen) {
 
 }  // namespace
 
-SSG_TEST_SUITE(test_session_snapshot_builder) {
+SSG_TEST_SUITE(test_grid_presentation_builder) {
     RUN(builtSnapshotRendersTheDocumentLikeTheRealRuntime);
     RUN(theBuilderProducesARenderableScreenWithoutAnyFilesystem);
     RUN(builderSettersReachTheRenderedScreen);

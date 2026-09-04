@@ -69,7 +69,6 @@ The user-facing capability set, stated as engineering deliverables:
 
 - `data/required-commands.json` — exact required command catalog
 - `data/unicode/` — pinned Unicode 15 source data and provenance
-- `data/ui/status_fields.json` — header/footer collapse priorities
 
 Runtime settings support default, user, workspace, language, and document
 scopes. Workspace file authority and persisted relative paths are rooted at the

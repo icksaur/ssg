@@ -1,7 +1,5 @@
 #include "editor_session_internal.h"
 
-#include "../selection_commands.h"
-
 #include <ssg/HistoryEditClassification.h>
 
 #include <algorithm>
@@ -66,7 +64,6 @@ EditCommandSettings editSettings(EditorSession::Impl const&) {
 }
 
 CommandHandlerResult applyTransaction(EditorSession::Impl& runtime,
-                                       ViewId viewId,
                                        EditTransaction const& transaction,
                                        SelectionSet const& selectionsAfter,
                                        HistoryEditKind kind) {
@@ -87,7 +84,6 @@ CommandHandlerResult applyTransaction(EditorSession::Impl& runtime,
 }
 
 CommandHandlerResult bindText(EditorSession::Impl& runtime,
-                               ViewId viewId,
                                TextInputCommand command,
                                TextInputArguments arguments) {
     if (runtime.activeTabIsLiveDiff()) {
@@ -105,7 +101,7 @@ CommandHandlerResult bindText(EditorSession::Impl& runtime,
         return failure(result.message);
     }
     auto outcome =
-        applyTransaction(runtime, viewId, *result.transaction,
+        applyTransaction(runtime, *result.transaction,
                          *result.selections, historyEditKind(command));
     // Keep undo word-granular: seal the current unit after a newline or after
     // inserting a whitespace/punctuation boundary, so the next word starts a
@@ -165,7 +161,7 @@ CommandHandlerResult bindSelection(EditorSession::Impl& runtime,
     return success();
 }
 
-CommandHandlerResult bindEdit(EditorSession::Impl& runtime, ViewId viewId,
+CommandHandlerResult bindEdit(EditorSession::Impl& runtime,
                               EditCommand command) {
     if (runtime.activeTabIsLiveDiff()) {
         return failure("edit command cannot mutate a diff document");
@@ -177,11 +173,11 @@ CommandHandlerResult bindEdit(EditorSession::Impl& runtime, ViewId viewId,
     if (!result.accepted() || !result.transaction || !result.selections) {
         return failure(result.message);
     }
-    return applyTransaction(runtime, viewId, *result.transaction,
+    return applyTransaction(runtime, *result.transaction,
                             *result.selections, HistoryEditKind::Other);
 }
 
-CommandHandlerResult bindHistory(EditorSession::Impl& runtime, ViewId viewId,
+CommandHandlerResult bindHistory(EditorSession::Impl& runtime,
                                  HistoryCommand command) {
     if (runtime.activeTabIsLiveDiff()) {
         return failure("history command cannot mutate a diff document");
@@ -199,7 +195,7 @@ CommandHandlerResult bindHistory(EditorSession::Impl& runtime, ViewId viewId,
     return success();
 }
 
-CommandHandlerResult bindClipboard(EditorSession::Impl& runtime, ViewId viewId,
+CommandHandlerResult bindClipboard(EditorSession::Impl& runtime,
                                    ClipboardCommand command) {
     if (runtime.activeTabIsLiveDiff() && command != ClipboardCommand::Copy) {
         return failure("clipboard mutation is unavailable in diff mode");
@@ -287,8 +283,6 @@ std::vector<PromptToggle> findOptionToggles(EditorSession::Impl& runtime) {
 }
 
 CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
-                                     ViewId viewId,
-                                     Revision revision,
                                      FindReplaceCommand command,
                                      std::any const& payload) {
     if (runtime.activeTabIsLiveDiff() &&
@@ -301,7 +295,7 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
     auto* document = runtime.activeDocument();
     auto query = payloadAs<std::string>(payload) ? *payloadAs<std::string>(payload) : runtime.findReplace.viewState().query;
     std::optional<ByteRange> range;
-    DocumentSnapshot snapshot{{}, Revision{0}, DocumentMode::Edit, false};
+    DocumentSnapshot snapshot{{}, std::uint64_t{0}, DocumentMode::Edit, false};
     if (document != nullptr) {
         snapshot = document->snapshot();
         auto selected = runtime.selection.selections.primary();
@@ -461,7 +455,9 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
             if (arguments == nullptr) {
                 return failure("replace.workspace_preview requires a workspace replace payload");
             }
-            auto result = WorkspaceReplacer{}.preview(runtime, revision,
+            auto result = WorkspaceReplacer{}.preview(
+                                                    runtime,
+                                                    ++runtime.workspaceReplaceGeneration,
                                                     arguments->request,
                                                     arguments->replacement);
             if (!result.accepted()) return failure(result.message);
@@ -495,21 +491,16 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
 } // namespace
 
 CommandHandlerResult executeFindReplaceCommand(EditorSession::Impl& runtime,
-                                                ViewId viewId,
-                                               Revision revision,
-                                               FindReplaceCommand command,
-                                               std::any const& payload) {
-    return bindFindReplace(runtime, viewId, revision, command, payload);
+                                                FindReplaceCommand command,
+                                                std::any const& payload) {
+    return bindFindReplace(runtime, command, payload);
 }
 
 // The text-input commands, declared where they are implemented.
-//
-// The first component migrated off the static table
-//.  Each command's facts and its handler are
-// one expression, so the argument type is written once -- in `handler<...>` --
-// and the codec, the unwrap and the reference's argument column are all derived
-// from it.  There is no row elsewhere to keep in step.
-void registerTextInputCommands(CommandCatalog& builder,
+// Aggregate command registrations: each command's facts and handler comprise a
+// single expression. The argument type, codec, unwrap, and column reference are
+// all derived from the handler type, written once in `handler<...>`.
+void registerTextInputCommands(CommandCatalog& catalog,
                                EditorSession::Impl& runtime) {
     // Only insertion carries text.  The other five never read a payload -- the
     // old handler default-constructed one and ignored it -- yet the static table
@@ -518,35 +509,34 @@ void registerTextInputCommands(CommandCatalog& builder,
     // argument cannot declare one.
     auto declareTextless = [&](std::string id, std::string label,
                                std::string summary, TextInputCommand command) {
-        builder.add(CommandSpecBuilder{std::move(id)}
-                        .owner("text-input-commands")
-                        .label(std::move(label))
-                        .summary(std::move(summary))
-                        .mutates()
-                        .lua()
-                        .handler([&runtime, command](CommandContext& context) {
-                            return runtime.runTransaction([&] {
-                                return bindText(runtime, context.viewId(),
-                                                command, {});
-                            });
-                        }));
+        catalog.add(CommandSpec{
+            .id = std::move(id),
+            .owner = "text-input-commands",
+            .label = std::move(label),
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+            .binding = bindNoArgumentHandler(
+                [&runtime, command](CommandContext&) {
+                    return bindText(runtime, command, {});
+                }),
+        });
     };
 
-    builder.add(CommandSpecBuilder{"text.insert"}
-                    .owner("text-input-commands")
-                    .label("Insert")
-                    .summary("Insert")
-                    .mutates()
-                    .lua()
-                    .handler<TextInputArguments>(
-                        [&runtime](CommandContext& context,
-                                   TextInputArguments const& arguments) {
-                            return runtime.runTransaction([&] {
-                                return bindText(runtime, context.viewId(),
-                                                TextInputCommand::Insert,
-                                                arguments);
-                            });
-                        }));
+    catalog.add(CommandSpec{
+        .id = "text.insert",
+        .owner = "text-input-commands",
+        .label = "Insert",
+        .summary = "Insert",
+        .effect = CommandEffect::Mutation,
+        .luaApi = true,
+        .binding = bindWireHandler<TextInputArguments>(
+            [&runtime](CommandContext&,
+                       TextInputArguments const& arguments) {
+                return bindText(runtime,
+                                TextInputCommand::Insert, arguments);
+            }),
+    });
     declareTextless("text.newline", "Newline", "Newline",
                     TextInputCommand::Newline);
     declareTextless("text.delete_backward", "Delete Backward",
@@ -562,44 +552,44 @@ void registerTextInputCommands(CommandCatalog& builder,
 }
 
 // Undo and redo.
-void registerHistoryCommands(CommandCatalog& builder,
+void registerHistoryCommands(CommandCatalog& catalog,
                              EditorSession::Impl& runtime) {
     auto declare = [&](std::string id, std::string summary,
                        HistoryCommand command) {
-        builder.add(CommandSpecBuilder{std::move(id)}
-                        .owner("undo-redo-history")
-                        .label(summary)
-                        .summary(std::move(summary))
-                        .mutates()
-                        .lua()
-                        .handler([&runtime, command](CommandContext& context) {
-                            return runtime.runTransaction([&] {
-                                return bindHistory(runtime, context.viewId(),
-                                                   command);
-                            });
-                        }));
+        catalog.add(CommandSpec{
+            .id = std::move(id),
+            .owner = "undo-redo-history",
+            .label = summary,
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+            .binding = bindNoArgumentHandler(
+                [&runtime, command](CommandContext&) {
+                    return bindHistory(runtime, command);
+                }),
+        });
     };
     declare("edit.undo", "Undo", HistoryCommand::Undo);
     declare("edit.redo", "Redo", HistoryCommand::Redo);
 }
 
 // The clipboard register: copy, cut and paste over the current selections.
-void registerClipboardCommands(CommandCatalog& builder,
+void registerClipboardCommands(CommandCatalog& catalog,
                                EditorSession::Impl& runtime) {
     auto declare = [&](std::string id, std::string summary,
                        ClipboardCommand command) {
-        builder.add(CommandSpecBuilder{std::move(id)}
-                        .owner("clipboard-register")
-                        .label(summary)
-                        .summary(std::move(summary))
-                        .mutates()
-                        .lua()
-                        .handler([&runtime, command](CommandContext& context) {
-                            return runtime.runTransaction([&] {
-                                return bindClipboard(runtime, context.viewId(),
-                                                     command);
-                            });
-                        }));
+        catalog.add(CommandSpec{
+            .id = std::move(id),
+            .owner = "clipboard-register",
+            .label = summary,
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+            .binding = bindNoArgumentHandler(
+                [&runtime, command](CommandContext&) {
+                    return bindClipboard(runtime, command);
+                }),
+        });
     };
     declare("clipboard.copy", "Copy", ClipboardCommand::Copy);
     declare("clipboard.cut", "Cut", ClipboardCommand::Cut);
@@ -608,23 +598,23 @@ void registerClipboardCommands(CommandCatalog& builder,
 
 // Whole-line and whole-selection edits.  None takes an argument: each acts on
 // wherever the selections already are.
-void registerEditSuiteCommands(CommandCatalog& builder,
+void registerEditSuiteCommands(CommandCatalog& catalog,
                                EditorSession::Impl& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary,
                        EditCommand command) {
-        auto built = CommandSpecBuilder{std::move(id)}
-                         .owner("edit-command-suite")
-                         .summary(std::move(summary))
-                         .mutates()
-                         .lua()
-                         .handler([&runtime, command](CommandContext& context) {
-                             return runtime.runTransaction([&] {
-                                 return bindEdit(runtime, context.viewId(),
-                                                 command);
-                             });
-                         });
-        if (!label.empty()) built.label(std::move(label));
-        builder.add(std::move(built));
+        CommandSpec built{
+            .id = std::move(id),
+            .owner = "edit-command-suite",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+            .binding = bindNoArgumentHandler(
+                [&runtime, command](CommandContext&) {
+                    return bindEdit(runtime, command);
+                }),
+        };
+        if (!label.empty()) built.label = std::move(label);
+        catalog.add(std::move(built));
     };
     declare("edit.indent", "Indent", "Indent", EditCommand::Indent);
     declare("edit.outdent", "Outdent", "Outdent", EditCommand::Outdent);
@@ -645,27 +635,27 @@ void registerEditSuiteCommands(CommandCatalog& builder,
 }
 
 // Find and replace, in the open document and across the workspace.
-void registerFindReplaceCommands(CommandCatalog& builder,
+void registerFindReplaceCommands(CommandCatalog& catalog,
                                  EditorSession::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
-        return CommandSpecBuilder{std::move(id)}
-            .owner("find-replace")
-            .summary(std::move(summary))
-            .mutates()
-            .lua();
+        return CommandSpec{
+            .id = std::move(id),
+            .owner = "find-replace",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+        };
     };
     auto bare = [&](std::string id, std::string label, std::string summary,
                     FindReplaceCommand command) {
-        auto built = spec(std::move(id), std::move(summary))
-                         .handler([&runtime, command](CommandContext& context) {
-                             return runtime.runTransaction([&] {
-                                 return executeFindReplaceCommand(
-                                     runtime, context.viewId(),
-                                     context.revision(), command, {});
-                             });
-                         });
-        if (!label.empty()) built.label(std::move(label));
-        builder.add(std::move(built));
+        auto built = spec(std::move(id), std::move(summary));
+        built.binding = bindNoArgumentHandler(
+            [&runtime, command](CommandContext&) {
+                return executeFindReplaceCommand(
+                    runtime, command, {});
+            });
+        if (!label.empty()) built.label = std::move(label);
+        catalog.add(std::move(built));
     };
 
     bare("find.open", "Find", "Find", FindReplaceCommand::FindOpen);
@@ -692,19 +682,15 @@ void registerFindReplaceCommands(CommandCatalog& builder,
     auto carrying = [&]<typename Arguments>(std::string id, std::string summary,
                                             FindReplaceCommand command,
                                             Arguments const*) {
-        builder.add(spec(std::move(id), std::move(summary))
-                        .optionalHandler<Arguments>(
-                            [&runtime, command](
-                                CommandContext& context,
+        auto built = spec(std::move(id), std::move(summary));
+        built.binding = bindOptionalWireHandler<Arguments>(
+            [&runtime, command](CommandContext&,
                                 std::optional<Arguments> const& arguments) {
-                                return runtime.runTransaction([&] {
-                                    return executeFindReplaceCommand(
-                                        runtime, context.viewId(),
-                                        context.revision(), command,
-                                        arguments ? std::any{*arguments}
-                                                  : std::any{});
-                                });
-                            }));
+                return executeFindReplaceCommand(
+                    runtime, command,
+                    arguments ? std::any{*arguments} : std::any{});
+            });
+        catalog.add(std::move(built));
     };
     carrying("find.update_query", "Update Query",
              FindReplaceCommand::FindUpdateQuery,
@@ -728,7 +714,7 @@ void registerFindReplaceCommands(CommandCatalog& builder,
 // pairs each id with its motion, rather than restating that list: the summary
 // is the id's last segment in words, which is the rule every one of them
 // follows.
-void registerSelectionCommands(CommandCatalog& builder,
+void registerSelectionCommands(CommandCatalog& catalog,
                                EditorSession::Impl& runtime) {
     auto summaryOf = [](std::string_view id) {
         auto const segment = id.substr(id.find('.') + 1);
@@ -780,66 +766,66 @@ void registerSelectionCommands(CommandCatalog& builder,
             }
         }();
         if (visualAction) {
-            builder.add(
-                CommandSpecBuilder{std::string{descriptor.id}}
-                    .owner("selection-navigation")
-                    .summary(summaryOf(descriptor.id))
-                    .viewAction()
-                    .lua()
-                    .optionalHandler<SelectionCommandArguments>(
-                        [action = *visualAction](
-                            CommandContext&,
-                            std::optional<SelectionCommandArguments> const&) {
-                            return CommandHandlerResult::requireView(action);
-                        }));
+            catalog.add(CommandSpec{
+                .id = std::string{descriptor.id},
+                .owner = "selection-navigation",
+                .summary = summaryOf(descriptor.id),
+                .effect = CommandEffect::ViewAction,
+                .luaApi = true,
+                .binding = bindOptionalWireHandler<SelectionCommandArguments>(
+                    [action = *visualAction](
+                        CommandContext&,
+                        std::optional<SelectionCommandArguments> const&) {
+                        return CommandHandlerResult::requireView(action);
+                    }),
+            });
             continue;
         }
         if (command == SelectionCommand::ViewRevealCaret ||
             command == SelectionCommand::ViewCenterCaret) {
-            builder.add(
-                CommandSpecBuilder{std::string{descriptor.id}}
-                    .owner("selection-navigation")
-                    .summary(summaryOf(descriptor.id))
-                    .viewAction()
-                    .lua()
-                    .optionalHandler<SelectionCommandArguments>(
-                        [command](
-                            CommandContext&,
-                            std::optional<SelectionCommandArguments> const&) {
-                            return CommandHandlerResult::requireView(
-                                command == SelectionCommand::ViewRevealCaret
-                                    ? ViewAction{RevealSelection{}}
-                                    : ViewAction{CenterSelection{}});
-                        }));
+            catalog.add(CommandSpec{
+                .id = std::string{descriptor.id},
+                .owner = "selection-navigation",
+                .summary = summaryOf(descriptor.id),
+                .effect = CommandEffect::ViewAction,
+                .luaApi = true,
+                .binding = bindOptionalWireHandler<SelectionCommandArguments>(
+                    [command](CommandContext&,
+                              std::optional<SelectionCommandArguments> const&) {
+                        return CommandHandlerResult::requireView(
+                            command == SelectionCommand::ViewRevealCaret
+                                ? ViewAction{RevealSelection{}}
+                                : ViewAction{CenterSelection{}});
+                    }),
+            });
             continue;
         }
-        builder.add(
-            CommandSpecBuilder{std::string{descriptor.id}}
-                .owner("selection-navigation")
-                .summary(summaryOf(descriptor.id))
-                .mutates()
-                .lua()
-                .optionalHandler<SelectionCommandArguments>(
-                    [&runtime, command](
-                        CommandContext&,
-                        std::optional<SelectionCommandArguments> const&
-                            arguments) {
-                        return runtime.runTransaction([&] {
-                            return bindSelection(
-                                runtime, command,
-                                arguments ? std::any{*arguments} : std::any{});
-                        });
-                    }));
+        catalog.add(CommandSpec{
+            .id = std::string{descriptor.id},
+            .owner = "selection-navigation",
+            .summary = summaryOf(descriptor.id),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+            .binding = bindOptionalWireHandler<SelectionCommandArguments>(
+                [&runtime, command](
+                    CommandContext&,
+                    std::optional<SelectionCommandArguments> const&
+                        arguments) {
+                    return bindSelection(
+                        runtime, command,
+                        arguments ? std::any{*arguments} : std::any{});
+                }),
+        });
     }
 }
 
-void bindRuntimeEditing(CommandCatalog& builder, EditorSession::Impl& runtime) {
-    registerTextInputCommands(builder, runtime);
-    registerSelectionCommands(builder, runtime);
-    registerEditSuiteCommands(builder, runtime);
-    registerFindReplaceCommands(builder, runtime);
-    registerHistoryCommands(builder, runtime);
-    registerClipboardCommands(builder, runtime);
+void bindRuntimeEditing(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+    registerTextInputCommands(catalog, runtime);
+    registerSelectionCommands(catalog, runtime);
+    registerEditSuiteCommands(catalog, runtime);
+    registerFindReplaceCommands(catalog, runtime);
+    registerHistoryCommands(catalog, runtime);
+    registerClipboardCommands(catalog, runtime);
 }
 
 } // namespace ssg

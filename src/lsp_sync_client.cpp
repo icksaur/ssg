@@ -590,7 +590,7 @@ struct LspSyncClient::Impl {
     struct DocumentState {
         std::string languageId;
         std::int64_t version = 1;
-        Revision revision{0};
+        std::uint64_t revision{0};
         std::string text;
     };
 
@@ -769,7 +769,7 @@ struct LspSyncClient::Impl {
         } else {
             updated.documents.insert(found, std::move(replacement));
         }
-        updated.revision = Revision{view.revision.value() + 1};
+        updated.revision = std::uint64_t{view.revision + 1};
         view = std::move(updated);
         return {};
     }
@@ -936,13 +936,13 @@ LspSyncResult LspSyncClient::poll() {
 }
 
 LspSyncResult LspSyncClient::openDocument(
-    std::string uri, std::string languageId, Revision revision,
+    std::string uri, std::string languageId, std::uint64_t revision,
     std::string text) {
     if (impl_->lifecycle != LspLifecycleState::Ready) {
         return {LspSyncError::InvalidState,
                 "opening an LSP document requires a ready client"};
     }
-    if (uri.empty() || languageId.empty() || revision.value() == 0 ||
+    if (uri.empty() || languageId.empty() || revision == 0 ||
         !validUtf8(text)) {
         return {LspSyncError::InvalidArgument,
                 "LSP document URI, language, revision, or UTF-8 is invalid"};
@@ -968,7 +968,7 @@ LspSyncResult LspSyncClient::openDocument(
 }
 
 LspSyncResult LspSyncClient::changeDocument(std::string_view uri,
-                                             Revision revision,
+                                             std::uint64_t revision,
                                              std::string text) {
     if (impl_->lifecycle != LspLifecycleState::Ready) {
         return {LspSyncError::InvalidState,
@@ -1022,7 +1022,7 @@ LspSyncResult LspSyncClient::closeDocument(std::string_view uri) {
         [&](const LspDocumentDiagnostics& value) { return value.uri == uri; });
     if (diagnostic != impl_->view.documents.end()) {
         impl_->view.documents.erase(diagnostic);
-        impl_->view.revision = Revision{impl_->view.revision.value() + 1};
+        impl_->view.revision = std::uint64_t{impl_->view.revision + 1};
     }
     return {};
 }

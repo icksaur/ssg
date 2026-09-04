@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/CommandInvocation.h>
+#include <ssg/CommandCatalog.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/Keymap.h>
 #include <ssg/PaneNavigation.h>
@@ -37,15 +37,7 @@ enum class InputPointerPhase : std::uint8_t {
     Cancel = 3,
 };
 
-struct SemanticInputBasis {
-    Revision observedRevision;
-
-    friend bool operator==(const SemanticInputBasis&,
-                           const SemanticInputBasis&) = default;
-};
-
 struct TabPointerInput {
-    SemanticInputBasis basis;
     TabId tabId;
     InputPointerButton button = InputPointerButton::Primary;
     InputPointerPhase phase = InputPointerPhase::Press;
@@ -55,7 +47,6 @@ struct TabPointerInput {
 };
 
 struct TreePointerInput {
-    SemanticInputBasis basis;
     TreeNodeId nodeId;
     InputPointerButton button = InputPointerButton::Primary;
     InputPointerPhase phase = InputPointerPhase::Press;
@@ -75,7 +66,6 @@ struct PickerPointerInput {
 };
 
 struct ExternalActionPointerInput {
-    SemanticInputBasis basis;
     ExternalActionInvocation invocation;
     InputPointerButton button = InputPointerButton::Primary;
     InputPointerPhase phase = InputPointerPhase::Press;
@@ -85,7 +75,6 @@ struct ExternalActionPointerInput {
 };
 
 struct NoticeActionPointerInput {
-    SemanticInputBasis basis;
     std::string actionId;
     InputPointerButton button = InputPointerButton::Primary;
     InputPointerPhase phase = InputPointerPhase::Press;
@@ -95,7 +84,6 @@ struct NoticeActionPointerInput {
 };
 
 struct DocumentPointerInput {
-    SemanticInputBasis basis;
     std::optional<ByteOffset> position;
     bool additive = false;
     bool selectWord = false;
@@ -108,7 +96,6 @@ struct DocumentPointerInput {
 };
 
 struct ScrollLinesInput {
-    SemanticInputBasis basis;
     ScrollLines action;
 
     friend bool operator==(const ScrollLinesInput&,
@@ -116,7 +103,6 @@ struct ScrollLinesInput {
 };
 
 struct ScrollFractionInput {
-    SemanticInputBasis basis;
     ScrollFraction action;
 
     friend bool operator==(const ScrollFractionInput&,
@@ -145,7 +131,7 @@ struct SelectionRangeTransition {
 
 struct SelectionTransition {
     TabId activeTab;
-    Revision documentRevision;
+    std::uint64_t documentRevision;
     std::vector<SelectionRangeTransition> selections;
 
     friend bool operator==(const SelectionTransition&,
@@ -164,10 +150,6 @@ using ViewTransition =
                  SelectionTransition, PointerSelectionTransition>;
 
 struct ViewTransitionInput {
-    // CONTRACT: observedRevision identifies the active document as well as its
-    // state because every active-document switch advances EditorSession's
-    // revision; exact revision validation precedes every transition.
-    SemanticInputBasis basis;
     ViewTransition transition;
 
     friend bool operator==(const ViewTransitionInput&,

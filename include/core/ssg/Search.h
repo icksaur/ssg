@@ -59,7 +59,7 @@ struct WorkspaceSymbol {
 };
 
 struct WorkspaceSnapshot {
-    Revision revision{0};
+    std::uint64_t revision{0};
     std::vector<WorkspaceFile> files;
     std::vector<WorkspaceSymbol> symbols;
     friend bool operator==(const WorkspaceSnapshot&,
@@ -70,7 +70,7 @@ class SearchWorkspaceSource {
 public:
     virtual ~SearchWorkspaceSource() = default;
     [[nodiscard]] virtual WorkspaceSnapshot snapshot(
-        Revision revision) const = 0;
+        std::uint64_t revision) const = 0;
 };
 
 struct SearchCommandDescriptor {
@@ -117,14 +117,14 @@ struct SearchResult {
 
 struct WorkspaceSearchRequest {
     std::uint64_t generation = 0;
-    Revision sourceRevision{0};
+    std::uint64_t sourceRevision{0};
     ParsedSearchQuery query;
     SearchCancellationToken cancellation;
 };
 
 struct WorkspaceSearchBatch {
     std::uint64_t generation = 0;
-    Revision sourceRevision{0};
+    std::uint64_t sourceRevision{0};
     std::vector<SearchResult> results;
     bool cancelled = false;
 };
@@ -185,7 +185,7 @@ private:
 };
 
 struct SearchViewState {
-    Revision revision{0};
+    std::uint64_t revision{0};
     bool paletteOpen = false;
     std::string query;
     SearchMode mode = SearchMode::File;
@@ -209,20 +209,20 @@ public:
     SearchController(const SearchWorkspaceSource& workspace,
                      SearchCommandSource& commands) noexcept;
 
-    void openPalette(Revision revision);
-    void closePalette(Revision revision);
-    void updatePaletteQuery(std::string query, Revision revision);
+    void openPalette(std::uint64_t revision);
+    void closePalette(std::uint64_t revision);
+    void updatePaletteQuery(std::string query, std::uint64_t revision);
     void selectNext();
     void selectPrevious();
     [[nodiscard]] PaletteExecutionResult executePalette();
 
     [[nodiscard]] WorkspaceSearchRequest beginWorkspaceSearch(
-        std::string query, Revision sourceRevision);
+        std::string query, std::uint64_t sourceRevision);
     [[nodiscard]] WorkspaceSearchBatch evaluate(
         const WorkspaceSearchRequest& request) const;
     void cancelWorkspaceSearch() noexcept;
     [[nodiscard]] SearchPublishResult publish(
-        const WorkspaceSearchBatch& batch, Revision currentRevision);
+        const WorkspaceSearchBatch& batch, std::uint64_t currentRevision);
 
     [[nodiscard]] const SearchViewState& viewState() const noexcept {
         return state_;

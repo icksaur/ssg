@@ -13,14 +13,22 @@
 
 namespace {
 
-ssg::CommandSpecBuilder minimal(std::string id) {
-    return ssg::CommandSpecBuilder{std::move(id)}
-        .owner("test-owner")
-        .summary("a command")
-        .observes()
-        .handler([](ssg::CommandContext&) {
+ssg::CommandSpec minimal(std::string id) {
+    return ssg::CommandSpec{
+        .id = std::move(id),
+        .owner = "test-owner",
+        .summary = "a command",
+        .effect = ssg::CommandEffect::Observation,
+        .binding = ssg::bindNoArgumentHandler([](ssg::CommandContext&) {
             return ssg::CommandHandlerResult::success();
-        });
+        }),
+    };
+}
+
+ssg::CommandSpec minimal(std::string id, std::string owner) {
+    auto spec = minimal(std::move(id));
+    spec.owner = std::move(owner);
+    return spec;
 }
 
 struct Payload {
@@ -41,12 +49,16 @@ TEST(addIssuesAHandleThatResolvesBackToItsCommand) {
 
 TEST(addRejectsADuplicateIdAndNamesBothOwners) {
     ssg::CommandCatalog catalog;
-    catalog.add(minimal("dup.command").owner("first-owner"));
+    auto first = minimal("dup.command");
+    first.owner = "first-owner";
+    catalog.add(std::move(first));
 
     bool threw = false;
     std::string message;
     try {
-        catalog.add(minimal("dup.command").owner("second-owner"));
+        auto second = minimal("dup.command");
+        second.owner = "second-owner";
+        catalog.add(std::move(second));
     } catch (std::runtime_error const& error) {
         threw = true;
         message = error.what();
@@ -59,11 +71,11 @@ TEST(addRejectsADuplicateIdAndNamesBothOwners) {
     ASSERT_EQ(catalog.size(), std::size_t{1});
 }
 
-// Every required field is checked at add, because a builder passed to add is
+// Every required field is checked at add, because a spec passed to add is
 // finished by definition.  Each omission is checked separately so the test
 // fails for the field actually missing.
 TEST(addRejectsEachMissingRequiredField) {
-    auto const rejects = [](ssg::CommandSpecBuilder spec) {
+    auto const rejects = [](ssg::CommandSpec spec) {
         ssg::CommandCatalog catalog;
         try {
             catalog.add(std::move(spec));
@@ -72,45 +84,35 @@ TEST(addRejectsEachMissingRequiredField) {
         }
         return false;
     };
-    auto const handler = [](ssg::CommandContext&) {
+    auto const handler = ssg::bindNoArgumentHandler([](ssg::CommandContext&) {
         return ssg::CommandHandlerResult::success();
-    };
+    });
 
-    ASSERT_TRUE(rejects(ssg::CommandSpecBuilder{""}.owner("o").summary("s")
-                            .observes().handler(handler)));
-    ASSERT_TRUE(rejects(ssg::CommandSpecBuilder{"no.owner"}.summary("s")
-                            .observes().handler(handler)));
-    ASSERT_TRUE(rejects(ssg::CommandSpecBuilder{"no.summary"}.owner("o")
-                            .observes().handler(handler)));
+    ASSERT_TRUE(rejects(ssg::CommandSpec{.id = "",
+                                         .owner = "o",
+                                         .summary = "s",
+                                         .effect = ssg::CommandEffect::Observation,
+                                         .binding = handler}));
+    ASSERT_TRUE(rejects(ssg::CommandSpec{.id = "no.owner",
+                                         .summary = "s",
+                                         .effect = ssg::CommandEffect::Observation,
+                                         .binding = handler}));
+    ASSERT_TRUE(rejects(ssg::CommandSpec{.id = "no.summary",
+                                         .owner = "o",
+                                         .effect = ssg::CommandEffect::Observation,
+                                         .binding = handler}));
     // Effect has no default: "nobody decided" must not be shippable.
-    ASSERT_TRUE(rejects(ssg::CommandSpecBuilder{"no.effect"}.owner("o")
-                            .summary("s").handler(handler)));
-    ASSERT_TRUE(rejects(ssg::CommandSpecBuilder{"no.handler"}.owner("o")
-                            .summary("s").observes()));
-    ASSERT_FALSE(rejects(ssg::CommandSpecBuilder{"complete"}.owner("o")
-                             .summary("s").observes().handler(handler)));
-}
-
-TEST(builderRejectsConflictingRevisionPolicies) {
-    bool mutatingConflict = false;
-    try {
-        (void)ssg::CommandSpecBuilder{"conflict.mutating"}
-            .stateValidatedMutation()
-            .mutates();
-    } catch (const std::logic_error&) {
-        mutatingConflict = true;
-    }
-    ASSERT_TRUE(mutatingConflict);
-
-    bool observingConflict = false;
-    try {
-        (void)ssg::CommandSpecBuilder{"conflict.observing"}
-            .observes()
-            .stateValidatedMutation();
-    } catch (const std::logic_error&) {
-        observingConflict = true;
-    }
-    ASSERT_TRUE(observingConflict);
+    ASSERT_TRUE(rejects(ssg::CommandSpec{
+        .id = "no.effect", .owner = "o", .summary = "s", .binding = handler}));
+    ASSERT_TRUE(rejects(ssg::CommandSpec{.id = "no.handler",
+                                         .owner = "o",
+                                         .summary = "s",
+                                         .effect = ssg::CommandEffect::Observation}));
+    ASSERT_FALSE(rejects(ssg::CommandSpec{.id = "complete",
+                                          .owner = "o",
+                                          .summary = "s",
+                                          .effect = ssg::CommandEffect::Observation,
+                                          .binding = handler}));
 }
 
 // The catalog is append-only and its storage is stable, so a reference taken
@@ -145,9 +147,9 @@ TEST(revisionAdvancesOnEveryRegistration) {
 
 TEST(commandsAreEnumeratedInRegistrationOrderAndGroupedByOwner) {
     ssg::CommandCatalog catalog;
-    catalog.add(minimal("a.command").owner("alpha"));
-    catalog.add(minimal("b.command").owner("beta"));
-    catalog.add(minimal("c.command").owner("alpha"));
+    catalog.add(minimal("a.command", "alpha"));
+    catalog.add(minimal("b.command", "beta"));
+    catalog.add(minimal("c.command", "alpha"));
 
     std::vector<std::string> ids;
     for (auto const* entry : catalog.commands()) ids.push_back(entry->id);
@@ -169,15 +171,17 @@ TEST(commandsAreEnumeratedInRegistrationOrderAndGroupedByOwner) {
 // when a migrated command dispatches through a real session (D3).
 TEST(aTypedHandlerRecordsTheArgumentTypeItConsumes) {
     ssg::CommandCatalog catalog;
-    catalog.add(ssg::CommandSpecBuilder{"typed.command"}
-                    .owner("test-owner")
-                    .summary("takes a payload")
-                    .mutates()
-                    .handler<Payload>([](ssg::CommandContext&,
-                                         Payload const& payload) {
-                        (void)payload;
-                        return ssg::CommandHandlerResult::success();
-                    }));
+    catalog.add(ssg::CommandSpec{
+        .id = "typed.command",
+        .owner = "test-owner",
+        .summary = "takes a payload",
+        .effect = ssg::CommandEffect::Mutation,
+        .binding = ssg::bindWireHandler<Payload>(
+            [](ssg::CommandContext&, Payload const& payload) {
+                (void)payload;
+                return ssg::CommandHandlerResult::success();
+            }),
+    });
 
     auto const* entry = catalog.find("typed.command");
     ASSERT_TRUE(entry != nullptr);
@@ -197,7 +201,9 @@ TEST(aCommandWithNoArgumentsDeclaresNoArgumentType) {
 
 TEST(initScriptImpliesLuaApi) {
     ssg::CommandCatalog catalog;
-    catalog.add(minimal("granted.command").initScript());
+    auto spec = minimal("granted.command");
+    spec.initScript = true;
+    catalog.add(std::move(spec));
     auto const* entry = catalog.find("granted.command");
     ASSERT_TRUE(entry != nullptr);
     if (!entry) return;
@@ -269,17 +275,19 @@ TEST(aCommandRegisteredAfterExecutorConstructionIsDispatchable) {
     ssg::CommandExecutor executor{catalog};
 
     int lateCalls = 0;
-    catalog->add(
-        ssg::CommandSpecBuilder{"late.command"}
-            .owner("test-owner")
-            .summary("registered after the session existed")
-            .observes()
-            .handler([&lateCalls](ssg::CommandContext&) {
+    catalog->add(ssg::CommandSpec{
+        .id = "late.command",
+        .owner = "test-owner",
+        .summary = "registered after the session existed",
+        .effect = ssg::CommandEffect::Observation,
+        .binding = ssg::bindNoArgumentHandler(
+            [&lateCalls](ssg::CommandContext&) {
                 ++lateCalls;
                 return ssg::CommandHandlerResult::success();
-            }));
+            }),
+    });
 
-    auto const byName = executor.dispatch({"late.command", executor.revision(), {}});
+    auto const byName = executor.dispatch({"late.command",  {}});
     ASSERT_TRUE(byName.accepted());
     ASSERT_EQ(lateCalls, 1);
 
@@ -287,7 +295,7 @@ TEST(aCommandRegisteredAfterExecutorConstructionIsDispatchable) {
     // path's spelling.
     auto const handle = catalog->handleFor("late.command");
     ASSERT_TRUE(handle.valid());
-    auto const byHandle = executor.dispatch({ssg::CommandName{"late.command", handle}, executor.revision(), {}});
+    auto const byHandle = executor.dispatch({ssg::CommandName{"late.command", handle},  {}});
     ASSERT_TRUE(byHandle.accepted());
     ASSERT_EQ(lateCalls, 2);
 }
@@ -311,7 +319,7 @@ TEST(aSwapExceedingTheHandleSpaceLeavesThePreviousGenerationWorking) {
     bool refused = false;
     std::string refusal;
     for (int reload = 0; reload < 200000 && !refused; ++reload) {
-        std::vector<ssg::CommandSpecBuilder> batch;
+        std::vector<ssg::CommandSpec> batch;
         batch.push_back(minimal("lua.churn"));
         try {
             auto const added = catalog.replaceGeneration(previous, std::move(batch));
@@ -342,7 +350,7 @@ TEST(retiringACommandFreesItsNameButNeverItsHandle) {
     auto const first = catalog.add(minimal("lua.hello"));
     ASSERT_TRUE(catalog.find("lua.hello") != nullptr);
 
-    std::vector<ssg::CommandSpecBuilder> second;
+    std::vector<ssg::CommandSpec> second;
     second.push_back(minimal("lua.hello"));
     auto const replaced = catalog.replaceGeneration(std::array{first}, std::move(second));
 
@@ -371,10 +379,10 @@ TEST(aBatchWithOneBadSpecChangesNothing) {
     ssg::CommandCatalog catalog;
     auto const previous = catalog.add(minimal("lua.keep"));
 
-    std::vector<ssg::CommandSpecBuilder> batch;
+    std::vector<ssg::CommandSpec> batch;
     batch.push_back(minimal("lua.fine"));
     // Missing owner/summary/effect/handler: an incomplete spec is the bad one.
-    batch.push_back(ssg::CommandSpecBuilder{"lua.broken"});
+    batch.push_back(ssg::CommandSpec{.id = "lua.broken"});
     bool threw = false;
     try {
         catalog.replaceGeneration(std::array{previous}, std::move(batch));
@@ -390,7 +398,7 @@ TEST(aBatchWithOneBadSpecChangesNothing) {
 
 TEST(aBatchRepeatingAnIdIsRefusedWholesale) {
     ssg::CommandCatalog catalog;
-    std::vector<ssg::CommandSpecBuilder> batch;
+    std::vector<ssg::CommandSpec> batch;
     batch.push_back(minimal("lua.twice"));
     batch.push_back(minimal("lua.twice"));
     bool threw = false;
@@ -409,7 +417,7 @@ TEST(aBatchMayReuseAnIdItIsItselfRetiring) {
     ssg::CommandCatalog catalog;
     auto const a = catalog.add(minimal("lua.a"));
     auto const b = catalog.add(minimal("lua.b"));
-    std::vector<ssg::CommandSpecBuilder> batch;
+    std::vector<ssg::CommandSpec> batch;
     batch.push_back(minimal("lua.a"));
     batch.push_back(minimal("lua.c"));
     auto const added = catalog.replaceGeneration(std::array{a, b}, std::move(batch));
@@ -435,7 +443,7 @@ TEST(aSwapIsNeverObservedWithNeitherGenerationPresent) {
     }};
 
     for (int generation = 0; generation < 200; ++generation) {
-        std::vector<ssg::CommandSpecBuilder> batch;
+        std::vector<ssg::CommandSpec> batch;
         batch.push_back(minimal("lua.only"));
         handles = catalog.replaceGeneration(handles, std::move(batch));
     }
@@ -451,7 +459,6 @@ SSG_TEST_SUITE(test_command_catalog) {
     RUN(addIssuesAHandleThatResolvesBackToItsCommand);
     RUN(addRejectsADuplicateIdAndNamesBothOwners);
     RUN(addRejectsEachMissingRequiredField);
-    RUN(builderRejectsConflictingRevisionPolicies);
     RUN(referencesAndHandlesSurviveLaterRegistrations);
     RUN(revisionAdvancesOnEveryRegistration);
     RUN(commandsAreEnumeratedInRegistrationOrderAndGroupedByOwner);

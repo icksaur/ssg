@@ -9,8 +9,8 @@ namespace ssg::test {
 
 class GridTestView {
 public:
-    GridTestView(ViewId view, ViewportDimensions dimensions)
-        : dimensions_{dimensions}, presenter_{view} {}
+    explicit GridTestView(ViewportDimensions dimensions)
+        : dimensions_{dimensions}, presenter_{} {}
 
     [[nodiscard]] std::optional<GridPresentation> present(
         EditorSession& session, PaletteReport palette = {}) {

@@ -35,7 +35,6 @@ core/ssg/ClientInput.h	func	ssg::operator==	bool (const ScrollFractionInput &, c
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const ScrollLinesInput &, const ScrollLinesInput &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const SelectionRangeTransition &, const SelectionRangeTransition &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const SelectionTransition &, const SelectionTransition &) noexcept(false)
-core/ssg/ClientInput.h	func	ssg::operator==	bool (const SemanticInputBasis &, const SemanticInputBasis &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const TabPointerInput &, const TabPointerInput &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const TreePointerInput &, const TreePointerInput &)
 core/ssg/ClientInput.h	func	ssg::operator==	bool (const ViewTransitionInput &, const ViewTransitionInput &)
@@ -53,7 +52,6 @@ core/ssg/ClientInput.h	struct	ssg::ScrollFractionInput
 core/ssg/ClientInput.h	struct	ssg::ScrollLinesInput
 core/ssg/ClientInput.h	struct	ssg::SelectionRangeTransition
 core/ssg/ClientInput.h	struct	ssg::SelectionTransition
-core/ssg/ClientInput.h	struct	ssg::SemanticInputBasis
 core/ssg/ClientInput.h	struct	ssg::TabPointerInput
 core/ssg/ClientInput.h	struct	ssg::TreePointerInput
 core/ssg/ClientInput.h	struct	ssg::ViewTransitionInput
@@ -66,18 +64,15 @@ core/ssg/ClientInput.h	var	ssg::ClientKeyInput::stroke	KeyStroke
 core/ssg/ClientInput.h	var	ssg::ClientOwnedInput::kind	ClientOwnedInputKind
 core/ssg/ClientInput.h	var	ssg::ClientOwnedInput::text	std::string
 core/ssg/ClientInput.h	var	ssg::DocumentPointerInput::additive	bool
-core/ssg/ClientInput.h	var	ssg::DocumentPointerInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::DocumentPointerInput::button	InputPointerButton
 core/ssg/ClientInput.h	var	ssg::DocumentPointerInput::edge	DocumentPointerEdge
 core/ssg/ClientInput.h	var	ssg::DocumentPointerInput::phase	InputPointerPhase
 core/ssg/ClientInput.h	var	ssg::DocumentPointerInput::position	std::optional<ByteOffset>
 core/ssg/ClientInput.h	var	ssg::DocumentPointerInput::selectWord	bool
-core/ssg/ClientInput.h	var	ssg::ExternalActionPointerInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::ExternalActionPointerInput::button	InputPointerButton
 core/ssg/ClientInput.h	var	ssg::ExternalActionPointerInput::invocation	ExternalActionInvocation
 core/ssg/ClientInput.h	var	ssg::ExternalActionPointerInput::phase	InputPointerPhase
 core/ssg/ClientInput.h	var	ssg::NoticeActionPointerInput::actionId	std::string
-core/ssg/ClientInput.h	var	ssg::NoticeActionPointerInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::NoticeActionPointerInput::button	InputPointerButton
 core/ssg/ClientInput.h	var	ssg::NoticeActionPointerInput::phase	InputPointerPhase
 core/ssg/ClientInput.h	var	ssg::PaneFocusTransition::pane	PaneId
@@ -87,24 +82,18 @@ core/ssg/ClientInput.h	var	ssg::PickerPointerInput::candidateId	std::string
 core/ssg/ClientInput.h	var	ssg::PickerPointerInput::phase	InputPointerPhase
 core/ssg/ClientInput.h	var	ssg::PointerSelectionTransition::position	ByteOffset
 core/ssg/ClientInput.h	var	ssg::ScrollFractionInput::action	ScrollFraction
-core/ssg/ClientInput.h	var	ssg::ScrollFractionInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::ScrollLinesInput::action	ScrollLines
-core/ssg/ClientInput.h	var	ssg::ScrollLinesInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::SelectionRangeTransition::active	ByteOffset
 core/ssg/ClientInput.h	var	ssg::SelectionRangeTransition::anchor	ByteOffset
 core/ssg/ClientInput.h	var	ssg::SelectionTransition::activeTab	TabId
-core/ssg/ClientInput.h	var	ssg::SelectionTransition::documentRevision	Revision
+core/ssg/ClientInput.h	var	ssg::SelectionTransition::documentRevision	std::uint64_t
 core/ssg/ClientInput.h	var	ssg::SelectionTransition::selections	std::vector<SelectionRangeTransition>
-core/ssg/ClientInput.h	var	ssg::SemanticInputBasis::observedRevision	Revision
-core/ssg/ClientInput.h	var	ssg::TabPointerInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::TabPointerInput::button	InputPointerButton
 core/ssg/ClientInput.h	var	ssg::TabPointerInput::phase	InputPointerPhase
 core/ssg/ClientInput.h	var	ssg::TabPointerInput::tabId	TabId
-core/ssg/ClientInput.h	var	ssg::TreePointerInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::TreePointerInput::button	InputPointerButton
 core/ssg/ClientInput.h	var	ssg::TreePointerInput::nodeId	TreeNodeId
 core/ssg/ClientInput.h	var	ssg::TreePointerInput::phase	InputPointerPhase
-core/ssg/ClientInput.h	var	ssg::ViewTransitionInput::basis	SemanticInputBasis
 core/ssg/ClientInput.h	var	ssg::ViewTransitionInput::transition	ViewTransition
 core/ssg/ClipboardRegister.h	class	ssg::ClipboardRegister
 core/ssg/ClipboardRegister.h	enum	ssg::ClipboardError
@@ -134,31 +123,74 @@ core/ssg/ClipboardRegister.h	struct	ssg::ClipboardWrite
 core/ssg/ClipboardRegister.h	var	ssg::ClipboardResult::documentChanged	bool
 core/ssg/ClipboardRegister.h	var	ssg::ClipboardResult::error	ClipboardError
 core/ssg/ClipboardRegister.h	var	ssg::ClipboardResult::message	std::string
-core/ssg/ClipboardRegister.h	var	ssg::ClipboardResult::revision	Revision
+core/ssg/ClipboardRegister.h	var	ssg::ClipboardResult::revision	std::uint64_t
 core/ssg/ClipboardRegister.h	var	ssg::ClipboardResult::selections	std::optional<SelectionSet>
 core/ssg/ClipboardRegister.h	var	ssg::ClipboardResult::write	std::optional<ClipboardWrite>
 core/ssg/ClipboardRegister.h	var	ssg::ClipboardViewState::fragments	std::vector<std::string>
 core/ssg/ClipboardRegister.h	var	ssg::ClipboardViewState::plainText	std::string
 core/ssg/ClipboardRegister.h	var	ssg::ClipboardViewState::systemWrite	std::optional<ClipboardWrite>
 core/ssg/ClipboardRegister.h	var	ssg::ClipboardWrite::id	std::uint64_t
-core/ssg/ClipboardRegister.h	var	ssg::ClipboardWrite::requestRevision	Revision
+core/ssg/ClipboardRegister.h	var	ssg::ClipboardWrite::requestRevision	std::uint64_t
 core/ssg/ClipboardRegister.h	var	ssg::ClipboardWrite::text	std::string
 core/ssg/CommandCatalog.h	alias	ssg::CatalogRevision
+core/ssg/CommandCatalog.h	alias	ssg::CommandHandler
 core/ssg/CommandCatalog.h	class	ssg::CommandCatalog
+core/ssg/CommandCatalog.h	class	ssg::CommandContext
+core/ssg/CommandCatalog.h	class	ssg::CommandExecutor
+core/ssg/CommandCatalog.h	enum	ssg::CommandEffect
+core/ssg/CommandCatalog.h	enum	ssg::CommandError
+core/ssg/CommandCatalog.h	enum	ssg::CommandResult::Outcome
+core/ssg/CommandCatalog.h	enumerator	ssg::CommandEffect::Mutation
+core/ssg/CommandCatalog.h	enumerator	ssg::CommandEffect::Observation
+core/ssg/CommandCatalog.h	enumerator	ssg::CommandEffect::Routing
+core/ssg/CommandCatalog.h	enumerator	ssg::CommandEffect::ViewAction
+core/ssg/CommandCatalog.h	enumerator	ssg::CommandError::HandlerFailed
+core/ssg/CommandCatalog.h	enumerator	ssg::CommandError::None
+core/ssg/CommandCatalog.h	enumerator	ssg::CommandError::UnknownCommand
+core/ssg/CommandCatalog.h	enumerator	ssg::CommandResult::Outcome::Completed
+core/ssg/CommandCatalog.h	enumerator	ssg::CommandResult::Outcome::Rejected
+core/ssg/CommandCatalog.h	enumerator	ssg::CommandResult::Outcome::ViewActionRequired
 core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::CommandCatalog	void ()
 core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::CommandCatalog	void (const CommandCatalog &)
-core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::add	CommandHandle (CommandSpecBuilder)
+core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::add	CommandHandle (CommandSpec)
 core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::commands	std::vector<const CommandEntry *> () const
 core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::find	const CommandEntry *(CommandHandle) const
 core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::find	const CommandEntry *(std::string_view) const
 core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::handleFor	CommandHandle (std::string_view) const
 core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::operator=	CommandCatalog &(const CommandCatalog &)
 core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::ownedBy	std::vector<const CommandEntry *> (std::string_view) const
-core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::replaceGeneration	std::vector<CommandHandle> (std::span<const CommandHandle>, std::vector<CommandSpecBuilder>)
+core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::replaceGeneration	std::vector<CommandHandle> (std::span<const CommandHandle>, std::vector<CommandSpec>)
 core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::revision	CatalogRevision () const
 core/ssg/CommandCatalog.h	func	ssg::CommandCatalog::size	std::size_t () const
+core/ssg/CommandCatalog.h	func	ssg::CommandContext::setActiveWorkspace	void (WorkspaceId) noexcept
 core/ssg/CommandCatalog.h	func	ssg::CommandEntry::displayLabel	std::string () const
+core/ssg/CommandCatalog.h	func	ssg::CommandHandlerResult::failure	CommandHandlerResult (std::string)
+core/ssg/CommandCatalog.h	func	ssg::CommandHandlerResult::requireView	CommandHandlerResult (ViewAction)
+core/ssg/CommandCatalog.h	func	ssg::CommandHandlerResult::success	CommandHandlerResult ()
+core/ssg/CommandCatalog.h	func	ssg::CommandResult::accepted	bool () const noexcept
+core/ssg/CommandCatalog.h	func	ssg::CommandResult::completed	bool () const noexcept
+core/ssg/CommandCatalog.h	func	ssg::CommandResult::outcome	Outcome () const noexcept
+core/ssg/CommandCatalog.h	func	ssg::WorkspaceId::WorkspaceId	void (std::uint64_t) noexcept
+core/ssg/CommandCatalog.h	func	ssg::WorkspaceId::operator<=>	std::strong_ordering (const WorkspaceId &) const noexcept
+core/ssg/CommandCatalog.h	func	ssg::WorkspaceId::value	std::uint64_t () const noexcept
+core/ssg/CommandCatalog.h	func	ssg::bindInProcessHandler	CommandHandlerBinding (Fn &&)
+core/ssg/CommandCatalog.h	func	ssg::bindNoArgumentHandler	CommandHandlerBinding (Fn &&)
+core/ssg/CommandCatalog.h	func	ssg::bindOptionalInProcessHandler	CommandHandlerBinding (Fn &&)
+core/ssg/CommandCatalog.h	func	ssg::bindOptionalWireHandler	CommandHandlerBinding (Fn &&)
+core/ssg/CommandCatalog.h	func	ssg::bindUntypedHandler	CommandHandlerBinding (CommandHandler, std::optional<std::type_index>)
+core/ssg/CommandCatalog.h	func	ssg::bindWireHandler	CommandHandlerBinding (Fn &&)
+core/ssg/CommandCatalog.h	struct	ssg::ClientCommand
+core/ssg/CommandCatalog.h	struct	ssg::CommandArgumentType
 core/ssg/CommandCatalog.h	struct	ssg::CommandEntry
+core/ssg/CommandCatalog.h	struct	ssg::CommandHandlerBinding
+core/ssg/CommandCatalog.h	struct	ssg::CommandHandlerResult
+core/ssg/CommandCatalog.h	struct	ssg::CommandResult
+core/ssg/CommandCatalog.h	struct	ssg::CommandSpec
+core/ssg/CommandCatalog.h	struct	ssg::WorkspaceId
+core/ssg/CommandCatalog.h	var	ssg::ClientCommand::id	CommandName
+core/ssg/CommandCatalog.h	var	ssg::ClientCommand::payload	std::any
+core/ssg/CommandCatalog.h	var	ssg::CommandArgumentType::type	std::optional<std::type_index>
+core/ssg/CommandCatalog.h	var	ssg::CommandArgumentType::wire	bool
 core/ssg/CommandCatalog.h	var	ssg::CommandCatalog::kMaximumCommands	const std::size_t
 core/ssg/CommandCatalog.h	var	ssg::CommandEntry::argument	CommandArgumentType
 core/ssg/CommandCatalog.h	var	ssg::CommandEntry::effect	CommandEffect
@@ -169,8 +201,23 @@ core/ssg/CommandCatalog.h	var	ssg::CommandEntry::label	std::string
 core/ssg/CommandCatalog.h	var	ssg::CommandEntry::luaApi	bool
 core/ssg/CommandCatalog.h	var	ssg::CommandEntry::owner	std::string
 core/ssg/CommandCatalog.h	var	ssg::CommandEntry::retired	bool
-core/ssg/CommandCatalog.h	var	ssg::CommandEntry::revisionPolicy	CommandRevisionPolicy
 core/ssg/CommandCatalog.h	var	ssg::CommandEntry::summary	std::string
+core/ssg/CommandCatalog.h	var	ssg::CommandHandlerBinding::argument	CommandArgumentType
+core/ssg/CommandCatalog.h	var	ssg::CommandHandlerBinding::handler	CommandHandler
+core/ssg/CommandCatalog.h	var	ssg::CommandHandlerResult::accepted	bool
+core/ssg/CommandCatalog.h	var	ssg::CommandHandlerResult::message	std::string
+core/ssg/CommandCatalog.h	var	ssg::CommandHandlerResult::viewAction	std::optional<ViewAction>
+core/ssg/CommandCatalog.h	var	ssg::CommandResult::error	CommandError
+core/ssg/CommandCatalog.h	var	ssg::CommandResult::message	std::string
+core/ssg/CommandCatalog.h	var	ssg::CommandResult::viewAction	std::optional<ViewAction>
+core/ssg/CommandCatalog.h	var	ssg::CommandSpec::binding	CommandHandlerBinding
+core/ssg/CommandCatalog.h	var	ssg::CommandSpec::effect	std::optional<CommandEffect>
+core/ssg/CommandCatalog.h	var	ssg::CommandSpec::id	std::string
+core/ssg/CommandCatalog.h	var	ssg::CommandSpec::initScript	bool
+core/ssg/CommandCatalog.h	var	ssg::CommandSpec::label	std::string
+core/ssg/CommandCatalog.h	var	ssg::CommandSpec::luaApi	bool
+core/ssg/CommandCatalog.h	var	ssg::CommandSpec::owner	std::string
+core/ssg/CommandCatalog.h	var	ssg::CommandSpec::summary	std::string
 core/ssg/CommandHandle.h	class	ssg::CommandHandle
 core/ssg/CommandHandle.h	class	ssg::CommandName
 core/ssg/CommandHandle.h	func	ssg::CommandHandle::CommandHandle	void () noexcept
@@ -185,105 +232,6 @@ core/ssg/CommandHandle.h	func	ssg::CommandName::empty	bool () const noexcept
 core/ssg/CommandHandle.h	func	ssg::CommandName::handle	CommandHandle () const noexcept
 core/ssg/CommandHandle.h	func	ssg::CommandName::name	std::string_view () const noexcept
 core/ssg/CommandHandle.h	func	ssg::CommandName::operator==	bool (const CommandName &) const noexcept
-core/ssg/CommandInvocation.h	alias	ssg::CommandHandler
-core/ssg/CommandInvocation.h	class	ssg::CommandContext
-core/ssg/CommandInvocation.h	class	ssg::CommandExecutor
-core/ssg/CommandInvocation.h	class	ssg::CommandServices
-core/ssg/CommandInvocation.h	enum	ssg::CommandEffect
-core/ssg/CommandInvocation.h	enum	ssg::CommandError
-core/ssg/CommandInvocation.h	enum	ssg::CommandResult::Outcome
-core/ssg/CommandInvocation.h	enum	ssg::CommandRevisionPolicy
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandEffect::Mutation
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandEffect::Observation
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandEffect::Routing
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandEffect::ViewAction
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandError::HandlerFailed
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandError::None
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandError::RevisionExhausted
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandError::StaleRevision
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandError::UnknownCommand
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandResult::Outcome::Completed
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandResult::Outcome::Rejected
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandResult::Outcome::ViewActionRequired
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandRevisionPolicy::Exact
-core/ssg/CommandInvocation.h	enumerator	ssg::CommandRevisionPolicy::StateValidated
-core/ssg/CommandInvocation.h	func	ssg::CommandContext::revision	Revision () const noexcept
-core/ssg/CommandInvocation.h	func	ssg::CommandContext::services	CommandServices *() const noexcept
-core/ssg/CommandInvocation.h	func	ssg::CommandContext::setActiveView	void (ViewId) noexcept
-core/ssg/CommandInvocation.h	func	ssg::CommandContext::setActiveWorkspace	void (WorkspaceId) noexcept
-core/ssg/CommandInvocation.h	func	ssg::CommandContext::viewId	ViewId () const noexcept
-core/ssg/CommandInvocation.h	func	ssg::CommandHandlerResult::failure	CommandHandlerResult (std::string)
-core/ssg/CommandInvocation.h	func	ssg::CommandHandlerResult::requireView	CommandHandlerResult (ViewAction)
-core/ssg/CommandInvocation.h	func	ssg::CommandHandlerResult::success	CommandHandlerResult ()
-core/ssg/CommandInvocation.h	func	ssg::CommandResult::accepted	bool () const noexcept
-core/ssg/CommandInvocation.h	func	ssg::CommandResult::completed	bool () const noexcept
-core/ssg/CommandInvocation.h	func	ssg::CommandResult::outcome	Outcome () const noexcept
-core/ssg/CommandInvocation.h	func	ssg::CommandServices::featureState	State &()
-core/ssg/CommandInvocation.h	func	ssg::CommandServices::publishDelta	void (Delta)
-core/ssg/CommandInvocation.h	func	ssg::CommandServices::publishStatus	void (Status)
-core/ssg/CommandInvocation.h	func	ssg::CommandServices::runTransaction	CommandHandlerResult (std::function<CommandHandlerResult ()>)
-core/ssg/CommandInvocation.h	func	ssg::ViewId::ViewId	void (std::uint64_t) noexcept
-core/ssg/CommandInvocation.h	func	ssg::ViewId::operator<=>	std::strong_ordering (const ViewId &) const noexcept
-core/ssg/CommandInvocation.h	func	ssg::ViewId::value	std::uint64_t () const noexcept
-core/ssg/CommandInvocation.h	func	ssg::WorkspaceId::WorkspaceId	void (std::uint64_t) noexcept
-core/ssg/CommandInvocation.h	func	ssg::WorkspaceId::operator<=>	std::strong_ordering (const WorkspaceId &) const noexcept
-core/ssg/CommandInvocation.h	func	ssg::WorkspaceId::value	std::uint64_t () const noexcept
-core/ssg/CommandInvocation.h	func	ssg::operator==	bool (const ViewActionRequest &, const ViewActionRequest &)
-core/ssg/CommandInvocation.h	struct	ssg::ClientCommand
-core/ssg/CommandInvocation.h	struct	ssg::CommandHandlerResult
-core/ssg/CommandInvocation.h	struct	ssg::CommandResult
-core/ssg/CommandInvocation.h	struct	ssg::ViewActionRequest
-core/ssg/CommandInvocation.h	struct	ssg::ViewId
-core/ssg/CommandInvocation.h	struct	ssg::WorkspaceId
-core/ssg/CommandInvocation.h	var	ssg::ClientCommand::baseRevision	Revision
-core/ssg/CommandInvocation.h	var	ssg::ClientCommand::id	CommandName
-core/ssg/CommandInvocation.h	var	ssg::ClientCommand::payload	std::any
-core/ssg/CommandInvocation.h	var	ssg::CommandHandlerResult::accepted	bool
-core/ssg/CommandInvocation.h	var	ssg::CommandHandlerResult::message	std::string
-core/ssg/CommandInvocation.h	var	ssg::CommandHandlerResult::viewAction	std::optional<ViewAction>
-core/ssg/CommandInvocation.h	var	ssg::CommandResult::error	CommandError
-core/ssg/CommandInvocation.h	var	ssg::CommandResult::message	std::string
-core/ssg/CommandInvocation.h	var	ssg::CommandResult::revision	Revision
-core/ssg/CommandInvocation.h	var	ssg::CommandResult::viewAction	std::optional<ViewActionRequest>
-core/ssg/CommandInvocation.h	var	ssg::ViewActionRequest::action	ViewAction
-core/ssg/CommandInvocation.h	var	ssg::ViewActionRequest::semanticRevision	Revision
-core/ssg/CommandInvocation.h	var	ssg::ViewActionRequest::viewId	ViewId
-core/ssg/CommandSpecBuilder.h	class	ssg::CommandSpecBuilder
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::CommandSpecBuilder	void (std::string)
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::handler	CommandSpecBuilder &(Fn &&)
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::inProcessHandler	CommandSpecBuilder &(Fn &&)
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::initScript	CommandSpecBuilder &()
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::label	CommandSpecBuilder &(std::string)
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::lua	CommandSpecBuilder &()
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::mutates	CommandSpecBuilder &()
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::observes	CommandSpecBuilder &()
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::optionalHandler	CommandSpecBuilder &(Fn &&)
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::optionalInProcessHandler	CommandSpecBuilder &(Fn &&)
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::owner	CommandSpecBuilder &(std::string)
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::routes	CommandSpecBuilder &()
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::stateValidatedMutation	CommandSpecBuilder &()
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::summary	CommandSpecBuilder &(std::string)
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::untypedHandler	CommandSpecBuilder &(CommandHandler, std::optional<std::type_index>)
-core/ssg/CommandSpecBuilder.h	func	ssg::CommandSpecBuilder::viewAction	CommandSpecBuilder &()
-core/ssg/CommandSpecBuilder.h	struct	ssg::CommandArgumentType
-core/ssg/CommandSpecBuilder.h	var	ssg::CommandArgumentType::type	std::optional<std::type_index>
-core/ssg/CommandSpecBuilder.h	var	ssg::CommandArgumentType::wire	bool
-core/ssg/CommandTransition.h	alias	ssg::CommandTransition
-core/ssg/CommandTransition.h	enum	ssg::CycleDirection
-core/ssg/CommandTransition.h	enumerator	ssg::CycleDirection::Next
-core/ssg/CommandTransition.h	enumerator	ssg::CycleDirection::Previous
-core/ssg/CommandTransition.h	func	ssg::activePromptRegion	std::optional<PromptRegion> (const PromptSurface &)
-core/ssg/CommandTransition.h	func	ssg::builtInPanelTreeProvider	TreeProviderBinding (TreeProviderKind)
-core/ssg/CommandTransition.h	func	ssg::builtInPanelTreeProviders	std::span<const TreeProviderBinding> ()
-core/ssg/CommandTransition.h	func	ssg::cyclePanelTreeProvider	TreeProviderBinding (const TreeProviderBinding &, CycleDirection)
-core/ssg/CommandTransition.h	struct	ssg::CloseFinder
-core/ssg/CommandTransition.h	struct	ssg::OpenFinder
-core/ssg/CommandTransition.h	struct	ssg::ShowPanelProvider
-core/ssg/CommandTransition.h	struct	ssg::SwitchPanelProvider
-core/ssg/CommandTransition.h	struct	ssg::TogglePanel
-core/ssg/CommandTransition.h	var	ssg::OpenFinder::picker	PickerKind
-core/ssg/CommandTransition.h	var	ssg::ShowPanelProvider::binding	TreeProviderBinding
-core/ssg/CommandTransition.h	var	ssg::SwitchPanelProvider::binding	TreeProviderBinding
 core/ssg/CompiledKeymap.h	alias	ssg::CompiledSequence
 core/ssg/CompiledKeymap.h	class	ssg::CommandCatalog
 core/ssg/CompiledKeymap.h	class	ssg::CompiledContext
@@ -341,15 +289,15 @@ core/ssg/DiffModel.h	func	ssg::DiffFileId::DiffFileId	void (std::string)
 core/ssg/DiffModel.h	func	ssg::DiffFileId::operator<=>	std::strong_ordering (const DiffFileId &) const
 core/ssg/DiffModel.h	func	ssg::DiffFileId::value	const std::string &() const noexcept
 core/ssg/DiffModel.h	func	ssg::DiffModel::DiffModel	void (DiffConfig)
-core/ssg/DiffModel.h	func	ssg::DiffModel::applyNonGitEvent	DiffMutationResult (NonGitDiffEvent, Revision)
+core/ssg/DiffModel.h	func	ssg::DiffModel::applyNonGitEvent	DiffMutationResult (NonGitDiffEvent, std::uint64_t)
 core/ssg/DiffModel.h	func	ssg::DiffModel::file	std::optional<std::reference_wrapper<const DiffFileView>> (const DiffFileId &) const
 core/ssg/DiffModel.h	func	ssg::DiffModel::isGitFile	bool (const DiffFileId &) const noexcept
-core/ssg/DiffModel.h	func	ssg::DiffModel::removeFile	DiffMutationResult (const DiffFileId &, Revision)
-core/ssg/DiffModel.h	func	ssg::DiffModel::seedNonGit	DiffMutationResult (std::vector<SeededDiffFile>, Revision)
-core/ssg/DiffModel.h	func	ssg::DiffModel::updateGitFile	DiffMutationResult (GitDiffFile, std::string, Revision)
+core/ssg/DiffModel.h	func	ssg::DiffModel::removeFile	DiffMutationResult (const DiffFileId &, std::uint64_t)
+core/ssg/DiffModel.h	func	ssg::DiffModel::seedNonGit	DiffMutationResult (std::vector<SeededDiffFile>, std::uint64_t)
+core/ssg/DiffModel.h	func	ssg::DiffModel::updateGitFile	DiffMutationResult (GitDiffFile, std::string, std::uint64_t)
 core/ssg/DiffModel.h	func	ssg::DiffModel::viewState	DiffViewState () const
 core/ssg/DiffModel.h	func	ssg::DiffMutationResult::accepted	bool () const noexcept
-core/ssg/DiffModel.h	func	ssg::DiffViewState::fileForDocument	std::optional<std::reference_wrapper<const DiffFileView>> (const DocumentViewState &) const
+core/ssg/DiffModel.h	func	ssg::DiffViewState::fileForIdentity	std::optional<std::reference_wrapper<const DiffFileView>> (const std::optional<std::string> &) const
 core/ssg/DiffModel.h	func	ssg::GitDiffFile::status	DiffFileStatus () const noexcept
 core/ssg/DiffModel.h	func	ssg::diffOpenFile	DiffOpenTarget (const DiffFileView &)
 core/ssg/DiffModel.h	func	ssg::nextDiffHunk	std::optional<std::size_t> (const DiffFileView &, std::optional<std::size_t>)
@@ -403,7 +351,7 @@ core/ssg/DiffModel.h	var	ssg::DiffOpenTarget::deleted	bool
 core/ssg/DiffModel.h	var	ssg::DiffOpenTarget::id	DiffFileId
 core/ssg/DiffModel.h	var	ssg::DiffOpenTarget::path	std::filesystem::path
 core/ssg/DiffModel.h	var	ssg::DiffViewState::files	std::vector<DiffFileView>
-core/ssg/DiffModel.h	var	ssg::DiffViewState::revision	Revision
+core/ssg/DiffModel.h	var	ssg::DiffViewState::revision	std::uint64_t
 core/ssg/DiffModel.h	var	ssg::DiffWordRange::byteLength	std::size_t
 core/ssg/DiffModel.h	var	ssg::DiffWordRange::byteStart	std::size_t
 core/ssg/DiffModel.h	var	ssg::GitDiffFile::baselineContent	std::optional<std::string>
@@ -444,7 +392,7 @@ core/ssg/Document.h	func	ssg::Document::dirty	bool () const noexcept
 core/ssg/Document.h	func	ssg::Document::mode	DocumentMode () const noexcept
 core/ssg/Document.h	func	ssg::Document::operator=	Document &(Document &&) noexcept
 core/ssg/Document.h	func	ssg::Document::operator=	Document &(const Document &)
-core/ssg/Document.h	func	ssg::Document::revision	Revision () const noexcept
+core/ssg/Document.h	func	ssg::Document::revision	std::uint64_t () const noexcept
 core/ssg/Document.h	func	ssg::Document::snapshot	DocumentSnapshot () const
 core/ssg/Document.h	func	ssg::DocumentSnapshot::operator==	bool (const DocumentSnapshot &) const
 core/ssg/Document.h	func	ssg::EditTransaction::operator==	bool (const EditTransaction &) const
@@ -457,16 +405,16 @@ core/ssg/Document.h	struct	ssg::TextEdit
 core/ssg/Document.h	struct	ssg::TransactionResult
 core/ssg/Document.h	var	ssg::DocumentSnapshot::dirty	bool
 core/ssg/Document.h	var	ssg::DocumentSnapshot::mode	DocumentMode
-core/ssg/Document.h	var	ssg::DocumentSnapshot::revision	Revision
+core/ssg/Document.h	var	ssg::DocumentSnapshot::revision	std::uint64_t
 core/ssg/Document.h	var	ssg::DocumentSnapshot::text	std::string
-core/ssg/Document.h	var	ssg::EditTransaction::baseRevision	Revision
+core/ssg/Document.h	var	ssg::EditTransaction::baseRevision	std::uint64_t
 core/ssg/Document.h	var	ssg::EditTransaction::edits	std::vector<TextEdit>
 core/ssg/Document.h	var	ssg::TextEdit::erasedBytes	std::uint64_t
 core/ssg/Document.h	var	ssg::TextEdit::insertedText	std::string
 core/ssg/Document.h	var	ssg::TextEdit::offset	ByteOffset
 core/ssg/Document.h	var	ssg::TransactionResult::error	DocumentError
 core/ssg/Document.h	var	ssg::TransactionResult::message	std::string
-core/ssg/Document.h	var	ssg::TransactionResult::revision	Revision
+core/ssg/Document.h	var	ssg::TransactionResult::revision	std::uint64_t
 core/ssg/DocumentHistory.h	class	ssg::DocumentHistory
 core/ssg/DocumentHistory.h	enum	ssg::HistoryEditKind
 core/ssg/DocumentHistory.h	enum	ssg::HistoryError
@@ -500,7 +448,7 @@ core/ssg/DocumentHistory.h	struct	ssg::HistoryViewState
 core/ssg/DocumentHistory.h	var	ssg::HistoryResult::documentError	DocumentError
 core/ssg/DocumentHistory.h	var	ssg::HistoryResult::error	HistoryError
 core/ssg/DocumentHistory.h	var	ssg::HistoryResult::message	std::string
-core/ssg/DocumentHistory.h	var	ssg::HistoryResult::revision	Revision
+core/ssg/DocumentHistory.h	var	ssg::HistoryResult::revision	std::uint64_t
 core/ssg/DocumentHistory.h	var	ssg::HistoryResult::selections	std::optional<SelectionSet>
 core/ssg/DocumentHistory.h	var	ssg::HistoryViewState::canRedo	bool
 core/ssg/DocumentHistory.h	var	ssg::HistoryViewState::canUndo	bool
@@ -565,6 +513,7 @@ core/ssg/EditCommands.h	var	ssg::EditCommandSettings::lineEnding	LineEnding
 core/ssg/EditCommands.h	var	ssg::EditCommandSettings::tabWidth	std::uint32_t
 core/ssg/EditorSession.h	class	ssg::CommandCatalog
 core/ssg/EditorSession.h	class	ssg::EditorSession
+core/ssg/EditorSession.h	class	ssg::GridPresenter
 core/ssg/EditorSession.h	enum	ssg::DiffIngressError
 core/ssg/EditorSession.h	enum	ssg::EditorSession::DraftReopenNotice
 core/ssg/EditorSession.h	enumerator	ssg::DiffIngressError::DiffRejected
@@ -581,7 +530,6 @@ core/ssg/EditorSession.h	func	ssg::EditorSession::activeDocumentText	std::string
 core/ssg/EditorSession.h	func	ssg::EditorSession::activeDraftReopenNotice	DraftReopenNotice () const
 core/ssg/EditorSession.h	func	ssg::EditorSession::applyExternalDiffBurst	DiffIngressResult (std::vector<ExternalDiffRevision>)
 core/ssg/EditorSession.h	func	ssg::EditorSession::applyGitDiffScan	DiffIngressResult (GitDiffScan)
-core/ssg/EditorSession.h	func	ssg::EditorSession::capturePresentation	std::optional<PresentationCapture> (std::optional<ViewId>, const PaletteReport &) const
 core/ssg/EditorSession.h	func	ssg::EditorSession::commandCatalog	std::shared_ptr<const CommandCatalog> () const
 core/ssg/EditorSession.h	func	ssg::EditorSession::create	EditorSessionCreateResult (EditorSessionConfig)
 core/ssg/EditorSession.h	func	ssg::EditorSession::deferDispatch	bool (ClientCommand)
@@ -599,25 +547,24 @@ core/ssg/EditorSession.h	func	ssg::EditorSession::liveDocumentRuntimeStateCountF
 core/ssg/EditorSession.h	func	ssg::EditorSession::operator=	EditorSession &(EditorSession &&)
 core/ssg/EditorSession.h	func	ssg::EditorSession::operator=	EditorSession &(const EditorSession &)
 core/ssg/EditorSession.h	func	ssg::EditorSession::primeDeferred	void ()
-core/ssg/EditorSession.h	func	ssg::EditorSession::projectViewport	std::optional<ViewportProjectionResult> (const ViewportProjectionRequest &, ViewportProjectionState &) const
 core/ssg/EditorSession.h	func	ssg::EditorSession::pump	PumpResult ()
 core/ssg/EditorSession.h	func	ssg::EditorSession::reconcileExternalWatchEventsForTest	void (std::vector<WatchEvent>)
 core/ssg/EditorSession.h	func	ssg::EditorSession::refreshFilesystemForTest	void ()
-core/ssg/EditorSession.h	func	ssg::EditorSession::registerCommand	CommandHandle (CommandSpecBuilder)
-core/ssg/EditorSession.h	func	ssg::EditorSession::replaceCommandGeneration	std::vector<CommandHandle> (std::span<const CommandHandle>, std::vector<CommandSpecBuilder>)
+core/ssg/EditorSession.h	func	ssg::EditorSession::registerCommand	CommandHandle (CommandSpec)
+core/ssg/EditorSession.h	func	ssg::EditorSession::replaceCommandGeneration	std::vector<CommandHandle> (std::span<const CommandHandle>, std::vector<CommandSpec>)
 core/ssg/EditorSession.h	func	ssg::EditorSession::reportWatcherAvailabilityForTest	void (bool)
 core/ssg/EditorSession.h	func	ssg::EditorSession::resetKeymapToDefault	void ()
-core/ssg/EditorSession.h	func	ssg::EditorSession::revision	Revision () const
 core/ssg/EditorSession.h	func	ssg::EditorSession::setAutosaveDraftByteCapForTests	void (std::uint64_t)
-core/ssg/EditorSession.h	func	ssg::EditorSession::snapshot	std::optional<SessionSnapshot> (PaletteReport) const
 core/ssg/EditorSession.h	func	ssg::EditorSession::workspaceRoot	const std::filesystem::path &() const noexcept
 core/ssg/EditorSession.h	func	ssg::EditorSessionCreateResult::accepted	bool () const noexcept
+core/ssg/EditorSession.h	func	ssg::operator==	bool (const NoticeView &, const NoticeView &)
 core/ssg/EditorSession.h	struct	ssg::DiffIngressResult
 core/ssg/EditorSession.h	struct	ssg::EditorSession::DeferredWorkCounts
 core/ssg/EditorSession.h	struct	ssg::EditorSession::Impl
 core/ssg/EditorSession.h	struct	ssg::EditorSessionConfig
 core/ssg/EditorSession.h	struct	ssg::EditorSessionCreateResult
 core/ssg/EditorSession.h	struct	ssg::ExternalDiffRevision
+core/ssg/EditorSession.h	struct	ssg::NoticeView
 core/ssg/EditorSession.h	struct	ssg::PumpResult
 core/ssg/EditorSession.h	var	ssg::DiffIngressResult::error	DiffIngressError
 core/ssg/EditorSession.h	var	ssg::EditorSession::DeferredWorkCounts::syntaxRuns	std::uint64_t
@@ -629,14 +576,14 @@ core/ssg/EditorSession.h	var	ssg::EditorSessionConfig::enableFilesystemWatcher	b
 core/ssg/EditorSession.h	var	ssg::EditorSessionConfig::enableGitDiffWorker	bool
 core/ssg/EditorSession.h	var	ssg::EditorSessionConfig::recoveryRoot	std::filesystem::path
 core/ssg/EditorSession.h	var	ssg::EditorSessionConfig::scratchRoot	std::filesystem::path
-core/ssg/EditorSession.h	var	ssg::EditorSessionConfig::statusFieldProviders	std::vector<StatusFieldProviderBinding>
 core/ssg/EditorSession.h	var	ssg::EditorSessionConfig::syntaxParser	std::shared_ptr<SyntaxParser>
 core/ssg/EditorSession.h	var	ssg::EditorSessionCreateResult::message	std::string
 core/ssg/EditorSession.h	var	ssg::EditorSessionCreateResult::session	std::unique_ptr<EditorSession>
 core/ssg/EditorSession.h	var	ssg::ExternalDiffRevision::event	NonGitDiffEvent
-core/ssg/EditorSession.h	var	ssg::ExternalDiffRevision::revision	Revision
+core/ssg/EditorSession.h	var	ssg::ExternalDiffRevision::revision	std::uint64_t
+core/ssg/EditorSession.h	var	ssg::NoticeView::actions	std::vector<UiAction>
+core/ssg/EditorSession.h	var	ssg::NoticeView::text	std::string
 core/ssg/EditorSession.h	var	ssg::PumpResult::advanced	bool
-core/ssg/EditorSession.h	var	ssg::PumpResult::revision	Revision
 core/ssg/ExternalModificationFlow.h	alias	ssg::ExternalKeepBufferCommit
 core/ssg/ExternalModificationFlow.h	alias	ssg::ExternalReloadCommit
 core/ssg/ExternalModificationFlow.h	class	ssg::ExternalModificationFlow
@@ -665,8 +612,8 @@ core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::keepBuff
 core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::openDiff	ExternalOpenDiffResult (const DiffFileId &) const
 core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::operator=	ExternalModificationFlow &(ExternalModificationFlow &&) noexcept
 core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::operator=	ExternalModificationFlow &(const ExternalModificationFlow &)
-core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::processEvent	ExternalModificationResult (ExternalEventInput, Revision, std::optional<JournalDocument> &, std::function<bool ()>, std::function<bool ()>)
-core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::processResyncEvent	ExternalModificationResult (ExternalEventInput, Revision, std::optional<JournalDocument> &, std::function<bool ()>, std::function<bool ()>)
+core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::processEvent	ExternalModificationResult (ExternalEventInput, std::uint64_t, std::optional<JournalDocument> &, std::function<bool ()>, std::function<bool ()>)
+core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::processResyncEvent	ExternalModificationResult (ExternalEventInput, std::uint64_t, std::optional<JournalDocument> &, std::function<bool ()>, std::function<bool ()>)
 core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::reload	ExternalModificationResult (const DiffFileId &, std::optional<JournalDocument> &)
 core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::resolveReload	ExternalModificationResult (const DiffFileId &, const ExternalReloadCommit &)
 core/ssg/ExternalModificationFlow.h	func	ssg::ExternalModificationFlow::selectFile	bool (const DiffFileId &)
@@ -710,7 +657,7 @@ core/ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationResult::error	E
 core/ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationResult::statusPublished	bool
 core/ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationViewState::files	std::vector<ExternalDocumentView>
 core/ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationViewState::message	std::string
-core/ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationViewState::revision	Revision
+core/ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationViewState::revision	std::uint64_t
 core/ssg/ExternalModificationFlow.h	var	ssg::ExternalModificationViewState::selected	std::optional<DiffFileId>
 core/ssg/ExternalModificationFlow.h	var	ssg::ExternalOpenDiffResult::error	ExternalModificationError
 core/ssg/ExternalModificationFlow.h	var	ssg::ExternalOpenDiffResult::target	std::optional<DiffOpenTarget>
@@ -749,9 +696,17 @@ core/ssg/FileCommands.h	enumerator	ssg::FileCommand::Save
 core/ssg/FileCommands.h	enumerator	ssg::FileCommand::SaveAll
 core/ssg/FileCommands.h	enumerator	ssg::FileCommand::SaveAs
 core/ssg/FileCommands.h	func	ssg::DroppedContentArguments::operator==	bool (const DroppedContentArguments &) const
+core/ssg/FileCommands.h	func	ssg::fileCommandPathPrompt	PromptRequest (FileCommand)
 core/ssg/FileCommands.h	struct	ssg::DroppedContentArguments
+core/ssg/FileCommands.h	struct	ssg::FileCommandDescriptor
 core/ssg/FileCommands.h	var	ssg::DroppedContentArguments::bytes	std::vector<std::uint8_t>
 core/ssg/FileCommands.h	var	ssg::DroppedContentArguments::suggestedLabel	std::string
+core/ssg/FileCommands.h	var	ssg::FileCommandDescriptor::command	FileCommand
+core/ssg/FileCommands.h	var	ssg::FileCommandDescriptor::id	std::string_view
+core/ssg/FileCommands.h	var	ssg::FileCommandDescriptor::lua	bool
+core/ssg/FileCommands.h	var	ssg::FileCommandDescriptor::mutatesActiveDocumentFile	bool
+core/ssg/FileCommands.h	var	ssg::FileCommandDescriptor::pathPrompt	bool
+core/ssg/FileCommands.h	var	ssg::kFileCommands	const std::array<FileCommandDescriptor, 12>
 core/ssg/FindReplace.h	class	ssg::FindMatcher
 core/ssg/FindReplace.h	class	ssg::FindReplaceController
 core/ssg/FindReplace.h	class	ssg::FindReplaceWorkspace
@@ -809,7 +764,7 @@ core/ssg/FindReplace.h	func	ssg::FindReplaceOperationResult::accepted	bool () co
 core/ssg/FindReplace.h	func	ssg::FindReplaceViewState::operator==	bool (const FindReplaceViewState &) const
 core/ssg/FindReplace.h	func	ssg::FindReplaceWorkspace::apply	WorkspaceApplyResult (const WorkspaceReplacePreview &, WorkspaceRecoverySink &)
 core/ssg/FindReplace.h	func	ssg::FindReplaceWorkspace::recover	WorkspaceApplyResult (const WorkspaceRecoveryRecord &)
-core/ssg/FindReplace.h	func	ssg::FindReplaceWorkspace::snapshot	WorkspaceSnapshot (Revision) const
+core/ssg/FindReplace.h	func	ssg::FindReplaceWorkspace::snapshot	WorkspaceSnapshot (std::uint64_t) const
 core/ssg/FindReplace.h	func	ssg::FindResult::accepted	bool () const noexcept
 core/ssg/FindReplace.h	func	ssg::WorkspaceApplyResult::accepted	bool () const noexcept
 core/ssg/FindReplace.h	func	ssg::WorkspaceFileReplacement::operator==	bool (const WorkspaceFileReplacement &) const
@@ -819,7 +774,7 @@ core/ssg/FindReplace.h	func	ssg::WorkspaceRecoverySink::store	bool (const Worksp
 core/ssg/FindReplace.h	func	ssg::WorkspaceReplaceArguments::operator==	bool (const WorkspaceReplaceArguments &) const
 core/ssg/FindReplace.h	func	ssg::WorkspaceReplacePreview::operator==	bool (const WorkspaceReplacePreview &) const
 core/ssg/FindReplace.h	func	ssg::WorkspaceReplacer::apply	WorkspaceApplyResult (FindReplaceWorkspace &, const WorkspaceReplacePreview &, WorkspaceRecoverySink &) const
-core/ssg/FindReplace.h	func	ssg::WorkspaceReplacer::preview	WorkspacePreviewResult (const FindReplaceWorkspace &, Revision, const FindRequest &, std::string) const
+core/ssg/FindReplace.h	func	ssg::WorkspaceReplacer::preview	WorkspacePreviewResult (const FindReplaceWorkspace &, std::uint64_t, const FindRequest &, std::string) const
 core/ssg/FindReplace.h	func	ssg::WorkspaceReplacer::recover	WorkspaceApplyResult (FindReplaceWorkspace &, const WorkspaceRecoveryRecord &) const
 core/ssg/FindReplace.h	func	ssg::operator==	bool (const FindQueryArguments &, const FindQueryArguments &)
 core/ssg/FindReplace.h	struct	ssg::ByteRange
@@ -847,7 +802,7 @@ core/ssg/FindReplace.h	var	ssg::FindOptions::wholeWord	bool
 core/ssg/FindReplace.h	var	ssg::FindQueryArguments::query	std::string
 core/ssg/FindReplace.h	var	ssg::FindReplaceOperationResult::error	FindReplaceError
 core/ssg/FindReplace.h	var	ssg::FindReplaceOperationResult::message	std::string
-core/ssg/FindReplace.h	var	ssg::FindReplaceOperationResult::revision	Revision
+core/ssg/FindReplace.h	var	ssg::FindReplaceOperationResult::revision	std::uint64_t
 core/ssg/FindReplace.h	var	ssg::FindReplaceViewState::activeMatch	std::optional<std::size_t>
 core/ssg/FindReplace.h	var	ssg::FindReplaceViewState::error	FindReplaceError
 core/ssg/FindReplace.h	var	ssg::FindReplaceViewState::generation	std::uint64_t
@@ -858,7 +813,7 @@ core/ssg/FindReplace.h	var	ssg::FindReplaceViewState::options	FindOptions
 core/ssg/FindReplace.h	var	ssg::FindReplaceViewState::query	std::string
 core/ssg/FindReplace.h	var	ssg::FindReplaceViewState::replaceMode	bool
 core/ssg/FindReplace.h	var	ssg::FindReplaceViewState::replacement	std::string
-core/ssg/FindReplace.h	var	ssg::FindReplaceViewState::sourceRevision	Revision
+core/ssg/FindReplace.h	var	ssg::FindReplaceViewState::sourceRevision	std::uint64_t
 core/ssg/FindReplace.h	var	ssg::FindRequest::cancelled	const std::atomic_bool *
 core/ssg/FindReplace.h	var	ssg::FindRequest::options	FindOptions
 core/ssg/FindReplace.h	var	ssg::FindRequest::query	std::string
@@ -869,7 +824,7 @@ core/ssg/FindReplace.h	var	ssg::FindResult::matches	std::vector<FindMatch>
 core/ssg/FindReplace.h	var	ssg::FindResult::message	std::string
 core/ssg/FindReplace.h	var	ssg::WorkspaceApplyResult::error	FindReplaceError
 core/ssg/FindReplace.h	var	ssg::WorkspaceApplyResult::message	std::string
-core/ssg/FindReplace.h	var	ssg::WorkspaceApplyResult::revision	Revision
+core/ssg/FindReplace.h	var	ssg::WorkspaceApplyResult::revision	std::uint64_t
 core/ssg/FindReplace.h	var	ssg::WorkspaceFileReplacement::after	std::string
 core/ssg/FindReplace.h	var	ssg::WorkspaceFileReplacement::before	std::string
 core/ssg/FindReplace.h	var	ssg::WorkspaceFileReplacement::matches	std::vector<FindMatch>
@@ -877,16 +832,16 @@ core/ssg/FindReplace.h	var	ssg::WorkspaceFileReplacement::path	std::string
 core/ssg/FindReplace.h	var	ssg::WorkspacePreviewResult::error	FindReplaceError
 core/ssg/FindReplace.h	var	ssg::WorkspacePreviewResult::message	std::string
 core/ssg/FindReplace.h	var	ssg::WorkspacePreviewResult::preview	std::optional<WorkspaceReplacePreview>
-core/ssg/FindReplace.h	var	ssg::WorkspaceRecoveryRecord::appliedRevision	Revision
+core/ssg/FindReplace.h	var	ssg::WorkspaceRecoveryRecord::appliedRevision	std::uint64_t
 core/ssg/FindReplace.h	var	ssg::WorkspaceRecoveryRecord::changes	std::vector<WorkspaceFileReplacement>
-core/ssg/FindReplace.h	var	ssg::WorkspaceRecoveryRecord::sourceRevision	Revision
+core/ssg/FindReplace.h	var	ssg::WorkspaceRecoveryRecord::sourceRevision	std::uint64_t
 core/ssg/FindReplace.h	var	ssg::WorkspaceReplaceArguments::replacement	std::string
 core/ssg/FindReplace.h	var	ssg::WorkspaceReplaceArguments::request	FindRequest
 core/ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::changes	std::vector<WorkspaceFileReplacement>
 core/ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::options	FindOptions
 core/ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::query	std::string
 core/ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::replacement	std::string
-core/ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::sourceRevision	Revision
+core/ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::sourceRevision	std::uint64_t
 core/ssg/FollowEditsModel.h	class	ssg::FollowEditsModel
 core/ssg/FollowEditsModel.h	enum	ssg::FollowEditsError
 core/ssg/FollowEditsModel.h	enum	ssg::FollowMode
@@ -899,7 +854,7 @@ core/ssg/FollowEditsModel.h	enumerator	ssg::NavigationClass::NonNavigation
 core/ssg/FollowEditsModel.h	enumerator	ssg::NavigationClass::Programmatic
 core/ssg/FollowEditsModel.h	enumerator	ssg::NavigationClass::User
 core/ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::FollowEditsModel	void (FollowEditsConfig)
-core/ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::acceptExternalChange	FollowEditsResult (const DiffFileView &, Revision)
+core/ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::acceptExternalChange	FollowEditsResult (const DiffFileView &, std::uint64_t)
 core/ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::acceptExternalChanges	FollowEditsResult (std::vector<FollowDiffChange>)
 core/ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::applyNavigation	FollowEditsResult (const FollowNavigation &)
 core/ssg/FollowEditsModel.h	func	ssg::FollowEditsModel::footerProjection	FollowEditsFooterProjection () const
@@ -921,7 +876,7 @@ core/ssg/FollowEditsModel.h	struct	ssg::FollowNavigation
 core/ssg/FollowEditsModel.h	struct	ssg::FollowTarget
 core/ssg/FollowEditsModel.h	var	ssg::FollowDiffChange::file	DiffFileView
 core/ssg/FollowEditsModel.h	var	ssg::FollowDiffChange::priorHunks	std::vector<DiffHunk>
-core/ssg/FollowEditsModel.h	var	ssg::FollowDiffChange::sourceRevision	Revision
+core/ssg/FollowEditsModel.h	var	ssg::FollowDiffChange::sourceRevision	std::uint64_t
 core/ssg/FollowEditsModel.h	var	ssg::FollowEditsConfig::queueCapacity	std::size_t
 core/ssg/FollowEditsModel.h	var	ssg::FollowEditsConfig::resumeBinding	std::string
 core/ssg/FollowEditsModel.h	var	ssg::FollowEditsFooterProjection::mode	std::string
@@ -938,7 +893,7 @@ core/ssg/FollowEditsModel.h	var	ssg::FollowTarget::deleted	bool
 core/ssg/FollowEditsModel.h	var	ssg::FollowTarget::id	DiffFileId
 core/ssg/FollowEditsModel.h	var	ssg::FollowTarget::newestHunkLine	std::size_t
 core/ssg/FollowEditsModel.h	var	ssg::FollowTarget::path	std::filesystem::path
-core/ssg/FollowEditsModel.h	var	ssg::FollowTarget::sourceRevision	Revision
+core/ssg/FollowEditsModel.h	var	ssg::FollowTarget::sourceRevision	std::uint64_t
 core/ssg/Geometry.h	func	ssg::Rect::bottom	int () const noexcept
 core/ssg/Geometry.h	func	ssg::Rect::right	int () const noexcept
 core/ssg/Geometry.h	func	ssg::operator==	bool (const GridSize &, const GridSize &)
@@ -991,12 +946,12 @@ core/ssg/GitDiffSource.h	var	ssg::GitDiffScan::baselineIdentity	std::string
 core/ssg/GitDiffSource.h	var	ssg::GitDiffScan::complete	bool
 core/ssg/GitDiffSource.h	var	ssg::GitDiffScan::currentBranch	std::optional<std::string>
 core/ssg/GitDiffSource.h	var	ssg::GitDiffScan::files	std::vector<GitDiffFile>
-core/ssg/GitDiffSource.h	var	ssg::GitDiffScan::revision	Revision
+core/ssg/GitDiffSource.h	var	ssg::GitDiffScan::revision	std::uint64_t
 core/ssg/GitDiffSource.h	var	ssg::GitWorkingTreeScan::baselineIdentity	std::string
 core/ssg/GitDiffSource.h	var	ssg::GitWorkingTreeScan::complete	bool
 core/ssg/GitDiffSource.h	var	ssg::GitWorkingTreeScan::files	std::vector<GitDiffFile>
 core/ssg/GitDiffSource.h	var	ssg::GitWorkingTreeScan::requestedPaths	std::vector<std::filesystem::path>
-core/ssg/GitDiffSource.h	var	ssg::GitWorkingTreeScan::revision	Revision
+core/ssg/GitDiffSource.h	var	ssg::GitWorkingTreeScan::revision	std::uint64_t
 core/ssg/GraphemeLayout.h	class	ssg::GraphemeLayout
 core/ssg/GraphemeLayout.h	enum	ssg::CellKind
 core/ssg/GraphemeLayout.h	enumerator	ssg::CellKind::Combining
@@ -1016,38 +971,6 @@ core/ssg/GraphemeLayout.h	var	ssg::CellSpan::byteOffset	uint32_t
 core/ssg/GraphemeLayout.h	var	ssg::CellSpan::cellWidth	uint32_t
 core/ssg/GraphemeLayout.h	var	ssg::CellSpan::kind	CellKind
 core/ssg/HistoryEditClassification.h	func	ssg::historyEditKind	HistoryEditKind (TextInputCommand) noexcept
-core/ssg/InteractionAuthority.h	class	ssg::InteractionAuthority
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::InteractionAuthority	void (InteractionAuthority &&) noexcept
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::InteractionAuthority	void (UiComposition, TreeModel &, std::uint64_t, PickerActivationId)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::InteractionAuthority	void (const InteractionAuthority &)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::allocateTreeRevision	TreeRevision ()
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::apply	bool (const CommandTransition &)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::cancelPrompt	PromptCommandResult ()
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::captureExternalFocus	bool ()
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::effectiveFocus	FocusTarget () const noexcept
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::focusEditor	void ()
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::focusNextPromptControl	PromptCommandResult ()
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::focusPanel	bool ()
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::focusPath	std::vector<UiNodeId> () const
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::focusPromptControl	PromptCommandResult (std::string_view)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::openPicker	std::optional<PickerKind> () const noexcept
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::openPickerActivation	const std::optional<PickerActivation> &() const noexcept
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::openPrompt	PromptCommandResult (PromptRequest)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::operator=	InteractionAuthority &(InteractionAuthority &&) noexcept
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::operator=	InteractionAuthority &(const InteractionAuthority &)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::pickerPresenceOverlay	PalettePresenceOverlay () const
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::prompt	const PromptSurface &() const noexcept
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::refreshExternalModificationPresence	bool (bool)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::refreshNoticePresence	bool (bool)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::refreshStatusActions	bool (std::vector<StatusActionNode>)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::releaseExternalFocus	bool ()
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::routingGeneration	std::uint64_t () const noexcept
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::schema	const UiSchema &() const noexcept
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::statusActions	const std::vector<StatusActionNode> &() const noexcept
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::submitPrompt	PromptCommandResult ()
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::toggleDistractionFree	void ()
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::updateComposition	bool (UiComposition)
-core/ssg/InteractionAuthority.h	func	ssg::InteractionAuthority::updatePromptValue	PromptCommandResult (std::size_t, std::string)
 core/ssg/KeyCode.h	enum	ssg::KeyCode
 core/ssg/KeyCode.h	enumerator	ssg::KeyCode::ArrowDown
 core/ssg/KeyCode.h	enumerator	ssg::KeyCode::ArrowLeft
@@ -1203,6 +1126,7 @@ core/ssg/Keymap.h	func	ssg::SemanticInputRouter::semanticInput	SemanticCommand (
 core/ssg/Keymap.h	func	ssg::SemanticInputRouter::textRouting	TextRouting (std::string_view) const noexcept
 core/ssg/Keymap.h	func	ssg::applyKeymapBind	KeymapMutationResult (const KeymapViewState &, const KeymapBindArguments &) noexcept
 core/ssg/Keymap.h	func	ssg::applyKeymapUnbind	KeymapMutationResult (const KeymapViewState &, const KeymapUnbindArguments &) noexcept
+core/ssg/Keymap.h	func	ssg::defaultTerminalKeymap	KeymapViewState ()
 core/ssg/Keymap.h	func	ssg::operator==	bool (const KeymapBindArguments &, const KeymapBindArguments &)
 core/ssg/Keymap.h	func	ssg::operator==	bool (const KeymapMutationError &, const KeymapMutationError &)
 core/ssg/Keymap.h	func	ssg::operator==	bool (const KeymapUnbindArguments &, const KeymapUnbindArguments &)
@@ -1317,11 +1241,11 @@ core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::LspFeatureContro
 core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::acceptCompletion	LspCompletionAcceptance ()
 core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::dismissCompletion	void ()
 core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::dismissHover	void ()
-core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::poll	LspFeaturePollResult (Revision)
-core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestCompletion	LspFeatureRequestResult (std::string, Revision, ByteOffset)
-core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestDefinition	LspFeatureRequestResult (std::string, Revision, ByteOffset)
-core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestHover	LspFeatureRequestResult (std::string, Revision, ByteOffset)
-core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestReferences	LspFeatureRequestResult (std::string, Revision, ByteOffset)
+core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::poll	LspFeaturePollResult (std::uint64_t)
+core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestCompletion	LspFeatureRequestResult (std::string, std::uint64_t, ByteOffset)
+core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestDefinition	LspFeatureRequestResult (std::string, std::uint64_t, ByteOffset)
+core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestHover	LspFeatureRequestResult (std::string, std::uint64_t, ByteOffset)
+core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::requestReferences	LspFeatureRequestResult (std::string, std::uint64_t, ByteOffset)
 core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::selectNextCompletion	void ()
 core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::selectPreviousCompletion	void ()
 core/ssg/LspFeatureController.h	func	ssg::LspFeatureController::viewState	const LspFeatureViewState &() const noexcept
@@ -1373,7 +1297,7 @@ core/ssg/LspFeatureController.h	var	ssg::LspFeatureRequestResult::requestId	std:
 core/ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::completion	LspCompletionViewState
 core/ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::hover	std::optional<LspHover>
 core/ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::navigation	LspNavigationViewState
-core/ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::revision	Revision
+core/ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::revision	std::uint64_t
 core/ssg/LspFeatureController.h	var	ssg::LspFeatureViewState::status	std::string
 core/ssg/LspFeatureController.h	var	ssg::LspHover::contents	std::string
 core/ssg/LspFeatureController.h	var	ssg::LspHover::range	std::optional<LspRange>
@@ -1441,9 +1365,9 @@ core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditApplier::apply	L
 core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditApplier::recover	LspWorkspaceEditApplyResult (const LspWorkspaceEditRecoveryRecord &)
 core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditApplyResult::accepted	bool () const noexcept
 core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditController::LspWorkspaceEditController	void (LspSyncClient &, LspWorkspaceEditApplier &)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditController::poll	LspRenamePollResult (Revision)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditController::requestRename	LspRenameRequestResult (std::string, Revision, ByteOffset, std::string)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditDocuments::apply	LspWorkspaceDocumentWriteResult (std::string, Revision, std::string)
+core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditController::poll	LspRenamePollResult (std::uint64_t)
+core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditController::requestRename	LspRenameRequestResult (std::string, std::uint64_t, ByteOffset, std::string)
+core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditDocuments::apply	LspWorkspaceDocumentWriteResult (std::string, std::uint64_t, std::string)
 core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditDocuments::snapshot	std::optional<LspDocumentSnapshot> (std::string_view) const
 core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceFileOperations::createFile	LspWorkspaceFileResult (std::string, bool)
 core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceFileOperations::deletePath	LspWorkspaceFileResult (std::string, bool)
@@ -1478,12 +1402,12 @@ core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenameRequestResult::message	s
 core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenameRequestResult::requestId	std::uint64_t
 core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceDocumentWriteResult::error	LspWorkspaceDocumentError
 core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceDocumentWriteResult::message	std::string
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceDocumentWriteResult::revision	Revision
+core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceDocumentWriteResult::revision	std::uint64_t
 core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditApplyResult::error	LspWorkspaceEditError
 core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditApplyResult::message	std::string
 core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditApplyResult::recovery	std::optional<LspWorkspaceEditRecoveryRecord>
 core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditConfig::maximumJsonDepth	std::size_t
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::expectedRevision	Revision
+core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::expectedRevision	std::uint64_t
 core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::kind	LspWorkspaceEditRecoveryKind
 core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::node	LspWorkspaceFileNode
 core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::overwrite	bool
@@ -1641,7 +1565,6 @@ core/ssg/PaneTopology.h	struct	ssg::SessionTopology
 core/ssg/PaneTopology.h	var	ssg::PaneTopologyNode::axis	SplitAxis
 core/ssg/PaneTopology.h	var	ssg::PaneTopologyNode::children	std::vector<PaneTopologyNode>
 core/ssg/PaneTopology.h	var	ssg::PaneTopologyNode::id	PaneId
-core/ssg/PaneTopology.h	var	ssg::SessionTopology::activeView	std::optional<ViewId>
 core/ssg/PaneTopology.h	var	ssg::SessionTopology::activeWorkspace	std::optional<WorkspaceId>
 core/ssg/PaneTopology.h	var	ssg::SessionTopology::panes	PaneTopology
 core/ssg/Picker.h	class	ssg::PickerCatalog
@@ -2009,20 +1932,20 @@ core/ssg/Search.h	func	ssg::SearchCancellationToken::cancelled	bool () const noe
 core/ssg/Search.h	func	ssg::SearchCommandSource::descriptors	std::vector<SearchCommandDescriptor> () const
 core/ssg/Search.h	func	ssg::SearchCommandSource::execute	PaletteExecutionResult (std::string_view)
 core/ssg/Search.h	func	ssg::SearchController::SearchController	void (const SearchWorkspaceSource &, SearchCommandSource &) noexcept
-core/ssg/Search.h	func	ssg::SearchController::beginWorkspaceSearch	WorkspaceSearchRequest (std::string, Revision)
+core/ssg/Search.h	func	ssg::SearchController::beginWorkspaceSearch	WorkspaceSearchRequest (std::string, std::uint64_t)
 core/ssg/Search.h	func	ssg::SearchController::cancelWorkspaceSearch	void () noexcept
-core/ssg/Search.h	func	ssg::SearchController::closePalette	void (Revision)
+core/ssg/Search.h	func	ssg::SearchController::closePalette	void (std::uint64_t)
 core/ssg/Search.h	func	ssg::SearchController::evaluate	WorkspaceSearchBatch (const WorkspaceSearchRequest &) const
 core/ssg/Search.h	func	ssg::SearchController::executePalette	PaletteExecutionResult ()
-core/ssg/Search.h	func	ssg::SearchController::openPalette	void (Revision)
-core/ssg/Search.h	func	ssg::SearchController::publish	SearchPublishResult (const WorkspaceSearchBatch &, Revision)
+core/ssg/Search.h	func	ssg::SearchController::openPalette	void (std::uint64_t)
+core/ssg/Search.h	func	ssg::SearchController::publish	SearchPublishResult (const WorkspaceSearchBatch &, std::uint64_t)
 core/ssg/Search.h	func	ssg::SearchController::selectNext	void ()
 core/ssg/Search.h	func	ssg::SearchController::selectPrevious	void ()
-core/ssg/Search.h	func	ssg::SearchController::updatePaletteQuery	void (std::string, Revision)
+core/ssg/Search.h	func	ssg::SearchController::updatePaletteQuery	void (std::string, std::uint64_t)
 core/ssg/Search.h	func	ssg::SearchController::viewState	const SearchViewState &() const noexcept
 core/ssg/Search.h	func	ssg::SearchNavigator::gotoLine	std::optional<NavigationTarget> (std::string, const ParsedSearchQuery &) const
 core/ssg/Search.h	func	ssg::SearchNavigator::target	std::optional<NavigationTarget> (const SearchResult &) const
-core/ssg/Search.h	func	ssg::SearchWorkspaceSource::snapshot	WorkspaceSnapshot (Revision) const
+core/ssg/Search.h	func	ssg::SearchWorkspaceSource::snapshot	WorkspaceSnapshot (std::uint64_t) const
 core/ssg/Search.h	func	ssg::WorkspaceSearcher::evaluate	WorkspaceSearchBatch (const SearchWorkspaceSource &, const WorkspaceSearchRequest &) const
 core/ssg/Search.h	func	ssg::WorkspaceSearcher::parse	ParsedSearchQuery (std::string_view) const
 core/ssg/Search.h	func	ssg::WorkspaceSearcher::rank	std::vector<SearchResult> (const WorkspaceSnapshot &, const ParsedSearchQuery &, const SearchCancellationToken &) const
@@ -2073,7 +1996,7 @@ core/ssg/Search.h	var	ssg::SearchViewState::mode	SearchMode
 core/ssg/Search.h	var	ssg::SearchViewState::paletteOpen	bool
 core/ssg/Search.h	var	ssg::SearchViewState::query	std::string
 core/ssg/Search.h	var	ssg::SearchViewState::results	std::vector<SearchResult>
-core/ssg/Search.h	var	ssg::SearchViewState::revision	Revision
+core/ssg/Search.h	var	ssg::SearchViewState::revision	std::uint64_t
 core/ssg/Search.h	var	ssg::SearchViewState::searchGeneration	std::uint64_t
 core/ssg/Search.h	var	ssg::SearchViewState::searching	bool
 core/ssg/Search.h	var	ssg::SearchViewState::selectedIndex	std::optional<std::size_t>
@@ -2082,13 +2005,13 @@ core/ssg/Search.h	var	ssg::WorkspaceFile::text	std::string
 core/ssg/Search.h	var	ssg::WorkspaceSearchBatch::cancelled	bool
 core/ssg/Search.h	var	ssg::WorkspaceSearchBatch::generation	std::uint64_t
 core/ssg/Search.h	var	ssg::WorkspaceSearchBatch::results	std::vector<SearchResult>
-core/ssg/Search.h	var	ssg::WorkspaceSearchBatch::sourceRevision	Revision
+core/ssg/Search.h	var	ssg::WorkspaceSearchBatch::sourceRevision	std::uint64_t
 core/ssg/Search.h	var	ssg::WorkspaceSearchRequest::cancellation	SearchCancellationToken
 core/ssg/Search.h	var	ssg::WorkspaceSearchRequest::generation	std::uint64_t
 core/ssg/Search.h	var	ssg::WorkspaceSearchRequest::query	ParsedSearchQuery
-core/ssg/Search.h	var	ssg::WorkspaceSearchRequest::sourceRevision	Revision
+core/ssg/Search.h	var	ssg::WorkspaceSearchRequest::sourceRevision	std::uint64_t
 core/ssg/Search.h	var	ssg::WorkspaceSnapshot::files	std::vector<WorkspaceFile>
-core/ssg/Search.h	var	ssg::WorkspaceSnapshot::revision	Revision
+core/ssg/Search.h	var	ssg::WorkspaceSnapshot::revision	std::uint64_t
 core/ssg/Search.h	var	ssg::WorkspaceSnapshot::symbols	std::vector<WorkspaceSymbol>
 core/ssg/Search.h	var	ssg::WorkspaceSymbol::column	std::size_t
 core/ssg/Search.h	var	ssg::WorkspaceSymbol::line	std::size_t
@@ -2148,7 +2071,6 @@ core/ssg/Selection.h	func	ssg::Selection::lower	const DocumentPosition &() const
 core/ssg/Selection.h	func	ssg::Selection::operator==	bool (const Selection &) const noexcept
 core/ssg/Selection.h	func	ssg::Selection::upper	const DocumentPosition &() const noexcept
 core/ssg/Selection.h	func	ssg::Selection::wordOrCoveredText	std::string (std::string_view) const
-core/ssg/Selection.h	func	ssg::SelectionNavigation::operator==	bool (const SelectionNavigation &) const noexcept
 core/ssg/Selection.h	func	ssg::SelectionNavigationResult::accepted	bool () const noexcept
 core/ssg/Selection.h	func	ssg::SelectionNavigator::apply	SelectionNavigationResult (std::string_view, const SelectionViewState &, SelectionCommand, ViewportDimensions, SelectionCommandArguments, std::span<const BracketPair>, int, bool, const DiffFileView *) const
 core/ssg/Selection.h	func	ssg::SelectionNavigator::resolvePosition	std::optional<DocumentPosition> (std::string_view, ByteOffset, int)
@@ -2161,7 +2083,7 @@ core/ssg/Selection.h	func	ssg::SelectionViewState::operator==	bool (const Select
 core/ssg/Selection.h	struct	ssg::BracketPair
 core/ssg/Selection.h	struct	ssg::Selection
 core/ssg/Selection.h	struct	ssg::SelectionCommandArguments
-core/ssg/Selection.h	struct	ssg::SelectionNavigation
+core/ssg/Selection.h	struct	ssg::SelectionCommandDescriptor
 core/ssg/Selection.h	struct	ssg::SelectionNavigationResult
 core/ssg/Selection.h	struct	ssg::SelectionViewDelta
 core/ssg/Selection.h	struct	ssg::SelectionViewState
@@ -2172,9 +2094,8 @@ core/ssg/Selection.h	var	ssg::Selection::anchor	DocumentPosition
 core/ssg/Selection.h	var	ssg::SelectionCommandArguments::position	std::optional<DocumentPosition>
 core/ssg/Selection.h	var	ssg::SelectionCommandArguments::selection	std::optional<Selection>
 core/ssg/Selection.h	var	ssg::SelectionCommandArguments::selections	std::vector<Selection>
-core/ssg/Selection.h	var	ssg::SelectionNavigation::desiredCell	std::optional<CellIndex>
-core/ssg/Selection.h	var	ssg::SelectionNavigation::firstVisualColumn	std::uint32_t
-core/ssg/Selection.h	var	ssg::SelectionNavigation::firstVisualRow	std::uint32_t
+core/ssg/Selection.h	var	ssg::SelectionCommandDescriptor::command	SelectionCommand
+core/ssg/Selection.h	var	ssg::SelectionCommandDescriptor::id	std::string_view
 core/ssg/Selection.h	var	ssg::SelectionNavigationResult::delta	SelectionViewDelta
 core/ssg/Selection.h	var	ssg::SelectionNavigationResult::error	SelectionNavigationError
 core/ssg/Selection.h	var	ssg::SelectionNavigationResult::message	std::string
@@ -2184,6 +2105,7 @@ core/ssg/Selection.h	var	ssg::SelectionViewState::desiredCell	std::optional<Cell
 core/ssg/Selection.h	var	ssg::SelectionViewState::firstVisualColumn	std::uint32_t
 core/ssg/Selection.h	var	ssg::SelectionViewState::firstVisualRow	std::uint32_t
 core/ssg/Selection.h	var	ssg::SelectionViewState::selections	SelectionSet
+core/ssg/Selection.h	var	ssg::kSelectionCommands	const std::array<SelectionCommandDescriptor, 38>
 core/ssg/Settings.h	alias	ssg::SettingValue
 core/ssg/Settings.h	class	ssg::SettingsModel
 core/ssg/Settings.h	class	ssg::SettingsPersistence
@@ -2311,37 +2233,26 @@ core/ssg/SharedBytes.h	func	ssg::SharedBytes::owning	SharedBytes (std::string)
 core/ssg/SharedBytes.h	func	ssg::SharedBytes::size	std::size_t () const noexcept
 core/ssg/SharedBytes.h	func	ssg::SharedBytes::view	std::string_view () const noexcept
 core/ssg/SharedBytes.h	struct	ssg::SharedBytes::Backing
-core/ssg/StatusFields.h	alias	ssg::StatusFieldProvider
-core/ssg/StatusFields.h	enum	ssg::StatusFieldRegion
-core/ssg/StatusFields.h	enumerator	ssg::StatusFieldRegion::Footer
-core/ssg/StatusFields.h	enumerator	ssg::StatusFieldRegion::Header
-core/ssg/StatusFields.h	func	ssg::defaultStatusFieldProviders	std::vector<StatusFieldProviderBinding> ()
-core/ssg/StatusFields.h	func	ssg::p0StatusFieldCatalog	std::vector<StatusFieldCatalogEntry> ()
-core/ssg/StatusFields.h	func	ssg::projectStatusFields	StatusFieldProjection (const std::vector<StatusFieldCatalogEntry> &, const std::unordered_map<std::string, StatusFieldProvider> &, const StatusFieldProviderContext &)
+core/ssg/StatusFields.h	func	ssg::projectStatusFields	StatusFieldProjection (const StatusFieldContext &)
 core/ssg/StatusFields.h	struct	ssg::StatusField
-core/ssg/StatusFields.h	struct	ssg::StatusFieldCatalogEntry
+core/ssg/StatusFields.h	struct	ssg::StatusFieldContext
 core/ssg/StatusFields.h	struct	ssg::StatusFieldProjection
-core/ssg/StatusFields.h	struct	ssg::StatusFieldProviderBinding
-core/ssg/StatusFields.h	struct	ssg::StatusFieldProviderContext
 core/ssg/StatusFields.h	var	ssg::StatusField::accessibleLabel	std::string
-core/ssg/StatusFields.h	var	ssg::StatusField::collapseRank	std::uint8_t
 core/ssg/StatusFields.h	var	ssg::StatusField::commandId	std::optional<std::string>
 core/ssg/StatusFields.h	var	ssg::StatusField::id	std::string
 core/ssg/StatusFields.h	var	ssg::StatusField::value	std::string
-core/ssg/StatusFields.h	var	ssg::StatusFieldCatalogEntry::accessibleLabel	std::string
-core/ssg/StatusFields.h	var	ssg::StatusFieldCatalogEntry::collapseRank	std::uint8_t
-core/ssg/StatusFields.h	var	ssg::StatusFieldCatalogEntry::id	std::string
-core/ssg/StatusFields.h	var	ssg::StatusFieldCatalogEntry::region	StatusFieldRegion
+core/ssg/StatusFields.h	var	ssg::StatusFieldContext::currentBranch	std::optional<std::string>
+core/ssg/StatusFields.h	var	ssg::StatusFieldContext::cwdPrefix	std::string
+core/ssg/StatusFields.h	var	ssg::StatusFieldContext::followMode	std::string
+core/ssg/StatusFields.h	var	ssg::StatusFieldContext::homeDirectory	std::string
+core/ssg/StatusFields.h	var	ssg::StatusFieldContext::statusValue	std::string
+core/ssg/StatusFields.h	var	ssg::StatusFieldContext::workspaceRoot	std::filesystem::path
 core/ssg/StatusFields.h	var	ssg::StatusFieldProjection::footer	std::vector<StatusField>
 core/ssg/StatusFields.h	var	ssg::StatusFieldProjection::header	std::vector<StatusField>
-core/ssg/StatusFields.h	var	ssg::StatusFieldProviderBinding::id	std::string
-core/ssg/StatusFields.h	var	ssg::StatusFieldProviderBinding::provider	StatusFieldProvider
-core/ssg/StatusFields.h	var	ssg::StatusFieldProviderContext::currentBranch	std::optional<std::string>
-core/ssg/StatusFields.h	var	ssg::StatusFieldProviderContext::cwdPrefix	std::string
-core/ssg/StatusFields.h	var	ssg::StatusFieldProviderContext::followMode	std::string
-core/ssg/StatusFields.h	var	ssg::StatusFieldProviderContext::homeDirectory	std::string
-core/ssg/StatusFields.h	var	ssg::StatusFieldProviderContext::statusValue	std::string
-core/ssg/StatusFields.h	var	ssg::StatusFieldProviderContext::workspaceRoot	std::filesystem::path
+core/ssg/StatusFields.h	var	ssg::kBranchStatusFieldId	const std::string_view
+core/ssg/StatusFields.h	var	ssg::kFollowStatusFieldId	const std::string_view
+core/ssg/StatusFields.h	var	ssg::kPathStatusFieldId	const std::string_view
+core/ssg/StatusFields.h	var	ssg::kStatusValueFieldId	const std::string_view
 core/ssg/StatusQueue.h	class	ssg::StatusId
 core/ssg/StatusQueue.h	enum	ssg::StatusPriority
 core/ssg/StatusQueue.h	enumerator	ssg::StatusPriority::Error
@@ -2514,8 +2425,8 @@ core/ssg/SyntaxModel.h	func	ssg::SyntaxModel::canIncrementallyParse	bool (const 
 core/ssg/SyntaxModel.h	func	ssg::SyntaxModel::cancelPending	void () noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxModel::hasGrammar	bool (const LanguageId &) const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxModel::hasParser	bool () const noexcept
-core/ssg/SyntaxModel.h	func	ssg::SyntaxModel::parse	SyntaxParseResult (Revision, LanguageId, std::string, std::vector<SyntaxEdit>)
-core/ssg/SyntaxModel.h	func	ssg::SyntaxModel::request	SyntaxParseRequestResult (Revision, LanguageId, std::string, std::vector<SyntaxEdit>)
+core/ssg/SyntaxModel.h	func	ssg::SyntaxModel::parse	SyntaxParseResult (std::uint64_t, LanguageId, std::string, std::vector<SyntaxEdit>)
+core/ssg/SyntaxModel.h	func	ssg::SyntaxModel::request	SyntaxParseRequestResult (std::uint64_t, LanguageId, std::string, std::vector<SyntaxEdit>)
 core/ssg/SyntaxModel.h	func	ssg::SyntaxModel::run	SyntaxParseOutput (const SyntaxParseRequest &) const
 core/ssg/SyntaxModel.h	func	ssg::SyntaxModel::viewState	const SyntaxViewState &() const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxParseRequest::cancel	void () const noexcept
@@ -2523,22 +2434,22 @@ core/ssg/SyntaxModel.h	func	ssg::SyntaxParseRequest::cancelled	bool () const noe
 core/ssg/SyntaxModel.h	func	ssg::SyntaxParseRequest::edits	const std::vector<SyntaxEdit> &() const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxParseRequest::language	const LanguageId &() const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxParseRequest::priorParse	const SyntaxParseHandle &() const noexcept
-core/ssg/SyntaxModel.h	func	ssg::SyntaxParseRequest::revision	Revision () const noexcept
+core/ssg/SyntaxModel.h	func	ssg::SyntaxParseRequest::revision	std::uint64_t () const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxParseRequest::text	const std::string &() const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxParseRequestResult::accepted	bool () const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxParseResult::accepted	bool () const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxParser::hasGrammar	bool (const LanguageId &) const
 core/ssg/SyntaxModel.h	func	ssg::SyntaxParser::parse	SyntaxParseOutput (const SyntaxParseRequest &)
-core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::SyntaxViewState	void (Revision, LanguageId, std::uint64_t, std::vector<SyntaxSpan>, std::vector<SyntaxBracketPair>, std::vector<UnmatchedBracket>, std::vector<CommentToken>, std::vector<CommentRange>, std::vector<LineIndentation>)
+core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::SyntaxViewState	void (std::uint64_t, LanguageId, std::uint64_t, std::vector<SyntaxSpan>, std::vector<SyntaxBracketPair>, std::vector<UnmatchedBracket>, std::vector<CommentToken>, std::vector<CommentRange>, std::vector<LineIndentation>)
 core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::bracketPairs	const std::vector<SyntaxBracketPair> &() const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::commentRanges	const std::vector<CommentRange> &() const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::commentTokens	const std::vector<CommentToken> &() const noexcept
-core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::fromParse	SyntaxViewState (Revision, LanguageId, std::string_view, const SyntaxParseOutput &, const SyntaxConfig &)
+core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::fromParse	SyntaxViewState (std::uint64_t, LanguageId, std::string_view, const SyntaxParseOutput &, const SyntaxConfig &)
 core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::indentation	const std::vector<LineIndentation> &() const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::language	const LanguageId &() const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::matchingBracket	std::optional<ByteOffset> (ByteOffset) const
-core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::plainText	SyntaxViewState (Revision, LanguageId, std::string_view, std::uint32_t)
-core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::revision	Revision () const noexcept
+core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::plainText	SyntaxViewState (std::uint64_t, LanguageId, std::string_view, std::uint32_t)
+core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::revision	std::uint64_t () const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::scopeAt	SyntaxScope (ByteOffset) const
 core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::spans	const std::vector<SyntaxSpan> &() const noexcept
 core/ssg/SyntaxModel.h	func	ssg::SyntaxViewState::textBytes	std::uint64_t () const noexcept
@@ -2601,7 +2512,7 @@ core/ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::brackets	std::vector<BracketT
 core/ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::commentRanges	std::vector<CommentRange>
 core/ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::commentTokens	std::vector<CommentToken>
 core/ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::parse	SyntaxParseHandle
-core/ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::revision	Revision
+core/ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::revision	std::uint64_t
 core/ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::spans	std::vector<SyntaxSpan>
 core/ssg/SyntaxModel.h	var	ssg::SyntaxParseOutput::status	SyntaxParseStatus
 core/ssg/SyntaxModel.h	var	ssg::SyntaxParseRequestResult::error	SyntaxRequestError
@@ -2620,7 +2531,6 @@ core/ssg/SyntaxModel.h	var	ssg::UnmatchedBracket::kind	BracketKind
 core/ssg/SyntaxModel.h	var	ssg::UnmatchedBracket::offset	ByteOffset
 core/ssg/SyntaxModel.h	var	ssg::UnmatchedBracket::role	BracketRole
 core/ssg/TabManager.h	class	ssg::TabId
-core/ssg/TabManager.h	class	ssg::TabLifecycle
 core/ssg/TabManager.h	class	ssg::TabManager
 core/ssg/TabManager.h	enum	ssg::TabError
 core/ssg/TabManager.h	enum	ssg::TabKind
@@ -2639,17 +2549,17 @@ core/ssg/TabManager.h	enumerator	ssg::TabKind::TreeView
 core/ssg/TabManager.h	func	ssg::TabId::TabId	void (std::uint64_t) noexcept
 core/ssg/TabManager.h	func	ssg::TabId::operator<=>	std::strong_ordering (const TabId &) const noexcept
 core/ssg/TabManager.h	func	ssg::TabId::value	std::uint64_t () const noexcept
-core/ssg/TabManager.h	func	ssg::TabLifecycle::close	TabLifecycleResult (const TabState &, std::chrono::milliseconds)
-core/ssg/TabManager.h	func	ssg::TabLifecycle::reopen	TabLifecycleResult (const TabState &, const RecoveryRecordId &)
 core/ssg/TabManager.h	func	ssg::TabLifecycleResult::accepted	bool () const noexcept
-core/ssg/TabManager.h	func	ssg::TabManager::TabManager	void (TabLifecycle &, TabManagerConfig)
 core/ssg/TabManager.h	func	ssg::TabManager::TabManager	void (TabManager &&) noexcept
+core/ssg/TabManager.h	func	ssg::TabManager::TabManager	void (TabManagerConfig)
 core/ssg/TabManager.h	func	ssg::TabManager::TabManager	void (const TabManager &)
 core/ssg/TabManager.h	func	ssg::TabManager::activate	TabResult (TabId)
-core/ssg/TabManager.h	func	ssg::TabManager::close	TabResult (TabId, std::chrono::milliseconds)
-core/ssg/TabManager.h	func	ssg::TabManager::closeAll	TabResult (std::chrono::milliseconds)
-core/ssg/TabManager.h	func	ssg::TabManager::closeOthers	TabResult (TabId, std::chrono::milliseconds)
+core/ssg/TabManager.h	func	ssg::TabManager::beginReopenClosed	std::variant<TabResult, TabReopenRequest> ()
+core/ssg/TabManager.h	func	ssg::TabManager::close	TabResult (TabId, TabLifecycleResult)
+core/ssg/TabManager.h	func	ssg::TabManager::closeAll	TabResult (std::vector<TabCloseOutcome>)
+core/ssg/TabManager.h	func	ssg::TabManager::closeOthers	TabResult (TabId, std::vector<TabCloseOutcome>)
 core/ssg/TabManager.h	func	ssg::TabManager::dropDocument	std::size_t (FileDocumentId)
+core/ssg/TabManager.h	func	ssg::TabManager::finishReopenClosed	TabResult (TabReopenRequest, TabLifecycleResult)
 core/ssg/TabManager.h	func	ssg::TabManager::moveLeft	TabResult (TabId)
 core/ssg/TabManager.h	func	ssg::TabManager::moveRight	TabResult (TabId)
 core/ssg/TabManager.h	func	ssg::TabManager::next	TabResult ()
@@ -2659,19 +2569,22 @@ core/ssg/TabManager.h	func	ssg::TabManager::operator=	TabManager &(TabManager &&
 core/ssg/TabManager.h	func	ssg::TabManager::operator=	TabManager &(const TabManager &)
 core/ssg/TabManager.h	func	ssg::TabManager::previous	TabResult ()
 core/ssg/TabManager.h	func	ssg::TabManager::recentlyClosedCount	std::size_t () const noexcept
-core/ssg/TabManager.h	func	ssg::TabManager::reopenClosed	TabResult ()
 core/ssg/TabManager.h	func	ssg::TabManager::updateDocument	TabResult (FileDocumentId, JournalDocumentKey, std::string_view, DocumentMode, bool, std::optional<ScratchDurability>)
 core/ssg/TabManager.h	func	ssg::TabManager::viewState	const TabViewState &() const noexcept
 core/ssg/TabManager.h	func	ssg::TabResult::accepted	bool () const noexcept
 core/ssg/TabManager.h	func	ssg::operator==	bool (const TabFailure &, const TabFailure &)
 core/ssg/TabManager.h	func	ssg::operator==	bool (const TabState &, const TabState &)
 core/ssg/TabManager.h	func	ssg::operator==	bool (const TabViewState &, const TabViewState &)
+core/ssg/TabManager.h	struct	ssg::TabCloseOutcome
 core/ssg/TabManager.h	struct	ssg::TabFailure
 core/ssg/TabManager.h	struct	ssg::TabLifecycleResult
 core/ssg/TabManager.h	struct	ssg::TabManagerConfig
+core/ssg/TabManager.h	struct	ssg::TabReopenRequest
 core/ssg/TabManager.h	struct	ssg::TabResult
 core/ssg/TabManager.h	struct	ssg::TabState
 core/ssg/TabManager.h	struct	ssg::TabViewState
+core/ssg/TabManager.h	var	ssg::TabCloseOutcome::result	TabLifecycleResult
+core/ssg/TabManager.h	var	ssg::TabCloseOutcome::tab	TabId
 core/ssg/TabManager.h	var	ssg::TabFailure::error	TabError
 core/ssg/TabManager.h	var	ssg::TabFailure::message	std::string
 core/ssg/TabManager.h	var	ssg::TabFailure::tab	TabId
@@ -2683,6 +2596,9 @@ core/ssg/TabManager.h	var	ssg::TabLifecycleResult::message	std::string
 core/ssg/TabManager.h	var	ssg::TabLifecycleResult::reopenedDocument	std::optional<FileDocumentId>
 core/ssg/TabManager.h	var	ssg::TabLifecycleResult::reopenedDocumentKey	std::optional<JournalDocumentKey>
 core/ssg/TabManager.h	var	ssg::TabManagerConfig::maximumRecentlyClosed	std::size_t
+core/ssg/TabManager.h	var	ssg::TabReopenRequest::compensation	RecoveryRecordId
+core/ssg/TabManager.h	var	ssg::TabReopenRequest::index	std::size_t
+core/ssg/TabManager.h	var	ssg::TabReopenRequest::tab	TabState
 core/ssg/TabManager.h	var	ssg::TabResult::error	TabError
 core/ssg/TabManager.h	var	ssg::TabResult::failures	std::vector<TabFailure>
 core/ssg/TabManager.h	var	ssg::TabResult::message	std::string
@@ -3043,9 +2959,7 @@ core/ssg/UiTree.h	func	ssg::operator==	bool (const UiNodeActivationArguments &, 
 core/ssg/UiTree.h	func	ssg::operator==	bool (const UiNodeStyle &, const UiNodeStyle &)
 core/ssg/UiTree.h	func	ssg::operator==	bool (const UiSchema &, const UiSchema &)
 core/ssg/UiTree.h	func	ssg::requirePublishedUiTree	UiSchema (UiSchema)
-core/ssg/UiTree.h	func	ssg::resolveUiLeafState	std::optional<UiLeafState> (const WidgetDescriptor &, const WidgetProviderResolver &, SemanticRole)
 core/ssg/UiTree.h	func	ssg::resolveUiNodeStyle	std::optional<ResolvedUiNodeStyle> (const UiSchema &, std::string_view)
-core/ssg/UiTree.h	func	ssg::resolveUiTree	UiSchema (const UiSchema &, const WidgetProviderResolver &)
 core/ssg/UiTree.h	func	ssg::setUiNodeVisible	void (UiSchema &, const UiNodeId &, bool)
 core/ssg/UiTree.h	func	ssg::uiSchemaNodeIds	std::set<UiNodeId> (const UiSchema &)
 core/ssg/UiTree.h	func	ssg::validatePublishedUiTree	UiSchemaValidation (const UiSchema &)
@@ -3098,11 +3012,17 @@ core/ssg/UiTree.h	var	ssg::kExternalModNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kFileTreeNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kFindResultsNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kFindResultsViewportNodeId	const std::string_view
+core/ssg/UiTree.h	var	ssg::kFooterFollowFieldNodeId	const std::string_view
+core/ssg/UiTree.h	var	ssg::kFooterHintNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kFooterNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kFooterPromptNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kFooterPromptOptionsNodeId	const std::string_view
+core/ssg/UiTree.h	var	ssg::kFooterStatusActionsNodeId	const std::string_view
+core/ssg/UiTree.h	var	ssg::kFooterStatusFieldNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kGitStatusNodeId	const std::string_view
+core/ssg/UiTree.h	var	ssg::kHeaderBranchFieldNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kHeaderNodeId	const std::string_view
+core/ssg/UiTree.h	var	ssg::kHeaderPathFieldNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kHeaderPromptInputNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kNoticeNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kPanelNodeId	const std::string_view
@@ -3110,20 +3030,8 @@ core/ssg/UiTree.h	var	ssg::kRootNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kSymbolsNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kTabBarNodeId	const std::string_view
 core/ssg/UiTree.h	var	ssg::kTreeNodeId	const std::string_view
-core/ssg/UiWidget.h	alias	ssg::WidgetProviderResolver
-core/ssg/UiWidget.h	func	ssg::operator==	bool (const ValueSource &, const ValueSource &) noexcept
 core/ssg/UiWidget.h	func	ssg::operator==	bool (const WidgetDescriptor &, const WidgetDescriptor &)
-core/ssg/UiWidget.h	struct	ssg::ResolvedProvider
-core/ssg/UiWidget.h	struct	ssg::ValueSource
 core/ssg/UiWidget.h	struct	ssg::WidgetDescriptor
-core/ssg/UiWidget.h	var	ssg::ResolvedProvider::accessibleLabel	std::string
-core/ssg/UiWidget.h	var	ssg::ResolvedProvider::active	std::optional<bool>
-core/ssg/UiWidget.h	var	ssg::ResolvedProvider::commandId	std::optional<std::string>
-core/ssg/UiWidget.h	var	ssg::ResolvedProvider::value	std::string
-core/ssg/UiWidget.h	var	ssg::ValueSource::isProvider	bool
-core/ssg/UiWidget.h	var	ssg::ValueSource::literal	std::string
-core/ssg/UiWidget.h	var	ssg::ValueSource::provider	std::string
-core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::checked	std::optional<ValueSource>
 core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::command	std::optional<std::string>
 core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::id	std::string
 core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::keep	bool
@@ -3133,7 +3041,6 @@ core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::rank	int
 core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::role	std::optional<std::string>
 core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::sigil	std::string
 core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::surface	std::optional<ViewSurface>
-core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::value	std::optional<ValueSource>
 core/ssg/UiWidget.h	var	ssg::WidgetDescriptor::width	std::optional<int>
 core/ssg/ViewAction.h	alias	ssg::ViewAction
 core/ssg/ViewAction.h	enum	ssg::DocumentPointerEdge
@@ -3183,20 +3090,7 @@ core/ssg/ViewActionResult.h	struct	ssg::ViewActionResult
 core/ssg/ViewActionResult.h	var	ssg::ViewActionResult::message	std::string
 core/ssg/ViewActionResult.h	var	ssg::ViewActionResult::status	ViewActionStatus
 core/ssg/ViewActionResult.h	var	ssg::ViewActionResult::transition	std::optional<ViewTransitionInput>
-core/ssg/ViewSurfaceBacking.h	enum	ssg::SnapshotSection
-core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::Document
-core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::ExternalModification
-core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::NoticeView
-core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::Palette
-core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::PromptStatus
-core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::Selection
-core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::Syntax
-core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::Tabs
-core/ssg/ViewSurfaceBacking.h	enumerator	ssg::SnapshotSection::Tree
-core/ssg/ViewSurfaceBacking.h	func	ssg::statusActionsBackingSection	SnapshotSection ()
-core/ssg/ViewSurfaceBacking.h	func	ssg::viewSurfaceBackingSections	std::span<const SnapshotSection> (ViewSurface)
 core/ssg/Viewport.h	alias	ssg::ProjectedRow
-core/ssg/Viewport.h	class	ssg::LineLayoutCache
 core/ssg/Viewport.h	class	ssg::RowProjection
 core/ssg/Viewport.h	class	ssg::ScrollOffset
 core/ssg/Viewport.h	class	ssg::Viewport
@@ -3223,6 +3117,7 @@ core/ssg/Viewport.h	func	ssg::ScrollOffset::revealSelection	void (uint32_t, uint
 core/ssg/Viewport.h	func	ssg::ScrollOffset::setFirstVisible	void (uint32_t) noexcept
 core/ssg/Viewport.h	func	ssg::ScrollOffset::toFraction	void (uint32_t, uint32_t, uint32_t, uint32_t)
 core/ssg/Viewport.h	func	ssg::ScrollbarMetrics::operator==	bool (const ScrollbarMetrics &) const noexcept
+core/ssg/Viewport.h	func	ssg::SelectionNavigation::operator==	bool (const SelectionNavigation &) const noexcept
 core/ssg/Viewport.h	func	ssg::Viewport::compute	ViewportViewState (std::span<const CellRun>, ViewportDimensions, uint32_t, const DiffFileView *, std::optional<ViewportDimensions>) const
 core/ssg/Viewport.h	func	ssg::Viewport::computeUnwrapped	ViewportViewState (std::string_view, ViewportDimensions, uint32_t, uint32_t, int, const DiffFileView *, std::optional<ViewportDimensions>, LineLayoutCache *) const
 core/ssg/Viewport.h	func	ssg::Viewport::deriveDelta	ViewportDelta (const ViewportViewState &, const ViewportViewState &) const
@@ -3247,6 +3142,7 @@ core/ssg/Viewport.h	struct	ssg::ListScrollView
 core/ssg/Viewport.h	struct	ssg::PhantomRow
 core/ssg/Viewport.h	struct	ssg::RealRow
 core/ssg/Viewport.h	struct	ssg::ScrollbarMetrics
+core/ssg/Viewport.h	struct	ssg::SelectionNavigation
 core/ssg/Viewport.h	struct	ssg::ViewportDelta
 core/ssg/Viewport.h	struct	ssg::ViewportDimensions
 core/ssg/Viewport.h	struct	ssg::ViewportViewState
@@ -3277,6 +3173,9 @@ core/ssg/Viewport.h	var	ssg::ScrollbarMetrics::thumbSize	uint32_t
 core/ssg/Viewport.h	var	ssg::ScrollbarMetrics::thumbStart	uint32_t
 core/ssg/Viewport.h	var	ssg::ScrollbarMetrics::totalRows	uint32_t
 core/ssg/Viewport.h	var	ssg::ScrollbarMetrics::viewportRows	uint32_t
+core/ssg/Viewport.h	var	ssg::SelectionNavigation::desiredCell	std::optional<CellIndex>
+core/ssg/Viewport.h	var	ssg::SelectionNavigation::firstVisualColumn	std::uint32_t
+core/ssg/Viewport.h	var	ssg::SelectionNavigation::firstVisualRow	std::uint32_t
 core/ssg/Viewport.h	var	ssg::ViewportDelta::changed	bool
 core/ssg/Viewport.h	var	ssg::ViewportDelta::replacement	std::optional<ViewportViewState>
 core/ssg/Viewport.h	var	ssg::ViewportDimensions::columns	uint32_t
@@ -3296,30 +3195,8 @@ core/ssg/Viewport.h	var	ssg::VisualRow::logicalLine	uint32_t
 core/ssg/Viewport.h	var	ssg::VisualRow::spanCount	uint32_t
 core/ssg/Viewport.h	var	ssg::VisualRow::startCell	CellIndex
 core/ssg/Viewport.h	var	ssg::VisualRow::visibleCells	uint32_t
-core/ssg/ViewportProjection.h	class	ssg::EditorSession
-core/ssg/ViewportProjection.h	class	ssg::ViewportProjectionState
-core/ssg/ViewportProjection.h	func	ssg::ViewportProjectionState::ViewportProjectionState	void ()
-core/ssg/ViewportProjection.h	func	ssg::ViewportProjectionState::ViewportProjectionState	void (ViewportProjectionState &&) noexcept
-core/ssg/ViewportProjection.h	func	ssg::ViewportProjectionState::ViewportProjectionState	void (const ViewportProjectionState &)
-core/ssg/ViewportProjection.h	func	ssg::ViewportProjectionState::operator=	ViewportProjectionState &(ViewportProjectionState &&) noexcept
-core/ssg/ViewportProjection.h	func	ssg::ViewportProjectionState::operator=	ViewportProjectionState &(const ViewportProjectionState &)
-core/ssg/ViewportProjection.h	struct	ssg::PresentationCapture
-core/ssg/ViewportProjection.h	struct	ssg::ViewportProjectionRequest
-core/ssg/ViewportProjection.h	struct	ssg::ViewportProjectionResult
-core/ssg/ViewportProjection.h	struct	ssg::ViewportProjectionState::Impl
-core/ssg/ViewportProjection.h	var	ssg::PresentationCapture::semantic	SessionSnapshot
-core/ssg/ViewportProjection.h	var	ssg::PresentationCapture::style	Style
-core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionRequest::dimensions	ViewportDimensions
-core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionRequest::paneContentColumns	std::uint32_t
-core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionRequest::paneContentRows	std::uint32_t
-core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionRequest::proposedNavigation	SelectionNavigation
-core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionRequest::revealPrimarySelection	bool
-core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionRequest::semanticRevision	Revision
-core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionRequest::viewId	ViewId
-core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionResult::navigation	SelectionNavigation
-core/ssg/ViewportProjection.h	var	ssg::ViewportProjectionResult::viewport	ViewportViewState
 core/ssg/WholeScreenAssembly.h	func	ssg::assembleFooterPrompt	UiNode (const PromptSurface &)
-core/ssg/WholeScreenAssembly.h	func	ssg::assembleWholeScreen	UiComposition (const std::vector<StatusFieldCatalogEntry> &, std::string_view, const StyleDimensions &, std::string_view)
+core/ssg/WholeScreenAssembly.h	func	ssg::assembleWholeScreen	UiComposition (std::string_view, const StyleDimensions &, std::string_view)
 core/ssg/WholeScreenAssembly.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
 core/ssg/WholeScreenAssembly.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)
 core/ssg/Widget.h	enum	ssg::Overflow
@@ -3542,12 +3419,12 @@ core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::LspSyncClient	void (LspByteS
 core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::LspSyncClient	void (LspSyncClient &&) noexcept
 core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::LspSyncClient	void (const LspSyncClient &)
 core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::cancel	LspSyncResult (std::uint64_t)
-core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::changeDocument	LspSyncResult (std::string_view, Revision, std::string)
+core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::changeDocument	LspSyncResult (std::string_view, std::uint64_t, std::string)
 core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::closeDocument	LspSyncResult (std::string_view)
 core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::documentSnapshot	std::optional<LspDocumentSnapshot> (std::string_view) const
 core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::documentVersion	std::optional<std::int64_t> (std::string_view) const
 core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::initialize	LspSyncResult (std::string)
-core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::openDocument	LspSyncResult (std::string, std::string, Revision, std::string)
+core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::openDocument	LspSyncResult (std::string, std::string, std::uint64_t, std::string)
 core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::operator=	LspSyncClient &(LspSyncClient &&) noexcept
 core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::operator=	LspSyncClient &(const LspSyncClient &)
 core/ssg/lsp_sync_client.h	func	ssg::LspSyncClient::poll	LspSyncResult ()
@@ -3593,9 +3470,9 @@ core/ssg/lsp_sync_client.h	var	ssg::LspDiagnostic::message	std::string
 core/ssg/lsp_sync_client.h	var	ssg::LspDiagnostic::range	LspRange
 core/ssg/lsp_sync_client.h	var	ssg::LspDiagnostic::severity	std::optional<LspDiagnosticSeverity>
 core/ssg/lsp_sync_client.h	var	ssg::LspDocumentDiagnostics::diagnostics	std::vector<LspDiagnostic>
-core/ssg/lsp_sync_client.h	var	ssg::LspDocumentDiagnostics::revision	Revision
+core/ssg/lsp_sync_client.h	var	ssg::LspDocumentDiagnostics::revision	std::uint64_t
 core/ssg/lsp_sync_client.h	var	ssg::LspDocumentDiagnostics::uri	std::string
-core/ssg/lsp_sync_client.h	var	ssg::LspDocumentSnapshot::revision	Revision
+core/ssg/lsp_sync_client.h	var	ssg::LspDocumentSnapshot::revision	std::uint64_t
 core/ssg/lsp_sync_client.h	var	ssg::LspDocumentSnapshot::text	std::string
 core/ssg/lsp_sync_client.h	var	ssg::LspDocumentSnapshot::uri	std::string
 core/ssg/lsp_sync_client.h	var	ssg::LspDocumentSnapshot::version	std::int64_t
@@ -3625,52 +3502,7 @@ core/ssg/lsp_sync_client.h	var	ssg::LspSyncConfig::maximumReadBytes	std::size_t
 core/ssg/lsp_sync_client.h	var	ssg::LspSyncResult::error	LspSyncError
 core/ssg/lsp_sync_client.h	var	ssg::LspSyncResult::message	std::string
 core/ssg/lsp_sync_client.h	var	ssg::LspSyncViewState::documents	std::vector<LspDocumentDiagnostics>
-core/ssg/lsp_sync_client.h	var	ssg::LspSyncViewState::revision	Revision
-core/ssg/session_snapshot.h	class	ssg::SessionSnapshot
-core/ssg/session_snapshot.h	func	ssg::SessionSnapshot::SessionSnapshot	void (Revision, SessionTopology, SessionSnapshotSections)
-core/ssg/session_snapshot.h	func	ssg::SessionSnapshot::SessionSnapshot	void (SessionSnapshot &&) noexcept
-core/ssg/session_snapshot.h	func	ssg::SessionSnapshot::SessionSnapshot	void (const SessionSnapshot &)
-core/ssg/session_snapshot.h	func	ssg::SessionSnapshot::operator=	SessionSnapshot &(SessionSnapshot &&) noexcept
-core/ssg/session_snapshot.h	func	ssg::SessionSnapshot::operator=	SessionSnapshot &(const SessionSnapshot &)
-core/ssg/session_snapshot.h	func	ssg::SessionSnapshot::operator==	bool (const SessionSnapshot &) const
-core/ssg/session_snapshot.h	func	ssg::SessionSnapshot::revision	Revision () const noexcept
-core/ssg/session_snapshot.h	func	ssg::SessionSnapshot::sections	const SessionSnapshotSections &() const noexcept
-core/ssg/session_snapshot.h	func	ssg::SessionSnapshot::topology	const SessionTopology &() const noexcept
-core/ssg/session_snapshot.h	func	ssg::operator==	bool (const NoticeView &, const NoticeView &)
-core/ssg/session_snapshot.h	func	ssg::operator==	bool (const SessionSnapshotSections &, const SessionSnapshotSections &)
-core/ssg/session_snapshot.h	struct	ssg::NoticeView
-core/ssg/session_snapshot.h	struct	ssg::SessionSnapshotSections
-core/ssg/session_snapshot.h	var	ssg::NoticeView::actions	std::vector<UiAction>
-core/ssg/session_snapshot.h	var	ssg::NoticeView::text	std::string
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::clipboard	ClipboardViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::diff	DiffViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::document	DocumentViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::externalModification	ExternalModificationViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::findReplace	FindReplaceViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::followEdits	FollowEditsViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::history	HistoryViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::keymap	KeymapViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::lspFeatures	LspFeatureViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::lspSync	LspSyncViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::noticeView	std::optional<NoticeView>
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::palette	PaletteViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::promptStatus	PromptStatusViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::search	SearchViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::selection	SelectionSet
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::settings	SettingsViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::syntax	SyntaxViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::tabs	TabViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::textEncoding	TextEncodingViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::theme	ThemeSnapshot
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::tree	TreeViewState
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::uiTree	UiSchema
-core/ssg/session_snapshot.h	var	ssg::SessionSnapshotSections::watcherAvailable	bool
-core/ssg/snapshot.h	func	ssg::DocumentViewState::operator==	bool (const DocumentViewState &) const
-core/ssg/snapshot.h	struct	ssg::DocumentViewState
-core/ssg/snapshot.h	var	ssg::DocumentViewState::caret	ByteOffset
-core/ssg/snapshot.h	var	ssg::DocumentViewState::diffFileIdentity	std::optional<std::string>
-core/ssg/snapshot.h	var	ssg::DocumentViewState::revision	Revision
-core/ssg/snapshot.h	var	ssg::DocumentViewState::text	std::string
+core/ssg/lsp_sync_client.h	var	ssg::LspSyncViewState::revision	std::uint64_t
 core/ssg/ssg.h	var	ssg::kLibraryName	const std::string_view
 core/ssg/types.h	enum	ssg::DocumentMode
 core/ssg/types.h	enumerator	ssg::DocumentMode::Diff
@@ -3686,14 +3518,10 @@ core/ssg/types.h	func	ssg::DocumentPosition::operator==	bool (const DocumentPosi
 core/ssg/types.h	func	ssg::LineIndex::LineIndex	void (uint64_t) noexcept
 core/ssg/types.h	func	ssg::LineIndex::operator<=>	std::strong_ordering (const LineIndex &) const noexcept
 core/ssg/types.h	func	ssg::LineIndex::value	uint64_t () const noexcept
-core/ssg/types.h	func	ssg::Revision::Revision	void (uint64_t) noexcept
-core/ssg/types.h	func	ssg::Revision::operator<=>	std::strong_ordering (const Revision &) const noexcept
-core/ssg/types.h	func	ssg::Revision::value	uint64_t () const noexcept
 core/ssg/types.h	struct	ssg::ByteOffset
 core/ssg/types.h	struct	ssg::CellIndex
 core/ssg/types.h	struct	ssg::DocumentPosition
 core/ssg/types.h	struct	ssg::LineIndex
-core/ssg/types.h	struct	ssg::Revision
 core/ssg/types.h	var	ssg::DocumentPosition::byteOffset	ByteOffset
 core/ssg/types.h	var	ssg::DocumentPosition::cell	CellIndex
 core/ssg/types.h	var	ssg::DocumentPosition::line	LineIndex

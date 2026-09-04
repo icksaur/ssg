@@ -74,7 +74,7 @@ bool isUtf8Boundary(std::string_view text, std::size_t offset) {
            !isContinuation(static_cast<unsigned char>(text[offset]));
 }
 
-TransactionResult failure(DocumentError error, Revision revision,
+TransactionResult failure(DocumentError error, std::uint64_t revision,
                           std::string message) {
     return TransactionResult{error, revision, std::move(message)};
 }
@@ -88,7 +88,7 @@ struct Document::Impl {
         : tree(std::move(text)), mode(documentMode) {}
 
     detail::PieceTree tree;
-    Revision revision{1};
+    std::uint64_t revision{1};
     DocumentMode mode;
     bool dirty{false};
 };
@@ -109,7 +109,7 @@ Document::~Document() = default;
 Document::Document(Document&&) noexcept = default;
 Document& Document::operator=(Document&&) noexcept = default;
 
-Revision Document::revision() const noexcept {
+std::uint64_t Document::revision() const noexcept {
     return impl_->revision;
 }
 
@@ -144,7 +144,7 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
         return failure(DocumentError::EmptyTransaction, currentRevision,
                        "transaction must contain at least one edit");
     }
-    if (currentRevision.value() ==
+    if (currentRevision ==
         std::numeric_limits<std::uint64_t>::max()) {
         return failure(DocumentError::RevisionExhausted, currentRevision,
                        "document revision is exhausted");
@@ -212,7 +212,7 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
         }
     }
 
-    impl_->revision = Revision{currentRevision.value() + 1};
+    impl_->revision = std::uint64_t{currentRevision + 1};
     impl_->dirty = true;
     return TransactionResult{DocumentError::None, impl_->revision, {}};
 }

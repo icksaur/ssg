@@ -2,6 +2,7 @@
 
 #include <ssg/DiffModel.h>
 #include <ssg/GraphemeLayout.h>
+#include <ssg/LineLayoutCache.h>
 #include <ssg/types.h>
 
 #include <cstdint>
@@ -15,7 +16,6 @@
 namespace ssg {
 
 struct DiffFileView;
-class LineLayoutCache;
 
 struct ViewportDimensions {
     uint32_t columns;
@@ -190,6 +190,14 @@ struct ViewportDelta {
     bool operator==(const ViewportDelta&) const noexcept = default;
 };
 
+struct SelectionNavigation {
+    std::uint32_t firstVisualRow = 0;
+    std::uint32_t firstVisualColumn = 0;
+    std::optional<CellIndex> desiredCell;
+
+    bool operator==(const SelectionNavigation&) const noexcept = default;
+};
+
 // A scrollable surface's vertical position, and the operations on it.
 //
 // Owns exactly one durable field: which item is at the top. Geometry
@@ -254,7 +262,8 @@ private:
 };
 
 class Viewport {
-public:    // The scrollbar thumb geometry for a list of `total_rows` items shown in a
+public:
+    // The scrollbar thumb geometry for a list of `total_rows` items shown in a
     // `viewport_rows`-tall window scrolled to `first_row`.  When the content fits
     // (`total_rows <= viewport_rows`) the thumb is hidden: `maximum_first_row`,
     // `thumb_start`, and `thumb_size` collapse to a no-thumb sentinel.  Shared by
@@ -333,6 +342,14 @@ public:    // The scrollbar thumb geometry for a list of `total_rows` items show
     [[nodiscard]] ViewportDelta deriveDelta(
         const ViewportViewState& previous,
         const ViewportViewState& current) const;
+
+private:
+    LineLayoutCache lineCache_;
+    std::optional<std::uint64_t> cellRunsRevision_;
+    std::optional<std::uint64_t> cellRunsDocument_;
+    std::vector<CellRun> cellRuns_;
+
+    friend class EditorSession;
 };
 
 }  // namespace ssg

@@ -37,7 +37,7 @@ std::set<DiffFileId> currentIds(const DiffModel& model) {
 GitDiffScan buildPublishedScan(const std::map<DiffFileId, GitDiffFile>& files,
                                const std::string& baselineIdentity,
                                const std::optional<std::string>& currentBranch,
-                               Revision publishedRevision) {
+                               std::uint64_t publishedRevision) {
     GitDiffScan published{
         .revision = publishedRevision,
         .baselineIdentity = baselineIdentity,
@@ -56,7 +56,7 @@ GitDiffScan buildPublishedScan(const std::map<DiffFileId, GitDiffFile>& files,
 GitDiffSource::GitDiffSource(DiffModel& diffModel, GitDiffConfig config)
     : diffModel_{&diffModel},
       config_{std::move(config)},
-      nextRevision_{Revision{diffModel.viewState().revision.value() + 1}} {}
+      nextRevision_{std::uint64_t{diffModel.viewState().revision + 1}} {}
 
 GitDiffRefreshResult GitDiffSource::refresh(GitRepository& repository) {
     currentBranch_ = repository.currentBranch();
@@ -78,10 +78,10 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
 
     DiffModel stagedDiff = *diffModel_;
     auto stagedFiles = currentFiles_;
-    Revision stagedNextRevision = nextRevision_;
+    std::uint64_t stagedNextRevision = nextRevision_;
     const auto nextMutationRevision = [&stagedNextRevision]() {
         auto current = stagedNextRevision;
-        stagedNextRevision = Revision{stagedNextRevision.value() + 1};
+        stagedNextRevision = std::uint64_t{stagedNextRevision + 1};
         return current;
     };
 
@@ -145,7 +145,7 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
     currentFiles_ = std::move(stagedFiles);
     baselineIdentity_ = scan.baselineIdentity;
     auto publishedRevision = publishedRevision_;
-    publishedRevision_ = Revision{publishedRevision_.value() + 1};
+    publishedRevision_ = std::uint64_t{publishedRevision_ + 1};
     latestAppliedScan_ = buildPublishedScan(currentFiles_, baselineIdentity_,
                                             currentBranch_, publishedRevision);
     publishedBranch_ = currentBranch_;
@@ -164,10 +164,10 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
 
     DiffModel stagedDiff = *diffModel_;
     auto stagedFiles = currentFiles_;
-    Revision stagedNextRevision = nextRevision_;
+    std::uint64_t stagedNextRevision = nextRevision_;
     const auto nextMutationRevision = [&stagedNextRevision]() {
         auto current = stagedNextRevision;
-        stagedNextRevision = Revision{stagedNextRevision.value() + 1};
+        stagedNextRevision = std::uint64_t{stagedNextRevision + 1};
         return current;
     };
 
@@ -242,7 +242,7 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
     currentFiles_ = std::move(stagedFiles);
     baselineIdentity_ = scan.baselineIdentity;
     auto publishedRevision = publishedRevision_;
-    publishedRevision_ = Revision{publishedRevision_.value() + 1};
+    publishedRevision_ = std::uint64_t{publishedRevision_ + 1};
     latestAppliedScan_ = buildPublishedScan(currentFiles_, baselineIdentity_,
                                             currentBranch_, publishedRevision);
     publishedBranch_ = currentBranch_;
@@ -254,7 +254,7 @@ std::optional<GitDiffScan> GitDiffSource::takeBranchOnlyScanIfChanged() {
         return std::nullopt;
     }
     publishedBranch_ = currentBranch_;
-    return GitDiffScan{.revision = Revision{0}, .currentBranch = currentBranch_};
+    return GitDiffScan{.revision = std::uint64_t{0}, .currentBranch = currentBranch_};
 }
 
 std::optional<GitDiffScan> GitDiffSource::latestAppliedScan() const {

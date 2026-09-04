@@ -110,13 +110,13 @@ TEST(scriptedServerCoversInitializeSyncAndShutdownLifecycle) {
     ASSERT_TRUE(server.received_payloads().back().find(
                     "\"method\":\"initialized\"") != std::string::npos);
 
-    ASSERT_EQ(errorOf(client.openDocument(kUri, "cpp", Revision{40}, "one")),
+    ASSERT_EQ(errorOf(client.openDocument(kUri, "cpp", std::uint64_t{40}, "one")),
               LspSyncError::None);
     ASSERT_EQ(versionOf(client), 1);
-    ASSERT_EQ(errorOf(client.changeDocument(kUri, Revision{41}, "two")),
+    ASSERT_EQ(errorOf(client.changeDocument(kUri, std::uint64_t{41}, "two")),
               LspSyncError::None);
     ASSERT_EQ(versionOf(client), 2);
-    ASSERT_EQ(errorOf(client.changeDocument(kUri, Revision{41}, "stale")),
+    ASSERT_EQ(errorOf(client.changeDocument(kUri, std::uint64_t{41}, "stale")),
               LspSyncError::StaleDocument);
     ASSERT_EQ(versionOf(client), 2);
     ASSERT_EQ(errorOf(client.closeDocument(kUri)), LspSyncError::None);
@@ -138,7 +138,7 @@ TEST(diagnosticsAreVersionCheckedBoundedCoalescedAndReplayable) {
     ASSERT_EQ(errorOf(client.initialize("file:///workspace")), LspSyncError::None);
     server.queue_payload(ssg::test::response(1));
     ASSERT_EQ(errorOf(client.poll()), LspSyncError::None);
-    ASSERT_EQ(errorOf(client.openDocument(kUri, "cpp", Revision{10}, "abc\n")),
+    ASSERT_EQ(errorOf(client.openDocument(kUri, "cpp", std::uint64_t{10}, "abc\n")),
               LspSyncError::None);
 
     const std::string one =
@@ -148,10 +148,10 @@ TEST(diagnosticsAreVersionCheckedBoundedCoalescedAndReplayable) {
     ASSERT_EQ(errorOf(client.poll()), LspSyncError::None);
     const auto accepted = client.viewState();
     ASSERT_EQ(accepted.documents.size(), 1U);
-    ASSERT_EQ(accepted.documents[0].revision, Revision{10});
+    ASSERT_EQ(accepted.documents[0].revision, std::uint64_t{10});
     ASSERT_EQ(accepted.documents[0].diagnostics[0].message, "bad");
 
-    ASSERT_EQ(errorOf(client.changeDocument(kUri, Revision{11}, "abcd\n")),
+    ASSERT_EQ(errorOf(client.changeDocument(kUri, std::uint64_t{11}, "abcd\n")),
               LspSyncError::None);
     server.queue_payload(ssg::test::diagnostics(kUri, 1, "[]"));
     ASSERT_EQ(errorOf(client.poll()), LspSyncError::StaleDiagnostics);
@@ -219,7 +219,7 @@ TEST(writeTimeoutDoesNotAdvanceLifecycleOrDocumentState) {
     server.queue_payload(ssg::test::response(1));
     ASSERT_EQ(errorOf(client.poll()), LspSyncError::None);
     server.timeout_next_write();
-    ASSERT_EQ(errorOf(client.openDocument(kUri, "cpp", Revision{1}, "x")),
+    ASSERT_EQ(errorOf(client.openDocument(kUri, "cpp", std::uint64_t{1}, "x")),
               LspSyncError::Timeout);
     ASSERT_FALSE(client.documentVersion(kUri).has_value());
 }
@@ -232,11 +232,11 @@ TEST(softDiagnosticRejectionDoesNotDropLaterFramedMessages) {
     server.queue_payload(ssg::test::response(1));
     ASSERT_EQ(errorOf(client.poll()), LspSyncError::None);
     const std::string secondUri = "file:///workspace/other.cpp";
-    ASSERT_EQ(errorOf(client.openDocument(kUri, "cpp", Revision{1}, "a")),
+    ASSERT_EQ(errorOf(client.openDocument(kUri, "cpp", std::uint64_t{1}, "a")),
               LspSyncError::None);
-    ASSERT_EQ(errorOf(client.openDocument(secondUri, "cpp", Revision{2}, "b")),
+    ASSERT_EQ(errorOf(client.openDocument(secondUri, "cpp", std::uint64_t{2}, "b")),
               LspSyncError::None);
-    ASSERT_EQ(errorOf(client.changeDocument(kUri, Revision{3}, "aa")),
+    ASSERT_EQ(errorOf(client.changeDocument(kUri, std::uint64_t{3}, "aa")),
               LspSyncError::None);
 
     const std::string valid =

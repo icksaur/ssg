@@ -126,9 +126,8 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
             // A View is opaque: it carries only its id + surface. Any widget-only
             // field is semantic state no View consumer reads, so it is rejected
             // rather than silently ignored.
-            if (w.value || w.checked || w.width || w.role || w.command ||
-                !w.sigil.empty() || w.rank != 0 || w.keep ||
-                w.overflow != Overflow::None) {
+            if (w.width || w.role || w.command || !w.sigil.empty() ||
+                w.rank != 0 || w.keep || w.overflow != Overflow::None) {
                 error = here + ": a \"view\" leaf carries only an id and a surface";
                 return;
             }
@@ -138,8 +137,8 @@ void walk(const UiNode& node, std::string path, std::set<std::string>& seen,
             // View it carries only its id, but it has intrinsic content (a variable
             // action list), so unlike a View it may be Auto-sized. Any widget-only
             // field is semantic state no consumer reads, so it is rejected.
-            if (w.value || w.checked || w.width || w.role || w.command ||
-                w.surface || !w.sigil.empty() || w.rank != 0 || w.keep ||
+            if (w.width || w.role || w.command || w.surface ||
+                !w.sigil.empty() || w.rank != 0 || w.keep ||
                 w.overflow != Overflow::None) {
                 error = here + ": a \"status_actions\" leaf carries only an id";
                 return;
@@ -178,106 +177,6 @@ bool isUiNodeVisible(const UiSchema& schema, const UiNodeId& id) noexcept {
 
 FocusTarget effectiveUiFocus(const UiSchema& schema) noexcept {
     return *findUiNode(schema, schema.focusPath.back())->focusContext;
-}
-
-namespace {
-
-bool truthy(std::string_view value) { return value == "true"; }
-
-struct Sources {
-    std::string value;
-    std::string providerLabel;
-    std::optional<std::string> inheritedCommand;
-    std::optional<bool> active;
-    bool fromProvider = false;
-};
-
-Sources resolveSources(const WidgetDescriptor& widget,
-                       const WidgetProviderResolver& resolveProvider) {
-    Sources sources;
-    if (!widget.value) return sources;
-    if (!widget.value->isProvider) {
-        sources.value = widget.value->literal;
-        return sources;
-    }
-
-    sources.fromProvider = true;
-    if (const auto resolved = resolveProvider(widget.value->provider)) {
-        sources.value = resolved->value;
-        sources.providerLabel = resolved->accessibleLabel;
-        sources.inheritedCommand = resolved->commandId;
-        sources.active = resolved->active;
-    }
-    return sources;
-}
-
-bool resolveChecked(const WidgetDescriptor& widget,
-                    const WidgetProviderResolver& resolveProvider) {
-    if (!widget.checked) return false;
-    if (!widget.checked->isProvider) {
-        return truthy(widget.checked->literal);
-    }
-    const auto resolved = resolveProvider(widget.checked->provider);
-    return resolved && truthy(resolved->value);
-}
-
-SemanticRole effectiveRole(const WidgetDescriptor& widget,
-                           SemanticRole defaultRole) {
-    if (widget.role) {
-        if (const auto parsed = semanticRoleFromName(*widget.role)) {
-            return *parsed;
-        }
-    }
-    return defaultRole;
-}
-
-SemanticRole defaultRoleForArea(const UiNodeId& id) {
-    if (id.value() == kHeaderNodeId) return SemanticRole::Header;
-    if (id.value() == kFooterNodeId) return SemanticRole::Footer;
-    return SemanticRole::Text;
-}
-
-void resolveNode(UiNode& node, const WidgetProviderResolver& resolveProvider,
-                 SemanticRole defaultRole) {
-    if (auto* leaf = std::get_if<UiLeaf>(&node.content)) {
-        node.resolved = resolveUiLeafState(leaf->widget, resolveProvider, defaultRole);
-        return;
-    }
-    if (auto* container = std::get_if<UiContainer>(&node.content)) {
-        for (auto& child : container->children) {
-            resolveNode(child, resolveProvider, defaultRole);
-        }
-    }
-}
-
-}  // namespace
-
-std::optional<UiLeafState> resolveUiLeafState(
-    const WidgetDescriptor& widget,
-    const WidgetProviderResolver& resolveProvider,
-    SemanticRole defaultRole) {
-    const Sources sources = resolveSources(widget, resolveProvider);
-    const std::string label =
-        sources.fromProvider ? sources.providerLabel : sources.value;
-    const std::optional<std::string> command =
-        widget.command ? widget.command : sources.inheritedCommand;
-    const SemanticRole role = effectiveRole(widget, defaultRole);
-
-    switch (widget.kind) {
-    case WidgetKind::Label:
-    case WidgetKind::Field:
-        if (sources.value.empty() || label.empty()) return std::nullopt;
-        return UiLeafState{sources.value, label, command, std::nullopt, role};
-    case WidgetKind::Checkbox:
-        return UiLeafState{sources.value, label, command,
-                           resolveChecked(widget, resolveProvider), role};
-    case WidgetKind::TextInput:
-        if (!sources.fromProvider || label.empty()) return std::nullopt;
-        return UiLeafState{sources.value, label, command, std::nullopt, role,
-                           sources.active};
-    default:
-        return std::nullopt;
-    }
 }
 
 namespace {
@@ -346,17 +245,6 @@ void setUiNodeVisible(UiSchema& schema, const UiNodeId& id, bool visible) {
         throw std::invalid_argument("setUiNodeVisible: unknown node id");
     }
     node->visible = visible;
-}
-
-UiSchema resolveUiTree(const UiSchema& schema,
-                      const WidgetProviderResolver& resolveProvider) {
-    UiSchema result = schema;
-    if (auto* container = std::get_if<UiContainer>(&result.root.content)) {
-        for (auto& area : container->children) {
-            resolveNode(area, resolveProvider, defaultRoleForArea(area.id));
-        }
-    }
-    return result;
 }
 
 }  // namespace ssg

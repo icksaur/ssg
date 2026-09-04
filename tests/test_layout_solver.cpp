@@ -593,7 +593,7 @@ TEST(uiFrameRejectsUnrepresentableIntrinsicExtent) {
 
 TEST(generatedWholeScreenSolvesEveryPresentNodeExactlyOnce) {
     UiSchema schema{
-        assembleWholeScreen({}, "help.open", StyleDimensions{}, "> ")
+        assembleWholeScreen("help.open", StyleDimensions{}, "> ")
             .root};
     auto validation = validateUiSchema(schema);
     ASSERT_TRUE(validation.ok());

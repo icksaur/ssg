@@ -27,40 +27,39 @@ CommandHandlerResult lspWorkspaceCommand(EditorSession::Impl& runtime, std::any 
 
 // Renaming a symbol across the workspace.  The new name arrives in-process from
 // the prompt that collected it.
-void registerLspWorkspaceEditCommands(CommandCatalog& builder,
+void registerLspWorkspaceEditCommands(CommandCatalog& catalog,
                                       EditorSession::Impl& runtime) {
-    builder.add(CommandSpecBuilder{"rename.symbol"}
-                    .owner("lsp-workspace-edits")
-                    .summary("Symbol")
-                    .mutates()
-                    .lua()
-                    .inProcessHandler<std::string>(
-                        [&runtime](CommandContext&, std::string const& name) {
-                            return runtime.runTransaction([&] {
-                                return lspWorkspaceCommand(runtime,
-                                                           std::any{name});
-                            });
-                        }));
+    catalog.add(CommandSpec{
+        .id = "rename.symbol",
+        .owner = "lsp-workspace-edits",
+        .summary = "Symbol",
+        .effect = CommandEffect::Mutation,
+        .luaApi = true,
+        .binding = bindInProcessHandler<std::string>(
+            [&runtime](CommandContext&, std::string const& name) {
+                return lspWorkspaceCommand(runtime, std::any{name});
+            }),
+    });
 }
 
 // Go-to, completion and hover.  None takes an argument: each acts on wherever
 // the cursor already is.
-void registerLspFeatureCommands(CommandCatalog& builder,
+void registerLspFeatureCommands(CommandCatalog& catalog,
                                 EditorSession::Impl& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary) {
         auto const name = id;
-        auto spec = CommandSpecBuilder{std::move(id)}
-                        .owner("lsp-language-features")
-                        .summary(std::move(summary))
-                        .mutates()
-                        .lua()
-                        .handler([&runtime, name](CommandContext&) {
-                            return runtime.runTransaction([&] {
-                                return lspFeatureCommand(runtime, name);
-                            });
-                        });
-        if (!label.empty()) spec.label(std::move(label));
-        builder.add(std::move(spec));
+        CommandSpec spec{
+            .id = std::move(id),
+            .owner = "lsp-language-features",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+            .binding = bindNoArgumentHandler([&runtime, name](CommandContext&) {
+                return lspFeatureCommand(runtime, name);
+            }),
+        };
+        if (!label.empty()) spec.label = std::move(label);
+        catalog.add(std::move(spec));
     };
     declare("goto.definition", "Go to Definition", "Go to Definition");
     declare("goto.reference", "", "Reference");
@@ -73,9 +72,9 @@ void registerLspFeatureCommands(CommandCatalog& builder,
     declare("hover.dismiss", "", "Dismiss");
 }
 
-void bindRuntimeLanguageServices(CommandCatalog& builder, EditorSession::Impl& runtime) {
-    registerLspWorkspaceEditCommands(builder, runtime);
-    registerLspFeatureCommands(builder, runtime);
+void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+    registerLspWorkspaceEditCommands(catalog, runtime);
+    registerLspFeatureCommands(catalog, runtime);
 }
 
 } // namespace ssg

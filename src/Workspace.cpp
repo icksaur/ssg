@@ -754,7 +754,7 @@ TransactionResult Workspace::apply(
     FileDocumentId id, const EditTransaction& transaction) {
     auto* entry = impl_->find(id);
     if (!entry) {
-        return {DocumentError::InvalidRange, Revision{0},
+        return {DocumentError::InvalidRange, std::uint64_t{0},
                 "workspace document does not exist"};
     }
     const auto result = entry->document.apply(transaction);

@@ -19,7 +19,7 @@ struct RegisterData {
     std::string plainText;
 };
 
-ClipboardResult failure(ClipboardError error, Revision revision,
+ClipboardResult failure(ClipboardError error, std::uint64_t revision,
                         std::string message) {
     return {error, revision, std::nullopt, std::nullopt, false,
             std::move(message)};
@@ -216,7 +216,7 @@ struct ClipboardRegister::Impl {
     RegisterData registerData;
     std::optional<ClipboardWrite> systemWrite;
 
-    std::optional<ClipboardWrite> makeWrite(Revision revision,
+    std::optional<ClipboardWrite> makeWrite(std::uint64_t revision,
                                             std::string text) {
         if (nextRequestId == std::numeric_limits<std::uint64_t>::max()) {
             return std::nullopt;
@@ -337,7 +337,7 @@ ClipboardResult ClipboardRegister::cut(Document& document,
     auto resultingText = snapshot.text;
     std::optional<SelectionSet> after = selections;
     bool changed = !ranges.empty();
-    Revision revision = snapshot.revision;
+    std::uint64_t revision = snapshot.revision;
 
     if (changed) {
         std::vector<TextEdit> edits;

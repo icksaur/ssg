@@ -1,8 +1,9 @@
 #include "editor_session_internal.h"
 
-#include "../file_commands.h"
+#include <ssg/FileCommands.h>
 
 #include <algorithm>
+#include <utility>
 
 namespace ssg {
 namespace {
@@ -225,8 +226,8 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             // The tab's document no longer has backing bytes, so leaving it
             // open would offer editing and saving of a file that is gone.
             // Dropped rather than closed: deleteFile has already removed the
-            // workspace entry, so the close lifecycle would fail on a missing
-            // document and strand the tab. That lifecycle also owns the
+            // workspace entry, so the ordinary close path would fail on a
+            // missing document and strand the tab. That path also owns the
             // per-document runtime state, so bypassing it means discarding
             // that state here or it accumulates for a document nobody can
             // reach again.
@@ -248,8 +249,8 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
 }
 
 CommandHandlerResult bindTab(EditorSession::Impl& runtime,
-                              TabCommand command,
-                              std::any const& payload) {
+                               TabCommand command,
+                               std::any const& payload) {
     auto active = runtime.tabs.viewState().active;
     auto tab = payloadAs<TabId>(payload) ? *payloadAs<TabId>(payload) : active.value_or(TabId{0});
     const auto activeTabBefore = runtime.tabs.viewState().active;
@@ -258,12 +259,85 @@ CommandHandlerResult bindTab(EditorSession::Impl& runtime,
     // a close that changes the active tab / reopen). move_left/move_right and
     // close_others keep the same active document and must NOT snap the scroll.
     auto const documentBefore = runtime.activeDocumentId();
+    const auto closesTab = [](const TabState& state,
+                              const TabLifecycleResult& result) {
+        return result.accepted() && (!state.dirty || result.durable) &&
+               (result.compensation.has_value() || result.ephemeral);
+    };
+    std::vector<TabId> alreadyClosed;
+    const auto closeOutcomeFor = [&](const TabState& state) {
+        return TabCloseOutcome{
+            state.id,
+            runtime.closeTab(state, std::chrono::milliseconds{100},
+                             alreadyClosed),
+        };
+    };
     TabResult result;
     switch (command) {
-        case TabCommand::Close: result = runtime.tabs.close(tab, std::chrono::milliseconds{100}); break;
-        case TabCommand::CloseOthers: result = runtime.tabs.closeOthers(tab, std::chrono::milliseconds{100}); break;
-        case TabCommand::CloseAll: result = runtime.tabs.closeAll(std::chrono::milliseconds{100}); break;
-        case TabCommand::ReopenClosed: result = runtime.tabs.reopenClosed(); break;
+        case TabCommand::Close: {
+            const auto found = std::find_if(
+                runtime.tabs.viewState().tabs.begin(), runtime.tabs.viewState().tabs.end(),
+                [&](const TabState& candidate) { return candidate.id == tab; });
+            if (found == runtime.tabs.viewState().tabs.end()) {
+                result = {TabError::NotFound, "tab is not open", {}, {}};
+                break;
+            }
+            auto outcome = runtime.closeTab(*found, std::chrono::milliseconds{100});
+            result = runtime.tabs.close(tab, std::move(outcome));
+            break;
+        }
+        case TabCommand::CloseOthers: {
+            const auto kept = std::find_if(
+                runtime.tabs.viewState().tabs.begin(), runtime.tabs.viewState().tabs.end(),
+                [&](const TabState& candidate) { return candidate.id == tab; });
+            if (kept == runtime.tabs.viewState().tabs.end()) {
+                result = {TabError::NotFound, "tab is not open", {}, {}};
+                break;
+            }
+            std::vector<TabState> targets;
+            for (const auto& candidate : runtime.tabs.viewState().tabs) {
+                if (candidate.id != tab) {
+                    targets.push_back(candidate);
+                }
+            }
+            std::vector<TabCloseOutcome> outcomes;
+            outcomes.reserve(targets.size());
+            for (const auto& target : targets) {
+                auto outcome = closeOutcomeFor(target);
+                if (closesTab(target, outcome.result)) {
+                    alreadyClosed.push_back(target.id);
+                }
+                outcomes.push_back(std::move(outcome));
+            }
+            result = runtime.tabs.closeOthers(tab, std::move(outcomes));
+            break;
+        }
+        case TabCommand::CloseAll: {
+            std::vector<TabState> targets = runtime.tabs.viewState().tabs;
+            std::vector<TabCloseOutcome> outcomes;
+            outcomes.reserve(targets.size());
+            for (const auto& target : targets) {
+                auto outcome = closeOutcomeFor(target);
+                if (closesTab(target, outcome.result)) {
+                    alreadyClosed.push_back(target.id);
+                }
+                outcomes.push_back(std::move(outcome));
+            }
+            result = runtime.tabs.closeAll(std::move(outcomes));
+            break;
+        }
+        case TabCommand::ReopenClosed: {
+            auto reopened = runtime.tabs.beginReopenClosed();
+            if (auto* immediate = std::get_if<TabResult>(&reopened)) {
+                result = std::move(*immediate);
+                break;
+            }
+            auto request = std::get<TabReopenRequest>(reopened);
+            auto outcome = runtime.reopenTab(request.tab, request.compensation);
+            result = runtime.tabs.finishReopenClosed(std::move(request),
+                                                     std::move(outcome));
+            break;
+        }
         case TabCommand::Next: result = runtime.tabs.next(); break;
         case TabCommand::Previous: result = runtime.tabs.previous(); break;
         case TabCommand::Activate: result = runtime.tabs.activate(tab); break;
@@ -382,10 +456,11 @@ CommandHandlerResult EditorSession::Impl::activateDocument(FileDocumentId docume
                                      scratch.durabilityState().kind);
     if (!result.accepted()) return failure(tabMessage(result));
     // Closed only after the open succeeded, so a failed open never costs the
-    // buffer the user still has.  TabManager::close takes the tab's ID; the
-    // lifecycle hook it calls is what retires the workspace document.
+    // buffer the user still has. closeTab retires the workspace document and
+    // TabManager consumes the completed outcome.
     if (disposableScratch) {
-        (void)tabs.close(disposableScratch->id, std::chrono::milliseconds{100});
+        auto outcome = closeTab(*disposableScratch, std::chrono::milliseconds{100});
+        (void)tabs.close(disposableScratch->id, std::move(outcome));
     }
     resetSelectionForActiveDocument();
     refreshSyntax();
@@ -403,7 +478,7 @@ CommandHandlerResult EditorSession::Impl::activateDocument(FileDocumentId docume
 // runtime-resolved id and so stays in-process (that id means nothing to a remote
 // client); the payload-less commands are the keyboard route, reachable in the
 // external focus context.
-void registerExternalModificationCommands(CommandCatalog& builder,
+void registerExternalModificationCommands(CommandCatalog& catalog,
                                           EditorSession::Impl& runtime) {
     auto applyAction = [&runtime](
                            ExternalAction action) -> CommandHandlerResult {
@@ -471,129 +546,143 @@ void registerExternalModificationCommands(CommandCatalog& builder,
                 diffFile->get(), NavigationClass::Programmatic);
     };
     auto spec = [](std::string id, std::string summary) {
-        return CommandSpecBuilder{std::move(id)}
-            .owner("external-modification-flow")
-            .summary(std::move(summary))
-            .mutates()
-            .lua();
+        return CommandSpec{
+            .id = std::move(id),
+            .owner = "external-modification-flow",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+        };
     };
     auto action = [&](std::string id, std::string summary,
                       ExternalAction which) {
-        builder.add(spec(std::move(id), std::move(summary))
-                        .handler([&runtime, applyAction, which](CommandContext&) {
-                            return runtime.runTransaction(
-                                [&] { return applyAction(which); });
-                        }));
+        auto built = spec(std::move(id), std::move(summary));
+        built.binding = bindNoArgumentHandler(
+            [&runtime, applyAction, which](CommandContext&) {
+                return applyAction(which);
+            });
+        catalog.add(std::move(built));
     };
     action("external.reload", "Reload", ExternalAction::Reload);
     action("external.keep_buffer", "Keep Buffer", ExternalAction::KeepBuffer);
     action("external.open_diff", "Open Diff", ExternalAction::OpenDiff);
 
-    builder.add(
-        spec("external.invoke_action", "Invoke External Change Action")
-            .handler<ExternalActionInvocation>(
-                [&runtime, applyAction](
-                    CommandContext&,
-                    ExternalActionInvocation const& invocation) {
-                    return runtime.runTransaction([&] {
-                        if (!runtime.external.hasFile(invocation.fileId)) {
-                            return failure(
-                                "external change is unavailable");
-                        }
-                        (void)runtime.external.selectFile(
-                            invocation.fileId);
-                        return applyAction(invocation.action);
-                    });
-                }));
+    {
+        auto built = spec("external.invoke_action", "Invoke External Change Action");
+        built.binding = bindWireHandler<ExternalActionInvocation>(
+            [&runtime, applyAction](
+                CommandContext&, ExternalActionInvocation const& invocation) {
+                if (!runtime.external.hasFile(invocation.fileId)) {
+                    return failure(
+                        "external change is unavailable");
+                }
+                (void)runtime.external.selectFile(
+                    invocation.fileId);
+                return applyAction(invocation.action);
+            });
+        catalog.add(std::move(built));
+    }
 
-    builder.add(spec("external.select_next", "Select Next External Change")
-                    .handler([&runtime](CommandContext&) {
-                        return runtime.runTransaction([&] {
-                            (void)runtime.external.selectNext();
-                            return success();
-                        });
-                    }));
-    builder.add(spec("external.select_previous",
-                     "Select Previous External Change")
-                    .handler([&runtime](CommandContext&) {
-                        return runtime.runTransaction([&] {
-                            (void)runtime.external.selectPrevious();
-                            return success();
-                        });
-                    }));
+    {
+        auto built = spec("external.select_next", "Select Next External Change");
+        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+            (void)runtime.external.selectNext();
+            return success();
+        });
+        catalog.add(std::move(built));
+    }
+    {
+        auto built = spec("external.select_previous",
+                          "Select Previous External Change");
+        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+            (void)runtime.external.selectPrevious();
+            return success();
+        });
+        catalog.add(std::move(built));
+    }
     // The pointer path's select-then-act target: a runtime-minted id, so in-process.
-    builder.add(spec("external.select", "Select External Change")
-                    .inProcessHandler<DiffFileId>(
-                        [&runtime](CommandContext&, DiffFileId const& file) {
-                            if (!runtime.external.hasFile(file))
-                                return failure("external change is unavailable");
-                            return runtime.runTransaction([&] {
-                                (void)runtime.external.selectFile(file);
-                                return success();
-                            });
-                        }));
+    {
+        auto built = spec("external.select", "Select External Change");
+        built.binding = bindInProcessHandler<DiffFileId>(
+            [&runtime](CommandContext&, DiffFileId const& file) {
+                if (!runtime.external.hasFile(file))
+                    return failure("external change is unavailable");
+                (void)runtime.external.selectFile(file);
+                return success();
+            });
+        catalog.add(std::move(built));
+    }
     // The keyboard-first entry point (global, present-gated, idempotent) and its
     // return. focus pushes the external capture only if not already held; return
     // pops it, without overloading prompt.cancel.
-    builder.add(spec("external.focus", "Focus External Change Bar")
-                    .handler([&runtime](CommandContext&) {
-                        return runtime.runTransaction([&] {
-                            (void)runtime.interaction.captureExternalFocus();
-                            return success();
-                        });
-                    }));
-    builder.add(spec("external.focus_return", "Leave External Change Bar")
-                    .handler([&runtime](CommandContext&) {
-                        return runtime.runTransaction([&] {
-                            (void)runtime.interaction.releaseExternalFocus();
-                            return success();
-                        });
-                    }));
+    {
+        auto built = spec("external.focus", "Focus External Change Bar");
+        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+            (void)runtime.interaction.captureExternalFocus();
+            return success();
+        });
+        catalog.add(std::move(built));
+    }
+    {
+        auto built = spec("external.focus_return", "Leave External Change Bar");
+        built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+            (void)runtime.interaction.releaseExternalFocus();
+            return success();
+        });
+        catalog.add(std::move(built));
+    }
 }
 
 // How the active document is decoded and written back: its text encoding, its
 // line endings, and whether it ends with a newline.
-void registerEncodingCommands(CommandCatalog& builder,
+void registerEncodingCommands(CommandCatalog& catalog,
                               EditorSession::Impl& runtime) {
     auto declare = [](std::string id, std::string summary) {
-        return CommandSpecBuilder{std::move(id)}
-            .owner("encoding-eol")
-            .summary(std::move(summary))
-            .mutates()
-            .lua();
+        return CommandSpec{
+            .id = std::move(id),
+            .owner = "encoding-eol",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+        };
     };
     auto run = [&runtime](std::string_view id, std::any payload) {
-        return runtime.runTransaction(
-            [&] { return bindEncoding(runtime, id, payload); });
+        return bindEncoding(runtime, id, payload);
     };
 
-    builder.add(declare("file.reopen_with_encoding", "Reopen With Encoding")
-                    .handler<ReopenWithEncodingArguments>(
-                        [run](CommandContext&,
-                              ReopenWithEncodingArguments const& arguments) {
-                            return run("file.reopen_with_encoding",
-                                       std::any{arguments});
-                        }));
-    builder.add(declare("file.set_encoding", "Set Encoding")
-                    .handler<SetEncodingArguments>(
-                        [run](CommandContext&,
-                              SetEncodingArguments const& arguments) {
-                            return run("file.set_encoding", std::any{arguments});
-                        }));
-    builder.add(declare("file.set_line_ending", "Set Line Ending")
-                    .handler<SetLineEndingArguments>(
-                        [run](CommandContext&,
-                              SetLineEndingArguments const& arguments) {
-                            return run("file.set_line_ending",
-                                       std::any{arguments});
-                        }));
-    builder.add(declare("file.set_final_newline", "Set Final Newline")
-                    .handler<SetFinalNewlineArguments>(
-                        [run](CommandContext&,
-                              SetFinalNewlineArguments const& arguments) {
-                            return run("file.set_final_newline",
-                                       std::any{arguments});
-                        }));
+    {
+        auto built = declare("file.reopen_with_encoding", "Reopen With Encoding");
+        built.binding = bindWireHandler<ReopenWithEncodingArguments>(
+            [run](CommandContext&,
+                  ReopenWithEncodingArguments const& arguments) {
+                return run("file.reopen_with_encoding", std::any{arguments});
+            });
+        catalog.add(std::move(built));
+    }
+    {
+        auto built = declare("file.set_encoding", "Set Encoding");
+        built.binding = bindWireHandler<SetEncodingArguments>(
+            [run](CommandContext&, SetEncodingArguments const& arguments) {
+                return run("file.set_encoding", std::any{arguments});
+            });
+        catalog.add(std::move(built));
+    }
+    {
+        auto built = declare("file.set_line_ending", "Set Line Ending");
+        built.binding = bindWireHandler<SetLineEndingArguments>(
+            [run](CommandContext&, SetLineEndingArguments const& arguments) {
+                return run("file.set_line_ending", std::any{arguments});
+            });
+        catalog.add(std::move(built));
+    }
+    {
+        auto built = declare("file.set_final_newline", "Set Final Newline");
+        built.binding = bindWireHandler<SetFinalNewlineArguments>(
+            [run](CommandContext&, SetFinalNewlineArguments const& arguments) {
+                return run("file.set_final_newline", std::any{arguments});
+            });
+        catalog.add(std::move(built));
+    }
 }
 
 // Opening, saving, renaming and deleting files.
@@ -601,33 +690,31 @@ void registerEncodingCommands(CommandCatalog& builder,
 // file.open_dropped_content is the only file command not offered to Lua:
 // content dropped by a local window manager arrives outside any script's
 // reach.
-void registerFileCommands(CommandCatalog& builder,
+void registerFileCommands(CommandCatalog& catalog,
                           EditorSession::Impl& runtime) {
     auto spec = [](std::string id, std::string summary) {
-        return CommandSpecBuilder{std::move(id)}
-            .owner("file-commands")
-            .summary(std::move(summary))
-            .mutates();
+        return CommandSpec{
+            .id = std::move(id),
+            .owner = "file-commands",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+        };
     };
     // Most of these act on a path when given one and on the active document
     // otherwise, so the path is an optional in-process argument.  A remote
     // client cannot send one: opening an arbitrary path is a local decision.
     auto declare = [&](std::string id, std::string label, std::string summary,
                        FileCommand command) {
-        auto built =
-            spec(std::move(id), std::move(summary))
-                .lua()
-                .optionalInProcessHandler<std::string>(
-                    [&runtime, command](CommandContext&,
-                                        std::optional<std::string> const& path) {
-                        return runtime.runTransaction([&] {
-                            return bindFile(
-                                runtime, command,
+        auto built = spec(std::move(id), std::move(summary));
+        built.luaApi = true;
+        built.binding = bindOptionalInProcessHandler<std::string>(
+            [&runtime, command](CommandContext&,
+                                std::optional<std::string> const& path) {
+                return bindFile(runtime, command,
                                 path ? std::any{*path} : std::any{});
-                        });
-                    });
-        if (!label.empty()) built.label(std::move(label));
-        builder.add(std::move(built));
+            });
+        if (!label.empty()) built.label = std::move(label);
+        catalog.add(std::move(built));
     };
 
     declare("workspace.open_directory", "", "Open Directory",
@@ -635,18 +722,18 @@ void registerFileCommands(CommandCatalog& builder,
     declare("file.new", "New File", "New File", FileCommand::Create);
     declare("file.open", "Open File", "Open File", FileCommand::Open);
     // Chooses from the recent list by position, not by path.
-    builder.add(spec("file.open_recent", "Open Recent")
-                    .lua()
-                    .optionalInProcessHandler<std::size_t>(
-                        [&runtime](CommandContext&,
-                                   std::optional<std::size_t> const& index) {
-                            return runtime.runTransaction([&] {
-                                return bindFile(
-                                    runtime,
-                                    FileCommand::OpenRecent,
-                                    index ? std::any{*index} : std::any{});
-                            });
-                        }));
+    {
+        auto built = spec("file.open_recent", "Open Recent");
+        built.luaApi = true;
+        built.binding = bindOptionalInProcessHandler<std::size_t>(
+            [&runtime](CommandContext&,
+                       std::optional<std::size_t> const& index) {
+                return bindFile(
+                    runtime, FileCommand::OpenRecent,
+                    index ? std::any{*index} : std::any{});
+            });
+        catalog.add(std::move(built));
+    }
     declare("file.save", "Save File", "Save File", FileCommand::Save);
     declare("file.save_all", "Save All Files", "Save All Files",
             FileCommand::SaveAll);
@@ -658,16 +745,16 @@ void registerFileCommands(CommandCatalog& builder,
     declare("file.new_directory", "", "New Directory",
             FileCommand::NewDirectory);
 
-    builder.add(spec("file.open_dropped_content", "Open Dropped Content")
-                    .handler<DroppedContentArguments>(
-                        [&runtime](CommandContext&,
-                                   DroppedContentArguments const& arguments) {
-                            return runtime.runTransaction([&] {
-                                return bindFile(runtime,
-                                                FileCommand::OpenDroppedContent,
-                                                std::any{arguments});
-                            });
-                        }));
+    {
+        auto built = spec("file.open_dropped_content", "Open Dropped Content");
+        built.binding = bindWireHandler<DroppedContentArguments>(
+            [&runtime](CommandContext&,
+                       DroppedContentArguments const& arguments) {
+                return bindFile(runtime, FileCommand::OpenDroppedContent,
+                                std::any{arguments});
+            });
+        catalog.add(std::move(built));
+    }
 }
 
 // Tabs.
@@ -676,26 +763,25 @@ void registerFileCommands(CommandCatalog& builder,
 // name none -- so each takes an OPTIONAL in-process tab id.  Declaring them as
 // taking nothing dropped that id and made tab.activate act on whichever tab
 // happened to be active.
-void registerTabCommands(CommandCatalog& builder,
+void registerTabCommands(CommandCatalog& catalog,
                          EditorSession::Impl& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary,
                        TabCommand command) {
-        auto built =
-            CommandSpecBuilder{std::move(id)}
-                .owner("tab-management")
-                .summary(std::move(summary))
-                .mutates()
-                .lua()
-                .optionalHandler<TabId>(
-                    [&runtime, command](CommandContext&,
-                                        std::optional<TabId> const& tab) {
-                        return runtime.runTransaction([&] {
-                            return bindTab(runtime, command,
-                                           tab ? std::any{*tab} : std::any{});
-                        });
-                    });
-        if (!label.empty()) built.label(std::move(label));
-        builder.add(std::move(built));
+        CommandSpec built{
+            .id = std::move(id),
+            .owner = "tab-management",
+            .summary = std::move(summary),
+            .effect = CommandEffect::Mutation,
+            .luaApi = true,
+            .binding = bindOptionalWireHandler<TabId>(
+                [&runtime, command](CommandContext&,
+                                    std::optional<TabId> const& tab) {
+                    return bindTab(runtime, command,
+                                   tab ? std::any{*tab} : std::any{});
+                }),
+        };
+        if (!label.empty()) built.label = std::move(label);
+        catalog.add(std::move(built));
     };
     declare("tab.close", "Close Tab", "Close Tab", TabCommand::Close);
     declare("tab.close_others", "Close Other Tabs", "Close Other Tabs",
@@ -716,49 +802,49 @@ void registerTabCommands(CommandCatalog& builder,
 // live diff of the current buffer (the draft) against its current disk content,
 // so a conflict can be inspected before it is resolved. In-process only: it
 // opens a live diff tab, a concept with no remote representation.
-void registerDraftCommands(CommandCatalog& builder,
+void registerDraftCommands(CommandCatalog& catalog,
                            EditorSession::Impl& runtime) {
-    builder.add(
-        CommandSpecBuilder{"draft.diff"}
-            .owner("draft-recovery")
-            .summary("Diff Draft Against Disk")
-            .label("Diff Draft Against Disk")
-            .mutates()
-            .lua()
-            .handler([&runtime](CommandContext&) {
-                return runtime.runTransaction(
-                    [&] { return runtime.openDraftDiff(); });
-            }));
-    builder.add(
-        CommandSpecBuilder{"draft.discard"}
-            .owner("draft-recovery")
-            .summary("Discard Draft (Use Disk)")
-            .label("Discard Draft (Use Disk)")
-            .mutates()
-            .lua()
-            .handler([&runtime](CommandContext&) {
-                return runtime.runTransaction(
-                    [&] { return runtime.discardDraft(); });
-            }));
-    builder.add(
-        CommandSpecBuilder{"draft.dismiss"}
-            .owner("draft-recovery")
-            .summary("Dismiss Draft Notice")
-            .label("Dismiss Draft Notice")
-            .mutates()
-            .lua()
-            .handler([&runtime](CommandContext&) {
-                return runtime.runTransaction(
-                    [&] { return runtime.dismissDraftNotice(); });
-            }));
+    catalog.add(CommandSpec{
+        .id = "draft.diff",
+        .owner = "draft-recovery",
+        .label = "Diff Draft Against Disk",
+        .summary = "Diff Draft Against Disk",
+        .effect = CommandEffect::Mutation,
+        .luaApi = true,
+        .binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+            return runtime.openDraftDiff();
+        }),
+    });
+    catalog.add(CommandSpec{
+        .id = "draft.discard",
+        .owner = "draft-recovery",
+        .label = "Discard Draft (Use Disk)",
+        .summary = "Discard Draft (Use Disk)",
+        .effect = CommandEffect::Mutation,
+        .luaApi = true,
+        .binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+            return runtime.discardDraft();
+        }),
+    });
+    catalog.add(CommandSpec{
+        .id = "draft.dismiss",
+        .owner = "draft-recovery",
+        .label = "Dismiss Draft Notice",
+        .summary = "Dismiss Draft Notice",
+        .effect = CommandEffect::Mutation,
+        .luaApi = true,
+        .binding = bindNoArgumentHandler([&runtime](CommandContext&) {
+            return runtime.dismissDraftNotice();
+        }),
+    });
 }
 
-void bindRuntimeFiles(CommandCatalog& builder, EditorSession::Impl& runtime) {
-    registerExternalModificationCommands(builder, runtime);
-    registerFileCommands(builder, runtime);
-    registerTabCommands(builder, runtime);
-    registerEncodingCommands(builder, runtime);
-    registerDraftCommands(builder, runtime);
+void bindRuntimeFiles(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+    registerExternalModificationCommands(catalog, runtime);
+    registerFileCommands(catalog, runtime);
+    registerTabCommands(catalog, runtime);
+    registerEncodingCommands(catalog, runtime);
+    registerDraftCommands(catalog, runtime);
 }
 
 } // namespace ssg

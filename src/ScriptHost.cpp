@@ -68,8 +68,7 @@ struct ScriptHost::Impl {
     // inside one, and its commands run immediately -- which is what makes an
     // init.lua of bare ssg.command calls behave as it always has.
     CommandHandlerResult forward(std::string_view id, std::any payload) {
-        ClientCommand command{std::string{id}, runtime.revision(),
-                              std::move(payload)};
+        ClientCommand command{std::string{id}, std::move(payload)};
         if (runtime.dispatchInProgress()) {
             if (!runtime.deferDispatch(std::move(command))) {
                 return CommandHandlerResult::failure(
@@ -212,19 +211,20 @@ LuaResult ScriptHost::evaluate(std::string_view script) {
 // and the Lua functions behind them.  Doing this AFTER the host published would
 // leave the catalog listing commands whose functions had already been released.
 LuaResult ScriptHost::offerGeneration(std::vector<std::string> const& ids) {
-    std::vector<CommandSpecBuilder> specs;
+    std::vector<CommandSpec> specs;
     specs.reserve(ids.size());
     for (auto const& id : ids) {
-        specs.push_back(
-            CommandSpecBuilder{id}
-                .owner("lua")
-                .summary("Registered by init.lua")
-                // A script's function may do anything the commands it calls can
-                // do, so it is always treated as a mutation.  It carries no
-                // capability of its own: everything it invokes is gated
-                // individually at dispatch, as any other Lua caller is.
-                .mutates()
-                .handler([impl = impl_.get(), id](CommandContext&) {
+        specs.push_back(CommandSpec{
+            .id = id,
+            .owner = "lua",
+            .summary = "Registered by init.lua",
+            // A script's function may do anything the commands it calls can
+            // do, so it is always treated as a mutation.  It carries no
+            // capability of its own: everything it invokes is gated
+            // individually at dispatch, as any other Lua caller is.
+            .effect = CommandEffect::Mutation,
+            .binding = bindNoArgumentHandler(
+                [impl = impl_.get(), id](CommandContext&) {
                     // The Lua state belongs to one thread.  A call from another
                     // is REFUSED rather than serialised: serialising would run
                     // script code at a moment the caller cannot reason about,
@@ -237,7 +237,8 @@ LuaResult ScriptHost::offerGeneration(std::vector<std::string> const& ids) {
                     return result.accepted()
                                ? CommandHandlerResult::success()
                                : CommandHandlerResult::failure(result.message);
-                }));
+                }),
+        });
     }
 
     try {

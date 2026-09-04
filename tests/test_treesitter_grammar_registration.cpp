@@ -41,7 +41,7 @@ std::vector<SyntaxSpan> spansFor(SyntaxParser& parser,
                                  const std::string& text,
                                  std::uint64_t revision) {
     SyntaxModel model{std::shared_ptr<SyntaxParser>{&parser, [](SyntaxParser*) {}}};
-    const auto request = model.request(Revision{revision}, LanguageId{language}, text);
+    const auto request = model.request(std::uint64_t{revision}, LanguageId{language}, text);
     if (!request.accepted()) return {};
     return model.run(*request.request).spans;
 }

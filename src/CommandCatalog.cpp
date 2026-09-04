@@ -61,6 +61,22 @@ std::string CommandEntry::displayLabel() const {
     return label.empty() ? humanize(id) : label;
 }
 
+void CommandContext::setActiveWorkspace(WorkspaceId workspace) noexcept {
+    workspaceChanged_ = true;
+    activeWorkspace_ = workspace;
+}
+
+CommandHandlerResult CommandHandlerResult::success() {
+    return {true, {}, std::nullopt};
+}
+
+CommandHandlerResult CommandHandlerResult::failure(std::string message) {
+    return {false, std::move(message), std::nullopt};
+}
+
+CommandHandlerResult CommandHandlerResult::requireView(ViewAction action) {
+    return {true, {}, std::move(action)};
+}
 
 CommandCatalog::CommandCatalog() = default;
 CommandCatalog::~CommandCatalog() = default;
@@ -73,7 +89,6 @@ struct CommandCatalog::ValidatedSpec {
     std::string label;
     std::string summary;
     CommandEffect effect;
-    CommandRevisionPolicy revisionPolicy;
     bool luaApi;
     bool initScript;
     CommandArgumentType argument;
@@ -86,53 +101,51 @@ struct CommandCatalog::ValidatedSpec {
 // it takes effect: validating as it went would let a late spec fail after
 // earlier ones had already been installed.
 CommandCatalog::ValidatedSpec CommandCatalog::validate(
-    CommandSpecBuilder spec, std::unordered_set<std::string> const& alsoTaken,
+    CommandSpec spec, std::unordered_set<std::string> const& alsoTaken,
     std::unordered_set<std::string> const& beingFreed) const {
-    requireField(!spec.id_.empty(), "<unnamed>", "id");
-    requireField(!spec.owner_.empty(), spec.id_, "owner");
-    requireField(!spec.summary_.empty(), spec.id_, "summary");
-    requireField(spec.effect_.has_value(), spec.id_,
-                 "effect (call mutates(), observes(), or "
-                 "stateValidatedMutation())");
-    requireField(spec.revisionPolicy_.has_value(), spec.id_,
-                 "revision policy");
-    requireField(static_cast<bool>(spec.handler_), spec.id_, "handler");
+    requireField(!spec.id.empty(), "<unnamed>", "id");
+    requireField(!spec.owner.empty(), spec.id, "owner");
+    requireField(!spec.summary.empty(), spec.id, "summary");
+    requireField(spec.effect.has_value(), spec.id, "effect");
+    requireField(static_cast<bool>(spec.binding.handler), spec.id, "handler");
 
     // A name the same batch is retiring counts as free: re-registering its own
     // ids is what an ordinary script reload does.
-    if (auto const existing = byId_.find(spec.id_);
-        existing != byId_.end() && !beingFreed.contains(spec.id_)) {
-        throw std::runtime_error{"command \"" + spec.id_ +
+    if (auto const existing = byId_.find(spec.id);
+        existing != byId_.end() && !beingFreed.contains(spec.id)) {
+        throw std::runtime_error{"command \"" + spec.id +
                                  "\" is already registered by owner \"" +
                                  entries_[existing->second].owner +
-                                 "\"; second registration by \"" + spec.owner_ +
+                                 "\"; second registration by \"" + spec.owner +
                                  "\""};
     }
-    if (alsoTaken.contains(spec.id_)) {
-        throw std::runtime_error{"command \"" + spec.id_ +
+    if (alsoTaken.contains(spec.id)) {
+        throw std::runtime_error{"command \"" + spec.id +
                                  "\" is registered twice in one batch"};
     }
 
-    return ValidatedSpec{std::move(spec.id_),      std::move(spec.owner_),
-                         std::move(spec.label_),   std::move(spec.summary_),
-                         *spec.effect_,            *spec.revisionPolicy_,
-                         spec.luaApi_,             spec.initScript_,
-                         spec.argument_,           std::move(spec.handler_)};
+    // `initScript` grants init.lua a command; that grant cannot exist without
+    // API eligibility, or a host would be asked to expose a command it may not.
+    return ValidatedSpec{std::move(spec.id),      std::move(spec.owner),
+                         std::move(spec.label),   std::move(spec.summary),
+                         *spec.effect,
+                         spec.luaApi || spec.initScript, spec.initScript,
+                         std::move(spec.binding.argument),
+                         std::move(spec.binding.handler)};
 }
 
 CommandHandle CommandCatalog::appendValidated(ValidatedSpec spec) {
     auto const index = entries_.size();
     entries_.push_back(CommandEntry{
         std::move(spec.id), std::move(spec.owner), std::move(spec.label),
-        std::move(spec.summary), spec.effect, spec.revisionPolicy,
-        spec.luaApi, spec.initScript,
+        std::move(spec.summary), spec.effect, spec.luaApi, spec.initScript,
         spec.argument, std::move(spec.handler), false});
     byId_.emplace(entries_[index].id, index);
     ++revision_;
     return CommandHandle{static_cast<std::uint16_t>(index)};
 }
 
-CommandHandle CommandCatalog::add(CommandSpecBuilder spec) {
+CommandHandle CommandCatalog::add(CommandSpec spec) {
     std::unique_lock lock{mutex_};
     // A handle is a 16-bit index, so a catalog cannot exceed that space.
     // Truncating would alias a new command onto an existing handle and
@@ -144,7 +157,7 @@ CommandHandle CommandCatalog::add(CommandSpecBuilder spec) {
 
 std::vector<CommandHandle> CommandCatalog::replaceGeneration(
     std::span<CommandHandle const> retire,
-    std::vector<CommandSpecBuilder> add) {
+    std::vector<CommandSpec> add) {
     std::unique_lock lock{mutex_};
 
     // Validate phase.  A retired slot is not reclaimed, so the batch must fit

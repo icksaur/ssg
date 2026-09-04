@@ -78,7 +78,7 @@ public:
     explicit MemoryWorkspace(std::vector<WorkspaceFile> files)
         : files_(std::move(files)) {}
 
-    WorkspaceSnapshot snapshot(Revision requested) const override {
+    WorkspaceSnapshot snapshot(std::uint64_t requested) const override {
         if (requested != revision_) {
             return WorkspaceSnapshot{revision_, {}, {}};
         }
@@ -103,7 +103,7 @@ public:
             }
             it->text = change.after;
         }
-        WorkspaceRecoveryRecord record{revision_, Revision{revision_.value() + 1},
+        WorkspaceRecoveryRecord record{revision_, std::uint64_t{revision_ + 1},
                                        preview.changes};
         if (!sink.store(record)) {
             return {FindReplaceError::RecoveryRejected, revision_,
@@ -133,15 +133,15 @@ public:
             it->text = change.before;
         }
         files_ = std::move(candidate);
-        revision_ = Revision{revision_.value() + 1};
+        revision_ = std::uint64_t{revision_ + 1};
         return {FindReplaceError::None, revision_, {}};
     }
 
     const std::vector<WorkspaceFile>& files() const { return files_; }
-    Revision revision() const { return revision_; }
+    std::uint64_t revision() const { return revision_; }
 
 private:
-    Revision revision_{1};
+    std::uint64_t revision_{1};
     std::vector<WorkspaceFile> files_;
 };
 

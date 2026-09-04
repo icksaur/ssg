@@ -3,83 +3,68 @@
 #include <ssg/TabManager.h>
 
 #include <algorithm>
-#include <chrono>
+#include <optional>
+#include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace {
-
-using namespace std::chrono_literals;
-
-class FakeLifecycle final : public ssg::TabLifecycle {
-public:
-    std::vector<ssg::TabId> failClose;
-    std::vector<ssg::TabId> ephemeralClose;
-    std::vector<ssg::TabId> noCompensation;
-    bool failReopen = false;
-    std::optional<ssg::FileDocumentId> reopenedDocument;
-    std::optional<ssg::JournalDocumentKey> reopenedDocumentKey;
-    int closeCalls = 0;
-    int reopenCalls = 0;
-
-    ssg::TabLifecycleResult close(
-        const ssg::TabState& tab,
-        std::chrono::milliseconds durabilityTimeout) override {
-        ++closeCalls;
-        if (durabilityTimeout <= 0ms) {
-            return {ssg::TabError::DurabilityFailed, "invalid timeout",
-                    std::nullopt, std::nullopt, std::nullopt, false};
-        }
-        if (std::find(failClose.begin(), failClose.end(), tab.id) !=
-            failClose.end()) {
-            return {ssg::TabError::DurabilityFailed, "durability failed",
-                    std::nullopt, std::nullopt, std::nullopt, false};
-        }
-        if (std::find(ephemeralClose.begin(), ephemeralClose.end(), tab.id) !=
-            ephemeralClose.end()) {
-            return {ssg::TabError::None, {}, std::nullopt, std::nullopt,
-                    std::nullopt, false, true};
-        }
-        if (std::find(noCompensation.begin(), noCompensation.end(), tab.id) !=
-            noCompensation.end()) {
-            return {ssg::TabError::None, {}, std::nullopt, std::nullopt,
-                    std::nullopt, false, false};
-        }
-        return {ssg::TabError::None, {},
-                ssg::RecoveryRecordId{"closed-" +
-                                      std::to_string(tab.id.value())},
-                std::nullopt, std::nullopt,
-                tab.dirty};
-    }
-
-    ssg::TabLifecycleResult reopen(
-        const ssg::TabState&,
-        const ssg::RecoveryRecordId&) override {
-        ++reopenCalls;
-        if (failReopen) {
-            return {ssg::TabError::LifecycleFailed, "restore failed",
-                    std::nullopt, std::nullopt, std::nullopt, false};
-        }
-        return {ssg::TabError::None, {}, std::nullopt, reopenedDocument,
-                reopenedDocumentKey, true};
-    }
-};
 
 ssg::JournalDocumentKey saved(std::string_view path) {
     return ssg::JournalDocumentKey::saved(path);
 }
 
+ssg::TabState tabState(const ssg::TabManager& tabs, ssg::TabId id) {
+    const auto& view = tabs.viewState().tabs;
+    const auto found = std::find_if(
+        view.begin(), view.end(),
+        [id](const ssg::TabState& tab) { return tab.id == id; });
+    if (found == view.end()) {
+        throw std::logic_error{"tab not found"};
+    }
+    return *found;
+}
+
+ssg::TabLifecycleResult acceptedCloseResult(const ssg::TabState& tab) {
+    return {ssg::TabError::None, {},
+            ssg::RecoveryRecordId{"closed-" + std::to_string(tab.id.value())},
+            std::nullopt, std::nullopt, tab.dirty};
+}
+
+ssg::TabLifecycleResult failedCloseResult() {
+    return {ssg::TabError::DurabilityFailed, "durability failed", std::nullopt,
+            std::nullopt, std::nullopt, false};
+}
+
+ssg::TabLifecycleResult ephemeralCloseResult() {
+    return {ssg::TabError::None, {}, std::nullopt, std::nullopt, std::nullopt,
+            false, true};
+}
+
+ssg::TabLifecycleResult missingCompensationResult() {
+    return {ssg::TabError::None, {}, std::nullopt, std::nullopt, std::nullopt,
+            false, false};
+}
+
+ssg::TabCloseOutcome acceptedCloseOutcome(const ssg::TabState& tab) {
+    return {tab.id, acceptedCloseResult(tab)};
+}
+
+ssg::TabCloseOutcome failedCloseOutcome(ssg::TabId id) {
+    return {id, failedCloseResult()};
+}
+
 ssg::TabId openSaved(ssg::TabManager& tabs, std::uint64_t document,
-                      std::string_view path, bool dirty = false) {
+                     std::string_view path, bool dirty = false) {
     return *tabs
                 .openDocument(ssg::FileDocumentId{document}, saved(path), path,
-                               ssg::DocumentMode::Edit, dirty)
+                              ssg::DocumentMode::Edit, dirty)
                 .tab;
 }
 
 TEST(duplicateDocumentIdentityActivatesExistingTab) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle};
+    ssg::TabManager tabs;
     const auto first = openSaved(tabs, 1, "src/a.cpp");
     (void)openSaved(tabs, 2, "src/b.cpp");
     const auto duplicate = tabs.openDocument(
@@ -93,21 +78,20 @@ TEST(duplicateDocumentIdentityActivatesExistingTab) {
 }
 
 TEST(allTabKindsNavigateCyclicallyAndReorder) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle};
+    ssg::TabManager tabs;
     const auto document = openSaved(tabs, 1, "a");
     const auto diff =
         *tabs.openContent(ssg::TabKind::LiveDiff, "diff:a", "Diff",
-                           ssg::DocumentMode::Diff)
+                          ssg::DocumentMode::Diff)
              .tab;
     const auto output =
         *tabs.openContent(ssg::TabKind::ReadOnlyOutput, "output:1", "Output",
-                           ssg::DocumentMode::ReadOnly)
+                          ssg::DocumentMode::ReadOnly)
              .tab;
     (void)tabs.openContent(ssg::TabKind::SearchResults, "search:x", "Search",
-                            ssg::DocumentMode::ReadOnly);
+                           ssg::DocumentMode::ReadOnly);
     (void)tabs.openContent(ssg::TabKind::TreeView, "tree:files", "Files",
-                            ssg::DocumentMode::ReadOnly);
+                           ssg::DocumentMode::ReadOnly);
 
     ASSERT_TRUE(tabs.activate(document).accepted());
     ASSERT_EQ(tabs.previous().tab,
@@ -121,38 +105,35 @@ TEST(allTabKindsNavigateCyclicallyAndReorder) {
 }
 
 TEST(activeClosePrefersRightThenLeftAndDirtyFailureIsAtomic) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle};
+    ssg::TabManager tabs;
     const auto a = openSaved(tabs, 1, "a");
     const auto b = openSaved(tabs, 2, "b", true);
     const auto c = openSaved(tabs, 3, "c");
     (void)tabs.activate(b);
-    lifecycle.failClose.push_back(b);
     const auto before = tabs.viewState();
 
-    const auto closeFailure = tabs.close(b, 100ms);
+    const auto closeFailure = tabs.close(b, failedCloseResult());
     ASSERT_EQ(closeFailure.error, ssg::TabError::DurabilityFailed);
     ASSERT_EQ(tabs.viewState(), before);
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
 
-    lifecycle.failClose.clear();
-    ASSERT_TRUE(tabs.close(b, 100ms).accepted());
+    ASSERT_TRUE(tabs.close(b, acceptedCloseResult(tabState(tabs, b))).accepted());
     ASSERT_EQ(tabs.viewState().active, std::optional{c});
-    ASSERT_TRUE(tabs.close(c, 100ms).accepted());
+    ASSERT_TRUE(tabs.close(c, acceptedCloseResult(tabState(tabs, c))).accepted());
     ASSERT_EQ(tabs.viewState().active, std::optional{a});
 }
 
 TEST(batchCloseIsLeftToRightBestEffort) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle};
+    ssg::TabManager tabs;
     const auto a = openSaved(tabs, 1, "a");
     const auto b = openSaved(tabs, 2, "b", true);
     const auto c = openSaved(tabs, 3, "c");
     const auto d = openSaved(tabs, 4, "d", true);
     (void)tabs.activate(c);
-    lifecycle.failClose = {b, d};
 
-    const auto result = tabs.closeOthers(a, 100ms);
+    const auto result = tabs.closeOthers(
+        a, {failedCloseOutcome(b), acceptedCloseOutcome(tabState(tabs, c)),
+            failedCloseOutcome(d)});
     ASSERT_TRUE(result.accepted());
     ASSERT_EQ(result.failures.size(), std::size_t{2});
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{3});
@@ -163,22 +144,38 @@ TEST(batchCloseIsLeftToRightBestEffort) {
 }
 
 TEST(reopenIsLifoRetryableAndRestoresPositionAndActivation) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle};
+    ssg::TabManager tabs;
     const auto a = openSaved(tabs, 1, "a");
     const auto b = openSaved(tabs, 2, "b");
     const auto c = openSaved(tabs, 3, "c");
-    (void)tabs.close(b, 100ms);
-    (void)tabs.close(c, 100ms);
+    (void)tabs.close(b, acceptedCloseResult(tabState(tabs, b)));
+    (void)tabs.close(c, acceptedCloseResult(tabState(tabs, c)));
 
-    lifecycle.failReopen = true;
-    ASSERT_EQ(tabs.reopenClosed().error, ssg::TabError::LifecycleFailed);
+    auto begin = tabs.beginReopenClosed();
+    ASSERT_TRUE(std::holds_alternative<ssg::TabReopenRequest>(begin));
+    auto request = std::get<ssg::TabReopenRequest>(begin);
+    auto failedResult = tabs.finishReopenClosed(
+        request, {ssg::TabError::LifecycleFailed, "restore failed", std::nullopt,
+                  std::nullopt, std::nullopt, false});
+    ASSERT_EQ(failedResult.error, ssg::TabError::LifecycleFailed);
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{2});
 
-    lifecycle.failReopen = false;
-    ASSERT_EQ(tabs.reopenClosed().tab, std::optional{c});
-    ASSERT_EQ(tabs.viewState().active, std::optional{c});
-    ASSERT_EQ(tabs.reopenClosed().tab, std::optional{b});
+    begin = tabs.beginReopenClosed();
+    ASSERT_TRUE(std::holds_alternative<ssg::TabReopenRequest>(begin));
+    request = std::get<ssg::TabReopenRequest>(begin);
+    ASSERT_EQ(tabs.finishReopenClosed(
+                  request, {ssg::TabError::None, {}, std::nullopt, std::nullopt,
+                            std::nullopt, true})
+                  .tab,
+              std::optional{c});
+    begin = tabs.beginReopenClosed();
+    ASSERT_TRUE(std::holds_alternative<ssg::TabReopenRequest>(begin));
+    request = std::get<ssg::TabReopenRequest>(begin);
+    ASSERT_EQ(tabs.finishReopenClosed(
+                  request, {ssg::TabError::None, {}, std::nullopt, std::nullopt,
+                            std::nullopt, true})
+                  .tab,
+              std::optional{b});
     ASSERT_EQ(tabs.viewState().tabs[0].id, a);
     ASSERT_EQ(tabs.viewState().tabs[1].id, b);
     ASSERT_EQ(tabs.viewState().tabs[2].id, c);
@@ -186,38 +183,50 @@ TEST(reopenIsLifoRetryableAndRestoresPositionAndActivation) {
 }
 
 TEST(recentlyClosedEvictsOldestAtConfiguredBound) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle, {.maximumRecentlyClosed = 2}};
+    ssg::TabManager tabs{{.maximumRecentlyClosed = 2}};
     const auto a = openSaved(tabs, 1, "a");
     const auto b = openSaved(tabs, 2, "b");
     const auto c = openSaved(tabs, 3, "c");
-    (void)tabs.close(a, 100ms);
-    (void)tabs.close(b, 100ms);
-    (void)tabs.close(c, 100ms);
+    (void)tabs.close(a, acceptedCloseResult(tabState(tabs, a)));
+    (void)tabs.close(b, acceptedCloseResult(tabState(tabs, b)));
+    (void)tabs.close(c, acceptedCloseResult(tabState(tabs, c)));
 
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{2});
-    ASSERT_EQ(tabs.reopenClosed().tab, std::optional{c});
-    ASSERT_EQ(tabs.reopenClosed().tab, std::optional{b});
-    ASSERT_EQ(tabs.reopenClosed().error, ssg::TabError::NoRecentlyClosed);
+    auto begin = tabs.beginReopenClosed();
+    ASSERT_TRUE(std::holds_alternative<ssg::TabReopenRequest>(begin));
+    auto request = std::get<ssg::TabReopenRequest>(begin);
+    ASSERT_EQ(tabs.finishReopenClosed(
+                  request, {ssg::TabError::None, {}, std::nullopt, std::nullopt,
+                            std::nullopt, true})
+                  .tab,
+              std::optional{c});
+    begin = tabs.beginReopenClosed();
+    ASSERT_TRUE(std::holds_alternative<ssg::TabReopenRequest>(begin));
+    request = std::get<ssg::TabReopenRequest>(begin);
+    ASSERT_EQ(tabs.finishReopenClosed(
+                  request, {ssg::TabError::None, {}, std::nullopt, std::nullopt,
+                            std::nullopt, true})
+                  .tab,
+              std::optional{b});
+    const auto noRecent = std::get<ssg::TabResult>(tabs.beginReopenClosed());
+    ASSERT_EQ(noRecent.error, ssg::TabError::NoRecentlyClosed);
 }
 
 TEST(reopenActivatesAnIdentityAlreadyOpenedByAnotherPath) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle};
+    ssg::TabManager tabs;
     const auto original = openSaved(tabs, 1, "a");
-    (void)tabs.close(original, 100ms);
+    (void)tabs.close(original, acceptedCloseResult(tabState(tabs, original)));
     const auto replacement = openSaved(tabs, 2, "a");
 
-    ASSERT_EQ(tabs.reopenClosed().tab, std::optional{replacement});
+    const auto reopened = std::get<ssg::TabResult>(tabs.beginReopenClosed());
+    ASSERT_EQ(reopened.tab, std::optional{replacement});
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
     ASSERT_EQ(tabs.viewState().active, std::optional{replacement});
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
-    ASSERT_EQ(lifecycle.reopenCalls, 0);
 }
 
 TEST(untitledLabelsAreSmallestAvailableAndReopenIsStable) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle};
+    ssg::TabManager tabs;
     const auto first = tabs.openDocument(
         ssg::FileDocumentId{1},
         ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate()),
@@ -229,13 +238,19 @@ TEST(untitledLabelsAreSmallestAvailableAndReopenIsStable) {
     ASSERT_EQ(tabs.viewState().tabs[0].label, std::string{"Untitled 1"});
     ASSERT_EQ(tabs.viewState().tabs[1].label, std::string{"Untitled 2"});
 
-    (void)tabs.close(*first.tab, 100ms);
+    (void)tabs.close(*first.tab, acceptedCloseResult(tabState(tabs, *first.tab)));
     const auto third = tabs.openDocument(
         ssg::FileDocumentId{3},
         ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate()),
         "", ssg::DocumentMode::Edit, true);
     ASSERT_EQ(tabs.viewState().tabs.back().label, std::string{"Untitled 1"});
-    (void)tabs.reopenClosed();
+    auto begin = tabs.beginReopenClosed();
+    ASSERT_TRUE(std::holds_alternative<ssg::TabReopenRequest>(begin));
+    auto request = std::get<ssg::TabReopenRequest>(begin);
+    ASSERT_TRUE(tabs.finishReopenClosed(
+                    request, {ssg::TabError::None, {}, std::nullopt, std::nullopt,
+                              std::nullopt, true})
+                    .accepted());
     const auto reopened = std::find_if(
         tabs.viewState().tabs.begin(), tabs.viewState().tabs.end(),
         [id = *first.tab](const auto& tab) { return tab.id == id; });
@@ -245,8 +260,7 @@ TEST(untitledLabelsAreSmallestAvailableAndReopenIsStable) {
 }
 
 TEST(reopenUntitledRebindsDocumentKeyForDedup) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle};
+    ssg::TabManager tabs;
     auto originalKey =
         ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate());
     auto reopenedKey =
@@ -260,32 +274,37 @@ TEST(reopenUntitledRebindsDocumentKeyForDedup) {
     ASSERT_TRUE(opened.accepted());
     ASSERT_TRUE(opened.tab.has_value());
     if (!opened.tab) return;
-    ASSERT_TRUE(tabs.close(*opened.tab, 100ms).accepted());
+    ASSERT_TRUE(
+        tabs.close(*opened.tab, acceptedCloseResult(tabState(tabs, *opened.tab)))
+            .accepted());
 
-    lifecycle.reopenedDocument = ssg::FileDocumentId{2};
-    lifecycle.reopenedDocumentKey = reopenedKey;
-    ASSERT_TRUE(tabs.reopenClosed().accepted());
+    auto begin = tabs.beginReopenClosed();
+    ASSERT_TRUE(std::holds_alternative<ssg::TabReopenRequest>(begin));
+    auto request = std::get<ssg::TabReopenRequest>(begin);
+    ASSERT_TRUE(tabs.finishReopenClosed(
+                    request, {ssg::TabError::None, {}, std::nullopt,
+                              ssg::FileDocumentId{2}, reopenedKey, true})
+                    .accepted());
 
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
     ASSERT_EQ(tabs.viewState().tabs.front().document,
-              lifecycle.reopenedDocument);
+              std::optional{ssg::FileDocumentId{2}});
     ASSERT_EQ(tabs.viewState().tabs.front().documentKey,
-              lifecycle.reopenedDocumentKey);
+              std::optional{reopenedKey});
 
-    auto duplicate = tabs.openDocument(*lifecycle.reopenedDocument, reopenedKey,
+    auto duplicate = tabs.openDocument(ssg::FileDocumentId{2}, reopenedKey,
                                        "reopened", ssg::DocumentMode::Edit, false);
     ASSERT_TRUE(duplicate.accepted());
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
 }
 
 TEST(badgesUpdateExactly) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle};
+    ssg::TabManager tabs;
     (void)openSaved(tabs, 7, "a");
     ASSERT_TRUE(tabs.updateDocument(
-                        ssg::FileDocumentId{7}, saved("a"), "a",
-                        ssg::DocumentMode::ReadOnly, true,
-                        ssg::ScratchDurability::Pending)
+                    ssg::FileDocumentId{7}, saved("a"), "a",
+                    ssg::DocumentMode::ReadOnly, true,
+                    ssg::ScratchDurability::Pending)
                     .accepted());
     const auto target = tabs.viewState();
     ASSERT_EQ(target.tabs[0].mode, ssg::DocumentMode::ReadOnly);
@@ -295,25 +314,18 @@ TEST(badgesUpdateExactly) {
 }
 
 TEST(closeAcceptsAMissingCompensationOnlyForAnEphemeralTab) {
-    FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle};
+    ssg::TabManager tabs;
     const auto document = openSaved(tabs, 1, "a");
     const auto output =
         *tabs.openContent(ssg::TabKind::ReadOnlyOutput, "output:1", "Output",
                           ssg::DocumentMode::ReadOnly)
              .tab;
 
-    // An ephemeral (regenerable) tab returns no reopen record and closes anyway;
-    // it is not added to the reopen-closed history.
-    lifecycle.ephemeralClose.push_back(output);
-    ASSERT_TRUE(tabs.close(output, 100ms).accepted());
+    ASSERT_TRUE(tabs.close(output, ephemeralCloseResult()).accepted());
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
 
-    // A non-ephemeral tab that returns no compensation is a lifecycle bug: the
-    // close is refused and the tab is left in place.
-    lifecycle.noCompensation.push_back(document);
-    const auto refused = tabs.close(document, 100ms);
+    const auto refused = tabs.close(document, missingCompensationResult());
     ASSERT_EQ(refused.error, ssg::TabError::LifecycleFailed);
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
     ASSERT_EQ(tabs.viewState().tabs[0].id, document);

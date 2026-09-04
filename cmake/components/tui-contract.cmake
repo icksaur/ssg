@@ -1,6 +1,6 @@
 # Milestone 11 — The semantic library API drives the TUI contract.
 # Proves the TUI screen is a pure function of the production EditorSession's
-# SessionSnapshot: render(snapshot).canonical() == checked-in goldens for the
+# GridPresentation: render(snapshot).canonical() == checked-in goldens for the
 # normal, prompt, and too-small screens.
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

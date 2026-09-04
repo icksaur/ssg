@@ -3,12 +3,9 @@
 #include <ssg/GraphemeLayout.h>
 #include <tui/StatusFieldGrid.h>
 #include <ssg/StatusQueue.h>
-#include <ssg/Theme.h>  // semanticRoleFromName
-#include <ssg/UiTree.h>  // resolveUiLeafState
 #include <tui/WidgetLayout.h>
 
 #include <optional>
-#include <ranges>
 #include <string>
 #include <utility>
 #include <variant>
@@ -34,56 +31,52 @@ struct Packed {
 struct RegionLeaf {
     UiNodeId nodeId;
     const WidgetDescriptor* descriptor;
+    const std::optional<UiLeafState>* resolved;
 };
 
 struct Resolved {
     std::string content;
     std::string label;
     std::optional<std::string> command;
+    SemanticRole role = SemanticRole::Text;
     bool drop = false;
 };
 
-bool truthy(std::string_view value) { return value == "true"; }
-
-// The resolved sources shared by the TUI's glyph lowering and the semantic
-// dynamic-state resolution, so the two cannot diverge on how a source resolves.
-// Resolve a widget's displayed content + accessible label + inherited command for
-// the GRID lowering: content is the glyph a terminal draws (a checkbox composes its
-// box), and a literal checkbox labels itself with that glyph. Byte-identical to the
-// shipped behavior; the semantic resolution below is a separate, glyph-free path.
-Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
-                       const WidgetProviderResolver& resolveProvider) {
+// Lower a widget's already-resolved semantic state (UiNode::resolved,
+// populated once at snapshot publication) into its GRID display content: the
+// glyph a terminal draws (a checkbox composes its box) and its accessible
+// label. Consumes the resolved value directly -- there is no resolver to
+// reconstruct, and no independent role re-derivation: `resolved->role` is
+// already the widget's one resolved SemanticRole.
+Resolved resolveWidget(const WidgetDescriptor& w,
+                       const std::optional<UiLeafState>& resolved,
+                       SemanticRole defaultRole, const Style& style) {
     Resolved r;
-    const auto semantic =
-        resolveUiLeafState(w, resolveProvider, SemanticRole::Text);
+    r.role = resolved ? resolved->role : defaultRole;
 
     switch (w.kind) {
     case WidgetKind::Label:
     case WidgetKind::Field: {
-        // A provider widget's label is the provider's; a literal widget labels
-        // itself with its own text. Match the built-in status-field skip: drop
-        // when EITHER the value or the accessible label is empty.
-        if (!semantic) {
+        // Match the built-in status-field skip: a field with no resolved
+        // value (dropped at publication) emits nothing.
+        if (!resolved) {
             r.drop = true;
             return r;
         }
-        const std::string_view providerId =
-            w.value && w.value->isProvider ? w.value->provider : std::string_view{};
-        r.content =
-            statusFieldGridDisplay(providerId, semantic->value, style);
-        r.label = semantic->label;
+        r.content = statusFieldGridDisplay(w.id, resolved->value, style);
+        r.label = resolved->label;
         break;
     }
     case WidgetKind::Checkbox: {
-        if (!semantic) {
+        if (!resolved) {
             r.drop = true;
             return r;
         }
-        r.content = checkboxText(semantic->checked.value_or(false),
-                                 semantic->value, style.toggle);
-        r.label = semantic->label.empty()
+        r.content = checkboxText(resolved->checked.value_or(false),
+                                 resolved->value, style.toggle);
+        r.label = resolved->label.empty()
                       ? r.content
-                      : semantic->label;
+                      : resolved->label;
         break;
     }
     case WidgetKind::Spacer:
@@ -94,9 +87,8 @@ Resolved resolveWidget(const WidgetDescriptor& w, const Style& style,
         break;  // TextInput/Container are excluded by the decoder
     }
 
-    // The descriptor's own command overrides an inherited one.
     if (w.kind != WidgetKind::Label) {
-        r.command = semantic ? semantic->command : std::nullopt;
+        r.command = resolved ? resolved->command : std::nullopt;
     }
     return r;
 }
@@ -114,13 +106,6 @@ int widgetDesired(const WidgetDescriptor& w, const Resolved& resolved,
                                style.dimensions.labelPadding);
     }
     return measureFieldCells(resolved.content);
-}
-
-SemanticRole widgetRole(const WidgetDescriptor& w, SemanticRole defaultRole) {
-    if (w.role) {
-        if (const auto parsed = semanticRoleFromName(*w.role)) return *parsed;
-    }
-    return defaultRole;
 }
 
 StackItem stackItemFor(const WidgetDescriptor& w, std::string stackId,
@@ -147,7 +132,6 @@ static int lowerUiRegionGroups(
     const std::vector<RegionLeaf>& right,
     const RegionLeaf* center, int separator, CenterWidth centerWidth,
     int centerFixed, const Rect& rect, SemanticRole defaultRole, const Style& style,
-    const WidgetProviderResolver& resolveProvider,
     std::vector<SolvedUiItem>& out, const StatusViewState* statusView) {
     WidgetStack stack{separator};
     std::vector<Packed> packed;
@@ -188,7 +172,7 @@ static int lowerUiRegionGroups(
             }
             return;
         }
-        const Resolved resolved = resolveWidget(w, style, resolveProvider);
+        const Resolved resolved = resolveWidget(w, *source.resolved, defaultRole, style);
         if (resolved.drop) return;
         StackItem item = stackItemFor(w, stackId, resolved, style);
         if (isCenter) {
@@ -198,12 +182,8 @@ static int lowerUiRegionGroups(
         } else {
             stack.packRight(std::move(item));
         }
-        const SemanticRole role =
-            (w.kind == WidgetKind::Field && w.id == "footer.hint")
-                ? SemanticRole::Footer
-                : widgetRole(w, defaultRole);
         packed.push_back({stackId, &w, w.id, source.nodeId, resolved.content,
-                          resolved.label, resolved.command, role});
+                          resolved.label, resolved.command, resolved.role});
     };
 
     for (std::size_t i = 0; i < left.size(); ++i)
@@ -267,10 +247,10 @@ std::optional<std::vector<RegionLeaf>> groupLeaves(
     for (const auto& child : container->children) {
         const auto* leaf = std::get_if<UiLeaf>(&child.content);
         if (leaf) {
-            widgets.push_back({child.id, &leaf->widget});
+            widgets.push_back({child.id, &leaf->widget, &child.resolved});
             continue;
         }
-        if (child.id.value() != "footer.status_actions") {
+        if (child.id.value() != kFooterStatusActionsNodeId) {
             return std::nullopt;
         }
         const auto* actions = std::get_if<UiContainer>(&child.content);
@@ -280,7 +260,7 @@ std::optional<std::vector<RegionLeaf>> groupLeaves(
             if (!actionLeaf || action.size.kind() != SizeKind::Auto) {
                 return std::nullopt;
             }
-            widgets.push_back({action.id, &actionLeaf->widget});
+            widgets.push_back({action.id, &actionLeaf->widget, &action.resolved});
         }
     }
     return widgets;
@@ -291,7 +271,6 @@ std::optional<std::vector<RegionLeaf>> groupLeaves(
 UiRegionProjectionResult projectUiRegion(
     const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
     const Style& style,
-    const WidgetProviderResolver& resolveProvider,
     SolvedUiRegion& out, const StatusViewState* statusView,
     const PromptInputProjection* input) {
     out = SolvedUiRegion{rect};
@@ -414,7 +393,7 @@ UiRegionProjectionResult projectUiRegion(
         const UiNode& centerNode = middleContainer->children.front();
         const auto* leaf = std::get_if<UiLeaf>(&centerNode.content);
         if (!leaf) return {"UI region center is not a leaf"};
-        center = RegionLeaf{centerNode.id, &leaf->widget};
+        center = RegionLeaf{centerNode.id, &leaf->widget, &centerNode.resolved};
         if (center->descriptor->kind == WidgetKind::View) {
             return {"UI region cannot render a view leaf"};
         }
@@ -443,7 +422,7 @@ UiRegionProjectionResult projectUiRegion(
     const int rightEdge = lowerUiRegionGroups(
         *leftWidgets, *rightWidgets, center ? &*center : nullptr, separator,
         centerWidth, centerFixed,
-        groupsRect, defaultRole, style, resolveProvider, out.items,
+        groupsRect, defaultRole, style, out.items,
         statusView);
 
     // The input line grows across the header's remaining width after the groups'
@@ -471,55 +450,6 @@ UiRegionProjectionResult projectUiRegion(
         out.input = std::move(solvedInput);
     }
     return {std::nullopt, rightEdge};
-}
-
-UiRegionProjectionResult solveUiRegion(
-    const UiNode& regionRoot, const Rect& rect, SemanticRole defaultRole,
-    const Style& style,
-    SolvedUiRegion& out, const StatusViewState* statusView,
-    const PromptInputProjection* input) {
-    struct ProviderState {
-        std::string id;
-        ResolvedProvider value;
-    };
-    std::vector<ProviderState> providers;
-    const auto collect = [&](const auto& self, const UiNode& node) -> void {
-        if (const auto* leaf = std::get_if<UiLeaf>(&node.content)) {
-            if (node.resolved) {
-                const auto& semantic = *node.resolved;
-                if (leaf->widget.value &&
-                    leaf->widget.value->isProvider) {
-                    providers.push_back(
-                        {leaf->widget.value->provider,
-                         {semantic.value, semantic.label, semantic.command,
-                          semantic.active}});
-                }
-                if (leaf->widget.checked &&
-                    leaf->widget.checked->isProvider &&
-                    semantic.checked) {
-                    providers.push_back(
-                        {leaf->widget.checked->provider,
-                         {*semantic.checked ? "true" : "false", {},
-                          std::nullopt, std::nullopt}});
-                }
-            }
-        }
-        if (const auto* container =
-                std::get_if<UiContainer>(&node.content)) {
-            for (const auto& child : container->children) self(self, child);
-        }
-    };
-    collect(collect, regionRoot);
-    const WidgetProviderResolver resolver =
-        [providers = std::move(providers)](
-            std::string_view id) -> std::optional<ResolvedProvider> {
-        const auto found = std::ranges::find(providers, id, &ProviderState::id);
-        return found == providers.end()
-                   ? std::nullopt
-                   : std::optional<ResolvedProvider>{found->value};
-    };
-    return projectUiRegion(regionRoot, rect, defaultRole, style, resolver,
-                               out, statusView, input);
 }
 
 }  // namespace ssg

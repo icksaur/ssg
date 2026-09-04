@@ -1,7 +1,6 @@
 #include <ssg/ScriptHost.h>
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/CommandSpecBuilder.h>
 #include <ssg/EditorSession.h>
 #include <tui/GridPresenter.h>
 
@@ -72,17 +71,17 @@ TEST(viewActionsRequireAndUseAHostSuppliedSink) {
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
-    auto command = runtime->registerCommand(
-        ssg::CommandSpecBuilder{"oracle.view_action"}
-            .owner("test-oracle")
-            .summary("returns one typed view action")
-            .viewAction()
-            .initScript()
-            .handler([](ssg::CommandContext&) {
-                return ssg::CommandHandlerResult::requireView(
-                    ssg::ScrollLines{
-                        ssg::ScrollTarget::Document, 1});
-            }));
+    auto command = runtime->registerCommand(ssg::CommandSpec{
+        .id = "oracle.view_action",
+        .owner = "test-oracle",
+        .summary = "returns one typed view action",
+        .effect = ssg::CommandEffect::ViewAction,
+        .initScript = true,
+        .binding = ssg::bindNoArgumentHandler([](ssg::CommandContext&) {
+            return ssg::CommandHandlerResult::requireView(
+                ssg::ScrollLines{ssg::ScrollTarget::Document, 1});
+        }),
+    });
 
     {
         ssg::ScriptHost scripts{*runtime};
@@ -95,17 +94,13 @@ TEST(viewActionsRequireAndUseAHostSuppliedSink) {
     }
 
     int applications = 0;
-    const auto before = runtime->revision();
     ssg::ScriptHost scripts{
         *runtime,
-        [&](ssg::ViewActionRequest const& request) {
+        [&](ssg::ViewAction const&) {
             ++applications;
-            ASSERT_EQ(request.viewId, ssg::ViewId{1});
             return ssg::ViewActionResult{
                 ssg::ViewActionStatus::TransitionRequired,
-                ssg::ViewTransitionInput{
-                    {request.semanticRevision},
-                    ssg::PauseFollowTransition{}},
+                ssg::ViewTransitionInput{ssg::PauseFollowTransition{}},
                 {}};
         }};
     ASSERT_TRUE(
@@ -113,7 +108,6 @@ TEST(viewActionsRequireAndUseAHostSuppliedSink) {
     ASSERT_TRUE(
         scripts.evaluate("ssg.command('oracle.view_action')").accepted());
     ASSERT_EQ(applications, 2);
-    ASSERT_EQ(runtime->revision().value(), before.value() + 1);
     fs::remove_all(root);
 }
 
@@ -166,7 +160,7 @@ TEST(aCommandAScriptRegistersIsAnOrdinaryCatalogCommand) {
     if (entry) ASSERT_EQ(entry->owner, std::string{"lua"});
 
     auto const dispatched = runtime->dispatch(
-        {"user.count", runtime->revision(), {}});
+        {"user.count",  {}});
     ASSERT_TRUE(dispatched.accepted());
     ASSERT_TRUE(scripts.evaluate("if calls ~= 1 then error('not called') end")
                     .accepted());
@@ -225,7 +219,7 @@ TEST(aFailedReloadKeepsThePreviousGenerationDispatchable) {
 
     ASSERT_TRUE(runtime->commandCatalog()->find("user.kept") != nullptr);
     ASSERT_TRUE(runtime
-                    ->dispatch({"user.kept", runtime->revision(), {}})
+                    ->dispatch({"user.kept",  {}})
                     .accepted());
     fs::remove_all(root);
 }
@@ -241,7 +235,7 @@ TEST(aRetiredScriptCommandIsNoLongerDispatchable) {
             .accepted());
     ASSERT_TRUE(scripts.evaluate("noop = true").accepted());
     ASSERT_TRUE(!runtime
-                     ->dispatch({"user.gone", runtime->revision(), {}})
+                     ->dispatch({"user.gone",  {}})
                      .accepted());
     fs::remove_all(root);
 }
@@ -291,7 +285,7 @@ TEST(aRefusedGenerationLeavesThePreviousOneWhollyIntact) {
     // Still registered, and still backed by a live Lua function.
     ASSERT_TRUE(runtime->commandCatalog()->find("user.old") != nullptr);
     ASSERT_TRUE(runtime
-                    ->dispatch({"user.old", runtime->revision(), {}})
+                    ->dispatch({"user.old",  {}})
                     .accepted());
     auto const* builtIn = runtime->commandCatalog()->find("file.save");
     ASSERT_TRUE(builtIn != nullptr);
@@ -318,7 +312,7 @@ TEST(aScriptCommandCanCallCommandsAndBothArePerformedInOrder) {
                     .accepted());
 
     auto const dispatched = runtime->dispatch(
-        {"user.rebind", runtime->revision(), {}});
+        {"user.rebind",  {}});
     if (!dispatched.accepted()) {
         std::cout << "  msg: " << dispatched.message << "\n";
     }
@@ -342,7 +336,7 @@ TEST(aFailureAmongQueuedCommandsIsReportedAndNamesTheCommand) {
                     .accepted());
 
     auto const dispatched = runtime->dispatch(
-        {"user.bad", runtime->revision(), {}});
+        {"user.bad",  {}});
     ASSERT_TRUE(!dispatched.accepted());
     ASSERT_TRUE(dispatched.message.find("keymap.bind") != std::string::npos);
     fs::remove_all(root);
@@ -366,7 +360,7 @@ TEST(aScriptThatQueuesWithoutBoundIsRefusedRatherThanSpinning) {
                     .accepted());
 
     auto const dispatched = runtime->dispatch(
-        {"user.flood", runtime->revision(), {}});
+        {"user.flood",  {}});
     ASSERT_TRUE(!dispatched.accepted());
     fs::remove_all(root);
 }
@@ -392,7 +386,7 @@ TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
     ssg::CommandResult offThread{};
     std::thread caller{[&] {
         offThread = runtime->dispatch(
-            {"user.owned", runtime->revision(), {}});
+            {"user.owned",  {}});
     }};
     caller.join();
 
@@ -401,7 +395,7 @@ TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
 
     // The same command still works from the owning thread.
     ASSERT_TRUE(runtime
-                    ->dispatch({"user.owned", runtime->revision(), {}})
+                    ->dispatch({"user.owned",  {}})
                     .accepted());
 
     // Exactly one call reached the script, so the refused one was not merely
@@ -436,10 +430,10 @@ TEST(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor) {
                     .accepted());
 
     ASSERT_TRUE(runtime
-                    ->dispatch({"palette.open", runtime->revision(), {}})
+                    ->dispatch({"palette.open",  {}})
                     .accepted());
     auto const executed = runtime->dispatch(
-        {"palette.execute", runtime->revision(),
+        {"palette.execute",
          ssg::PaletteExecuteArguments{"user.viapalette"}});
 
     ASSERT_TRUE(!executed.accepted());

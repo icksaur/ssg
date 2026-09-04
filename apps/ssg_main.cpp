@@ -23,7 +23,6 @@
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Picker.h>
 #include <ssg/platform_files.h>
-#include <ssg/session_snapshot.h>
 #include <ssg/TextInputCommands.h>
 #include <ssg/WordClassification.h>
 
@@ -367,9 +366,9 @@ constexpr std::chrono::milliseconds kInitScriptPollInterval{500};
 // Watches init.lua for changes on a background thread and wakes the main
 // loop to re-evaluate it -- mirrors EditorSession's OWN git-diff-worker
 // shape (background poll thread + wake self-pipe + main-thread-only apply,
-// src/EditorSession.cpp's startGitDiffWorker/drainGitDiffScans) as a
-// SEPARATE, dedicated mechanism (not sharing that worker's thread or
-// pipe): init.lua lives outside the workspace tree, where the library's
+// src/runtime/git_diff_worker.h's GitDiffWorker) as a SEPARATE, dedicated
+// mechanism (not sharing that worker's thread or pipe): init.lua lives
+// outside the workspace tree, where the library's
 // FilesystemWatcher (a workspace-rooted native recursive watcher) does not
 // apply. All Lua evaluation and runtime.dispatch() calls happen on the
 // MAIN thread inside drainAndEvaluate(), never on the background thread,
@@ -699,15 +698,14 @@ int main(int argc, char** argv) {
     int const gitDiffWakeFd = runtime.gitDiffWakeDescriptor();
     STARTUP_MARK("post_create");
 
-    const ssg::ViewId view{1};
-    ssg::GridPresenter gridPresenter{view};
+    ssg::GridPresenter gridPresenter{};
     STARTUP_MARK("post_presenter_init");
 
     // Lives for the rest of the process, so a function init.lua defines
     // remains callable long after the script that defined it has finished.
     ssg::ScriptHost scripts{
         runtime,
-        [&](ssg::ViewActionRequest const& request) {
+        [&](ssg::ViewAction const& request) {
             auto frame = gridPresenter.project(runtime, {terminalSize(), {}});
             if (!frame) {
                 return ssg::ViewActionResult{
@@ -746,7 +744,7 @@ int main(int argc, char** argv) {
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
             auto const openResult = runtime.dispatch(
-                {"file.open", runtime.revision(), *target.file});
+                {"file.open", *target.file});
             startsWithAnEditableDocument = openResult.accepted();
             openedNamedFile = openResult.accepted();
             // panel.show_files (dispatched later, once the deferred tree
@@ -763,7 +761,7 @@ int main(int argc, char** argv) {
     // when the user is ready to keep it.
     if (!startsWithAnEditableDocument) {
         startsWithAnEditableDocument =
-            runtime.dispatch({"file.new", runtime.revision(), {}})
+            runtime.dispatch({"file.new", {}})
                 .accepted();
     }
     STARTUP_MARK("post_open");
@@ -985,13 +983,13 @@ int main(int argc, char** argv) {
         auto snapshot = gridPresenter.project(
             runtime, {terminalSize(), buildReport()});
         if (snapshot) {
-            focus = ssg::effectiveUiFocus(snapshot->sections().uiTree);
-            pickerActivation = snapshot->sections().palette.activePicker;
+            focus = ssg::effectiveUiFocus(snapshot->uiTree);
+            pickerActivation = snapshot->paletteView.activePicker;
             pickerMode = pickerActivation
                              ? pickerActivation->mode
                              : ssg::SearchMode::Command;
             if (auto const* published =
-                    snapshot->sections().palette.candidatesFor(pickerMode)) {
+                    snapshot->paletteView.candidatesFor(pickerMode)) {
                 candidates = *published;
             } else {
                 candidates.clear();
@@ -1003,9 +1001,9 @@ int main(int argc, char** argv) {
             // lags one frame before keep-visible re-settles — the same one-frame
             // clamp the editor's server-side scroll offset already has, and it
             // self-corrects on the next snapshot.
-            if (snapshot->document()) {
+            if (snapshot->document) {
                 picker.paneRows = static_cast<std::uint32_t>(
-                    std::max(snapshot->document()->content.height, 1));
+                    std::max(snapshot->document->content.height, 1));
             }
             // A copy or cut offers its text for the SYSTEM clipboard.  Serve it
             // with OSC 52, which over SSH is the only way the remote editor can
@@ -1014,7 +1012,7 @@ int main(int argc, char** argv) {
             // entirely when the terminal did not advertise the capability --
             // where it would be an unrecognised sequence rather than a copy.
             if (auto const bytes = clipboardWriter.bytesFor(
-                    snapshot->sections().clipboard.systemWrite,
+                    snapshot->clipboardWrite,
                     capabilities.has(ssg::app::Capability::ClipboardWrite))) {
                 writeAll(*bytes);
             }
@@ -1022,7 +1020,7 @@ int main(int argc, char** argv) {
             // controller being open under prompt focus: a palette/settings prompt
             // may be active while the find controller is still open, and find
             // fulfillment must not hijack that unrelated prompt's keys.
-            auto const& findView = snapshot->sections().findReplace;
+            auto const& findView = snapshot->findReplace;
             // The AUTHORITATIVE active-prompt kind: present even for a
             // header-hosted prompt (palette / file
             // finder) whose query renders in the header input line and so
@@ -1030,7 +1028,7 @@ int main(int argc, char** argv) {
             // from this -- rather than from `promptStatus.prompt->kind`, which is
             // nullopt for a header-hosted prompt -- is what lets typed text reach
             // the picker query.
-            auto const activeKind = snapshot->sections().promptStatus.activeKind;
+            auto const activeKind = snapshot->promptStatus.activeKind;
             bool const wasPickerOpen = pickerOpen;
             pickerOpen = activeKind == ssg::PromptKind::Palette;
             if (pickerOpen && !wasPickerOpen) {
@@ -1128,7 +1126,7 @@ int main(int argc, char** argv) {
                     // defers registering that provider until exactly this point.
                     if (!openedNamedFile) {
                         if (auto const panelResult = runtime.dispatch(
-                                {"panel.show_files", runtime.revision(), {}});
+                                {"panel.show_files", {}});
                             !panelResult.accepted()) {
                             std::fprintf(stderr,
                                          "ssg: could not open Files sidebar: %s\n",
@@ -1156,10 +1154,10 @@ int main(int argc, char** argv) {
             // scroll one line and re-extend the selection to the new edge cell, so a
             // drag held still at the edge keeps scrolling and selecting.
             std::optional<int> dragEdge;
-            if (dragging && snapshot && snapshot->document()) {
+            if (dragging && snapshot && snapshot->document) {
                 dragEdge = ssg::app::edge_scroll(
                     dragging, lastPointerRow,
-                    snapshot->document()->content);
+                    snapshot->document->content);
             }
             if (dragEdge) {
                 auto const ready = waitReadiness(kEdgeScrollIntervalMs, signalPipe[0], -1);
@@ -1174,8 +1172,8 @@ int main(int argc, char** argv) {
                 if (!ready.input) {
                     (void)handleInputResult(runtime.input(
                         ssg::DocumentPointerInput{
-                                    {runtime.revision()}, std::nullopt, false,
-                                    false, ssg::InputPointerButton::Primary,
+                                    std::nullopt, false, false,
+                                    ssg::InputPointerButton::Primary,
                                     ssg::InputPointerPhase::Move,
                                     *dragEdge < 0
                                         ? ssg::DocumentPointerEdge::Before
@@ -1293,7 +1291,6 @@ int main(int argc, char** argv) {
                 ssg::app::PointerTargets targets;
                 std::optional<ssg::DocumentPosition> doubleClickPosition;
                 if (snapshot) {
-                    targets.observed_revision = snapshot->revision();
                     ssg::HitTester tester{*snapshot};
                     if (draggingGutter &&
                         decoded.pointer.kind == ssg::app::PointerKind::drag) {
@@ -1346,10 +1343,10 @@ int main(int argc, char** argv) {
                     }
                     if (hit.region == ssg::HitRegion::Editor) {
                         targets.document_position = ssg::SelectionNavigator::resolvePosition(
-                            snapshot->sections().document.text,
+                            snapshot->documentText,
                             ssg::ByteOffset{hit.byteOffset});
                     } else if (hit.region == ssg::HitRegion::Tab) {
-                        auto const& tabs = snapshot->sections().tabs.tabs;
+                        auto const& tabs = snapshot->tabs.tabs;
                         if (hit.tabIndex < tabs.size()) {
                             targets.tab_id = tabs[hit.tabIndex].id;
                         }
@@ -1373,7 +1370,7 @@ int main(int argc, char** argv) {
                                hit.externalFileId && hit.commandId) {
                         const auto fileId = ssg::DiffFileId{*hit.externalFileId};
                         for (auto const& file :
-                             snapshot->sections().externalModification.files) {
+                             snapshot->externalModification.files) {
                             if (file.id != fileId) continue;
                             for (auto const& action : file.actions) {
                                 if (action.command == *hit.commandId) {
@@ -1398,8 +1395,8 @@ int main(int argc, char** argv) {
                     if (leftEditorPress && targets.document_position &&
                         ssg::app::register_click_is_double(
                             clickTracker, std::chrono::steady_clock::now(),
-                            snapshot->sections().tabs.active
-                                ? snapshot->sections().tabs.active->value()
+                            snapshot->tabs.active
+                                ? snapshot->tabs.active->value()
                                 : 0,
                             decoded.pointer.row, decoded.pointer.column,
                             kDoubleClickWindow)) {
@@ -1418,9 +1415,7 @@ int main(int argc, char** argv) {
                         : altDrag;
                 auto plan =
                     doubleClickPosition
-                        ? ssg::app::double_click_dispatch(
-                              *doubleClickPosition,
-                              targets.observed_revision)
+                        ? ssg::app::double_click_dispatch(*doubleClickPosition)
                         : ssg::app::route_pointer(
                               hit, decoded.pointer.button, decoded.pointer.kind,
                               effectiveAlt, dragging, dragAnchor, targets);
@@ -1494,14 +1489,12 @@ int main(int argc, char** argv) {
                     case ssg::app::WheelTarget::editor:
                         (void)handleInputResult(runtime.input(
                             ssg::ScrollLinesInput{
-                                {runtime.revision()},
                                 {ssg::ScrollTarget::Document,
                                  decoded.scroll}}));
                         break;
                     case ssg::app::WheelTarget::tree:
                         (void)handleInputResult(runtime.input(
                             ssg::ScrollLinesInput{
-                                {runtime.revision()},
                                 {ssg::ScrollTarget::Tree,
                                  decoded.scroll}}));
                         break;

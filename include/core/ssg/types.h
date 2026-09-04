@@ -16,17 +16,6 @@
 
 namespace ssg {
 
-// Monotonically increasing session revision. Revision{0} is the null
-// sentinel.  Accepted state changes are totally ordered (spec invariant I3).
-struct Revision {
-    explicit constexpr Revision(uint64_t v = 0) noexcept : value_{v} {}
-    [[nodiscard]] constexpr uint64_t value() const noexcept { return value_; }
-    constexpr auto operator<=>(Revision const&) const noexcept = default;
-
-private:
-    uint64_t value_;
-};
-
 // Zero-based byte offset into a UTF-8 document buffer.  Byte offsets are
 // canonical for document mutation; line and cell indices are derived (spec).
 struct ByteOffset {
