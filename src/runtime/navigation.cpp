@@ -96,7 +96,8 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_vie
         const auto sourceGeneration = ++runtime.workspaceSearchGeneration;
         auto request = runtime.search.beginWorkspaceSearch(
             std::move(query), sourceGeneration);
-        auto batch = runtime.search.evaluate(request);
+        auto batch = runtime.search.evaluate(
+            request, runtime.snapshot(request.sourceRevision));
         (void)runtime.search.publish(batch, sourceGeneration);
     } else if (id == "goto.back") {
         (void)runtime.navigation.back();

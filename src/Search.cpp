@@ -223,7 +223,7 @@ std::vector<SearchResult> WorkspaceSearcher::rank(
 }
 
 WorkspaceSearchBatch WorkspaceSearcher::evaluate(
-    const SearchWorkspaceSource& source,
+    const WorkspaceSnapshot& workspace,
     const WorkspaceSearchRequest& request) const {
     WorkspaceSearchBatch batch{.generation = request.generation,
                                .sourceRevision = request.sourceRevision};
@@ -231,7 +231,6 @@ WorkspaceSearchBatch WorkspaceSearcher::evaluate(
         batch.cancelled = true;
         return batch;
     }
-    const auto workspace = source.snapshot(request.sourceRevision);
     batch.sourceRevision = workspace.revision;
     batch.results = rank(workspace, request.query, request.cancellation);
     batch.cancelled = request.cancellation.cancelled();
@@ -310,9 +309,8 @@ NavigationTransition NavigationHistory::forward() {
     return transition(entries_[*cursor_], NavigationOrigin::User);
 }
 
-SearchController::SearchController(const SearchWorkspaceSource& workspace,
-                                   SearchCommandSource& commands) noexcept
-    : workspace_{workspace}, commands_{commands} {}
+SearchController::SearchController(SearchCommands commands)
+    : commands_{std::move(commands)} {}
 
 void SearchController::openPalette(std::uint64_t revision) {
     state_.paletteOpen = true;
@@ -412,8 +410,9 @@ WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
 }
 
 WorkspaceSearchBatch SearchController::evaluate(
-    const WorkspaceSearchRequest& request) const {
-    return WorkspaceSearcher{}.evaluate(workspace_, request);
+    const WorkspaceSearchRequest& request,
+    const WorkspaceSnapshot& workspace) const {
+    return WorkspaceSearcher{}.evaluate(workspace, request);
 }
 
 void SearchController::cancelWorkspaceSearch() noexcept {

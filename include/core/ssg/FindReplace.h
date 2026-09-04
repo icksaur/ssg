@@ -45,7 +45,6 @@ enum class FindReplaceError : std::uint8_t {
     StaleRevision = 7,
     DocumentRejected = 8,
     WorkspaceRejected = 9,
-    RecoveryRejected = 10,
 };
 
 struct FindRequest {
@@ -184,19 +183,6 @@ struct WorkspaceReplaceArguments {
     bool operator==(const WorkspaceReplaceArguments&) const = default;
 };
 
-struct WorkspaceRecoveryRecord {
-    std::uint64_t sourceRevision{0};
-    std::uint64_t appliedRevision{0};
-    std::vector<WorkspaceFileReplacement> changes;
-    bool operator==(const WorkspaceRecoveryRecord&) const = default;
-};
-
-class WorkspaceRecoverySink {
-public:
-    virtual ~WorkspaceRecoverySink() = default;
-    virtual bool store(const WorkspaceRecoveryRecord& record) = 0;
-};
-
 struct WorkspaceApplyResult {
     FindReplaceError error = FindReplaceError::None;
     std::uint64_t revision{0};
@@ -204,18 +190,6 @@ struct WorkspaceApplyResult {
     [[nodiscard]] bool accepted() const noexcept {
         return error == FindReplaceError::None;
     }
-};
-
-class FindReplaceWorkspace {
-public:
-    virtual ~FindReplaceWorkspace() = default;
-    [[nodiscard]] virtual WorkspaceSnapshot snapshot(
-        std::uint64_t revision) const = 0;
-    [[nodiscard]] virtual WorkspaceApplyResult apply(
-        const WorkspaceReplacePreview& preview,
-        WorkspaceRecoverySink& recoverySink) = 0;
-    [[nodiscard]] virtual WorkspaceApplyResult recover(
-        const WorkspaceRecoveryRecord& record) = 0;
 };
 
 struct WorkspacePreviewResult {
@@ -227,18 +201,8 @@ struct WorkspacePreviewResult {
     }
 };
 
-class WorkspaceReplacer {
-public:
-    [[nodiscard]] WorkspacePreviewResult preview(
-        const FindReplaceWorkspace& workspace, std::uint64_t sourceRevision,
-        const FindRequest& request, std::string replacement) const;
-    [[nodiscard]] WorkspaceApplyResult apply(
-        FindReplaceWorkspace& workspace,
-        const WorkspaceReplacePreview& preview,
-        WorkspaceRecoverySink& recoverySink) const;
-    [[nodiscard]] WorkspaceApplyResult recover(
-        FindReplaceWorkspace& workspace,
-        const WorkspaceRecoveryRecord& record) const;
-};
+[[nodiscard]] WorkspacePreviewResult previewWorkspaceReplace(
+    const WorkspaceSnapshot& snapshot, const FindRequest& request,
+    std::string replacement);
 
 }  // namespace ssg

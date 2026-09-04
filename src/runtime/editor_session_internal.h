@@ -15,7 +15,6 @@
 #include <ssg/CompiledKeymap.h>
 #include <ssg/Keymap.h>
 #include <ssg/LspFeatureController.h>
-#include <ssg/LspWorkspaceEditController.h>
 #include <ssg/LineLayoutCache.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/Picker.h>
@@ -127,12 +126,7 @@ void bindRuntimeHelp(CommandCatalog& catalog, EditorSession::Impl& runtime);
     EditorSession::Impl& runtime, FindReplaceCommand command,
     std::any const& payload);
 
-struct EditorSession::Impl final : SearchWorkspaceSource,
-                                   SearchCommandSource,
-                                   FindReplaceWorkspace,
-                                   WorkspaceRecoverySink,
-                                   LspWorkspaceEditDocuments,
-                                   LspWorkspaceFileOperations {
+struct EditorSession::Impl final {
     Impl(std::filesystem::path canonicalCwd,
          std::filesystem::path scratchRoot,
          std::filesystem::path recoveryRoot,
@@ -341,34 +335,9 @@ struct EditorSession::Impl final : SearchWorkspaceSource,
     [[nodiscard]] TabLifecycleResult reopenTab(
         const TabState& tab, const RecoveryRecordId& compensation);
 
-    [[nodiscard]] WorkspaceSnapshot snapshot(std::uint64_t revision) const override;
-    [[nodiscard]] std::vector<SearchCommandDescriptor> descriptors() const override;
-    PaletteExecutionResult execute(std::string_view commandId) override;
-
-    [[nodiscard]] WorkspaceApplyResult apply(
-        const WorkspaceReplacePreview& preview,
-        WorkspaceRecoverySink& recoverySink) override;
-    [[nodiscard]] WorkspaceApplyResult recover(
-        const WorkspaceRecoveryRecord& record) override;
-    bool store(const WorkspaceRecoveryRecord& record) override;
-
-    [[nodiscard]] std::optional<LspDocumentSnapshot> snapshot(
-        std::string_view uri) const override;
-    [[nodiscard]] LspWorkspaceDocumentWriteResult apply(
-        std::string uri, std::uint64_t expectedRevision, std::string text) override;
-    [[nodiscard]] LspWorkspaceFileResult snapshot(
-        std::string_view uri, LspWorkspaceFileNode& node) const override;
-    [[nodiscard]] LspWorkspaceFileResult createFile(
-        std::string uri, bool overwrite) override;
-    [[nodiscard]] LspWorkspaceFileResult writeFile(
-        std::string uri, std::string content) override;
-    [[nodiscard]] LspWorkspaceFileResult renamePath(
-        std::string oldUri, std::string newUri, bool overwrite) override;
-    [[nodiscard]] LspWorkspaceFileResult deletePath(
-        std::string uri, bool recursive) override;
-    [[nodiscard]] LspWorkspaceFileResult restorePath(
-        std::string uri, const LspWorkspaceFileNode& node) override;
-
+    [[nodiscard]] WorkspaceSnapshot snapshot(std::uint64_t revision) const;
+    [[nodiscard]] WorkspaceApplyResult applyWorkspaceReplace(
+        const WorkspaceReplacePreview& preview);
     [[nodiscard]] std::optional<FileDocumentId> activeDocumentId() const;
     [[nodiscard]] const TabState* activeTabState() const;
     // Whether the active tab shows a live diff. A guard several command handlers

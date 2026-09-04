@@ -254,21 +254,6 @@ std::span<const std::byte> asByteSpan(std::string_view text) noexcept {
     return {reinterpret_cast<const std::byte*>(text.data()), text.size()};
 }
 
-LspWorkspaceFileResult asLspResult(FileIoResult result) {
-    switch (result.status) {
-        case FileIoStatus::Ok:
-            return {};
-        case FileIoStatus::NotFound:
-            return {LspWorkspaceFileError::NotFound, std::move(result.message)};
-        case FileIoStatus::AlreadyExists:
-            return {LspWorkspaceFileError::AlreadyExists,
-                    std::move(result.message)};
-        case FileIoStatus::IoError:
-            break;
-    }
-    return {LspWorkspaceFileError::IoError, std::move(result.message)};
-}
-
 // std::nullopt for a file that could not be read, so an unreadable file can
 // never be mistaken for an empty one. That mistake is destructive here: these
 // results feed staleness comparisons and rollback snapshots, where fake empty
@@ -315,16 +300,6 @@ bool existingDocumentMutated(
         }
     }
     return false;
-}
-
-std::optional<std::filesystem::path> pathFromUri(std::string_view uri) {
-    constexpr std::string_view prefix{"file://"};
-    if (uri.rfind(prefix, 0) != 0) return std::nullopt;
-    return std::filesystem::path{std::string{uri.substr(prefix.size())}};
-}
-
-std::string uriFromPath(std::filesystem::path const& path) {
-    return "file://" + path.generic_string();
 }
 
 std::optional<std::string> relativeToRoot(std::filesystem::path const& root,
@@ -418,7 +393,19 @@ EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
       interaction{assembleWholeScreen("help.open", StyleDimensions{},
                                       Style{}.inputLineSigil),
                   tree, 1},
-      search{*this, *this},
+      search{SearchCommands{
+          .descriptors = [this] {
+              std::vector<SearchCommandDescriptor> result;
+              for (auto const* command : catalog->commands()) {
+                  result.push_back({command->id, command->id});
+              }
+              return result;
+          },
+          .execute = [this](std::string_view commandId) {
+              return PaletteExecutionResult{
+                  catalog->find(commandId) != nullptr, {}};
+          },
+      }},
       theme{defaultTheme()},
       deferringEnrichment{deferEnrichment},
       gitDiffWorker{root, enableGitDiffWorker, enableFilesystemWatcher} {
@@ -681,20 +668,8 @@ WorkspaceSnapshot EditorSession::Impl::snapshot(std::uint64_t revision) const {
     return result;
 }
 
-std::vector<SearchCommandDescriptor> EditorSession::Impl::descriptors() const {
-    std::vector<SearchCommandDescriptor> result;
-    for (auto const* command : catalog->commands()) {
-        result.push_back({command->id, command->id});
-    }
-    return result;
-}
-
-PaletteExecutionResult EditorSession::Impl::execute(std::string_view commandId) {
-    return {catalog->find(commandId) != nullptr, {}};
-}
-
-WorkspaceApplyResult EditorSession::Impl::apply(
-    const WorkspaceReplacePreview& preview, WorkspaceRecoverySink& recoverySink) {
+WorkspaceApplyResult EditorSession::Impl::applyWorkspaceReplace(
+    const WorkspaceReplacePreview& preview) {
     std::vector<std::filesystem::path> paths;
     std::vector<std::string> normalizedPaths;
     paths.reserve(preview.changes.size());
@@ -745,10 +720,6 @@ WorkspaceApplyResult EditorSession::Impl::apply(
         paths.push_back(std::move(*path));
         normalizedPaths.push_back(std::move(normalized));
     }
-    WorkspaceRecoveryRecord record{preview.sourceRevision, std::uint64_t{preview.sourceRevision + 1}, preview.changes};
-    if (!recoverySink.store(record)) {
-        return {FindReplaceError::RecoveryRejected, preview.sourceRevision, "workspace replacement recovery rejected"};
-    }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
         auto const& change = preview.changes[index];
         // Atomic replace, not truncate-then-stream: a replace-across-files run
@@ -777,146 +748,8 @@ WorkspaceApplyResult EditorSession::Impl::apply(
             (void)updateTabsFor(id);
         }
     }
-    return {FindReplaceError::None, record.appliedRevision, {}};
-}
-
-WorkspaceApplyResult EditorSession::Impl::recover(const WorkspaceRecoveryRecord& record) {
-    for (auto const& change : record.changes) {
-        // This is the rollback path, so an interrupted write here would leave a
-        // file that is neither the edited version nor the original.
-        try {
-            replaceFileAtomically(root / change.path, asByteSpan(change.before));
-        } catch (const std::exception&) {
-            return {FindReplaceError::WorkspaceRejected, record.appliedRevision, "failed to recover workspace file"};
-        }
-    }
-    return {FindReplaceError::None, record.appliedRevision, {}};
-}
-
-bool EditorSession::Impl::store(const WorkspaceRecoveryRecord&) { return true; }
-
-std::optional<LspDocumentSnapshot> EditorSession::Impl::snapshot(std::string_view uri) const {
-    auto path = pathFromUri(uri);
-    if (!path) return std::nullopt;
-    for (auto const id : workspace.documents()) {
-        auto state = workspace.state(id);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
-        if (uriFromPath(root / state->key.savedPath()) == uri) {
-            return LspDocumentSnapshot{std::string{uri}, workspace.document(id).revision(), 1,
-                                       workspace.document(id).snapshot().text};
-        }
-    }
-    return std::nullopt;
-}
-
-LspWorkspaceDocumentWriteResult EditorSession::Impl::apply(
-    std::string uri, std::uint64_t expectedRevision, std::string text) {
-    for (auto const id : workspace.documents()) {
-        auto state = workspace.state(id);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
-        if (uriFromPath(root / state->key.savedPath()) != uri) continue;
-        auto& document = const_cast<Document&>(workspace.document(id));
-        if (document.revision() != expectedRevision) {
-            return {document.revision(), LspWorkspaceDocumentError::StaleRevision, "document revision is stale"};
-        }
-        auto snapshot = document.snapshot();
-        auto result = document.apply({snapshot.revision, {{ByteOffset{0}, snapshot.text.size(), std::move(text)}}});
-        if (!result.accepted()) return {document.revision(), LspWorkspaceDocumentError::WriteFailed, result.message};
-        return {result.revision, LspWorkspaceDocumentError::None, {}};
-    }
-    return {std::uint64_t{0}, LspWorkspaceDocumentError::UnknownDocument, "document URI is not open"};
-}
-
-LspWorkspaceFileResult EditorSession::Impl::snapshot(std::string_view uri, LspWorkspaceFileNode& node) const {
-    auto path = pathFromUri(uri);
-    if (!path) return {LspWorkspaceFileError::NotFound, "URI is not a file URI"};
-    if (!std::filesystem::exists(*path)) {
-        node.kind = LspWorkspaceFileNodeKind::Missing;
-    } else if (std::filesystem::is_directory(*path)) {
-        node.kind = LspWorkspaceFileNodeKind::Directory;
-    } else {
-        node.kind = LspWorkspaceFileNodeKind::File;
-        auto content = readFileText(*path);
-        // This snapshot is what a rollback restores from. Recording empty
-        // content for a file that merely could not be read would turn a failed
-        // edit into a truncation.
-        if (!content) {
-            return {LspWorkspaceFileError::IoError,
-                    "failed to read file for snapshot"};
-        }
-        node.content = std::move(*content);
-    }
-    return {};
-}
-
-
-LspWorkspaceFileResult EditorSession::Impl::createFile(std::string uri, bool overwrite) {
-    auto path = pathFromUri(uri);
-    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
-    if (overwrite) {
-        try {
-            replaceFileAtomically(*path, {});
-        } catch (const std::exception& exception) {
-            return {LspWorkspaceFileError::IoError, exception.what()};
-        }
-        return {};
-    }
-    // Exclusive create rather than exists()-then-truncate: the previous form
-    // could report success after another process won the race, and its truncate
-    // would then have destroyed that file's contents.
-    return asLspResult(createFileExclusively(*path, {}));
-}
-
-LspWorkspaceFileResult EditorSession::Impl::writeFile(std::string uri, std::string content) {
-    auto path = pathFromUri(uri);
-    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
-    // Atomic replace rather than truncate-then-stream: an LSP edit interrupted
-    // part way through must leave the user's file whole, not half written.
-    try {
-        replaceFileAtomically(*path, asByteSpan(content));
-    } catch (const std::exception& exception) {
-        return {LspWorkspaceFileError::IoError, exception.what()};
-    }
-    return {};
-}
-
-LspWorkspaceFileResult EditorSession::Impl::renamePath(std::string oldUri, std::string newUri, bool overwrite) {
-    auto oldPath = pathFromUri(oldUri);
-    auto newPath = pathFromUri(newUri);
-    if (!oldPath || !newPath) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
-    if (!overwrite) {
-        return asLspResult(renameFileNoClobber(*oldPath, *newPath));
-    }
-    std::error_code code;
-    // seam-exempt: the LSP protocol asked for overwrite explicitly
-    std::filesystem::rename(*oldPath, *newPath, code);
-    return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
-}
-
-LspWorkspaceFileResult EditorSession::Impl::deletePath(std::string uri, bool recursive) {
-    auto path = pathFromUri(uri);
-    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
-    std::error_code code;
-    if (recursive) std::filesystem::remove_all(*path, code);
-    // seam-exempt: LSP delete has no archive contract; file.delete is the archived path
-    else std::filesystem::remove(*path, code);
-    return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
-}
-
-LspWorkspaceFileResult EditorSession::Impl::restorePath(std::string uri, const LspWorkspaceFileNode& node) {
-    auto path = pathFromUri(uri);
-    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
-    if (node.kind == LspWorkspaceFileNodeKind::Missing) {
-        std::error_code code;
-        std::filesystem::remove_all(*path, code);
-        return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
-    }
-    if (node.kind == LspWorkspaceFileNodeKind::Directory) {
-        std::error_code code;
-        std::filesystem::create_directories(*path, code);
-        return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
-    }
-    return writeFile(std::move(uri), node.content);
+    return {FindReplaceError::None,
+            std::uint64_t{preview.sourceRevision + 1}, {}};
 }
 
 std::optional<FileDocumentId> EditorSession::Impl::activeDocumentId() const {

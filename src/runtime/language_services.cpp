@@ -16,31 +16,7 @@ CommandHandlerResult lspFeatureCommand(EditorSession::Impl& runtime, std::string
     return failure(runtime.lspFeatures.status);
 }
 
-CommandHandlerResult lspWorkspaceCommand(EditorSession::Impl& runtime, std::any const& payload) {
-    auto const* name = payloadAs<std::string>(payload);
-    if (name == nullptr || name->empty()) return failure("rename.symbol requires a new-name payload");
-    runtime.lspFeatures.status = "LSP rename is not configured";
-    return failure(runtime.lspFeatures.status);
-}
-
 } // namespace
-
-// Renaming a symbol across the workspace.  The new name arrives in-process from
-// the prompt that collected it.
-void registerLspWorkspaceEditCommands(CommandCatalog& catalog,
-                                      EditorSession::Impl& runtime) {
-    catalog.add(CommandSpec{
-        .id = "rename.symbol",
-        .owner = "lsp-workspace-edits",
-        .summary = "Symbol",
-        .effect = CommandEffect::Mutation,
-        .luaApi = true,
-        .binding = bindInProcessHandler<std::string>(
-            [&runtime](CommandContext&, std::string const& name) {
-                return lspWorkspaceCommand(runtime, std::any{name});
-            }),
-    });
-}
 
 // Go-to, completion and hover.  None takes an argument: each acts on wherever
 // the cursor already is.
@@ -73,7 +49,6 @@ void registerLspFeatureCommands(CommandCatalog& catalog,
 }
 
 void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorSession::Impl& runtime) {
-    registerLspWorkspaceEditCommands(catalog, runtime);
     registerLspFeatureCommands(catalog, runtime);
 }
 

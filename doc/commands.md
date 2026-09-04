@@ -7,7 +7,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them.
 
-There are 199 commands.
+There are 198 commands.
 
 ## clipboard-register
 
@@ -146,12 +146,6 @@ There are 199 commands.
 | `completion.dismiss` | Dismiss | none | lua |
 | `hover.show` | Show | none | lua |
 | `hover.dismiss` | Dismiss | none | lua |
-
-## lsp-workspace-edits
-
-| Command | Summary | Arguments | Surfaces |
-|---|---|---|---|
-| `rename.symbol` | Symbol | none | lua |
 
 ## prompt-status-surface
 

@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -66,13 +67,6 @@ struct WorkspaceSnapshot {
                            const WorkspaceSnapshot&) = default;
 };
 
-class SearchWorkspaceSource {
-public:
-    virtual ~SearchWorkspaceSource() = default;
-    [[nodiscard]] virtual WorkspaceSnapshot snapshot(
-        std::uint64_t revision) const = 0;
-};
-
 struct SearchCommandDescriptor {
     std::string id;
     std::string label;
@@ -87,12 +81,9 @@ struct PaletteExecutionResult {
                            const PaletteExecutionResult&) = default;
 };
 
-class SearchCommandSource {
-public:
-    virtual ~SearchCommandSource() = default;
-    [[nodiscard]] virtual std::vector<SearchCommandDescriptor> descriptors()
-        const = 0;
-    virtual PaletteExecutionResult execute(std::string_view commandId) = 0;
+struct SearchCommands {
+    std::function<std::vector<SearchCommandDescriptor>()> descriptors;
+    std::function<PaletteExecutionResult(std::string_view)> execute;
 };
 
 class SearchCancellationToken {
@@ -136,7 +127,7 @@ public:
         const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
         const SearchCancellationToken& cancellation) const;
     [[nodiscard]] WorkspaceSearchBatch evaluate(
-        const SearchWorkspaceSource& source,
+        const WorkspaceSnapshot& workspace,
         const WorkspaceSearchRequest& request) const;
 };
 
@@ -206,8 +197,7 @@ enum class SearchPublishResult : std::uint8_t {
 
 class SearchController {
 public:
-    SearchController(const SearchWorkspaceSource& workspace,
-                     SearchCommandSource& commands) noexcept;
+    explicit SearchController(SearchCommands commands);
 
     void openPalette(std::uint64_t revision);
     void closePalette(std::uint64_t revision);
@@ -219,7 +209,8 @@ public:
     [[nodiscard]] WorkspaceSearchRequest beginWorkspaceSearch(
         std::string query, std::uint64_t sourceRevision);
     [[nodiscard]] WorkspaceSearchBatch evaluate(
-        const WorkspaceSearchRequest& request) const;
+        const WorkspaceSearchRequest& request,
+        const WorkspaceSnapshot& workspace) const;
     void cancelWorkspaceSearch() noexcept;
     [[nodiscard]] SearchPublishResult publish(
         const WorkspaceSearchBatch& batch, std::uint64_t currentRevision);
@@ -231,8 +222,7 @@ public:
 private:
     void rankPalette();
 
-    const SearchWorkspaceSource& workspace_;
-    SearchCommandSource& commands_;
+    SearchCommands commands_;
     SearchViewState state_;
     std::optional<WorkspaceSearchRequest> activeRequest_;
 };

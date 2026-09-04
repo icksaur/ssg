@@ -455,11 +455,9 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
             if (arguments == nullptr) {
                 return failure("replace.workspace_preview requires a workspace replace payload");
             }
-            auto result = WorkspaceReplacer{}.preview(
-                                                    runtime,
-                                                    ++runtime.workspaceReplaceGeneration,
-                                                    arguments->request,
-                                                    arguments->replacement);
+            auto result = previewWorkspaceReplace(
+                runtime.snapshot(++runtime.workspaceReplaceGeneration),
+                arguments->request, arguments->replacement);
             if (!result.accepted()) return failure(result.message);
             runtime.workspaceReplacePreview = std::move(result.preview);
             return success();
@@ -478,7 +476,7 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
             if (explicitPreview != nullptr && *explicitPreview != *preview) {
                 return failure("replace.workspace_apply payload does not match the current workspace preview");
             }
-            auto result = WorkspaceReplacer{}.apply(runtime, *preview, runtime);
+            auto result = runtime.applyWorkspaceReplace(*preview);
             if (!result.accepted()) return failure(result.message);
             runtime.workspaceReplacePreview.reset();
             (void)runtime.refreshTree();

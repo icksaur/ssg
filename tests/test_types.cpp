@@ -6,9 +6,7 @@
 //
 // Tests: valid construction/accessor round trips, invalid-construction
 // failures (std::invalid_argument), equality and ordering, and scoped-enum
-// values.  The test executable itself is the CMake fixture that proves the
-// foundation-types component manifest is discovered, built, and registered
-// without editing CMakeLists.txt.
+// values.
 
 #include <ssg/config.h>
 #include <ssg/types.h>

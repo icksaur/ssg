@@ -16,57 +16,53 @@ namespace {
 
 using namespace ssg;
 
-class FixtureWorkspace final : public SearchWorkspaceSource {
-public:
-    WorkspaceSnapshot snapshot(std::uint64_t revision) const override {
-        return {
-            .revision = revision,
-            .files = {
-                {.path = "README.md", .text = "project\n"},
-                {.path = "include/core/ssg/search.h",
-                 .text = "struct SearchResult {};\n"},
-                {.path = "src/search.cpp",
-                 .text = "search ranking\nworker\ncancel token\n"},
-                {.path = "src/session.cpp", .text = "session state\n"},
-            },
-            .symbols = {
-                {.path = "include/core/ssg/search.h",
-                 .name = "SearchResult",
-                 .line = 1,
-                 .column = 8},
-                {.path = "src/search.cpp",
-                 .name = "SearchController",
-                 .line = 1,
-                 .column = 1},
-                {.path = "src/session.cpp",
-                 .name = "EditorSession",
-                 .line = 1,
-                 .column = 1},
-            },
-        };
-    }
-};
+WorkspaceSnapshot fixtureWorkspace(std::uint64_t revision) {
+    return {
+        .revision = revision,
+        .files = {
+        {.path = "README.md", .text = "project\n"},
+        {.path = "include/core/ssg/search.h",
+         .text = "struct SearchResult {};\n"},
+        {.path = "src/search.cpp",
+         .text = "search ranking\nworker\ncancel token\n"},
+        {.path = "src/session.cpp", .text = "session state\n"},
+        },
+        .symbols = {
+        {.path = "include/core/ssg/search.h",
+         .name = "SearchResult",
+         .line = 1,
+         .column = 8},
+        {.path = "src/search.cpp",
+         .name = "SearchController",
+         .line = 1,
+         .column = 1},
+        {.path = "src/session.cpp",
+         .name = "EditorSession",
+         .line = 1,
+         .column = 1},
+        },
+    };
+}
 
-class FixtureCommands final : public SearchCommandSource {
-public:
-    std::vector<SearchCommandDescriptor> descriptors() const override {
-        return {
+SearchCommands fixtureCommands(std::vector<std::string>& executed) {
+    return {
+        .descriptors = [] {
+        return std::vector<SearchCommandDescriptor>{
             {.id = "file.open", .label = "Open File"},
             {.id = "palette.close", .label = "Close Command Palette"},
             {.id = "workspace.open", .label = "Open Workspace"},
         };
-    }
-
-    PaletteExecutionResult execute(std::string_view commandId) override {
+        },
+        .execute = [&executed](std::string_view commandId) {
         executed.emplace_back(commandId);
         if (commandId == "file.open") {
-            return {.accepted = true};
+            return PaletteExecutionResult{.accepted = true};
         }
-        return {.accepted = false, .message = "command rejected"};
-    }
-
-    std::vector<std::string> executed;
-};
+        return PaletteExecutionResult{
+            .accepted = false, .message = "command rejected"};
+        },
+    };
+}
 
 std::vector<std::string> split(std::string_view value, char separator) {
     std::vector<std::string> result;
@@ -118,8 +114,7 @@ TEST(queryModesAreUnambiguousAndLinesAreValidated) {
 }
 
 TEST(acceptedRankingGoldensMatch) {
-    FixtureWorkspace workspace;
-    const auto snapshot = workspace.snapshot(std::uint64_t{7});
+    const auto snapshot = fixtureWorkspace(std::uint64_t{7});
     std::ifstream fixture{
         std::filesystem::path{SSG_SEARCH_FIXTURE_DIR} / "ranking.tsv"};
     ASSERT_TRUE(fixture.good());
@@ -147,25 +142,27 @@ TEST(acceptedRankingGoldensMatch) {
 }
 
 TEST(cancellationSupersessionAndStaleRevisionAreRejected) {
-    FixtureWorkspace workspace;
-    FixtureCommands commands;
-    SearchController controller{workspace, commands};
+    std::vector<std::string> executed;
+    SearchController controller{fixtureCommands(executed)};
 
     const auto first = controller.beginWorkspaceSearch("#search", std::uint64_t{8});
     const auto second = controller.beginWorkspaceSearch("#cancel", std::uint64_t{8});
     ASSERT_TRUE(first.cancellation.cancelled());
 
-    const auto cancelled = controller.evaluate(first);
+    const auto cancelled =
+        controller.evaluate(first, fixtureWorkspace(first.sourceRevision));
     ASSERT_TRUE(cancelled.cancelled);
     ASSERT_EQ(controller.publish(cancelled, std::uint64_t{8}),
               SearchPublishResult::Cancelled);
 
-    auto superseded = controller.evaluate(second);
+    auto superseded =
+        controller.evaluate(second, fixtureWorkspace(second.sourceRevision));
     superseded.generation = first.generation;
     ASSERT_EQ(controller.publish(superseded, std::uint64_t{8}),
               SearchPublishResult::Superseded);
 
-    const auto completed = controller.evaluate(second);
+    const auto completed =
+        controller.evaluate(second, fixtureWorkspace(second.sourceRevision));
     ASSERT_EQ(controller.publish(completed, std::uint64_t{9}),
               SearchPublishResult::StaleRevision);
     ASSERT_EQ(controller.publish(completed, std::uint64_t{8}),
@@ -213,9 +210,8 @@ TEST(navigationHistoryMatchesTransitionTable) {
 }
 
 TEST(paletteUsesInjectedCatalogAndDispatch) {
-    FixtureWorkspace workspace;
-    FixtureCommands commands;
-    SearchController controller{workspace, commands};
+    std::vector<std::string> executed;
+    SearchController controller{fixtureCommands(executed)};
 
     controller.openPalette(std::uint64_t{11});
     controller.updatePaletteQuery("open f", std::uint64_t{12});
@@ -223,7 +219,7 @@ TEST(paletteUsesInjectedCatalogAndDispatch) {
     ASSERT_EQ(labels(controller.viewState().results),
               std::vector<std::string>{"Open File"});
     ASSERT_EQ(controller.executePalette().accepted, true);
-    ASSERT_EQ(commands.executed, std::vector<std::string>{"file.open"});
+    ASSERT_EQ(executed, std::vector<std::string>{"file.open"});
 
     controller.closePalette(std::uint64_t{13});
     ASSERT_FALSE(controller.executePalette().accepted);

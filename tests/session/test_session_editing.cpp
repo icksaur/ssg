@@ -41,35 +41,18 @@ std::string readText(const std::filesystem::path& path) {
     return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
 }
 
-class DiskPreviewWorkspace final : public ssg::FindReplaceWorkspace {
-public:
-    DiskPreviewWorkspace(std::filesystem::path root, std::uint64_t revision)
-        : root_{std::move(root)}, revision_{revision} {}
-
-    ssg::WorkspaceSnapshot snapshot(std::uint64_t revision) const override {
-        ssg::WorkspaceSnapshot snapshot;
-        snapshot.revision = revision_;
-        if (revision != revision_) return snapshot;
-        for (auto const& entry : std::filesystem::recursive_directory_iterator{root_}) {
-            if (!entry.is_regular_file()) continue;
-            auto relative = entry.path().lexically_relative(root_).generic_string();
-            snapshot.files.push_back({relative, readText(entry.path())});
-        }
-        return snapshot;
+ssg::WorkspaceSnapshot diskSnapshot(
+    const std::filesystem::path& root, std::uint64_t revision) {
+    ssg::WorkspaceSnapshot snapshot;
+    snapshot.revision = revision;
+    for (auto const& entry :
+         std::filesystem::recursive_directory_iterator{root}) {
+        if (!entry.is_regular_file()) continue;
+        auto relative = entry.path().lexically_relative(root).generic_string();
+        snapshot.files.push_back({relative, readText(entry.path())});
     }
-
-    ssg::WorkspaceApplyResult apply(const ssg::WorkspaceReplacePreview&, ssg::WorkspaceRecoverySink&) override {
-        return {ssg::FindReplaceError::WorkspaceRejected, revision_, "not used"};
-    }
-
-    ssg::WorkspaceApplyResult recover(const ssg::WorkspaceRecoveryRecord&) override {
-        return {ssg::FindReplaceError::WorkspaceRejected, revision_, "not used"};
-    }
-
-private:
-    std::filesystem::path root_;
-    std::uint64_t revision_;
-};
+    return snapshot;
+}
 
 TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
     auto root = uniqueRoot();
@@ -134,9 +117,8 @@ TEST(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply) {
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
-    DiskPreviewWorkspace oracleWorkspace{root / "workspace", 1};
-    auto oracle =
-        ssg::WorkspaceReplacer{}.preview(oracleWorkspace, 1, request, "dog");
+    auto oracle = ssg::previewWorkspaceReplace(
+        diskSnapshot(root / "workspace", 1), request, "dog");
     ASSERT_TRUE(oracle.accepted());
     ASSERT_EQ(oracle.preview->changes.size(), std::size_t{1});
 
@@ -163,9 +145,8 @@ TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
     auto& runtime = *created.session;
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
-    DiskPreviewWorkspace oracleWorkspace{workspace, 1};
-    auto oracle =
-        ssg::WorkspaceReplacer{}.preview(oracleWorkspace, 1, request, "dog");
+    auto oracle = ssg::previewWorkspaceReplace(
+        diskSnapshot(workspace, 1), request, "dog");
     ASSERT_TRUE(oracle.accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.workspace_preview",  ssg::WorkspaceReplaceArguments{request, "dog"}}).accepted());
 
@@ -204,9 +185,8 @@ TEST(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk) {
     ASSERT_TRUE(runtime.dispatch({"file.open",  std::string{"edit.txt"}}).accepted());
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
-    DiskPreviewWorkspace oracleWorkspace{root / "workspace", 1};
-    auto oracle =
-        ssg::WorkspaceReplacer{}.preview(oracleWorkspace, 1, request, "dog");
+    auto oracle = ssg::previewWorkspaceReplace(
+        diskSnapshot(root / "workspace", 1), request, "dog");
     ASSERT_TRUE(oracle.accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.workspace_preview",  ssg::WorkspaceReplaceArguments{request, "dog"}}).accepted());
     ASSERT_TRUE(runtime.dispatch({"replace.workspace_apply",  {}}).accepted());

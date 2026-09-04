@@ -709,9 +709,6 @@ core/ssg/FileCommands.h	var	ssg::FileCommandDescriptor::pathPrompt	bool
 core/ssg/FileCommands.h	var	ssg::kFileCommands	const std::array<FileCommandDescriptor, 12>
 core/ssg/FindReplace.h	class	ssg::FindMatcher
 core/ssg/FindReplace.h	class	ssg::FindReplaceController
-core/ssg/FindReplace.h	class	ssg::FindReplaceWorkspace
-core/ssg/FindReplace.h	class	ssg::WorkspaceRecoverySink
-core/ssg/FindReplace.h	class	ssg::WorkspaceReplacer
 core/ssg/FindReplace.h	enum	ssg::FindReplaceCommand
 core/ssg/FindReplace.h	enum	ssg::FindReplaceError
 core/ssg/FindReplace.h	enumerator	ssg::FindReplaceCommand::FindClose
@@ -738,7 +735,6 @@ core/ssg/FindReplace.h	enumerator	ssg::FindReplaceError::InvalidSelection
 core/ssg/FindReplace.h	enumerator	ssg::FindReplaceError::InvalidUtf8
 core/ssg/FindReplace.h	enumerator	ssg::FindReplaceError::NoMatch
 core/ssg/FindReplace.h	enumerator	ssg::FindReplaceError::None
-core/ssg/FindReplace.h	enumerator	ssg::FindReplaceError::RecoveryRejected
 core/ssg/FindReplace.h	enumerator	ssg::FindReplaceError::StaleRevision
 core/ssg/FindReplace.h	enumerator	ssg::FindReplaceError::WorkspaceRejected
 core/ssg/FindReplace.h	func	ssg::ByteRange::operator==	bool (const ByteRange &) const noexcept
@@ -762,21 +758,14 @@ core/ssg/FindReplace.h	func	ssg::FindReplaceController::updateReplacement	void (
 core/ssg/FindReplace.h	func	ssg::FindReplaceController::viewState	const FindReplaceViewState &() const noexcept
 core/ssg/FindReplace.h	func	ssg::FindReplaceOperationResult::accepted	bool () const noexcept
 core/ssg/FindReplace.h	func	ssg::FindReplaceViewState::operator==	bool (const FindReplaceViewState &) const
-core/ssg/FindReplace.h	func	ssg::FindReplaceWorkspace::apply	WorkspaceApplyResult (const WorkspaceReplacePreview &, WorkspaceRecoverySink &)
-core/ssg/FindReplace.h	func	ssg::FindReplaceWorkspace::recover	WorkspaceApplyResult (const WorkspaceRecoveryRecord &)
-core/ssg/FindReplace.h	func	ssg::FindReplaceWorkspace::snapshot	WorkspaceSnapshot (std::uint64_t) const
 core/ssg/FindReplace.h	func	ssg::FindResult::accepted	bool () const noexcept
 core/ssg/FindReplace.h	func	ssg::WorkspaceApplyResult::accepted	bool () const noexcept
 core/ssg/FindReplace.h	func	ssg::WorkspaceFileReplacement::operator==	bool (const WorkspaceFileReplacement &) const
 core/ssg/FindReplace.h	func	ssg::WorkspacePreviewResult::accepted	bool () const noexcept
-core/ssg/FindReplace.h	func	ssg::WorkspaceRecoveryRecord::operator==	bool (const WorkspaceRecoveryRecord &) const
-core/ssg/FindReplace.h	func	ssg::WorkspaceRecoverySink::store	bool (const WorkspaceRecoveryRecord &)
 core/ssg/FindReplace.h	func	ssg::WorkspaceReplaceArguments::operator==	bool (const WorkspaceReplaceArguments &) const
 core/ssg/FindReplace.h	func	ssg::WorkspaceReplacePreview::operator==	bool (const WorkspaceReplacePreview &) const
-core/ssg/FindReplace.h	func	ssg::WorkspaceReplacer::apply	WorkspaceApplyResult (FindReplaceWorkspace &, const WorkspaceReplacePreview &, WorkspaceRecoverySink &) const
-core/ssg/FindReplace.h	func	ssg::WorkspaceReplacer::preview	WorkspacePreviewResult (const FindReplaceWorkspace &, std::uint64_t, const FindRequest &, std::string) const
-core/ssg/FindReplace.h	func	ssg::WorkspaceReplacer::recover	WorkspaceApplyResult (FindReplaceWorkspace &, const WorkspaceRecoveryRecord &) const
 core/ssg/FindReplace.h	func	ssg::operator==	bool (const FindQueryArguments &, const FindQueryArguments &)
+core/ssg/FindReplace.h	func	ssg::previewWorkspaceReplace	WorkspacePreviewResult (const WorkspaceSnapshot &, const FindRequest &, std::string)
 core/ssg/FindReplace.h	struct	ssg::ByteRange
 core/ssg/FindReplace.h	struct	ssg::FindMatch
 core/ssg/FindReplace.h	struct	ssg::FindOptions
@@ -788,7 +777,6 @@ core/ssg/FindReplace.h	struct	ssg::FindResult
 core/ssg/FindReplace.h	struct	ssg::WorkspaceApplyResult
 core/ssg/FindReplace.h	struct	ssg::WorkspaceFileReplacement
 core/ssg/FindReplace.h	struct	ssg::WorkspacePreviewResult
-core/ssg/FindReplace.h	struct	ssg::WorkspaceRecoveryRecord
 core/ssg/FindReplace.h	struct	ssg::WorkspaceReplaceArguments
 core/ssg/FindReplace.h	struct	ssg::WorkspaceReplacePreview
 core/ssg/FindReplace.h	var	ssg::ByteRange::begin	ByteOffset
@@ -832,9 +820,6 @@ core/ssg/FindReplace.h	var	ssg::WorkspaceFileReplacement::path	std::string
 core/ssg/FindReplace.h	var	ssg::WorkspacePreviewResult::error	FindReplaceError
 core/ssg/FindReplace.h	var	ssg::WorkspacePreviewResult::message	std::string
 core/ssg/FindReplace.h	var	ssg::WorkspacePreviewResult::preview	std::optional<WorkspaceReplacePreview>
-core/ssg/FindReplace.h	var	ssg::WorkspaceRecoveryRecord::appliedRevision	std::uint64_t
-core/ssg/FindReplace.h	var	ssg::WorkspaceRecoveryRecord::changes	std::vector<WorkspaceFileReplacement>
-core/ssg/FindReplace.h	var	ssg::WorkspaceRecoveryRecord::sourceRevision	std::uint64_t
 core/ssg/FindReplace.h	var	ssg::WorkspaceReplaceArguments::replacement	std::string
 core/ssg/FindReplace.h	var	ssg::WorkspaceReplaceArguments::request	FindRequest
 core/ssg/FindReplace.h	var	ssg::WorkspaceReplacePreview::changes	std::vector<WorkspaceFileReplacement>
@@ -1307,119 +1292,6 @@ core/ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::revealPrimaryCa
 core/ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::selectedIndex	std::optional<std::size_t>
 core/ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::targets	std::vector<LspNavigationTarget>
 core/ssg/LspFeatureController.h	var	ssg::LspNavigationViewState::userNavigation	bool
-core/ssg/LspWorkspaceEditController.h	class	ssg::LspWorkspaceEditApplier
-core/ssg/LspWorkspaceEditController.h	class	ssg::LspWorkspaceEditController
-core/ssg/LspWorkspaceEditController.h	class	ssg::LspWorkspaceEditDocuments
-core/ssg/LspWorkspaceEditController.h	class	ssg::LspWorkspaceFileOperations
-core/ssg/LspWorkspaceEditController.h	enum	ssg::LspRenameError
-core/ssg/LspWorkspaceEditController.h	enum	ssg::LspRenamePublishResult
-core/ssg/LspWorkspaceEditController.h	enum	ssg::LspWorkspaceDocumentError
-core/ssg/LspWorkspaceEditController.h	enum	ssg::LspWorkspaceEditError
-core/ssg/LspWorkspaceEditController.h	enum	ssg::LspWorkspaceEditRecoveryKind
-core/ssg/LspWorkspaceEditController.h	enum	ssg::LspWorkspaceFileError
-core/ssg/LspWorkspaceEditController.h	enum	ssg::LspWorkspaceFileNodeKind
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenameError::InvalidArgument
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenameError::InvalidPosition
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenameError::None
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenameError::StaleRevision
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenameError::SyncError
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenameError::UnknownDocument
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenamePublishResult::Accepted
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenamePublishResult::Cancelled
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenamePublishResult::EditRejected
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenamePublishResult::MalformedResponse
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenamePublishResult::ServerError
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenamePublishResult::StaleRevision
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspRenamePublishResult::Superseded
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceDocumentError::None
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceDocumentError::StaleRevision
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceDocumentError::UnknownDocument
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceDocumentError::WriteFailed
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditError::ApplyFailed
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditError::FileConflict
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditError::InvalidPosition
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditError::MalformedEdit
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditError::None
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditError::OverlappingEdits
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditError::RollbackFailed
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditError::StaleRevision
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditError::UnknownDocument
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditRecoveryKind::DeleteFile
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditRecoveryKind::DocumentText
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditRecoveryKind::RenameFile
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditRecoveryKind::RestorePath
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceEditRecoveryKind::WriteFile
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceFileError::AlreadyExists
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceFileError::InvalidOperation
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceFileError::IoError
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceFileError::None
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceFileError::NotFound
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceFileNodeKind::Directory
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceFileNodeKind::File
-core/ssg/LspWorkspaceEditController.h	enumerator	ssg::LspWorkspaceFileNodeKind::Missing
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspRenamePollResult::accepted	bool () const noexcept
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspRenameRequestResult::accepted	bool () const noexcept
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceDocumentWriteResult::accepted	bool () const noexcept
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditApplier::LspWorkspaceEditApplier	void (LspWorkspaceEditDocuments &, LspWorkspaceFileOperations &, LspWorkspaceEditConfig)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditApplier::apply	LspWorkspaceEditApplyResult (std::string_view)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditApplier::recover	LspWorkspaceEditApplyResult (const LspWorkspaceEditRecoveryRecord &)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditApplyResult::accepted	bool () const noexcept
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditController::LspWorkspaceEditController	void (LspSyncClient &, LspWorkspaceEditApplier &)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditController::poll	LspRenamePollResult (std::uint64_t)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditController::requestRename	LspRenameRequestResult (std::string, std::uint64_t, ByteOffset, std::string)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditDocuments::apply	LspWorkspaceDocumentWriteResult (std::string, std::uint64_t, std::string)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceEditDocuments::snapshot	std::optional<LspDocumentSnapshot> (std::string_view) const
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceFileOperations::createFile	LspWorkspaceFileResult (std::string, bool)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceFileOperations::deletePath	LspWorkspaceFileResult (std::string, bool)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceFileOperations::renamePath	LspWorkspaceFileResult (std::string, std::string, bool)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceFileOperations::restorePath	LspWorkspaceFileResult (std::string, const LspWorkspaceFileNode &)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceFileOperations::snapshot	LspWorkspaceFileResult (std::string_view, LspWorkspaceFileNode &) const
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceFileOperations::writeFile	LspWorkspaceFileResult (std::string, std::string)
-core/ssg/LspWorkspaceEditController.h	func	ssg::LspWorkspaceFileResult::accepted	bool () const noexcept
-core/ssg/LspWorkspaceEditController.h	func	ssg::operator==	bool (const LspRenamePublication &, const LspRenamePublication &)
-core/ssg/LspWorkspaceEditController.h	func	ssg::operator==	bool (const LspWorkspaceEditRecoveryOperation &, const LspWorkspaceEditRecoveryOperation &)
-core/ssg/LspWorkspaceEditController.h	func	ssg::operator==	bool (const LspWorkspaceEditRecoveryRecord &, const LspWorkspaceEditRecoveryRecord &) noexcept(false)
-core/ssg/LspWorkspaceEditController.h	func	ssg::operator==	bool (const LspWorkspaceFileNode &, const LspWorkspaceFileNode &)
-core/ssg/LspWorkspaceEditController.h	struct	ssg::LspRenamePollResult
-core/ssg/LspWorkspaceEditController.h	struct	ssg::LspRenamePublication
-core/ssg/LspWorkspaceEditController.h	struct	ssg::LspRenameRequestResult
-core/ssg/LspWorkspaceEditController.h	struct	ssg::LspWorkspaceDocumentWriteResult
-core/ssg/LspWorkspaceEditController.h	struct	ssg::LspWorkspaceEditApplyResult
-core/ssg/LspWorkspaceEditController.h	struct	ssg::LspWorkspaceEditConfig
-core/ssg/LspWorkspaceEditController.h	struct	ssg::LspWorkspaceEditRecoveryOperation
-core/ssg/LspWorkspaceEditController.h	struct	ssg::LspWorkspaceEditRecoveryRecord
-core/ssg/LspWorkspaceEditController.h	struct	ssg::LspWorkspaceFileNode
-core/ssg/LspWorkspaceEditController.h	struct	ssg::LspWorkspaceFileResult
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenamePollResult::error	LspSyncError
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenamePollResult::message	std::string
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenamePollResult::publications	std::vector<LspRenamePublication>
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenamePublication::message	std::string
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenamePublication::recovery	std::optional<LspWorkspaceEditRecoveryRecord>
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenamePublication::requestId	std::uint64_t
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenamePublication::result	LspRenamePublishResult
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenameRequestResult::error	LspRenameError
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenameRequestResult::message	std::string
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspRenameRequestResult::requestId	std::uint64_t
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceDocumentWriteResult::error	LspWorkspaceDocumentError
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceDocumentWriteResult::message	std::string
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceDocumentWriteResult::revision	std::uint64_t
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditApplyResult::error	LspWorkspaceEditError
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditApplyResult::message	std::string
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditApplyResult::recovery	std::optional<LspWorkspaceEditRecoveryRecord>
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditConfig::maximumJsonDepth	std::size_t
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::expectedRevision	std::uint64_t
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::kind	LspWorkspaceEditRecoveryKind
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::node	LspWorkspaceFileNode
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::overwrite	bool
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::recursive	bool
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::secondaryUri	std::string
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::text	std::string
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryOperation::uri	std::string
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceEditRecoveryRecord::operations	std::vector<LspWorkspaceEditRecoveryOperation>
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceFileNode::content	std::string
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceFileNode::kind	LspWorkspaceFileNodeKind
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceFileResult::error	LspWorkspaceFileError
-core/ssg/LspWorkspaceEditController.h	var	ssg::LspWorkspaceFileResult::message	std::string
 core/ssg/LuaCommandHost.h	alias	ssg::LuaDispatcher
 core/ssg/LuaCommandHost.h	alias	ssg::LuaGenerationGate
 core/ssg/LuaCommandHost.h	class	ssg::LuaCommandHost
@@ -1900,10 +1772,8 @@ core/ssg/ScriptHost.h	func	ssg::ScriptHost::evaluate	LuaResult (std::string_view
 core/ssg/ScriptHost.h	func	ssg::ScriptHost::operator=	ScriptHost &(const ScriptHost &)
 core/ssg/Search.h	class	ssg::NavigationHistory
 core/ssg/Search.h	class	ssg::SearchCancellationToken
-core/ssg/Search.h	class	ssg::SearchCommandSource
 core/ssg/Search.h	class	ssg::SearchController
 core/ssg/Search.h	class	ssg::SearchNavigator
-core/ssg/Search.h	class	ssg::SearchWorkspaceSource
 core/ssg/Search.h	class	ssg::WorkspaceSearcher
 core/ssg/Search.h	enum	ssg::NavigationOrigin
 core/ssg/Search.h	enum	ssg::SearchMode
@@ -1929,13 +1799,11 @@ core/ssg/Search.h	func	ssg::NavigationHistory::visit	NavigationTransition (Navig
 core/ssg/Search.h	func	ssg::SearchCancellationToken::SearchCancellationToken	void ()
 core/ssg/Search.h	func	ssg::SearchCancellationToken::cancel	void () const noexcept
 core/ssg/Search.h	func	ssg::SearchCancellationToken::cancelled	bool () const noexcept
-core/ssg/Search.h	func	ssg::SearchCommandSource::descriptors	std::vector<SearchCommandDescriptor> () const
-core/ssg/Search.h	func	ssg::SearchCommandSource::execute	PaletteExecutionResult (std::string_view)
-core/ssg/Search.h	func	ssg::SearchController::SearchController	void (const SearchWorkspaceSource &, SearchCommandSource &) noexcept
+core/ssg/Search.h	func	ssg::SearchController::SearchController	void (SearchCommands)
 core/ssg/Search.h	func	ssg::SearchController::beginWorkspaceSearch	WorkspaceSearchRequest (std::string, std::uint64_t)
 core/ssg/Search.h	func	ssg::SearchController::cancelWorkspaceSearch	void () noexcept
 core/ssg/Search.h	func	ssg::SearchController::closePalette	void (std::uint64_t)
-core/ssg/Search.h	func	ssg::SearchController::evaluate	WorkspaceSearchBatch (const WorkspaceSearchRequest &) const
+core/ssg/Search.h	func	ssg::SearchController::evaluate	WorkspaceSearchBatch (const WorkspaceSearchRequest &, const WorkspaceSnapshot &) const
 core/ssg/Search.h	func	ssg::SearchController::executePalette	PaletteExecutionResult ()
 core/ssg/Search.h	func	ssg::SearchController::openPalette	void (std::uint64_t)
 core/ssg/Search.h	func	ssg::SearchController::publish	SearchPublishResult (const WorkspaceSearchBatch &, std::uint64_t)
@@ -1945,8 +1813,7 @@ core/ssg/Search.h	func	ssg::SearchController::updatePaletteQuery	void (std::stri
 core/ssg/Search.h	func	ssg::SearchController::viewState	const SearchViewState &() const noexcept
 core/ssg/Search.h	func	ssg::SearchNavigator::gotoLine	std::optional<NavigationTarget> (std::string, const ParsedSearchQuery &) const
 core/ssg/Search.h	func	ssg::SearchNavigator::target	std::optional<NavigationTarget> (const SearchResult &) const
-core/ssg/Search.h	func	ssg::SearchWorkspaceSource::snapshot	WorkspaceSnapshot (std::uint64_t) const
-core/ssg/Search.h	func	ssg::WorkspaceSearcher::evaluate	WorkspaceSearchBatch (const SearchWorkspaceSource &, const WorkspaceSearchRequest &) const
+core/ssg/Search.h	func	ssg::WorkspaceSearcher::evaluate	WorkspaceSearchBatch (const WorkspaceSnapshot &, const WorkspaceSearchRequest &) const
 core/ssg/Search.h	func	ssg::WorkspaceSearcher::parse	ParsedSearchQuery (std::string_view) const
 core/ssg/Search.h	func	ssg::WorkspaceSearcher::rank	std::vector<SearchResult> (const WorkspaceSnapshot &, const ParsedSearchQuery &, const SearchCancellationToken &) const
 core/ssg/Search.h	func	ssg::operator==	bool (const NavigationTarget &, const NavigationTarget &) noexcept(false)
@@ -1964,6 +1831,7 @@ core/ssg/Search.h	struct	ssg::NavigationTransition
 core/ssg/Search.h	struct	ssg::PaletteExecutionResult
 core/ssg/Search.h	struct	ssg::ParsedSearchQuery
 core/ssg/Search.h	struct	ssg::SearchCommandDescriptor
+core/ssg/Search.h	struct	ssg::SearchCommands
 core/ssg/Search.h	struct	ssg::SearchResult
 core/ssg/Search.h	struct	ssg::SearchViewState
 core/ssg/Search.h	struct	ssg::WorkspaceFile
@@ -1986,6 +1854,8 @@ core/ssg/Search.h	var	ssg::ParsedSearchQuery::mode	SearchMode
 core/ssg/Search.h	var	ssg::ParsedSearchQuery::text	std::string
 core/ssg/Search.h	var	ssg::SearchCommandDescriptor::id	std::string
 core/ssg/Search.h	var	ssg::SearchCommandDescriptor::label	std::string
+core/ssg/Search.h	var	ssg::SearchCommands::descriptors	std::function<std::vector<SearchCommandDescriptor> ()>
+core/ssg/Search.h	var	ssg::SearchCommands::execute	std::function<PaletteExecutionResult (std::string_view)>
 core/ssg/Search.h	var	ssg::SearchResult::column	std::size_t
 core/ssg/Search.h	var	ssg::SearchResult::label	std::string
 core/ssg/Search.h	var	ssg::SearchResult::line	std::optional<LineIndex>

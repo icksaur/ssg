@@ -59,92 +59,6 @@ SelectionSet caret(std::uint64_t offset) {
     return SelectionSet{{Selection{p, p}}};
 }
 
-class RecordingSink final : public WorkspaceRecoverySink {
-public:
-    bool accept = true;
-    std::optional<WorkspaceRecoveryRecord> record;
-
-    bool store(const WorkspaceRecoveryRecord& value) override {
-        if (!accept) {
-            return false;
-        }
-        record = value;
-        return true;
-    }
-};
-
-class MemoryWorkspace final : public FindReplaceWorkspace {
-public:
-    explicit MemoryWorkspace(std::vector<WorkspaceFile> files)
-        : files_(std::move(files)) {}
-
-    WorkspaceSnapshot snapshot(std::uint64_t requested) const override {
-        if (requested != revision_) {
-            return WorkspaceSnapshot{revision_, {}, {}};
-        }
-        return WorkspaceSnapshot{revision_, files_, {}};
-    }
-
-    WorkspaceApplyResult apply(const WorkspaceReplacePreview& preview,
-                               WorkspaceRecoverySink& sink) override {
-        if (preview.sourceRevision != revision_) {
-            return {FindReplaceError::StaleRevision, revision_,
-                    "stale workspace preview"};
-        }
-        auto candidate = files_;
-        for (const auto& change : preview.changes) {
-            const auto it = std::find_if(
-                candidate.begin(), candidate.end(), [&](const WorkspaceFile& f) {
-                    return f.path == change.path;
-                });
-            if (it == candidate.end() || it->text != change.before) {
-                return {FindReplaceError::WorkspaceRejected, revision_,
-                        "workspace changed"};
-            }
-            it->text = change.after;
-        }
-        WorkspaceRecoveryRecord record{revision_, std::uint64_t{revision_ + 1},
-                                       preview.changes};
-        if (!sink.store(record)) {
-            return {FindReplaceError::RecoveryRejected, revision_,
-                    "recovery sink rejected record"};
-        }
-        files_ = std::move(candidate);
-        revision_ = record.appliedRevision;
-        return {FindReplaceError::None, revision_, {}};
-    }
-
-    WorkspaceApplyResult recover(
-        const WorkspaceRecoveryRecord& record) override {
-        if (record.appliedRevision != revision_) {
-            return {FindReplaceError::StaleRevision, revision_,
-                    "stale recovery record"};
-        }
-        auto candidate = files_;
-        for (const auto& change : record.changes) {
-            const auto it = std::find_if(
-                candidate.begin(), candidate.end(), [&](const WorkspaceFile& f) {
-                    return f.path == change.path;
-                });
-            if (it == candidate.end() || it->text != change.after) {
-                return {FindReplaceError::WorkspaceRejected, revision_,
-                        "workspace changed"};
-            }
-            it->text = change.before;
-        }
-        files_ = std::move(candidate);
-        revision_ = std::uint64_t{revision_ + 1};
-        return {FindReplaceError::None, revision_, {}};
-    }
-
-    const std::vector<WorkspaceFile>& files() const { return files_; }
-    std::uint64_t revision() const { return revision_; }
-
-private:
-    std::uint64_t revision_{1};
-    std::vector<WorkspaceFile> files_;
-};
-
 TEST(literalCaseWordAndSelectionMatchIndependentOracle) {
     const std::vector<std::string> texts = {
         "", "a", "Aa aA", "cat scatter cat_cat cat", "na\xC3\xAFve na"};
@@ -272,35 +186,17 @@ TEST(currentReplaceIsAtomicOneUndoUnitAndStaleSafe) {
     ASSERT_EQ(document.snapshot(), before);
 }
 
-TEST(workspacePreviewApplyRecoverAndFailuresRoundTrip) {
-    MemoryWorkspace workspace{{{"a.txt", "cat cat"},
-                               {"b.txt", "dog cat"},
-                               {"c.txt", "none"}}};
+TEST(workspacePreviewProducesReplacements) {
+    WorkspaceSnapshot workspace{
+        1,
+        {{"a.txt", "cat cat"}, {"b.txt", "dog cat"}, {"c.txt", "none"}},
+        {},
+    };
     FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
-    auto preview =
-        WorkspaceReplacer{}.preview(workspace, workspace.revision(), request, "x");
+    auto preview = previewWorkspaceReplace(workspace, request, "x");
     ASSERT_TRUE(preview.accepted());
     ASSERT_EQ(preview.preview->changes.size(), std::size_t{2});
     ASSERT_EQ(preview.preview->changes[0].after, std::string{"x x"});
-
-    RecordingSink rejecting;
-    rejecting.accept = false;
-    const auto original = workspace.files();
-    auto rejected = WorkspaceReplacer{}.apply(workspace, *preview.preview, rejecting);
-    ASSERT_EQ(rejected.error, FindReplaceError::RecoveryRejected);
-    ASSERT_EQ(workspace.files(), original);
-
-    RecordingSink sink;
-    auto applied = WorkspaceReplacer{}.apply(workspace, *preview.preview, sink);
-    ASSERT_TRUE(applied.accepted());
-    ASSERT_TRUE(sink.record.has_value());
-    ASSERT_EQ(workspace.files()[0].text, std::string{"x x"});
-    ASSERT_TRUE(WorkspaceReplacer{}.recover(workspace, *sink.record).accepted());
-    ASSERT_EQ(workspace.files(), original);
-
-    auto stale = WorkspaceReplacer{}.apply(workspace, *preview.preview, sink);
-    ASSERT_EQ(stale.error, FindReplaceError::StaleRevision);
-    ASSERT_EQ(workspace.files(), original);
 }
 
 TEST(viewStateTransitionsAreExact) {
@@ -329,7 +225,7 @@ SSG_TEST_SUITE(test_find_replace) {
     RUN(ssg::regexOracleCoversGrammarCaseWordAndInvalidPattern);
     RUN(ssg::zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels);
     RUN(ssg::currentReplaceIsAtomicOneUndoUnitAndStaleSafe);
-    RUN(ssg::workspacePreviewApplyRecoverAndFailuresRoundTrip);
+    RUN(ssg::workspacePreviewProducesReplacements);
     RUN(ssg::viewStateTransitionsAreExact);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

@@ -802,19 +802,14 @@ const FindReplaceViewState& FindReplaceController::viewState() const noexcept {
     return state_;
 }
 
-WorkspacePreviewResult WorkspaceReplacer::preview(
-    const FindReplaceWorkspace& workspace, std::uint64_t sourceRevision,
-    const FindRequest& request, std::string replacement) const {
+WorkspacePreviewResult previewWorkspaceReplace(
+    const WorkspaceSnapshot& snapshot, const FindRequest& request,
+    std::string replacement) {
     if (request.options.selectionOnly) {
         return {FindReplaceError::InvalidSelection, std::nullopt,
                 "workspace replace cannot use a document selection"};
     }
-    const auto snapshot = workspace.snapshot(sourceRevision);
-    if (snapshot.revision != sourceRevision) {
-        return {FindReplaceError::StaleRevision, std::nullopt,
-                "workspace snapshot revision is stale"};
-    }
-    WorkspaceReplacePreview preview{sourceRevision,
+    WorkspaceReplacePreview preview{snapshot.revision,
                                     request.query,
                                     std::move(replacement),
                                     request.options,
@@ -840,18 +835,6 @@ WorkspacePreviewResult WorkspaceReplacer::preview(
         }
     }
     return {FindReplaceError::None, std::move(preview), {}};
-}
-
-WorkspaceApplyResult WorkspaceReplacer::apply(
-    FindReplaceWorkspace& workspace, const WorkspaceReplacePreview& preview,
-    WorkspaceRecoverySink& recoverySink) const {
-    return workspace.apply(preview, recoverySink);
-}
-
-WorkspaceApplyResult WorkspaceReplacer::recover(
-    FindReplaceWorkspace& workspace,
-    const WorkspaceRecoveryRecord& record) const {
-    return workspace.recover(record);
 }
 
 }  // namespace ssg

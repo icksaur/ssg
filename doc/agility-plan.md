@@ -67,7 +67,7 @@ Do these in order. The first item is the generator of everything else.
 2. **Generate the command catalog from `data/required-commands.json`.** Delete
    `kExpectedCommands`, `kExpectedCategoryCounts`, both count `static_assert`s,
    and the hand-written body of `tests/session/command_cases.h`. Use
-   `configure_file`, already proven in `cmake/components/editor-session-assembly.cmake:11`.
+   `configure_file`.
    Adding a command drops from **13 edit sites to 2**. Removes ~410 duplicated lines.
 3. **Delete the 10 arbitrary-appearance fixtures** (`fixtures/tui/*` 363 lines,
    `fixtures/ui_layout/*` 42, `fixtures/prompt_status/*` 11) and replace with
@@ -167,4 +167,3 @@ This is a real editor that writes users' files.
 5. **`test_cell_layout.cpp` and `fixtures/layout/cells/*`.** UAX #29/#11 is
    defined outside SSG. This is the textbook correct use of oracle-first.
 6. **Linux/Windows adapter parity** and **`Theme` as the only colour source.**
-7. **The `cmake/components/*.cmake` structure.** It is why a rebuild is 4.6s.
