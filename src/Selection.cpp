@@ -265,16 +265,16 @@ public:
         ViewportDimensions dimensions,
         std::uint32_t requestedFirstVisualRow,
         const DiffFileView* diff = nullptr) const {
-        return Viewport{}.compute(allRuns(), dimensions,
-                                  requestedFirstVisualRow, diff);
+        return computeViewport(allRuns(), dimensions, requestedFirstVisualRow,
+                               diff);
     }
 
     [[nodiscard]] RowProjection rowProjection(
         std::uint32_t columns, const DiffFileView& diff) const {
         if (columns == kNoWrap) {
-            return Viewport{}.rowProjectionUnwrapped(text_, diff);
+            return rowProjectionUnwrapped(text_, diff);
         }
-        return Viewport{}.rowProjection(allRuns(), columns, diff);
+        return ssg::rowProjection(allRuns(), columns, diff);
     }
 
     [[nodiscard]] std::uint32_t visualRow(
@@ -860,9 +860,9 @@ SelectionNavigationResult SelectionNavigator::apply(
     // the exact wrapped viewport.
     const auto currentViewport =
         wordWrap ? model.viewportState(viewport, before.firstVisualRow, diff)
-                  : Viewport{}.computeUnwrapped(text, viewport,
-                                               before.firstVisualRow, 0,
-                                               tabWidth, diff);
+                  : computeUnwrappedViewport(text, viewport,
+                                             before.firstVisualRow, 0,
+                                             tabWidth, diff);
     auto rowProjection =
         diff == nullptr
             ? std::optional<RowProjection>{}

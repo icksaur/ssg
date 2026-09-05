@@ -155,7 +155,7 @@ public:
             static_cast<std::uint32_t>(columns_),
             static_cast<std::uint32_t>(rows_)};
         auto presentation = GridPresentation{
-            .viewport = Viewport{}.computeUnwrapped(
+            .viewport = computeUnwrappedViewport(
                 text_, dimensions, firstRow_, 0, 4),
             .style = style_,
             .palette = palette_,
@@ -295,7 +295,7 @@ public:
                     static_cast<std::uint32_t>(std::max(content.height, 1))};
                 const auto activeDiff = presentation.diff.fileForIdentity(
                     presentation.diffFileIdentity);
-                presentation.viewport = Viewport{}.computeUnwrapped(
+                presentation.viewport = computeUnwrappedViewport(
                     presentation.documentText, pane, firstRow_, 0, 4,
                     activeDiff ? &activeDiff->get() : nullptr, dimensions);
             }

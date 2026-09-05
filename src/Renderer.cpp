@@ -161,10 +161,10 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
             end == std::string::npos ? text.size() - begin : end - begin;
         if (referenced.contains(index)) {
             auto const line = std::string_view{text}.substr(begin, length);
+            ++gRenderSegmentationCalls;
             if (cache) {
                 lines.emplace(index, LogicalLine{line, begin, cache->run(line, 4)});
             } else {
-                ++gRenderSegmentationCalls;
                 lines.emplace(index, LogicalLine{line, begin,
                                                  GraphemeLayout{}.computeRun(line)});
             }
@@ -1183,8 +1183,7 @@ std::string CellGrid::canonical() const {
     return output.str();
 }
 
-CellGrid Renderer::render(GridPresentation const& snapshot,
-                          LineLayoutCache* lineCache) const {
+CellGrid Renderer::render(GridPresentation const& snapshot) {
     auto const& theme = snapshot.theme;
     auto const& style = snapshot.style;
     const FocusTarget effectiveFocus =
@@ -1333,7 +1332,7 @@ CellGrid Renderer::render(GridPresentation const& snapshot,
             fillRect(grid, document.content, foreground, documentBackground,
                      documentBackgroundRole);
             paintDocument(grid, snapshot, document.content, theme,
-                           documentBackground, style, lineCache);
+                           documentBackground, style, &lineCache_);
             if (snapshot.tabs.tabs.empty() &&
                 snapshot.documentRevision == 0) {
                 paintText(grid, document.content.x, document.content.y,

@@ -6,7 +6,7 @@
 
 #include <ssg/color.h>
 #include <ssg/Renderer.h>
-#include <ssg/Scroll.h>
+#include <ssg/Viewport.h>
 
 #include <array>
 #include <chrono>

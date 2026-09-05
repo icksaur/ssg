@@ -1158,7 +1158,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     projection.scrollbarRect = pane.scrollbarGutter;
     projection.firstVisible = 20;
     projection.selected = std::uint32_t{25};
-    projection.scrollbar = ssg::Viewport{}.scrollbarMetrics(40, rows, 20);
+    projection.scrollbar = ssg::scrollbarMetrics(40, rows, 20);
     for (std::uint32_t i = 0; i < rows; ++i) {
         projection.rows.push_back(
             {"cmd-" + std::to_string(20 + i), ""});
@@ -1208,7 +1208,7 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     projection.firstVisible = 0;
     projection.selected = std::uint32_t{0};
     projection.scrollbar =
-        ssg::Viewport{}.scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
+        ssg::scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
     projection.rows = {{"a", ""}, {"b", ""}};
     auto sections = *snapshot;
     showPicker(sections);
@@ -2048,10 +2048,8 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
     }
 }
 
-// Lever 2 (visible-line cache): render re-shapes the visible document lines each
-// frame. With a borrowed LineLayoutCache a cached render segments strictly fewer
-// lines than an uncached one (the document lines are reused; only the uncached
-// chrome shaping remains), and the two grids are byte-identical.
+// Lever 2 (visible-line cache): a renderer reuses visible document lines across
+// frames while a fresh renderer shapes them again.
 TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
     auto root = uniqueRoot();
     std::string doc;
@@ -2065,14 +2063,14 @@ TEST(cachedRenderReusesDocumentLineShapingAndMatchesUncached) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
-    ssg::LineLayoutCache cache;
-    auto warm = ssg::Renderer{}.render(*snapshot, &cache);  // warm
+    ssg::Renderer renderer;
+    auto warm = renderer.render(*snapshot);
     ssg::GraphemeLayout::resetCellRunCalls();
-    auto cached =
-        ssg::Renderer{}.render(*snapshot, &cache);
+    auto cached = renderer.render(*snapshot);
     auto const cachedCalls = ssg::GraphemeLayout::cellRunCalls();
     ssg::GraphemeLayout::resetCellRunCalls();
-    auto uncached = ssg::Renderer{}.render(*snapshot);
+    ssg::Renderer uncachedRenderer;
+    auto uncached = uncachedRenderer.render(*snapshot);
     auto const uncachedCalls = ssg::GraphemeLayout::cellRunCalls();
 
     // The cache reused the visible document lines: strictly fewer segmentations.

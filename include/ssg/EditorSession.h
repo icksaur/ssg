@@ -20,7 +20,7 @@
 #include <ssg/Theme.h>
 #include <ssg/TreeModel.h>
 #include <ssg/UiTree.h>
-#include <ssg/Scroll.h>
+#include <ssg/Viewport.h>
 #include <ssg/LspSyncClient.h>
 
 #include <cstdint>

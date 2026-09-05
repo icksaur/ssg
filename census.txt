@@ -2359,7 +2359,7 @@ ssg/Renderer.h	func	ssg::CellGrid::canonical	std::string () const
 ssg/Renderer.h	func	ssg::CellGridCell::operator==	bool (const CellGridCell &) const
 ssg/Renderer.h	func	ssg::CellHyperlink::operator==	bool (const CellHyperlink &) const
 ssg/Renderer.h	func	ssg::GridPosition::operator==	bool (const GridPosition &) const
-ssg/Renderer.h	func	ssg::Renderer::render	CellGrid (const GridPresentation &, LineLayoutCache *) const
+ssg/Renderer.h	func	ssg::Renderer::render	CellGrid (const GridPresentation &)
 ssg/Renderer.h	func	ssg::Renderer::renderSegmentationCalls	std::uint64_t ()
 ssg/Renderer.h	func	ssg::Renderer::resetRenderSegmentationCalls	void ()
 ssg/Renderer.h	struct	ssg::CellGrid
@@ -2531,75 +2531,6 @@ ssg/ScriptHost.h	func	ssg::ScriptHost::ScriptHost	void (EditorSession &, ViewAct
 ssg/ScriptHost.h	func	ssg::ScriptHost::ScriptHost	void (const ScriptHost &)
 ssg/ScriptHost.h	func	ssg::ScriptHost::evaluate	LuaResult (std::string_view)
 ssg/ScriptHost.h	func	ssg::ScriptHost::operator=	ScriptHost &(const ScriptHost &)
-ssg/Scroll.h	class	ssg::ScrollOffset
-ssg/Scroll.h	class	ssg::Viewport
-ssg/Scroll.h	func	ssg::CellHitTarget::operator==	bool (const CellHitTarget &) const noexcept
-ssg/Scroll.h	func	ssg::ListScrollView::operator==	bool (const ListScrollView &) const noexcept
-ssg/Scroll.h	func	ssg::ScrollOffset::ScrollOffset	void ()
-ssg/Scroll.h	func	ssg::ScrollOffset::ScrollOffset	void (uint32_t) noexcept
-ssg/Scroll.h	func	ssg::ScrollOffset::byLines	void (std::int64_t, uint32_t, uint32_t)
-ssg/Scroll.h	func	ssg::ScrollOffset::byPages	void (std::int64_t, uint32_t, uint32_t)
-ssg/Scroll.h	func	ssg::ScrollOffset::firstVisible	uint32_t () const noexcept
-ssg/Scroll.h	func	ssg::ScrollOffset::operator==	bool (const ScrollOffset &) const noexcept
-ssg/Scroll.h	func	ssg::ScrollOffset::resolve	ListScrollView (uint32_t, uint32_t) const
-ssg/Scroll.h	func	ssg::ScrollOffset::revealSelection	void (uint32_t, uint32_t, uint32_t)
-ssg/Scroll.h	func	ssg::ScrollOffset::setFirstVisible	void (uint32_t) noexcept
-ssg/Scroll.h	func	ssg::ScrollOffset::toFraction	void (uint32_t, uint32_t, uint32_t, uint32_t)
-ssg/Scroll.h	func	ssg::SelectionNavigation::operator==	bool (const SelectionNavigation &) const noexcept
-ssg/Scroll.h	func	ssg::Viewport::compute	ViewportViewState (std::span<const CellRun>, ViewportDimensions, uint32_t, const DiffFileView *, std::optional<ViewportDimensions>) const
-ssg/Scroll.h	func	ssg::Viewport::computeUnwrapped	ViewportViewState (std::string_view, ViewportDimensions, uint32_t, uint32_t, int, const DiffFileView *, std::optional<ViewportDimensions>, LineLayoutCache *) const
-ssg/Scroll.h	func	ssg::Viewport::deriveDelta	ViewportDelta (const ViewportViewState &, const ViewportViewState &) const
-ssg/Scroll.h	func	ssg::Viewport::listScrollView	ListScrollView (uint32_t, uint32_t, uint32_t, std::optional<uint32_t>, bool) const
-ssg/Scroll.h	func	ssg::Viewport::rowProjection	RowProjection (std::span<const CellRun>, uint32_t, const DiffFileView &) const
-ssg/Scroll.h	func	ssg::Viewport::rowProjectionUnwrapped	RowProjection (std::string_view, const DiffFileView &) const
-ssg/Scroll.h	func	ssg::Viewport::scrollBy	ViewportViewState (std::span<const CellRun>, ViewportDimensions, uint32_t, int64_t, const DiffFileView *) const
-ssg/Scroll.h	func	ssg::Viewport::scrollbarMetrics	ScrollbarMetrics (uint32_t, uint32_t, uint32_t) const
-ssg/Scroll.h	func	ssg::ViewportDelta::operator==	bool (const ViewportDelta &) const noexcept
-ssg/Scroll.h	func	ssg::ViewportDimensions::ViewportDimensions	void (uint32_t, uint32_t)
-ssg/Scroll.h	func	ssg::ViewportDimensions::operator==	bool (const ViewportDimensions &) const noexcept
-ssg/Scroll.h	func	ssg::ViewportViewState::editableOffset	uint32_t (uint32_t) const
-ssg/Scroll.h	func	ssg::ViewportViewState::operator==	bool (const ViewportViewState &) const noexcept
-ssg/Scroll.h	func	ssg::ViewportViewState::projectedRow	ProjectedRow (uint32_t) const
-ssg/Scroll.h	func	ssg::VisualRow::operator==	bool (const VisualRow &) const noexcept
-ssg/Scroll.h	struct	ssg::CellHitTarget
-ssg/Scroll.h	struct	ssg::DiffFileView
-ssg/Scroll.h	struct	ssg::ListScrollView
-ssg/Scroll.h	struct	ssg::SelectionNavigation
-ssg/Scroll.h	struct	ssg::ViewportDelta
-ssg/Scroll.h	struct	ssg::ViewportDimensions
-ssg/Scroll.h	struct	ssg::ViewportViewState
-ssg/Scroll.h	struct	ssg::VisualRow
-ssg/Scroll.h	var	ssg::CellHitTarget::byteLen	uint32_t
-ssg/Scroll.h	var	ssg::CellHitTarget::byteOffset	uint32_t
-ssg/Scroll.h	var	ssg::CellHitTarget::cell	CellIndex
-ssg/Scroll.h	var	ssg::CellHitTarget::logicalLine	uint32_t
-ssg/Scroll.h	var	ssg::CellHitTarget::viewportColumn	uint32_t
-ssg/Scroll.h	var	ssg::CellHitTarget::viewportRow	uint32_t
-ssg/Scroll.h	var	ssg::ListScrollView::firstVisible	uint32_t
-ssg/Scroll.h	var	ssg::ListScrollView::scrollbar	ScrollbarMetrics
-ssg/Scroll.h	var	ssg::ListScrollView::visibleCount	uint32_t
-ssg/Scroll.h	var	ssg::SelectionNavigation::desiredCell	std::optional<CellIndex>
-ssg/Scroll.h	var	ssg::SelectionNavigation::firstVisualColumn	std::uint32_t
-ssg/Scroll.h	var	ssg::SelectionNavigation::firstVisualRow	std::uint32_t
-ssg/Scroll.h	var	ssg::ViewportDelta::changed	bool
-ssg/Scroll.h	var	ssg::ViewportDelta::replacement	std::optional<ViewportViewState>
-ssg/Scroll.h	var	ssg::ViewportDimensions::columns	uint32_t
-ssg/Scroll.h	var	ssg::ViewportDimensions::rows	uint32_t
-ssg/Scroll.h	var	ssg::ViewportViewState::dimensions	ViewportDimensions
-ssg/Scroll.h	var	ssg::ViewportViewState::firstVisualColumn	uint32_t
-ssg/Scroll.h	var	ssg::ViewportViewState::firstVisualRow	uint32_t
-ssg/Scroll.h	var	ssg::ViewportViewState::hitTargets	std::vector<CellHitTarget>
-ssg/Scroll.h	var	ssg::ViewportViewState::rowProjection	std::vector<ProjectedRow>
-ssg/Scroll.h	var	ssg::ViewportViewState::scrollbar	ScrollbarMetrics
-ssg/Scroll.h	var	ssg::ViewportViewState::totalVisualRows	uint32_t
-ssg/Scroll.h	var	ssg::ViewportViewState::visibleRows	std::vector<VisualRow>
-ssg/Scroll.h	var	ssg::VisualRow::contentCells	uint32_t
-ssg/Scroll.h	var	ssg::VisualRow::endByteOffset	uint32_t
-ssg/Scroll.h	var	ssg::VisualRow::firstSpan	uint32_t
-ssg/Scroll.h	var	ssg::VisualRow::logicalLine	uint32_t
-ssg/Scroll.h	var	ssg::VisualRow::spanCount	uint32_t
-ssg/Scroll.h	var	ssg::VisualRow::startCell	CellIndex
-ssg/Scroll.h	var	ssg::VisualRow::visibleCells	uint32_t
 ssg/Scrollbar.h	func	ssg::ScrollbarMetrics::operator==	bool (const ScrollbarMetrics &) const noexcept
 ssg/Scrollbar.h	func	ssg::scrollFirstRow	uint32_t (uint32_t, uint32_t, uint32_t) noexcept
 ssg/Scrollbar.h	func	ssg::scrollScaleRounded	uint32_t (uint32_t, uint32_t, uint32_t) noexcept
@@ -3949,6 +3880,74 @@ ssg/ViewActionResult.h	struct	ssg::ViewActionResult
 ssg/ViewActionResult.h	var	ssg::ViewActionResult::message	std::string
 ssg/ViewActionResult.h	var	ssg::ViewActionResult::status	ViewActionStatus
 ssg/ViewActionResult.h	var	ssg::ViewActionResult::transition	std::optional<ViewTransitionInput>
+ssg/Viewport.h	class	ssg::ScrollOffset
+ssg/Viewport.h	func	ssg::CellHitTarget::operator==	bool (const CellHitTarget &) const noexcept
+ssg/Viewport.h	func	ssg::ListScrollView::operator==	bool (const ListScrollView &) const noexcept
+ssg/Viewport.h	func	ssg::ScrollOffset::ScrollOffset	void ()
+ssg/Viewport.h	func	ssg::ScrollOffset::ScrollOffset	void (uint32_t) noexcept
+ssg/Viewport.h	func	ssg::ScrollOffset::byLines	void (std::int64_t, uint32_t, uint32_t)
+ssg/Viewport.h	func	ssg::ScrollOffset::byPages	void (std::int64_t, uint32_t, uint32_t)
+ssg/Viewport.h	func	ssg::ScrollOffset::firstVisible	uint32_t () const noexcept
+ssg/Viewport.h	func	ssg::ScrollOffset::operator==	bool (const ScrollOffset &) const noexcept
+ssg/Viewport.h	func	ssg::ScrollOffset::resolve	ListScrollView (uint32_t, uint32_t) const
+ssg/Viewport.h	func	ssg::ScrollOffset::revealSelection	void (uint32_t, uint32_t, uint32_t)
+ssg/Viewport.h	func	ssg::ScrollOffset::setFirstVisible	void (uint32_t) noexcept
+ssg/Viewport.h	func	ssg::ScrollOffset::toFraction	void (uint32_t, uint32_t, uint32_t, uint32_t)
+ssg/Viewport.h	func	ssg::SelectionNavigation::operator==	bool (const SelectionNavigation &) const noexcept
+ssg/Viewport.h	func	ssg::ViewportDelta::operator==	bool (const ViewportDelta &) const noexcept
+ssg/Viewport.h	func	ssg::ViewportDimensions::ViewportDimensions	void (uint32_t, uint32_t)
+ssg/Viewport.h	func	ssg::ViewportDimensions::operator==	bool (const ViewportDimensions &) const noexcept
+ssg/Viewport.h	func	ssg::ViewportViewState::editableOffset	uint32_t (uint32_t) const
+ssg/Viewport.h	func	ssg::ViewportViewState::operator==	bool (const ViewportViewState &) const noexcept
+ssg/Viewport.h	func	ssg::ViewportViewState::projectedRow	ProjectedRow (uint32_t) const
+ssg/Viewport.h	func	ssg::VisualRow::operator==	bool (const VisualRow &) const noexcept
+ssg/Viewport.h	func	ssg::computeUnwrappedViewport	ViewportViewState (std::string_view, ViewportDimensions, uint32_t, uint32_t, int, const DiffFileView *, std::optional<ViewportDimensions>, LineLayoutCache *)
+ssg/Viewport.h	func	ssg::computeViewport	ViewportViewState (std::span<const CellRun>, ViewportDimensions, uint32_t, const DiffFileView *, std::optional<ViewportDimensions>)
+ssg/Viewport.h	func	ssg::deriveViewportDelta	ViewportDelta (const ViewportViewState &, const ViewportViewState &)
+ssg/Viewport.h	func	ssg::listScrollView	ListScrollView (uint32_t, uint32_t, uint32_t, std::optional<uint32_t>, bool)
+ssg/Viewport.h	func	ssg::rowProjection	RowProjection (std::span<const CellRun>, uint32_t, const DiffFileView &)
+ssg/Viewport.h	func	ssg::rowProjectionUnwrapped	RowProjection (std::string_view, const DiffFileView &)
+ssg/Viewport.h	func	ssg::scrollViewportBy	ViewportViewState (std::span<const CellRun>, ViewportDimensions, uint32_t, int64_t, const DiffFileView *)
+ssg/Viewport.h	func	ssg::scrollbarMetrics	ScrollbarMetrics (uint32_t, uint32_t, uint32_t)
+ssg/Viewport.h	struct	ssg::CellHitTarget
+ssg/Viewport.h	struct	ssg::DiffFileView
+ssg/Viewport.h	struct	ssg::ListScrollView
+ssg/Viewport.h	struct	ssg::SelectionNavigation
+ssg/Viewport.h	struct	ssg::ViewportDelta
+ssg/Viewport.h	struct	ssg::ViewportDimensions
+ssg/Viewport.h	struct	ssg::ViewportViewState
+ssg/Viewport.h	struct	ssg::VisualRow
+ssg/Viewport.h	var	ssg::CellHitTarget::byteLen	uint32_t
+ssg/Viewport.h	var	ssg::CellHitTarget::byteOffset	uint32_t
+ssg/Viewport.h	var	ssg::CellHitTarget::cell	CellIndex
+ssg/Viewport.h	var	ssg::CellHitTarget::logicalLine	uint32_t
+ssg/Viewport.h	var	ssg::CellHitTarget::viewportColumn	uint32_t
+ssg/Viewport.h	var	ssg::CellHitTarget::viewportRow	uint32_t
+ssg/Viewport.h	var	ssg::ListScrollView::firstVisible	uint32_t
+ssg/Viewport.h	var	ssg::ListScrollView::scrollbar	ScrollbarMetrics
+ssg/Viewport.h	var	ssg::ListScrollView::visibleCount	uint32_t
+ssg/Viewport.h	var	ssg::SelectionNavigation::desiredCell	std::optional<CellIndex>
+ssg/Viewport.h	var	ssg::SelectionNavigation::firstVisualColumn	std::uint32_t
+ssg/Viewport.h	var	ssg::SelectionNavigation::firstVisualRow	std::uint32_t
+ssg/Viewport.h	var	ssg::ViewportDelta::changed	bool
+ssg/Viewport.h	var	ssg::ViewportDelta::replacement	std::optional<ViewportViewState>
+ssg/Viewport.h	var	ssg::ViewportDimensions::columns	uint32_t
+ssg/Viewport.h	var	ssg::ViewportDimensions::rows	uint32_t
+ssg/Viewport.h	var	ssg::ViewportViewState::dimensions	ViewportDimensions
+ssg/Viewport.h	var	ssg::ViewportViewState::firstVisualColumn	uint32_t
+ssg/Viewport.h	var	ssg::ViewportViewState::firstVisualRow	uint32_t
+ssg/Viewport.h	var	ssg::ViewportViewState::hitTargets	std::vector<CellHitTarget>
+ssg/Viewport.h	var	ssg::ViewportViewState::rowProjection	std::vector<ProjectedRow>
+ssg/Viewport.h	var	ssg::ViewportViewState::scrollbar	ScrollbarMetrics
+ssg/Viewport.h	var	ssg::ViewportViewState::totalVisualRows	uint32_t
+ssg/Viewport.h	var	ssg::ViewportViewState::visibleRows	std::vector<VisualRow>
+ssg/Viewport.h	var	ssg::VisualRow::contentCells	uint32_t
+ssg/Viewport.h	var	ssg::VisualRow::endByteOffset	uint32_t
+ssg/Viewport.h	var	ssg::VisualRow::firstSpan	uint32_t
+ssg/Viewport.h	var	ssg::VisualRow::logicalLine	uint32_t
+ssg/Viewport.h	var	ssg::VisualRow::spanCount	uint32_t
+ssg/Viewport.h	var	ssg::VisualRow::startCell	CellIndex
+ssg/Viewport.h	var	ssg::VisualRow::visibleCells	uint32_t
 ssg/Widget.h	enum	ssg::Overflow
 ssg/Widget.h	enum	ssg::ViewSurface
 ssg/Widget.h	enum	ssg::WidgetKind

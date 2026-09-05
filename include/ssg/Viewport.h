@@ -56,8 +56,7 @@ struct CellHitTarget {
 
 // A resolved scroll view for a simple list region: the clamped first visible
 // item, how many items are visible, and the scrollbar geometry.  This is the
-// generalized primitive the tree and palette use, mirroring what
-// `Viewport::compute` produces for the editor.
+// generalized primitive the tree and palette use.
 struct ListScrollView {
     uint32_t firstVisible;
     uint32_t visibleCount;
@@ -118,8 +117,8 @@ struct SelectionNavigation {
 // This exists because a shared *function* could not stop the three scrollable
 // surfaces diverging: a pure function cannot own state, so each surface grew
 // its own offset field and its own clamp-and-shift arithmetic. Every operation
-// here is expressed through `Viewport::listScrollView`, so the math still lives
-// in one place; what is new is that the state and its mutators do too.
+// here is expressed through `listScrollView`, so the math still lives in one
+// place; what is new is that the state and its mutators do too.
 //
 // A value type rather than a base class the surfaces inherit: the editor and
 // tree offsets are server state while the picker's is client-owned by
@@ -171,95 +170,38 @@ private:
     uint32_t firstVisible_ = 0;
 };
 
-class Viewport {
-public:
-    // The scrollbar thumb geometry for a list of `total_rows` items shown in a
-    // `viewport_rows`-tall window scrolled to `first_row`.  When the content fits
-    // (`total_rows <= viewport_rows`) the thumb is hidden: `maximum_first_row`,
-    // `thumb_start`, and `thumb_size` collapse to a no-thumb sentinel.  Shared by
-    // every scrollable region (editor, tree, palette) so thumb math lives in one
-    // place.
-    [[nodiscard]] ScrollbarMetrics scrollbarMetrics(
-        uint32_t totalRows,
-        uint32_t viewportRows,
-        uint32_t firstRow) const;
+[[nodiscard]] ScrollbarMetrics scrollbarMetrics(
+    uint32_t totalRows, uint32_t viewportRows, uint32_t firstRow);
 
-    // Resolve a list scroll view.  `first_visible` is always clamped to
-    // `[0, maximum_first_row]`.  Keep-visible is an explicit input, never inferred:
-    // only when `keep_selection_visible` is true AND `selected` holds an item index
-    // does the window shift minimally so `selected` lies within
-    // `[first_visible, first_visible + visible_count)`.  With
-    // `keep_selection_visible == false` the (clamped) `first_visible` is honored
-    // verbatim and the selection may fall outside the window, exactly as the editor
-    // caret can.  `selected` is an absolute item index.
-    [[nodiscard]] ListScrollView listScrollView(
-        uint32_t totalItems,
-        uint32_t viewportRows,
-        uint32_t firstVisible,
-        std::optional<uint32_t> selected,
-        bool keepSelectionVisible) const;
+[[nodiscard]] ListScrollView listScrollView(
+    uint32_t totalItems, uint32_t viewportRows, uint32_t firstVisible,
+    std::optional<uint32_t> selected, bool keepSelectionVisible);
 
-    // `contentArea` is the region the editor actually PAINTS -- the client
-    // surface minus whatever the shell spends on header, tab bar, footer and any
-    // reserved prompt.  All scroll math derives from it, so a caller that passes
-    // the whole surface here leaves the last rows of a document unreachable.
-    // `clientSurface` is republished as `ViewportViewState::dimensions` for a
-    // client to size its grid from; when omitted the two are the same, which is
-    // what a caller with no surrounding chrome wants.
-    [[nodiscard]] ViewportViewState compute(
-        std::span<const CellRun> logicalLines,
-        ViewportDimensions contentArea,
-        uint32_t requestedFirstVisualRow = 0,
-        const DiffFileView* diff = nullptr,
-        std::optional<ViewportDimensions> clientSurface = std::nullopt) const;
+[[nodiscard]] ViewportViewState computeViewport(
+    std::span<const CellRun> logicalLines, ViewportDimensions contentArea,
+    uint32_t requestedFirstVisualRow = 0, const DiffFileView* diff = nullptr,
+    std::optional<ViewportDimensions> clientSurface = std::nullopt);
 
-    // Word-wrap-OFF viewport projection.  Builds the SAME ViewportViewState shape as
-    // `compute` for a NON-wrapping document, but in O(visible rows) grapheme
-    // segmentation instead of O(document): the total visual row count is the logical
-    // line count (a byte scan for '\n'), and compute_cell_run runs only for the
-    // visible lines.  Long lines are clipped at `dimensions.columns` (cells beyond
-    // the width are not emitted).  For documents whose lines all fit the width, the
-    // result is field-for-field equal to
-    // `compute(active_cell_runs(document_text), dimensions, first_row)` — the
-    // reference oracle (INV-projection-equivalence).  `tab_width` must match the full
-    // path's (4 today).  Hit-target byte offsets are document-absolute.
-    [[nodiscard]] ViewportViewState computeUnwrapped(
-        std::string_view documentText,
-        ViewportDimensions contentArea,
-        uint32_t requestedFirstVisualRow,
-        uint32_t requestedFirstVisualColumn,
-        int tabWidth,
-        const DiffFileView* diff = nullptr,
-        std::optional<ViewportDimensions> clientSurface = std::nullopt,
-        LineLayoutCache* lineCache = nullptr) const;
+[[nodiscard]] ViewportViewState computeUnwrappedViewport(
+    std::string_view documentText, ViewportDimensions contentArea,
+    uint32_t requestedFirstVisualRow, uint32_t requestedFirstVisualColumn,
+    int tabWidth, const DiffFileView* diff = nullptr,
+    std::optional<ViewportDimensions> clientSurface = std::nullopt,
+    LineLayoutCache* lineCache = nullptr);
 
-    [[nodiscard]] RowProjection rowProjection(
-        std::span<const CellRun> logicalLines,
-        uint32_t columns,
-        const DiffFileView& diff) const;
+[[nodiscard]] RowProjection rowProjection(
+    std::span<const CellRun> logicalLines, uint32_t columns,
+    const DiffFileView& diff);
 
-    [[nodiscard]] RowProjection rowProjectionUnwrapped(
-        std::string_view documentText,
-        const DiffFileView& diff) const;
+[[nodiscard]] RowProjection rowProjectionUnwrapped(
+    std::string_view documentText, const DiffFileView& diff);
 
-    [[nodiscard]] ViewportViewState scrollBy(
-        std::span<const CellRun> logicalLines,
-        ViewportDimensions dimensions,
-        uint32_t currentFirstVisualRow,
-        int64_t rowDelta,
-        const DiffFileView* diff = nullptr) const;
+[[nodiscard]] ViewportViewState scrollViewportBy(
+    std::span<const CellRun> logicalLines, ViewportDimensions dimensions,
+    uint32_t currentFirstVisualRow, int64_t rowDelta,
+    const DiffFileView* diff = nullptr);
 
-    [[nodiscard]] ViewportDelta deriveDelta(
-        const ViewportViewState& previous,
-        const ViewportViewState& current) const;
-
-private:
-    LineLayoutCache lineCache_;
-    std::optional<std::uint64_t> cellRunsRevision_;
-    std::optional<std::uint64_t> cellRunsDocument_;
-    std::vector<CellRun> cellRuns_;
-
-    friend class EditorSession;
-};
+[[nodiscard]] ViewportDelta deriveViewportDelta(
+    const ViewportViewState& previous, const ViewportViewState& current);
 
 }  // namespace ssg

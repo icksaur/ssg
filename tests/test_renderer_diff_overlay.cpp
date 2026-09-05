@@ -185,7 +185,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
         {},
         {},
     };
-    presentation.viewport = ssg::Viewport{}.computeUnwrapped(
+    presentation.viewport = ssg::computeUnwrappedViewport(
         text, presentation.viewport.dimensions, 0, 0, 4, &diffFile);
     ASSERT_TRUE(base->document.has_value());
     if (!base->document) return;
@@ -239,7 +239,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
 
     auto scrolledSections = overlay;
     auto scrolledPresentation = overlay;
-    scrolledPresentation.viewport = ssg::Viewport{}.computeUnwrapped(
+    scrolledPresentation.viewport = ssg::computeUnwrappedViewport(
         text, scrolledPresentation.viewport.dimensions, 0, 8, 4, &diffFile);
     auto scrolled = snapshotWith(
         overlay, std::move(scrolledSections), std::move(scrolledPresentation));
@@ -308,7 +308,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     auto noDiffPresentation = overlay;
     noDiffSections.diff = {};
     noDiffSections.diffFileIdentity.reset();
-    noDiffPresentation.viewport = ssg::Viewport{}.computeUnwrapped(
+    noDiffPresentation.viewport = ssg::computeUnwrappedViewport(
         text, noDiffPresentation.viewport.dimensions, 0, 0, 4);
     auto noDiff = snapshotWith(
         overlay, std::move(noDiffSections), std::move(noDiffPresentation));

@@ -1,5 +1,5 @@
 #include <ssg/PaletteSearcher.h>
-#include <ssg/Scroll.h>
+#include <ssg/Viewport.h>
 #include <ssg/Picker.h>
 
 #include <algorithm>
@@ -174,7 +174,7 @@ PaletteReport PaletteSearcher::report(
         order.empty() ? std::nullopt
                       : std::optional<std::uint32_t>{
                             static_cast<std::uint32_t>(window.selected)};
-    auto const scroll = Viewport{}.listScrollView(
+    auto const scroll = listScrollView(
         static_cast<std::uint32_t>(order.size()), window.paneRows,
         window.firstVisible, selected,
         /*keep_selection_visible=*/selectionClamped);

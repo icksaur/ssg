@@ -2,7 +2,7 @@
 #include <ssg/DiffModel.h>
 #include <ssg/LineLayoutCache.h>
 #include <ssg/Selection.h>
-#include <ssg/Scroll.h>
+#include <ssg/Viewport.h>
 
 #include "test_helpers.h"
 
@@ -135,7 +135,7 @@ void assertGolden(std::string_view name,
                    const std::vector<CellRun>& lines,
                    ViewportDimensions dimensions,
                    uint32_t firstRow) {
-    ASSERT_EQ(serialize(ssg::Viewport{}.compute(lines, dimensions, firstRow)),
+    ASSERT_EQ(serialize(ssg::computeViewport(lines, dimensions, firstRow)),
               fixture(name));
 }
 
@@ -165,7 +165,7 @@ TEST(tinyClippedGolden) {
 }
 
 TEST(noDiffProjectionIsIdentity) {
-    auto state = ssg::Viewport{}.compute(
+    auto state = ssg::computeViewport(
         runs({"one", "two", "three"}), ViewportDimensions{20, 4});
     ASSERT_TRUE(state.rowProjection.empty());
     ASSERT_EQ(state.totalVisualRows, std::uint32_t{3});
@@ -181,7 +181,7 @@ TEST(noDiffProjectionIsIdentity) {
 
 TEST(removedRowsAreProjectedAtTargetAndCountedByScrollbar) {
     auto diff = removedLines(1, 1, {"gone\n", "also gone\n"});
-    auto state = ssg::Viewport{}.compute(
+    auto state = ssg::computeViewport(
         runs({"one", "two", "three"}), ViewportDimensions{20, 4}, 0, &diff);
 
     ASSERT_EQ(state.totalVisualRows, std::uint32_t{5});
@@ -203,7 +203,7 @@ TEST(removedRowsAreProjectedAtTargetAndCountedByScrollbar) {
 
 TEST(leadingTrailingAndWrappedPhantomBlocksUseTheSameProjection) {
     auto leading = removedLines(0, 0, {"before\n"});
-    auto leadingState = ssg::Viewport{}.compute(
+    auto leadingState = ssg::computeViewport(
         runs({"one", "two", "three"}), ViewportDimensions{20, 8}, 0,
         &leading);
     ASSERT_TRUE(
@@ -214,7 +214,7 @@ TEST(leadingTrailingAndWrappedPhantomBlocksUseTheSameProjection) {
     ASSERT_EQ(leadingState.editableOffset(0), std::uint32_t{0});
 
     auto trailing = removedLines(3, 3, {"abcdef\n"});
-    auto trailingState = ssg::Viewport{}.compute(
+    auto trailingState = ssg::computeViewport(
         runs({"one", "two", "three"}), ViewportDimensions{3, 8}, 0,
         &trailing);
     ASSERT_EQ(trailingState.totalVisualRows, std::uint32_t{6});
@@ -235,7 +235,7 @@ TEST(leadingTrailingAndWrappedPhantomBlocksUseTheSameProjection) {
 TEST(unwrappedProjectionStaysAlignedAcrossEmptyAndScrolledOffRows) {
     auto diff = removedLines(0, 0, {});
     const std::string text = "a\n\nb";
-    auto state = ssg::Viewport{}.computeUnwrapped(
+    auto state = ssg::computeUnwrappedViewport(
         text, ViewportDimensions{2, 3}, 0, 5, 4, &diff);
     ASSERT_EQ(state.visibleRows.size(), std::size_t{3});
     ASSERT_EQ(state.rowProjection.size(), state.visibleRows.size());
@@ -248,7 +248,7 @@ TEST(unwrappedProjectionStaysAlignedAcrossEmptyAndScrolledOffRows) {
 
 TEST(unwrappedMergedInlineRowGhostSpansResolveHitTestsToRealBytesAroundThem) {
     auto diff = modifiedLineWithInlineSegments();
-    auto state = ssg::Viewport{}.computeUnwrapped(
+    auto state = ssg::computeUnwrappedViewport(
         diff.currentContent, ViewportDimensions{40, 3}, 0, 0, 4, &diff);
     // Merged text: "gamma original modified line two" (ghosts "original"/" "
     // spliced between the real "gamma " prefix and the real "modified line
@@ -298,7 +298,7 @@ TEST(wrappedModifiedLineNeverMergesEvenWhenTheLineFitsOnOneRow) {
     // fit as a single visual row.
     auto diff = modifiedLineWithInlineSegments();
     auto lines = runs({"gamma modified line two"});
-    auto state = ssg::Viewport{}.compute(lines, ViewportDimensions{80, 4}, 0,
+    auto state = ssg::computeViewport(lines, ViewportDimensions{80, 4}, 0,
                                           &diff);
     ASSERT_EQ(state.totalVisualRows, std::uint32_t{2});
     ASSERT_TRUE(std::holds_alternative<PhantomRow>(state.projectedRow(0)));
@@ -310,18 +310,18 @@ TEST(wrappedModifiedLineNeverMergesEvenWhenTheLineFitsOnOneRow) {
 TEST(scrollSaturatesAndDeltaSuppressesEqualPayload) {
     const auto lines = runs({"abcdef", "xy"});
     const auto initial =
-        ssg::Viewport{}.compute(lines, ViewportDimensions{2, 2}, 0);
+        ssg::computeViewport(lines, ViewportDimensions{2, 2}, 0);
     const auto bottom =
-        ssg::Viewport{}.scrollBy(lines, ViewportDimensions{2, 2}, 0, 99);
+        ssg::scrollViewportBy(lines, ViewportDimensions{2, 2}, 0, 99);
     ASSERT_EQ(bottom.firstVisualRow, bottom.scrollbar.maximumFirstRow);
-    const auto top = ssg::Viewport{}.scrollBy(
+    const auto top = ssg::scrollViewportBy(
         lines, ViewportDimensions{2, 2}, bottom.firstVisualRow, -99);
     ASSERT_EQ(top.firstVisualRow, 0u);
 
-    const auto same = ssg::Viewport{}.deriveDelta(initial, initial);
+    const auto same = ssg::deriveViewportDelta(initial, initial);
     ASSERT_FALSE(same.changed);
     ASSERT_FALSE(same.replacement.has_value());
-    const auto changed = ssg::Viewport{}.deriveDelta(initial, bottom);
+    const auto changed = ssg::deriveViewportDelta(initial, bottom);
     ASSERT_TRUE(changed.changed);
     ASSERT_TRUE(changed.replacement.has_value());
     ASSERT_EQ(*changed.replacement, bottom);
@@ -334,7 +334,7 @@ TEST(viewportBoundsProperties) {
     for (uint32_t columns = 1; columns <= 8; ++columns) {
         for (uint32_t rows = 1; rows <= 5; ++rows) {
             for (uint32_t requested = 0; requested <= 40; ++requested) {
-                const auto state = ssg::Viewport{}.compute(
+                const auto state = ssg::computeViewport(
                     lines, ViewportDimensions{columns, rows}, requested);
                 ASSERT_TRUE(state.firstVisualRow <=
                             state.scrollbar.maximumFirstRow);
@@ -379,67 +379,67 @@ TEST(invalidDimensionsAreActionable) {
 
 TEST(listScrollViewClampsAndHidesThumbWhenContentFits) {
     // Shorter than the viewport: first pinned to 0, all items visible, no thumb.
-    auto view = ssg::Viewport{}.listScrollView(3, 10, 5, std::nullopt, false);
+    auto view = ssg::listScrollView(3, 10, 5, std::nullopt, false);
     ASSERT_EQ(view.firstVisible, std::uint32_t{0});
     ASSERT_EQ(view.visibleCount, std::uint32_t{3});
     ASSERT_EQ(view.scrollbar.maximumFirstRow, std::uint32_t{0});
     ASSERT_EQ(view.scrollbar.thumbStart, std::uint32_t{0});
-    ASSERT_EQ(view.scrollbar, ssg::Viewport{}.scrollbarMetrics(3, 10, 0));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(3, 10, 0));
 
     // Exactly full: still no scrolling room.
-    auto full = ssg::Viewport{}.listScrollView(10, 10, 4, std::nullopt, false);
+    auto full = ssg::listScrollView(10, 10, 4, std::nullopt, false);
     ASSERT_EQ(full.firstVisible, std::uint32_t{0});
     ASSERT_EQ(full.visibleCount, std::uint32_t{10});
     ASSERT_EQ(full.scrollbar.maximumFirstRow, std::uint32_t{0});
 }
 
 TEST(listScrollViewEmptyList) {
-    auto view = ssg::Viewport{}.listScrollView(0, 8, 3, std::nullopt, false);
+    auto view = ssg::listScrollView(0, 8, 3, std::nullopt, false);
     ASSERT_EQ(view.firstVisible, std::uint32_t{0});
     ASSERT_EQ(view.visibleCount, std::uint32_t{0});
-    ASSERT_EQ(view.scrollbar, ssg::Viewport{}.scrollbarMetrics(0, 8, 0));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(0, 8, 0));
 }
 
 TEST(listScrollViewZeroViewportIsInert) {
-    auto view = ssg::Viewport{}.listScrollView(20, 0, 5, std::optional<std::uint32_t>{7}, true);
+    auto view = ssg::listScrollView(20, 0, 5, std::optional<std::uint32_t>{7}, true);
     ASSERT_EQ(view.firstVisible, std::uint32_t{0});
     ASSERT_EQ(view.visibleCount, std::uint32_t{0});
-    ASSERT_EQ(view.scrollbar, ssg::Viewport{}.scrollbarMetrics(20, 0, 0));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(20, 0, 0));
 }
 
 TEST(listScrollViewClampsOverScrollToMaximum) {
     // 100 items, 10-tall window: maximum first is 90.  A larger request clamps.
-    auto view = ssg::Viewport{}.listScrollView(100, 10, 500, std::nullopt, false);
+    auto view = ssg::listScrollView(100, 10, 500, std::nullopt, false);
     ASSERT_EQ(view.scrollbar.maximumFirstRow, std::uint32_t{90});
     ASSERT_EQ(view.firstVisible, std::uint32_t{90});
     ASSERT_EQ(view.visibleCount, std::uint32_t{10});
-    ASSERT_EQ(view.scrollbar, ssg::Viewport{}.scrollbarMetrics(100, 10, 90));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(100, 10, 90));
 }
 
 TEST(listScrollViewFreeScrollIgnoresSelection) {
     // keep=false: the clamped request is honored even though the selection (0)
     // is far above the window, and even though a selection is present.
-    auto view = ssg::Viewport{}.listScrollView(100, 10, 40,
+    auto view = ssg::listScrollView(100, 10, 40,
                                               std::optional<std::uint32_t>{0}, false);
     ASSERT_EQ(view.firstVisible, std::uint32_t{40});
     ASSERT_EQ(view.visibleCount, std::uint32_t{10});
-    ASSERT_EQ(view.scrollbar, ssg::Viewport{}.scrollbarMetrics(100, 10, 40));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(100, 10, 40));
 }
 
 TEST(listScrollViewKeepVisibleScrollsDownToSelection) {
     // Selection below the window forces the minimal downward shift so it lands
     // on the last visible row: first = selected - viewport + 1.
-    auto view = ssg::Viewport{}.listScrollView(100, 10, 0,
+    auto view = ssg::listScrollView(100, 10, 0,
                                               std::optional<std::uint32_t>{25}, true);
     ASSERT_EQ(view.firstVisible, std::uint32_t{16});
     ASSERT_TRUE(25 >= view.firstVisible &&
                 25 < view.firstVisible + view.visibleCount);
-    ASSERT_EQ(view.scrollbar, ssg::Viewport{}.scrollbarMetrics(100, 10, 16));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(100, 10, 16));
 }
 
 TEST(listScrollViewKeepVisibleScrollsUpToSelection) {
     // Selection above the window forces first = selected.
-    auto view = ssg::Viewport{}.listScrollView(100, 10, 50,
+    auto view = ssg::listScrollView(100, 10, 50,
                                               std::optional<std::uint32_t>{12}, true);
     ASSERT_EQ(view.firstVisible, std::uint32_t{12});
     ASSERT_TRUE(12 >= view.firstVisible &&
@@ -448,7 +448,7 @@ TEST(listScrollViewKeepVisibleScrollsUpToSelection) {
 
 TEST(listScrollViewKeepVisibleLeavesInWindowSelectionUntouched) {
     // Selection already inside the window: no shift.
-    auto view = ssg::Viewport{}.listScrollView(100, 10, 20,
+    auto view = ssg::listScrollView(100, 10, 20,
                                               std::optional<std::uint32_t>{25}, true);
     ASSERT_EQ(view.firstVisible, std::uint32_t{20});
 }
@@ -456,7 +456,7 @@ TEST(listScrollViewKeepVisibleLeavesInWindowSelectionUntouched) {
 TEST(listScrollViewKeepVisibleClampsSelectionToLastItem) {
     // An out-of-range selection is clamped to the last item, which still forces
     // a valid in-range window that never exceeds maximum_first_row.
-    auto view = ssg::Viewport{}.listScrollView(100, 10, 0,
+    auto view = ssg::listScrollView(100, 10, 0,
                                               std::optional<std::uint32_t>{999}, true);
     ASSERT_EQ(view.firstVisible, std::uint32_t{90});
     ASSERT_EQ(view.scrollbar.maximumFirstRow, std::uint32_t{90});
@@ -468,8 +468,8 @@ TEST(listScrollViewMatchesComputeViewportMetrics) {
     // first) — no regression in the reused thumb math.
     std::vector<CellRun> lines;
     for (int i = 0; i < 40; ++i) lines.push_back(ssg::GraphemeLayout{}.computeRun("line", 4));
-    auto viewport = ssg::Viewport{}.compute(lines, ssg::ViewportDimensions{20, 10}, 7);
-    auto list = ssg::Viewport{}.listScrollView(
+    auto viewport = ssg::computeViewport(lines, ssg::ViewportDimensions{20, 10}, 7);
+    auto list = ssg::listScrollView(
         viewport.totalVisualRows, 10, 7, std::nullopt, false);
     ASSERT_EQ(list.scrollbar, viewport.scrollbar);
     ASSERT_EQ(list.firstVisible, viewport.firstVisualRow);
@@ -503,8 +503,8 @@ TEST(unwrappedMatchesFullPathForFittingLines) {
                 for (uint32_t rows = 1; rows <= 6; ++rows) {
                     for (uint32_t first = 0; first <= 12; ++first) {
                         ViewportDimensions dims{columns, rows};
-                        const auto full = ssg::Viewport{}.compute(lines, dims, first);
-                        const auto proj = ssg::Viewport{}.computeUnwrapped(
+                        const auto full = ssg::computeViewport(lines, dims, first);
+                        const auto proj = ssg::computeUnwrappedViewport(
                             doc, dims, first, 0, tab);
                         ASSERT_EQ(serialize(proj), serialize(full));
                         ASSERT_TRUE(proj == full);
@@ -520,7 +520,7 @@ TEST(unwrappedMatchesFullPathForFittingLines) {
 TEST(unwrappedClipsLongLinesToOneRow) {
     const std::string doc = "abcdef\nxy";  // line 0 is 6 cells wide
     const ViewportDimensions dims{3, 2};
-    const auto proj = ssg::Viewport{}.computeUnwrapped(doc, dims, 0, 0, 4);
+    const auto proj = ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4);
 
     ASSERT_EQ(proj.totalVisualRows, 2u);  // two logical lines, NOT wrapped
     ASSERT_EQ(proj.visibleRows.size(), 2u);
@@ -549,8 +549,8 @@ TEST(unwrappedClipsLongLinesToOneRow) {
 TEST(unwrappedVsWrappedRowCountDiffersForLongLines) {
     const std::string doc = "abcdef\nxy";
     const ViewportDimensions dims{3, 8};
-    const auto wrapped = ssg::Viewport{}.compute(cellRunsFromText(doc, 4), dims, 0);
-    const auto proj = ssg::Viewport{}.computeUnwrapped(doc, dims, 0, 0, 4);
+    const auto wrapped = ssg::computeViewport(cellRunsFromText(doc, 4), dims, 0);
+    const auto proj = ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4);
     ASSERT_EQ(proj.totalVisualRows, 2u);
     ASSERT_EQ(wrapped.totalVisualRows, 3u);  // "abcdef" -> 2 rows, "xy" -> 1
     ASSERT_TRUE(wrapped.totalVisualRows > proj.totalVisualRows);
@@ -561,7 +561,7 @@ TEST(unwrappedVsWrappedRowCountDiffersForLongLines) {
 TEST(unwrappedClampsFirstRowToLineCount) {
     const std::string doc = "a\nb\nc\nd\ne";  // 5 logical lines
     const ViewportDimensions dims{4, 2};
-    const auto proj = ssg::Viewport{}.computeUnwrapped(doc, dims, 99, 0, 4);
+    const auto proj = ssg::computeUnwrappedViewport(doc, dims, 99, 0, 4);
     ASSERT_EQ(proj.totalVisualRows, 5u);
     ASSERT_EQ(proj.scrollbar.maximumFirstRow, 3u);  // 5 - 2
     ASSERT_EQ(proj.firstVisualRow, 3u);
@@ -575,7 +575,7 @@ TEST(unwrappedHorizontalOffsetWindowsEachRow) {
     const std::string doc = "abcdefghij\nkl";  // line 0 is 10 cells wide
     const ViewportDimensions dims{4, 2};
     // Scroll right by 3 cells: the row shows cells [3, 7) = "defg".
-    const auto proj = ssg::Viewport{}.computeUnwrapped(doc, dims, 0, 3, 4);
+    const auto proj = ssg::computeUnwrappedViewport(doc, dims, 0, 3, 4);
 
     ASSERT_EQ(proj.firstVisualColumn, 3u);
     ASSERT_EQ(proj.totalVisualRows, 2u);
@@ -608,7 +608,7 @@ TEST(unwrappedHorizontalOffsetSnapsToGraphemeBoundary) {
     // Requesting offset 2 lands inside the wide cluster (cells 1-2); the pane
     // offset is the requested value (2), while the row's own origin snaps to the
     // first span at/after cell 2 — "B" at cell 3 — recorded in start_cell.
-    const auto proj = ssg::Viewport{}.computeUnwrapped(doc, dims, 0, 2, 4);
+    const auto proj = ssg::computeUnwrappedViewport(doc, dims, 0, 2, 4);
     ASSERT_EQ(proj.firstVisualColumn, 2u);
     ASSERT_EQ(proj.visibleRows[0].startCell.value(), 3u);
     ASSERT_EQ(proj.visibleRows[0].spanCount, 1u);  // just "B"
@@ -630,7 +630,7 @@ TEST(unwrappedEndByteOffsetIsTheTrueLineEnd) {
     const std::array<std::uint32_t, 4> wantEnd{2, 3, 7, 8};
     for (uint32_t columns : {1u, 3u, 80u}) {          // incl. a clipping width
         for (uint32_t firstCol : {0u, 1u, 5u}) {      // incl. horizontal offset
-            const auto proj = ssg::Viewport{}.computeUnwrapped(
+            const auto proj = ssg::computeUnwrappedViewport(
                 doc, ViewportDimensions{columns, 8}, 0, firstCol, 4);
             for (const auto& row : proj.visibleRows) {
                 ASSERT_EQ(row.endByteOffset, wantEnd[row.logicalLine]);
@@ -653,7 +653,7 @@ TEST(wrappedEndByteOffsetIsTheVisualRowEnd) {
     // then "xy"(7..9). Document ends after "xy" with no trailing newline.
     const std::string doc = "abcdef\nxy";
     const auto lines = cellRunsFromText(doc, 4);
-    const auto proj = ssg::Viewport{}.compute(lines, ViewportDimensions{3, 8}, 0);
+    const auto proj = ssg::computeViewport(lines, ViewportDimensions{3, 8}, 0);
     // Rows: 0="abc" end=3 (wrap boundary), 1="def" end=6 (logical EOL / newline),
     // 2="xy" end=9 (text.size()).
     ASSERT_EQ(proj.visibleRows.size(), std::size_t{3});
@@ -674,7 +674,7 @@ TEST(scrollbarThumbAndFirstRowAreAnExactMatchedPair) {
     for (auto const& r : {Regime{200, 10}, Regime{1000, 30}, Regime{100, 20},
                           Regime{40, 20}, Regime{25, 20}, Regime{57, 13},
                           Regime{500, 50}, Regime{80, 79}}) {
-        auto const metrics = ssg::Viewport{}.scrollbarMetrics(r.total, r.viewport, 0);
+        auto const metrics = ssg::scrollbarMetrics(r.total, r.viewport, 0);
         std::uint32_t const maximum = metrics.maximumFirstRow;
         std::uint32_t const travel = metrics.viewportRows - metrics.thumbSize;
         ASSERT_TRUE(maximum > 0);
@@ -700,7 +700,7 @@ TEST(scrollbarThumbAndFirstRowAreAnExactMatchedPair) {
         // The thumb always fits and never jumps backward as firstRow advances.
         std::uint32_t previousThumb = 0;
         for (std::uint32_t firstRow = 0; firstRow <= maximum; ++firstRow) {
-            auto const m = ssg::Viewport{}.scrollbarMetrics(r.total, r.viewport,
+            auto const m = ssg::scrollbarMetrics(r.total, r.viewport,
                                                             firstRow);
             ASSERT_TRUE(m.thumbStart + m.thumbSize <= r.viewport);
             ASSERT_TRUE(m.thumbStart >= previousThumb);
@@ -797,15 +797,15 @@ TEST(unwrappedProjectionReusesCachedVisibleLines) {
     for (int i = 0; i < 40; ++i) doc += "line " + std::to_string(i) + " text\n";
     ssg::ViewportDimensions const dims{80, 24};
     ssg::LineLayoutCache cache;
-    (void)ssg::Viewport{}.computeUnwrapped(doc, dims, 0, 0, 4, nullptr,
+    (void)ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4, nullptr,
                                            std::nullopt, &cache);  // warm
     ssg::GraphemeLayout::resetCellRunCalls();
-    (void)ssg::Viewport{}.computeUnwrapped(doc, dims, 0, 0, 4, nullptr,
+    (void)ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4, nullptr,
                                            std::nullopt, &cache);
     ASSERT_EQ(ssg::GraphemeLayout::cellRunCalls(), std::uint64_t{0});
     // Without a cache the same projection re-segments the visible lines.
     ssg::GraphemeLayout::resetCellRunCalls();
-    (void)ssg::Viewport{}.computeUnwrapped(doc, dims, 0, 0, 4);
+    (void)ssg::computeUnwrappedViewport(doc, dims, 0, 0, 4);
     ASSERT_TRUE(ssg::GraphemeLayout::cellRunCalls() > 0);
 }
 

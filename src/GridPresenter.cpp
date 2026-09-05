@@ -10,7 +10,6 @@
 namespace ssg {
 
 struct GridPresenter::State {
-    Viewport viewport;
     LineLayoutCache lineCache;
     SelectionNavigation navigation;
     std::uint32_t treeFirstVisible = 0;
@@ -366,7 +365,7 @@ std::optional<GridPresentation> GridPresenter::project(
             1, std::min(paneRows, request.dimensions.rows))};
     ViewportViewState viewport = [&] {
         if (!wordWrap) {
-            return state.viewport.computeUnwrapped(
+            return computeUnwrappedViewport(
                 documentText, content, navigation.firstVisualRow,
                 navigation.firstVisualColumn, 4, activeDiffFile,
                 request.dimensions, &state.lineCache);
@@ -388,7 +387,7 @@ std::optional<GridPresentation> GridPresenter::project(
             state.wrappedDocumentRevision = documentRevision;
             state.wrappedTab = tabs.active;
         }
-        return state.viewport.compute(
+        return computeViewport(
             state.wrappedCellRuns, content, navigation.firstVisualRow,
             activeDiffFile, request.dimensions);
     }();

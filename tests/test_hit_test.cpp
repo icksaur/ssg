@@ -397,7 +397,7 @@ TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
                           .targetLines = {}});
     const auto content = base->document->content;
     auto projection = *base;
-    projection.viewport = ssg::Viewport{}.computeUnwrapped(
+    projection.viewport = ssg::computeUnwrappedViewport(
         text,
         ssg::ViewportDimensions{
             static_cast<std::uint32_t>(content.width),
@@ -518,7 +518,7 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     const auto firstVisible = std::uint32_t{20};
     const auto selected = std::uint32_t{25};
     const auto scrollbar =
-        ssg::Viewport{}.scrollbarMetrics(40, rows, firstVisible);
+        ssg::scrollbarMetrics(40, rows, firstVisible);
     std::vector<ssg::PaletteCandidate> paletteRows;
     for (std::uint32_t i = 0; i < rows; ++i) {
         paletteRows.push_back(
@@ -573,7 +573,7 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     std::uint32_t const rows = static_cast<std::uint32_t>(pane.content.height);
 
     const auto scrollbar =
-        ssg::Viewport{}.scrollbarMetrics(100, rows, 0);
+        ssg::scrollbarMetrics(100, rows, 0);
     std::vector<ssg::PaletteCandidate> paletteRows;
     for (std::uint32_t i = 0; i < 2; ++i) {
         paletteRows.push_back({"cmd-" + std::to_string(i),

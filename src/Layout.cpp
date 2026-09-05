@@ -1,7 +1,7 @@
 #include <ssg/Layout.h>
 
 #include <ssg/GraphemeLayout.h>
-#include <ssg/Scroll.h>
+#include <ssg/Viewport.h>
 #include <ssg/EditorSession.h>
 
 #include <algorithm>
@@ -340,7 +340,7 @@ SolvedPanelSurface solvePanelSurface(const TreeViewState& tree,
                 std::distance(provider->nodes.begin(), selected));
         }
     }
-    const auto window = Viewport{}.listScrollView(
+    const auto window = listScrollView(
         static_cast<std::uint32_t>(provider->nodes.size()), contentRows,
         firstVisible, selectedIndex, revealSelection);
     solved.firstVisible = window.firstVisible;

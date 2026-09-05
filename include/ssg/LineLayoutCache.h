@@ -6,14 +6,14 @@
 // hit is byte-identical to a fresh GraphemeLayout::computeRun and the cache
 // needs NO semantic invalidation -- only capacity eviction. This is the
 // library-only rendering seam for Lever 2's visible-line shaping: the two hot
-// visible-line paths (Renderer's paint pass and Viewport::computeUnwrapped)
+// visible-line paths (Renderer's paint pass and computeUnwrappedViewport)
 // re-shape the same on-screen lines every frame during navigation; each holds
 // its own cache across frames so a scroll or an in-page caret move reuses the
 // unchanged rows instead of re-segmenting them.
 //
-// Not thread-safe: each owner (a host render loop, the runtime's viewport path)
-// keeps its own instance. The cache stores only stable document-line text; the
-// synthetic phantom/merged-diff runs are shaped fresh by their callers.
+// Not thread-safe: each Renderer and runtime viewport keeps its own instance.
+// The cache stores only stable document-line text; synthetic phantom and
+// merged-diff runs are shaped fresh by their callers.
 
 #include <ssg/GraphemeLayout.h>
 

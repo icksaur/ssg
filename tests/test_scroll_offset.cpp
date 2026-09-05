@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/Scroll.h>
+#include <ssg/Viewport.h>
 
 #include <vector>
 
@@ -174,7 +174,7 @@ TEST(scrollOffsetMetricsEqualTheSharedPrimitive) {
         for (const std::uint32_t start : {0U, 2U, 37U, 100000U}) {
             ssg::ScrollOffset offset{start};
             const auto view = offset.resolve(total, rows);
-            const auto expected = ssg::Viewport{}.listScrollView(
+            const auto expected = ssg::listScrollView(
                 total, rows, start, std::nullopt, false);
             ASSERT_TRUE(view == expected);
         }
@@ -241,19 +241,19 @@ TEST(editorOverScrollResolvesToTheHandComputedMaximum) {
     }
     const ssg::ViewportDimensions dimensions{80, 10};
 
-    const auto over = ssg::Viewport{}.compute(lines, dimensions, 100000);
+    const auto over = ssg::computeViewport(lines, dimensions, 100000);
     ASSERT_EQ(over.firstVisualRow, std::uint32_t{90});
     ASSERT_EQ(over.scrollbar.maximumFirstRow, std::uint32_t{90});
     ASSERT_EQ(over.visibleRows.size(), std::size_t{10});
 
     // An in-range request is honoured verbatim.
-    const auto within = ssg::Viewport{}.compute(lines, dimensions, 37);
+    const auto within = ssg::computeViewport(lines, dimensions, 37);
     ASSERT_EQ(within.firstVisualRow, std::uint32_t{37});
 
     // Exactly at the boundary, and one past it.
-    ASSERT_EQ(ssg::Viewport{}.compute(lines, dimensions, 90).firstVisualRow,
+    ASSERT_EQ(ssg::computeViewport(lines, dimensions, 90).firstVisualRow,
               std::uint32_t{90});
-    ASSERT_EQ(ssg::Viewport{}.compute(lines, dimensions, 91).firstVisualRow,
+    ASSERT_EQ(ssg::computeViewport(lines, dimensions, 91).firstVisualRow,
               std::uint32_t{90});
 }
 

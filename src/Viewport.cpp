@@ -1,4 +1,4 @@
-#include <ssg/Scroll.h>
+#include <ssg/Viewport.h>
 
 #include <ssg/DiffModel.h>
 #include <ssg/LineLayoutCache.h>
@@ -490,18 +490,17 @@ uint32_t ViewportViewState::editableOffset(uint32_t viewportRow) const {
     return visibleRows.at(viewportRow).endByteOffset;
 }
 
-ScrollbarMetrics Viewport::scrollbarMetrics(uint32_t totalRows,
-                                            uint32_t viewportRows,
-                                            uint32_t firstRow) const {
+ScrollbarMetrics scrollbarMetrics(uint32_t totalRows, uint32_t viewportRows,
+                                   uint32_t firstRow) {
     return scrollbarMetricsImpl(totalRows, viewportRows, firstRow);
 }
 
-ListScrollView Viewport::listScrollView(
+ListScrollView listScrollView(
     uint32_t totalItems,
     uint32_t viewportRows,
     uint32_t firstVisible,
     std::optional<uint32_t> selected,
-    bool keepSelectionVisible) const {
+    bool keepSelectionVisible) {
     if (viewportRows == 0) {
         // A zero-height surface shows nothing. NOTE the returned metrics report
         // `maximumFirstRow == totalItems` here (scrollbarMetricsImpl's
@@ -592,16 +591,15 @@ void ScrollOffset::toFraction(uint32_t numerator, uint32_t denominator,
 
 void ScrollOffset::revealSelection(uint32_t selected, uint32_t totalItems,
                                    uint32_t viewportRows) {
-    firstVisible_ = Viewport{}
-                        .listScrollView(totalItems, viewportRows, firstVisible_,
-                                        selected, true)
-                        .firstVisible;
+    firstVisible_ =
+        listScrollView(totalItems, viewportRows, firstVisible_, selected, true)
+            .firstVisible;
 }
 
 ListScrollView ScrollOffset::resolve(uint32_t totalItems,
                                      uint32_t viewportRows) const {
-    return Viewport{}.listScrollView(totalItems, viewportRows, firstVisible_,
-                                     std::nullopt, false);
+    return listScrollView(totalItems, viewportRows, firstVisible_, std::nullopt,
+                          false);
 }
 
 ViewportDimensions::ViewportDimensions(uint32_t columnCount,
@@ -616,11 +614,10 @@ ViewportDimensions::ViewportDimensions(uint32_t columnCount,
     }
 }
 
-ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
-                                    ViewportDimensions dimensions,
-                                    uint32_t requestedFirstVisualRow,
-                                    const DiffFileView* diff,
-                                    std::optional<ViewportDimensions> clientSurface) const {
+ViewportViewState computeViewport(
+    std::span<const CellRun> logicalLines, ViewportDimensions dimensions,
+    uint32_t requestedFirstVisualRow, const DiffFileView* diff,
+    std::optional<ViewportDimensions> clientSurface) {
     // Everything below projects against `dimensions`, the painted content area.
     // Only the published field differs, so a client sizes its grid from its own
     // surface while scroll math stays bound to what is actually drawn.
@@ -759,12 +756,12 @@ ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
     };
 }
 
-ViewportViewState Viewport::computeUnwrapped(
+ViewportViewState computeUnwrappedViewport(
     std::string_view documentText, ViewportDimensions dimensions,
     uint32_t requestedFirstVisualRow, uint32_t requestedFirstVisualColumn,
     int tabWidth, const DiffFileView* diff,
     std::optional<ViewportDimensions> clientSurface,
-    LineLayoutCache* lineCache) const {
+    LineLayoutCache* lineCache) {
     // As in `compute`: project against the painted content area, publish the
     // client's own surface so it can size its grid.
     ViewportDimensions const surface = clientSurface.value_or(dimensions);
@@ -1017,10 +1014,10 @@ ViewportViewState Viewport::computeUnwrapped(
     };
 }
 
-RowProjection Viewport::rowProjection(
+RowProjection rowProjection(
     std::span<const CellRun> logicalLines,
     uint32_t columns,
-    const DiffFileView& diff) const {
+    const DiffFileView& diff) {
     auto projected = projectedWrappedRows(logicalLines, columns, diff);
     std::vector<ProjectedRow> rows;
     rows.reserve(projected.size());
@@ -1031,18 +1028,17 @@ RowProjection Viewport::rowProjection(
     return RowProjection{std::move(rows)};
 }
 
-RowProjection Viewport::rowProjectionUnwrapped(
-    std::string_view documentText,
-    const DiffFileView& diff) const {
+RowProjection rowProjectionUnwrapped(std::string_view documentText,
+                                     const DiffFileView& diff) {
     return projectedUnwrappedRows(documentText, diff);
 }
 
-ViewportViewState Viewport::scrollBy(
+ViewportViewState scrollViewportBy(
     std::span<const CellRun> logicalLines,
     ViewportDimensions dimensions,
     uint32_t currentFirstVisualRow,
     int64_t rowDelta,
-    const DiffFileView* diff) const {
+    const DiffFileView* diff) {
     // The saturating shift lives in ScrollOffset, so this is not a fifth
     // implementation of it. compute() applies the top clamp, which is why this
     // deliberately does not bound `requested` here: it would need the total
@@ -1050,11 +1046,12 @@ ViewportViewState Viewport::scrollBy(
     ScrollOffset offset{currentFirstVisualRow};
     offset.byLines(rowDelta, std::numeric_limits<uint32_t>::max(),
                    dimensions.rows);
-    return compute(logicalLines, dimensions, offset.firstVisible(), diff);
+    return computeViewport(logicalLines, dimensions, offset.firstVisible(),
+                           diff);
 }
 
-ViewportDelta Viewport::deriveDelta(const ViewportViewState& previous,
-                                    const ViewportViewState& current) const {
+ViewportDelta deriveViewportDelta(const ViewportViewState& previous,
+                                  const ViewportViewState& current) {
     if (previous == current) {
         return ViewportDelta{false, std::nullopt};
     }

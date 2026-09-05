@@ -633,7 +633,7 @@ int main(int argc, char** argv) {
     // Once inside main, exception unwinding does not portably restore the terminal.
     bool firstFrameMarked = false;
     auto lastFrameAt = std::chrono::steady_clock::time_point{};
-    ssg::LineLayoutCache renderLineCache;
+    ssg::Renderer renderer;
     try {
         while (!quit) {
             // Motion floods can otherwise render every event and pin a core.
@@ -647,7 +647,7 @@ int main(int argc, char** argv) {
             context.activeSnapshot = renderFrame(context);
             auto& snapshot = context.activeSnapshot;
             if (snapshot) {
-                auto grid = ssg::Renderer{}.render(*snapshot, &renderLineCache);
+                auto grid = renderer.render(*snapshot);
                 std::string frame = ssg::app::encode_frame(grid, colorDepth, !pointer.gutterDrag.has_value());
                 if (!firstFrameMarked) {
                     recordStartupMark("first_content_frame");

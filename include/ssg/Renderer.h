@@ -1,10 +1,7 @@
 #pragma once
 
-// The authoritative cell renderer.  ssg::Renderer{}.render turns a
-// GridPresentation into a
-// deterministic monospace CellGrid: the single place where shell geometry and
-// content become cells. The terminal client translates the grid to its medium;
-// it adds no layout, content, or color.
+// The authoritative cell renderer. It turns a GridPresentation into a
+// deterministic monospace CellGrid and retains line shaping across frames.
 
 #include <ssg/GridPresenter.h>
 #include <ssg/Style.h>
@@ -94,28 +91,20 @@ struct CellGrid {
 
 class Renderer {
 public:
-    // `lineCache`, when supplied, is a caller-owned bounded cache of shaped
-    // document lines that survives across frames. render() borrows it to skip
-    // re-segmenting on-screen lines that a previous frame already shaped; a
-    // nullptr cache reproduces the exact pre-cache behaviour (a fresh shape per
-    // visible line). The cache holds only stable document-line text.
-    [[nodiscard]] CellGrid render(GridPresentation const& snapshot,
-                                  LineLayoutCache* lineCache = nullptr) const;
+    [[nodiscard]] CellGrid render(GridPresentation const& snapshot);
 
     // Style is no longer a renderer member: it is read from the snapshot's
     // published Style section, so the runtime and the
     // renderer share the one instance the runtime owns rather than two that can
     // drift.
 
-    // Test instrumentation (M12 INV-render-projection).  Counts the
-    // compute_cell_run (grapheme-segmentation) calls render() has made since the
-    // last reset.  This is a diagnostic counter, not production state; it lets a
-    // test assert that render segments only the logical lines the viewport shows
-    // (<= viewport rows), never the whole document — so a regression to
-    // whole-document segmentation fails the count oracle.  Not thread-safe across
-    // concurrent render() calls (per-thread counter).
+    // Test instrumentation for the number of visible logical lines render()
+    // requests from its shaping cache.
     [[nodiscard]] static std::uint64_t renderSegmentationCalls();
     static void resetRenderSegmentationCalls();
+
+private:
+    LineLayoutCache lineCache_;
 };
 
 }  // namespace ssg
