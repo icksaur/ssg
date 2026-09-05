@@ -389,9 +389,9 @@ EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
       tabs{},
       external{recovery, diff},
       syntaxParser{std::move(parser)},
-      interaction{assembleScreen("help.open", StyleDimensions{},
-                                      Style{}.inputLineSigil),
-                  tree, 1},
+      screen{assembleScreen("help.open", StyleDimensions{},
+                            Style{}.inputLineSigil),
+             tree},
       search{SearchCommands{
           .descriptors = [this] {
               std::vector<SearchCommandDescriptor> result;
@@ -830,7 +830,7 @@ CommandHandlerResult EditorSession::Impl::openOrFocusLiveDiffTab(
     if (classification == NavigationClass::User) {
         recordNavigation(classification);
     }
-    interaction.focusEditor();
+    screen.focusEditor();
     return success();
 }
 
@@ -862,7 +862,7 @@ CommandHandlerResult EditorSession::Impl::openReadOnlyTab(
     if (!opened.accepted()) {
         return failure(tabMessage(opened));
     }
-    interaction.focusEditor();
+    screen.focusEditor();
     // Untitled documents get no language from a path, so highlight the override
     // language (e.g. Markdown) now that this tab is active.
     refreshSyntax();
@@ -1198,11 +1198,11 @@ void EditorSession::Impl::reconcileExternalWatchEvents(
         }
     }
     // External state changes here in the watcher drain, not only on a command
-    // dispatch (Decision 4): reconcile the section's presence into the interaction
-    // authority whenever the flow's view advanced, so the node appears/updates
+    // dispatch: reconcile the section's presence into the screen whenever the
+    // flow's view advanced, so the node appears/updates
     // without waiting for an unrelated command.
     if (external.viewState().revision != flowRevisionBefore) {
-        interaction.refreshExternalModificationPresence(
+        screen.refreshExternalModificationPresence(
             externalModificationPresent());
     }
 }
@@ -1454,7 +1454,7 @@ Document* EditorSession::Impl::activeDocument() {
 void EditorSession::Impl::ensureDocumentRuntimeState(FileDocumentId document) {
     documentRuntimeStates.try_emplace(
         document.value(),
-        DocumentRuntimeState{HistoryConfig::defaults(), syntaxParser});
+        DocumentRuntimeState{settings, syntaxParser});
 }
 
 void EditorSession::Impl::discardDocumentRuntimeState(FileDocumentId document) {
@@ -1588,7 +1588,7 @@ bool EditorSession::Impl::refreshTree() {
     }
     ++treeScanCount;
     tree.replaceProvider(TreeProviderSnapshot::fromFilesystem(
-        TreeProviderId{"filesystem"}, root, interaction.allocateTreeRevision()));
+        TreeProviderId{"filesystem"}, root));
     rebuildFileCandidates();
     return true;
 }
@@ -1600,12 +1600,12 @@ void EditorSession::Impl::refreshTreeForPublication() {
 void EditorSession::Impl::rebuildInteractionSchema(
     const StyleDimensions& dimensions,
     std::string_view promptSigil) {
-    (void)interaction.updateComposition(
+    (void)screen.updateComposition(
         assembleScreen("help.open", dimensions, promptSigil));
 }
 
 bool EditorSession::Impl::openPickerPrompt(PickerKind kind) {
-    return interaction.openFinder(kind);
+    return screen.openFinder(kind);
 }
 
 // The index opens its OWN repository handle rather than sharing the git-diff
@@ -1634,10 +1634,10 @@ void EditorSession::Impl::reconcileFindDocument() {
     // The document the find evaluated against is gone, changed, or was edited:
     // close the controller and dismiss its prompt so no stale match is navigable.
     findReplace.close();
-    if (auto const& request = interaction.prompt().request();
+    if (auto const& request = screen.prompt().request();
         request && (request->kind == PromptKind::Find ||
                     request->kind == PromptKind::Replace)) {
-        (void)interaction.cancelPrompt();
+        (void)screen.prompt().cancel();
     }
     findDocumentId.reset();
 }
@@ -1696,7 +1696,7 @@ void EditorSession::Impl::enqueueStatus(StatusPriority priority, std::string tex
     if (status
             .enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}})
             .accepted) {
-        interaction.refreshStatusActions(status.actionNodes());
+        screen.refreshStatusActions(status.actionNodes());
     }
 }
 
@@ -2028,8 +2028,7 @@ DiffIngressResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
         }
     }
     tree.replaceProvider(TreeProviderSnapshot::fromGit(
-        TreeProviderId{"git"}, interaction.allocateTreeRevision(),
-        std::move(gitRecords)));
+        TreeProviderId{"git"}, std::move(gitRecords)));
     lastGitScanRevision = scan.revision;
     return {};
 }
@@ -2046,7 +2045,7 @@ bool EditorSession::Impl::revealCurrentDiffTarget(
     }
     selection.selections =
         SelectionSet{std::vector<Selection>{Selection{*position, *position}}};
-    interaction.focusEditor();
+    screen.focusEditor();
     return true;
 }
 
@@ -2080,7 +2079,7 @@ CommandHandlerResult EditorSession::Impl::closePane() {
 }
 
 CommandHandlerResult EditorSession::Impl::cyclePane(
-    PaneCycleDirection direction) {
+    CycleDirection direction) {
     paneTopology.cycle(direction);
     if (follow.viewState().mode == FollowMode::Following) {
         (void)follow.pause();
@@ -2108,7 +2107,7 @@ void EditorSession::resetKeymapToDefault() {
 
 void EditorSession::focusEditor() {
     std::lock_guard operationLock{impl_->operationMutex};
-    impl_->interaction.focusEditor();
+    impl_->screen.focusEditor();
 }
 
 EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
@@ -2248,14 +2247,14 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
         }
         reconcileFindDocument();
         // The draft-conflict notice's presence lives in per-document runtime state,
-        // outside the prompt/panel transitions, so reconcile it into the interaction
-        // authority here where every state change (open, reopen, tab switch, discard,
+        // outside the prompt/panel transitions, so reconcile it into the screen
+        // here where every state change (open, reopen, tab switch, discard,
         // dismiss) has settled -- the notice region then shows/hides in the presence
         // section this dispatch publishes.
-        interaction.refreshNoticePresence(noticePresent());
-        interaction.refreshExternalModificationPresence(
+        screen.refreshNoticePresence(noticePresent());
+        screen.refreshExternalModificationPresence(
             externalModificationPresent());
-        interaction.refreshStatusActions(status.actionNodes());
+        screen.refreshStatusActions(status.actionNodes());
         if (result.accepted() &&
             existingDocumentMutated(revisionsBefore, workspace)) {
             (void)follow.notifyLocalEdit();
@@ -2347,9 +2346,9 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
     // client keeps close-on-success semantics identical for keyboard and
     // pointer submits: a rejected open -- the file was removed between the walk
     // and the submit -- leaves the picker open with its query intact.
-    if (result.accepted() && interaction.openPicker() == PickerKind::File &&
+    if (result.accepted() && screen.openPicker() == PickerKind::File &&
         command.id == "file.open") {
-        (void)interaction.cancelPrompt();
+        (void)screen.prompt().cancel();
     }
     return {result.error, std::move(result.message),
             std::move(result.viewAction)};

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/types.h>
+
 #include <cstdint>
 #include <compare>
 
@@ -25,11 +27,6 @@ enum class PaneDirection : std::uint8_t {
     Right = 1,
     Up = 2,
     Down = 3,
-};
-
-enum class PaneCycleDirection : std::uint8_t {
-    Next = 0,
-    Previous = 1,
 };
 
 }  // namespace ssg

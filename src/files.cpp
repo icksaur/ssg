@@ -109,7 +109,8 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             return failure(*refusal);
         }
         auto opened =
-            runtime.interaction.openPrompt(fileCommandPathPrompt(command));
+            openGenericPrompt(runtime.screen.prompt(),
+                              fileCommandPathPrompt(command));
         if (!opened.accepted()) return failure(opened.error->message);
         return success();
     }
@@ -136,7 +137,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
         case FileCommand::Open: {
             auto path = stringPayload(payload);
             if (!path) {
-                auto opened = runtime.interaction.openPrompt(
+                auto opened = openGenericPrompt(runtime.screen.prompt(),
                     fileCommandPathPrompt(command));
                 if (!opened.accepted()) return failure(opened.error->message);
                 return success();
@@ -174,7 +175,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
             auto const state = runtime.workspace.state(*id);
             if (state &&
                 state->key.kind() != JournalDocumentKeyKind::Saved) {
-                auto opened = runtime.interaction.openPrompt(
+                auto opened = openGenericPrompt(runtime.screen.prompt(),
                     fileCommandPathPrompt(FileCommand::SaveAs));
                 if (!opened.accepted()) return failure(opened.error->message);
                 return success();
@@ -356,7 +357,7 @@ CommandHandlerResult bindTab(EditorSession::Impl& runtime,
     // palette/lua "Tab Activate") acts on the editor, so move keyboard focus there.
     // Keyboard tab switching uses tab.next/tab.previous, which do not reach here.
     if (command == TabCommand::Activate) {
-        runtime.interaction.focusEditor();
+        runtime.screen.focusEditor();
     }
     if (runtime.tabs.viewState().active != activeTabBefore &&
         (command == TabCommand::Activate || command == TabCommand::Next ||
@@ -618,7 +619,7 @@ void registerExternalModificationCommands(CommandCatalog& catalog,
     {
         auto built = spec("external.focus", "Focus External Change Bar");
         built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
-            (void)runtime.interaction.captureExternalFocus();
+            (void)runtime.screen.captureExternalFocus();
             return success();
         });
         catalog.add(std::move(built));
@@ -626,7 +627,7 @@ void registerExternalModificationCommands(CommandCatalog& catalog,
     {
         auto built = spec("external.focus_return", "Leave External Change Bar");
         built.binding = bindNoArgumentHandler([&runtime](CommandContext&) {
-            (void)runtime.interaction.releaseExternalFocus();
+            (void)runtime.screen.releaseExternalFocus();
             return success();
         });
         catalog.add(std::move(built));

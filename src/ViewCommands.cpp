@@ -68,28 +68,28 @@ CommandHandlerResult setLineNumbers(EditorSession::Impl& runtime) {
 
 CommandHandlerResult shellCommand(EditorSession::Impl& runtime,
                                   std::string_view id) {
-    if (id == "panel.toggle") (void)runtime.interaction.togglePanel();
-    else if (id == "panel.focus") (void)runtime.interaction.focusPanel();
+    if (id == "panel.toggle") (void)runtime.screen.togglePanel();
+    else if (id == "panel.focus") (void)runtime.screen.focusPanel();
     else if (id == "panel.show_files") {
-        if (!runtime.interaction.showPanelProvider(TreeProviderKind::Filesystem)) {
+        if (!runtime.screen.showPanelProvider(TreeProviderKind::Filesystem)) {
             return failure("files tree provider is unavailable");
         }
     } else if (id == "panel.show_git_status") {
-        if (!runtime.interaction.showPanelProvider(TreeProviderKind::Git)) {
+        if (!runtime.screen.showPanelProvider(TreeProviderKind::Git)) {
             return failure("git tree provider is unavailable");
         }
     }
     else if (id == "panel.next_provider") {
-        if (!runtime.interaction.switchPanelProvider(CycleDirection::Next)) {
+        if (!runtime.screen.switchPanelProvider(CycleDirection::Next)) {
             return failure("next tree provider is unavailable");
         }
     } else if (id == "panel.previous_provider") {
-        if (!runtime.interaction.switchPanelProvider(CycleDirection::Previous)) {
+        if (!runtime.screen.switchPanelProvider(CycleDirection::Previous)) {
             return failure("previous tree provider is unavailable");
         }
     }
     else if (id == "view.toggle_distraction_free")
-        runtime.interaction.toggleDistractionFree();
+        runtime.screen.toggleDistractionFree();
     else return failure("unknown shell command");
     return success();
 }
@@ -100,7 +100,7 @@ CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
     if (id == "prompt.submit" || id == "prompt.cancel" ||
         id == "prompt.next" || id == "prompt.previous" ||
         id == "prompt.update_value") {
-        auto const& request = runtime.interaction.prompt().request();
+        auto const& request = runtime.screen.prompt().request();
         if (!request) {
             return failure("no active prompt");
         }
@@ -131,7 +131,7 @@ CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
             return failure("command is not valid for a find/replace prompt");
         }
         if (id == "prompt.submit") {
-            auto result = runtime.interaction.submitPrompt();
+            auto result = runtime.screen.prompt().submit();
             if (!result.accepted()) return failure(result.error->message);
             // A prompt that names a command exists to collect that command's
             // argument, so submitting it runs the command. Deferred to the
@@ -157,11 +157,11 @@ CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
                 return failure("prompt.update_value requires a value payload");
             }
             auto result =
-                runtime.interaction.updatePromptValue(arguments->index, arguments->value);
+                runtime.screen.prompt().updateValue(arguments->index, arguments->value);
             return result.accepted() ? success() : failure(result.error->message);
         }
         if (id == "prompt.cancel") {
-            auto result = runtime.interaction.cancelPrompt();
+            auto result = runtime.screen.prompt().cancel();
             return result.accepted() ? success() : failure(result.error->message);
         }
         return success();
@@ -172,11 +172,11 @@ CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
             return failure("prompt.focus_control requires a focus payload");
         }
         auto result =
-            runtime.interaction.focusPromptControl(arguments->controlId);
+            runtime.screen.prompt().focusInput(arguments->controlId);
         return result.accepted() ? success() : failure(result.error->message);
     }
     if (id == "prompt.focus_next_control") {
-        auto result = runtime.interaction.focusNextPromptControl();
+        auto result = runtime.screen.prompt().focusNextInput();
         return result.accepted() ? success() : failure(result.error->message);
     }
     if (id == "status.next") runtime.status.next();
@@ -198,7 +198,7 @@ void syncRuntimeSettings(EditorSession::Impl& runtime) {
 
 CommandHandlerResult settingsCommand(EditorSession::Impl& runtime, std::string_view id, std::any const& payload) {
     if (id == "settings.open") {
-        auto opened = runtime.interaction.openPrompt(PromptRequest{
+        auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
             PromptKind::Settings, "settings",
             {{"settings.query", "settings query", ""}}, {}, std::nullopt});
         if (!opened.accepted()) return failure(opened.error->message);
@@ -595,10 +595,10 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
                         case PaneMutationCommand::Kind::Close:
                             return runtime.closePane();
                         case PaneMutationCommand::Kind::Next:
-                            return runtime.cyclePane(PaneCycleDirection::Next);
+                            return runtime.cyclePane(CycleDirection::Next);
                         case PaneMutationCommand::Kind::Previous:
                             return runtime.cyclePane(
-                                PaneCycleDirection::Previous);
+                                CycleDirection::Previous);
                     }
                     return failure("unknown pane mutation");
                 }),

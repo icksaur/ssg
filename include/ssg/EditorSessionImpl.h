@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ssg/ClipboardRegister.h>
-#include <ssg/interaction.h>
+#include <ssg/ScreenState.h>
 #include <ssg/DiffModel.h>
 #include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
@@ -77,9 +77,9 @@ enum class DraftReopenOutcome { None, Restored, Conflict };
 
 struct DocumentRuntimeState {
     explicit DocumentRuntimeState(
-        HistoryConfig historyConfig = HistoryConfig::defaults(),
+        const SettingsModel& settings,
         std::shared_ptr<SyntaxParser> parser = nullptr)
-        : history{historyConfig}, syntax{std::move(parser)} {
+        : history{settings}, syntax{std::move(parser)} {
         ++liveCount;
     }
 
@@ -148,9 +148,9 @@ struct EditorSession::Impl final {
     ScratchStore scratch;
     Workspace workspace;
     SelectionViewState selection;
+    SettingsModel settings;
     std::map<std::uint64_t, DocumentRuntimeState> documentRuntimeStates;
     ClipboardRegister clipboard;
-    SettingsModel settings;
     // Autosave debounce state for open dirty documents (single-file draft
     // recovery, M15). The policy lives here (library-owned); the app supplies
     // only a periodic tick and a clean-exit call.
@@ -181,7 +181,7 @@ struct EditorSession::Impl final {
     // revision source. Presentation reads its projection; every focus, presence,
     // and prompt change flows through it. Declared after `tree` so it is
     // constructed first.
-    InteractionState interaction;
+    ScreenState screen;
     std::unordered_map<std::string, FileDocumentId> liveDiffDocuments;
     // Read-only, in-memory "output" tabs (help, and any future generated-content
     // tab), keyed by the tab's content identity. Mirrors liveDiffDocuments: a
@@ -493,7 +493,7 @@ struct EditorSession::Impl final {
     void recordNavigation(NavigationClass classification);
     [[nodiscard]] CommandHandlerResult splitPane(SplitAxis axis);
     [[nodiscard]] CommandHandlerResult closePane();
-    [[nodiscard]] CommandHandlerResult cyclePane(PaneCycleDirection direction);
+    [[nodiscard]] CommandHandlerResult cyclePane(CycleDirection direction);
     [[nodiscard]] bool focusPane(PaneId pane);
     [[nodiscard]] bool refreshTree();
     void refreshTreeForPublication();

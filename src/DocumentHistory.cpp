@@ -159,9 +159,9 @@ std::uint64_t unitCharge(const HistoryStep& step,
 }  // namespace
 
 struct DocumentHistory::Impl {
-    explicit Impl(HistoryConfig historyConfig) : config(historyConfig) {}
+    explicit Impl(const SettingsModel& settingsModel) : settings(settingsModel) {}
 
-    HistoryConfig config;
+    const SettingsModel& settings;
     std::vector<HistoryUnit> undo;
     std::vector<HistoryUnit> redo;
     std::optional<std::uint64_t> expectedRevision;
@@ -186,7 +186,9 @@ struct DocumentHistory::Impl {
     }
 
     void enforceBudget() {
-        while (retained > config.byteBudget && !undo.empty()) {
+        const auto byteBudget = std::get<std::uint64_t>(
+            settings.resolve(SettingKey::UndoByteBudget).value);
+        while (retained > byteBudget && !undo.empty()) {
             removeCharge(undo.front());
             undo.erase(undo.begin());
         }
@@ -197,16 +199,18 @@ struct DocumentHistory::Impl {
                       std::uint64_t timestampMs,
                       bool stepCoalescible) const {
         (void)step;
+        const auto coalescingMs = std::get<std::uint32_t>(
+            settings.resolve(SettingKey::TypingCoalescingMs).value);
         return !barrier && unit.coalescible && stepCoalescible &&
                unit.kind == kind &&
                unit.selectionsAfter == before &&
                timestampMs >= unit.lastTimestampMs &&
-               timestampMs - unit.lastTimestampMs <= config.coalesceMs;
+               timestampMs - unit.lastTimestampMs <= coalescingMs;
     }
 };
 
-DocumentHistory::DocumentHistory(HistoryConfig config)
-    : impl_(std::make_unique<Impl>(config)) {}
+DocumentHistory::DocumentHistory(const SettingsModel& settings)
+    : impl_(std::make_unique<Impl>(settings)) {}
 
 DocumentHistory::~DocumentHistory() = default;
 DocumentHistory::DocumentHistory(DocumentHistory&&) noexcept = default;

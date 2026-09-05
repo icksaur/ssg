@@ -462,8 +462,8 @@ ssg/DocumentHistory.h	enumerator	ssg::HistoryError::None
 ssg/DocumentHistory.h	enumerator	ssg::HistoryError::RevisionExhausted
 ssg/DocumentHistory.h	enumerator	ssg::HistoryError::StaleDocument
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::DocumentHistory	void (DocumentHistory &&) noexcept
-ssg/DocumentHistory.h	func	ssg::DocumentHistory::DocumentHistory	void (HistoryConfig)
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::DocumentHistory	void (const DocumentHistory &)
+ssg/DocumentHistory.h	func	ssg::DocumentHistory::DocumentHistory	void (const SettingsModel &)
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::applyEdit	HistoryResult (Document &, const EditTransaction &, const SelectionSet &, const SelectionSet &, HistoryEditKind, std::uint64_t)
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::breakCoalescing	void () noexcept
 ssg/DocumentHistory.h	func	ssg::DocumentHistory::canRedo	bool () const noexcept
@@ -625,8 +625,8 @@ ssg/EditorSessionImpl.h	enumerator	ssg::DraftReopenOutcome::Conflict
 ssg/EditorSessionImpl.h	enumerator	ssg::DraftReopenOutcome::None
 ssg/EditorSessionImpl.h	enumerator	ssg::DraftReopenOutcome::Restored
 ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (DocumentRuntimeState &&) noexcept
-ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (HistoryConfig, std::shared_ptr<SyntaxParser>)
 ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (const DocumentRuntimeState &)
+ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::DocumentRuntimeState	void (const SettingsModel &, std::shared_ptr<SyntaxParser>)
 ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::liveInstances	std::uint64_t () noexcept
 ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::operator=	DocumentRuntimeState &(DocumentRuntimeState &&)
 ssg/EditorSessionImpl.h	func	ssg::DocumentRuntimeState::operator=	DocumentRuntimeState &(const DocumentRuntimeState &)
@@ -655,7 +655,7 @@ ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::clampSelectionsToActiveDo
 ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::closePane	CommandHandlerResult ()
 ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::closeTab	TabLifecycleResult (const TabState &, std::chrono::milliseconds, std::span<const TabId>)
 ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::commitExternalDismissal	bool (FileDocumentId, bool, const std::optional<std::string> &)
-ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::cyclePane	CommandHandlerResult (PaneCycleDirection)
+ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::cyclePane	CommandHandlerResult (CycleDirection)
 ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::defer	bool (ClientCommand)
 ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::discardDocumentRuntimeState	void (FileDocumentId)
 ssg/EditorSessionImpl.h	func	ssg::EditorSession::Impl::discardDraft	CommandHandlerResult ()
@@ -776,7 +776,6 @@ ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::homeDirectory	std::string
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::inputCatalogRevision	std::optional<CatalogRevision>
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::inputKeymap	std::unique_ptr<CompiledKeymap>
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::inputKeymapGeneration	std::optional<std::uint64_t>
-ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::interaction	InteractionState
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::keymap	KeymapViewState
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::keymapGeneration	std::uint64_t
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::lastGitScanRevision	std::uint64_t
@@ -797,6 +796,7 @@ ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::recoveryRoot	std::filesyst
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::root	std::filesystem::path
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::scratch	ScratchStore
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::scratchRoot	std::filesystem::path
+ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::screen	ScreenState
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::search	SearchController
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::selection	SelectionViewState
 ssg/EditorSessionImpl.h	var	ssg::EditorSession::Impl::settings	SettingsModel
@@ -2095,11 +2095,8 @@ ssg/PaletteSearcher.h	var	ssg::kMaxExactDoubleInteger	const std::int64_t
 ssg/PaletteSearcher.h	var	ssg::kMaxMatcherParameterMagnitude	const std::int64_t
 ssg/PaletteSearcher.h	var	ssg::kMaxWeightsPerScoredByte	const std::int64_t
 ssg/PaneNavigation.h	class	ssg::PaneId
-ssg/PaneNavigation.h	enum	ssg::PaneCycleDirection
 ssg/PaneNavigation.h	enum	ssg::PaneDirection
 ssg/PaneNavigation.h	enum	ssg::SplitAxis
-ssg/PaneNavigation.h	enumerator	ssg::PaneCycleDirection::Next
-ssg/PaneNavigation.h	enumerator	ssg::PaneCycleDirection::Previous
 ssg/PaneNavigation.h	enumerator	ssg::PaneDirection::Down
 ssg/PaneNavigation.h	enumerator	ssg::PaneDirection::Left
 ssg/PaneNavigation.h	enumerator	ssg::PaneDirection::Right
@@ -2114,7 +2111,7 @@ ssg/PaneTopology.h	class	ssg::PaneTopology
 ssg/PaneTopology.h	func	ssg::PaneTopology::activePane	PaneId () const noexcept
 ssg/PaneTopology.h	func	ssg::PaneTopology::closeActive	bool ()
 ssg/PaneTopology.h	func	ssg::PaneTopology::contains	bool (PaneId) const noexcept
-ssg/PaneTopology.h	func	ssg::PaneTopology::cycle	void (PaneCycleDirection)
+ssg/PaneTopology.h	func	ssg::PaneTopology::cycle	void (CycleDirection)
 ssg/PaneTopology.h	func	ssg::PaneTopology::focus	bool (PaneId) noexcept
 ssg/PaneTopology.h	func	ssg::PaneTopology::initial	PaneTopology ()
 ssg/PaneTopology.h	func	ssg::PaneTopology::panes	std::vector<PaneId> () const
@@ -2197,6 +2194,7 @@ ssg/PromptSurface.h	func	ssg::PromptSurface::open	PromptCommandResult (PromptReq
 ssg/PromptSurface.h	func	ssg::PromptSurface::request	const std::optional<PromptRequest> &() const noexcept
 ssg/PromptSurface.h	func	ssg::PromptSurface::submit	PromptCommandResult ()
 ssg/PromptSurface.h	func	ssg::PromptSurface::updateValue	PromptCommandResult (std::size_t, std::string)
+ssg/PromptSurface.h	func	ssg::openGenericPrompt	PromptCommandResult (PromptSurface &, PromptRequest)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptControl &, const PromptControl &)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptError &, const PromptError &)
 ssg/PromptSurface.h	func	ssg::operator==	bool (const PromptFocusArguments &, const PromptFocusArguments &)
@@ -2500,6 +2498,31 @@ ssg/ScreenLayout.h	func	ssg::assembleFooterPrompt	UiNode (const PromptSurface &)
 ssg/ScreenLayout.h	func	ssg::assembleScreen	UiComposition (std::string_view, const StyleDimensions &, std::string_view)
 ssg/ScreenLayout.h	func	ssg::withFooterPrompt	UiComposition (UiComposition, const PromptSurface &)
 ssg/ScreenLayout.h	func	ssg::withStatusActions	UiComposition (UiComposition, const std::vector<StatusActionNode> &)
+ssg/ScreenState.h	class	ssg::ScreenState
+ssg/ScreenState.h	func	ssg::ScreenState::ScreenState	void (UiComposition, TreeModel &, PickerActivationId)
+ssg/ScreenState.h	func	ssg::ScreenState::captureExternalFocus	bool ()
+ssg/ScreenState.h	func	ssg::ScreenState::closeFinder	bool ()
+ssg/ScreenState.h	func	ssg::ScreenState::effectiveFocus	FocusTarget () const noexcept
+ssg/ScreenState.h	func	ssg::ScreenState::focusEditor	void ()
+ssg/ScreenState.h	func	ssg::ScreenState::focusPanel	bool ()
+ssg/ScreenState.h	func	ssg::ScreenState::focusPath	std::vector<UiNodeId> () const
+ssg/ScreenState.h	func	ssg::ScreenState::openFinder	bool (PickerKind)
+ssg/ScreenState.h	func	ssg::ScreenState::openPicker	std::optional<PickerKind> () const noexcept
+ssg/ScreenState.h	func	ssg::ScreenState::openPickerActivation	std::optional<PickerActivation> () const noexcept
+ssg/ScreenState.h	func	ssg::ScreenState::pickerPresenceOverlay	PalettePresenceOverlay () const
+ssg/ScreenState.h	func	ssg::ScreenState::prompt	PromptSurface &() noexcept
+ssg/ScreenState.h	func	ssg::ScreenState::prompt	const PromptSurface &() const noexcept
+ssg/ScreenState.h	func	ssg::ScreenState::refreshExternalModificationPresence	bool (bool)
+ssg/ScreenState.h	func	ssg::ScreenState::refreshNoticePresence	bool (bool)
+ssg/ScreenState.h	func	ssg::ScreenState::refreshStatusActions	bool (std::vector<StatusActionNode>)
+ssg/ScreenState.h	func	ssg::ScreenState::releaseExternalFocus	bool ()
+ssg/ScreenState.h	func	ssg::ScreenState::schema	UiSchema () const
+ssg/ScreenState.h	func	ssg::ScreenState::showPanelProvider	bool (TreeProviderKind)
+ssg/ScreenState.h	func	ssg::ScreenState::statusActions	const std::vector<StatusActionNode> &() const noexcept
+ssg/ScreenState.h	func	ssg::ScreenState::switchPanelProvider	bool (CycleDirection)
+ssg/ScreenState.h	func	ssg::ScreenState::toggleDistractionFree	void ()
+ssg/ScreenState.h	func	ssg::ScreenState::togglePanel	bool ()
+ssg/ScreenState.h	func	ssg::ScreenState::updateComposition	bool (UiComposition)
 ssg/ScriptHost.h	alias	ssg::ScriptHost::ViewActionSink
 ssg/ScriptHost.h	class	ssg::EditorSession
 ssg/ScriptHost.h	class	ssg::ScriptHost
@@ -2797,10 +2820,19 @@ ssg/Selection.h	var	ssg::kSelectionCommands	const std::array<SelectionCommandDes
 ssg/Settings.h	alias	ssg::SettingValue
 ssg/Settings.h	class	ssg::SettingsModel
 ssg/Settings.h	class	ssg::SettingsPersistence
+ssg/Settings.h	class	ssg::TabWidth
+ssg/Settings.h	enum	ssg::IndentStyle
+ssg/Settings.h	enum	ssg::LineEnding
 ssg/Settings.h	enum	ssg::SettingErrorCode
 ssg/Settings.h	enum	ssg::SettingKey
 ssg/Settings.h	enum	ssg::SettingScope
 ssg/Settings.h	enum	ssg::TextEncoding
+ssg/Settings.h	enumerator	ssg::IndentStyle::Spaces
+ssg/Settings.h	enumerator	ssg::IndentStyle::Tabs
+ssg/Settings.h	enumerator	ssg::LineEnding::Cr
+ssg/Settings.h	enumerator	ssg::LineEnding::Crlf
+ssg/Settings.h	enumerator	ssg::LineEnding::Lf
+ssg/Settings.h	enumerator	ssg::LineEnding::Mixed
 ssg/Settings.h	enumerator	ssg::SettingErrorCode::EmptyIdentity
 ssg/Settings.h	enumerator	ssg::SettingErrorCode::ImmutableScope
 ssg/Settings.h	enumerator	ssg::SettingErrorCode::InvalidRecord
@@ -2857,6 +2889,9 @@ ssg/Settings.h	func	ssg::SettingsPersistence::SettingsPersistence	void (Settings
 ssg/Settings.h	func	ssg::SettingsPersistence::load	SettingsIoResult (SettingsModel &) const
 ssg/Settings.h	func	ssg::SettingsPersistence::save	SettingsIoResult (const SettingsModel &) const
 ssg/Settings.h	func	ssg::SettingsViewState::find	const SettingViewEntry *(SettingKey) const noexcept
+ssg/Settings.h	func	ssg::TabWidth::TabWidth	void (int)
+ssg/Settings.h	func	ssg::TabWidth::operator==	bool (const TabWidth &) const noexcept
+ssg/Settings.h	func	ssg::TabWidth::value	int () const noexcept
 ssg/Settings.h	func	ssg::linuxSettingsPaths	SettingsPaths (const std::filesystem::path &, const std::filesystem::path &, std::string_view)
 ssg/Settings.h	func	ssg::operator==	bool (const EffectiveSetting &, const EffectiveSetting &)
 ssg/Settings.h	func	ssg::operator==	bool (const SettingCompensation &, const SettingCompensation &)
@@ -2906,6 +2941,8 @@ ssg/Settings.h	var	ssg::SettingsIoResult::ok	bool
 ssg/Settings.h	var	ssg::SettingsPaths::userFile	std::filesystem::path
 ssg/Settings.h	var	ssg::SettingsPaths::workspaceFile	std::filesystem::path
 ssg/Settings.h	var	ssg::SettingsViewState::entries	std::array<SettingViewEntry, kSettingKeyCount>
+ssg/Settings.h	var	ssg::TabWidth::kMaxValue	const int
+ssg/Settings.h	var	ssg::TabWidth::kMinValue	const int
 ssg/Settings.h	var	ssg::kSettingKeyCount	const std::size_t
 ssg/SharedBytes.h	class	ssg::SharedBytes
 ssg/SharedBytes.h	func	ssg::SharedBytes::Backing::Backing	void ()
@@ -3589,7 +3626,7 @@ ssg/TreeModel.h	enumerator	ssg::TreeProviderKind::Git
 ssg/TreeModel.h	enumerator	ssg::TreeProviderKind::Symbols
 ssg/TreeModel.h	func	ssg::GitTreeAffordance::operator==	bool (const GitTreeAffordance &) const noexcept
 ssg/TreeModel.h	func	ssg::TreeCommandInvocation::operator==	bool (const TreeCommandInvocation &) const
-ssg/TreeModel.h	func	ssg::TreeModel::activateOrCreate	bool (const TreeProviderBinding &, const std::function<TreeRevision ()> &)
+ssg/TreeModel.h	func	ssg::TreeModel::activateOrCreate	bool (const TreeProviderBinding &)
 ssg/TreeModel.h	func	ssg::TreeModel::activateProvider	bool (const TreeProviderId &)
 ssg/TreeModel.h	func	ssg::TreeModel::activeProviderBinding	std::optional<TreeProviderBinding> () const
 ssg/TreeModel.h	func	ssg::TreeModel::activeVisibleNodeCount	std::size_t () const
@@ -3616,10 +3653,10 @@ ssg/TreeModel.h	func	ssg::TreeProviderBinding::operator==	bool (const TreeProvid
 ssg/TreeModel.h	func	ssg::TreeProviderId::TreeProviderId	void (std::string)
 ssg/TreeModel.h	func	ssg::TreeProviderId::operator<=>	std::strong_ordering (const TreeProviderId &) const
 ssg/TreeModel.h	func	ssg::TreeProviderId::value	const std::string &() const noexcept
-ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::TreeProviderSnapshot	void (TreeProviderId, TreeProviderKind, TreeRevision, std::vector<TreeNode>)
-ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromFilesystem	TreeProviderSnapshot (TreeProviderId, const std::filesystem::path &, TreeRevision)
-ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromGit	TreeProviderSnapshot (TreeProviderId, TreeRevision, std::vector<GitTreeRecord>)
-ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromSymbols	TreeProviderSnapshot (TreeProviderId, TreeRevision, std::vector<SymbolTreeRecord>)
+ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::TreeProviderSnapshot	void (TreeProviderId, TreeProviderKind, std::vector<TreeNode>)
+ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromFilesystem	TreeProviderSnapshot (TreeProviderId, const std::filesystem::path &)
+ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromGit	TreeProviderSnapshot (TreeProviderId, std::vector<GitTreeRecord>)
+ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::fromSymbols	TreeProviderSnapshot (TreeProviderId, std::vector<SymbolTreeRecord>)
 ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::kind	TreeProviderKind () const noexcept
 ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::nodes	const std::vector<TreeNode> &() const noexcept
 ssg/TreeModel.h	func	ssg::TreeProviderSnapshot::providerId	const TreeProviderId &() const noexcept
@@ -4098,7 +4135,6 @@ ssg/application.h	func	ssg::app::parseArguments	LaunchArguments (int, char **)
 ssg/application.h	func	ssg::app::recordStartupMark	void (const char *)
 ssg/application.h	struct	ssg::app::LaunchArguments
 ssg/application.h	var	ssg::app::LaunchArguments::argument	std::filesystem::path
-ssg/application.h	var	ssg::app::LaunchArguments::capabilities	bool
 ssg/color.h	class	ssg::ColorResolver
 ssg/color.h	enum	ssg::ColorDepth
 ssg/color.h	enumerator	ssg::ColorDepth::Ansi16
@@ -4112,25 +4148,6 @@ ssg/color.h	struct	ssg::ResolvedColor
 ssg/color.h	var	ssg::ResolvedColor::encoding	ColorDepth
 ssg/color.h	var	ssg::ResolvedColor::index	std::uint8_t
 ssg/color.h	var	ssg::ResolvedColor::rgb	SrgbColor
-ssg/config.h	class	ssg::TabWidth
-ssg/config.h	enum	ssg::IndentStyle
-ssg/config.h	enum	ssg::LineEnding
-ssg/config.h	enumerator	ssg::IndentStyle::Spaces
-ssg/config.h	enumerator	ssg::IndentStyle::Tabs
-ssg/config.h	enumerator	ssg::LineEnding::Cr
-ssg/config.h	enumerator	ssg::LineEnding::Crlf
-ssg/config.h	enumerator	ssg::LineEnding::Lf
-ssg/config.h	enumerator	ssg::LineEnding::Mixed
-ssg/config.h	func	ssg::HistoryConfig::defaults	HistoryConfig () noexcept
-ssg/config.h	func	ssg::HistoryConfig::operator==	bool (const HistoryConfig &) const noexcept
-ssg/config.h	func	ssg::TabWidth::TabWidth	void (int)
-ssg/config.h	func	ssg::TabWidth::operator==	bool (const TabWidth &) const noexcept
-ssg/config.h	func	ssg::TabWidth::value	int () const noexcept
-ssg/config.h	struct	ssg::HistoryConfig
-ssg/config.h	var	ssg::HistoryConfig::byteBudget	uint64_t
-ssg/config.h	var	ssg::HistoryConfig::coalesceMs	uint32_t
-ssg/config.h	var	ssg::TabWidth::kMaxValue	const int
-ssg/config.h	var	ssg::TabWidth::kMinValue	const int
 ssg/focus.h	enum	ssg::FocusTarget
 ssg/focus.h	enumerator	ssg::FocusTarget::Editor
 ssg/focus.h	enumerator	ssg::FocusTarget::ExternalModification
@@ -4138,41 +4155,6 @@ ssg/focus.h	enumerator	ssg::FocusTarget::Panel
 ssg/focus.h	enumerator	ssg::FocusTarget::Prompt
 ssg/focus.h	func	ssg::focusTargetName	std::string_view (FocusTarget) noexcept
 ssg/focus.h	func	ssg::keymapContexts	std::array<std::string_view, 5> () noexcept
-ssg/interaction.h	class	ssg::InteractionState
-ssg/interaction.h	enum	ssg::CycleDirection
-ssg/interaction.h	enumerator	ssg::CycleDirection::Next
-ssg/interaction.h	enumerator	ssg::CycleDirection::Previous
-ssg/interaction.h	func	ssg::InteractionState::InteractionState	void (UiComposition, TreeModel &, std::uint64_t, PickerActivationId)
-ssg/interaction.h	func	ssg::InteractionState::allocateTreeRevision	TreeRevision ()
-ssg/interaction.h	func	ssg::InteractionState::cancelPrompt	PromptCommandResult ()
-ssg/interaction.h	func	ssg::InteractionState::captureExternalFocus	bool ()
-ssg/interaction.h	func	ssg::InteractionState::closeFinder	bool ()
-ssg/interaction.h	func	ssg::InteractionState::effectiveFocus	FocusTarget () const noexcept
-ssg/interaction.h	func	ssg::InteractionState::focusEditor	void ()
-ssg/interaction.h	func	ssg::InteractionState::focusNextPromptControl	PromptCommandResult ()
-ssg/interaction.h	func	ssg::InteractionState::focusPanel	bool ()
-ssg/interaction.h	func	ssg::InteractionState::focusPath	std::vector<UiNodeId> () const
-ssg/interaction.h	func	ssg::InteractionState::focusPromptControl	PromptCommandResult (std::string_view)
-ssg/interaction.h	func	ssg::InteractionState::openFinder	bool (PickerKind)
-ssg/interaction.h	func	ssg::InteractionState::openPicker	std::optional<PickerKind> () const noexcept
-ssg/interaction.h	func	ssg::InteractionState::openPickerActivation	const std::optional<PickerActivation> &() const noexcept
-ssg/interaction.h	func	ssg::InteractionState::openPrompt	PromptCommandResult (PromptRequest)
-ssg/interaction.h	func	ssg::InteractionState::pickerPresenceOverlay	PalettePresenceOverlay () const
-ssg/interaction.h	func	ssg::InteractionState::prompt	const PromptSurface &() const noexcept
-ssg/interaction.h	func	ssg::InteractionState::refreshExternalModificationPresence	bool (bool)
-ssg/interaction.h	func	ssg::InteractionState::refreshNoticePresence	bool (bool)
-ssg/interaction.h	func	ssg::InteractionState::refreshStatusActions	bool (std::vector<StatusActionNode>)
-ssg/interaction.h	func	ssg::InteractionState::releaseExternalFocus	bool ()
-ssg/interaction.h	func	ssg::InteractionState::routingGeneration	std::uint64_t () const noexcept
-ssg/interaction.h	func	ssg::InteractionState::schema	const UiSchema &() const noexcept
-ssg/interaction.h	func	ssg::InteractionState::showPanelProvider	bool (TreeProviderKind)
-ssg/interaction.h	func	ssg::InteractionState::statusActions	const std::vector<StatusActionNode> &() const noexcept
-ssg/interaction.h	func	ssg::InteractionState::submitPrompt	PromptCommandResult ()
-ssg/interaction.h	func	ssg::InteractionState::switchPanelProvider	bool (CycleDirection)
-ssg/interaction.h	func	ssg::InteractionState::toggleDistractionFree	void ()
-ssg/interaction.h	func	ssg::InteractionState::togglePanel	bool ()
-ssg/interaction.h	func	ssg::InteractionState::updateComposition	bool (UiComposition)
-ssg/interaction.h	func	ssg::InteractionState::updatePromptValue	PromptCommandResult (std::size_t, std::string)
 ssg/open_metrics.h	class	ssg::OpenPhaseTimer
 ssg/open_metrics.h	enum	ssg::OpenPhase
 ssg/open_metrics.h	enumerator	ssg::OpenPhase::Count
@@ -4338,7 +4320,6 @@ ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::colorDepth	ssg::ColorDep
 ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::endProbe	void ()
 ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::has	bool (Capability) const
 ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::observeReply	void (std::string_view)
-ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::probeLog	const ProbeLog &() const
 ssg/ssg_terminal.h	func	ssg::app::TerminalCapabilities::probing	bool () const
 ssg/ssg_terminal.h	func	ssg::app::TerminalModes::Guard::Guard	void () noexcept
 ssg/ssg_terminal.h	func	ssg::app::TerminalModes::Guard::Guard	void (Guard &&) noexcept
@@ -4367,7 +4348,6 @@ ssg/ssg_terminal.h	func	ssg::app::encode_ansi_frame	std::string (const ssg::Cell
 ssg/ssg_terminal.h	func	ssg::app::encode_clipboard_write	std::string (std::string_view)
 ssg/ssg_terminal.h	func	ssg::app::encode_frame	std::string (const ssg::CellGrid &, ssg::ColorDepth, bool)
 ssg/ssg_terminal.h	func	ssg::app::operator==	bool (const PointerEvent &, const PointerEvent &)
-ssg/ssg_terminal.h	func	ssg::app::reportCapabilities	int ()
 ssg/ssg_terminal.h	func	ssg::app::resolve_launch	LaunchTarget (const std::filesystem::path &)
 ssg/ssg_terminal.h	func	ssg::app::terminalSize	ssg::ViewportDimensions ()
 ssg/ssg_terminal.h	func	ssg::app::writeAll	void (std::string_view)
@@ -4375,7 +4355,6 @@ ssg/ssg_terminal.h	struct	ssg::app::Decoded
 ssg/ssg_terminal.h	struct	ssg::app::LaunchTarget
 ssg/ssg_terminal.h	struct	ssg::app::PointerEvent
 ssg/ssg_terminal.h	struct	ssg::app::SignalEvents
-ssg/ssg_terminal.h	struct	ssg::app::TerminalCapabilities::ProbeLog
 ssg/ssg_terminal.h	struct	ssg::app::TerminalMode
 ssg/ssg_terminal.h	var	ssg::app::Decoded::pointer	PointerEvent
 ssg/ssg_terminal.h	var	ssg::app::Decoded::reply	std::string
@@ -4392,8 +4371,6 @@ ssg/ssg_terminal.h	var	ssg::app::PointerEvent::kind	PointerKind
 ssg/ssg_terminal.h	var	ssg::app::PointerEvent::row	int
 ssg/ssg_terminal.h	var	ssg::app::SignalEvents::resize	bool
 ssg/ssg_terminal.h	var	ssg::app::SignalEvents::terminate	std::optional<int>
-ssg/ssg_terminal.h	var	ssg::app::TerminalCapabilities::ProbeLog::believed	std::vector<std::string>
-ssg/ssg_terminal.h	var	ssg::app::TerminalCapabilities::ProbeLog::ignored	std::vector<std::string>
 ssg/ssg_terminal.h	var	ssg::app::TerminalCapabilities::kProbeWindow	const std::chrono::milliseconds
 ssg/ssg_terminal.h	var	ssg::app::TerminalMode::enter	std::string_view
 ssg/ssg_terminal.h	var	ssg::app::TerminalMode::leave	std::string_view
@@ -4409,7 +4386,10 @@ ssg/ssg_terminal.h	var	ssg::app::kMaxSequenceBytes	const std::size_t
 ssg/ssg_terminal.h	var	ssg::app::kMouseButtons	const TerminalMode
 ssg/ssg_terminal.h	var	ssg::app::kMouseMotion	const TerminalMode
 ssg/ssg_terminal.h	var	ssg::app::kMouseSgrCoordinates	const TerminalMode
+ssg/types.h	enum	ssg::CycleDirection
 ssg/types.h	enum	ssg::DocumentMode
+ssg/types.h	enumerator	ssg::CycleDirection::Next
+ssg/types.h	enumerator	ssg::CycleDirection::Previous
 ssg/types.h	enumerator	ssg::DocumentMode::Diff
 ssg/types.h	enumerator	ssg::DocumentMode::Edit
 ssg/types.h	enumerator	ssg::DocumentMode::ReadOnly

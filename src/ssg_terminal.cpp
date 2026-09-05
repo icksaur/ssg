@@ -741,7 +741,6 @@ std::string TerminalCapabilities::beginProbe() {
     // direction.
     answers_.fill(Answer::Unknown);
     probing_ = true;
-    log_ = {};
     deadline_ = clock_() + kProbeWindow;
     // DA1 is written last: every terminal answers it, so its reply is the fence
     // that tells us the speculative questions above have had their chance.
@@ -752,11 +751,7 @@ std::string TerminalCapabilities::beginProbe() {
 
 void TerminalCapabilities::observeReply(std::string_view reply) {
     if (expired()) endProbe();
-    if (!probing_) {
-        log_.ignored.emplace_back(reply);
-        return;
-    }
-    log_.believed.emplace_back(reply);
+    if (!probing_) return;
     auto const parts = parseReply(reply);
     if (!parts) return;
     auto const record = [&](Capability capability, bool present) {
@@ -819,10 +814,6 @@ bool TerminalCapabilities::has(Capability capability) const {
 }
 
 ssg::ColorDepth TerminalCapabilities::colorDepth() const { return colorDepth_; }
-
-TerminalCapabilities::ProbeLog const& TerminalCapabilities::probeLog() const {
-    return log_;
-}
 
 Decoded decodeInputRaw(std::string_view bytes, bool inputExhausted,
                        std::size_t& consumed) {

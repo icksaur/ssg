@@ -191,4 +191,17 @@ std::vector<PromptControl> resolvePromptControls(const PromptRequest& request) {
     return controls;
 }
 
-} // namespace ssg
+PromptCommandResult openGenericPrompt(
+    PromptSurface& prompt, PromptRequest request) {
+    if (request.kind == PromptKind::Palette) {
+        return {
+            PromptError{
+                PromptErrorCode::InvalidRequest,
+                "a generic prompt must not be a Palette prompt; open a picker "
+                "through a finder transition"},
+            std::nullopt};
+    }
+    return prompt.open(std::move(request));
+}
+
+}  // namespace ssg

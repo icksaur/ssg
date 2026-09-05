@@ -28,16 +28,16 @@ CommandHandlerResult validatePublishedCommand(EditorSession::Impl& runtime,
 
 CommandHandlerResult validatePaletteTarget(EditorSession::Impl& runtime,
                                            std::string const& commandId) {
-    bool const paletteOpen = runtime.interaction.prompt().active() &&
-                              runtime.interaction.prompt().request() &&
-                              runtime.interaction.prompt().request()->kind ==
+    bool const paletteOpen = runtime.screen.prompt().active() &&
+                              runtime.screen.prompt().request() &&
+                              runtime.screen.prompt().request()->kind ==
                                   PromptKind::Palette;
     if (!paletteOpen) return failure("palette.execute requires the palette to be open");
     // Every picker uses a Palette-kind prompt, so prompt kind alone no longer
     // identifies the command palette.  Without this the file picker's
     // candidates -- which are PATHS, not command ids -- would be submittable as
     // commands.
-    if (runtime.interaction.openPicker() != PickerKind::Command) {
+    if (runtime.screen.openPicker() != PickerKind::Command) {
         return failure("palette.execute requires the command palette to be open");
     }
     return validatePublishedCommand(runtime, commandId);
@@ -71,11 +71,11 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_vie
                 }
                 return success();
             }
-            if (runtime.interaction.openPickerActivation() != *expected) {
+            if (runtime.screen.openPickerActivation() != *expected) {
                 return success();
             }
         }
-        if (!runtime.interaction.closeFinder()) {
+        if (!runtime.screen.closeFinder()) {
             return failure("no palette to close");
         }
     }
@@ -89,7 +89,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_vie
         if (!runtime.defer(ClientCommand{arguments->commandId, {}})) {
             return failure("could not queue the selected command");
         }
-        (void)runtime.interaction.closeFinder();
+        (void)runtime.screen.closeFinder();
     } else if (id == "search.workspace") {
         std::string query;
         if (auto const* text = payloadAs<std::string>(payload)) query = *text;
@@ -113,7 +113,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_vie
         // typed line number via the generic prompt.submit path.
         auto const* lineText = payloadAs<std::string>(payload);
         if (lineText == nullptr) {
-            auto opened = runtime.interaction.openPrompt(PromptRequest{
+            auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
                 PromptKind::CommandArgument, "go to line",
                 {{"line", "line number", ""}}, {}, std::nullopt, "goto.line"});
             if (!opened.accepted()) return failure(opened.error->message);
@@ -189,7 +189,7 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
             return failure("tree node is not selectable");
         }
 
-        (void)runtime.interaction.focusPanel();
+        (void)runtime.screen.focusPanel();
         return treeCommand(runtime, context, "tree.activate", {});
     }
     if (id == "tree.activate") {
@@ -221,7 +221,7 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
             auto result = runtime.workspace.openFile(*selected->workspacePath);
             if (!result.accepted() || !result.document) return failure("failed to open tree file");
             auto opened = runtime.activateDocument(*result.document);
-            if (opened.accepted) runtime.interaction.focusEditor();
+            if (opened.accepted) runtime.screen.focusEditor();
             return opened;
         }
         return success();
@@ -234,7 +234,7 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
         // Focus follows the pointer (M8-F): clicking a tree row acts on the panel,
         // so move keyboard focus there. (For a file click the app dispatches
         // tree.activate next, whose file-open focus_editor() then wins.)
-        (void)runtime.interaction.focusPanel();
+        (void)runtime.screen.focusPanel();
         return success();
     }
     auto const* invocation = payloadAs<TreeCommandInvocation>(payload);
@@ -537,7 +537,7 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
                   return failure(
                       "candidate is not in the picker inventory");
                }
-               if (runtime.interaction.openPickerActivation() !=
+               if (runtime.screen.openPickerActivation() !=
                   arguments.activation) {
                   return failure(
                       "picker.submit requires a matching open picker");

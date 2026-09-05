@@ -10,6 +10,18 @@
 #include <system_error>
 
 namespace ssg {
+
+TabWidth::TabWidth(int width) {
+    if (width < kMinValue || width > kMaxValue) {
+        throw std::invalid_argument(
+            "TabWidth: value must be in [" +
+            std::to_string(kMinValue) + ", " +
+            std::to_string(kMaxValue) + "], got " +
+            std::to_string(width));
+    }
+    value_ = width;
+}
+
 namespace {
 
 constexpr std::size_t index(SettingKey key) noexcept {

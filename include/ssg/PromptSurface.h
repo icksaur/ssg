@@ -227,4 +227,7 @@ private:
 [[nodiscard]] std::vector<PromptControl> resolvePromptControls(
     const PromptRequest& request);
 
-} // namespace ssg
+[[nodiscard]] PromptCommandResult openGenericPrompt(
+    PromptSurface& prompt, PromptRequest request);
+
+}  // namespace ssg

@@ -13,7 +13,6 @@
 namespace ssg::app {
 
 struct LaunchArguments {
-    bool capabilities = false;
     std::filesystem::path argument;
 };
 

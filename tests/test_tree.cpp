@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,14 @@ const TreeProviderView& onlyProvider(const TreeViewState& state) {
     return state.providers.front();
 }
 
+TreeRevision providerRevision(const TreeModel& model,
+                              const TreeProviderId& providerId) {
+    for (const auto& identity : model.providerIdentities()) {
+        if (identity.binding.id == providerId) return identity.revision;
+    }
+    throw std::logic_error{"missing tree provider"};
+}
+
 TEST(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks) {
     TemporaryDirectory temporary;
     std::filesystem::create_directories(temporary.path() / "z-dir");
@@ -56,11 +65,11 @@ TEST(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks) {
         temporary.path() / "z-dir", temporary.path() / "a-link", symlinkError);
 
     const auto first = TreeProviderSnapshot::fromFilesystem(
-        TreeProviderId{"files"}, temporary.path(), TreeRevision{1});
+        TreeProviderId{"files"}, temporary.path());
     std::filesystem::rename(temporary.path() / "a.txt",
                             temporary.path() / "renamed.txt");
     const auto second = TreeProviderSnapshot::fromFilesystem(
-        TreeProviderId{"files"}, temporary.path(), TreeRevision{2});
+        TreeProviderId{"files"}, temporary.path());
 
     std::vector<std::string> expected{
         "files:.", "files:a-dir", "files:a-link", "files:a.txt", "files:b.txt",
@@ -98,7 +107,7 @@ TEST(filesystemSnapshotIgnoresAnEntryThatDisappearsDuringInspection) {
 
 TEST(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys) {
     const auto git = TreeProviderSnapshot::fromGit(
-        TreeProviderId{"git"}, TreeRevision{7},
+        TreeProviderId{"git"},
         {{.workspacePath = "z.cpp", .label = "renamed label",
           .status = DiffFileStatus::Modified},
          {.workspacePath = "a.cpp", .label = "a.cpp",
@@ -114,7 +123,7 @@ TEST(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys) {
     ASSERT_EQ(git.nodes()[1].gitStatus->role, SemanticRole::DiffModified);
 
     const auto symbols = TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{8},
+        TreeProviderId{"symbols"},
         {{.stableKey = "type/Z", .label = "renamed Z"},
          {.stableKey = "type/A", .label = "A"},
          {.stableKey = "type/A/member", .parentKey = "type/A",
@@ -128,7 +137,7 @@ TEST(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys) {
 TEST(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned) {
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{1},
+        TreeProviderId{"symbols"},
         {{.stableKey = "type/A", .label = "A"},
          {.stableKey = "type/A/member", .parentKey = "type/A",
           .label = "member"}}));
@@ -138,7 +147,7 @@ TEST(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned) {
     ASSERT_EQ(onlyProvider(model.viewState()).nodes.size(), std::size_t{2});
 
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{2},
+        TreeProviderId{"symbols"},
         {{.stableKey = "type/A", .label = "renamed A"},
          {.stableKey = "type/A/member", .parentKey = "type/A",
           .label = "renamed member"}}));
@@ -146,7 +155,7 @@ TEST(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned) {
     ASSERT_EQ(onlyProvider(model.viewState()).nodes.size(), std::size_t{2});
 
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{3},
+        TreeProviderId{"symbols"},
         {{.stableKey = "type/B", .label = "B"}}));
     ASSERT_FALSE(model.isExpanded(TreeProviderId{"symbols"},
                                    TreeNodeId{"symbols:type/A"}));
@@ -155,7 +164,7 @@ TEST(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned) {
 TEST(nodeCommandInvocationIsProviderDataOnly) {
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{1},
+        TreeProviderId{"symbols"},
         {{.stableKey = "type/A",
           .label = "A",
           .commands = {{.id = "symbol.open", .label = "Open symbol"}}}}));
@@ -171,7 +180,7 @@ TEST(nodeCommandInvocationIsProviderDataOnly) {
 TEST(selectionNavigatesExpandsAndReportsSelectedNode) {
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{1},
+        TreeProviderId{"symbols"},
         {{.stableKey = "A", .label = "A"},
          {.stableKey = "A/one", .parentKey = "A", .label = "one"},
          {.stableKey = "B", .label = "B"}}));
@@ -215,7 +224,7 @@ TEST(selectionNavigatesExpandsAndReportsSelectedNode) {
 TEST(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes) {
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{1},
+        TreeProviderId{"symbols"},
         {{.stableKey = "A", .label = "A"},
          {.stableKey = "A/one", .parentKey = "A", .label = "one"},
          {.stableKey = "B", .label = "B"}}));
@@ -244,7 +253,7 @@ TEST(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes) {
 TEST(treeViewStateRejectsMissingMismatchedAndDuplicateActiveBindings) {
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{1},
+        TreeProviderId{"symbols"},
         {{.stableKey = "A", .label = "A"}}));
     const auto valid = model.viewState();
     ASSERT_TRUE(isValidTreeViewState(valid));
@@ -270,90 +279,54 @@ TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
     TemporaryDirectory directory;
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromFilesystem(
-        TreeProviderId{"filesystem"}, directory.path(), TreeRevision{1}));
+        TreeProviderId{"filesystem"}, directory.path()));
+    const auto filesystemRevision =
+        model.providerIdentities().front().revision;
 
-    // Counts how often the model asks for a create-revision, so the test can pin
-    // that the source is consumed ONLY on the create path.
-    int revisionRequests = 0;
-    auto revision = [&](std::uint64_t value) {
-        return [&revisionRequests, value] {
-            ++revisionRequests;
-            return TreeRevision{value};
-        };
-    };
-
-    // A git binding with no git provider yet: created at the supplied revision,
-    // activated, and reported as the active provider.
     ASSERT_TRUE(model.activateOrCreate(
-        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
-        revision(7)));
-    ASSERT_EQ(revisionRequests, 1);
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git}));
+    TreeRevision gitRevision{0};
     {
         const auto view = model.viewState();
         const auto& active = view.providers.front();
         ASSERT_TRUE(active.providerId == TreeProviderId{"git"});
         ASSERT_TRUE(active.kind == TreeProviderKind::Git);
+        gitRevision = providerRevision(model, TreeProviderId{"git"});
     }
+    ASSERT_TRUE(gitRevision > filesystemRevision);
 
-    // A symbols binding: the same lazy-create path for the second creatable kind.
     ASSERT_TRUE(model.activateOrCreate(
         TreeProviderBinding{TreeProviderId{"symbols"},
-                            TreeProviderKind::Symbols},
-        revision(9)));
-    ASSERT_EQ(revisionRequests, 2);
+                            TreeProviderKind::Symbols}));
     {
         const auto view = model.viewState();
         const auto& active = view.providers.front();
         ASSERT_TRUE(active.providerId == TreeProviderId{"symbols"});
         ASSERT_TRUE(active.kind == TreeProviderKind::Symbols);
+        ASSERT_TRUE(providerRevision(model, TreeProviderId{"symbols"}) >
+                    gitRevision);
     }
 
-    // Re-activating an existing provider is a plain activate: it becomes active
-    // again, the view revision does NOT advance a second time (no spurious
-    // replace), and the create-revision source is NOT consumed.
     ASSERT_TRUE(model.activateOrCreate(
-        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
-        revision(99)));
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git}));
     const auto afterFirst = model.viewState().revision;
-    const auto requestsAfterFirst = revisionRequests;
     ASSERT_TRUE(model.activateOrCreate(
-        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
-        revision(99)));
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git}));
     ASSERT_TRUE(model.viewState().revision == afterFirst);
-    ASSERT_EQ(revisionRequests, requestsAfterFirst);
     ASSERT_TRUE(model.viewState().providers.front().providerId ==
                 TreeProviderId{"git"});
 
     ASSERT_FALSE(model.activateOrCreate(
-        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Symbols},
-        revision(101)));
-    ASSERT_EQ(revisionRequests, requestsAfterFirst);
+        TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Symbols}));
     ASSERT_TRUE((model.activeProviderBinding() ==
                  TreeProviderBinding{TreeProviderId{"git"},
                                      TreeProviderKind::Git}));
 
-    // A filesystem binding is NEVER created here (it is seeded at construction);
-    // a missing one is a genuine failure that creates nothing and asks for no
-    // revision.
     TreeModel empty;
-    int emptyRequests = 0;
     ASSERT_FALSE(empty.activateOrCreate(
         TreeProviderBinding{TreeProviderId{"filesystem"},
-                            TreeProviderKind::Filesystem},
-        [&emptyRequests] {
-            ++emptyRequests;
-            return TreeRevision{3};
-        }));
+                            TreeProviderKind::Filesystem}));
     ASSERT_TRUE(empty.viewState().providers.empty());
-    ASSERT_EQ(emptyRequests, 0);
-
-    // An empty revision source is a misuse that fails loudly with a descriptive
-    // error, not an opaque std::bad_function_call on the create path.
-    ASSERT_THROWS(
-        model.activateOrCreate(
-            TreeProviderBinding{TreeProviderId{"git"}, TreeProviderKind::Git},
-            std::function<TreeRevision()>{}),
-        std::invalid_argument);
 }
 
 // The memoization invariant: visibility is a pure function of (snapshot,
@@ -365,7 +338,7 @@ TEST(activateOrCreateLazilyCreatesGitAndSymbolsButNeverFilesystem) {
 TEST(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation) {
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{1},
+        TreeProviderId{"symbols"},
         {{.stableKey = "type/A", .label = "A"},
          {.stableKey = "type/A/member", .parentKey = "type/A",
           .label = "member"},
@@ -398,7 +371,7 @@ TEST(visibleNodesRecomputesOnlyOnRevisionOrExpandedChangeNeverOnNavigation) {
     // A provider replacement bumps the snapshot revision.
     TreeModel::resetVisibleNodesRecomputeCount();
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(
-        TreeProviderId{"symbols"}, TreeRevision{2},
+        TreeProviderId{"symbols"},
         {{.stableKey = "type/A", .label = "renamed A"}}));
     (void)model.viewState();
     ASSERT_TRUE(TreeModel::visibleNodesRecomputeCount() >= std::uint64_t{1});

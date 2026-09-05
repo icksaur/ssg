@@ -88,10 +88,10 @@ bool PaneTopology::closeActive() {
     return true;
 }
 
-void PaneTopology::cycle(PaneCycleDirection direction) {
+void PaneTopology::cycle(CycleDirection direction) {
     auto ids = panes();
     const auto active = std::ranges::find(ids, active_);
-    if (direction == PaneCycleDirection::Next) {
+    if (direction == CycleDirection::Next) {
         active_ = std::next(active) == ids.end() ? ids.front() : *std::next(active);
     } else {
         active_ = active == ids.begin() ? ids.back() : *std::prev(active);

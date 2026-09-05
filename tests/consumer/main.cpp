@@ -4,7 +4,7 @@
 // correctly when SSG is consumed via add_subdirectory from a host project.
 // This is a compile+link+run check; all logic is in CMakeLists.txt.
 
-#include <ssg/config.h>
+#include <ssg/Settings.h>
 #include <ssg/types.h>
 
 int main() {
@@ -12,12 +12,10 @@ int main() {
     std::uint64_t  r{42};
     ssg::ByteOffset o{100};
     ssg::TabWidth  w{4};
-    ssg::HistoryConfig h = ssg::HistoryConfig::defaults();
 
     // Verify values are reachable (prevents the compiler optimising everything
     // away and gives a concrete return value in case of UB).
-    return (r.value() == 42 && o.value() == 100 && w.value() == 4 &&
-            h.coalesceMs == 750)
+    return (r == 42 && o.value() == 100 && w.value() == 4)
                ? 0
                : 1;
 }

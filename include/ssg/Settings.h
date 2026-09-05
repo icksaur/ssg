@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ssg/config.h>
-
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -12,6 +10,32 @@
 #include <vector>
 
 namespace ssg {
+
+enum class IndentStyle : std::uint8_t {
+    Spaces = 0,
+    Tabs = 1,
+};
+
+enum class LineEnding : std::uint8_t {
+    Lf = 0,
+    Crlf = 1,
+    Cr = 2,
+    Mixed = 3,
+};
+
+class TabWidth {
+public:
+    static constexpr int kMinValue = 1;
+    static constexpr int kMaxValue = 16;
+
+    explicit TabWidth(int width);
+
+    [[nodiscard]] int value() const noexcept { return value_; }
+    bool operator==(TabWidth const&) const noexcept = default;
+
+private:
+    int value_{4};
+};
 
 enum class SettingScope : std::uint8_t {
     Defaults = 0,

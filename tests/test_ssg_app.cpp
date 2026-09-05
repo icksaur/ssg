@@ -1636,39 +1636,7 @@ TEST(configDocDocumentsEveryCapabilityOverride) {
         }
         ASSERT_TRUE(doc.find(variable) != std::string::npos);
     }
-    // The diagnostic that makes the overrides actionable must be findable too.
-    ASSERT_TRUE(doc.find("--capabilities") != std::string::npos);
     ASSERT_TRUE(doc.find("SSG_COLOR_DEPTH") != std::string::npos);
-}
-
-// The diagnostic must be able to explain a reported "no".  A reply that arrives
-// after the fence is recorded but not believed, and the two must stay
-// distinguishable -- they call for different fixes.
-TEST(theProbeLogSeparatesWhatWasBelievedFromWhatArrivedLate) {
-    ssg::app::TerminalCapabilities capabilities{fakeEnvironment({})};
-    (void)capabilities.beginProbe();
-    capabilities.observeReply("\x1b[?2026;2$y");
-    capabilities.observeReply("\x1b[?62;22c");  // The fence closes the window.
-    capabilities.observeReply("\x1b[?1u");      // Too late to count.
-
-    auto const& log = capabilities.probeLog();
-    ASSERT_EQ(log.believed.size(), std::size_t{2});
-    ASSERT_EQ(log.believed.front(), std::string{"\x1b[?2026;2$y"});
-    ASSERT_EQ(log.ignored.size(), std::size_t{1});
-    ASSERT_EQ(log.ignored.front(), std::string{"\x1b[?1u"});
-    ASSERT_FALSE(capabilities.has(ssg::app::Capability::KeyboardProtocol));
-
-    // A terminal that says nothing leaves an empty log, which is what tells a
-    // user "silent" rather than "misparsed".
-    ssg::app::TerminalCapabilities silent{fakeEnvironment({})};
-    (void)silent.beginProbe();
-    ASSERT_TRUE(silent.probeLog().believed.empty());
-    ASSERT_TRUE(silent.probeLog().ignored.empty());
-
-    // Re-probing starts a fresh log rather than accumulating across probes.
-    (void)capabilities.beginProbe();
-    ASSERT_TRUE(capabilities.probeLog().believed.empty());
-    ASSERT_TRUE(capabilities.probeLog().ignored.empty());
 }
 
 // Field-captured replies, kept verbatim because a hand-written reply would not
@@ -1689,9 +1657,6 @@ TEST(realTerminalRepliesResolveAsObserved) {
     // It answered nothing about the keyboard protocol, so it does not have it
     // (1.24 predates the release that implements it).
     ASSERT_FALSE(windowsTerminal.has(ssg::app::Capability::KeyboardProtocol));
-    ASSERT_TRUE(windowsTerminal.probeLog().ignored.empty());
-    ASSERT_EQ(windowsTerminal.probeLog().believed.size(), std::size_t{2});
-
     // xterm.js: a minimal DA1 with no extensions, and no answer to either
     // speculative question.
     ssg::app::TerminalCapabilities xtermJs{fakeEnvironment({})};
@@ -2909,7 +2874,6 @@ SSG_TEST_SUITE(test_ssg_app) {
     RUN(theProbeAsksOnlyQuestionsItCanUnderstand);
     RUN(aReplyArrivingAfterTheWindowExpiresIsNotBelieved);
     RUN(configDocDocumentsEveryCapabilityOverride);
-    RUN(theProbeLogSeparatesWhatWasBelievedFromWhatArrivedLate);
     RUN(realTerminalRepliesResolveAsObserved);
     RUN(aDragFrameEndsWithTheCursorHiddenAndEveryOtherFrameShowsIt);
     RUN(aBracketedPasteIsContentAndNeverKeys);

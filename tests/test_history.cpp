@@ -11,6 +11,25 @@
 
 namespace {
 
+struct HistoryFixture {
+    explicit HistoryFixture(
+        std::uint64_t byteBudget = 4096,
+        std::uint32_t coalescingMs = 750)
+        : history{settings} {
+        ASSERT_TRUE(settings
+                        .set(ssg::SettingScope::User,
+                             ssg::SettingKey::UndoByteBudget, byteBudget)
+                        .accepted());
+        ASSERT_TRUE(settings
+                        .set(ssg::SettingScope::User,
+                             ssg::SettingKey::TypingCoalescingMs, coalescingMs)
+                        .accepted());
+    }
+
+    ssg::SettingsModel settings;
+    ssg::DocumentHistory history;
+};
+
 ssg::DocumentPosition position(std::uint64_t offset) {
     return {ssg::ByteOffset{offset}, ssg::LineIndex{0}, ssg::CellIndex{offset}};
 }
@@ -70,7 +89,8 @@ void assertMatches(const ssg::Document& document,
 
 TEST(referenceForwardUndoRedoRoundTrips) {
     ssg::Document document{"one"};
-    ssg::DocumentHistory history{{4096, 750}};
+    HistoryFixture fixture;
+    auto& history = fixture.history;
     auto selections = caret(3);
     auto reference = ref::make_editor("one");
 
@@ -107,7 +127,8 @@ TEST(referenceForwardUndoRedoRoundTrips) {
 
 TEST(typingCoalescesAtInclusiveClockBoundary) {
     ssg::Document document;
-    ssg::DocumentHistory history{{4096, 750}};
+    HistoryFixture fixture;
+    auto& history = fixture.history;
     auto selections = caret(0);
 
     ASSERT_TRUE(input(history, document, selections,
@@ -126,9 +147,38 @@ TEST(typingCoalescesAtInclusiveClockBoundary) {
     ASSERT_EQ(selections, caret(2));
 }
 
+TEST(settingChangesApplyToTheNextEdit) {
+    ssg::Document document;
+    HistoryFixture fixture;
+    auto& history = fixture.history;
+    auto selections = caret(0);
+
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Typing, 0, "a");
+    ASSERT_TRUE(fixture.settings
+                    .set(ssg::SettingScope::User,
+                         ssg::SettingKey::TypingCoalescingMs,
+                         std::uint32_t{0})
+                    .accepted());
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Typing, 1, "b");
+    selections = *history.undo(document).selections;
+    ASSERT_EQ(document.snapshot().text, std::string{"a"});
+
+    ASSERT_TRUE(fixture.settings
+                    .set(ssg::SettingScope::User,
+                         ssg::SettingKey::UndoByteBudget,
+                         std::uint64_t{0})
+                    .accepted());
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Other, 2, "c");
+    ASSERT_FALSE(history.canUndo());
+}
+
 TEST(multicaretTypingCoalescesAndRoundTrips) {
     ssg::Document document{"abcd"};
-    ssg::DocumentHistory history{{4096, 750}};
+    HistoryFixture fixture;
+    auto& history = fixture.history;
     auto selections = ssg::SelectionSet{{
         ssg::Selection{position(1), position(1)},
         ssg::Selection{position(3), position(3)},
@@ -148,7 +198,8 @@ TEST(multicaretTypingCoalescesAndRoundTrips) {
 
 TEST(windowKindAndBarrierSplitUnits) {
     ssg::Document document;
-    ssg::DocumentHistory history{{4096, 750}};
+    HistoryFixture fixture;
+    auto& history = fixture.history;
     auto selections = caret(0);
 
     input(history, document, selections, ssg::TextInputCommand::Insert,
@@ -166,7 +217,8 @@ TEST(windowKindAndBarrierSplitUnits) {
     ASSERT_EQ(document.snapshot().text, std::string{"ab"});
 
     ssg::Document directions{"abc"};
-    ssg::DocumentHistory directionHistory{{4096, 750}};
+    HistoryFixture directionFixture;
+    auto& directionHistory = directionFixture.history;
     auto directionSelection = caret(1);
     input(directionHistory, directions, directionSelection,
           ssg::TextInputCommand::DeleteBackward,
@@ -180,7 +232,8 @@ TEST(windowKindAndBarrierSplitUnits) {
 
 TEST(sameDirectionDeletionsCoalesce) {
     ssg::Document backwardDocument{"abc"};
-    ssg::DocumentHistory backwardHistory{{4096, 750}};
+    HistoryFixture backwardFixture;
+    auto& backwardHistory = backwardFixture.history;
     auto backwardSelection = caret(3);
     input(backwardHistory, backwardDocument, backwardSelection,
           ssg::TextInputCommand::DeleteBackward,
@@ -193,7 +246,8 @@ TEST(sameDirectionDeletionsCoalesce) {
     ASSERT_EQ(backwardSelection, caret(3));
 
     ssg::Document forwardDocument{"abc"};
-    ssg::DocumentHistory forwardHistory{{4096, 750}};
+    HistoryFixture forwardFixture;
+    auto& forwardHistory = forwardFixture.history;
     auto forwardSelection = caret(0);
     input(forwardHistory, forwardDocument, forwardSelection,
           ssg::TextInputCommand::DeleteForward,
@@ -208,7 +262,8 @@ TEST(sameDirectionDeletionsCoalesce) {
 
 TEST(selectionRestorationAndRedoInvalidation) {
     ssg::Document document{"abcd"};
-    ssg::DocumentHistory history{{4096, 750}};
+    HistoryFixture fixture;
+    auto& history = fixture.history;
     auto selections = range(1, 3);
 
     input(history, document, selections, ssg::TextInputCommand::Insert,
@@ -230,7 +285,8 @@ TEST(byteBudgetEvictsOldestAndRejectsOversizeUnits) {
     const auto oneInsertCharge =
         std::uint64_t{1} + 2 * sizeof(ssg::Selection);
     ssg::Document document;
-    ssg::DocumentHistory history{{oneInsertCharge, 750}};
+    HistoryFixture fixture{oneInsertCharge};
+    auto& history = fixture.history;
     auto selections = caret(0);
 
     input(history, document, selections, ssg::TextInputCommand::Insert,
@@ -244,7 +300,8 @@ TEST(byteBudgetEvictsOldestAndRejectsOversizeUnits) {
     ASSERT_FALSE(history.canUndo());
 
     ssg::Document oversizedDocument;
-    ssg::DocumentHistory oversized{{oneInsertCharge - 1, 750}};
+    HistoryFixture oversizedFixture{oneInsertCharge - 1};
+    auto& oversized = oversizedFixture.history;
     auto oversizedSelection = caret(0);
     input(oversized, oversizedDocument, oversizedSelection,
           ssg::TextInputCommand::Insert, ssg::HistoryEditKind::Other, 0, "x");
@@ -252,7 +309,8 @@ TEST(byteBudgetEvictsOldestAndRejectsOversizeUnits) {
     ASSERT_EQ(oversized.retainedBytes(), std::uint64_t{0});
 
     ssg::Document disabledDocument;
-    ssg::DocumentHistory disabled{{0, 750}};
+    HistoryFixture disabledFixture{0};
+    auto& disabled = disabledFixture.history;
     auto disabledSelection = caret(0);
     input(disabled, disabledDocument, disabledSelection,
           ssg::TextInputCommand::Insert, ssg::HistoryEditKind::Other, 0, "x");
@@ -261,7 +319,8 @@ TEST(byteBudgetEvictsOldestAndRejectsOversizeUnits) {
 
 TEST(rejectionAndStaleDocumentAreFailureAtomic) {
     ssg::Document document{"a"};
-    ssg::DocumentHistory history{{4096, 750}};
+    HistoryFixture fixture;
+    auto& history = fixture.history;
     auto selections = caret(1);
     const auto stale = ssg::EditTransaction{
         std::uint64_t{99}, {{ssg::ByteOffset{1}, 0, "b"}}};
@@ -287,7 +346,8 @@ TEST(rejectionAndStaleDocumentAreFailureAtomic) {
 
 TEST(undoRedoAdvanceRevisionAndKeepDirty) {
     ssg::Document document;
-    ssg::DocumentHistory history{{4096, 750}};
+    HistoryFixture fixture;
+    auto& history = fixture.history;
     auto selections = caret(0);
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 0, "a");
@@ -303,7 +363,8 @@ TEST(undoRedoAdvanceRevisionAndKeepDirty) {
 
 TEST(viewStateTracksHistoryAvailability) {
     ssg::Document document;
-    ssg::DocumentHistory history{{4096, 750}};
+    HistoryFixture fixture;
+    auto& history = fixture.history;
     const auto empty = history.viewState();
     ASSERT_FALSE(empty.canUndo);
     ASSERT_FALSE(empty.canRedo);
@@ -325,6 +386,7 @@ TEST(viewStateTracksHistoryAvailability) {
 SSG_TEST_SUITE(test_history) {
     RUN(referenceForwardUndoRedoRoundTrips);
     RUN(typingCoalescesAtInclusiveClockBoundary);
+    RUN(settingChangesApplyToTheNextEdit);
     RUN(multicaretTypingCoalescesAndRoundTrips);
     RUN(windowKindAndBarrierSplitUnits);
     RUN(sameDirectionDeletionsCoalesce);

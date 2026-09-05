@@ -1,14 +1,14 @@
 // Oracle: tests/test_types.cpp
 //
 // Compile-only consumer via the public include path verifies that
-// include/ssg/types.h and include/ssg/config.h are self-contained and
+// include/ssg/types.h and include/ssg/Settings.h are self-contained and
 // well-formed without requiring any internal headers.
 //
 // Tests: valid construction/accessor round trips, invalid-construction
 // failures (std::invalid_argument), equality and ordering, and scoped-enum
 // values.
 
-#include <ssg/config.h>
+#include <ssg/Settings.h>
 #include <ssg/types.h>
 
 #include "test_helpers.h"
@@ -130,31 +130,6 @@ TEST(tabWidthEquality) {
     ASSERT_TRUE(a != c);
 }
 
-// ---------------------------------------------------------------------------
-// HistoryConfig
-
-TEST(historyConfigDefaults) {
-    auto cfg = ssg::HistoryConfig::defaults();
-    ASSERT_EQ(cfg.byteBudget, uint64_t{16u * 1024u * 1024u});
-    ASSERT_EQ(cfg.coalesceMs, uint32_t{750});
-}
-
-TEST(historyConfigRoundTrip) {
-    ssg::HistoryConfig cfg;
-    cfg.byteBudget = 1024;
-    cfg.coalesceMs = 500;
-    ASSERT_EQ(cfg.byteBudget, uint64_t{1024});
-    ASSERT_EQ(cfg.coalesceMs, uint32_t{500});
-}
-
-TEST(historyConfigEquality) {
-    ssg::HistoryConfig a;
-    ssg::HistoryConfig b;
-    ASSERT_TRUE(a == b);
-    b.byteBudget = 1;
-    ASSERT_TRUE(a != b);
-}
-
 TEST(indentStyleDistinctValues) {
     ASSERT_TRUE(ssg::IndentStyle::Spaces != ssg::IndentStyle::Tabs);
 }
@@ -198,9 +173,6 @@ SSG_TEST_SUITE(test_types) {
     RUN(tabWidthInvalidNegative);
     RUN(tabWidthEquality);
 
-    RUN(historyConfigDefaults);
-    RUN(historyConfigRoundTrip);
-    RUN(historyConfigEquality);
 
     RUN(indentStyleDistinctValues);
 

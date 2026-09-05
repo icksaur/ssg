@@ -256,15 +256,6 @@ the keyboard protocol, clipboard access -- and adapts. Nothing waits for the
 answers, so a terminal that stays silent simply gets the conservative
 rendering rather than a slow start.
 
-To see what ssg decided about your terminal:
-
-```
-ssg --capabilities
-```
-
-It prints the resolved colour depth and one line per capability, then exits
-without opening the editor.
-
 Terminals sometimes claim a capability they render badly, or omit one they
 actually have. Every answer can be overridden, and an override always beats
 what the terminal reports:

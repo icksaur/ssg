@@ -7,7 +7,7 @@
 #include <ssg/ScreenLayout.h>
 #include <ssg/GridPresenter.h>
 
-#include <ssg/interaction.h>
+#include <ssg/ScreenState.h>
 
 #include <algorithm>
 #include <functional>
@@ -123,24 +123,22 @@ public:
                                           style_.inputLineSigil)
                           .root;
         TreeModel treeModel;
-        InteractionState interaction{
-            withStatusActions(std::move(composition),
-                              projectStatusActionNodes(status_)),
-            treeModel};
+        ScreenState screen{std::move(composition), treeModel};
+        (void)screen.refreshStatusActions(projectStatusActionNodes(status_));
         if (panel_) {
-            (void)interaction.togglePanel();
-            if (!panelFocused_) interaction.focusEditor();
+            (void)screen.togglePanel();
+            if (!panelFocused_) screen.focusEditor();
         }
-        if (noticePresent_) (void)interaction.refreshNoticePresence(true);
+        if (noticePresent_) (void)screen.refreshNoticePresence(true);
         if (externalModificationPresent_) {
-            (void)interaction.refreshExternalModificationPresence(true);
+            (void)screen.refreshExternalModificationPresence(true);
         }
-        if (promptInput_) (void)interaction.openFinder(PickerKind::Command);
+        if (promptInput_) (void)screen.openFinder(PickerKind::Command);
 
-        UiSchema uiTree = interaction.schema();
+        UiSchema uiTree = screen.schema();
         populateFixtureUiTree(uiTree, statusFields_, helpHintLabel_,
                               projectStatusActionNodes(status_));
-        uiTree.focusPath = interaction.focusPath();
+        uiTree.focusPath = screen.focusPath();
         uiTree = requirePublishedUiTree(std::move(uiTree));
 
         TabViewState tabs;

@@ -32,6 +32,7 @@ TEST(copyCapturesFragmentsLinesAndExactPlainPayload) {
     const std::string text = "aa\r\nbb\rc\nlast";
     ssg::Document document{text};
     ssg::ClipboardRegister clipboard;
+    ssg::SettingsModel settings;
     const auto selected = selections(text, {{0, 2}, {5, 5}, {10, 10}});
 
     const auto copied = clipboard.copy(document.snapshot(), selected);
@@ -63,6 +64,7 @@ TEST(lineCopyPreservesDuplicatesAndEmptyFinalLine) {
 
 TEST(fragmentDistributionAndPlainPayloadFallbackRoundTrip) {
     ssg::ClipboardRegister clipboard;
+    ssg::SettingsModel settings;
     ssg::Document source{"AB"};
     ASSERT_TRUE(clipboard
                     .copy(source.snapshot(),
@@ -70,7 +72,7 @@ TEST(fragmentDistributionAndPlainPayloadFallbackRoundTrip) {
                     .accepted());
 
     ssg::Document distributed{"xx"};
-    ssg::DocumentHistory distributedHistory;
+    ssg::DocumentHistory distributedHistory{settings};
     const auto distributedBefore = selections("xx", {{0, 0}, {2, 2}});
     const auto paste = clipboard.paste(
         distributed, distributedHistory, distributedBefore, 10);
@@ -86,7 +88,7 @@ TEST(fragmentDistributionAndPlainPayloadFallbackRoundTrip) {
     ASSERT_EQ(distributed.snapshot().text, std::string{"AxxB"});
 
     ssg::Document fallback{"xyz"};
-    ssg::DocumentHistory fallbackHistory;
+    ssg::DocumentHistory fallbackHistory{settings};
     const auto fallbackBefore = selections("xyz", {{0, 0}, {1, 1}, {3, 3}});
     const auto fallbackPaste = clipboard.paste(
         fallback, fallbackHistory, fallbackBefore, 20);
@@ -101,7 +103,8 @@ TEST(fragmentDistributionAndPlainPayloadFallbackRoundTrip) {
 TEST(lineCutMergesDuplicateRangesAndIsUndoable) {
     const std::string text = "one\r\ntwo\nlast";
     ssg::Document document{text};
-    ssg::DocumentHistory history;
+    ssg::SettingsModel settings;
+    ssg::DocumentHistory history{settings};
     ssg::ClipboardRegister clipboard;
     const auto before = selections(text, {{6, 6}, {7, 7}});
 
@@ -124,10 +127,11 @@ TEST(lineCutMergesDuplicateRangesAndIsUndoable) {
 
 TEST(nonEditModesAreAtomic) {
     ssg::ClipboardRegister clipboard;
+    ssg::SettingsModel settings;
     for (const auto mode :
          {ssg::DocumentMode::ReadOnly, ssg::DocumentMode::Diff}) {
         ssg::Document blocked{"x", mode};
-        ssg::DocumentHistory blockedHistory;
+        ssg::DocumentHistory blockedHistory{settings};
         const auto blockedBefore = selections("x", {{0, 1}});
         const auto cut =
             clipboard.cut(blocked, blockedHistory, blockedBefore, 30);

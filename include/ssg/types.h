@@ -8,13 +8,17 @@
 // construction-time validation because the values are unconstrained ordinals
 // (any uint64_t is a valid byte offset, line index, etc.).
 //
-// Construction failure contract: these types have no invalid values; types
-// with invariants live in config.h.
+// Construction failure contract: these types have no invalid values.
 
 #include <compare>
 #include <cstdint>
 
 namespace ssg {
+
+enum class CycleDirection : std::uint8_t {
+    Next,
+    Previous,
+};
 
 // Zero-based byte offset into a UTF-8 document buffer.  Byte offsets are
 // canonical for document mutation; line and cell indices are derived (spec).

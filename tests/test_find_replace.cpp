@@ -147,7 +147,8 @@ TEST(zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels) {
 
 TEST(currentReplaceIsAtomicOneUndoUnitAndStaleSafe) {
     Document document{"one two one"};
-    DocumentHistory history;
+    SettingsModel settings;
+    DocumentHistory history{settings};
     FindReplaceController controller;
     controller.open(document.snapshot(),
                     FindRequest{"one", {}, std::nullopt, 100000, nullptr});

@@ -230,7 +230,7 @@ void populateUiTree(UiSchema& schema, const UiTreeValues& values) {
 
 std::optional<EditorSession::Impl::ResolvedPromptControls>
 EditorSession::Impl::resolvedPromptControls() const {
-    const auto& prompt = interaction.prompt();
+    const auto& prompt = screen.prompt();
     const auto& request = prompt.request();
     if (!request || promptFocusRegion(request->kind) != PromptRegion::Footer) {
         return std::nullopt;
@@ -276,7 +276,7 @@ PromptStatusViewState EditorSession::Impl::promptStatusView() const {
     // a header-hosted prompt with no footer view) and the status bar. No
     // dimensions are needed to resolve this semantic state.
     PromptStatusViewState view;
-    if (interaction.prompt().request()) view.activeKind = interaction.prompt().request()->kind;
+    if (screen.prompt().request()) view.activeKind = screen.prompt().request()->kind;
     view.status = status.viewState();
     return view;
 }
@@ -326,15 +326,15 @@ UiSchema EditorSession::Impl::projectedUiTree() const {
     // Population writes directly into a copy of the same single UiSchema the
     // interaction authority owns, so the published tree's visibility and
     // resolved values correspond node-for-node.
-    UiSchema uiTree = interaction.schema();
+    UiSchema uiTree = screen.schema();
     populateUiTree(
         uiTree, UiTreeValues{
                     uiStatusFields(), helpHintLabel(keymap),
-                    interaction.statusActions()});
+                    screen.statusActions()});
     if (auto prompt = resolvedPromptControls()) {
         populatePromptControls(uiTree, prompt->controls, prompt->activeInput);
     }
-    uiTree.focusPath = interaction.focusPath();
+    uiTree.focusPath = screen.focusPath();
     return requirePublishedUiTree(std::move(uiTree));
 }
 
@@ -345,10 +345,10 @@ TreeViewState EditorSession::Impl::treeView() const {
 
 PaletteViewState EditorSession::Impl::paletteView() const {
     PaletteViewState view;
-    view.presenceOverlay = interaction.pickerPresenceOverlay();
-    if (auto open = interaction.openPicker()) {
+    view.presenceOverlay = screen.pickerPresenceOverlay();
+    if (auto open = screen.openPicker()) {
         if (auto const* descriptor = pickerCatalog().find(*open)) {
-            view.activePicker = interaction.openPickerActivation();
+            view.activePicker = screen.openPickerActivation();
         }
     }
     // Every registered command is published continuously. Resolving each key hint

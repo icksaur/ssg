@@ -1,4 +1,4 @@
-#include <ssg/interaction.h>
+#include <ssg/ScreenState.h>
 #include <ssg/ScreenLayout.h>
 
 #include <algorithm>
@@ -35,17 +35,9 @@ TreeProviderBinding cyclePanelTreeProvider(
     if (at == kPanelTreeProviders.end()) {
         throw std::logic_error("active tree provider is outside the panel cycle");
     }
-    std::size_t step;
-    switch (direction) {
-    case CycleDirection::Next:
-        step = 1;
-        break;
-    case CycleDirection::Previous:
-        step = kPanelTreeProviders.size() - 1;
-        break;
-    default:
-        throw std::logic_error("corrupt CycleDirection enumerator");
-    }
+    const std::size_t step = direction == CycleDirection::Next
+                                 ? 1
+                                 : kPanelTreeProviders.size() - 1;
     const std::size_t index =
         static_cast<std::size_t>(at - kPanelTreeProviders.begin());
     return kPanelTreeProviders[(index + step) % kPanelTreeProviders.size()];
@@ -162,18 +154,6 @@ PalettePresenceOverlay derivePickerPresenceOverlay(
     return overlay;
 }
 
-// The revision source must lead every existing provider so a replacement stamped from it
-// strictly increases; a source behind one is a broken invariant, not a runtime condition.
-std::uint64_t requireSourceAheadOfProviders(std::uint64_t source, const TreeModel& tree) {
-    for (const auto& identity : tree.providerIdentities()) {
-        if (source <= identity.revision.value()) {
-            throw std::logic_error(
-                "interaction revision source must lead every provider revision");
-        }
-    }
-    return source;
-}
-
 UiSchema validatedSchema(UiComposition composition) {
     UiSchema schema{std::move(composition.root)};
     const UiSchemaValidation result = validateUiSchema(schema);
@@ -192,51 +172,42 @@ bool updateSchema(UiSchema& schema, UiComposition composition) {
 
 }  // namespace
 
-InteractionState::InteractionState(UiComposition initialAssembly, TreeModel& tree,
-                                  std::uint64_t firstTreeRevision,
-                                  PickerActivationId firstPickerActivation)
+ScreenState::ScreenState(UiComposition initialAssembly, TreeModel& tree,
+                         PickerActivationId firstPickerActivation)
     : baseComposition_{std::move(initialAssembly)},
-      schema_{validatedSchema(baseComposition_)},
       tree_{tree},
-      nextTreeRevision_{requireSourceAheadOfProviders(firstTreeRevision, tree)},
-      nextPickerActivation_{firstPickerActivation},
-      interaction_{buildInteraction(schema_, {}, std::nullopt)} {
+      nextPickerActivation_{firstPickerActivation} {
+    (void)validatedSchema(baseComposition_);
     if (!nextPickerActivation_.valid()) {
         throw std::invalid_argument(
-           "interaction picker activation source must be valid");
+           "screen picker activation source must be valid");
     }
 }
 
-UiComposition InteractionState::assembled(
+UiComposition ScreenState::assembled(
     const UiComposition& base, const PromptSurface& prompt) const {
     UiComposition projected = withStatusActions(base, statusActions_);
     return prompt.active() ? withFooterPrompt(std::move(projected), prompt)
                            : projected;
 }
 
-UiInteractionState InteractionState::project(
-    const UiSchema& schema, const PromptSurface& prompt) const {
+UiInteractionState ScreenState::project() const {
+    UiSchema schema{assembled(baseComposition_, prompt_).root};
     return buildInteraction(
-        schema,
-        {panelPresent_, distractionFree_, openPicker_, baseFocus_,
+        std::move(schema),
+        {panelPresent_, distractionFree_, visiblePicker(), baseFocus_,
          noticePresent_, externalModificationPresent_, externalFocusHeld_},
-        activePromptRegion(prompt));
+        activePromptRegion(prompt_));
 }
 
-void InteractionState::adopt(PromptSurface prompt) {
-    const bool activePalette =
-        prompt.active() && prompt.request()->kind == PromptKind::Palette;
-    if (!activePalette) openPicker_.reset();
-
-    UiInteractionState projection = project(schema_, prompt);
-
-    prompt_ = std::move(prompt);
-    if (!openPicker_) openPickerActivation_.reset();
-    interaction_ = std::move(projection);
-    ++routingGeneration_;
+std::optional<PickerKind> ScreenState::visiblePicker() const noexcept {
+    if (!prompt_.active() || prompt_.request()->kind != PromptKind::Palette) {
+        return std::nullopt;
+    }
+    return openPicker_;
 }
 
-bool InteractionState::activatePanelProvider(
+bool ScreenState::activatePanelProvider(
     TreeProviderBinding binding, bool panelPresent, BaseFocus baseFocus,
     BaseFocus panelReturnFocus) {
     const auto identities = tree_.providerIdentities();
@@ -248,35 +219,14 @@ bool InteractionState::activatePanelProvider(
         return false;
     }
 
-    std::optional<TreeProviderSnapshot> created;
-    if (existing == identities.end()) {
-        if (!treeProviderCanBeCreatedEmpty(binding.kind) ||
-            nextTreeRevision_ == std::numeric_limits<std::uint64_t>::max()) {
-            return false;
-        }
-        created = TreeProviderSnapshot{
-            binding.id, binding.kind, TreeRevision{nextTreeRevision_}, {}};
-    }
-
-    UiInteractionState projection = buildInteraction(
-        schema_,
-        {panelPresent, distractionFree_, openPicker_, baseFocus, noticePresent_,
-         externalModificationPresent_, externalFocusHeld_},
-        activePromptRegion(prompt_));
-    if (created) {
-        tree_.replaceProvider(std::move(*created));
-        ++nextTreeRevision_;
-    }
-    (void)tree_.activateProvider(binding.id);
+    if (!tree_.activateOrCreate(binding)) return false;
     panelPresent_ = panelPresent;
     baseFocus_ = baseFocus;
     panelReturnFocus_ = panelReturnFocus;
-    interaction_ = std::move(projection);
-    ++routingGeneration_;
     return true;
 }
 
-bool InteractionState::togglePanel() {
+bool ScreenState::togglePanel() {
     auto& state = *this;
     if (state.panelPresent_) {
         state.panelPresent_ = false;
@@ -286,11 +236,10 @@ bool InteractionState::togglePanel() {
         state.panelPresent_ = true;
         state.baseFocus_ = BaseFocus::Panel;
     }
-    state.adopt(state.prompt_);
     return true;
 }
 
-bool InteractionState::showPanelProvider(TreeProviderKind kind) {
+bool ScreenState::showPanelProvider(TreeProviderKind kind) {
     auto& state = *this;
     const TreeProviderBinding binding = panelTreeProvider(kind);
     if (state.panelPresent_ &&
@@ -303,7 +252,7 @@ bool InteractionState::showPanelProvider(TreeProviderKind kind) {
                                        returnFocus);
 }
 
-bool InteractionState::switchPanelProvider(CycleDirection direction) {
+bool ScreenState::switchPanelProvider(CycleDirection direction) {
     auto& state = *this;
     const auto active = state.tree_.activeProviderBinding();
     if (!active) return false;
@@ -312,7 +261,7 @@ bool InteractionState::switchPanelProvider(CycleDirection direction) {
         state.baseFocus_, state.panelReturnFocus_);
 }
 
-bool InteractionState::openFinder(PickerKind kind) {
+bool ScreenState::openFinder(PickerKind kind) {
     auto& state = *this;
     const PickerDescriptor* descriptor = pickerCatalog().find(kind);
     if (descriptor == nullptr ||
@@ -326,7 +275,7 @@ bool InteractionState::openFinder(PickerKind kind) {
         {{"query", "command palette query", ""}}, {}, std::nullopt});
     if (!opened.accepted()) return false;
     state.openPicker_ = kind;
-    state.adopt(std::move(prompt));
+    state.prompt_ = std::move(prompt);
     state.openPickerActivation_ =
         PickerActivation{descriptor->wireMode, state.nextPickerActivation_};
     state.nextPickerActivation_ =
@@ -334,127 +283,41 @@ bool InteractionState::openFinder(PickerKind kind) {
     return true;
 }
 
-bool InteractionState::closeFinder() {
+bool ScreenState::closeFinder() {
     auto& state = *this;
     PromptSurface prompt = state.prompt_;
     if (!prompt.cancel().accepted()) return false;
     state.openPicker_.reset();
-    state.adopt(std::move(prompt));
+    state.prompt_ = std::move(prompt);
+    state.openPickerActivation_.reset();
     return true;
 }
 
-PromptCommandResult InteractionState::openPrompt(PromptRequest request) {
-    auto& state = *this;
-    // Only a finder transition may establish picker identity; a generic open must never be
-    // a Palette prompt, or it would masquerade as a picker without an identity.
-    if (request.kind == PromptKind::Palette) {
-        return PromptCommandResult{
-            PromptError{PromptErrorCode::InvalidRequest,
-                        "a generic prompt must not be a Palette prompt; open a picker "
-                        "through a finder transition"},
-            std::nullopt};
-    }
-    PromptSurface copy = state.prompt_;
-    PromptCommandResult result = copy.open(std::move(request));
-    if (result.accepted()) {
-        UiSchema candidate = state.schema_;
-        updateSchema(candidate, state.assembled(state.baseComposition_, copy));
-        state.openPicker_.reset();
-        UiInteractionState projection = state.project(candidate, copy);
-        state.schema_ = std::move(candidate);
-        state.prompt_ = std::move(copy);
-        state.openPickerActivation_.reset();
-        state.interaction_ = std::move(projection);
-        ++state.routingGeneration_;
-    }
-    return result;
-}
-
-PromptCommandResult InteractionState::submitPrompt() {
-    auto& state = *this;
-    PromptSurface copy = state.prompt_;
-    PromptCommandResult result = copy.submit();
-    if (result.accepted()) state.adopt(std::move(copy));
-    return result;
-}
-
-PromptCommandResult InteractionState::cancelPrompt() {
-    auto& state = *this;
-    PromptSurface copy = state.prompt_;
-    PromptCommandResult result = copy.cancel();
-    if (result.accepted()) state.adopt(std::move(copy));
-    return result;
-}
-
-PromptCommandResult InteractionState::updatePromptValue(std::size_t index,
-                                                         std::string value) {
-    auto& state = *this;
-    // A value edit cannot change the prompt's activity, kind, region, presence, or focus,
-    // so the interaction projection is unchanged -- swap only the prompt, no rebuild.
-    PromptSurface copy = state.prompt_;
-    PromptCommandResult result = copy.updateValue(index, std::move(value));
-    if (result.accepted()) {
-        state.prompt_ = std::move(copy);
-        ++state.routingGeneration_;
-    }
-    return result;
-}
-
-PromptCommandResult InteractionState::focusPromptControl(
-    std::string_view controlId) {
-    auto& state = *this;
-    // Which input owns the keyboard changes the semantic prompt view but not the
-    // tree topology, presence, or the footer.prompt focus-capture anchor -- swap
-    // only the prompt, no rebuild.
-    PromptSurface copy = state.prompt_;
-    PromptCommandResult result = copy.focusInput(controlId);
-    if (result.accepted()) {
-        state.prompt_ = std::move(copy);
-        ++state.routingGeneration_;
-    }
-    return result;
-}
-
-PromptCommandResult InteractionState::focusNextPromptControl() {
-    auto& state = *this;
-    PromptSurface copy = state.prompt_;
-    PromptCommandResult result = copy.focusNextInput();
-    if (result.accepted()) {
-        state.prompt_ = std::move(copy);
-        ++state.routingGeneration_;
-    }
-    return result;
-}
-
-void InteractionState::toggleDistractionFree() {
+void ScreenState::toggleDistractionFree() {
     auto& state = *this;
     state.distractionFree_ = !state.distractionFree_;
-    state.adopt(state.prompt_);
 }
 
-void InteractionState::focusEditor() {
+void ScreenState::focusEditor() {
     auto& state = *this;
     state.baseFocus_ = BaseFocus::Editor;
-    state.adopt(state.prompt_);
 }
 
-bool InteractionState::focusPanel() {
+bool ScreenState::focusPanel() {
     auto& state = *this;
     if (!state.panelPresent_) return false;
     state.baseFocus_ = BaseFocus::Panel;
-    state.adopt(state.prompt_);
     return true;
 }
 
-bool InteractionState::refreshNoticePresence(bool present) {
+bool ScreenState::refreshNoticePresence(bool present) {
     auto& state = *this;
     if (state.noticePresent_ == present) return false;
     state.noticePresent_ = present;
-    state.adopt(state.prompt_);
     return true;
 }
 
-bool InteractionState::refreshExternalModificationPresence(bool present) {
+bool ScreenState::refreshExternalModificationPresence(bool present) {
     auto& state = *this;
     if (state.externalModificationPresent_ == present &&
         (present || !state.externalFocusHeld_)) {
@@ -464,111 +327,99 @@ bool InteractionState::refreshExternalModificationPresence(bool present) {
     // Presence dropping clears focus: the capture auto-pops and a later disk event
     // that re-raises the bar never reactively steals the keyboard.
     if (!present) state.externalFocusHeld_ = false;
-    state.adopt(state.prompt_);
     return true;
 }
 
-bool InteractionState::captureExternalFocus() {
+bool ScreenState::captureExternalFocus() {
     auto& state = *this;
     if (!state.externalModificationPresent_ || state.externalFocusHeld_) {
         return false;
     }
     state.externalFocusHeld_ = true;
-    state.adopt(state.prompt_);
     return true;
 }
 
-bool InteractionState::releaseExternalFocus() {
+bool ScreenState::releaseExternalFocus() {
     auto& state = *this;
     if (!state.externalFocusHeld_) return false;
     state.externalFocusHeld_ = false;
-    state.adopt(state.prompt_);
     return true;
 }
 
-bool InteractionState::updateComposition(UiComposition assembly) {
+bool ScreenState::updateComposition(UiComposition assembly) {
     auto& state = *this;
-    UiSchema candidate = state.schema_;
+    UiSchema candidate{
+        state.assembled(state.baseComposition_, state.prompt_).root};
     UiComposition projected = state.assembled(assembly, state.prompt_);
     if (!updateSchema(candidate, std::move(projected))) {
         state.baseComposition_ = std::move(assembly);
         return false;
     }
-    UiInteractionState projection = state.project(candidate, state.prompt_);
-    state.schema_ = std::move(candidate);
     state.baseComposition_ = std::move(assembly);
-    state.interaction_ = std::move(projection);
     return true;
 }
 
-bool InteractionState::refreshStatusActions(
+bool ScreenState::refreshStatusActions(
     std::vector<StatusActionNode> actions) {
     auto& state = *this;
     if (actions == state.statusActions_) return false;
-    UiSchema candidate = state.schema_;
+    UiSchema candidate{
+        state.assembled(state.baseComposition_, state.prompt_).root};
     UiComposition projected = withStatusActions(state.baseComposition_, actions);
     if (state.prompt_.active()) {
         projected = withFooterPrompt(std::move(projected), state.prompt_);
     }
-    const bool schemaChanged = updateSchema(candidate, std::move(projected));
-    std::optional<UiInteractionState> interaction;
-    if (schemaChanged) {
-        interaction = state.project(candidate, state.prompt_);
-    }
+    (void)updateSchema(candidate, std::move(projected));
     state.statusActions_ = std::move(actions);
-    if (schemaChanged) {
-        state.schema_ = std::move(candidate);
-        state.interaction_ = std::move(*interaction);
-    }
     return true;
 }
 
-const PromptSurface& InteractionState::prompt() const noexcept {
+PromptSurface& ScreenState::prompt() noexcept {
     return prompt_;
 }
 
-const std::vector<StatusActionNode>& InteractionState::statusActions() const
+const PromptSurface& ScreenState::prompt() const noexcept {
+    return prompt_;
+}
+
+const std::vector<StatusActionNode>& ScreenState::statusActions() const
     noexcept {
     return statusActions_;
 }
 
-FocusTarget InteractionState::effectiveFocus() const noexcept {
-    return interaction_.effectiveFocus();
-}
-
-std::optional<PickerKind> InteractionState::openPicker() const noexcept {
-    return openPicker_;
-}
-
-const std::optional<PickerActivation>&
-InteractionState::openPickerActivation() const noexcept {
-    return openPickerActivation_;
-}
-
-std::uint64_t InteractionState::routingGeneration() const noexcept {
-    return routingGeneration_;
-}
-
-const UiSchema& InteractionState::schema() const noexcept {
-    return interaction_.schema();
-}
-
-std::vector<UiNodeId> InteractionState::focusPath() const {
-    return interaction_.focusPath();
-}
-
-PalettePresenceOverlay InteractionState::pickerPresenceOverlay() const {
-    return derivePickerPresenceOverlay(
-        schema_,
-        {panelPresent_, distractionFree_, openPicker_, baseFocus_,
-         noticePresent_, externalModificationPresent_, externalFocusHeld_});
-}
-
-TreeRevision InteractionState::allocateTreeRevision() {
-    if (nextTreeRevision_ == std::numeric_limits<std::uint64_t>::max()) {
-        throw std::logic_error("interaction tree revision source is exhausted");
+FocusTarget ScreenState::effectiveFocus() const noexcept {
+    if (prompt_.active()) return FocusTarget::Prompt;
+    if (externalModificationPresent_ && externalFocusHeld_) {
+        return FocusTarget::ExternalModification;
     }
-    return TreeRevision{nextTreeRevision_++};
+    return baseFocus_ == BaseFocus::Panel && panelPresent_ && !distractionFree_
+               ? FocusTarget::Panel
+               : FocusTarget::Editor;
+}
+
+std::optional<PickerKind> ScreenState::openPicker() const noexcept {
+    return visiblePicker();
+}
+
+std::optional<PickerActivation>
+ScreenState::openPickerActivation() const noexcept {
+    return visiblePicker() ? openPickerActivation_ : std::nullopt;
+}
+
+UiSchema ScreenState::schema() const {
+    return project().schema();
+}
+
+std::vector<UiNodeId> ScreenState::focusPath() const {
+    return project().focusPath();
+}
+
+PalettePresenceOverlay ScreenState::pickerPresenceOverlay() const {
+    UiSchema current{assembled(baseComposition_, prompt_).root};
+    return derivePickerPresenceOverlay(
+        current,
+        {panelPresent_, distractionFree_, visiblePicker(), baseFocus_,
+         noticePresent_, externalModificationPresent_, externalFocusHeld_});
 }
 
 }  // namespace ssg

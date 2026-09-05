@@ -11,7 +11,7 @@ ClientInputResult inputKeyLocked(EditorSession::Impl& impl_,
                              std::any payload = {}) -> ClientInputResult {
         auto result = impl_.dispatchLocked({std::move(command), std::move(payload)});
         const auto activation = result.accepted()
-                                    ? impl_.interaction.openPickerActivation()
+                                    ? impl_.screen.openPickerActivation()
                                     : std::nullopt;
         const auto outcome =
             !result.accepted()
@@ -28,12 +28,12 @@ ClientInputResult inputKeyLocked(EditorSession::Impl& impl_,
     };
 
     PromptRoutingState routing;
-    routing.focus = impl_.interaction.effectiveFocus();
+    routing.focus = impl_.screen.effectiveFocus();
     auto const promptStatus = impl_.promptStatusView();
     if (promptStatus.activeKind == PromptKind::Palette) {
         routing.prompt = ActivePrompt::Palette;
     } else if (auto const view = impl_.resolvedPromptControls()) {
-        const auto kind = impl_.interaction.prompt().request()->kind;
+        const auto kind = impl_.screen.prompt().request()->kind;
         switch (kind) {
         case PromptKind::Find:
             routing.prompt = ActivePrompt::Find;
@@ -178,7 +178,7 @@ ClientInputResult inputLocked(EditorSession::Impl& impl_,
                         {std::move(command), std::move(payload)});
                     const auto activation =
                         result.accepted()
-                            ? impl_.interaction.openPickerActivation()
+                            ? impl_.screen.openPickerActivation()
                             : std::nullopt;
                     const auto outcome =
                         !result.accepted()
@@ -254,10 +254,10 @@ ClientInputResult inputLocked(EditorSession::Impl& impl_,
                                         "attachment");
                                 }
                                 const bool focusChanged =
-                                    impl_.interaction.effectiveFocus() !=
+                                    impl_.screen.effectiveFocus() !=
                                     FocusTarget::Editor;
                                 if (focusChanged) {
-                                    impl_.interaction.focusEditor();
+                                    impl_.screen.focusEditor();
                                 }
                                 impl_.recordNavigation(NavigationClass::User);
                                 return {ClientInputOutcome::Dispatched,

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/config.h>
+#include <ssg/Settings.h>
 #include <ssg/Document.h>
 #include <ssg/Selection.h>
 

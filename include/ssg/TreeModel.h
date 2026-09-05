@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -118,16 +117,13 @@ namespace detail {
 class TreeProviderSnapshot {
 public:
     TreeProviderSnapshot(TreeProviderId providerId, TreeProviderKind kind,
-                         TreeRevision revision, std::vector<TreeNode> nodes);
+                         std::vector<TreeNode> nodes);
     static TreeProviderSnapshot fromFilesystem(
-        TreeProviderId providerId, const std::filesystem::path& canonicalCwd,
-        TreeRevision revision);
+        TreeProviderId providerId, const std::filesystem::path& canonicalCwd);
     static TreeProviderSnapshot fromGit(TreeProviderId providerId,
-                                        TreeRevision revision,
                                         std::vector<GitTreeRecord> records);
     static TreeProviderSnapshot fromSymbols(
-        TreeProviderId providerId, TreeRevision revision,
-        std::vector<SymbolTreeRecord> records);
+        TreeProviderId providerId, std::vector<SymbolTreeRecord> records);
 
     const TreeProviderId& providerId() const noexcept { return providerId_; }
     TreeProviderKind kind() const noexcept { return kind_; }
@@ -135,6 +131,8 @@ public:
     const std::vector<TreeNode>& nodes() const noexcept { return nodes_; }
 
 private:
+    friend class TreeModel;
+
     TreeProviderId providerId_;
     TreeProviderKind kind_;
     TreeRevision revision_;
@@ -227,16 +225,7 @@ public:
     // missing one is a genuine failure. Returns false when activation fails and
     // nothing was created.
     //
-    // `revisionForCreate` is invoked ONLY on the create path, so a caller whose
-    // revision source has a side effect (e.g. a post-increment counter) does not
-    // consume a revision when merely re-activating an existing provider. It must
-    // be callable: an empty function throws std::invalid_argument (a clear error
-    // rather than an opaque std::bad_function_call on the create path). Takes a
-    // typed binding, not a shell panel label: the tree does not know the shell's
-    // presentation vocabulary (the label -> binding mapping lives in the runtime
-    // seam).
-    bool activateOrCreate(const TreeProviderBinding& binding,
-                          const std::function<TreeRevision()>& revisionForCreate);
+    bool activateOrCreate(const TreeProviderBinding& binding);
     std::optional<TreeCommandInvocation> invokeNodeCommand(
         const TreeProviderId& providerId, const TreeNodeId& nodeId,
         std::string_view commandId) const;

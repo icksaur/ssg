@@ -139,9 +139,6 @@ LaunchArguments parseArguments(int argc, char** argv) {
     int firstOperand = 1;
     if (argc > 1 && std::string_view{argv[1]} == "--") {
         firstOperand = 2;
-    } else if (argc > 1 && std::string_view{argv[1]} == "--capabilities") {
-        arguments.capabilities = true;
-        return arguments;
     }
     if (argc > firstOperand) arguments.argument = argv[firstOperand];
     return arguments;

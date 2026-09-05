@@ -31,7 +31,7 @@ public:
 
     PaneId splitActive(SplitAxis axis);
     [[nodiscard]] bool closeActive();
-    void cycle(PaneCycleDirection direction);
+    void cycle(CycleDirection direction);
     [[nodiscard]] bool focus(PaneId pane) noexcept;
 
     friend bool operator==(const PaneTopology&, const PaneTopology&) = default;

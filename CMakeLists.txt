@@ -583,7 +583,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/config.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -1242,7 +1241,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(ssg_app
         ${SSG_SOURCE_DIR}/src/main.cpp
         ${SSG_SOURCE_DIR}/src/application.cpp
-        ${SSG_SOURCE_DIR}/src/capabilities_report.cpp
         ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
         ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
         ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
@@ -1257,8 +1255,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         SOURCES
             ${SSG_SOURCE_DIR}/src/ssg_terminal.cpp
             ${SSG_SOURCE_DIR}/src/pointer_routing.cpp
-            ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp
-            ${SSG_SOURCE_DIR}/src/capabilities_report.cpp)
+            ${SSG_SOURCE_DIR}/src/InitScriptWatcher.cpp)
     ssg_test_include_directories(test_ssg_app PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
@@ -1561,7 +1558,7 @@ endif()
 target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/Widget.cpp
     ${SSG_SOURCE_DIR}/src/UiTree.cpp
-    ${SSG_SOURCE_DIR}/src/interaction.cpp
+    ${SSG_SOURCE_DIR}/src/ScreenState.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
@@ -1601,10 +1598,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_test_link_libraries(test_ui_view_surface PRIVATE ssg_tui_objects)
 
     ssg_add_test_suite(
-        NAME test_interaction_authority
-        ENTRY ${SSG_SOURCE_DIR}/tests/test_interaction_authority.cpp
-        SYMBOL test_interaction_authority)
-    ssg_test_link_libraries(test_interaction_authority PRIVATE ssg_core)
+        NAME test_screen_state
+        ENTRY ${SSG_SOURCE_DIR}/tests/test_screen_state.cpp
+        SYMBOL test_screen_state)
+    ssg_test_link_libraries(test_screen_state PRIVATE ssg_core)
 
 endif()
 

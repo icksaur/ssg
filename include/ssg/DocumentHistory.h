@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/config.h>
+#include <ssg/Settings.h>
 #include <ssg/Document.h>
 #include <ssg/Selection.h>
 #include <ssg/TextInputCommands.h>
@@ -66,7 +66,7 @@ struct HistoryViewState {
 
 class DocumentHistory {
 public:
-    explicit DocumentHistory(HistoryConfig config = HistoryConfig::defaults());
+    explicit DocumentHistory(const SettingsModel& settings);
     ~DocumentHistory();
 
     DocumentHistory(const DocumentHistory&) = delete;

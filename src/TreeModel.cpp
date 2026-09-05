@@ -258,18 +258,16 @@ TreeNodeId::TreeNodeId(std::string value) : value_(std::move(value)) {
 }
 
 TreeProviderSnapshot::TreeProviderSnapshot(
-    TreeProviderId providerId, TreeProviderKind kind, TreeRevision revision,
-    std::vector<TreeNode> nodes)
+    TreeProviderId providerId, TreeProviderKind kind, std::vector<TreeNode> nodes)
     : providerId_(std::move(providerId)),
       kind_(kind),
-      revision_(revision),
+      revision_(0),
       nodes_(std::move(nodes)) {
     validateAndSortNodes(providerId_, nodes_);
 }
 
 TreeProviderSnapshot TreeProviderSnapshot::fromFilesystem(
-    TreeProviderId providerId, const std::filesystem::path& canonicalCwd,
-    TreeRevision revision) {
+    TreeProviderId providerId, const std::filesystem::path& canonicalCwd) {
     std::error_code error;
     const auto root = std::filesystem::canonical(canonicalCwd, error);
     if (error || !std::filesystem::is_directory(root, error) || error) {
@@ -312,13 +310,11 @@ TreeProviderSnapshot TreeProviderSnapshot::fromFilesystem(
                                  error.message());
     }
     return TreeProviderSnapshot{std::move(providerId),
-                                TreeProviderKind::Filesystem, revision,
-                                std::move(nodes)};
+                                TreeProviderKind::Filesystem, std::move(nodes)};
 }
 
 TreeProviderSnapshot TreeProviderSnapshot::fromGit(
-    TreeProviderId providerId, TreeRevision revision,
-    std::vector<GitTreeRecord> records) {
+    TreeProviderId providerId, std::vector<GitTreeRecord> records) {
     std::vector<TreeNode> nodes;
     nodes.reserve(records.size());
     for (auto& record : records) {
@@ -337,12 +333,11 @@ TreeProviderSnapshot TreeProviderSnapshot::fromGit(
                                  std::nullopt});
     }
     return TreeProviderSnapshot{std::move(providerId), TreeProviderKind::Git,
-                                revision, std::move(nodes)};
+                                std::move(nodes)};
 }
 
 TreeProviderSnapshot TreeProviderSnapshot::fromSymbols(
-    TreeProviderId providerId, TreeRevision revision,
-    std::vector<SymbolTreeRecord> records) {
+    TreeProviderId providerId, std::vector<SymbolTreeRecord> records) {
     std::vector<TreeNode> nodes;
     nodes.reserve(records.size());
     for (auto& record : records) {
@@ -369,11 +364,12 @@ TreeProviderSnapshot TreeProviderSnapshot::fromSymbols(
                                  record.sourceLine});
     }
     return TreeProviderSnapshot{std::move(providerId),
-                                TreeProviderKind::Symbols, revision,
-                                std::move(nodes)};
+                                TreeProviderKind::Symbols, std::move(nodes)};
 }
 
 void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
+    revision_ = TreeRevision{revision_.value() + 1};
+    snapshot.revision_ = revision_;
     const TreeProviderId providerId = snapshot.providerId();
     auto iterator = std::lower_bound(
         providers_.begin(), providers_.end(), providerId,
@@ -382,10 +378,6 @@ void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
         });
     if (iterator != providers_.end() &&
         iterator->snapshot.providerId() == snapshot.providerId()) {
-        if (snapshot.revision() <= iterator->snapshot.revision()) {
-            throw std::invalid_argument(
-                "replacement tree snapshot revision must increase");
-        }
         std::erase_if(iterator->expanded, [&](const TreeNodeId& id) {
             return findNode(snapshot, id) == nullptr;
         });
@@ -396,8 +388,6 @@ void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
             iterator, ProviderState{std::move(snapshot), {}});
     }
     if (!activeProviderId_) activeProviderId_ = providerId;
-    revision_ = TreeRevision{revision_.value() + 1};
-
     // Keep the selection valid against the active provider; default to its
     // first visible node so the tree always has a focus once populated.
     auto* active = activeProvider();
@@ -599,14 +589,7 @@ bool TreeModel::activateProvider(const TreeProviderId& providerId) {
     return true;
 }
 
-bool TreeModel::activateOrCreate(
-    const TreeProviderBinding& binding,
-    const std::function<TreeRevision()>& revisionForCreate) {
-    if (!revisionForCreate) {
-        throw std::invalid_argument{
-            "TreeModel::activateOrCreate requires a revision source "
-            "(revisionForCreate must be callable)"};
-    }
+bool TreeModel::activateOrCreate(const TreeProviderBinding& binding) {
     const auto existing = std::find_if(
         providers_.begin(), providers_.end(),
         [&](const ProviderState& state) {
@@ -617,8 +600,7 @@ bool TreeModel::activateOrCreate(
         return activateProvider(binding.id);
     }
     if (!treeProviderCanBeCreatedEmpty(binding.kind)) return false;
-    replaceProvider(
-        TreeProviderSnapshot{binding.id, binding.kind, revisionForCreate(), {}});
+    replaceProvider(TreeProviderSnapshot{binding.id, binding.kind, {}});
     return activateProvider(binding.id);
 }
 
