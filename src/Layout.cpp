@@ -2,7 +2,7 @@
 
 #include <ssg/GraphemeLayout.h>
 #include <ssg/Viewport.h>
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 
 #include <algorithm>
 #include <cstdint>

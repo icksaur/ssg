@@ -1,7 +1,7 @@
 #include <ssg/ScriptHost.h>
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/GridPresenter.h>
 
 #include "test_helpers.h"
@@ -30,9 +30,9 @@ fs::path uniqueRoot() {
     return root;
 }
 
-std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
+std::unique_ptr<ssg::Editor> makeRuntime(fs::path const& root) {
     auto created =
-        ssg::EditorSession::create({root, root / "scratch", root / "recovery"});
+        ssg::createEditor({root, root / "scratch", root / "recovery"});
     return std::move(created.session);
 }
 

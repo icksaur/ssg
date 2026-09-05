@@ -1,4 +1,4 @@
-#include <ssg/EditorSessionImpl.h>
+#include <ssg/Editor.h>
 #include <ssg/CommandCatalog.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Theme.h>
@@ -228,8 +228,8 @@ void populateUiTree(UiSchema& schema, const UiTreeValues& values) {
 
 } // namespace
 
-std::optional<EditorSession::Impl::ResolvedPromptControls>
-EditorSession::Impl::resolvedPromptControls() const {
+std::optional<Editor::ResolvedPromptControls>
+Editor::resolvedPromptControls() const {
     const auto& prompt = screen.prompt();
     const auto& request = prompt.request();
     if (!request || promptFocusRegion(request->kind) != PromptRegion::Footer) {
@@ -271,7 +271,7 @@ EditorSession::Impl::resolvedPromptControls() const {
     return resolved;
 }
 
-PromptStatusViewState EditorSession::Impl::promptStatusView() const {
+PromptStatusViewState Editor::promptStatusView() const {
     // Semantic prompt state: which prompt is open (authoritative, present even for
     // a header-hosted prompt with no footer view) and the status bar. No
     // dimensions are needed to resolve this semantic state.
@@ -281,7 +281,7 @@ PromptStatusViewState EditorSession::Impl::promptStatusView() const {
     return view;
 }
 
-std::optional<NoticeView> EditorSession::Impl::draftNotice() const {
+std::optional<NoticeView> Editor::draftNotice() const {
     // Only the Conflict outcome raises the notice; a Restored draft is a quieter
     // state with no external change to resolve. The action command ids are already
     // registered; the host only dispatches them.
@@ -299,15 +299,15 @@ std::optional<NoticeView> EditorSession::Impl::draftNotice() const {
          {"draft.notice.dismiss", "dismiss", "draft.dismiss"}}};
 }
 
-std::optional<NoticeView> EditorSession::Impl::noticeView() const {
+std::optional<NoticeView> Editor::noticeView() const {
     return draftNotice();
 }
 
-bool EditorSession::Impl::noticePresent() const {
+bool Editor::noticePresent() const {
     return draftNotice().has_value();
 }
 
-StatusFieldProjection EditorSession::Impl::uiStatusFields() const {
+StatusFieldProjection Editor::uiStatusFields() const {
     auto statusText = status.footerText();
     auto followProjection = follow.footerProjection();
     auto fields = projectStatusFields(
@@ -322,7 +322,7 @@ StatusFieldProjection EditorSession::Impl::uiStatusFields() const {
     return fields;
 }
 
-UiSchema EditorSession::Impl::projectedUiTree() const {
+UiSchema Editor::projectedUiTree() const {
     // Population writes directly into a copy of the same single UiSchema the
     // interaction authority owns, so the published tree's visibility and
     // resolved values correspond node-for-node.
@@ -338,12 +338,12 @@ UiSchema EditorSession::Impl::projectedUiTree() const {
     return requirePublishedUiTree(std::move(uiTree));
 }
 
-TreeViewState EditorSession::Impl::treeView() const {
+TreeViewState Editor::treeView() const {
     // Semantic only: providers, nodes, selection, and expansion.
     return tree.viewState();
 }
 
-PaletteViewState EditorSession::Impl::paletteView() const {
+PaletteViewState Editor::paletteView() const {
     PaletteViewState view;
     view.presenceOverlay = screen.pickerPresenceOverlay();
     if (auto open = screen.openPicker()) {

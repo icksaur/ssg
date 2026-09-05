@@ -1,6 +1,6 @@
 #include <ssg/GridPresenter.h>
 
-#include <ssg/EditorSessionImpl.h>
+#include <ssg/Editor.h>
 
 #include <algorithm>
 #include <set>
@@ -222,16 +222,11 @@ GridPresenter::GridPresenter(GridPresenter&&) noexcept = default;
 GridPresenter& GridPresenter::operator=(GridPresenter&&) noexcept = default;
 
 std::optional<GridPresentation> GridPresenter::project(
-    EditorSession& session, GridPresentationRequest request) {
-    if (session.impl_->catalog.dispatchInProgress()) {
+    Editor& runtime, GridPresentationRequest request) {
+    if (runtime.catalog.dispatchInProgress()) {
         throw std::logic_error{"a view cannot be presented during dispatch"};
     }
-    std::lock_guard operationLock{session.impl_->operationMutex};
-    return project(*session.impl_, std::move(request));
-}
-
-std::optional<GridPresentation> GridPresenter::project(
-    EditorSession::Impl& runtime, GridPresentationRequest request) {
+    std::lock_guard operationLock{runtime.operationMutex};
     const auto* activeDocument = runtime.activeDocument();
     std::string documentText = runtime.activeText();
     std::uint64_t documentRevision =

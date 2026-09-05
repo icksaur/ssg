@@ -1,4 +1,4 @@
-#include <ssg/EditorSessionImpl.h>
+#include <ssg/Editor.h>
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/Selection.h>
@@ -10,7 +10,7 @@
 namespace ssg {
 namespace {
 
-CommandHandlerResult validatePublishedCommand(EditorSession::Impl& runtime,
+CommandHandlerResult validatePublishedCommand(Editor& runtime,
                                              std::string const& commandId) {
     auto const palette = runtime.paletteView();
     const auto* candidates = palette.candidatesFor(SearchMode::Command);
@@ -26,7 +26,7 @@ CommandHandlerResult validatePublishedCommand(EditorSession::Impl& runtime,
     return success();
 }
 
-CommandHandlerResult validatePaletteTarget(EditorSession::Impl& runtime,
+CommandHandlerResult validatePaletteTarget(Editor& runtime,
                                            std::string const& commandId) {
     bool const paletteOpen = runtime.screen.prompt().active() &&
                               runtime.screen.prompt().request() &&
@@ -43,7 +43,7 @@ CommandHandlerResult validatePaletteTarget(EditorSession::Impl& runtime,
     return validatePublishedCommand(runtime, commandId);
 }
 
-CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_view id, std::any const& payload) {
+CommandHandlerResult searchCommand(Editor& runtime, std::string_view id, std::any const& payload) {
     if (id == "palette.open") {
         if (!runtime.openPickerPrompt(PickerKind::Command)) {
             return failure("could not open the command picker");
@@ -65,7 +65,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_vie
     else if (id == "palette.close") {
         if (auto const* expected = payloadAs<PickerActivation>(payload)) {
             if (!runtime.deferredCommands.empty()) {
-                if (!runtime.defer(
+                if (!runtime.deferDispatch(
                         ClientCommand{"palette.close", *expected})) {
                     return failure("could not defer the picker close");
                 }
@@ -86,7 +86,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_vie
         if (arguments == nullptr) return failure("palette.execute requires a command id payload");
         auto validation = validatePaletteTarget(runtime, arguments->commandId);
         if (!validation.accepted) return validation;
-        if (!runtime.defer(ClientCommand{arguments->commandId, {}})) {
+        if (!runtime.deferDispatch(ClientCommand{arguments->commandId, {}})) {
             return failure("could not queue the selected command");
         }
         (void)runtime.screen.closeFinder();
@@ -163,7 +163,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_vie
         // Placing and revealing the caret is owned by cursor.set_position; route
         // through it (deferred, since the session lock is non-reentrant) rather
         // than duplicating the reveal/focus/history contract here.
-        if (!runtime.defer(
+        if (!runtime.deferDispatch(
                            ClientCommand{"cursor.set_position",
                                          std::any{arguments}})) {
             return failure("could not queue cursor.set_position");
@@ -174,7 +174,7 @@ CommandHandlerResult searchCommand(EditorSession::Impl& runtime, std::string_vie
     return success();
 }
 
-CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
+CommandHandlerResult treeCommand(Editor& runtime,
                                  CommandContext& context,
                                  std::string_view id,
                                  std::any const& payload) {
@@ -248,7 +248,7 @@ CommandHandlerResult treeCommand(EditorSession::Impl& runtime,
     return command ? success() : failure("tree node command does not exist");
 }
 
-CommandHandlerResult diffCommand(EditorSession::Impl& runtime, std::string_view id, std::any const& payload) {
+CommandHandlerResult diffCommand(Editor& runtime, std::string_view id, std::any const& payload) {
     auto const* fileId = payloadAs<DiffFileId>(payload);
     if (fileId == nullptr) return failure(std::string{id} + " requires a diff file ID payload");
     auto file = runtime.diff.file(*fileId);
@@ -277,7 +277,7 @@ CommandHandlerResult diffCommand(EditorSession::Impl& runtime, std::string_view 
     return success();
 }
 
-CommandHandlerResult followCommand(EditorSession::Impl& runtime, std::string_view id) {
+CommandHandlerResult followCommand(Editor& runtime, std::string_view id) {
     const auto modeBefore = runtime.follow.viewState().mode;
     FollowEditsResult result;
     if (id == "follow_edits.pause") {
@@ -312,7 +312,7 @@ CommandHandlerResult followCommand(EditorSession::Impl& runtime, std::string_vie
 // client, so they are in-process only: typed for the handler, absent from the
 // interface.
 void registerDiffAndFollowCommands(CommandCatalog& catalog,
-                                   EditorSession::Impl& runtime) {
+                                   Editor& runtime) {
     auto diff = [&](std::string id, std::string summary) {
         auto const name = id;
         catalog.add(CommandSpec{
@@ -354,7 +354,7 @@ void registerDiffAndFollowCommands(CommandCatalog& catalog,
 // Semantic tree actions share one handler. Scroll actions resolve to the
 // attached view owner instead of mutating session presentation state.
 void registerTreeCommands(CommandCatalog& catalog,
-                          EditorSession::Impl& runtime) {
+                          Editor& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpec{
             .id = std::move(id),
@@ -450,7 +450,7 @@ void registerTreeCommands(CommandCatalog& catalog,
 
 // The pickers, workspace search, and the go-to jumps.
 void registerSearchPaletteCommands(CommandCatalog& catalog,
-                                   EditorSession::Impl& runtime) {
+                                   Editor& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpec{
             .id = std::move(id),
@@ -562,11 +562,11 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
                   return failure(
                       "another picker submission is pending");
                }
-               if (!runtime.defer(std::move(selected))) {
+               if (!runtime.deferDispatch(std::move(selected))) {
                   return failure(
                       "could not queue the selected command");
                }
-               if (!runtime.defer(
+               if (!runtime.deferDispatch(
                       ClientCommand{"palette.close",
                                     arguments.activation})) {
                   return failure(
@@ -625,7 +625,7 @@ void registerSearchPaletteCommands(CommandCatalog& catalog,
     }
 }
 
-void bindRuntimeNavigation(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+void bindRuntimeNavigation(CommandCatalog& catalog, Editor& runtime) {
     registerDiffAndFollowCommands(catalog, runtime);
     registerSearchPaletteCommands(catalog, runtime);
     registerTreeCommands(catalog, runtime);

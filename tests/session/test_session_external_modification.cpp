@@ -10,7 +10,7 @@
 // than depending on inotify timing.
 #include "../test_helpers.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/TextCodec.h>
@@ -36,8 +36,8 @@ std::filesystem::path uniqueRoot(std::string_view name) {
     return root;
 }
 
-ssg::EditorSessionConfig configFor(const std::filesystem::path& root) {
-    ssg::EditorSessionConfig config{root / "workspace", root / "scratch",
+ssg::EditorConfig configFor(const std::filesystem::path& root) {
+    ssg::EditorConfig config{root / "workspace", root / "scratch",
                                     root / "recovery"};
     // Non-git workspace, git worker AND the filesystem watcher off: ingress is
     // driven through the test hook, so the reconcile runs deterministically without
@@ -75,15 +75,15 @@ ssg::WatchEvent watchEvent(ssg::WatchEventKind kind, std::string path,
 // diverges from disk (the flow raises actions only for a dirty buffer).
 struct Session {
     std::filesystem::path root;
-    ssg::EditorSessionCreateResult created;
-    ssg::EditorSession* runtime = nullptr;
+    ssg::EditorCreateResult created;
+    ssg::Editor* runtime = nullptr;
 
     static Session open(std::string_view name, std::string_view diskContent,
                         bool dirty) {
         Session session;
         session.root = uniqueRoot(name);
         writeFile(session.root / "workspace" / "note.txt", diskContent);
-        session.created = ssg::EditorSession::create(configFor(session.root));
+        session.created = ssg::createEditor(configFor(session.root));
         session.runtime = session.created.session.get();
         (void)session.runtime->dispatch({"file.open",  std::string{"note.txt"}});
         if (dirty) {
@@ -99,13 +99,13 @@ struct Session {
 };
 
 std::vector<ssg::ExternalDocumentView> externalFiles(
-    ssg::EditorSession& runtime) {
+    ssg::Editor& runtime) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     if (!snapshot) return {};
     return snapshot->externalModification.files;
 }
 
-std::string activeTabLabel(ssg::EditorSession& runtime) {
+std::string activeTabLabel(ssg::Editor& runtime) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     if (!snapshot) return {};
     const auto& tabs = snapshot->tabs;
@@ -116,7 +116,7 @@ std::string activeTabLabel(ssg::EditorSession& runtime) {
     return {};
 }
 
-bool activeTabIsLiveDiff(ssg::EditorSession& runtime) {
+bool activeTabIsLiveDiff(ssg::Editor& runtime) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     if (!snapshot) return false;
     const auto& tabs = snapshot->tabs;
@@ -709,7 +709,7 @@ TEST(aStatusErrorOnAMissingBaselineRaisesOnTheOverflowPath) {
     auto root = uniqueRoot("status_error_overflow");
     std::filesystem::create_directories(root / "workspace" / "sub");
     writeFile(root / "workspace" / "sub" / "note.txt", "hi\n");
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     auto* runtime = created.session.get();
     (void)runtime->dispatch({"file.open",  std::string{"sub/note.txt"}});
     (void)runtime->dispatch({"text.insert",  ssg::TextInputArguments{"!"}});
@@ -804,7 +804,7 @@ TEST(aDraftPersistedBeforeKeepBufferReopensWithoutResurrectingTheConflict) {
     writeFile(root / "workspace" / "note.txt", "hi\n");
     std::string draft;
     {
-        auto created = ssg::EditorSession::create(configFor(root));
+        auto created = ssg::createEditor(configFor(root));
         ASSERT_TRUE(created.accepted());
         auto& runtime = *created.session;
         (void)runtime.dispatch({"file.open",  std::string{"note.txt"}});
@@ -830,7 +830,7 @@ TEST(aDraftPersistedBeforeKeepBufferReopensWithoutResurrectingTheConflict) {
 
     // Crash-reopen over the same scratch store: the persisted draft now branches
     // from the dismissed disk state, so it classifies Restored, not Conflict.
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     auto& runtime = *created.session;
     ASSERT_TRUE(runtime
@@ -839,7 +839,7 @@ TEST(aDraftPersistedBeforeKeepBufferReopensWithoutResurrectingTheConflict) {
                     .accepted());
     ASSERT_EQ(runtime.activeDocumentText(), draft);
     ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
-                ssg::EditorSession::DraftReopenNotice::Restored);
+                ssg::Editor::DraftReopenNotice::Restored);
 }
 
 TEST(anExternalActionAppliesOnlyAnOfferedActionForTheSelectedFile) {

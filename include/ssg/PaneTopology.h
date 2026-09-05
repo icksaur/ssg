@@ -18,7 +18,7 @@ struct PaneTopologyNode {
     friend bool operator==(const PaneTopologyNode&, const PaneTopologyNode&) = default;
 };
 
-class EditorSession;
+class Editor;
 
 class PaneTopology {
 public:

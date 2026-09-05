@@ -1,6 +1,6 @@
 #include <ssg/Renderer.h>
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/FindReplace.h>
 #include <ssg/HitTester.h>
 #include <ssg/PaletteSearcher.h>
@@ -48,12 +48,12 @@ fs::path uniqueRoot() {
     return base;
 }
 
-std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
-    ssg::EditorSessionConfig config{
+std::unique_ptr<ssg::Editor> makeRuntime(fs::path const& root) {
+    ssg::EditorConfig config{
         root, root / "scratch", root / "recovery"};
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
-    auto created = ssg::EditorSession::create(config);
+    auto created = ssg::createEditor(config);
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.session);
     return runtime;

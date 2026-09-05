@@ -1,4 +1,4 @@
-#include <ssg/EditorSessionImpl.h>
+#include <ssg/Editor.h>
 
 
 #include <algorithm>
@@ -12,7 +12,7 @@ namespace {
 enum class ClipboardCommand { Copy, Cut, Paste };
 enum class HistoryCommand { Undo, Redo };
 
-TextInputSettings textInputSettings(EditorSession::Impl const&) {
+TextInputSettings textInputSettings(Editor const&) {
     return {IndentStyle::Spaces, 4, true, LineEnding::Lf};
 }
 
@@ -58,11 +58,11 @@ std::vector<SyntaxEdit> syntaxEdits(std::string_view previousText,
     return edits;
 }
 
-EditCommandSettings editSettings(EditorSession::Impl const&) {
+EditCommandSettings editSettings(Editor const&) {
     return {IndentStyle::Spaces, 4, 4, LineEnding::Lf, "//"};
 }
 
-CommandHandlerResult applyTransaction(EditorSession::Impl& runtime,
+CommandHandlerResult applyTransaction(Editor& runtime,
                                        EditTransaction const& transaction,
                                        SelectionSet const& selectionsAfter,
                                        HistoryEditKind kind) {
@@ -82,7 +82,7 @@ CommandHandlerResult applyTransaction(EditorSession::Impl& runtime,
     return success();
 }
 
-CommandHandlerResult bindText(EditorSession::Impl& runtime,
+CommandHandlerResult bindText(Editor& runtime,
                                TextInputCommand command,
                                TextInputArguments arguments) {
     if (runtime.activeTabIsLiveDiff()) {
@@ -122,7 +122,7 @@ CommandHandlerResult bindText(EditorSession::Impl& runtime,
     return outcome;
 }
 
-CommandHandlerResult bindSelection(EditorSession::Impl& runtime,
+CommandHandlerResult bindSelection(Editor& runtime,
                                     SelectionCommand command,
                                     std::any const& payload) {
     SelectionCommandArguments arguments;
@@ -160,7 +160,7 @@ CommandHandlerResult bindSelection(EditorSession::Impl& runtime,
     return success();
 }
 
-CommandHandlerResult bindEdit(EditorSession::Impl& runtime,
+CommandHandlerResult bindEdit(Editor& runtime,
                               EditCommand command) {
     if (runtime.activeTabIsLiveDiff()) {
         return failure("edit command cannot mutate a diff document");
@@ -176,7 +176,7 @@ CommandHandlerResult bindEdit(EditorSession::Impl& runtime,
                             *result.selections, HistoryEditKind::Other);
 }
 
-CommandHandlerResult bindHistory(EditorSession::Impl& runtime,
+CommandHandlerResult bindHistory(Editor& runtime,
                                  HistoryCommand command) {
     if (runtime.activeTabIsLiveDiff()) {
         return failure("history command cannot mutate a diff document");
@@ -194,7 +194,7 @@ CommandHandlerResult bindHistory(EditorSession::Impl& runtime,
     return success();
 }
 
-CommandHandlerResult bindClipboard(EditorSession::Impl& runtime,
+CommandHandlerResult bindClipboard(Editor& runtime,
                                    ClipboardCommand command) {
     if (runtime.activeTabIsLiveDiff() && command != ClipboardCommand::Copy) {
         return failure("clipboard mutation is unavailable in diff mode");
@@ -232,7 +232,7 @@ CommandHandlerResult bindClipboard(EditorSession::Impl& runtime,
 
 // Move the primary selection onto the active find match and reveal it so the
 // viewport scrolls to follow find navigation (find.next/previous/update_query).
-void revealActiveFindMatch(EditorSession::Impl& runtime) {
+void revealActiveFindMatch(Editor& runtime) {
     auto const& state = runtime.findReplace.viewState();
     if (!state.open || !state.activeMatch ||
         *state.activeMatch >= state.matches.size()) {
@@ -252,7 +252,7 @@ void revealActiveFindMatch(EditorSession::Impl& runtime) {
 // destructive replace commands guard on this so a stray prompt-context chord
 // from an unrelated (palette/settings) prompt cannot mutate hidden state (an
 // open-only guard leaks because find can stay open behind another prompt).
-bool replacePromptActive(EditorSession::Impl& runtime) {
+bool replacePromptActive(Editor& runtime) {
     auto const& state = runtime.findReplace.viewState();
     auto const& request = runtime.screen.prompt().request();
     return state.open && state.replaceMode && request &&
@@ -263,7 +263,7 @@ bool replacePromptActive(EditorSession::Impl& runtime) {
 // toggle/next/previous chords guard on this so a stray prompt-context chord from
 // an unrelated (palette/settings) prompt cannot mutate hidden find state (find
 // can remain open behind another prompt).
-bool findOrReplacePromptActive(EditorSession::Impl& runtime) {
+bool findOrReplacePromptActive(Editor& runtime) {
     auto const& state = runtime.findReplace.viewState();
     auto const& request = runtime.screen.prompt().request();
     return state.open && request &&
@@ -274,14 +274,14 @@ bool findOrReplacePromptActive(EditorSession::Impl& runtime) {
 // The find/replace option indicators shared by the find and replace prompts,
 // seeded from the current options; project_find_replace_prompt refreshes their
 // `checked` state from the authoritative options at snapshot time.
-std::vector<PromptToggle> findOptionToggles(EditorSession::Impl& runtime) {
+std::vector<PromptToggle> findOptionToggles(Editor& runtime) {
     auto const& options = runtime.findReplace.viewState().options;
     return {{"find.toggle_case", "case", options.caseSensitive, 9},
             {"find.toggle_whole_word", "word", options.wholeWord, 9},
             {"find.toggle_regex", "regex", options.regex, 10}};
 }
 
-CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
+CommandHandlerResult bindFindReplace(Editor& runtime,
                                      FindReplaceCommand command,
                                      std::any const& payload) {
     if (runtime.activeTabIsLiveDiff() &&
@@ -487,7 +487,7 @@ CommandHandlerResult bindFindReplace(EditorSession::Impl& runtime,
 
 } // namespace
 
-CommandHandlerResult executeFindReplaceCommand(EditorSession::Impl& runtime,
+CommandHandlerResult executeFindReplaceCommand(Editor& runtime,
                                                 FindReplaceCommand command,
                                                 std::any const& payload) {
     return bindFindReplace(runtime, command, payload);
@@ -498,7 +498,7 @@ CommandHandlerResult executeFindReplaceCommand(EditorSession::Impl& runtime,
 // single expression. The argument type, codec, unwrap, and column reference are
 // all derived from the handler type, written once in `handler<...>`.
 void registerTextInputCommands(CommandCatalog& catalog,
-                               EditorSession::Impl& runtime) {
+                               Editor& runtime) {
     // Only insertion carries text.  The other five never read a payload -- the
     // old handler default-constructed one and ignored it -- yet the static table
     // declared all six as taking text.  Deducing the type from the handler makes
@@ -550,7 +550,7 @@ void registerTextInputCommands(CommandCatalog& catalog,
 
 // Undo and redo.
 void registerHistoryCommands(CommandCatalog& catalog,
-                             EditorSession::Impl& runtime) {
+                             Editor& runtime) {
     auto declare = [&](std::string id, std::string summary,
                        HistoryCommand command) {
         catalog.add(CommandSpec{
@@ -572,7 +572,7 @@ void registerHistoryCommands(CommandCatalog& catalog,
 
 // The clipboard register: copy, cut and paste over the current selections.
 void registerClipboardCommands(CommandCatalog& catalog,
-                               EditorSession::Impl& runtime) {
+                               Editor& runtime) {
     auto declare = [&](std::string id, std::string summary,
                        ClipboardCommand command) {
         catalog.add(CommandSpec{
@@ -596,7 +596,7 @@ void registerClipboardCommands(CommandCatalog& catalog,
 // Whole-line and whole-selection edits.  None takes an argument: each acts on
 // wherever the selections already are.
 void registerEditSuiteCommands(CommandCatalog& catalog,
-                               EditorSession::Impl& runtime) {
+                               Editor& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary,
                        EditCommand command) {
         CommandSpec built{
@@ -633,7 +633,7 @@ void registerEditSuiteCommands(CommandCatalog& catalog,
 
 // Find and replace, in the open document and across the workspace.
 void registerFindReplaceCommands(CommandCatalog& catalog,
-                                 EditorSession::Impl& runtime) {
+                                 Editor& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpec{
             .id = std::move(id),
@@ -712,7 +712,7 @@ void registerFindReplaceCommands(CommandCatalog& catalog,
 // is the id's last segment in words, which is the rule every one of them
 // follows.
 void registerSelectionCommands(CommandCatalog& catalog,
-                               EditorSession::Impl& runtime) {
+                               Editor& runtime) {
     auto summaryOf = [](std::string_view id) {
         auto const segment = id.substr(id.find('.') + 1);
         std::string words;
@@ -816,7 +816,7 @@ void registerSelectionCommands(CommandCatalog& catalog,
     }
 }
 
-void bindRuntimeEditing(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+void bindRuntimeEditing(CommandCatalog& catalog, Editor& runtime) {
     registerTextInputCommands(catalog, runtime);
     registerSelectionCommands(catalog, runtime);
     registerEditSuiteCommands(catalog, runtime);

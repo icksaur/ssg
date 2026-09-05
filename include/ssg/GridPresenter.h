@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/ViewActionResult.h>
 #include <ssg/Layout.h>
 #include <ssg/PromptSurface.h>
@@ -59,15 +59,12 @@ public:
     GridPresenter& operator=(GridPresenter&&) noexcept;
 
     [[nodiscard]] std::optional<GridPresentation> project(
-        EditorSession& session, GridPresentationRequest request);
+        Editor& session, GridPresentationRequest request);
     [[nodiscard]] ViewActionResult apply(
         ViewAction const& request, GridPresentation const& presentation);
 
 private:
     struct State;
-
-    [[nodiscard]] std::optional<GridPresentation> project(
-        EditorSession::Impl& runtime, GridPresentationRequest request);
 
     std::unique_ptr<State> state_;
 };

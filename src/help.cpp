@@ -1,4 +1,4 @@
-#include <ssg/EditorSessionImpl.h>
+#include <ssg/Editor.h>
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/Keymap.h>
@@ -166,7 +166,7 @@ std::string renderCommandList(CommandCatalog const& catalog) {
 // keybinding table, then configuration help and the full command list.
 // Reassembled on every help.open so the generated sections always reflect the
 // current keymap and catalog.
-std::string buildHelpDocument(EditorSession::Impl const& runtime) {
+std::string buildHelpDocument(Editor const& runtime) {
     std::string document{kHelpPreamble};
     document += renderKeybindings(runtime.keymap, runtime.catalog);
     document += kHelpConfigSection;
@@ -177,7 +177,7 @@ std::string buildHelpDocument(EditorSession::Impl const& runtime) {
 }
 
 void bindRuntimeHelp(CommandCatalog& catalog,
-                     EditorSession::Impl& runtime) {
+                     Editor& runtime) {
     catalog.add(CommandSpec{
         .id = "help.open",
         .owner = "help-system",

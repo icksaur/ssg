@@ -12,7 +12,7 @@
 
 namespace ssg {
 
-class EditorSession;
+class Editor;
 
 // The editor's Lua state, and everything that connects it to the editor.
 //
@@ -37,10 +37,10 @@ public:
 
     // Without a view-action sink, an immediate script request for a view-owned
     // command fails with `view_action_unavailable`.
-    explicit ScriptHost(EditorSession& runtime);
+    explicit ScriptHost(Editor& runtime);
     // The host-owned sink applies a view action; ScriptHost submits its
     // optional semantic transition once.
-    ScriptHost(EditorSession& runtime, ViewActionSink viewActionSink);
+    ScriptHost(Editor& runtime, ViewActionSink viewActionSink);
     ~ScriptHost();
 
     ScriptHost(ScriptHost const&) = delete;

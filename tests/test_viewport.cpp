@@ -39,7 +39,7 @@ std::vector<CellRun> runs(std::initializer_list<std::string_view> lines) {
     return result;
 }
 
-// The reference line splitter: mirrors EditorSession::Impl::active_cell_runs
+// The reference line splitter: mirrors Editor::active_cell_runs
 // (split on '\n', one CellRun per logical line, an empty document -> one empty
 // run).  compute_viewport over these runs is the oracle compute_viewport_unwrapped
 // must match for fitting lines.

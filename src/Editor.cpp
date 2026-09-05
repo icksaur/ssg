@@ -1,4 +1,4 @@
-#include <ssg/EditorSessionImpl.h>
+#include <ssg/Editor.h>
 #include <ssg/CommandCatalog.h>
 #include <ssg/DraftReopenClassifier.h>
 #include <ssg/FilesystemWatcher.h>
@@ -369,14 +369,14 @@ std::string tabMessage(TabResult const& result) {
     return result.message.empty() ? "tab operation failed" : result.message;
 }
 
-EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
-                          std::filesystem::path scratchRoot,
-                          std::filesystem::path recoveryRoot,
-                          std::filesystem::path archiveRoot,
-                          bool deferEnrichment,
-                          std::shared_ptr<SyntaxParser> parser,
-                          bool enableGitDiffWorker,
-                          bool enableFilesystemWatcher)
+Editor::Editor(std::filesystem::path canonicalCwd,
+               std::filesystem::path scratchRoot,
+               std::filesystem::path recoveryRoot,
+               std::filesystem::path archiveRoot,
+               bool deferEnrichment,
+               std::shared_ptr<SyntaxParser> parser,
+               bool enableGitDiffWorker,
+               bool enableFilesystemWatcher)
     : root{std::move(canonicalCwd)},
       scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
       recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
@@ -416,14 +416,14 @@ EditorSession::Impl::Impl(std::filesystem::path canonicalCwd,
     refreshSyntax();
 }
 
-EditorSession::Impl::~Impl() = default;
+Editor::~Editor() = default;
 
-bool EditorSession::Impl::drainGitDiffWorker() {
+bool Editor::drainGitDiffWorker() {
     auto batch = gitDiffWorker.drain();
     bool accepted = batch.watcherAvailabilityChanged || !batch.scans.empty() ||
                     !batch.watchEvents.empty() || batch.fullReconcile;
     for (auto& scan : batch.scans) {
-        (void)applyGitDiffScan(std::move(scan));
+        (void)applyGitDiffScanLocked(std::move(scan));
     }
     // Git scans first, then the external reconcile once over the whole queue, so a
     // burst of git scans never starves external ingress and both draw revisions
@@ -450,12 +450,12 @@ bool EditorSession::Impl::drainGitDiffWorker() {
     return accepted;
 }
 
-int EditorSession::Impl::gitDiffWakeDescriptor() const {
+int Editor::gitDiffWakeDescriptor() const {
     return gitDiffWorker.wakeDescriptor();
 }
 
 
-TabLifecycleResult EditorSession::Impl::closeTab(
+TabLifecycleResult Editor::closeTab(
     const TabState& tab, std::chrono::milliseconds durabilityTimeout,
     std::span<const TabId> alreadyClosed) {
     if (!tab.document) {
@@ -576,7 +576,7 @@ TabLifecycleResult EditorSession::Impl::closeTab(
             scratch.waitUntilDurable(durabilityTimeout)};
 }
 
-TabLifecycleResult EditorSession::Impl::reopenTab(
+TabLifecycleResult Editor::reopenTab(
     const TabState& tab, const RecoveryRecordId& compensation) {
     std::optional<JournalDocument> restoredDocument;
     auto restored = recovery.restoreDocument(compensation, restoredDocument);
@@ -633,7 +633,7 @@ TabLifecycleResult EditorSession::Impl::reopenTab(
             reopenedState->key, true};
 }
 
-WorkspaceSnapshot EditorSession::Impl::snapshot(std::uint64_t revision) const {
+WorkspaceSnapshot Editor::snapshot(std::uint64_t revision) const {
     WorkspaceSnapshot result;
     result.revision = revision;
     for (auto const id : workspace.documents()) {
@@ -667,7 +667,7 @@ WorkspaceSnapshot EditorSession::Impl::snapshot(std::uint64_t revision) const {
     return result;
 }
 
-WorkspaceApplyResult EditorSession::Impl::applyWorkspaceReplace(
+WorkspaceApplyResult Editor::applyWorkspaceReplace(
     const WorkspaceReplacePreview& preview) {
     std::vector<std::filesystem::path> paths;
     std::vector<std::string> normalizedPaths;
@@ -750,7 +750,7 @@ WorkspaceApplyResult EditorSession::Impl::applyWorkspaceReplace(
             std::uint64_t{preview.sourceRevision + 1}, {}};
 }
 
-std::optional<FileDocumentId> EditorSession::Impl::activeDocumentId() const {
+std::optional<FileDocumentId> Editor::activeDocumentId() const {
     // The active tab is the single source of truth for the active editor
     // document.  With no active tab (e.g. the last tab was closed) there is no
     // active document and the shell renders its empty state; the editor view
@@ -777,7 +777,7 @@ std::optional<FileDocumentId> EditorSession::Impl::activeDocumentId() const {
     return std::nullopt;
 }
 
-const TabState* EditorSession::Impl::activeTabState() const {
+const TabState* Editor::activeTabState() const {
     auto const& view = tabs.viewState();
     if (!view.active) return nullptr;
     auto found = std::find_if(view.tabs.begin(), view.tabs.end(),
@@ -788,7 +788,7 @@ const TabState* EditorSession::Impl::activeTabState() const {
     return &*found;
 }
 
-CommandHandlerResult EditorSession::Impl::openOrFocusLiveDiffTab(
+CommandHandlerResult Editor::openOrFocusLiveDiffTab(
     const DiffFileView& file, NavigationClass classification) {
     const auto target = diffOpenFile(file);
     const auto diffText = liveDiffDocumentText(file);
@@ -833,7 +833,7 @@ CommandHandlerResult EditorSession::Impl::openOrFocusLiveDiffTab(
     return success();
 }
 
-CommandHandlerResult EditorSession::Impl::openReadOnlyTab(
+CommandHandlerResult Editor::openReadOnlyTab(
     TabKind kind, std::string contentIdentity, std::string label,
     std::string text, LanguageId language) {
     // Build the replacement document FIRST, then swap: a ReadOnly document
@@ -868,7 +868,7 @@ CommandHandlerResult EditorSession::Impl::openReadOnlyTab(
     return success();
 }
 
-CommandHandlerResult EditorSession::Impl::openDraftDiff() {
+CommandHandlerResult Editor::openDraftDiff() {
     const auto id = activeDocumentId();
     if (!id) return failure("no active document");
     const auto state = workspace.state(*id);
@@ -911,11 +911,11 @@ CommandHandlerResult EditorSession::Impl::openDraftDiff() {
     return openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic);
 }
 
-DiffFileId EditorSession::Impl::externalDiffFileId(std::string_view savedPath) {
+DiffFileId Editor::externalDiffFileId(std::string_view savedPath) {
     return DiffFileId{"external:" + std::string{savedPath}};
 }
 
-std::optional<std::string> EditorSession::Impl::savedPathFromExternalDiffId(
+std::optional<std::string> Editor::savedPathFromExternalDiffId(
     const DiffFileId& id) {
     static constexpr std::string_view prefix{"external:"};
     const auto& value = id.value();
@@ -925,7 +925,7 @@ std::optional<std::string> EditorSession::Impl::savedPathFromExternalDiffId(
     return value.substr(prefix.size());
 }
 
-std::optional<FileDocumentId> EditorSession::Impl::resolveExternalDocument(
+std::optional<FileDocumentId> Editor::resolveExternalDocument(
     const DiffFileId& id) const {
     const auto savedPath = savedPathFromExternalDiffId(id);
     if (!savedPath) return std::nullopt;
@@ -940,7 +940,7 @@ std::optional<FileDocumentId> EditorSession::Impl::resolveExternalDocument(
 }
 
 std::optional<FileDocumentId>
-EditorSession::Impl::resolveOpenSavedDocumentByPath(
+Editor::resolveOpenSavedDocumentByPath(
     const std::filesystem::path& relativePath) const {
     const auto normalized = relativePath.generic_string();
     for (const auto documentId : workspace.documents()) {
@@ -953,7 +953,7 @@ EditorSession::Impl::resolveOpenSavedDocumentByPath(
     return std::nullopt;
 }
 
-void EditorSession::Impl::registerExternalSaveExpectation(
+void Editor::registerExternalSaveExpectation(
     const std::filesystem::path& relativePath) {
     const auto observed =
         WatchFileState::observe(workspace.root() / relativePath);
@@ -976,7 +976,7 @@ void EditorSession::Impl::registerExternalSaveExpectation(
     gitDiffWorker.registerSavedPath(std::move(expectation));
 }
 
-void EditorSession::Impl::reconcileExternalWatchEvents(
+void Editor::reconcileExternalWatchEvents(
     std::vector<WatchEvent> events, bool resync) {
     const auto flowRevisionBefore = external.viewState().revision;
     for (auto& event : events) {
@@ -1205,7 +1205,7 @@ void EditorSession::Impl::reconcileExternalWatchEvents(
     }
 }
 
-bool EditorSession::Impl::commitExternalDismissal(
+bool Editor::commitExternalDismissal(
     FileDocumentId document, bool removed,
     const std::optional<std::string>& dismissedContent) {
     return workspace.commitExternalDismissal(
@@ -1234,7 +1234,7 @@ bool EditorSession::Impl::commitExternalDismissal(
         });
 }
 
-void EditorSession::Impl::reconcileAllOpenDocumentsAgainstDisk() {
+void Editor::reconcileAllOpenDocumentsAgainstDisk() {
     std::vector<WatchEvent> synthesized;
     std::uint64_t sequence = 0;
     for (const auto documentId : workspace.documents()) {
@@ -1302,7 +1302,7 @@ void EditorSession::Impl::reconcileAllOpenDocumentsAgainstDisk() {
     }
 }
 
-bool EditorSession::Impl::archiveDiscardedDraft(std::string_view savedPath,
+bool Editor::archiveDiscardedDraft(std::string_view savedPath,
                                                 std::string_view content) {
     // Beside the scratch store (not the workspace deleted-file archive, which
     // the housekeeping pruner owns), so a discarded draft is never pruned as a
@@ -1333,7 +1333,7 @@ bool EditorSession::Impl::archiveDiscardedDraft(std::string_view savedPath,
     return createFileExclusively(target, bytes).ok();
 }
 
-CommandHandlerResult EditorSession::Impl::discardDraft() {
+CommandHandlerResult Editor::discardDraft() {
     const auto id = activeDocumentId();
     if (!id) return failure("no active document");
     const auto state = workspace.state(*id);
@@ -1372,7 +1372,7 @@ CommandHandlerResult EditorSession::Impl::discardDraft() {
     return updateTabsFor(*id);
 }
 
-CommandHandlerResult EditorSession::Impl::dismissDraftNotice() {
+CommandHandlerResult Editor::dismissDraftNotice() {
     const auto id = activeDocumentId();
     if (!id) return failure("no active document");
     const auto found = documentRuntimeStates.find(id->value());
@@ -1386,7 +1386,7 @@ CommandHandlerResult EditorSession::Impl::dismissDraftNotice() {
     return success();
 }
 
-void EditorSession::Impl::refreshLiveDiffDocuments(const DiffViewState& diffView) {
+void Editor::refreshLiveDiffDocuments(const DiffViewState& diffView) {
     for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
         const auto id = DiffFileId{it->first};
         auto file = std::find_if(
@@ -1423,7 +1423,7 @@ void EditorSession::Impl::refreshLiveDiffDocuments(const DiffViewState& diffView
     }
 }
 
-bool EditorSession::Impl::openOrRevealFollowTargetProgrammatic(
+bool Editor::openOrRevealFollowTargetProgrammatic(
     const FollowTarget& target) {
     const auto file = diff.file(target.id);
     if (!file.has_value()) {
@@ -1439,23 +1439,23 @@ bool EditorSession::Impl::openOrRevealFollowTargetProgrammatic(
     return revealCurrentDiffTarget(target, NavigationClass::Programmatic);
 }
 
-Document const* EditorSession::Impl::activeDocument() const {
+Document const* Editor::activeDocument() const {
     auto id = activeDocumentId();
     return id ? workspace.tryDocument(*id) : nullptr;
 }
 
-Document* EditorSession::Impl::activeDocument() {
+Document* Editor::activeDocument() {
     auto id = activeDocumentId();
     return id ? const_cast<Document*>(workspace.tryDocument(*id)) : nullptr;
 }
 
-void EditorSession::Impl::ensureDocumentRuntimeState(FileDocumentId document) {
+void Editor::ensureDocumentRuntimeState(FileDocumentId document) {
     documentRuntimeStates.try_emplace(
         document.value(),
         DocumentRuntimeState{settings, syntaxParser});
 }
 
-void EditorSession::Impl::discardDocumentRuntimeState(FileDocumentId document) {
+void Editor::discardDocumentRuntimeState(FileDocumentId document) {
     documentRuntimeStates.erase(document.value());
     documentLanguageOverrides.erase(document.value());
     autosave.forget(document);
@@ -1474,7 +1474,7 @@ void EditorSession::Impl::discardDocumentRuntimeState(FileDocumentId document) {
     }
 }
 
-DocumentHistory& EditorSession::Impl::historyFor(FileDocumentId document) {
+DocumentHistory& Editor::historyFor(FileDocumentId document) {
     auto it = documentRuntimeStates.find(document.value());
     if (it == documentRuntimeStates.end()) {
         throw std::logic_error{
@@ -1483,7 +1483,7 @@ DocumentHistory& EditorSession::Impl::historyFor(FileDocumentId document) {
     return it->second.history;
 }
 
-SyntaxModel& EditorSession::Impl::syntaxFor(FileDocumentId document) {
+SyntaxModel& Editor::syntaxFor(FileDocumentId document) {
     auto it = documentRuntimeStates.find(document.value());
     if (it == documentRuntimeStates.end()) {
         throw std::logic_error{
@@ -1492,7 +1492,7 @@ SyntaxModel& EditorSession::Impl::syntaxFor(FileDocumentId document) {
     return it->second.syntax;
 }
 
-SyntaxViewState EditorSession::Impl::activeSyntaxView() const {
+SyntaxViewState Editor::activeSyntaxView() const {
     if (auto id = activeDocumentId()) {
         if (auto it = documentRuntimeStates.find(id->value());
             it != documentRuntimeStates.end()) {
@@ -1505,12 +1505,12 @@ SyntaxViewState EditorSession::Impl::activeSyntaxView() const {
     return SyntaxViewState::plainText(revision, LanguageId::plainText(), text, 4);
 }
 
-std::optional<WorkspaceDocumentState> EditorSession::Impl::activeWorkspaceState() const {
+std::optional<WorkspaceDocumentState> Editor::activeWorkspaceState() const {
     auto id = activeDocumentId();
     return id ? workspace.state(*id) : std::nullopt;
 }
 
-std::optional<DiffFileView> EditorSession::Impl::activeDiffFile() const {
+std::optional<DiffFileView> Editor::activeDiffFile() const {
     const auto diffState = diff.viewState();
     std::optional<std::string> identity;
     if (const auto* tab = activeTabState();
@@ -1522,7 +1522,7 @@ std::optional<DiffFileView> EditorSession::Impl::activeDiffFile() const {
     return file ? std::optional<DiffFileView>{file->get()} : std::nullopt;
 }
 
-std::string const& EditorSession::Impl::activeText() const {
+std::string const& Editor::activeText() const {
     static const std::string empty;
     const auto documentId = activeDocumentId();
     auto const* document = activeDocument();
@@ -1536,11 +1536,11 @@ std::string const& EditorSession::Impl::activeText() const {
     return activeTextCache;
 }
 
-void EditorSession::Impl::resetSelectionForActiveDocument() {
+void Editor::resetSelectionForActiveDocument() {
     selection = initialSelection();
 }
 
-void EditorSession::Impl::clampSelectionToActiveDocument() {
+void Editor::clampSelectionToActiveDocument() {
     auto const& text = activeText();
     auto offset = selection.selections.primary().active.byteOffset.value();
     if (offset > text.size()) offset = text.size();
@@ -1548,7 +1548,7 @@ void EditorSession::Impl::clampSelectionToActiveDocument() {
     selection.selections = SelectionSet{std::vector<Selection>{Selection{position, position}}};
 }
 
-void EditorSession::Impl::clampSelectionsToActiveDocument() {
+void Editor::clampSelectionsToActiveDocument() {
     auto const& text = activeText();
     auto clampPosition = [&](DocumentPosition const& p) {
         auto offset = p.byteOffset.value();
@@ -1579,7 +1579,7 @@ void EditorSession::Impl::clampSelectionsToActiveDocument() {
     selection.selections = SelectionSet{std::move(clamped)};
 }
 
-bool EditorSession::Impl::refreshTree() {
+bool Editor::refreshTree() {
     if (deferringEnrichment) {
         pendingTreeRefresh = true;
         return false;
@@ -1591,25 +1591,25 @@ bool EditorSession::Impl::refreshTree() {
     return true;
 }
 
-void EditorSession::Impl::refreshTreeForPublication() {
+void Editor::refreshTreeForPublication() {
     (void)refreshTree();
 }
 
-void EditorSession::Impl::rebuildInteractionSchema(
+void Editor::rebuildInteractionSchema(
     const StyleDimensions& dimensions,
     std::string_view promptSigil) {
     (void)screen.updateComposition(
         assembleScreen("help.open", dimensions, promptSigil));
 }
 
-bool EditorSession::Impl::openPickerPrompt(PickerKind kind) {
+bool Editor::openPickerPrompt(PickerKind kind) {
     return screen.openFinder(kind);
 }
 
 // The index opens its OWN repository handle rather than sharing the git-diff
 // worker's: that one is owned by its thread, and libgit2 handles are not safe to
 // use from two threads.
-void EditorSession::Impl::rebuildFileCandidates() {
+void Editor::rebuildFileCandidates() {
     auto matcher = makePlatformGitIgnoreMatcher(root);
     WorkspaceFileIndexOptions options;
     options.respectGitignore =
@@ -1618,7 +1618,7 @@ void EditorSession::Impl::rebuildFileCandidates() {
         std::move(buildWorkspaceFileIndex(root, *matcher, options).candidates);
 }
 
-void EditorSession::Impl::reconcileFindDocument() {
+void Editor::reconcileFindDocument() {
     if (!findReplace.viewState().open) {
         findDocumentId.reset();
         return;
@@ -1640,7 +1640,7 @@ void EditorSession::Impl::reconcileFindDocument() {
     findDocumentId.reset();
 }
 
-void EditorSession::Impl::refreshSyntax(std::vector<SyntaxEdit> edits) {
+void Editor::refreshSyntax(std::vector<SyntaxEdit> edits) {
     auto id = activeDocumentId();
     if (!id) return;
     auto& model = syntaxFor(*id);
@@ -1670,7 +1670,8 @@ void EditorSession::Impl::refreshSyntax(std::vector<SyntaxEdit> edits) {
                       std::move(edits));
 }
 
-void EditorSession::Impl::primeDeferred() {
+void Editor::primeDeferred() {
+    std::lock_guard operationLock{operationMutex};
     if (!deferringEnrichment) return;
     deferringEnrichment = false;
     // Run whichever scans were requested while deferring, now that the first
@@ -1689,7 +1690,7 @@ void EditorSession::Impl::primeDeferred() {
     (void)ran;
 }
 
-void EditorSession::Impl::enqueueStatus(StatusPriority priority, std::string text) {
+void Editor::enqueueStatus(StatusPriority priority, std::string text) {
     auto value = nextStatusId++;
     if (status
             .enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}})
@@ -1726,7 +1727,7 @@ std::vector<AutosaveCandidate> autosaveCandidates(const Workspace& workspace) {
 
 } // namespace
 
-std::size_t EditorSession::Impl::persistAutosaveDraft(FileDocumentId document) {
+std::size_t Editor::persistAutosaveDraft(FileDocumentId document) {
     auto state = workspace.state(document);
     auto const* current = workspace.tryDocument(document);
     if (!state || current == nullptr) return 0;
@@ -1766,7 +1767,7 @@ std::size_t EditorSession::Impl::persistAutosaveDraft(FileDocumentId document) {
     return 1;
 }
 
-void EditorSession::Impl::reconcileDraftOnOpen(FileDocumentId document) {
+void Editor::reconcileDraftOnOpen(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) return;
 
@@ -1819,7 +1820,8 @@ void EditorSession::Impl::reconcileDraftOnOpen(FileDocumentId document) {
     }
 }
 
-std::size_t EditorSession::Impl::flushDueAutosaveDrafts() {
+std::size_t Editor::flushDueAutosaveDrafts() {
+    std::lock_guard operationLock{operationMutex};
     autosave.setInterval(std::chrono::milliseconds{
         uint32Setting(settings, SettingKey::AutosaveDebounceMs, 10000)});
     const auto candidates = autosaveCandidates(workspace);
@@ -1831,7 +1833,8 @@ std::size_t EditorSession::Impl::flushDueAutosaveDrafts() {
     return flushed;
 }
 
-std::size_t EditorSession::Impl::flushAllAutosaveDrafts() {
+std::size_t Editor::flushAllAutosaveDrafts() {
+    std::lock_guard operationLock{operationMutex};
     const auto candidates = autosaveCandidates(workspace);
     std::size_t flushed = 0;
     for (const auto id :
@@ -1841,8 +1844,9 @@ std::size_t EditorSession::Impl::flushAllAutosaveDrafts() {
     return flushed;
 }
 
-DiffIngressResult EditorSession::Impl::applyExternalDiffBurst(
+DiffIngressResult Editor::applyExternalDiffBurst(
     std::vector<ExternalDiffRevision> changes) {
+    std::lock_guard operationLock{operationMutex};
     if (changes.empty()) {
         return {DiffIngressError::EmptyBurst};
     }
@@ -1887,7 +1891,7 @@ DiffIngressResult EditorSession::Impl::applyExternalDiffBurst(
     return {};
 }
 
-DiffIngressResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
+DiffIngressResult Editor::applyGitDiffScanLocked(GitDiffScan scan) {
     if (scan.revision == 0) {
         auto const previousBranch = currentGitBranch;
         currentGitBranch = scan.currentBranch;
@@ -2031,7 +2035,7 @@ DiffIngressResult EditorSession::Impl::applyGitDiffScan(GitDiffScan scan) {
     return {};
 }
 
-bool EditorSession::Impl::revealCurrentDiffTarget(
+bool Editor::revealCurrentDiffTarget(
     const FollowTarget& target, NavigationClass classification) {
     (void)classification;
     const auto& text = activeText();
@@ -2047,7 +2051,7 @@ bool EditorSession::Impl::revealCurrentDiffTarget(
     return true;
 }
 
-bool EditorSession::Impl::revealDiffTarget(
+bool Editor::revealDiffTarget(
     const FollowTarget& target, NavigationClass classification) {
     if (target.deleted) {
         return false;
@@ -2060,23 +2064,23 @@ bool EditorSession::Impl::revealDiffTarget(
     return revealCurrentDiffTarget(target, classification);
 }
 
-void EditorSession::Impl::recordNavigation(NavigationClass classification) {
+void Editor::recordNavigation(NavigationClass classification) {
     (void)follow.applyNavigation({.classification = classification});
 }
 
-CommandHandlerResult EditorSession::Impl::splitPane(SplitAxis axis) {
+CommandHandlerResult Editor::splitPane(SplitAxis axis) {
     (void)paneTopology.splitActive(axis);
     return success();
 }
 
-CommandHandlerResult EditorSession::Impl::closePane() {
+CommandHandlerResult Editor::closePane() {
     if (!paneTopology.closeActive()) {
         return failure("the only pane cannot be closed");
     }
     return success();
 }
 
-CommandHandlerResult EditorSession::Impl::cyclePane(
+CommandHandlerResult Editor::cyclePane(
     CycleDirection direction) {
     paneTopology.cycle(direction);
     if (follow.viewState().mode == FollowMode::Following) {
@@ -2086,29 +2090,25 @@ CommandHandlerResult EditorSession::Impl::cyclePane(
     return success();
 }
 
-bool EditorSession::Impl::focusPane(PaneId pane) {
+bool Editor::focusPane(PaneId pane) {
     return paneTopology.focus(pane);
 }
 
-EditorSession::EditorSession(std::unique_ptr<Impl> implementation) noexcept
-    : impl_{std::move(implementation)} {}
-EditorSession::~EditorSession() = default;
-
-void EditorSession::resetKeymapToDefault() {
-    std::lock_guard operationLock{impl_->operationMutex};
+void Editor::resetKeymapToDefault() {
+    std::lock_guard operationLock{operationMutex};
     // defaultTerminalKeymap() is a fixed, already-construction-time-
     // validated value (see create() above), so no re-validation is needed
     // here -- resetting to it can never fail.
-    impl_->keymap = defaultTerminalKeymap();
-    ++impl_->keymapGeneration;
+    keymap = defaultTerminalKeymap();
+    ++keymapGeneration;
 }
 
-void EditorSession::focusEditor() {
-    std::lock_guard operationLock{impl_->operationMutex};
-    impl_->screen.focusEditor();
+void Editor::focusEditor() {
+    std::lock_guard operationLock{operationMutex};
+    screen.focusEditor();
 }
 
-EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
+EditorCreateResult createEditor(EditorConfig config) {
     try {
         auto cwd = canonicalDirectory(config.cwd);
         if (config.scratchRoot.empty()) config.scratchRoot = cwd / ".ssg" / "scratch";
@@ -2121,70 +2121,54 @@ EditorSessionCreateResult EditorSession::create(EditorSessionConfig config) {
         // for being opened -- visible in the file tree, and pointless for a
         // session that never deletes anything. FileArchive creates it on the
         // first delete instead.
-        auto impl = std::make_unique<Impl>(cwd, config.scratchRoot,
-                                           config.recoveryRoot,
-                                           config.archiveRoot,
-                                           config.deferEnrichment,
-                                           std::move(config.syntaxParser),
-                                           config.enableGitDiffWorker,
-                                           config.enableFilesystemWatcher);
+        auto editor = std::unique_ptr<Editor>{new Editor{
+            cwd, config.scratchRoot, config.recoveryRoot, config.archiveRoot,
+            config.deferEnrichment, std::move(config.syntaxParser),
+            config.enableGitDiffWorker, config.enableFilesystemWatcher}};
         // Housekeeping at workspace open rather than on a timer, so it is
         // deterministic and testable. Its result is deliberately ignored: a
         // corrupt archive entry must never stop a user opening their workspace.
-        (void)impl->workspace.pruneArchive();
-        impl->keymap = defaultTerminalKeymap();
-        if (auto errors = KeymapMatcher{impl->keymap}.validate(); !errors.empty()) {
+        (void)editor->workspace.pruneArchive();
+        editor->keymap = defaultTerminalKeymap();
+        if (auto errors = KeymapMatcher{editor->keymap}.validate(); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
         }
-        if (!KeymapMatcher{impl->keymap}.hasGlobalBinding("settings.open")) {
+        if (!KeymapMatcher{editor->keymap}.hasGlobalBinding("settings.open")) {
             return {nullptr,
                     "default keymap lacks a global settings.open escape hatch"};
         }
-        registerAllCommands(impl->catalog, *impl);
-        return {std::unique_ptr<EditorSession>{new EditorSession{std::move(impl)}}, {}};
+        registerAllCommands(editor->catalog, *editor);
+        return {std::move(editor), {}};
     } catch (std::exception const& exception) {
         return {nullptr, exception.what()};
     }
 }
 
-PumpResult EditorSession::pump() {
-    if (impl_->catalog.dispatchInProgress()) {
+PumpResult Editor::pump() {
+    if (catalog.dispatchInProgress()) {
         throw std::logic_error{"worker results cannot be pumped during dispatch"};
     }
-    std::lock_guard operationLock{impl_->operationMutex};
-    return {impl_->drainGitDiffWorker()};
+    std::lock_guard operationLock{operationMutex};
+    return {drainGitDiffWorker()};
 }
 
-void EditorSession::primeDeferred() {
-    std::lock_guard operationLock{impl_->operationMutex};
-    impl_->primeDeferred();
-}
-std::size_t EditorSession::flushDueAutosaveDrafts() {
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->flushDueAutosaveDrafts();
-}
-std::size_t EditorSession::flushAllAutosaveDrafts() {
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->flushAllAutosaveDrafts();
+Editor::DeferredWorkCounts Editor::deferredWorkCounts() const {
+    std::lock_guard operationLock{operationMutex};
+    return {syntaxRunCount, treeScanCount};
 }
 
-EditorSession::DeferredWorkCounts EditorSession::deferredWorkCounts() const {
-    std::lock_guard operationLock{impl_->operationMutex};
-    return {impl_->syntaxRunCount, impl_->treeScanCount};
-}
-
-std::uint64_t EditorSession::liveDocumentRuntimeStateCountForTests() {
+std::uint64_t Editor::liveDocumentRuntimeStateCountForTests() {
     return DocumentRuntimeState::liveInstances();
 }
 
-void EditorSession::setAutosaveDraftByteCapForTests(std::uint64_t cap) {
-    std::lock_guard operationLock{impl_->operationMutex};
-    impl_->autosaveDraftByteCap = cap;
+void Editor::setAutosaveDraftByteCapForTests(std::uint64_t cap) {
+    std::lock_guard operationLock{operationMutex};
+    autosaveDraftByteCap = cap;
 }
 
-void EditorSession::reconcileExternalWatchEventsForTest(
+void Editor::reconcileExternalWatchEventsForTest(
     std::vector<WatchEvent> events) {
-    std::lock_guard operationLock{impl_->operationMutex};
+    std::lock_guard operationLock{operationMutex};
     // Mirror the runtime drain: an Overflow in the batch triggers the full
     // open-document-vs-disk resync (the worker would signal it out of band), the
     // ordinary events reconcile normally.
@@ -2198,42 +2182,38 @@ void EditorSession::reconcileExternalWatchEventsForTest(
         }
     }
     if (!ordinary.empty()) {
-        impl_->reconcileExternalWatchEvents(std::move(ordinary));
+        reconcileExternalWatchEvents(std::move(ordinary));
     }
     if (overflowed) {
-        impl_->reconcileAllOpenDocumentsAgainstDisk();
+        reconcileAllOpenDocumentsAgainstDisk();
     }
 }
 
-bool EditorSession::diffModelHasFileForTest(const DiffFileId& id) const {
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->diff.file(id).has_value();
+bool Editor::diffModelHasFileForTest(const DiffFileId& id) const {
+    std::lock_guard operationLock{operationMutex};
+    return diff.file(id).has_value();
 }
 
-void EditorSession::reportWatcherAvailabilityForTest(bool available) {
-    std::lock_guard operationLock{impl_->operationMutex};
-    impl_->gitDiffWorker.setAvailabilityForTest(available);
+void Editor::reportWatcherAvailabilityForTest(bool available) {
+    std::lock_guard operationLock{operationMutex};
+    gitDiffWorker.setAvailabilityForTest(available);
 }
 
-void EditorSession::refreshFilesystemForTest() {
-    std::lock_guard operationLock{impl_->operationMutex};
-    impl_->refreshTreeForPublication();
+void Editor::refreshFilesystemForTest() {
+    std::lock_guard operationLock{operationMutex};
+    refreshTreeForPublication();
 }
 
-bool EditorSession::dispatchInProgress() const noexcept {
-    return impl_->catalog.dispatchInProgress();
+bool Editor::dispatchInProgress() const noexcept {
+    return catalog.dispatchInProgress();
 }
 
-bool EditorSession::Impl::defer(ClientCommand command) {
+bool Editor::deferDispatch(ClientCommand command) {
     if (!catalog.dispatchInProgress()) return false;
     return deferredCommands.enqueue({std::move(command)});
 }
 
-bool EditorSession::deferDispatch(ClientCommand command) {
-    return impl_->defer(std::move(command));
-}
-
-CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) {
+CommandResult Editor::dispatchLocked(ClientCommand const& command) {
     // Every direct dispatch -- keystroke, palette, or script -- is local: there
     // is one trusted caller, so a mutation always counts toward the local-edit
     // follow pause.
@@ -2241,7 +2221,7 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
         const auto revisionsBefore = documentRevisions(workspace);
         auto result = catalog.dispatch(dispatched);
         if (result.activeWorkspace) {
-            topology.activeWorkspace = result.activeWorkspace;
+            sessionTopology.activeWorkspace = result.activeWorkspace;
         }
         reconcileFindDocument();
         // The draft-conflict notice's presence lives in per-document runtime state,
@@ -2352,85 +2332,78 @@ CommandResult EditorSession::Impl::dispatchLocked(ClientCommand const& command) 
             std::move(result.viewAction)};
 }
 
-ClientInputResult EditorSession::input(ClientInput const& input) {
-    if (impl_->catalog.dispatchInProgress()) {
+ClientInputResult Editor::input(ClientInput const& input) {
+    if (catalog.dispatchInProgress()) {
         return {ClientInputOutcome::Rejected, std::nullopt,
                 CommandResult{CommandError::HandlerFailed,
                               std::string{kNestedDispatchRefusal},
                               {}}};
     }
-    std::lock_guard operationLock{impl_->operationMutex};
-    return inputLocked(*impl_, input);
+    std::lock_guard operationLock{operationMutex};
+    return inputLocked(*this, input);
 }
 
-CommandResult EditorSession::dispatch(ClientCommand const& command) {
+CommandResult Editor::dispatch(ClientCommand const& command) {
     // A handler must be refused before taking the non-recursive aggregate lock.
-    if (impl_->catalog.dispatchInProgress()) {
+    if (catalog.dispatchInProgress()) {
         return {CommandError::HandlerFailed,
                 std::string{kNestedDispatchRefusal}};
     }
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->dispatchLocked(command);
+    std::lock_guard operationLock{operationMutex};
+    return dispatchLocked(command);
 }
 
-SessionTopology EditorSession::topology() const {
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->topology;
+SessionTopology Editor::topology() const {
+    std::lock_guard operationLock{operationMutex};
+    return sessionTopology;
 }
 
-CommandCatalog const& EditorSession::commandCatalog() const {
-    return impl_->catalog;
+CommandCatalog const& Editor::commandCatalog() const {
+    return catalog;
 }
 
-CommandHandle EditorSession::registerCommand(CommandSpec command) {
+CommandHandle Editor::registerCommand(CommandSpec command) {
     if (dispatchInProgress()) {
         throw std::logic_error{"commands cannot be registered during dispatch"};
     }
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->catalog.add(std::move(command));
+    std::lock_guard operationLock{operationMutex};
+    return catalog.add(std::move(command));
 }
 
-std::vector<CommandHandle> EditorSession::replaceCommandGeneration(
+std::vector<CommandHandle> Editor::replaceCommandGeneration(
     std::span<CommandHandle const> retire,
     std::vector<CommandSpec> commands) {
     if (dispatchInProgress()) {
         throw std::logic_error{
             "command generations cannot be replaced during dispatch"};
     }
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->catalog.replaceGeneration(retire, std::move(commands));
+    std::lock_guard operationLock{operationMutex};
+    return catalog.replaceGeneration(retire, std::move(commands));
 }
 
-std::uint64_t EditorSession::gitFullRefreshCountForTest() const {
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->gitDiffWorker.fullRefreshCount();
+std::uint64_t Editor::gitFullRefreshCountForTest() const {
+    std::lock_guard operationLock{operationMutex};
+    return gitDiffWorker.fullRefreshCount();
 }
 
-std::filesystem::path const& EditorSession::workspaceRoot() const noexcept { return impl_->root; }
-DiffIngressResult EditorSession::applyExternalDiffBurst(
-    std::vector<ExternalDiffRevision> changes) {
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->applyExternalDiffBurst(std::move(changes));
-}
-DiffIngressResult EditorSession::applyGitDiffScan(GitDiffScan scan) {
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->applyGitDiffScan(std::move(scan));
-}
-int EditorSession::gitDiffWakeDescriptor() const {
-    return impl_->gitDiffWakeDescriptor();
+std::filesystem::path const& Editor::workspaceRoot() const noexcept { return root; }
+
+DiffIngressResult Editor::applyGitDiffScan(GitDiffScan scan) {
+    std::lock_guard operationLock{operationMutex};
+    return applyGitDiffScanLocked(std::move(scan));
 }
 
-std::string EditorSession::activeDocumentText() const {
-    std::lock_guard operationLock{impl_->operationMutex};
-    return impl_->activeText();
+std::string Editor::activeDocumentText() const {
+    std::lock_guard operationLock{operationMutex};
+    return activeText();
 }
 
-EditorSession::DraftReopenNotice EditorSession::activeDraftReopenNotice() const {
-    std::lock_guard operationLock{impl_->operationMutex};
-    const auto id = impl_->activeDocumentId();
+Editor::DraftReopenNotice Editor::activeDraftReopenNotice() const {
+    std::lock_guard operationLock{operationMutex};
+    const auto id = activeDocumentId();
     if (!id) return DraftReopenNotice::None;
-    const auto found = impl_->documentRuntimeStates.find(id->value());
-    if (found == impl_->documentRuntimeStates.end()) return DraftReopenNotice::None;
+    const auto found = documentRuntimeStates.find(id->value());
+    if (found == documentRuntimeStates.end()) return DraftReopenNotice::None;
     switch (found->second.reopen) {
         case DraftReopenOutcome::None: return DraftReopenNotice::None;
         case DraftReopenOutcome::Restored: return DraftReopenNotice::Restored;

@@ -1,7 +1,7 @@
 #include "../test_helpers.h"
 #include "../grid_test_frame.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/TextInputCommands.h>
 
 #include <filesystem>
@@ -22,7 +22,7 @@ std::filesystem::path uniqueRoot() {
 
 TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
     auto root = uniqueRoot();
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;

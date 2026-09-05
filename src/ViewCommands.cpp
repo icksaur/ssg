@@ -1,4 +1,4 @@
-#include <ssg/EditorSessionImpl.h>
+#include <ssg/Editor.h>
 
 
 #include <algorithm>
@@ -10,7 +10,7 @@ namespace ssg {
 namespace {
 
 CommandHandlerResult activateUiNode(
-    EditorSession::Impl& runtime,
+    Editor& runtime,
     const UiNodeActivationArguments& arguments) {
     const UiSchema tree = runtime.projectedUiTree();
     const UiNode* node = findUiNode(tree, arguments.nodeId);
@@ -42,13 +42,13 @@ CommandHandlerResult activateUiNode(
         }
         target.id = *node->resolved->command;
     }
-    if (!runtime.defer(std::move(target))) {
+    if (!runtime.deferDispatch(std::move(target))) {
         return failure("UI activation target could not be queued");
     }
     return success();
 }
 
-CommandHandlerResult setWordWrap(EditorSession::Impl& runtime) {
+CommandHandlerResult setWordWrap(Editor& runtime) {
     bool next = !boolSetting(runtime.settings, SettingKey::WordWrap, runtime.wordWrap);
     auto mutation = runtime.settings.set(SettingScope::Workspace, SettingKey::WordWrap, next);
     if (!mutation.accepted()) return failure(mutation.error->message);
@@ -56,7 +56,7 @@ CommandHandlerResult setWordWrap(EditorSession::Impl& runtime) {
     return success();
 }
 
-CommandHandlerResult setLineNumbers(EditorSession::Impl& runtime) {
+CommandHandlerResult setLineNumbers(Editor& runtime) {
     bool next = !boolSetting(runtime.settings, SettingKey::LineNumbers,
                              runtime.lineNumbers);
     auto mutation = runtime.settings.set(SettingScope::Workspace,
@@ -66,7 +66,7 @@ CommandHandlerResult setLineNumbers(EditorSession::Impl& runtime) {
     return success();
 }
 
-CommandHandlerResult shellCommand(EditorSession::Impl& runtime,
+CommandHandlerResult shellCommand(Editor& runtime,
                                   std::string_view id) {
     if (id == "panel.toggle") (void)runtime.screen.togglePanel();
     else if (id == "panel.focus") (void)runtime.screen.focusPanel();
@@ -94,7 +94,7 @@ CommandHandlerResult shellCommand(EditorSession::Impl& runtime,
     return success();
 }
 
-CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
+CommandHandlerResult promptStatusCommand(Editor& runtime,
                                          std::string_view id,
                                          std::any const& payload) {
     if (id == "prompt.submit" || id == "prompt.cancel" ||
@@ -143,7 +143,7 @@ CommandHandlerResult promptStatusCommand(EditorSession::Impl& runtime,
                     return failure(submission->commandId +
                                    " requires a non-empty value");
                 }
-                if (!runtime.defer(
+                if (!runtime.deferDispatch(
                         ClientCommand{submission->commandId,
                                       submission->values.front()})) {
                     return failure("could not queue " + submission->commandId);
@@ -189,14 +189,14 @@ std::string settingMessage(SettingMutation const& mutation) {
     return mutation.error ? mutation.error->message : "setting mutation failed";
 }
 
-void syncRuntimeSettings(EditorSession::Impl& runtime) {
+void syncRuntimeSettings(Editor& runtime) {
     runtime.wordWrap = boolSetting(runtime.settings, SettingKey::WordWrap,
                                      runtime.wordWrap);
     runtime.lineNumbers = boolSetting(runtime.settings, SettingKey::LineNumbers,
                                       runtime.lineNumbers);
 }
 
-CommandHandlerResult settingsCommand(EditorSession::Impl& runtime, std::string_view id, std::any const& payload) {
+CommandHandlerResult settingsCommand(Editor& runtime, std::string_view id, std::any const& payload) {
     if (id == "settings.open") {
         auto opened = openGenericPrompt(runtime.screen.prompt(), PromptRequest{
             PromptKind::Settings, "settings",
@@ -272,7 +272,7 @@ CommandHandlerResult settingsCommand(EditorSession::Impl& runtime, std::string_v
 // had to re-derive from the id which of two payload types it held; here the
 // type is stated once, at the command, and the compiler carries it.
 void registerAppearanceCommands(CommandCatalog& catalog,
-                                EditorSession::Impl& runtime) {
+                                Editor& runtime) {
     auto declare = [](std::string_view owner, std::string id,
                       std::string summary) {
         return CommandSpec{
@@ -352,7 +352,7 @@ void registerAppearanceCommands(CommandCatalog& catalog,
 // The scroll commands all record a user navigation when they move the view, so
 // follow-edits knows the user drove rather than the editor.
 void registerViewportCommands(CommandCatalog& catalog,
-                              EditorSession::Impl& runtime) {
+                              Editor& runtime) {
     catalog.add(CommandSpec{
         .id = "view.toggle_word_wrap",
         .owner = "viewport-wrap-scrollbar",
@@ -422,7 +422,7 @@ void registerViewportCommands(CommandCatalog& catalog,
 // that collected it, and settings.set/reset carry typed mutations that a remote
 // client may send.  The three that take nothing say so.
 void registerSettingsCommands(CommandCatalog& catalog,
-                              EditorSession::Impl& runtime) {
+                              Editor& runtime) {
     auto declare = [](std::string id, std::string summary) {
         return CommandSpec{
             .id = std::move(id),
@@ -488,7 +488,7 @@ void registerSettingsCommands(CommandCatalog& catalog,
 // The prompt line and the status bar.  Only prompt.update_value carries
 // anything: the text typed so far.
 void registerPromptStatusCommands(CommandCatalog& catalog,
-                                  EditorSession::Impl& runtime) {
+                                  Editor& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpec{
             .id = std::move(id),
@@ -554,7 +554,7 @@ void registerPromptStatusCommands(CommandCatalog& catalog,
 
 // Panes, the sidebar, and distraction-free mode. None takes an argument.
 void registerShellLayoutCommands(CommandCatalog& catalog,
-                                 EditorSession::Impl& runtime) {
+                                 Editor& runtime) {
     struct PaneMutationCommand {
         std::string_view id;
         std::string_view summary;
@@ -659,7 +659,7 @@ void registerShellLayoutCommands(CommandCatalog& catalog,
     declare("view.toggle_distraction_free", "", "Toggle Distraction Free");
 }
 
-void bindRuntimePresentation(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+void bindRuntimePresentation(CommandCatalog& catalog, Editor& runtime) {
     registerViewportCommands(catalog, runtime);
     registerShellLayoutCommands(catalog, runtime);
     registerPromptStatusCommands(catalog, runtime);
@@ -667,7 +667,7 @@ void bindRuntimePresentation(CommandCatalog& catalog, EditorSession::Impl& runti
     registerAppearanceCommands(catalog, runtime);
 }
 
-void registerAllCommands(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+void registerAllCommands(CommandCatalog& catalog, Editor& runtime) {
     bindRuntimeEditing(catalog, runtime);
     bindRuntimeFiles(catalog, runtime);
     bindRuntimePresentation(catalog, runtime);

@@ -3,7 +3,7 @@
 #include "../grid_test_view.h"
 #include "../test_helpers.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/GridPresenter.h>
 #include <ssg/Keymap.h>
 #include <ssg/UiTree.h>
@@ -31,7 +31,7 @@ std::filesystem::path uniqueRoot(std::string_view name) {
     return root;
 }
 
-ssg::EditorSessionConfig configFor(const std::filesystem::path& root) {
+ssg::EditorConfig configFor(const std::filesystem::path& root) {
     return {root / "workspace", root / "scratch", root / "recovery"};
 }
 
@@ -47,14 +47,14 @@ const ssg::UiNode* nodeById(const ssg::UiNode& node, std::string_view id) {
 
 TEST(constructionRejectsInvalidCwd) {
     auto root = uniqueRoot("invalid_cwd");
-    auto result = ssg::EditorSession::create(configFor(root / "missing"));
+    auto result = ssg::createEditor(configFor(root / "missing"));
     ASSERT_FALSE(result.accepted());
     ASSERT_FALSE(result.message.empty());
 }
 
 TEST(sessionProjectionResolvesStatusFieldsAndHint) {
     auto root = uniqueRoot("ui_tree_values");
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -109,13 +109,13 @@ TEST(runtimeSourcesDoNotIncludeFixtureModel) {
         if (!entry.is_regular_file()) continue;
         if (entry.path().extension() != ".cpp" && entry.path().extension() != ".h") continue;
         const auto relative = std::filesystem::relative(entry.path(), root).generic_string();
-        if (relative.rfind("src/", 0) != 0 && relative != "src/EditorSession.cpp") continue;
+        if (relative.rfind("src/", 0) != 0 && relative != "src/Editor.cpp") continue;
         std::ifstream input{entry.path()};
         const std::string text{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
         found = found || text.find("FixtureModel") != std::string::npos;
         snapshotConstCast =
             snapshotConstCast ||
-            text.find("const_cast<EditorSession::Impl*>") != std::string::npos;
+            text.find("const_cast<Editor*>") != std::string::npos;
     }
 
     ASSERT_FALSE(found);
@@ -139,7 +139,7 @@ TEST(defaultTerminalKeymapBindingsAreSingleStroke) {
 TEST(curatedKeymapBindingsAreArgumentFree) {
     auto root = uniqueRoot("keymap_argfree");
     std::ofstream{root / "workspace" / "doc.txt"} << "alpha\nbeta\n";
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -281,7 +281,7 @@ TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
         std::ofstream file{root / "workspace" / "long.txt"};
         for (int line = 1; line <= 60; ++line) file << "line " << line << "\n";
     }
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -345,7 +345,7 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
         std::ofstream file{root / "workspace" / "snug.txt"};
         for (int line = 1; line <= 23; ++line) file << "line " << line << "\n";
     }
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -367,7 +367,7 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
 // has done anything, so it stops meaning "you have work to lose".
 TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
     auto root = uniqueRoot("scratch_dirty");
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -393,7 +393,7 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
     auto root = uniqueRoot("scratch_close");
     std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
     std::ofstream{root / "workspace" / "beta.txt"} << "beta\n";
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -460,7 +460,7 @@ TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
 TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
     auto root = uniqueRoot("scratch_keep");
     std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -491,7 +491,7 @@ TEST(anEmptySavedFileIsNeverDiscardedAsScratch) {
     auto root = uniqueRoot("scratch_empty_file");
     std::ofstream{root / "workspace" / "blank.txt"};
     std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -524,7 +524,7 @@ TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
         std::ofstream file{root / "workspace" / "wide.txt"};
         file << std::string(70, 'a');
     }
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -548,7 +548,7 @@ TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
 TEST(addCursorChordProducesMultipleSelections) {
     auto root = uniqueRoot("multi_cursor");
     std::ofstream{root / "workspace" / "m.txt"} << "alpha\nbeta\n";
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -567,7 +567,7 @@ TEST(addCursorChordProducesMultipleSelections) {
 
 TEST(settingsOpenFocusesASettingsPrompt) {
     auto root = uniqueRoot("settings_open");
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -587,7 +587,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
         for (int line = 0; line < 80; ++line) file << "line\n";
     }
 
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -642,7 +642,7 @@ TEST(gridPresenterOwnsScrollAndRejectsAReusedFrameBasis) {
 
 TEST(sessionPaneTopologyRespondsToCommandsAndViewActions) {
     auto root = uniqueRoot("grid_presenter_panes");
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -774,7 +774,7 @@ TEST(visualLineMovementRequiresPresenterResolution) {
             lines << "line " << line << '\n';
         }
     }
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -855,7 +855,7 @@ TEST(visualMovementUsesActivePaneAcrossSerializedInput) {
             lines << "line " << line << '\n';
         }
     }
-    auto created = ssg::EditorSession::create(configFor(root));
+    auto created = ssg::createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;

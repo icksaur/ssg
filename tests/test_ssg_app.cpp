@@ -1,7 +1,7 @@
 #include <ssg/pointer_routing.h>
 #include <ssg/ssg_terminal.h>
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/focus.h>
 #include <ssg/HitTester.h>
 #include <ssg/PromptSurface.h>
@@ -265,7 +265,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
     const std::string line = "ab" + cjk + ecombining + emoji;
     std::ofstream{root / "workspace" / "u.txt", std::ios::binary} << line << "\n";
 
-    auto created = ssg::EditorSession::create(
+    auto created = ssg::createEditor(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -2207,7 +2207,7 @@ TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
     fs::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "f.txt"} << "abcdefghij\n";
 
-    auto created = ssg::EditorSession::create(
+    auto created = ssg::createEditor(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;

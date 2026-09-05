@@ -1,7 +1,7 @@
 // Kind: seam.
 //
 // Proves GridPresentationBuilder is faithful: a frame it builds renders the
-// document region identically to one the real EditorSession produces for the
+// document region identically to one the real Editor produces for the
 // same text.
 //
 // This is the test that makes the builder trustworthy.  ONE test pays the cost
@@ -13,7 +13,7 @@
 #include "grid_test_frame.h"
 #include "test_helpers.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/Renderer.h>
 
 #include <filesystem>
@@ -59,7 +59,7 @@ TEST(builtSnapshotRendersTheDocumentLikeTheRealRuntime) {
 
     auto root = uniqueRoot();
     std::ofstream{root / "a.txt", std::ios::binary} << text;
-    auto created = ssg::EditorSession::create(
+    auto created = ssg::createEditor(
         {root, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;

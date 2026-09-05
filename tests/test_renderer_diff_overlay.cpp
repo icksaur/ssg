@@ -1,4 +1,4 @@
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/Renderer.h>
 
 #include "test_helpers.h"
@@ -17,7 +17,7 @@ namespace fs = std::filesystem;
 
 struct Fixture {
     fs::path root;
-    std::unique_ptr<ssg::EditorSession> runtime;
+    std::unique_ptr<ssg::Editor> runtime;
 
     ~Fixture() { fs::remove_all(root); }
 };
@@ -28,7 +28,7 @@ Fixture makeFixture(std::string_view text) {
     fs::create_directories(root / "scratch");
     fs::create_directories(root / "recovery");
     std::ofstream{root / "overlay.cpp"} << text;
-    auto created = ssg::EditorSession::create(
+    auto created = ssg::createEditor(
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return {std::move(root), nullptr};
     auto runtime = std::move(created.session);

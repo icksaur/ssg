@@ -57,7 +57,7 @@ std::optional<SemanticCommand> TerminalInputCapture::capture(
 
 void TerminalInputCapture::reset() noexcept { pending_.clear(); }
 
-TuiClient::TuiClient(EditorSession& runtime,
+TuiClient::TuiClient(Editor& runtime,
                      ViewportDimensions dimensions)
     : runtime_{&runtime},
       dimensions_{dimensions},

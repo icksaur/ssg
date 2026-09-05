@@ -13,7 +13,7 @@ public:
         : dimensions_{dimensions}, presenter_{} {}
 
     [[nodiscard]] std::optional<GridPresentation> present(
-        EditorSession& session, PaletteReport palette = {}) {
+        Editor& session, PaletteReport palette = {}) {
         return presenter_.project(session, {dimensions_, std::move(palette)});
     }
 
@@ -21,7 +21,7 @@ public:
         dimensions_ = dimensions;
     }
 
-    [[nodiscard]] CommandResult dispatch(EditorSession& session,
+    [[nodiscard]] CommandResult dispatch(Editor& session,
                                          ClientCommand command) {
         auto result = session.dispatch(std::move(command));
         if (!result.viewAction) return result;

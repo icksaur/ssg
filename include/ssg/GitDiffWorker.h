@@ -24,7 +24,7 @@ namespace ssg {
 // runtime must resync every open document against disk), and whether the
 // durable watcher-availability fact changed. GitDiffWorker only produces this;
 // applying it to editor state (the DiffModel, the external-modification flow,
-// the tree) is EditorSession's job.
+// the tree) is Editor's job.
 struct GitDiffWorkerDrain {
     std::deque<GitDiffScan> scans;
     std::deque<WatchEvent> watchEvents;
@@ -43,7 +43,7 @@ struct GitDiffWorkerDrain {
 // A no-op (wakeDescriptor() == -1, no thread, fullRefreshCount() == 0) when
 // both git and watching are disabled, or if wake-pipe setup fails.
 //
-// EditorSession sees only this narrow surface: it never reaches the mutex,
+// Editor sees only this narrow surface: it never reaches the mutex,
 // queues, fds, or thread directly.
 class GitDiffWorker {
 public:

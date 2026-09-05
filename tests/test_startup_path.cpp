@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 #include "grid_test_frame.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/OptionalSubsystemAudit.h>
 #include <ssg/FilesystemWatcher.h>
 
@@ -36,8 +36,8 @@ fs::path makeWorkspace(std::string const& name) {
     return root;
 }
 
-ssg::EditorSessionConfig configFor(fs::path const& root, bool defer) {
-    ssg::EditorSessionConfig config;
+ssg::EditorConfig configFor(fs::path const& root, bool defer) {
+    ssg::EditorConfig config;
     config.cwd = root / "workspace";
     config.scratchRoot = root / "scratch";
     config.recoveryRoot = root / "recovery";
@@ -49,7 +49,7 @@ ssg::EditorSessionConfig configFor(fs::path const& root, bool defer) {
 
 TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
     auto root = makeWorkspace("deferred");
-    auto created = ssg::EditorSession::create(configFor(root, /*defer=*/true));
+    auto created = ssg::createEditor(configFor(root, /*defer=*/true));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -79,7 +79,7 @@ TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
 
 TEST(eagerConstructionRunsEnrichmentImmediately) {
     auto root = makeWorkspace("eager");
-    auto created = ssg::EditorSession::create(configFor(root, /*defer=*/false));
+    auto created = ssg::createEditor(configFor(root, /*defer=*/false));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -113,7 +113,7 @@ TEST(firstFrameConstructsNoOptionalSubsystem) {
     auto config = configFor(root, /*defer=*/true);
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
-    auto created = ssg::EditorSession::create(config);
+    auto created = ssg::createEditor(config);
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -163,7 +163,7 @@ TEST(optionalConstructionAuditIsWiredPositiveControl) {
 // test's first assertion becoming the WRONG one to rely on silently.
 TEST(panelShowFilesRequiresPrimeDeferredFirst) {
     auto root = makeWorkspace("panel_ordering");
-    auto created = ssg::EditorSession::create(configFor(root, /*defer=*/true));
+    auto created = ssg::createEditor(configFor(root, /*defer=*/true));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -188,7 +188,7 @@ TEST(panelShowFilesRequiresPrimeDeferredFirst) {
 // ends with focus on the panel instead of the editor.
 TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
     auto root = makeWorkspace("focus_ordering");
-    auto created = ssg::EditorSession::create(configFor(root, /*defer=*/true));
+    auto created = ssg::createEditor(configFor(root, /*defer=*/true));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;

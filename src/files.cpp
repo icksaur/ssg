@@ -1,4 +1,4 @@
-#include <ssg/EditorSessionImpl.h>
+#include <ssg/Editor.h>
 
 #include <ssg/FileCommands.h>
 
@@ -42,7 +42,7 @@ bool mutatesTheActiveDocumentsFile(FileCommand command) {
 // non-fatal status. Deliberately not fatal: a corrupt archive entry must never
 // stop a user opening their workspace. Retained-entry counts stay in the return
 // value rather than nagging on every startup.
-void pruneArchiveReportingFailures(EditorSession::Impl& runtime) {
+void pruneArchiveReportingFailures(Editor& runtime) {
     const auto report = runtime.workspace.pruneArchive();
     if (report.ok()) return;
     runtime.enqueueStatus(
@@ -50,7 +50,7 @@ void pruneArchiveReportingFailures(EditorSession::Impl& runtime) {
         "could not fully prune the deleted-file archive: " + report.message);
 }
 
-CommandHandlerResult openDocumentResult(EditorSession::Impl& runtime,
+CommandHandlerResult openDocumentResult(Editor& runtime,
                                           WorkspaceResult const& result) {
     if (!result.accepted() || !result.document) return failure(workspaceMessage(result));
     return runtime.activateDocument(*result.document);
@@ -62,7 +62,7 @@ CommandHandlerResult openDocumentResult(EditorSession::Impl& runtime,
 // they typed. The same reasons are re-checked by the command itself when the
 // submitted path arrives, since state can change while the prompt is open.
 std::optional<std::string> pathCommandPrecondition(
-    const EditorSession::Impl& runtime, FileCommand command) {
+    const Editor& runtime, FileCommand command) {
     if (!mutatesTheActiveDocumentsFile(command)) return std::nullopt;
 
     if (runtime.activeTabIsLiveDiff()) {
@@ -81,7 +81,7 @@ std::optional<std::string> pathCommandPrecondition(
     return std::nullopt;
 }
 
-CommandHandlerResult bindFile(EditorSession::Impl& runtime,
+CommandHandlerResult bindFile(Editor& runtime,
                                FileCommand command,
                                std::any const& payload) {
     WorkspaceResult result;
@@ -249,7 +249,7 @@ CommandHandlerResult bindFile(EditorSession::Impl& runtime,
     return failure("unknown file command");
 }
 
-CommandHandlerResult bindTab(EditorSession::Impl& runtime,
+CommandHandlerResult bindTab(Editor& runtime,
                                TabCommand command,
                                std::any const& payload) {
     auto active = runtime.tabs.viewState().active;
@@ -367,7 +367,7 @@ CommandHandlerResult bindTab(EditorSession::Impl& runtime,
     return success();
 }
 
-CommandHandlerResult bindEncoding(EditorSession::Impl& runtime,
+CommandHandlerResult bindEncoding(Editor& runtime,
                                     std::string_view id,
                                     std::any const& payload) {
     if (runtime.activeTabIsLiveDiff()) {
@@ -410,7 +410,7 @@ CommandHandlerResult bindEncoding(EditorSession::Impl& runtime,
 
 }  // namespace
 
-CommandHandlerResult EditorSession::Impl::updateTabsFor(FileDocumentId document) {
+CommandHandlerResult Editor::updateTabsFor(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state) return failure("workspace document does not exist");
     auto const* opened = workspace.tryDocument(document);
@@ -421,7 +421,7 @@ CommandHandlerResult EditorSession::Impl::updateTabsFor(FileDocumentId document)
     return result.accepted() ? success() : failure(tabMessage(result));
 }
 
-CommandHandlerResult EditorSession::Impl::activateDocument(FileDocumentId document) {
+CommandHandlerResult Editor::activateDocument(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state) return failure("workspace document does not exist");
     auto const* opened = workspace.tryDocument(document);
@@ -480,7 +480,7 @@ CommandHandlerResult EditorSession::Impl::activateDocument(FileDocumentId docume
 // client); the payload-less commands are the keyboard route, reachable in the
 // external focus context.
 void registerExternalModificationCommands(CommandCatalog& catalog,
-                                          EditorSession::Impl& runtime) {
+                                          Editor& runtime) {
     auto applyAction = [&runtime](
                            ExternalAction action) -> CommandHandlerResult {
             const auto view = runtime.external.viewState();
@@ -637,7 +637,7 @@ void registerExternalModificationCommands(CommandCatalog& catalog,
 // How the active document is decoded and written back: its text encoding, its
 // line endings, and whether it ends with a newline.
 void registerEncodingCommands(CommandCatalog& catalog,
-                              EditorSession::Impl& runtime) {
+                              Editor& runtime) {
     auto declare = [](std::string id, std::string summary) {
         return CommandSpec{
             .id = std::move(id),
@@ -692,7 +692,7 @@ void registerEncodingCommands(CommandCatalog& catalog,
 // content dropped by a local window manager arrives outside any script's
 // reach.
 void registerFileCommands(CommandCatalog& catalog,
-                          EditorSession::Impl& runtime) {
+                          Editor& runtime) {
     auto spec = [](std::string id, std::string summary) {
         return CommandSpec{
             .id = std::move(id),
@@ -765,7 +765,7 @@ void registerFileCommands(CommandCatalog& catalog,
 // taking nothing dropped that id and made tab.activate act on whichever tab
 // happened to be active.
 void registerTabCommands(CommandCatalog& catalog,
-                         EditorSession::Impl& runtime) {
+                         Editor& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary,
                        TabCommand command) {
         CommandSpec built{
@@ -804,7 +804,7 @@ void registerTabCommands(CommandCatalog& catalog,
 // so a conflict can be inspected before it is resolved. In-process only: it
 // opens a live diff tab, a concept with no remote representation.
 void registerDraftCommands(CommandCatalog& catalog,
-                           EditorSession::Impl& runtime) {
+                           Editor& runtime) {
     catalog.add(CommandSpec{
         .id = "draft.diff",
         .owner = "draft-recovery",
@@ -840,7 +840,7 @@ void registerDraftCommands(CommandCatalog& catalog,
     });
 }
 
-void bindRuntimeFiles(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+void bindRuntimeFiles(CommandCatalog& catalog, Editor& runtime) {
     registerExternalModificationCommands(catalog, runtime);
     registerFileCommands(catalog, runtime);
     registerTabCommands(catalog, runtime);

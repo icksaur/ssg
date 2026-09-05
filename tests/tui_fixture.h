@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ssg/Keymap.h>
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/GridPresenter.h>
 
 #include <array>
@@ -30,7 +30,7 @@ private:
 
 class TuiClient {
 public:
-    TuiClient(EditorSession& runtime, ViewportDimensions dimensions);
+    TuiClient(Editor& runtime, ViewportDimensions dimensions);
     ~TuiClient();
 
     TuiClient(TuiClient const&) = delete;
@@ -48,7 +48,7 @@ public:
 private:
     void refresh();
 
-    EditorSession* runtime_;
+    Editor* runtime_;
     ViewportDimensions dimensions_;
     GridPresenter presenter_;
     std::optional<GridPresentation> snapshot_;

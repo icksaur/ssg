@@ -1,7 +1,7 @@
 #include "../test_helpers.h"
 #include "../grid_test_frame.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/Renderer.h>
 #include <ssg/ShellViewState.h>
 #include <ssg/Viewport.h>
@@ -95,7 +95,7 @@ const std::vector<UiState>& uiStates() {
 
 void runState(const UiState& state) {
     auto root = makeRoot(state.name);
-    auto created = ssg::EditorSession::create(
+    auto created = ssg::createEditor(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) { fs::remove_all(root); return; }

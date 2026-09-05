@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 #include "grid_test_frame.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/FileCommands.h>
 #include <ssg/PromptSurface.h>
 
@@ -37,18 +37,18 @@ private:
     fs::path path_;
 };
 
-std::unique_ptr<ssg::EditorSession> makeRuntime(const fs::path& root) {
-    ssg::EditorSessionConfig config{
+std::unique_ptr<ssg::Editor> makeRuntime(const fs::path& root) {
+    ssg::EditorConfig config{
         root, root / "scratch", root / "recovery"};
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
-    auto created = ssg::EditorSession::create(config);
+    auto created = ssg::createEditor(config);
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.session);
     return runtime;
 }
 
-ssg::CommandResult run(ssg::EditorSession& runtime, std::string id,
+ssg::CommandResult run(ssg::Editor& runtime, std::string id,
                        std::any payload = {}) {
     return runtime.dispatch({std::move(id),  std::move(payload)});
 }
@@ -56,7 +56,7 @@ ssg::CommandResult run(ssg::EditorSession& runtime, std::string id,
 // The prompt as the client sees it. commandId is deliberately NOT here -- it is
 // runtime-internal attribution -- so these tests observe which command a prompt
 // belongs to through what submitting it DOES, which is the stronger oracle.
-bool pathPromptOpen(ssg::EditorSession& runtime) {
+bool pathPromptOpen(ssg::Editor& runtime) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     if (!snapshot) return false;
     return snapshot->promptStatus.activeKind ==

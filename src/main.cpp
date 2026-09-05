@@ -1,7 +1,7 @@
 #include <ssg/pointer_routing.h>
 #include <ssg/ssg_terminal.h>
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/GridPresenter.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/TreeSitterGrammars.h>
@@ -126,7 +126,7 @@ void popWord(std::string& text) {
 
 } // namespace
 
-ViewActionResult applyScriptViewAction(EditorSession& runtime, GridPresenter& presenter, const ViewAction& request) {
+ViewActionResult applyScriptViewAction(Editor& runtime, GridPresenter& presenter, const ViewAction& request) {
     auto frame = presenter.project(runtime, {terminalSize(), {}});
     if (!frame) {
         return {ViewActionStatus::Rejected, std::nullopt, "view action has no current grid frame"};
@@ -139,7 +139,7 @@ const char* environmentVariable(std::string_view name) { return std::getenv(std:
 class PaletteView;
 
 struct SsgContext {
-    EditorSession& runtime;
+    Editor& runtime;
     GridPresenter& presenter;
     ScriptHost& scripts;
     TerminalSession& terminal;
@@ -564,14 +564,14 @@ int main(int argc, char** argv) {
     auto recoveryBase = fs::temp_directory_path() / ("ssg-" + std::to_string(::getpid()));
     fs::create_directories(recoveryBase / "recovery", code);
 
-    ssg::EditorSessionConfig config;
+    ssg::EditorConfig config;
     config.cwd = target.cwd;
     config.scratchRoot = stateBase / "scratch";
     config.recoveryRoot = recoveryBase / "recovery";
     config.archiveRoot = stateBase / "archive";
     config.deferEnrichment = true;
     config.syntaxParser = ssg::TreeSitterParserFactory::createDefault();
-    auto created = ssg::EditorSession::create(config);
+    auto created = ssg::createEditor(config);
     if (!created.accepted()) {
         std::fprintf(stderr, "ssg: %s\n", created.message.c_str());
         return 1;

@@ -176,7 +176,7 @@ struct ThemeSetResult {
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
 
-// The compiled-in built-in theme: EditorSession::create()'s starting
+// The compiled-in built-in theme: createEditor()'s starting
 // ThemeSnapshot, before any init.lua theme.set() call runs. This is the ONE
 // source of the default theme's colors -- there is no data-file or other
 // loadable-config path; a second, independently hand-maintained copy would

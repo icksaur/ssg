@@ -1,7 +1,7 @@
 #include <ssg/ScriptHost.h>
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/Keymap.h>
 #include <ssg/StatusFields.h>
 #include <ssg/Style.h>
@@ -43,7 +43,7 @@ std::string argumentField(
 }  // namespace
 
 struct ScriptHost::Impl {
-    EditorSession& runtime;
+    Editor& runtime;
     std::thread::id owningThread{std::this_thread::get_id()};
     LuaCommandHost host;
     ViewActionSink viewActionSink;
@@ -51,7 +51,7 @@ struct ScriptHost::Impl {
     // next one.
     std::vector<CommandHandle> generation;
 
-    Impl(EditorSession& editorRuntime, LuaCommandHostOptions options,
+    Impl(Editor& editorRuntime, LuaCommandHostOptions options,
          ViewActionSink sink)
         : runtime{editorRuntime},
           host{std::move(options),
@@ -170,9 +170,9 @@ struct ScriptHost::Impl {
     }
 };
 
-ScriptHost::ScriptHost(EditorSession& runtime) : ScriptHost(runtime, {}) {}
+ScriptHost::ScriptHost(Editor& runtime) : ScriptHost(runtime, {}) {}
 
-ScriptHost::ScriptHost(EditorSession& runtime, ViewActionSink viewActionSink) {
+ScriptHost::ScriptHost(Editor& runtime, ViewActionSink viewActionSink) {
     LuaCommandHostOptions options;
     options.commands = scriptCommandCatalog(runtime.commandCatalog());
     options.publishGate = [this](std::vector<std::string> const& ids) {

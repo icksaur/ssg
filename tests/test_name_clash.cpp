@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 #include "grid_test_frame.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/FileCommands.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/RecoveryManager.h>
@@ -38,18 +38,18 @@ private:
     fs::path path_;
 };
 
-std::unique_ptr<ssg::EditorSession> makeRuntime(const fs::path& root) {
-    ssg::EditorSessionConfig config{
+std::unique_ptr<ssg::Editor> makeRuntime(const fs::path& root) {
+    ssg::EditorConfig config{
         root, root / "scratch", root / "recovery"};
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
-    auto created = ssg::EditorSession::create(config);
+    auto created = ssg::createEditor(config);
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.session);
     return runtime;
 }
 
-ssg::CommandResult run(ssg::EditorSession& runtime, std::string id,
+ssg::CommandResult run(ssg::Editor& runtime, std::string id,
                        std::any payload = {}) {
     return runtime.dispatch({std::move(id),  std::move(payload)});
 }
@@ -375,7 +375,7 @@ TEST(deletingAFileClosesItsTab) {
 TEST(deletingAFileLeavesNoRuntimeStateBehind) {
     TemporaryDirectory directory;
     const auto before =
-        ssg::EditorSession::liveDocumentRuntimeStateCountForTests();
+        ssg::Editor::liveDocumentRuntimeStateCountForTests();
     {
         writeOutOfBand(directory.path() / "doomed.txt", "bytes\n");
         auto runtime = makeRuntime(directory.path());
@@ -383,9 +383,9 @@ TEST(deletingAFileLeavesNoRuntimeStateBehind) {
         ASSERT_TRUE(
             run(*runtime, "file.open", std::string{"doomed.txt"}).accepted());
         ASSERT_TRUE(
-            ssg::EditorSession::liveDocumentRuntimeStateCountForTests() > before);
+            ssg::Editor::liveDocumentRuntimeStateCountForTests() > before);
         ASSERT_TRUE(run(*runtime, "file.delete").accepted());
-        ASSERT_EQ(ssg::EditorSession::liveDocumentRuntimeStateCountForTests(),
+        ASSERT_EQ(ssg::Editor::liveDocumentRuntimeStateCountForTests(),
                   before);
     }
 }

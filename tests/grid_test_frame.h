@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/GridPresenter.h>
 
 #include <optional>
@@ -9,14 +9,14 @@
 namespace ssg::test {
 
 inline std::optional<GridPresentation> projectGridFrame(
-    EditorSession& session,
+    Editor& session,
     ViewportDimensions dimensions, PaletteReport palette = {}) {
     GridPresenter presenter{};
     return presenter.project(session, {dimensions, std::move(palette)});
 }
 
 inline std::optional<GridPresentation> projectGridFrame(
-    EditorSession& session) {
+    Editor& session) {
     return projectGridFrame(session, {80, 24});
 }
 

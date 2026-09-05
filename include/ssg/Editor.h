@@ -1,11 +1,11 @@
 #pragma once
 
 #include <ssg/ClipboardRegister.h>
+#include <ssg/ClientInput.h>
 #include <ssg/ScreenState.h>
 #include <ssg/DiffModel.h>
 #include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
-#include <ssg/EditorSession.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>
@@ -17,6 +17,7 @@
 #include <ssg/LspFeatureController.h>
 #include <ssg/LineLayoutCache.h>
 #include <ssg/LuaCommandHost.h>
+#include <ssg/PaneTopology.h>
 #include <ssg/Picker.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
@@ -24,19 +25,25 @@
 #include <ssg/StatusFields.h>
 #include <ssg/StatusBar.h>
 #include <ssg/GitDiffWorker.h>
+#include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/TabManager.h>
+#include <ssg/Theme.h>
 #include <ssg/TreeModel.h>
+#include <ssg/UiTree.h>
+#include <ssg/Viewport.h>
 #include <ssg/WorkspaceFileIndex.h>
 #include <ssg/Workspace.h>
 
 #include <any>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <deque>
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -46,6 +53,58 @@
 #include <vector>
 
 namespace ssg {
+
+struct NoticeView {
+    std::string text;
+    std::vector<UiAction> actions;
+    friend bool operator==(const NoticeView&, const NoticeView&) = default;
+};
+
+struct EditorConfig {
+    std::filesystem::path cwd;
+    std::filesystem::path scratchRoot;
+    std::filesystem::path recoveryRoot;
+    std::filesystem::path archiveRoot;
+    bool deferEnrichment = false;
+    std::shared_ptr<SyntaxParser> syntaxParser;
+    bool enableGitDiffWorker = true;
+    bool enableFilesystemWatcher = true;
+};
+
+struct Editor;
+
+struct EditorCreateResult {
+    std::unique_ptr<Editor> session;
+    std::string message;
+
+    [[nodiscard]] bool accepted() const noexcept { return session != nullptr; }
+};
+
+[[nodiscard]] EditorCreateResult createEditor(EditorConfig config);
+
+struct ExternalDiffRevision {
+    NonGitDiffEvent event;
+    std::uint64_t revision{0};
+};
+
+enum class DiffIngressError {
+    None,
+    EmptyBurst,
+    DiffRejected,
+    FollowRejected,
+};
+
+struct DiffIngressResult {
+    DiffIngressError error = DiffIngressError::None;
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == DiffIngressError::None;
+    }
+};
+
+struct PumpResult {
+    bool advanced;
+};
+
 // Casts a command payload to the expected type, or null when it holds something
 // else. The one definition shared by every runtime handler file, which each
 // used to re-declare in its own anonymous namespace.
@@ -71,7 +130,7 @@ inline std::uint32_t uint32Setting(SettingsModel const& settings, SettingKey key
 }
 
 // The reopen outcome of a document's recovered draft (single-file draft
-// recovery, M15). Mirrors EditorSession::DraftReopenNotice; lives per-document
+// recovery, M15). Mirrors Editor::DraftReopenNotice; lives per-document
 // so the notice (p5) and discard (p6) phases can read it by document id.
 enum class DraftReopenOutcome { None, Restored, Conflict };
 
@@ -113,27 +172,68 @@ private:
     inline static std::atomic<std::uint64_t> liveCount{0};
 };
 
-void bindRuntimeEditing(CommandCatalog& catalog, EditorSession::Impl& runtime);
-void bindRuntimeFiles(CommandCatalog& catalog, EditorSession::Impl& runtime);
-void bindRuntimePresentation(CommandCatalog& catalog, EditorSession::Impl& runtime);
-void bindRuntimeNavigation(CommandCatalog& catalog, EditorSession::Impl& runtime);
-void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorSession::Impl& runtime);
-void bindRuntimeHelp(CommandCatalog& catalog, EditorSession::Impl& runtime);
-void registerAllCommands(CommandCatalog& catalog, EditorSession::Impl& runtime);
+void bindRuntimeEditing(CommandCatalog& catalog, Editor& runtime);
+void bindRuntimeFiles(CommandCatalog& catalog, Editor& runtime);
+void bindRuntimePresentation(CommandCatalog& catalog, Editor& runtime);
+void bindRuntimeNavigation(CommandCatalog& catalog, Editor& runtime);
+void bindRuntimeLanguageServices(CommandCatalog& catalog, Editor& runtime);
+void bindRuntimeHelp(CommandCatalog& catalog, Editor& runtime);
+void registerAllCommands(CommandCatalog& catalog, Editor& runtime);
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
-    EditorSession::Impl& runtime, FindReplaceCommand command,
+    Editor& runtime, FindReplaceCommand command,
     std::any const& payload);
 
-struct EditorSession::Impl final {
-    Impl(std::filesystem::path canonicalCwd,
-         std::filesystem::path scratchRoot,
-         std::filesystem::path recoveryRoot,
-         std::filesystem::path archiveRoot,
-         bool deferEnrichment = false,
-         std::shared_ptr<SyntaxParser> parser = nullptr,
-         bool enableGitDiffWorker = true,
-         bool enableFilesystemWatcher = true);
-    ~Impl();
+struct Editor final {
+private:
+    friend EditorCreateResult createEditor(EditorConfig config);
+
+    Editor(std::filesystem::path canonicalCwd,
+           std::filesystem::path scratchRoot,
+           std::filesystem::path recoveryRoot,
+           std::filesystem::path archiveRoot,
+           bool deferEnrichment = false,
+           std::shared_ptr<SyntaxParser> parser = nullptr,
+           bool enableGitDiffWorker = true,
+           bool enableFilesystemWatcher = true);
+
+public:
+    ~Editor();
+    Editor(Editor const&) = delete;
+    Editor& operator=(Editor const&) = delete;
+    Editor(Editor&&) = delete;
+    Editor& operator=(Editor&&) = delete;
+
+    [[nodiscard]] PumpResult pump();
+    [[nodiscard]] CommandResult dispatch(ClientCommand const& command);
+    [[nodiscard]] ClientInputResult input(ClientInput const& input);
+    [[nodiscard]] SessionTopology topology() const;
+    [[nodiscard]] bool deferDispatch(ClientCommand command);
+    [[nodiscard]] bool dispatchInProgress() const noexcept;
+    [[nodiscard]] CommandCatalog const& commandCatalog() const;
+    [[nodiscard]] CommandHandle registerCommand(CommandSpec command);
+    [[nodiscard]] std::vector<CommandHandle> replaceCommandGeneration(
+        std::span<CommandHandle const> retire,
+        std::vector<CommandSpec> commands);
+    [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
+    void resetKeymapToDefault();
+    void focusEditor();
+
+    struct DeferredWorkCounts {
+        std::uint64_t syntaxRuns = 0;
+        std::uint64_t treeScans = 0;
+    };
+    [[nodiscard]] DeferredWorkCounts deferredWorkCounts() const;
+    [[nodiscard]] static std::uint64_t liveDocumentRuntimeStateCountForTests();
+    void setAutosaveDraftByteCapForTests(std::uint64_t cap);
+    void reconcileExternalWatchEventsForTest(std::vector<WatchEvent> events);
+    [[nodiscard]] bool diffModelHasFileForTest(const DiffFileId& id) const;
+    void reportWatcherAvailabilityForTest(bool available);
+    void refreshFilesystemForTest();
+    [[nodiscard]] std::uint64_t gitFullRefreshCountForTest() const;
+    [[nodiscard]] std::string activeDocumentText() const;
+
+    enum class DraftReopenNotice { None, Restored, Conflict };
+    [[nodiscard]] DraftReopenNotice activeDraftReopenNotice() const;
 
     struct ResolvedPromptControls {
         std::vector<PromptControl> controls;
@@ -224,7 +324,7 @@ struct EditorSession::Impl final {
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
     std::uint64_t workspaceReplaceGeneration = 0;
     mutable std::mutex operationMutex;
-    SessionTopology topology;
+    SessionTopology sessionTopology;
     CommandCatalog catalog;
     // Commands a running handler asked to dispatch, run in order once the
     // operation lock releases. The operation mutex is not reentrant, so a handler
@@ -242,13 +342,13 @@ struct EditorSession::Impl final {
         ClientCommand command;
     };
 
-    // The queue, shaped so `Impl::defer` is the only way to ADD to it -- by
+    // The queue, shaped so `Editor::deferDispatch` is the only way to ADD to it -- by
     // construction, not by convention.
     //
     // It was previously a bare vector that two callers pushed to directly while
     // a third went through a checked method, so the shortest way to queue a
     // command was the only unchecked one.  Hiding the vector alone would just
-    // move that hole to the wrapper, so writing is private and `Impl` is the
+    // move that hole to the wrapper, so writing is private and `Editor` is the
     // only friend: a future caller cannot reach the write path at all, whereas
     // reading (which the drain needs) is harmless and stays public.
     class DeferredCommandQueue {
@@ -276,10 +376,10 @@ struct EditorSession::Impl final {
         void clear() noexcept { commands_.clear(); }
 
     private:
-        // Only reachable through Impl::defer, which is what enforces that a
+        // Only reachable through Editor::deferDispatch, which is what enforces that a
         // dispatch is actually in progress.  Queueing outside one would strand
         // the command until some later, unrelated dispatch drained it.
-        friend struct EditorSession::Impl;
+        friend struct Editor;
         [[nodiscard]] bool enqueue(DeferredCommand deferred) {
             if (commands_.size() >= kMaximum) return false;
             commands_.push_back(std::move(deferred));
@@ -291,13 +391,6 @@ struct EditorSession::Impl final {
 
     DeferredCommandQueue deferredCommands;
 
-    // Asks for `command` to run once the dispatch in progress finishes.
-    //
-    // THE one way to queue: it checks that a dispatch is actually in progress
-    // (queueing outside one would strand the command until some later,
-    // unrelated dispatch drained it) and enforces the bound.  Returns false if
-    // either fails.
-    [[nodiscard]] bool defer(ClientCommand command);
     CommandResult dispatchLocked(ClientCommand const& command);
     // The open file picker's candidate set, built when the picker opens and
     // Published continuously and rebuilt with the workspace tree.
@@ -329,7 +422,7 @@ struct EditorSession::Impl final {
     mutable std::string activeTextCache;
     std::uint64_t nextStatusId = 1;
 
-    // I1: EditorSession::Impl alone performs workspace/recovery effects for
+    // I1: Editor alone performs workspace/recovery effects for
     // close/reopen.
     [[nodiscard]] TabLifecycleResult closeTab(
         const TabState& tab, std::chrono::milliseconds durabilityTimeout,
@@ -413,8 +506,9 @@ struct EditorSession::Impl final {
     [[nodiscard]] DiffIngressResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
     [[nodiscard]] DiffIngressResult applyGitDiffScan(GitDiffScan scan);
+    [[nodiscard]] DiffIngressResult applyGitDiffScanLocked(GitDiffScan scan);
     // CONTRACT
-    // EditorSession::Impl: reconcileExternalWatchEvents and every mutation of
+    // Editor: reconcileExternalWatchEvents and every mutation of
     //   `external` and its shared DiffModel it drives run only on the runtime
     //   thread, reached through the wake drain (or the test hook that stands in for
     //   it); the watcher worker thread only queues normalized events and never
@@ -563,6 +657,6 @@ struct EditorSession::Impl final {
 [[nodiscard]] std::string tabMessage(TabResult const& result);
 [[nodiscard]] std::string wrongPayload(std::string_view commandId);
 
-ClientInputResult inputLocked(EditorSession::Impl&, ClientInput const&);
+ClientInputResult inputLocked(Editor&, ClientInput const&);
 
 } // namespace ssg

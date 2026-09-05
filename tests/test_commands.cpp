@@ -13,7 +13,7 @@
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/EditCommands.h>
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/ExternalModificationFlow.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
@@ -165,7 +165,7 @@ TEST(theGeneratedCommandReferenceIsCurrent) {
                       ("ssg-command-reference-" + std::to_string(::getpid()));
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
-    auto created = ssg::EditorSession::create({root});
+    auto created = ssg::createEditor({root});
     ASSERT_TRUE(created.session != nullptr);
     if (!created.session) return;
     auto const& catalog = created.session->commandCatalog();

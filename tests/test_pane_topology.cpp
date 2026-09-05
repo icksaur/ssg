@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 #include "grid_test_frame.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 
 #include <filesystem>
 #include <memory>
@@ -12,7 +12,7 @@ namespace {
 
 struct SessionFixture {
     std::filesystem::path root;
-    std::unique_ptr<ssg::EditorSession> session;
+    std::unique_ptr<ssg::Editor> session;
 
     ~SessionFixture() {
         session.reset();
@@ -24,7 +24,7 @@ SessionFixture sessionFixture(std::string_view name) {
     auto root = testRuntimePath("pane_topology_" + std::string{name});
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
-    auto created = ssg::EditorSession::create(
+    auto created = ssg::createEditor(
         {.cwd = root / "workspace",
          .scratchRoot = root / "scratch",
          .recoveryRoot = root / "recovery",

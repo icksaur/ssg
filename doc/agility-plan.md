@@ -94,7 +94,7 @@ Do these in order. The first item is the generator of everything else.
 ## Phase 3 — architectural (only if 1–2 do not suffice)
 
 - Extract `DocumentEditingSession`, then `PresentationState` / `WorkspaceSession`
-  / `ClientRegistry` / `CommandDispatcher` from `EditorSession` (1,911 → ~400 of
+  / `ClientRegistry` / `CommandDispatcher` from `Editor` (1,911 → ~400 of
   composition). This is what finally makes class-level tests sufficient.
 - Split `RecoveryManager.cpp` into `DurableFileOps` / `RecoveryJournal` /
   `RecoveryPolicy`. Do this **carefully and last** — it is the riskiest code.

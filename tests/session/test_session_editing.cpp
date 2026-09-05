@@ -2,7 +2,7 @@
 #include "../grid_test_frame.h"
 #include "../grid_test_view.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
 #include <ssg/Selection.h>
@@ -20,7 +20,7 @@
 namespace {
 
 std::optional<ssg::GridPresentation> projectFrame(
-    ssg::EditorSession& runtime, ssg::ViewportDimensions dimensions) {
+    ssg::Editor& runtime, ssg::ViewportDimensions dimensions) {
     return ssg::test::projectGridFrame(runtime, dimensions);
 }
 
@@ -56,7 +56,7 @@ ssg::WorkspaceSnapshot diskSnapshot(
 
 TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
     auto root = uniqueRoot();
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -78,7 +78,7 @@ TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
 
 TEST(typingUndoBreaksOnWordAndLineBoundaries) {
     auto root = uniqueRoot();
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -110,7 +110,7 @@ TEST(typingUndoBreaksOnWordAndLineBoundaries) {
 TEST(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "other.txt"} << "cat";
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -137,7 +137,7 @@ TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
     std::filesystem::create_directories(workspace / ".ssg" / "scratch");
     std::filesystem::create_directories(workspace / ".ssg" / "recovery");
     std::ofstream{workspace / "other.txt"} << "cat";
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, workspace / ".ssg" / "scratch",
         workspace / ".ssg" / "recovery"});
     ASSERT_TRUE(created.accepted());
@@ -178,7 +178,7 @@ TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
 TEST(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "edit.txt"} << "cat cat";
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -206,7 +206,7 @@ TEST(workspaceSearchAndReplaceExcludeRuntimeStateRoots) {
     std::ofstream{workspace / ".ssg" / "scratch" / "hidden.txt"} << "secret";
     std::ofstream{workspace / ".ssg" / "recovery" / "journal.txt"} << "secret";
 
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, workspace / ".ssg" / "scratch",
         workspace / ".ssg" / "recovery"});
     ASSERT_TRUE(created.accepted());
@@ -228,7 +228,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "hits.txt"} << "cat cat cat";
 
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -271,7 +271,7 @@ TEST(findCloseSucceedsWithoutAnActiveDocument) {
     auto root = uniqueRoot();
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -290,7 +290,7 @@ TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "doc.txt"} << "hello";
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -324,7 +324,7 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "a.txt"} << "cat cat cat";
     std::ofstream{workspace / "b.txt"} << "dog dog dog";
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -359,7 +359,7 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
         text += '\n';
     }
     std::ofstream{workspace / "tall.txt"} << text;
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -395,7 +395,7 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "r.txt"} << "cat cat cat";
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -438,7 +438,7 @@ TEST(replaceAllReplacesEveryMatch) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "r.txt"} << "cat cat cat";
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -462,7 +462,7 @@ TEST(replaceCommandsAreBenignNoOpsWithoutAReplacePrompt) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "r.txt"} << "cat cat cat";
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -487,7 +487,7 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "m.txt"} << "Cat cat CAT";
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -527,7 +527,7 @@ TEST(replaceOpenPreservesFindOptions) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "m.txt"} << "Cat cat CAT";
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -558,7 +558,7 @@ TEST(findCloseDismissesTheReplacePrompt) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "m.txt"} << "cat cat";
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -586,7 +586,7 @@ TEST(findCloseDismissesTheReplacePrompt) {
 
 TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
     auto root = uniqueRoot();
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -654,7 +654,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     std::string text;
     for (int i = 0; i < 100; ++i) text += "a\n";  // line L starts at byte L*2
     std::ofstream{root / "workspace" / "tall.txt", std::ios::binary} << text;
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -740,7 +740,7 @@ TEST(undoAndPasteRevealTheCaret) {
     std::string text;
     for (int i = 0; i < 100; ++i) text += "a\n";
     std::ofstream{root / "workspace" / "tall.txt", std::ios::binary} << text;
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -783,7 +783,7 @@ TEST(multiCursorPastePreservesAllCursors) {
     std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "m.txt", std::ios::binary} << "aaa\nbbb\nccc\n";
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -818,7 +818,7 @@ TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
     std::filesystem::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "m.txt", std::ios::binary}
         << "aaa\nbbb\nccc\n";
-    auto created = ssg::EditorSession::create(
+    auto created = ssg::createEditor(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -883,7 +883,7 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     for (int i = 0; i < 90; ++i) text += "filler\n";
     text += "needle\n";
     std::ofstream{root / "workspace" / "t.txt", std::ios::binary} << text;
-    auto created = ssg::EditorSession::create({root / "workspace", root / "scratch", root / "recovery"});
+    auto created = ssg::createEditor({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -913,7 +913,7 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
     std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "f.txt"} << "cat cat cat";
-    auto created = ssg::EditorSession::create(
+    auto created = ssg::createEditor(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -990,13 +990,13 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
 // find.word_under_cursor: leader,8 seeds find with the word under the caret and
 // searches the whole document literally.
 namespace {
-ssg::EditorSessionCreateResult openWith(const std::filesystem::path& root,
+ssg::EditorCreateResult openWith(const std::filesystem::path& root,
                                           std::string_view name,
                                           std::string_view contents) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / std::string{name}} << contents;
-    return ssg::EditorSession::create({workspace, root / "scratch", root / "recovery"});
+    return ssg::createEditor({workspace, root / "scratch", root / "recovery"});
 }
 }  // namespace
 
@@ -1113,7 +1113,7 @@ TEST(promptFocusIsSingleAndResolvesToItsRegion) {
     auto workspace = root / "workspace";
     std::filesystem::create_directories(workspace);
     std::ofstream{workspace / "hits.txt"} << "cat cat cat";
-    auto created = ssg::EditorSession::create({
+    auto created = ssg::createEditor({
         workspace, root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;

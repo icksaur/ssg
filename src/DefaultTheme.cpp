@@ -7,7 +7,7 @@
 namespace ssg {
 
 // The compiled-in built-in theme (see defaultTheme()'s doc comment in Theme.h):
-// EditorSession::create()'s starting ThemeSnapshot, before any init.lua
+// createEditor()'s starting ThemeSnapshot, before any init.lua
 // theme.set() call runs. This table lives in its OWN translation unit, separate
 // from Theme.cpp, deliberately: Theme.cpp is scanned by
 // tests/test_theme.cpp's sourceAndConfigHaveNoIndependentColorSources for

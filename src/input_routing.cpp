@@ -1,11 +1,11 @@
-#include <ssg/EditorSessionImpl.h>
+#include <ssg/Editor.h>
 
 #include <array>
 
 namespace ssg {
 namespace {
 
-ClientInputResult inputKeyLocked(EditorSession::Impl& impl_,
+ClientInputResult inputKeyLocked(Editor& impl_,
                                  ClientKeyInput const& input) {
     auto dispatchInput = [&](CommandName command,
                              std::any payload = {}) -> ClientInputResult {
@@ -138,7 +138,7 @@ ClientInputResult inputKeyLocked(EditorSession::Impl& impl_,
 
 } // namespace
 
-ClientInputResult inputLocked(EditorSession::Impl& impl_,
+ClientInputResult inputLocked(Editor& impl_,
                               ClientInput const& input) {
     return std::visit(
         [&](auto const& semantic) -> ClientInputResult {
@@ -407,7 +407,7 @@ ClientInputResult inputLocked(EditorSession::Impl& impl_,
                             }
                         }
                         impl_.documentPointerGesture =
-                            EditorSession::Impl::DocumentPointerGesture{
+                            Editor::DocumentPointerGesture{
                                 *documentId,
                                 impl_.activeDocument()->revision(),
                                 *position, *position, semantic.additive,

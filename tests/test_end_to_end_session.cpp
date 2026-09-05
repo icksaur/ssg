@@ -2,7 +2,7 @@
 #include "grid_test_frame.h"
 #include "tui_fixture.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/TextInputCommands.h>
 
 #include <any>
@@ -52,7 +52,7 @@ struct RuntimeFixture {
         std::filesystem::remove_all(root);
         std::filesystem::create_directories(root / "workspace");
         std::ofstream{root / "workspace" / "doc.txt"} << "alpha";
-        auto created = ssg::EditorSession::create(
+        auto created = ssg::createEditor(
             {.cwd = root / "workspace",
              .scratchRoot = root / "scratch",
              .recoveryRoot = root / "recovery",
@@ -67,7 +67,7 @@ struct RuntimeFixture {
     ~RuntimeFixture() { std::filesystem::remove_all(root); }
 
     std::filesystem::path root;
-    std::unique_ptr<ssg::EditorSession> runtime;
+    std::unique_ptr<ssg::Editor> runtime;
 };
 
 struct Step {

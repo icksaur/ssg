@@ -1,6 +1,6 @@
 #include <ssg/InitScriptWatcher.h>
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/ScriptHost.h>
 #include <ssg/platform_files.h>
 
@@ -45,7 +45,7 @@ constexpr std::chrono::milliseconds kInitScriptPollInterval{500};
 
 }  // namespace
 
-void evaluateInitScript(ScriptHost& scripts, EditorSession& runtime,
+void evaluateInitScript(ScriptHost& scripts, Editor& runtime,
                         std::filesystem::path const& scriptPath,
                         std::string const& script) {
     auto const result = scripts.evaluate(script);
@@ -66,7 +66,7 @@ std::optional<std::filesystem::path> resolveInitScriptPath() {
 }
 
 std::optional<std::string> loadInitScript(ScriptHost& scripts,
-                                          EditorSession& runtime) {
+                                          Editor& runtime) {
     auto const scriptPath = resolveInitScriptPath();
     if (!scriptPath) return std::nullopt;
     auto script = readInitScriptIfPresent(*scriptPath, true);
@@ -111,7 +111,7 @@ InitScriptWatcher::~InitScriptWatcher() {
 int InitScriptWatcher::wakeDescriptor() const noexcept { return wakePipe_[0]; }
 
 void InitScriptWatcher::drainAndEvaluate(ScriptHost& scripts,
-                                         EditorSession& runtime) {
+                                         Editor& runtime) {
     char buffer[64];
     while (::read(wakePipe_[0], buffer, sizeof buffer) > 0) {
     }

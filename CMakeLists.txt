@@ -266,7 +266,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 target_sources(ssg_core PRIVATE
-    ${SSG_SOURCE_DIR}/src/EditorSession.cpp
+    ${SSG_SOURCE_DIR}/src/Editor.cpp
     ${SSG_SOURCE_DIR}/src/editing.cpp
     ${SSG_SOURCE_DIR}/src/input_routing.cpp
     ${SSG_SOURCE_DIR}/src/files.cpp
@@ -275,7 +275,7 @@ target_sources(ssg_core PRIVATE
     ${SSG_SOURCE_DIR}/src/language_services.cpp
     ${SSG_SOURCE_DIR}/src/navigation.cpp
     ${SSG_SOURCE_DIR}/src/ViewCommands.cpp
-    ${SSG_SOURCE_DIR}/src/EditorSessionViews.cpp
+    ${SSG_SOURCE_DIR}/src/EditorViews.cpp
 )
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     ssg_add_test_suite(
@@ -1351,7 +1351,7 @@ target_sources(ssg_core PRIVATE
 )
 
 # Tree-sitter is compiled unconditionally.  Highlighting is disabled at RUNTIME
-# by constructing the runtime with a null EditorSessionConfig::syntaxParser,
+# by constructing the runtime with a null EditorConfig::syntaxParser,
 # which yields plain text.
 enable_language(C)
 
@@ -1537,7 +1537,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 # Milestone 11 — The semantic library API drives the TUI contract.
-# Proves the TUI screen is a pure function of the production EditorSession's
+# Proves the TUI screen is a pure function of the production Editor's
 # GridPresentation: render(snapshot).canonical() == checked-in goldens for the
 # normal, prompt, and too-small screens.
 

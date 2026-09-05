@@ -1,4 +1,4 @@
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 
 #include <ssg/CommandCatalog.h>
 #include "test_helpers.h"
@@ -31,8 +31,8 @@ fs::path uniqueRoot() {
     return root;
 }
 
-std::unique_ptr<ssg::EditorSession> makeRuntime(fs::path const& root) {
-    auto created = ssg::EditorSession::create(
+std::unique_ptr<ssg::Editor> makeRuntime(fs::path const& root) {
+    auto created = ssg::createEditor(
         {.cwd = root,
          .scratchRoot = root / "scratch",
          .recoveryRoot = root / "recovery",
@@ -109,7 +109,7 @@ TEST(viewActionResultsRemainExplicitAcrossTheAggregateBoundary) {
 // dispatch with its own revision step.
 //
 // To perturb: delete the nested-dispatch guards in CommandCatalog::dispatch and
-// EditorSession::dispatch, have the outer handler dispatch instead of defer,
+// Editor::dispatch, have the outer handler dispatch instead of defer,
 // and REBUILD THE LIBRARY (a probe linked against a stale libssg.a still
 // contains the guards and reports a false pass).  The counts then diverge.
 // The same property across a NESTED chain: a deferred command that itself

@@ -1,9 +1,9 @@
-#include <ssg/EditorSessionImpl.h>
+#include <ssg/Editor.h>
 
 namespace ssg {
 namespace {
 
-CommandHandlerResult lspFeatureCommand(EditorSession::Impl& runtime, std::string_view id) {
+CommandHandlerResult lspFeatureCommand(Editor& runtime, std::string_view id) {
     if (id == "completion.dismiss") {
         runtime.lspFeatures.completion.visible = false;
         return success();
@@ -21,7 +21,7 @@ CommandHandlerResult lspFeatureCommand(EditorSession::Impl& runtime, std::string
 // Go-to, completion and hover.  None takes an argument: each acts on wherever
 // the cursor already is.
 void registerLspFeatureCommands(CommandCatalog& catalog,
-                                EditorSession::Impl& runtime) {
+                                Editor& runtime) {
     auto declare = [&](std::string id, std::string label, std::string summary) {
         auto const name = id;
         CommandSpec spec{
@@ -48,7 +48,7 @@ void registerLspFeatureCommands(CommandCatalog& catalog,
     declare("hover.dismiss", "", "Dismiss");
 }
 
-void bindRuntimeLanguageServices(CommandCatalog& catalog, EditorSession::Impl& runtime) {
+void bindRuntimeLanguageServices(CommandCatalog& catalog, Editor& runtime) {
     registerLspFeatureCommands(catalog, runtime);
 }
 

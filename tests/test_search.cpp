@@ -37,7 +37,7 @@ WorkspaceSnapshot fixtureWorkspace(std::uint64_t revision) {
          .line = 1,
          .column = 1},
         {.path = "src/session.cpp",
-         .name = "EditorSession",
+         .name = "Editor",
          .line = 1,
          .column = 1},
         },

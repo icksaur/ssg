@@ -1,4 +1,4 @@
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include "grid_test_frame.h"
 #include <ssg/SyntaxModel.h>
 #include "test_helpers.h"
@@ -24,7 +24,7 @@ private:
 
 // A SyntaxParser test double that tags the entire document as Keyword and counts
 // how many times the runtime drove it. It proves the injection seam: the runtime
-// uses the parser handed to it via EditorSessionConfig, not a hard-constructed one.
+// uses the parser handed to it via EditorConfig, not a hard-constructed one.
 class RecordingParser final : public SyntaxParser {
 public:
     explicit RecordingParser(bool grammarAvailable = true)
@@ -72,8 +72,8 @@ bool hasScope(const SyntaxViewState& syntax, SyntaxScope scope) {
     return false;
 }
 
-EditorSessionConfig configFor(const std::filesystem::path& root) {
-    EditorSessionConfig config;
+EditorConfig configFor(const std::filesystem::path& root) {
+    EditorConfig config;
     config.cwd = root / "workspace";
     config.scratchRoot = root / "scratch";
     config.recoveryRoot = root / "recovery";
@@ -90,7 +90,7 @@ TEST(injectedParserDrivesHighlighting) {
     auto config = configFor(root);
     config.syntaxParser = parser;
 
-    auto created = EditorSession::create(std::move(config));
+    auto created = createEditor(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -116,7 +116,7 @@ TEST(nullParserYieldsPlainText) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}";
 
-    auto created = EditorSession::create(configFor(root));
+    auto created = createEditor(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -143,7 +143,7 @@ TEST(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame) {
     config.deferEnrichment = true;
     config.syntaxParser = parser;
 
-    auto created = EditorSession::create(std::move(config));
+    auto created = createEditor(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -172,7 +172,7 @@ TEST(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred) {
     config.deferEnrichment = true;
     config.syntaxParser = parser;
 
-    auto created = EditorSession::create(std::move(config));
+    auto created = createEditor(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -209,7 +209,7 @@ TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
     config.deferEnrichment = true;
     config.syntaxParser = parser;
 
-    auto created = EditorSession::create(std::move(config));
+    auto created = createEditor(std::move(config));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.session;
@@ -255,13 +255,13 @@ TEST(closingTabDestroysDocumentRuntimeState) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}\n";
 
-    const auto baseline = EditorSession::liveDocumentRuntimeStateCountForTests();
+    const auto baseline = Editor::liveDocumentRuntimeStateCountForTests();
     {
         auto parser = std::make_shared<RecordingParser>();
         auto config = configFor(root);
         config.syntaxParser = parser;
 
-        auto created = EditorSession::create(std::move(config));
+        auto created = createEditor(std::move(config));
         ASSERT_TRUE(created.accepted());
         if (!created.accepted()) return;
         auto& runtime = *created.session;
@@ -270,14 +270,14 @@ TEST(closingTabDestroysDocumentRuntimeState) {
                                    std::string{"main.cpp"}})
                         .accepted());
 
-        ASSERT_TRUE(EditorSession::liveDocumentRuntimeStateCountForTests() >=
+        ASSERT_TRUE(Editor::liveDocumentRuntimeStateCountForTests() >=
                     baseline + 1);
         ASSERT_TRUE(runtime
                         .dispatch({"tab.close",  {}})
                         .accepted());
-        ASSERT_EQ(EditorSession::liveDocumentRuntimeStateCountForTests(), baseline);
+        ASSERT_EQ(Editor::liveDocumentRuntimeStateCountForTests(), baseline);
     }
-    ASSERT_EQ(EditorSession::liveDocumentRuntimeStateCountForTests(), baseline);
+    ASSERT_EQ(Editor::liveDocumentRuntimeStateCountForTests(), baseline);
 }
 
 }  // namespace

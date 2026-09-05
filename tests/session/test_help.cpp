@@ -1,7 +1,7 @@
 #include "../test_helpers.h"
 #include "../grid_test_frame.h"
 
-#include <ssg/EditorSession.h>
+#include <ssg/Editor.h>
 #include <ssg/Keymap.h>
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
@@ -24,8 +24,8 @@ std::filesystem::path uniqueRoot(std::string_view name) {
     return root;
 }
 
-ssg::EditorSessionConfig configFor(const std::filesystem::path& root) {
-    ssg::EditorSessionConfig config{
+ssg::EditorConfig configFor(const std::filesystem::path& root) {
+    ssg::EditorConfig config{
         root / "workspace", root / "scratch", root / "recovery"};
     config.enableGitDiffWorker = false;
     config.enableFilesystemWatcher = false;
@@ -34,11 +34,11 @@ ssg::EditorSessionConfig configFor(const std::filesystem::path& root) {
 
 struct Harness {
     std::filesystem::path root;
-    ssg::EditorSessionCreateResult created;
-    ssg::EditorSession* runtime = nullptr;
+    ssg::EditorCreateResult created;
+    ssg::Editor* runtime = nullptr;
 
     explicit Harness(std::string_view name) : root(uniqueRoot(name)),
-        created(ssg::EditorSession::create(configFor(root))) {
+        created(ssg::createEditor(configFor(root))) {
         if (created.accepted()) {
             runtime = created.session.get();
         }
@@ -50,7 +50,7 @@ struct Harness {
     }
 };
 
-std::optional<ssg::TabState> activeTab(ssg::EditorSession& runtime) {
+std::optional<ssg::TabState> activeTab(ssg::Editor& runtime) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     if (!snapshot || !snapshot->tabs.active) return std::nullopt;
     for (const auto& tab : snapshot->tabs.tabs) {
@@ -59,13 +59,13 @@ std::optional<ssg::TabState> activeTab(ssg::EditorSession& runtime) {
     return std::nullopt;
 }
 
-std::size_t tabCount(ssg::EditorSession& runtime) {
+std::size_t tabCount(ssg::Editor& runtime) {
     auto snapshot = ssg::test::projectGridFrame(runtime);
     return snapshot ? snapshot->tabs.tabs.size() : 0;
 }
 
 std::optional<ssg::SolvedUiItem> footerHelpNode(
-    ssg::EditorSession& runtime) {
+    ssg::Editor& runtime) {
     auto frame = ssg::test::projectGridFrame(runtime, {120, 24});
     if (!frame || !frame->footer) return std::nullopt;
     for (const auto& item : frame->footer->items) {
